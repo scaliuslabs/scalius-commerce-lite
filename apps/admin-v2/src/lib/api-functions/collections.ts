@@ -93,6 +93,27 @@ export interface CollectionCategoryOptionsPayload {
   categories: Array<{ id: string; name: string }>;
 }
 
+export interface CollectionProductOptionDto {
+  id: string;
+  name: string;
+  price: number;
+  categoryId: string | null;
+  categoryName: string | null;
+  isActive: boolean;
+}
+
+export interface CollectionProductOptionsInput {
+  page?: number;
+  limit?: number;
+  search?: string;
+  categoryIds?: string[];
+}
+
+export interface CollectionProductOptionsPayload {
+  products: CollectionProductOptionDto[];
+  pagination: PaginationPayload;
+}
+
 export interface MessagePayload {
   message: string;
 }
@@ -135,6 +156,23 @@ export const getCollectionCategoryOptions = createServerFn({
 }).handler(async (): Promise<CollectionCategoryOptionsPayload> => {
   return apiGet<CollectionCategoryOptionsPayload>("/collections/category-options");
 });
+
+export const getCollectionProductOptions = createServerFn({ method: "GET" })
+  .validator((data: CollectionProductOptionsInput) => data)
+  .handler(async ({ data }): Promise<CollectionProductOptionsPayload> => {
+    const params: Record<string, string> = {};
+    if (data.page) params.page = String(data.page);
+    if (data.limit) params.limit = String(data.limit);
+    if (data.search?.trim()) params.search = data.search.trim();
+    const categoryIds = Array.from(
+      new Set((data.categoryIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, 90);
+    if (categoryIds.length > 0) params.categoryIds = categoryIds.join(",");
+    return apiGet<CollectionProductOptionsPayload>(
+      "/collections/product-options",
+      params,
+    );
+  });
 
 export const getCollectionFormOptions = createServerFn({
   method: "GET",

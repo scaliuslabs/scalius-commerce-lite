@@ -85,6 +85,40 @@ export const bulkUpdateVariantsSchema = z.object({
     ),
 });
 
+const variantEditPlanUpdateSchema = z.object({
+    id: z.string().trim().min(1, "Variant ID is required"),
+    size: z.string().max(50).nullable().optional(),
+    color: z.string().max(50).nullable().optional(),
+    weight: z.number().min(0).nullable().optional(),
+    sku: z.string().trim().min(3, "SKU must be at least 3 characters").optional(),
+    price: variantPriceSchema.optional(),
+    stock: z.number().int("Stock must be a whole number").min(0).optional(),
+    trackInventory: z.boolean().optional(),
+    barcode: z.string().max(50).nullable().optional(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).nullable().optional(),
+}).refine(
+    ({ id: _id, ...fields }) => Object.keys(fields).length > 0,
+    { message: "Each variant update must include at least one change" },
+);
+
+export const variantEditPlanSchema = z.object({
+    creates: z.array(bulkVariantSchema.extend({
+        sku: z.string().trim().min(3, "SKU must be at least 3 characters"),
+        stock: z.number().int("Stock must be a whole number").min(0),
+    })).default([]),
+    updates: z.array(variantEditPlanUpdateSchema).default([]),
+}).superRefine((plan, ctx) => {
+    if (plan.creates.length === 0 && plan.updates.length === 0) {
+        ctx.addIssue({
+            code: "custom",
+            message: "Add at least one variant create or update",
+            path: [],
+        });
+    }
+});
+
+export type VariantEditPlan = z.infer<typeof variantEditPlanSchema>;
+
 // ─────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────

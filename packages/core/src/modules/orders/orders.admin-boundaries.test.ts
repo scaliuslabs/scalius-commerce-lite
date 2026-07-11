@@ -138,4 +138,17 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("balanceDue: nextPaymentState.balanceDue");
     expect(source).toContain("paymentStatus: nextPaymentState.paymentStatus");
   });
+
+  it("keeps production order writes off replay-unsafe inventory primitives", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("applyClaimedInventoryEntryBatch");
+    expect(source).toContain("releaseReservedStockBatch");
+    expect(source).toContain("adminOrderInventoryClaimKey");
+    expect(source).toContain("reservationKey:");
+    expect(source).toContain("releaseKey:");
+    expect(source).not.toContain("deductMultiple");
+    expect(source).not.toContain("releaseMultiple");
+    expect(source).not.toContain("restoreDeductedMultiple");
+  });
 });

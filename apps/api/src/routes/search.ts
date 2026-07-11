@@ -40,8 +40,8 @@ app.use(
 const searchQuerySchema = z.object({
   q: z.string().optional().default("").openapi({ description: "Search query" }),
   categoryId: z.string().optional().openapi({ description: "Category ID filter" }),
-  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
-  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   limit: z.coerce.number().int().min(1).max(50).optional().default(10).openapi({ description: "Max results" }),
   searchPages: z
     .enum(["true", "false"])
@@ -55,6 +55,18 @@ const searchQuerySchema = z.object({
     .default("true")
     .transform((val) => val === "true")
     .openapi({ description: "Include categories in search results" })
+}).superRefine((value, ctx) => {
+  if (
+    value.minPrice !== undefined &&
+    value.maxPrice !== undefined &&
+    value.minPrice > value.maxPrice
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["maxPrice"],
+      message: "Maximum price must be greater than or equal to minimum price",
+    });
+  }
 });
 
 // GET /search — perform a search across products, categories, and pages
@@ -70,7 +82,16 @@ const searchRoute = createRoute({
     200: {
       description: "Search results",
       content: { "application/json": { schema: successEnvelope(z.object({
-        products: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string(), price: z.number() }).passthrough()),
+        products: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          slug: z.string(),
+          price: z.number(),
+          discountedPrice: z.number(),
+          priceVaries: z.boolean(),
+          availableForSale: z.boolean(),
+          hasVariants: z.boolean(),
+        }).passthrough()),
         pages: z.array(z.object({ id: z.string(), title: z.string(), slug: z.string() }).passthrough()),
         categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
         query: z.string(),
@@ -128,12 +149,17 @@ app.openapi(searchRoute, async (c) => {
   });
 
   // Set timeout for the search operation
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error("Search timed out")), 5000);
+    timeoutId = setTimeout(() => reject(new Error("Search timed out")), 5000);
   });
 
-  // Race the search and timeout
-  const results = await Promise.race([searchPromise, timeoutPromise]);
+  let results: Awaited<typeof searchPromise>;
+  try {
+    results = await Promise.race([searchPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 
   // Return results
   return ok(c, {

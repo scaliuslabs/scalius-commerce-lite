@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import type { FilterableAttribute } from "@/lib/api";
+import type { BuyerPriceRange, FilterableAttribute } from "@/lib/api";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
 import {
@@ -25,20 +25,26 @@ interface CategoryFiltersProps {
   attributes: FilterableAttribute[];
   currentFilters: Record<string, string>;
   categorySlug?: string;
+  priceRange?: BuyerPriceRange;
 }
 
 /**
  * Extracts initial component state from URL parameters
  * Separates price filters from other filters for independent state management
  */
-const getInitialState = (currentFilters: Record<string, string>) => {
+const getInitialState = (
+  currentFilters: Record<string, string>,
+  priceRange?: BuyerPriceRange,
+) => {
+  const defaultMinPrice = priceRange?.min ?? DEFAULT_MIN_PRICE;
+  const defaultMaxPrice = priceRange?.max ?? DEFAULT_MAX_PRICE;
   const minPrice = parsePriceFilterValue(
     currentFilters.minPrice,
-    DEFAULT_MIN_PRICE,
+    defaultMinPrice,
   );
   const maxPrice = parsePriceFilterValue(
     currentFilters.maxPrice,
-    DEFAULT_MAX_PRICE,
+    defaultMaxPrice,
   );
   const filters: Record<string, string | boolean> = {};
 
@@ -49,7 +55,14 @@ const getInitialState = (currentFilters: Record<string, string>) => {
     }
   });
 
-  return { minPrice, maxPrice, filters };
+  return {
+    minPrice,
+    maxPrice,
+    minRange: Math.min(defaultMinPrice, minPrice),
+    maxRange: Math.max(defaultMaxPrice, maxPrice),
+    defaultMaxPrice,
+    filters,
+  };
 };
 
 /**
@@ -70,28 +83,28 @@ export default function CategoryFilters({
   attributes,
   currentFilters,
   categorySlug,
+  priceRange,
 }: CategoryFiltersProps) {
   // Parse initial state from URL parameters
   const initialState = useMemo(
-    () => getInitialState(currentFilters),
-    [currentFilters],
+    () => getInitialState(currentFilters, priceRange),
+    [currentFilters, priceRange],
   );
 
   /**
    * Price State Management
    * Consolidated into single object to prevent state synchronization issues
    * - userModified: Prevents price reset when other filters change
-   * - priceChanged: Tracks if price differs from default (0-50000)
+   * - priceChanged: Tracks whether the buyer explicitly changed the range
    */
   const [priceState, setPriceState] = useState(() => ({
-    minPriceK: Math.floor(initialState.minPrice / 1000), // Slider works in thousands
-    maxPriceK: Math.ceil(initialState.maxPrice / 1000),
+    minPrice: initialState.minPrice,
+    maxPrice: initialState.maxPrice,
     minPriceInput: initialState.minPrice.toString(), // Input shows actual values
     maxPriceInput: initialState.maxPrice.toString(),
-    maxRange:
-      initialState.maxPrice > 200000
-        ? Math.ceil(initialState.maxPrice / 1000)
-        : 200,
+    minRange: initialState.minRange,
+    maxRange: initialState.maxRange,
+    defaultMaxPrice: initialState.defaultMaxPrice,
     priceChanged: !!(currentFilters.minPrice || currentFilters.maxPrice),
     userModified: false, // Critical: prevents price reset from URL changes
   }));
@@ -132,26 +145,29 @@ export default function CategoryFilters({
     if (!priceState.userModified) {
       const newMinPrice = parsePriceFilterValue(
         currentFilters.minPrice,
-        DEFAULT_MIN_PRICE,
+        priceRange?.min ?? DEFAULT_MIN_PRICE,
       );
       const newMaxPrice = parsePriceFilterValue(
         currentFilters.maxPrice,
-        DEFAULT_MAX_PRICE,
+        priceRange?.max ?? DEFAULT_MAX_PRICE,
       );
 
       setPriceState((prev) => ({
         ...prev,
-        minPriceK: Math.floor(newMinPrice / 1000),
-        maxPriceK: Math.ceil(newMaxPrice / 1000),
+        minPrice: newMinPrice,
+        maxPrice: newMaxPrice,
         minPriceInput: newMinPrice.toString(),
         maxPriceInput: newMaxPrice.toString(),
-        maxRange: newMaxPrice > 200000 ? Math.ceil(newMaxPrice / 1000) : 200,
+        minRange: Math.min(priceRange?.min ?? DEFAULT_MIN_PRICE, newMinPrice),
+        maxRange: Math.max(priceRange?.max ?? DEFAULT_MAX_PRICE, newMaxPrice),
+        defaultMaxPrice: priceRange?.max ?? DEFAULT_MAX_PRICE,
         priceChanged: !!(currentFilters.minPrice || currentFilters.maxPrice),
       }));
     }
   }, [
     currentFilters.minPrice,
     currentFilters.maxPrice,
+    priceRange,
     priceState.userModified,
   ]);
 
@@ -189,6 +205,7 @@ export default function CategoryFilters({
         priceChanged: priceState.priceChanged,
         minPriceInput: priceState.minPriceInput,
         maxPriceInput: priceState.maxPriceInput,
+        defaultMaxPrice: priceState.defaultMaxPrice,
       });
 
       // Other filter parameters (switches, attributes)
@@ -205,6 +222,7 @@ export default function CategoryFilters({
       priceState.priceChanged,
       priceState.minPriceInput,
       priceState.maxPriceInput,
+      priceState.defaultMaxPrice,
       selectedFilters,
     ],
   );
@@ -306,10 +324,10 @@ export default function CategoryFilters({
 
     setPriceState((prev) => ({
       ...prev,
-      minPriceK: min,
-      maxPriceK: max,
-      minPriceInput: (min * 1000).toString(),
-      maxPriceInput: (max * 1000).toString(),
+      minPrice: min,
+      maxPrice: max,
+      minPriceInput: min.toString(),
+      maxPriceInput: max.toString(),
       priceChanged: true,
       userModified: true, // Mark as user modified to prevent resets
     }));
@@ -348,7 +366,10 @@ export default function CategoryFilters({
    * Extends max range if user enters value beyond current range
    */
   const handlePriceInputChange = (type: "min" | "max", value: string) => {
-    const numValue = parseInt(value, 10) || 0;
+    const parsedValue = Number(value);
+    const numValue = Number.isFinite(parsedValue) && parsedValue >= 0
+      ? parsedValue
+      : 0;
 
     setPriceState((prev) => {
       const newState = {
@@ -359,14 +380,14 @@ export default function CategoryFilters({
 
       if (type === "min") {
         newState.minPriceInput = value;
-        newState.minPriceK = Math.floor(numValue / 1000);
+        newState.minPrice = numValue;
+        if (numValue < prev.minRange) newState.minRange = numValue;
       } else {
         newState.maxPriceInput = value;
-        const newMaxK = Math.ceil(numValue / 1000);
-        newState.maxPriceK = newMaxK;
+        newState.maxPrice = numValue;
         // Extend slider range if needed
-        if (newMaxK > prev.maxRange) {
-          newState.maxRange = newMaxK;
+        if (numValue > prev.maxRange) {
+          newState.maxRange = numValue;
         }
       }
 
@@ -428,12 +449,22 @@ export default function CategoryFilters({
   };
 
   // Format price display for slider labels
-  const formatPriceDisplay = (priceK: number): string => {
+  const formatPriceDisplay = (price: number): string => {
     const sym = getCurrencySymbol();
-    if (priceK === 0) return `${sym}0`;
-    if (priceK < 1) return `${sym}${(priceK * 1000).toLocaleString()}`;
-    return `${sym}${priceK}K`;
+    const formatted = new Intl.NumberFormat(undefined, {
+      notation: Math.abs(price) >= 10_000 ? "compact" : "standard",
+      maximumFractionDigits: Math.abs(price) < 100 ? 2 : 1,
+    }).format(price);
+    return `${sym}${formatted}`;
   };
+
+  const sliderStep = useMemo(() => {
+    const span = Math.max(0, priceState.maxRange - priceState.minRange);
+    if (span <= 100) return 0.01;
+    if (span <= 1_000) return 1;
+    if (span <= 100_000) return 100;
+    return 1_000;
+  }, [priceState.maxRange, priceState.minRange]);
 
   return (
     <>
@@ -506,10 +537,11 @@ export default function CategoryFilters({
                 {/* Price Slider */}
                 <div className="px-3 pt-2 pb-4">
                   <Slider
-                    value={[priceState.minPriceK, priceState.maxPriceK]}
-                    min={0}
+                    value={[priceState.minPrice, priceState.maxPrice]}
+                    min={priceState.minRange}
                     max={priceState.maxRange}
-                    step={1}
+                    step={sliderStep}
+                    disabled={priceState.maxRange <= priceState.minRange}
                     onValueChange={handleSliderChange}
                     onValueCommit={handleSliderEnd}
                     onPointerDown={handleSliderStart}
@@ -517,8 +549,8 @@ export default function CategoryFilters({
                   />
                   {/* Slider Value Display */}
                   <div className="flex justify-between text-xs text-gray-500 mt-4 px-1">
-                    <span>{formatPriceDisplay(priceState.minPriceK)}</span>
-                    <span>{formatPriceDisplay(priceState.maxPriceK)}</span>
+                    <span>{formatPriceDisplay(priceState.minPrice)}</span>
+                    <span>{formatPriceDisplay(priceState.maxPrice)}</span>
                   </div>
                 </div>
 
@@ -527,7 +559,7 @@ export default function CategoryFilters({
                   {/* Min Price Input */}
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-2">
-                      Min Price (Press Enter)
+                      Minimum
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
@@ -543,6 +575,7 @@ export default function CategoryFilters({
                         className="pl-7 h-9 text-sm"
                         placeholder="0"
                         min="0"
+                        step="any"
                       />
                     </div>
                   </div>
@@ -550,7 +583,7 @@ export default function CategoryFilters({
                   {/* Max Price Input */}
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-2">
-                      Max Price (Press Enter)
+                      Maximum
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
@@ -564,8 +597,9 @@ export default function CategoryFilters({
                         }
                         onKeyDown={handlePriceInputKeyPress}
                         className="pl-7 h-9 text-sm"
-                        placeholder="50000"
+                        placeholder={priceState.defaultMaxPrice.toString()}
                         min="0"
+                        step="any"
                       />
                     </div>
                   </div>

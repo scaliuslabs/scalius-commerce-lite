@@ -6,11 +6,12 @@ import type { CreateOrderInput } from "./orders.validation";
 
 const inventoryMocks = vi.hoisted(() => ({
     reserveStockBatch: vi.fn(),
-    deductMultiple: vi.fn(),
-    releaseMultiple: vi.fn(),
     releaseReservedStockBatch: vi.fn(),
-    restoreDeductedMultiple: vi.fn(),
     validateStockBatchAvailability: vi.fn(),
+}));
+const transitionMocks = vi.hoisted(() => ({
+    applyClaimedInventoryEntryBatch: vi.fn(),
+    applyInventoryForStatusChange: vi.fn(),
 }));
 const settingsMocks = vi.hoisted(() => ({
     getCurrencySettings: vi.fn(),
@@ -18,11 +19,16 @@ const settingsMocks = vi.hoisted(() => ({
 
 vi.mock("../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
-    deductMultiple: inventoryMocks.deductMultiple,
-    releaseMultiple: inventoryMocks.releaseMultiple,
     releaseReservedStockBatch: inventoryMocks.releaseReservedStockBatch,
-    restoreDeductedMultiple: inventoryMocks.restoreDeductedMultiple,
     validateStockBatchAvailability: inventoryMocks.validateStockBatchAvailability,
+}));
+
+vi.mock("../inventory/inventory-transitions", () => ({
+    applyClaimedInventoryEntryBatch: transitionMocks.applyClaimedInventoryEntryBatch,
+    applyInventoryForStatusChange: transitionMocks.applyInventoryForStatusChange,
+    isStockDeductStatus: (status: string) => status === "shipped" || status === "delivered",
+    isStockReservableStatus: (status: string) => ["incomplete", "pending", "processing", "confirmed"].includes(status),
+    isStockRestoreStatus: (status: string) => ["cancelled", "returned", "refunded"].includes(status),
 }));
 
 vi.mock("../settings/site-settings.service", () => ({
@@ -34,11 +40,10 @@ import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
 beforeEach(() => {
     vi.clearAllMocks();
     inventoryMocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
-    inventoryMocks.deductMultiple.mockResolvedValue({ success: true, results: [] });
-    inventoryMocks.releaseMultiple.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
-    inventoryMocks.restoreDeductedMultiple.mockResolvedValue({ success: true, results: [] });
     inventoryMocks.validateStockBatchAvailability.mockResolvedValue({ success: true, results: [] });
+    transitionMocks.applyClaimedInventoryEntryBatch.mockResolvedValue(undefined);
+    transitionMocks.applyInventoryForStatusChange.mockResolvedValue("deducted");
     settingsMocks.getCurrencySettings.mockResolvedValue({
         currencyCode: "BDT",
         currencySymbol: "৳",
@@ -327,8 +332,8 @@ describe("resolveAdminOrderItemInventory", () => {
             }),
         ]);
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-        expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
-        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+        expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
         expect(batch).not.toHaveBeenCalled();
         expect(insert).not.toHaveBeenCalled();
         expect(update).not.toHaveBeenCalled();
@@ -412,8 +417,8 @@ describe("resolveAdminOrderItemInventory", () => {
             .rejects.toThrow("Selected zone is no longer available for the chosen city.");
 
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-        expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
-        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+        expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+        expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
         expect(batch).not.toHaveBeenCalled();
         expect(insert).not.toHaveBeenCalled();
         expect(update).not.toHaveBeenCalled();
@@ -580,6 +585,7 @@ describe("resolveAdminOrderItemInventory", () => {
             db,
             [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
             "regular",
+            { reservationKey: expect.stringMatching(/^admin-order-create:v1:/) },
         );
         expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
             db,
@@ -587,8 +593,36 @@ describe("resolveAdminOrderItemInventory", () => {
             expect.any(String),
             { releaseKey: "admin-order-create-rollback:v1" },
         );
-        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
-        expect(inventoryMocks.deductMultiple).not.toHaveBeenCalled();
+        expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    });
+
+    it("finalizes tracked manual-order inventory through the claimed status transition", async () => {
+        const { db } = createOrderDbWithSkuRows([
+            {
+                id: "var_tracked",
+                productId: "prod_active",
+                trackInventory: true,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+            },
+        ]);
+
+        const result = await createOrder(db, createOrderInput({
+            items: [{
+                productId: "prod_active",
+                variantId: "var_tracked",
+                quantity: 2,
+                price: 100,
+            }],
+        }));
+
+        expect(transitionMocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
+            db,
+            result.id,
+            "shipped",
+        );
+        expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
     });
 
     it("fails closed when manual order reservation cleanup cannot be proven", async () => {
@@ -634,6 +668,6 @@ describe("resolveAdminOrderItemInventory", () => {
         await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableError);
 
         expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
-        expect(inventoryMocks.releaseMultiple).not.toHaveBeenCalled();
+        expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
 });

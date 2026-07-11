@@ -75,11 +75,11 @@ Handled by `inventory-transitions.ts` -- the **single source of truth** for how 
 
 | Order status change | `inventoryAction` guard  | Inventory operation              | New `inventoryAction` |
 |---------------------|-------------------------|----------------------------------|-----------------------|
-| Any -> `shipped`    | Must be `reserved`       | `deductMultiple()` -- decrements `stock`, releases `reservedStock` | `deducted`     |
-| Any -> `cancelled`  | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
-| Any -> `returned`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
-| Any -> `refunded`   | `reserved` or `deducted` | `releaseMultiple()` (reserved) or `restoreDeductedMultiple()` (deducted) | `restored` |
-| `restored` -> `incomplete`/`pending`/`processing`/`confirmed` | Must be `restored` | `reserveMultiple()` -- re-reserves stock | `reserved` |
+| Any -> `shipped`    | Must be `reserved`       | Claimed CAS deduction batch -- decrements `stock`, releases `reservedStock` | `deducted`     |
+| Any -> `cancelled`  | `reserved` or `deducted` | Claimed CAS release or restore batch | `restored` |
+| Any -> `returned`   | `reserved` or `deducted` | Claimed CAS release or restore batch | `restored` |
+| Any -> `refunded`   | `reserved` or `deducted` | Claimed CAS release or restore batch | `restored` |
+| `restored` -> `incomplete`/`pending`/`processing`/`confirmed` | Must be `restored` | Claimed `reserveStockBatch()` -- re-reserves stock | `reserved` |
 
 All transitions are **idempotent**: calling `applyInventoryForStatusChange()` multiple times with the same status produces no duplicate adjustments because it checks `inventoryAction` before acting.
 
@@ -87,10 +87,10 @@ All transitions are **idempotent**: calling `applyInventoryForStatusChange()` mu
 
 Admin-created orders follow a reserve-then-deduct pattern:
 
-1. `reserveMultiple()` validates availability and holds stock for all variant items
+1. `reserveStockBatch()` validates availability and holds stock for all variant items with deterministic claims
 2. `db.batch()` inserts customer + order + items atomically with `inventoryAction: "reserved"`
-3. If batch fails: `releaseMultiple()` releases all reservations (no orphaned holds)
-4. `deductMultiple()` converts reservations to permanent deductions (decrements `stock`, clears `reservedStock`)
+3. If the order batch fails, `releaseReservedStockBatch()` proves deterministic release claims and counter updates together
+4. `applyInventoryForStatusChange()` converts reservations through the claimed CAS transition engine (decrements `stock`, clears `reservedStock`)
 5. If deduction succeeds: `inventoryAction` updated to `"deducted"`
 6. If deduction fails: stock remains reserved (logged, not fatal -- no overselling risk)
 
@@ -142,7 +142,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
-| `inventory-transitions.ts` | `buildInventoryStatements()` -- returns SQL statements for batching; `applyInventoryForStatusChange()` -- standalone wrapper; single source of truth for order-status-driven inventory changes; `InventoryAction` type |
+| `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |
 
 Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes should invalidate by affected variant through `invalidateProductAvailabilityCaches(db, { variantIds }, c)` after the write commits, avoiding broad catalog invalidation unless product metadata changed too.
@@ -229,11 +229,11 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 ### Deduct
 
-`deductMultiple()` -- Sequential deduction with rollback via `restoreDeductedStock()`. For regular pool: decrements both `stock` and `reservedStock`. For preorder/backorder pool: decrements only `reservedStock`.
+Production order workflows use the claimed transition engine: deterministic movement insert and every variant `stockVersion` CAS update are submitted in one D1 batch. Deduct/release claims also require enough reserved units (and regular deductions require enough physical stock), so drift fails closed instead of being hidden by counter clamping. Exact duplicate claims are idempotent success; mismatched claims fail closed. For regular pool it decrements both `stock` and `reservedStock`; for preorder/backorder it decrements only `reservedStock`.
 
 ### Release
 
-`releaseMultiple()` -- Best-effort. Does NOT use CAS because releasing is always safe (uses `MAX(0, ...)` to guard underflow). Continues processing even if individual releases fail. A missed release only over-reserves, never causes overselling. Checks low stock alerts after each release.
+Production order workflows use either the claimed order transition engine or `releaseReservedStockBatch()`. Both keep deterministic movement claims and stock CAS updates together. `releaseReservedStockBatch()` also proves an outstanding reservation movement exists before releasing it. Partial-batch compensation is itself stock-version guarded; if rollback cannot be proven, the operation stops for manual reconciliation without deleting its evidence claim. The old best-effort sequential helpers remain compatibility-only and have no production caller.
 
 ### Restore
 
@@ -251,4 +251,5 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 ## Known Gaps
 
-- **Batch deduction not implemented** -- `deductMultiple()` is sequential (no batch equivalent like `reserveStockBatch()`)
+- The legacy sequential reserve/deduct/release/restore exports remain for compatibility, but no production order, checkout, payment, or fulfillment caller uses them. Do not add new callers; remove the exports only with an explicit package-contract decision.
+- Partial reservation/release generations and a foldable pool-aware ledger-v2 model remain open design work.

@@ -26,8 +26,9 @@ export interface Product {
   id: string;
   name: string;
   categoryId?: string | null;
-  categoryName?: string;
   price?: number;
+  categoryName?: string | null;
+  isActive?: boolean;
 }
 
 export const collectionTypes = [

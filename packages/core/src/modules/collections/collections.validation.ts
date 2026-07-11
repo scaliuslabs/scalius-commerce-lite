@@ -4,6 +4,7 @@ import {
     isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import { COLLECTION_CONFIG_ID_LIMIT } from "./collection-config";
 
 const canonicalPathSchema = z
     .string()
@@ -30,8 +31,8 @@ const canonicalPathUpdateSchema = z
     );
 
 const collectionConfigSchema = z.object({
-    categoryIds: z.array(z.string()).optional().default([]),
-    productIds: z.array(z.string()).optional().default([]),
+    categoryIds: z.array(z.string()).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
+    productIds: z.array(z.string()).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
     featuredProductId: z.string().optional(),
     maxProducts: z.number().int().min(1).max(24).optional().default(8),
     title: z.string().optional(),

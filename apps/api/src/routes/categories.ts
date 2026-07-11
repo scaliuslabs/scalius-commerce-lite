@@ -62,10 +62,22 @@ const categoryProductFilterSchema = z.object({
     .default("newest")
     .openapi({ description: "Sort order" }),
   search: z.string().optional().openapi({ description: "Search within category" }),
-  minPrice: z.coerce.number().optional().openapi({ description: "Minimum price filter" }),
-  maxPrice: z.coerce.number().optional().openapi({ description: "Maximum price filter" }),
+  minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
+  maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" })
+}).superRefine((value, ctx) => {
+  if (
+    value.minPrice !== undefined &&
+    value.maxPrice !== undefined &&
+    value.minPrice > value.maxPrice
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["maxPrice"],
+      message: "Maximum price must be greater than or equal to minimum price",
+    });
+  }
 });
 
 const storefrontCategorySchema = z.object({
@@ -168,8 +180,13 @@ const getCategoryProductsRoute = createRoute({
           discountPercentage: z.number().nullable(),
           discountAmount: z.number().nullable(),
           discountedPrice: z.number(),
+          priceVaries: z.boolean(),
         }).passthrough()),
         pagination: paginationSchema,
+        priceRange: z.object({
+          min: z.number().min(0),
+          max: z.number().min(0),
+        }),
         appliedFilters: z.record(z.string(), z.any()),
       })) } },
     },
@@ -230,6 +247,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     category: categoryForProducts,
     products: result.products,
     pagination: result.pagination,
+    priceRange: result.priceRange,
     appliedFilters,
   });
 });

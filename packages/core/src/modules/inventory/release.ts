@@ -2,7 +2,7 @@
 // Releases stock reservations when an order is cancelled or payment fails.
 // Decrements reservedStock (and restores preorderStock for pre-order pool).
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -327,7 +327,21 @@ export async function releaseReservedStockBatch(
     }
 
     if (failedMovementIndices.length > 0 || failedUpdateIndices.length > 0) {
-      await rollbackStrictReleaseBatch(db, insertedMovementIds, entriesToRelease, failedUpdateIndices);
+      const rollbackProven = await rollbackStrictReleaseBatch(
+        db,
+        claims,
+        insertedMovementIds,
+        entriesToRelease,
+        failedUpdateIndices,
+        variantLoad.variants,
+      );
+      if (!rollbackProven) {
+        return buildStrictReleaseFailure(
+          mergedEntries,
+          "Reservation release rollback could not be proven; manual reconciliation is required",
+          true,
+        );
+      }
 
       if (attempt < STRICT_RELEASE_RETRIES - 1) {
         await waitForStrictReleaseRetry(attempt);
@@ -518,6 +532,7 @@ function buildReleaseMovementInsert(
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
+        AND ${productVariants.reservedStock} >= ${Math.abs(claim.quantity)}
     `)
     .returning({ id: inventoryMovements.id });
 }
@@ -541,6 +556,7 @@ function buildReleaseVariantUpdate(
       and(
         eq(productVariants.id, entry.variantId),
         eq(productVariants.stockVersion, variant.stockVersion),
+        gte(productVariants.reservedStock, entry.quantity),
       ),
     )
     .returning({ id: productVariants.id });
@@ -548,35 +564,71 @@ function buildReleaseVariantUpdate(
 
 async function rollbackStrictReleaseBatch(
   db: Database,
+  claims: ReleaseMovementClaim[],
   insertedMovementIds: string[],
   entriesToRelease: StrictReleaseEntry[],
   failedUpdateIndices: number[],
-): Promise<void> {
-  const movementRollbackQueries = insertedMovementIds.map((id) =>
-    db.delete(inventoryMovements).where(eq(inventoryMovements.id, id)),
-  );
-  const counterRollbackQueries = entriesToRelease
-    .filter((_, index) => !failedUpdateIndices.includes(index))
-    .map((entry) =>
-      db
-        .update(productVariants)
-        .set({
-          reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
-          ...(entry.pool === "preorder"
-            ? { preorderStock: sql`MAX(0, ${productVariants.preorderStock} - ${entry.quantity})` }
-            : {}),
-          stockVersion: sql`${productVariants.stockVersion} + 1`,
-          updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(productVariants.id, entry.variantId)),
-    );
+  variants: Map<string, ReleaseVariantState>,
+): Promise<boolean> {
+  const rollbackQueries: SQLiteBatchItem[] = [];
 
-  if (movementRollbackQueries.length === 0 && counterRollbackQueries.length === 0) return;
+  for (let index = 0; index < entriesToRelease.length; index++) {
+    const entry = entriesToRelease[index]!;
+    const claim = claims[index]!;
+    const variant = variants.get(entry.variantId)!;
+    const movementInserted = insertedMovementIds.includes(claim.id);
+    const counterUpdated = !failedUpdateIndices.includes(index);
+
+    if (counterUpdated) {
+      rollbackQueries.push(
+        db
+          .update(productVariants)
+          .set({
+            reservedStock: sql`${productVariants.reservedStock} + ${entry.quantity}`,
+            ...(entry.pool === "preorder"
+              ? { preorderStock: sql`MAX(0, ${productVariants.preorderStock} - ${entry.quantity})` }
+              : {}),
+            stockVersion: sql`${productVariants.stockVersion} + 1`,
+            updatedAt: sql`unixepoch()`,
+          })
+          .where(and(
+            eq(productVariants.id, entry.variantId),
+            eq(productVariants.stockVersion, variant.stockVersion + 1),
+          ))
+          .returning({ id: productVariants.id }),
+      );
+      if (movementInserted) {
+        rollbackQueries.push(
+          db.delete(inventoryMovements)
+            .where(and(
+              eq(inventoryMovements.id, claim.id),
+              sql`EXISTS (
+                SELECT 1
+                FROM ${productVariants}
+                WHERE ${productVariants.id} = ${entry.variantId}
+                  AND ${productVariants.stockVersion} = ${variant.stockVersion + 2}
+              )`,
+            ))
+            .returning({ id: inventoryMovements.id }),
+        );
+      }
+    } else if (movementInserted) {
+      rollbackQueries.push(
+        db.delete(inventoryMovements)
+          .where(eq(inventoryMovements.id, claim.id))
+          .returning({ id: inventoryMovements.id }),
+      );
+    }
+  }
+
+  if (rollbackQueries.length === 0) return true;
 
   try {
-    await safeBatch(db, [...movementRollbackQueries, ...counterRollbackQueries] as SQLiteBatchItem[]);
+    const results = await safeBatch(db, rollbackQueries) as { id: string }[][];
+    return results.every((result) => Boolean(result?.length));
   } catch (err: unknown) {
     console.error("[inventory/release] Strict release rollback failed:", err);
+    return false;
   }
 }
 

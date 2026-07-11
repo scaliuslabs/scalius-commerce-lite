@@ -6,8 +6,8 @@ The storefront product page’s visual design is owner-protected. Do not redesig
 
 ## P1 correctness and discovery
 
-1. **Variant query HTML cache poisoning.** Product HTML cache removes `size` and `color`, but SSR uses them for the selected SKU, price, availability notice, OG price, and Product/ProductGroup JSON-LD. A variant request can poison base/other variant HTML. Immediate fix: bypass shared HTML Cache API for product requests containing selection parameters; keep base product pages cached.
-2. **Listing price/filter/sort is product-row truth, not SKU truth.** Category, search, collection, related, and typeahead cards use product price/discount while detail and checkout use SKU price/discount. Build one buyer-catalog pricing projection for minimum available effective price, price range, discount presence, and availability.
+1. **Resolved in batch 1: variant-selected HTML bypasses shared cache.** Base and tracking-only product URLs remain cacheable; `size`/`color` requests are private/no-store and cannot poison another selection.
+2. **Resolved in batch 3 for current buyer-card surfaces: listing price/filter/sort is SKU truth.** Category, search, collection/home modules, related cards, feed-backed UCP filtering, and command-palette search use one buyer projection with purchasable-SKU preference, exact interval matching, discount inheritance, availability, dynamic bounds, sold-out state, and price-variation semantics.
 3. **Canonical overrides can point to dead or different resources.** Shape-only validation accepts another slug/ID even though routes resolve only the saved resource handle. Until alias routing exists, require canonical segment equality; long-term add a unique URL-handle/redirect table.
 4. **Backend failures become cached-looking 404s.** Product and collection API clients collapse 404/500/timeout/malformed into `null`. Return `found | not_found | unavailable`; only authoritative 404 becomes 404, operational failure becomes no-store 503.
 5. **Collection detail is a capped homepage module.** It truncates at 24, has no truthful total/pagination, and ignores `featuredProduct`. Separate catalog collections from homepage merchandising sections.
@@ -19,12 +19,12 @@ The storefront product page’s visual design is owner-protected. Do not redesig
 
 ## P2 category/search and accessibility
 
-- Product cards need truthful sold-out state and “From”/range semantics based on buyer-resolvable SKUs.
-- Price filter defaults to 0–50,000 BDT even though the live catalog contains higher prices; derive bounds from effective catalog prices.
+- Resolved in batch 3: product cards expose truthful sold-out and “From” state from buyer-resolvable SKU pricing.
+- Resolved in batch 3: category/search price controls derive live effective SKU bounds and 50,000 is no longer a magic omission/cap.
 - Facets need multi-select, counts, selected chips, zero-result disabling, and scoping to the current result set.
 - Category filter drawer needs dialog semantics, focus trap/restoration, and a labelled close control.
 - Disabled pagination must not remain focusable `href="#"`; chevrons need accessible names.
-- Search palette needs dialog/combobox/listbox semantics, keyboard-focusable results, and a failure state distinct from no results.
+- Resolved in batch 3: search palette has dialog/combobox/listbox semantics, keyboard-focusable options, focus containment/restoration, and retryable failure distinct from no results.
 - Category and search pages duplicate listing/filter/pagination behavior; extract one `CatalogListingPage` boundary before broad iteration.
 
 ## Protected product-page changes allowed

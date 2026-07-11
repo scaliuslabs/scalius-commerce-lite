@@ -252,6 +252,16 @@ export interface BulkProductVariantsPayload {
   count: number;
 }
 
+export interface ProductVariantEditPlanInput {
+  creates: BulkProductVariantInput[];
+  updates: ProductVariantUpdateInput[];
+}
+
+export interface ProductVariantEditPlanPayload {
+  created: ProductVariantDto[];
+  updated: ProductVariantDto[];
+}
+
 export interface VariantSortItem {
   value: string;
   sortOrder: number;
@@ -399,6 +409,17 @@ export const bulkUpdateProductVariants = createServerFn({ method: "POST" })
     return apiPost<Record<string, never>>(
       `/products/${data.productId}/variants/bulk-update`,
       { updates: data.updates },
+    );
+  });
+
+export const applyProductVariantEditPlan = createServerFn({ method: "POST" })
+  .validator(
+    (data: { productId: string; plan: ProductVariantEditPlanInput }) => data,
+  )
+  .handler(async ({ data }): Promise<ProductVariantEditPlanPayload> => {
+    return apiPost<ProductVariantEditPlanPayload>(
+      `/products/${data.productId}/variants/edit-plan`,
+      data.plan,
     );
   });
 

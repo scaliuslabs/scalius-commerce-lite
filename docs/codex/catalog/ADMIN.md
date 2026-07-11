@@ -4,25 +4,25 @@ Last reviewed: 2026-07-12
 
 ## P0/P1 findings
 
-1. **Currency changes reinterpret the live catalog.** `CurrencySettingsBuilder.tsx` permits a normal ISO-code change, while `site-settings.service.ts` only updates settings and does not convert product, variant, shipping, discount, or tax amounts. Invalid exchange rates can be silently ignored while other fields save. Block code changes after money-bearing data exists unless an explicit migration exists; validate and write atomically.
-2. **Paginated collection reorder corrupts global order.** `admin/collections/index.tsx` renumbers only the current page to `0..N`; `collections.service.ts` persists those values blindly. Use an anchor/full-set reorder contract; immediately disable drag unless the complete ordered set is loaded.
-3. **Attribute values after the first 20 are unmanageable.** `AttributeValueEditor` and `AttributeValuesViewer` ignore server pagination and search only the first page. The service also merges presets against only the current page, duplicating values and totals.
-4. **Catalog query failures look empty or stale.** Products, Categories, Attributes, Collections, sortable tables, and Inventory discard query errors/refetch controls. Show explicit retry/stale states and disable mutations when authority is unavailable.
-5. **UI capabilities do not match API RBAC.** View-only routes expose create, edit, toggle, delete, restore, permanent delete, reorder, and stock-adjust actions that later fail at the API. Gate every action from a shared catalog capability model.
-6. **Variant bulk save is non-atomic and unsafe to retry.** The UI creates rows and then updates existing rows in two calls; a failure leaves successful creates marked as drafts. Use one atomic edit-plan endpoint or reconcile returned IDs and row-level failures.
+1. **Resolved in batch 1: base currency is locked after money-bearing catalog/order data exists.** Currency fields validate strictly and commit atomically; symbol/rate corrections remain possible.
+2. **Resolved in batch 1: collection drag reorder is disabled unless the complete ordered set is loaded.** Paginated slices cannot be renumbered as global order.
+3. **Resolved in batch 2: attribute values have authoritative server search, pagination, global/search totals, and complete preset reconciliation.** Normalized duplicates and rename collisions fail closed.
+4. **Resolved in batches 1–2: catalog query failures render retryable error state and disable authority-dependent mutations.** They no longer masquerade as empty data.
+5. **Resolved in batch 2 against the current API permission map: one capability model gates catalog and inventory actions.** Dedicated permissions for a few permanent/bulk actions remain a backend RBAC design gap.
+6. **Resolved in batch 3: the option spreadsheet uses one atomic mixed variant edit plan.** Failed plans preserve drafts and show actionable inline error; successful plans reconcile authoritative returned rows.
 7. **Variant image configuration is tied to SEO and array position.** The form stores an HTML marker in `metaDescription` and maps options to images by array index. Persist explicit stable media associations.
-8. **Collection product picker is truncated and racy.** It makes one request per category, reads only the first 50, has no request sequencing, and converts errors into “No products found.” Replace with one paginated multi-category server search.
+8. **Resolved in batch 3: collection product picker is one debounced, cancellable, paginated multi-category server query.** Loading, empty, failure, retry, and load-more are distinct; selected labels survive page/search changes.
 9. **Inventory hides operational deficits and allows false reason/sign pairs.** Admin clamps negative availability to zero, and accepts combinations such as positive “damage” or negative “stock received.” Show signed deficit and constrain reason by direction or use an absolute stocktake mode.
-10. **Single category hard delete leaves dangling collection config.** Single and bulk permanent deletion use different cleanup rules. Route both through one impact-aware primitive.
-11. **Detail loaders collapse operational failures into redirects.** Product/category/collection detail loaders redirect on 401/403/500/timeout as if the row was absent. Only typed 404 should redirect/not-found.
-12. **Variant drafts bypass the page unsaved-change guard.** Variant local state is not part of React Hook Form dirty state.
-13. **Form action links remain navigable during save.** A disabled Button wrapping a link does not disable the anchor; competing actions can leave during an in-flight save.
+10. **Resolved in batch 2: single and bulk category permanent deletion share one atomic cleanup primitive.** Malformed collection config blocks deletion instead of leaving dangling references.
+11. **Resolved in batch 2: detail loaders redirect only on typed 404.** Permission, conflict, timeout, and upstream failure reach the route error boundary.
+12. **Resolved in batch 2: option add/edit/bulk drafts participate in navigation protection.**
+13. **Resolved in batch 2: competing form actions are inert while save is in flight.**
 14. **Destructive confirmation is inconsistent.** Collection and attribute delete/permanent-delete paths can execute immediately while products/categories confirm. Permanent delete requires a consistent impact summary and confirmation.
 
 ## P2 workflow and UI findings
 
-- New products and collections default Active before buyer readiness is proven. Activation should require a shared readiness summary: resolvable SKU, positive effective price, media policy, category/content, and discovery outcome.
-- Product/category/collection create forms have no visible page-level `h1`; breadcrumbs alone are insufficient context.
+- New products and collections now default Draft; a shared activation-readiness gate remains open.
+- Product, category, and collection create/edit shells now expose compact visible page headings and workflow context.
 - Product detail omits flat discount, condition, feed/discovery state, and merchant option labels; it can render the internal variant-image marker and currently double-converts timestamps.
 - Product names in the main table are not semantic links; several icon controls have no accessible names; inventory tabs lack tab semantics; loading overlays lack `aria-busy`/live status.
 - Mobile product management keeps the desktop table and clips category, price, variants, and actions horizontally without a clear scroll affordance. Use a compact mobile row/card projection while preserving desktop density.

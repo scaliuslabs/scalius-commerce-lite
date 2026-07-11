@@ -33,6 +33,9 @@ This log records implementation state. The finding files remain the source for o
 - Full workspace typecheck: eight runnable packages passed; Astro reported zero errors, warnings, or hints across 286 files.
 - Full workspace lint, Worker environment parity, admin performance checks, generated SDK diff check, and `git diff --check` passed.
 - Post-deploy `pnpm release:check` passed API health/readiness, OpenAPI, dashboard auth gate, storefront health/pages/cache headers, discovery XML/feeds, UCP discovery/search/lookup/product, and Product schema.
+- Reliability batch 3 integrated suite: 432 files and 3,246 tests passed after the legacy order-atomicity harness was migrated to deterministic claim/release APIs.
+- Full workspace typecheck passed across eight runnable packages; Astro reported zero errors, warnings, or hints across 287 files. Full workspace lint, Worker binding parity, admin performance constraints, distribution secret checks, production builds, SDK regeneration, and `git diff --check` passed.
+- An executable SQLite projection test proves hidden default-SKU exclusion, purchasable-SKU preference, SKU-over-product discount inheritance, sold-out fallback, and exact interval matching. Read-only production D1 probes ranked roughly 400 rows into 28 product projections in 12.10 ms cold and 1.52 ms warm with zero writes.
 
 ## Deployment and live evidence
 
@@ -45,19 +48,29 @@ This log records implementation state. The finding files remain the source for o
 - Reliability batch 2 API version `d6a04312-94d7-4036-88b9-3261fe9f051e` and admin version `7a0808d3-a7c6-4c8a-a641-956061f3b0e1` each serve 100% traffic; API health and four readiness samples passed.
 - Fresh authenticated Chrome tabs confirmed current assets hydrate without console errors. New Product and New Collection show visible headings and unchecked Draft status. Attribute `brand` reports five values/nine product assignments, search for `Apple` reports one value/four assignments, and the compact pagination contract renders from authoritative totals.
 
-## Still open after batch 2
+## Landed in reliability batch 3 (local integration verified)
 
-- Legacy inventory deduction/release callers, partial reservation generations, and the ledger-v2 model remain P1.
-- Mixed create/update variant edit plans still use two API calls; each call is safer, but the combined UI plan is not atomic.
-- Collection product picking remains truncated/pagination-unsafe.
+- The option spreadsheet now submits one atomic mixed create/update edit plan. D1 version and stock-version guards execute inside the transaction, SKU swaps use temporary transaction-private values, normalized SKU/option/axis conflicts fail before commit, stock movements share the batch, and the UI reconciles only authoritative returned rows while preserving failed drafts.
+- Collection product selection now uses one debounced, cancellable, paginated multi-category endpoint and TanStack infinite query. It has authoritative loading/empty/error/retry/load-more states, stable selected labels, a 90-category parameter boundary, and no per-category request fan-out.
+- Production order, payment, fulfillment, stale-checkout, manual-edit, and trash-restore workflows no longer call the replay-unsafe sequential inventory APIs. Manual order edits use version-scoped deterministic reservation/release/deduct/restore claims with stock CAS batches, guarded rollback evidence, and pool-correct preorder behavior. The sequential exports remain compatibility-only.
+- Global listings, category listings, collection cards/home modules, related cards, feed filtering/sorting, UCP's feed-backed catalog, and command-palette product search now share the buyer-SKU pricing projection. It prefers purchasable SKUs, falls back truthfully when all are sold out, applies SKU-over-product discount inheritance, exposes `From`/sold-out card state, and computes availability-scoped discount truth.
+- Price filtering requires an actual SKU inside the requested interval; a product with only 50 and 150 price points does not falsely match 80–120. Category and search controls receive live effective SKU bounds, retain fractional values, and no longer treat 50,000 as a magic ceiling.
+- Public search no longer converts backend failure into an empty result. The command palette has a retryable failure state, dialog/combobox/listbox semantics, focus containment/restoration, labelled close control, keyboard-focusable result options, and buyer-SKU prices.
+- Collection config ID arrays are write-validated and legacy-normalized to 90. Cross-collection lookup sets use one bound `json_each()` token instead of exceeding D1's parameter ceiling.
+
+## Still open after batch 3
+
 - Variant-media configuration is still stored inside SEO metadata and matched positionally; this batch only prevents the marker from leaking in admin display.
-- Buyer listing price/filter/sort is still product-row based rather than one SKU-aware projection. Facets and price bounds remain inaccurate.
+- Partial reservation generations and the foldable pool-aware ledger-v2 model remain P1.
+- Facets remain single-select and do not yet expose result-scoped counts or zero-result disabling.
+- Public collection detail is still a capped merchandising resolver rather than a paginated catalog collection model.
+- The buyer projection is a derived window query. Correctness is unified, but very large catalogs should move it to a transactionally maintained projection table after write-path coverage and benchmark evidence exist.
 - The mobile admin catalog table, route-backed settings architecture, and broader keyboard/accessibility pass remain open.
 - Dedicated RBAC permissions do not yet exist for attribute restore/permanent delete, collection permanent delete, or bulk-permanent operations; the UI intentionally mirrors the current API permission map rather than inventing authority.
 
 ## Next implementation slice
 
-1. Design and implement one atomic mixed create/update variant edit-plan contract.
-2. Replace collection product picking with one paginated, cancellable server query.
-3. Migrate variant-media configuration out of SEO metadata into stable associations.
-4. Build one SKU-aware buyer pricing/availability projection for lists, filters, sort, cards, feeds, and UCP.
+1. Migrate variant-media configuration out of SEO metadata into stable associations.
+2. Design ledger v2 and partial reservation-generation reconciliation.
+3. Add result-scoped facet counts/multi-select and a paginated catalog-collection model.
+4. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.

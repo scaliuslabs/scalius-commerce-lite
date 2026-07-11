@@ -59,9 +59,17 @@ product resolution should not call `JSON.parse(collection.config)` directly.
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `listCollections` | `(db, { page?, limit?, search?, showTrashed?, sort?, order? })` | LIKE search, sortable by name/type/isActive/updatedAt/sortOrder (whitelist-validated), default limit 20 |
-| `getCollectionById` | `(db, id)` | Active collections only (excludes soft-deleted), returns null if not found |
-| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving only active/non-deleted collections |
-| `getCollectionCategoryOptions` | `(db)` | Lightweight active category options for collection builders |
+| `getCollectionById` | `(db, id)` | Excludes soft-deleted collections; returns null if not found |
+| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving requested order and excluding soft-deleted collections |
+| `getCollectionCategoryOptions` | `(db)` | Lightweight non-deleted category options for collection builders |
+| `listCollectionProductOptions` | `(db, { page?, limit?, search?, categoryIds? })` | Stable name/ID pagination for the collection picker; FTS search and OR-matched categories run in one two-statement D1 batch. Category IDs are deduplicated and capped at 90 so search/limit/offset binds stay below D1's 100-parameter ceiling. |
+
+The admin collection picker calls only `listCollectionProductOptions` through
+`GET /admin/collections/product-options`. Search is debounced and every filter
+combination owns a TanStack Query cache key, so a slower older request cannot
+replace a newer search. Load-more follows authoritative `pagination`; lookup
+failures remain distinct from an empty result. Selected product labels are
+resolved separately by ID and retained independently of picker pages.
 
 ### Mutations
 

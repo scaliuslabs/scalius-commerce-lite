@@ -4,6 +4,13 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("gates atomic variant edit plans behind product edit permission", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/products/prod_1/variants/edit-plan",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
+  });
+
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });

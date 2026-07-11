@@ -128,7 +128,11 @@ function createReleaseBatchDb(options: {
     delete(table: unknown) {
       return {
         where() {
-          return { kind: "deleteMovement" as const, table };
+          return {
+            returning() {
+              return { kind: "deleteMovement" as const, table };
+            },
+          };
         },
       };
     },
@@ -276,5 +280,26 @@ describe("releaseReservedStockBatch", () => {
       error: "No reservation movement found for order order_1 and variant var_a",
     });
     expect(batchCalls).toHaveLength(0);
+  });
+
+  it("requires manual reconciliation when a partial release rollback loses CAS", async () => {
+    const { db, batchCalls } = createReleaseBatchDb({
+      insertResults: [[{ id: "release_1" }]],
+      updateResults: [[], []],
+    });
+
+    const result = await releaseReservedStockBatch(
+      db,
+      [{ variantId: "var_a", quantity: 2, pool: "regular" }],
+      "order_1",
+      { releaseKey: "checkout-rollback:v1" },
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      manualReconciliationRequired: true,
+      error: "Reservation release rollback could not be proven; manual reconciliation is required",
+    });
+    expect(batchCalls).toHaveLength(2);
   });
 });

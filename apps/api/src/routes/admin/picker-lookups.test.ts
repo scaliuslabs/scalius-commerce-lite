@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
     getProductsByIds: vi.fn(),
     getProductDetails: vi.fn(),
     getCollectionCategoryOptions: vi.fn(),
+    listCollectionProductOptions: vi.fn(),
     getCollectionsByIds: vi.fn(),
     getCollectionById: vi.fn(),
 }));
@@ -29,6 +30,7 @@ vi.mock("@scalius/core/modules/collections", () => ({
     listCollections: vi.fn(),
     getCollectionById: mocks.getCollectionById,
     getCollectionCategoryOptions: mocks.getCollectionCategoryOptions,
+    listCollectionProductOptions: mocks.listCollectionProductOptions,
     getCollectionsByIds: mocks.getCollectionsByIds,
     createCollection: vi.fn(),
     updateCollection: vi.fn(),
@@ -119,6 +121,54 @@ describe("admin picker lookup routes", () => {
             data: { categories: [{ id: "cat_1", name: "Shirts" }] },
         });
         expect(mocks.getCollectionCategoryOptions).toHaveBeenCalledWith(db);
+    });
+
+    it("uses one paginated server query for multi-category product search", async () => {
+        const categoryIds = Array.from({ length: 95 }, (_, index) => `cat_${index}`);
+        mocks.listCollectionProductOptions.mockResolvedValue({
+            products: [
+                {
+                    id: "prod_1",
+                    name: "Blue Shirt",
+                    price: 25,
+                    categoryId: "cat_1",
+                    categoryName: "Shirts",
+                    isActive: true,
+                },
+            ],
+            pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+        });
+        const { app, db } = createTestApp();
+
+        const response = await app.request(
+            `/api/v1/admin/collections/product-options?page=2&limit=10&search=blue&categoryIds=${categoryIds.join(",")},cat_1`,
+        );
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(body).toEqual({
+            success: true,
+            data: {
+                products: [
+                    {
+                        id: "prod_1",
+                        name: "Blue Shirt",
+                        price: 25,
+                        categoryId: "cat_1",
+                        categoryName: "Shirts",
+                        isActive: true,
+                    },
+                ],
+                pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+            },
+        });
+        expect(mocks.listCollectionProductOptions).toHaveBeenCalledWith(db, {
+            page: 2,
+            limit: 10,
+            search: "blue",
+            categoryIds: categoryIds.slice(0, 90),
+        });
+        expect(mocks.getCollectionById).not.toHaveBeenCalled();
     });
 
     it("resolves collection picker summaries before the ID route can match", async () => {

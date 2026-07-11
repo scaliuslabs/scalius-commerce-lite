@@ -6,6 +6,7 @@ import {
     listCollections,
     getCollectionById,
     getCollectionCategoryOptions,
+    listCollectionProductOptions,
     getCollectionsByIds,
     createCollection,
     updateCollection,
@@ -42,8 +43,23 @@ const collectionPickerSummarySchema = collectionOptionSchema.extend({
     type: z.enum(["manual", "dynamic"]),
 });
 
+const collectionProductOptionSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    price: z.number(),
+    categoryId: z.string().nullable(),
+    categoryName: z.string().nullable(),
+    isActive: z.boolean(),
+});
+
 function parseLookupIds(ids: string | undefined): string[] {
     return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+}
+
+function parseProductOptionCategoryIds(ids: string | undefined): string[] {
+    return Array.from(
+        new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, 90);
 }
 
 // ── Form Options (categories + products for collection form) ──
@@ -116,6 +132,48 @@ app.openapi(categoryOptionsRoute, async (c) => {
     const db = c.get("db");
     const categoryOptions = await getCollectionCategoryOptions(db);
     return ok(c, { categories: categoryOptions });
+});
+
+// ── Product Options (server-filtered collection picker) ──
+
+const productOptionsRoute = createRoute({
+    method: "get",
+    path: "/product-options",
+    tags: ["Admin - Collections"],
+    summary: "Search products for collection forms",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(20).default(10),
+            search: z.string().trim().max(100).optional().default(""),
+            categoryIds: z.string().max(10000).optional().default("").openapi({
+                description: "Comma-separated category IDs. At most 90 IDs are applied.",
+            }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Paginated product options",
+            content: {
+                "application/json": {
+                    schema: paginatedEnvelope("products", collectionProductOptionSchema),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(productOptionsRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const result = await listCollectionProductOptions(db, {
+        page: query.page,
+        limit: query.limit,
+        search: query.search,
+        categoryIds: parseProductOptionCategoryIds(query.categoryIds),
+    });
+    return ok(c, result);
 });
 
 // ── List Collections ──

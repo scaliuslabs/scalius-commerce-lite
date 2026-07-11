@@ -5,13 +5,14 @@
 // order status transitions. Every endpoint that changes order status must
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
 import type { ReservationEntry, StockOperationResult } from "./types";
+import { validatePositiveQuantity } from "./validation";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -49,6 +50,16 @@ export type InventoryAction = "none" | "reserved" | "deducted" | "restored";
 type InventoryPoolName = "regular" | "preorder" | "backorder";
 type InventoryTransitionOperation = "deduct" | "release" | "reserve" | "restore";
 type StrictMovementOperation = Exclude<InventoryTransitionOperation, "reserve">;
+export type ClaimedInventoryEntryOperation = Extract<StrictMovementOperation, "deduct" | "restore">;
+
+export interface ClaimedInventoryEntryBatchInput {
+    orderId: string;
+    operation: ClaimedInventoryEntryOperation;
+    entries: ReservationEntry[];
+    /** Stable logical-operation key. Replaying the same key and payload is a no-op. */
+    claimKey: string;
+    pool: InventoryPoolName;
+}
 
 interface InventoryTransitionResult {
     success: boolean;
@@ -194,6 +205,46 @@ export async function applyInventoryForStatusChange(
 }
 
 /**
+ * Apply an explicit order-item inventory delta with a deterministic movement
+ * claim and a stockVersion CAS update in the same D1 batch.
+ *
+ * Manual order edits need to apply only the item delta before their guarded
+ * order write. Callers must derive `claimKey` from that immutable logical edit
+ * attempt (normally the order id, expected version, and operation purpose).
+ * Replaying the same key/order/variant/operation/pool tuple is idempotent; a
+ * different quantity for that tuple fails closed in the strict engine.
+ */
+export async function applyClaimedInventoryEntryBatch(
+    db: Database,
+    input: ClaimedInventoryEntryBatchInput,
+): Promise<void> {
+    if (!input.orderId.trim()) {
+        throw new ValidationError("Inventory claim requires an order id.");
+    }
+    if (!input.claimKey.trim()) {
+        throw new ValidationError("Inventory claim requires a stable claim key.");
+    }
+    for (const entry of input.entries) validatePositiveQuantity(entry.quantity);
+
+    const entries = mergeTransitionEntriesByVariant(input.entries, input.pool);
+    if (entries.length === 0) return;
+
+    await applyStrictInventoryTransitionMovements(
+        db,
+        {
+            id: input.orderId,
+            status: "",
+            inventoryAction: "",
+            inventoryPool: input.pool,
+            version: 0,
+        },
+        input.operation,
+        entries,
+        input.claimKey,
+    );
+}
+
+/**
  * Deduct physical stock permanently for all items in an order.
  * Used when an order transitions from reserved to confirmed/active.
  */
@@ -278,6 +329,7 @@ async function applyStrictInventoryTransitionMovements(
     order: InventoryTransitionOrder,
     operation: StrictMovementOperation,
     entries: ReservationEntry[],
+    claimKey?: string,
 ): Promise<void> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
@@ -285,9 +337,24 @@ async function applyStrictInventoryTransitionMovements(
 
     for (let attempt = 0; attempt < MAX_TRANSITION_RETRIES; attempt++) {
         const variants = await loadTransitionVariantStates(db, order.id, operation, mergedEntries);
-        const movementClaims = await buildTransitionMovementClaims(db, order, operation, mergedEntries, variants, pool);
-        const movementQueries = movementClaims.map((claim) =>
-            buildTransitionMovementInsert(db, claim, variants.get(claim.variantId)!),
+        const movementClaims = await buildTransitionMovementClaims(
+            db,
+            order,
+            operation,
+            mergedEntries,
+            variants,
+            pool,
+            claimKey,
+        );
+        const movementQueries = movementClaims.map((claim, index) =>
+            buildTransitionMovementInsert(
+                db,
+                claim,
+                variants.get(claim.variantId)!,
+                operation,
+                mergedEntries[index]!.quantity,
+                pool,
+            ),
         );
         const updateQueries = mergedEntries.map((entry) =>
             buildTransitionVariantUpdate(db, operation, entry, variants.get(entry.variantId)!, pool),
@@ -344,18 +411,58 @@ async function applyStrictInventoryTransitionMovements(
         }
 
         if (failedMovementIndices.length > 0 || failedUpdateIndices.length > 0) {
-            const rollbackQueries = mergedEntries
-                .filter((_, i) => !failedUpdateIndices.includes(i))
-                .map((entry) => buildTransitionVariantRollback(db, operation, entry, pool));
-            const movementRollbackQueries = insertedMovementIds.map((id) =>
-                db.delete(inventoryMovements).where(eq(inventoryMovements.id, id)),
-            );
+            const rollbackQueries: Array<{ query: unknown; description: string }> = [];
+            for (let i = 0; i < mergedEntries.length; i++) {
+                const entry = mergedEntries[i]!;
+                const claim = movementClaims[i]!;
+                const variant = variants.get(entry.variantId)!;
+                const movementInserted = insertedMovementIds.includes(claim.id);
+                const counterUpdated = !failedUpdateIndices.includes(i);
 
-            if (rollbackQueries.length > 0 || movementRollbackQueries.length > 0) {
+                if (counterUpdated) {
+                    rollbackQueries.push({
+                        query: buildTransitionVariantRollback(db, operation, entry, pool, variant),
+                        description: `counter rollback for ${entry.variantId}`,
+                    });
+                    if (movementInserted) {
+                        rollbackQueries.push({
+                            query: buildTransitionMovementRollbackAfterCounter(db, claim.id, entry.variantId, variant),
+                            description: `movement rollback for ${entry.variantId}`,
+                        });
+                    }
+                } else if (movementInserted) {
+                    rollbackQueries.push({
+                        query: db.delete(inventoryMovements)
+                            .where(eq(inventoryMovements.id, claim.id))
+                            .returning({ id: inventoryMovements.id }),
+                        description: `unapplied movement rollback for ${entry.variantId}`,
+                    });
+                }
+            }
+
+            if (rollbackQueries.length > 0) {
                 try {
-                    await safeBatch(db, [...movementRollbackQueries, ...rollbackQueries] as never);
+                    const rollbackResults = await safeBatch(
+                        db,
+                        rollbackQueries.map((entry) => entry.query) as never,
+                    ) as { id: string }[][];
+                    const missedRollback = rollbackResults.findIndex((result) => !result || result.length === 0);
+                    if (missedRollback >= 0) {
+                        throw new Error(`Unproven ${rollbackQueries[missedRollback]!.description}`);
+                    }
                 } catch (rollbackErr: unknown) {
                     console.error(`[inventory/transition] ${operation} rollback failed for order ${order.id}:`, rollbackErr);
+                    throwInventoryTransitionError(order.id, operation, {
+                        success: false,
+                        results: mergedEntries.map((entry) => ({
+                            success: false,
+                            variantId: entry.variantId,
+                            previousStock: 0,
+                            newStock: 0,
+                            error: "Inventory rollback could not be proven; manual reconciliation is required",
+                        })),
+                        error: "Inventory rollback could not be proven; manual reconciliation is required",
+                    });
                 }
             }
 
@@ -482,6 +589,7 @@ async function buildTransitionMovementClaims(
     entries: ReservationEntry[],
     variants: Map<string, InventoryVariantState>,
     pool: InventoryPoolName,
+    claimKey?: string,
 ): Promise<InventoryTransitionMovementClaim[]> {
     return Promise.all(entries.map(async (entry) => {
         const variant = variants.get(entry.variantId)!;
@@ -493,6 +601,7 @@ async function buildTransitionMovementClaims(
                 operation,
                 pool,
                 generation: await loadTransitionMovementGeneration(db, order.id, entry.variantId, operation),
+                claimKey,
             }),
             variantId: entry.variantId,
             orderId: order.id,
@@ -509,7 +618,14 @@ function buildTransitionMovementInsert(
     db: Database,
     claim: InventoryTransitionMovementClaim,
     variant: InventoryVariantState,
+    operation: StrictMovementOperation,
+    quantity: number,
+    pool: InventoryPoolName,
 ) {
+    const counterGuards = getTransitionCounterGuards(operation, quantity, pool);
+    const counterGuardSql = counterGuards.length > 0
+        ? sql` AND ${sql.join(counterGuards, sql` AND `)}`
+        : sql``;
     return db
         .insert(inventoryMovements)
         .select(sql`
@@ -527,6 +643,7 @@ function buildTransitionMovementInsert(
             FROM ${productVariants}
             WHERE ${productVariants.id} = ${claim.variantId}
               AND ${productVariants.stockVersion} = ${variant.stockVersion}
+              ${counterGuardSql}
         `)
         .returning({ id: inventoryMovements.id });
 }
@@ -538,6 +655,7 @@ function buildTransitionVariantUpdate(
     variant: InventoryVariantState,
     pool: InventoryPoolName,
 ) {
+    const counterGuards = getTransitionCounterGuards(operation, entry.quantity, pool);
     return db
         .update(productVariants)
         .set(getTransitionVariantUpdateSet(operation, entry.quantity, pool))
@@ -545,9 +663,24 @@ function buildTransitionVariantUpdate(
             and(
                 eq(productVariants.id, entry.variantId),
                 eq(productVariants.stockVersion, variant.stockVersion),
+                ...counterGuards,
             ),
         )
         .returning({ id: productVariants.id });
+}
+
+function getTransitionCounterGuards(
+    operation: StrictMovementOperation,
+    quantity: number,
+    pool: InventoryPoolName,
+): SQL[] {
+    if (operation === "restore") return [];
+
+    const guards: SQL[] = [gte(productVariants.reservedStock, quantity)];
+    if (operation === "deduct" && pool === "regular") {
+        guards.push(gte(productVariants.stock, quantity));
+    }
+    return guards;
 }
 
 function buildTransitionVariantRollback(
@@ -555,11 +688,36 @@ function buildTransitionVariantRollback(
     operation: StrictMovementOperation,
     entry: ReservationEntry,
     pool: InventoryPoolName,
+    variant: InventoryVariantState,
 ) {
     return db
         .update(productVariants)
         .set(getTransitionVariantRollbackSet(operation, entry.quantity, pool))
-        .where(eq(productVariants.id, entry.variantId));
+        .where(and(
+            eq(productVariants.id, entry.variantId),
+            eq(productVariants.stockVersion, variant.stockVersion + 1),
+        ))
+        .returning({ id: productVariants.id });
+}
+
+function buildTransitionMovementRollbackAfterCounter(
+    db: Database,
+    movementId: string,
+    variantId: string,
+    variant: InventoryVariantState,
+) {
+    return db
+        .delete(inventoryMovements)
+        .where(and(
+            eq(inventoryMovements.id, movementId),
+            sql`EXISTS (
+                SELECT 1
+                FROM ${productVariants}
+                WHERE ${productVariants.id} = ${variantId}
+                  AND ${productVariants.stockVersion} = ${variant.stockVersion + 2}
+            )`,
+        ))
+        .returning({ id: inventoryMovements.id });
 }
 
 function getTransitionVariantUpdateSet(
@@ -718,9 +876,13 @@ async function createTransitionMovementId(input: {
     operation: InventoryTransitionOperation;
     pool: InventoryPoolName;
     generation: number;
+    claimKey?: string;
 }): Promise<string> {
+    const namespace = input.claimKey
+        ? ["order-inventory-entry:v1", input.claimKey]
+        : ["order-inventory-transition:v1"];
     const payload = [
-        "order-inventory-transition:v1",
+        ...namespace,
         input.orderId,
         input.variantId,
         input.operation,

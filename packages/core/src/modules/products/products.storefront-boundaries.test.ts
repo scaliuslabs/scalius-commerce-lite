@@ -39,14 +39,14 @@ describe("storefront product query boundaries", () => {
 
         expect(source).toContain("publicProductBaseConditions");
         expect(source).toContain("publicProductHasBuyerResolvableSku");
-        expect(source).toContain("publicProductHasCustomerOptions");
-        expect(source).toContain("publicProductHasAvailableBuyerSku");
+        expect(source).toContain("buildBuyerCatalogPricingProjection");
         expect(source).toContain("const conditions: (SQL | undefined)[] = publicProductBaseConditions();");
         expect(source).toContain("const conditions: SQL[] = publicProductBaseConditions();");
         expect(source).toContain("publicProductHasBuyerResolvableSku(),");
         expect(source).toContain("normalizeDefaultSkuOptions");
-        expect(source).toContain("hasCustomerOptions: publicProductHasCustomerOptions(sql`${products.id}`).as(\"hasCustomerOptions\")");
-        expect(source).toContain("availableForSale: publicProductHasAvailableBuyerSku(sql`${products.id}`).as(\"availableForSale\")");
+        expect(source).toContain("hasCustomerOptions: buyerPricing.hasCustomerOptions");
+        expect(source).toContain("availableForSale: buyerPricing.availableForSale");
+        expect(source).toContain(".innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))");
         expect(source).toContain("hasVariants: Boolean(hasCustomerOptions)");
         expect(source).toContain("variant.isDefault !== true");
     });
@@ -59,7 +59,7 @@ describe("storefront product query boundaries", () => {
 
         const countQueryIndex = source.indexOf("let countQuery = db");
         const readWaveIndex = source.indexOf(
-            "const [productsList, totalCount] = await Promise.all([",
+            "const [productsList, totalCount, rawPriceRange] = await Promise.all([",
         );
         const rowsReadIndex = source.indexOf(
             "query.orderBy(orderBy).limit(limit).offset(offset).all()",
@@ -176,13 +176,14 @@ describe("storefront product query boundaries", () => {
         expect(lookupHelper).toContain("lookup_variant.id = public_lookup.value");
         expect(lookupHelper).toContain("lookup_variant.sku = public_lookup.value");
         expect(lookupHelper).toContain("lookup_variant.deleted_at IS NULL");
-        expect(listBody).toContain("const conditions = buildStorefrontProductConditions(params);");
+        expect(listBody).toContain("const conditions = buildStorefrontProductConditions(params, {}, buyerPricing);");
         expect(listBody).not.toContain("includeLookupHandles");
         expect(listBody).not.toContain("includeVariantLookups");
         expect(feedBody).toContain("const conditions = buildStorefrontProductConditions(params, {");
         expect(feedBody).toContain("includeLookupHandles: true");
         expect(feedBody).toContain("includeVariantLookups: true");
         expect(feedBody).toContain("includeCategorySearchMatches: true");
+        expect(feedBody).toContain("}, buyerPricing);");
         expect(feedBody).toContain("conditions.push(eq(products.excludeFromProductFeed, false));");
         expect(source).toContain("function buildFeedCategorySearchCondition");
         expect(source).toContain('MATCH ${`name : (${sanitized})`}');
@@ -295,11 +296,11 @@ describe("storefront product query boundaries", () => {
             sortHelperIndex,
         );
         const categoryConditionsIndex = source.indexOf(
-            "const conditions = buildStorefrontProductConditions({",
+            "const conditions = buildStorefrontProductConditions(scopedParams, {}, buyerPricing);",
             categoryHelperIndex,
         );
         const categorySortIndex = source.indexOf(
-            "const orderBy = getStorefrontProductOrderBy(sort);",
+            "const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);",
             categoryHelperIndex,
         );
         const categoryAttributeIndex = source.indexOf(
@@ -328,6 +329,8 @@ describe("storefront product query boundaries", () => {
         expect(categoryConditionsIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categorySortIndex).toBeGreaterThan(categoryHelperIndex);
         expect(categoryAttributeIndex).toBeGreaterThan(categoryHelperIndex);
+        expect(source.indexOf("category_price_range_filtered_products", categoryHelperIndex)).toBeGreaterThan(categoryHelperIndex);
+        expect(source.indexOf("priceRange:", categoryHelperIndex)).toBeGreaterThan(categoryHelperIndex);
         expect(guardedDiscountSortIndex).toBeGreaterThan(sortHelperIndex);
         expect(newestSortIndex).toBeGreaterThan(sortHelperIndex);
     });

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
     createCollection,
+    listCollectionProductOptions,
     resolveCollectionProducts,
     resolveCollectionProductsBatch,
     updateCollection,
@@ -13,12 +14,18 @@ type QueryChain = {
     where: ReturnType<typeof vi.fn>;
     limit: ReturnType<typeof vi.fn>;
     orderBy: ReturnType<typeof vi.fn>;
+    leftJoin: ReturnType<typeof vi.fn>;
+    innerJoin: ReturnType<typeof vi.fn>;
+    offset: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
+    as: ReturnType<typeof vi.fn>;
     limitValue?: number;
+    offsetValue?: number;
 };
 
 function createQueryChain(selection: Record<string, unknown> = {}): QueryChain {
     const chain = { selection } as QueryChain;
+    Object.assign(chain, selection);
     chain.from = vi.fn(() => chain);
     chain.where = vi.fn(() => chain);
     chain.limit = vi.fn((value: number) => {
@@ -26,15 +33,24 @@ function createQueryChain(selection: Record<string, unknown> = {}): QueryChain {
         return chain;
     });
     chain.orderBy = vi.fn(() => chain);
+    chain.leftJoin = vi.fn(() => chain);
+    chain.innerJoin = vi.fn(() => chain);
+    chain.offset = vi.fn((value: number) => {
+        chain.offsetValue = value;
+        return chain;
+    });
     chain.get = vi.fn();
+    chain.as = vi.fn(() => chain);
     return chain;
 }
 
-function createDb(batchResults: unknown[]): Database {
+function createDb(batchResults: unknown[]): Database & {
+    batch: ReturnType<typeof vi.fn>;
+} {
     return {
         select: vi.fn((selection: Record<string, unknown>) => createQueryChain(selection)),
         batch: vi.fn(async () => batchResults),
-    } as unknown as Database;
+    } as unknown as Database & { batch: ReturnType<typeof vi.fn> };
 }
 
 function product(id: string, categoryId: string | null = null) {
@@ -157,6 +173,42 @@ describe("resolveCollectionProducts", () => {
             "cat_a",
             "cat_b",
         ]);
+    });
+});
+
+describe("listCollectionProductOptions", () => {
+    it("returns stable paginated summaries from one bounded batch", async () => {
+        const rows = [
+            {
+                id: "prod_a",
+                name: "Alpha",
+                price: 100,
+                categoryId: "cat_a",
+                categoryName: "Category A",
+                isActive: true,
+            },
+        ];
+        const db = createDb([[{ count: 21 }], rows]);
+
+        const result = await listCollectionProductOptions(db, {
+            page: 2,
+            limit: 10,
+            search: "alpha",
+            categoryIds: [
+                ...Array.from({ length: 95 }, (_, index) => `cat_${index}`),
+                "cat_1",
+            ],
+        });
+
+        expect(result).toEqual({
+            products: rows,
+            pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+        });
+        expect(db.batch).toHaveBeenCalledTimes(1);
+        const statements = db.batch.mock.calls[0]?.[0] as QueryChain[];
+        expect(statements).toHaveLength(2);
+        expect(statements[1]?.limit).toHaveBeenCalledWith(10);
+        expect(statements[1]?.offset).toHaveBeenCalledWith(10);
     });
 });
 

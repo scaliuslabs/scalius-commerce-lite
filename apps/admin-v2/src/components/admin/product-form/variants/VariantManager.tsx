@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { useCurrency } from "@/hooks/use-currency";
+import { getServerFnError } from "@/lib/api-mutations/shared";
 import {
   Card,
   CardContent,
@@ -162,6 +163,7 @@ export function VariantManager({
   const [isBulkEditing, setIsBulkEditing] = useState(false);
   const [draftBulkUpdates, setDraftBulkUpdates] = useState<Record<string, BulkVariantDraftChanges>>({});
   const [draftNewIds, setDraftNewIds] = useState<string[]>([]);
+  const [bulkEditError, setBulkEditError] = useState<string | null>(null);
 
   // Filter and Sort State
   const [searchTerm, setSearchTerm] = useState("");
@@ -181,8 +183,8 @@ export function VariantManager({
     updateVariant,
     deleteVariant,
     bulkDeleteVariants,
-    bulkUpdateVariants,
     bulkCreateVariants,
+    applyVariantEditPlan,
     duplicateVariant,
     isLoading,
   } = useVariantOperations();
@@ -307,16 +309,19 @@ export function VariantManager({
       setIsBulkEditing(false);
       setDraftBulkUpdates({});
       setDraftNewIds([]);
+      setBulkEditError(null);
     } else {
       setIsBulkEditing(true);
       setDraftBulkUpdates({});
       setDraftNewIds([]);
+      setBulkEditError(null);
       setIsAdding(false);
       setEditingVariantId(null);
     }
   };
 
   const handleBulkEditChange = (variantId: string, field: VariantBulkEditField, value: VariantBulkEditValue) => {
+    setBulkEditError(null);
     setDraftBulkUpdates((prev) => ({
       ...prev,
       [variantId]: {
@@ -327,6 +332,7 @@ export function VariantManager({
   };
 
   const handleAddBulkRow = () => {
+    setBulkEditError(null);
     const newId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setDraftNewIds((prev) => [...prev, newId]);
 
@@ -343,6 +349,7 @@ export function VariantManager({
   };
 
   const handleRemoveBulkRow = (id: string) => {
+    setBulkEditError(null);
     setDraftNewIds((prev) => prev.filter((newId) => newId !== id));
     setDraftBulkUpdates((prev) => {
       const copy = { ...prev };
@@ -364,7 +371,7 @@ export function VariantManager({
         trackInventory: changes.trackInventory ?? true,
         size: changes.size || null,
         color: changes.color || null,
-        weight: changes.weight || null,
+        weight: changes.weight ?? null,
         discountType: "percentage" as const,
         discountAmount: null,
         discountPercentage: null,
@@ -390,37 +397,27 @@ export function VariantManager({
     }
 
     setIsSubmitting(true);
-    let success = true;
-
     try {
-      if (newDrafts.length > 0) {
-        const created = await bulkCreateVariants(productId, newDrafts);
-        if (created.length > 0) {
-          setLocalVariants((prev) => [...prev, ...created]);
-        } else {
-          success = false;
-        }
-      }
-
-      if (updateDrafts.length > 0) {
-        const updateSuccess = await bulkUpdateVariants(productId, updateDrafts);
-        if (updateSuccess) {
-          const updateById = new Map(updateDrafts.map(({ id, ...changes }) => [id, changes]));
-          setLocalVariants((prev) =>
-            prev.map((v) => {
-              const update = updateById.get(v.id);
-              return update ? { ...v, ...update } : v;
-            }),
-          );
-        } else {
-          success = false;
-        }
-      }
-
-      if (success) {
-        onVariantChange?.();
-        handleToggleBulkEdit();
-      }
+      setBulkEditError(null);
+      const result = await applyVariantEditPlan(
+        productId,
+        newDrafts,
+        updateDrafts,
+      );
+      const updatedById = new Map(result.updated.map((variant) => [variant.id, variant]));
+      setLocalVariants((previous) => [
+        ...previous.map((variant) => updatedById.get(variant.id) ?? variant),
+        ...result.created,
+      ]);
+      onVariantChange?.();
+      handleToggleBulkEdit();
+    } catch (error) {
+      setBulkEditError(
+        getServerFnError(
+          error,
+          "Option changes were not saved. Review the highlighted values and try again.",
+        ),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -623,6 +620,15 @@ export function VariantManager({
               optionLabels={normalizedOptionLabels}
             />
           )}
+
+          {isBulkEditing && bulkEditError ? (
+            <div
+              role="alert"
+              className="mx-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive sm:mx-3"
+            >
+              {bulkEditError}
+            </div>
+          ) : null}
 
           {isFirstOptionSetup && simpleVariantForSetup ? (
             <SimpleSkuTransitionSummary

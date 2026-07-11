@@ -7,13 +7,20 @@ import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
-    publicProductHasCustomerOptions,
 } from "../products/products.public-eligibility";
-import { normalizeCollectionConfig, stringifyCollectionConfig } from "./collection-config";
+import {
+    buildBuyerCatalogPricingProjection,
+    type BuyerCatalogPricingProjection,
+} from "../products/products.buyer-projection";
+import {
+    COLLECTION_CONFIG_ID_LIMIT,
+    normalizeCollectionConfig,
+    stringifyCollectionConfig,
+} from "./collection-config";
+import { ftsMatch } from "../../search/fts5";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -131,6 +138,90 @@ export async function getCollectionCategoryOptions(db: Database) {
         .from(categories)
         .where(isNull(categories.deletedAt))
         .limit(500);
+}
+
+const COLLECTION_PRODUCT_OPTION_CATEGORY_LIMIT = 90;
+
+export interface CollectionProductOptionsInput {
+    page?: number;
+    limit?: number;
+    search?: string;
+    categoryIds?: string[];
+}
+
+/**
+ * Lightweight, paginated product lookup for the collection builder.
+ *
+ * Category IDs are deliberately capped below D1's 100-bound-parameter limit:
+ * each statement may also bind the search expression, limit, and offset.
+ */
+export async function listCollectionProductOptions(
+    db: Database,
+    input: CollectionProductOptionsInput = {},
+) {
+    const page = Math.max(1, Math.trunc(input.page ?? 1));
+    const limit = Math.min(20, Math.max(1, Math.trunc(input.limit ?? 10)));
+    const search = input.search?.trim().slice(0, 100) ?? "";
+    const categoryIds = Array.from(
+        new Set((input.categoryIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, COLLECTION_PRODUCT_OPTION_CATEGORY_LIMIT);
+    const offset = (page - 1) * limit;
+
+    const whereConditions: SQL[] = [isNull(products.deletedAt)];
+    const searchCondition = search
+        ? ftsMatch("products_fts", "products", search)
+        : undefined;
+    if (searchCondition) whereConditions.push(searchCondition);
+    if (categoryIds.length > 0) {
+        whereConditions.push(inArray(products.categoryId, categoryIds));
+    }
+    const whereClause = and(...whereConditions);
+
+    const countQuery = db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(whereClause);
+    const optionsQuery = db
+        .select({
+            id: products.id,
+            name: products.name,
+            price: products.price,
+            categoryId: products.categoryId,
+            categoryName: categories.name,
+            isActive: products.isActive,
+        })
+        .from(products)
+        .leftJoin(categories, eq(categories.id, products.categoryId))
+        .where(whereClause)
+        .orderBy(asc(products.name), asc(products.id))
+        .limit(limit)
+        .offset(offset);
+
+    const [countRows = [], productOptions = []] = await safeBatch(db, [
+        countQuery,
+        optionsQuery,
+    ]) as unknown as [
+        Array<{ count: number }>,
+        Array<{
+            id: string;
+            name: string;
+            price: number;
+            categoryId: string | null;
+            categoryName: string | null;
+            isActive: boolean;
+        }>,
+    ];
+    const total = Number(countRows[0]?.count ?? 0);
+
+    return {
+        products: productOptions,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+        },
+    };
 }
 
 // ─────────────────────────────────────────
@@ -275,14 +366,17 @@ export async function reorderCollections(
 // ─────────────────────────────────────────
 
 /** Product select shape used for collection product resolution. */
-const buildCollectionProductSelect = () => ({
+const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
     id: products.id,
     name: products.name,
     slug: products.slug,
-    price: products.price,
-    discountType: products.discountType,
-    discountPercentage: products.discountPercentage,
-    discountAmount: products.discountAmount,
+    price: buyerPricing.basePrice,
+    discountType: buyerPricing.discountType,
+    discountPercentage: buyerPricing.discountPercentage,
+    discountAmount: buyerPricing.discountAmount,
+    discountedPrice: buyerPricing.effectivePrice,
+    maxBuyerPrice: buyerPricing.maxBuyerPrice,
+    availableForSale: buyerPricing.availableForSale,
     freeDelivery: products.freeDelivery,
     categoryId: products.categoryId,
     imageUrl: sql<string | null>`(
@@ -301,7 +395,7 @@ const buildCollectionProductSelect = () => ({
         ORDER BY "product_images"."sort_order" ASC
         LIMIT 1
     )`.as("imageAlt"),
-    hasVariants: publicProductHasCustomerOptions(sql`${products.id}`).as("hasVariants"),
+    hasVariants: buyerPricing.hasCustomerOptions,
 });
 
 type RawProduct = {
@@ -312,24 +406,29 @@ type RawProduct = {
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
+    discountedPrice: number;
+    maxBuyerPrice: number;
+    availableForSale: number;
     freeDelivery: boolean;
     categoryId: string | null;
     imageUrl: string | null;
     imageAlt: string | null;
-    hasVariants: boolean;
+    hasVariants: number;
 };
 
-export type ResolvedProduct = RawProduct & { discountedPrice: number };
+export type ResolvedProduct = Omit<RawProduct, "hasVariants" | "availableForSale" | "maxBuyerPrice"> & {
+    hasVariants: boolean;
+    availableForSale: boolean;
+    priceVaries: boolean;
+};
 
 function enrichProduct(p: RawProduct): ResolvedProduct {
+    const { hasVariants, availableForSale, maxBuyerPrice, ...product } = p;
     return {
-        ...p,
-        discountedPrice: calculateDiscountedPrice(
-            p.price,
-            p.discountType,
-            p.discountPercentage,
-            p.discountAmount,
-        ),
+        ...product,
+        hasVariants: Boolean(hasVariants),
+        availableForSale: Boolean(availableForSale),
+        priceVaries: maxBuyerPrice > p.discountedPrice,
     };
 }
 
@@ -358,22 +457,27 @@ export async function resolveCollectionProducts(
     const categoryIds = Array.isArray(config.categoryIds) ? config.categoryIds : [];
     const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
     const hasFeaturedProduct = !!config.featuredProductId;
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
 
     const noopQuery = db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`);
 
     if (productIds.length > 0) {
         // CASE 1: Specific products — ignore categoryIds
-        const specificProductIds = uniqueNonEmptyIds(productIds).slice(0, 100);
+        const specificProductIds = uniqueNonEmptyIds(productIds).slice(0, COLLECTION_CONFIG_ID_LIMIT);
         const batchResults = await db.batch([
             specificProductIds.length > 0
-                ? db.select(buildCollectionProductSelect())
+                ? db.select(buildCollectionProductSelect(buyerPricing))
                     .from(products)
-                    .where(and(...publicCollectionProductConditions(inArray(products.id, specificProductIds))))
+                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+                    .where(and(...publicCollectionProductConditions(sql`${products.id} IN (
+                        SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(specificProductIds)})
+                    )`)))
                     .limit(specificProductIds.length)
                 : noopQuery,
             hasFeaturedProduct
-                ? db.select(buildCollectionProductSelect())
+                ? db.select(buildCollectionProductSelect(buyerPricing))
                     .from(products)
+                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                     .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
                 : noopQuery,
         ]);
@@ -401,14 +505,16 @@ export async function resolveCollectionProducts(
             db.select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
                 .where(and(inArray(categories.id, specificCategoryIds), isNull(categories.deletedAt))),
-            db.select(buildCollectionProductSelect())
+            db.select(buildCollectionProductSelect(buyerPricing))
                 .from(products)
+                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                 .where(and(...publicCollectionProductConditions(inArray(products.categoryId, specificCategoryIds))))
                 .orderBy(desc(products.createdAt))
                 .limit(maxProducts),
             hasFeaturedProduct
-                ? db.select(buildCollectionProductSelect())
+                ? db.select(buildCollectionProductSelect(buyerPricing))
                     .from(products)
+                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                     .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
                 : noopQuery,
         ]);
@@ -429,8 +535,9 @@ export async function resolveCollectionProducts(
 
     if (hasFeaturedProduct) {
         // CASE 3: Only featured product
-        const featuredData = await db.select(buildCollectionProductSelect())
+        const featuredData = await db.select(buildCollectionProductSelect(buyerPricing))
             .from(products)
+            .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
             .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
             .get() as RawProduct | undefined;
 
@@ -484,25 +591,40 @@ export async function resolveCollectionProductsBatch(
     );
     const categoryIdsArr = categoryProductLimits.map(({ categoryId }) => categoryId);
     const featuredIdsArr = Array.from(allFeaturedIds);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
 
     const noopQuery = db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`);
 
     const batchResults = await safeBatch(db, [
         productIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, productIdsArr))))
+            ? db.select(buildCollectionProductSelect(buyerPricing)).from(products)
+                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+                .where(and(...publicCollectionProductConditions(sql`${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIdsArr)})
+                )`)))
             : noopQuery,
         ...categoryProductLimits.map(({ categoryId, maxProducts }) =>
-            db.select(buildCollectionProductSelect())
+            db.select(buildCollectionProductSelect(buyerPricing))
                 .from(products)
+                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
                 .where(and(...publicCollectionProductConditions(eq(products.categoryId, categoryId))))
                 .orderBy(desc(products.createdAt), asc(products.id))
                 .limit(maxProducts),
         ),
         categoryIdsArr.length > 0
-            ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(inArray(categories.id, categoryIdsArr), isNull(categories.deletedAt)))
+            ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(
+                sql`${categories.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdsArr)})
+                )`,
+                isNull(categories.deletedAt),
+            ))
             : noopQuery,
         featuredIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect()).from(products).where(and(...publicCollectionProductConditions(inArray(products.id, featuredIdsArr))))
+            ? db.select(buildCollectionProductSelect(buyerPricing)).from(products)
+                .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+                .where(and(...publicCollectionProductConditions(sql`${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(featuredIdsArr)})
+                )`)))
             : noopQuery,
     ]);
     const categoryProductsStartIndex = 1;

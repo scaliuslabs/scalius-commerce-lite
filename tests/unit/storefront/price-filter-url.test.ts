@@ -33,7 +33,7 @@ describe("storefront price filter URL params", () => {
     expect(params.get("maxPrice")).toBe("25000");
   });
 
-  it("keeps default max when min price is active", () => {
+  it("omits the unchanged maximum when only minimum price is active", () => {
     const params = new URLSearchParams();
 
     appendPriceFilterParams(params, {
@@ -44,7 +44,7 @@ describe("storefront price filter URL params", () => {
     });
 
     expect(params.get("minPrice")).toBe("10000");
-    expect(params.get("maxPrice")).toBe(DEFAULT_MAX_PRICE.toString());
+    expect(params.get("maxPrice")).toBeNull();
   });
 
   it("omits untouched default price filters", () => {

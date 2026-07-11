@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   updateVariant: vi.fn(),
   deleteVariant: vi.fn(),
   bulkCreateVariants: vi.fn(),
+  applyVariantEditPlan: vi.fn(),
   bulkDeleteVariants: vi.fn(),
   bulkUpdateVariants: vi.fn(),
   duplicateVariant: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("@scalius/core/modules/products/products.variants", () => ({
   updateVariant: mocks.updateVariant,
   deleteVariant: mocks.deleteVariant,
   bulkCreateVariants: mocks.bulkCreateVariants,
+  applyVariantEditPlan: mocks.applyVariantEditPlan,
   bulkDeleteVariants: mocks.bulkDeleteVariants,
   duplicateVariant: mocks.duplicateVariant,
   getProductVariants: mocks.getProductVariants,
@@ -149,6 +151,10 @@ function createTestApp() {
   mocks.updateVariant.mockResolvedValue({ id: "var_1" });
   mocks.deleteVariant.mockResolvedValue(undefined);
   mocks.bulkCreateVariants.mockResolvedValue([{ id: "var_1" }]);
+  mocks.applyVariantEditPlan.mockResolvedValue({
+    created: [{ id: "var_new" }],
+    updated: [{ id: "var_1" }],
+  });
   mocks.bulkDeleteVariants.mockResolvedValue(undefined);
   mocks.bulkUpdateVariants.mockResolvedValue(undefined);
   mocks.duplicateVariant.mockResolvedValue({ id: "var_2" });
@@ -272,6 +278,21 @@ describe("admin product cache invalidation", () => {
         ],
       },
       status: 201,
+    },
+    {
+      label: "atomic variant edit plan",
+      path: "/prod_1/variants/edit-plan",
+      method: "POST",
+      body: {
+        creates: [{
+          ...createVariantBody({ size: "M", sku: "SKU-NEW" }),
+          discountType: "percentage",
+          discountPercentage: null,
+          discountAmount: null,
+        }],
+        updates: [{ id: "var_1", price: 1300 }],
+      },
+      status: 200,
     },
     { label: "bulk delete variants", path: "/prod_1/variants/bulk-delete", method: "POST", body: { variantIds: ["var_1"] }, status: 204 },
     { label: "bulk update variants", path: "/prod_1/variants/bulk-update", method: "POST", body: { updates: [{ id: "var_1", price: 1300 }] }, status: 200 },

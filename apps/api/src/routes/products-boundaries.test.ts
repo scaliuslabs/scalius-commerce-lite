@@ -58,8 +58,8 @@ describe("product route query boundaries", () => {
     expect(source).toContain("const productFeedSchema = z.object({");
     expect(source).toContain("category: z.string().optional().openapi({ description: \"Category slug or ID filter\" })");
     expect(source).toContain("search: z.string().optional().openapi({ description: \"Search query\" })");
-    expect(source).toContain("minPrice: z.coerce.number().optional().openapi({ description: \"Minimum price filter\" })");
-    expect(source).toContain("maxPrice: z.coerce.number().optional().openapi({ description: \"Maximum price filter\" })");
+    expect(source).toContain("minPrice: z.coerce.number().min(0).optional().openapi({ description: \"Minimum effective buyer-SKU price\" })");
+    expect(source).toContain("maxPrice: z.coerce.number().min(0).optional().openapi({ description: \"Maximum effective buyer-SKU price\" })");
     expect(source).toContain("description: \"Comma-separated product IDs, product handles, variant IDs, or SKUs\"");
     expect(source).toContain("limit: z.coerce.number().int().min(1).max(100).optional().default(100)");
     expect(source).toContain("path: \"/feed\"");

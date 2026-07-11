@@ -24,6 +24,7 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import {
+    applyClaimedInventoryEntryBatch,
     applyInventoryForStatusChange,
     isStockDeductStatus,
     isStockReservableStatus,
@@ -31,10 +32,7 @@ import {
 } from "../inventory/inventory-transitions";
 import {
     reserveStockBatch,
-    deductMultiple,
-    releaseMultiple,
     releaseReservedStockBatch,
-    restoreDeductedMultiple,
     validateStockBatchAvailability,
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
@@ -1517,7 +1515,12 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
             quantity: e.quantity,
             orderId,
         }));
-        const reserveResult = await reserveStockBatch(db, batchItems, "regular");
+        const reserveResult = await reserveStockBatch(
+            db,
+            batchItems,
+            "regular",
+            { reservationKey: `admin-order-create:v1:${orderId}` },
+        );
         if (!reserveResult.success) {
             throw new ValidationError(
                 reserveResult.error ?? "Insufficient stock for one or more items",
@@ -1668,19 +1671,17 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     }
 
     // ── Convert reservations to permanent deductions ────────────────────
-    // Admin orders are immediately active, so we deduct right away.
-    // This decrements `stock` and clears `reservedStock` for each variant.
+    // Admin orders are immediately active. Route the conversion through the
+    // claimed order transition engine so a Worker retry cannot deduct twice.
     if (reservationEntries.length > 0) {
-        const deductResult = await deductMultiple(db, reservationEntries, orderId);
-        if (deductResult.success) {
-            await db.update(orders)
-                .set({ inventoryAction: "deducted", updatedAt: sql`unixepoch()` })
-                .where(eq(orders.id, orderId));
-        } else {
-            // Deduction failed -- log but don't fail the order.
-            // Stock is still reserved, so no overselling risk.
+        try {
+            await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
+        } catch (error: unknown) {
+            // The order remains reserved when the strict deduction cannot be
+            // proven, which fails safe against overselling.
             console.error(
-                `[orders.admin] Failed to deduct stock for order ${orderId}: ${deductResult.error}. Stock remains reserved.`,
+                `[orders.admin] Failed to prove stock deduction for order ${orderId}. Stock remains reserved.`,
+                error,
             );
         }
     }
@@ -1760,16 +1761,6 @@ function toReservationBatchItems(entries: ReservationEntry[], orderId: string) {
     }));
 }
 
-type InventoryBatchResult = {
-    success: boolean;
-    results: { success: boolean }[];
-    error?: string;
-};
-
-function successfulEntries(entries: ReservationEntry[], result: InventoryBatchResult): ReservationEntry[] {
-    return entries.filter((_, index) => result.results[index]?.success);
-}
-
 function groupEntriesByPool(entries: ReservationEntry[]) {
     const groups = new Map<NonNullable<ReservationEntry["pool"]>, ReservationEntry[]>();
     for (const entry of entries) {
@@ -1781,17 +1772,34 @@ function groupEntriesByPool(entries: ReservationEntry[]) {
     return groups;
 }
 
+function adminOrderInventoryClaimKey(
+    orderId: string,
+    expectedVersion: number,
+    purpose: string,
+): string {
+    return `admin-order-edit:v1:${orderId}:v${expectedVersion}:${purpose}`;
+}
+
 async function reserveEntriesForCompensation(
     db: Database,
     orderId: string,
+    expectedVersion: number,
     entries: ReservationEntry[],
+    purpose: string,
 ): Promise<{ success: boolean; error?: string }> {
     const reserved: ReservationEntry[] = [];
     for (const [pool, group] of groupEntriesByPool(entries)) {
-        const result = await reserveStockBatch(db, toReservationBatchItems(group, orderId), pool);
+        const result = await reserveStockBatch(
+            db,
+            toReservationBatchItems(group, orderId),
+            pool,
+            { reservationKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:reserve:${pool}`) },
+        );
         if (!result.success) {
             if (reserved.length > 0) {
-                await releaseMultiple(db, reserved, orderId);
+                await releaseReservedStockBatch(db, reserved, orderId, {
+                    releaseKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:rollback`),
+                });
             }
             return { success: false, error: result.error };
         }
@@ -1803,27 +1811,53 @@ async function reserveEntriesForCompensation(
 async function redeductRestoredEntriesForCompensation(
     db: Database,
     orderId: string,
+    expectedVersion: number,
     entries: ReservationEntry[],
+    purpose: string,
 ): Promise<{ success: boolean; error?: string }> {
     const preorderEntries = entries.filter((entry) => (entry.pool ?? "regular") === "preorder");
-    const directEntries = entries.filter((entry) => (entry.pool ?? "regular") === "regular");
+    const directEntries = entries.filter((entry) => (entry.pool ?? "regular") !== "preorder");
 
     if (preorderEntries.length > 0) {
-        const reserveResult = await reserveEntriesForCompensation(db, orderId, preorderEntries);
+        const reserveResult = await reserveEntriesForCompensation(
+            db,
+            orderId,
+            expectedVersion,
+            preorderEntries,
+            `${purpose}:preorder`,
+        );
         if (!reserveResult.success) {
             return reserveResult;
         }
-        const deductResult = await deductMultiple(db, preorderEntries, orderId);
-        if (!deductResult.success) {
-            await releaseMultiple(db, preorderEntries, orderId);
-            return { success: false, error: deductResult.error };
+        try {
+            await applyClaimedInventoryEntryBatch(db, {
+                orderId,
+                operation: "deduct",
+                entries: preorderEntries,
+                claimKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:deduct:preorder`),
+                pool: "preorder",
+            });
+        } catch (error: unknown) {
+            await releaseReservedStockBatch(db, preorderEntries, orderId, {
+                releaseKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:deduct-rollback:preorder`),
+            });
+            return { success: false, error: error instanceof Error ? error.message : "Failed to re-deduct preorder stock" };
         }
     }
 
     if (directEntries.length > 0) {
-        const deductResult = await deductMultiple(db, directEntries, orderId);
-        if (!deductResult.success) {
-            return { success: false, error: deductResult.error };
+        try {
+            for (const [pool, group] of groupEntriesByPool(directEntries)) {
+                await applyClaimedInventoryEntryBatch(db, {
+                    orderId,
+                    operation: "deduct",
+                    entries: group,
+                    claimKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:deduct:${pool}`),
+                    pool,
+                });
+            }
+        } catch (error: unknown) {
+            return { success: false, error: error instanceof Error ? error.message : "Failed to re-deduct stock" };
         }
     }
 
@@ -1833,21 +1867,16 @@ async function redeductRestoredEntriesForCompensation(
 async function releaseReservationsForOrderEdit(
     db: Database,
     orderId: string,
+    expectedVersion: number,
     entries: ReservationEntry[],
+    purpose: string,
     errorMessage: string,
 ): Promise<void> {
     if (entries.length === 0) return;
-    const result = await releaseMultiple(db, entries, orderId);
+    const result = await releaseReservedStockBatch(db, entries, orderId, {
+        releaseKey: adminOrderInventoryClaimKey(orderId, expectedVersion, purpose),
+    });
     if (!result.success) {
-        const releasedEntries = successfulEntries(entries, result);
-        if (releasedEntries.length > 0) {
-            const compensation = await reserveEntriesForCompensation(db, orderId, releasedEntries);
-            if (!compensation.success) {
-                console.error(
-                    `[orders.admin] Failed to compensate released reservations for order ${orderId}: ${compensation.error}`,
-                );
-            }
-        }
         throw new ValidationError(result.error ?? errorMessage);
     }
 }
@@ -1855,53 +1884,79 @@ async function releaseReservationsForOrderEdit(
 async function restoreDeductedForOrderEdit(
     db: Database,
     orderId: string,
+    expectedVersion: number,
     entries: ReservationEntry[],
+    purpose: string,
     errorMessage: string,
 ): Promise<void> {
     if (entries.length === 0) return;
-    const result = await restoreDeductedMultiple(db, entries, orderId);
-    if (!result.success) {
-        const restoredEntries = successfulEntries(entries, result);
-        if (restoredEntries.length > 0) {
-            const compensation = await redeductRestoredEntriesForCompensation(db, orderId, restoredEntries);
-            if (!compensation.success) {
-                console.error(
-                    `[orders.admin] Failed to compensate restored deducted stock for order ${orderId}: ${compensation.error}`,
-                );
-            }
+    try {
+        for (const [pool, group] of groupEntriesByPool(entries)) {
+            await applyClaimedInventoryEntryBatch(db, {
+                orderId,
+                operation: "restore",
+                entries: group,
+                claimKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `${purpose}:${pool}`),
+                pool,
+            });
         }
-        throw new ValidationError(result.error ?? errorMessage);
+    } catch (error: unknown) {
+        throw new ValidationError(error instanceof Error ? error.message : errorMessage);
     }
 }
 
 async function compensatePreWriteInventory(
     db: Database,
     orderId: string,
+    expectedVersion: number,
     acquiredReservations: ReservationEntry[],
     deductedEntries: ReservationEntry[],
     releasedReservations: ReservationEntry[],
     restoredDeductedEntries: ReservationEntry[],
 ) {
     if (restoredDeductedEntries.length > 0) {
-        const redeductResult = await redeductRestoredEntriesForCompensation(db, orderId, restoredDeductedEntries);
+        const redeductResult = await redeductRestoredEntriesForCompensation(
+            db,
+            orderId,
+            expectedVersion,
+            restoredDeductedEntries,
+            "compensate-restored",
+        );
         if (!redeductResult.success) {
             console.error(`[orders.admin] Failed to compensate restored deducted stock for order ${orderId}: ${redeductResult.error}`);
         }
     }
     if (releasedReservations.length > 0) {
-        const reserveResult = await reserveEntriesForCompensation(db, orderId, releasedReservations);
+        const reserveResult = await reserveEntriesForCompensation(
+            db,
+            orderId,
+            expectedVersion,
+            releasedReservations,
+            "compensate-released",
+        );
         if (!reserveResult.success) {
             console.error(`[orders.admin] Failed to compensate released reservations for order ${orderId}: ${reserveResult.error}`);
         }
     }
     if (deductedEntries.length > 0) {
-        const restoreResult = await restoreDeductedMultiple(db, deductedEntries, orderId);
-        if (!restoreResult.success) {
-            console.error(`[orders.admin] Failed to compensate deducted stock for order ${orderId}: ${restoreResult.error}`);
+        try {
+            for (const [pool, group] of groupEntriesByPool(deductedEntries)) {
+                await applyClaimedInventoryEntryBatch(db, {
+                    orderId,
+                    operation: "restore",
+                    entries: group,
+                    claimKey: adminOrderInventoryClaimKey(orderId, expectedVersion, `compensate-deducted:${pool}`),
+                    pool,
+                });
+            }
+        } catch (error: unknown) {
+            console.error(`[orders.admin] Failed to compensate deducted stock for order ${orderId}:`, error);
         }
     }
     if (acquiredReservations.length > 0) {
-        const releaseResult = await releaseMultiple(db, acquiredReservations, orderId);
+        const releaseResult = await releaseReservedStockBatch(db, acquiredReservations, orderId, {
+            releaseKey: adminOrderInventoryClaimKey(orderId, expectedVersion, "compensate-acquired"),
+        });
         if (!releaseResult.success) {
             console.error(`[orders.admin] Failed to compensate reserved stock for order ${orderId}: ${releaseResult.error}`);
         }
@@ -1995,7 +2050,12 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 throw new ValidationError(availability.error ?? "Insufficient stock for updated items");
             }
 
-            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(positiveEntries, id), pool);
+            const reserveResult = await reserveStockBatch(
+                db,
+                toReservationBatchItems(positiveEntries, id),
+                pool,
+                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-positive") },
+            );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
@@ -2003,24 +2063,43 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         }
 
         if (existingInventoryAction === "deducted" && !targetRestoresStock && positiveEntries.length > 0) {
-            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(positiveEntries, id), pool);
+            const reserveResult = await reserveStockBatch(
+                db,
+                toReservationBatchItems(positiveEntries, id),
+                pool,
+                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-positive-deducted") },
+            );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
             }
             acquiredReservations = positiveEntries;
 
-            const deductResult = await deductMultiple(db, positiveEntries, id);
-            if (!deductResult.success) {
-                await compensatePreWriteInventory(db, id, acquiredReservations, [], [], []);
+            try {
+                await applyClaimedInventoryEntryBatch(db, {
+                    orderId: id,
+                    operation: "deduct",
+                    entries: positiveEntries,
+                    claimKey: adminOrderInventoryClaimKey(id, existingOrder.version, "deduct-positive"),
+                    pool,
+                });
+            } catch (error: unknown) {
+                await compensatePreWriteInventory(db, id, existingOrder.version, acquiredReservations, [], [], []);
                 acquiredReservations = [];
-                throw new ValidationError(deductResult.error ?? "Failed to deduct additional stock for updated items");
+                throw new ValidationError(
+                    error instanceof Error ? error.message : "Failed to deduct additional stock for updated items",
+                );
             }
             acquiredReservations = [];
             deductedEntries = positiveEntries;
         }
 
         if (existingInventoryAction === "restored" && !targetRestoresStock && !targetDeductsStock && newEntries.length > 0) {
-            const reserveResult = await reserveStockBatch(db, toReservationBatchItems(newEntries, id), pool);
+            const reserveResult = await reserveStockBatch(
+                db,
+                toReservationBatchItems(newEntries, id),
+                pool,
+                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-reactivation") },
+            );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock to reactivate order");
             }
@@ -2032,7 +2111,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await releaseReservationsForOrderEdit(
                     db,
                     id,
+                    existingOrder.version,
                     oldEntries,
+                    "release-all",
                     "Failed to release order reservations",
                 );
                 releasedReservations = oldEntries;
@@ -2042,7 +2123,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await releaseReservationsForOrderEdit(
                     db,
                     id,
+                    existingOrder.version,
                     negativeEntries,
+                    "release-negative",
                     "Failed to release removed reservations",
                 );
                 releasedReservations = negativeEntries;
@@ -2052,7 +2135,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await restoreDeductedForOrderEdit(
                     db,
                     id,
+                    existingOrder.version,
                     oldEntries,
+                    "restore-all",
                     "Failed to restore deducted stock",
                 );
                 restoredDeductedEntries = oldEntries;
@@ -2062,7 +2147,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await restoreDeductedForOrderEdit(
                     db,
                     id,
+                    existingOrder.version,
                     negativeEntries,
+                    "restore-negative",
                     "Failed to restore removed deducted stock",
                 );
                 restoredDeductedEntries = negativeEntries;
@@ -2177,6 +2264,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await compensatePreWriteInventory(
                     db,
                     id,
+                    existingOrder.version,
                     acquiredReservations,
                     deductedEntries,
                     releasedReservations,
@@ -2267,7 +2355,12 @@ export async function restoreOrder(db: Database, id: string) {
                     quantity: e.quantity,
                     orderId: id,
                 }));
-                const reserveResult = await reserveStockBatch(db, batchItems, pool);
+                const reserveResult = await reserveStockBatch(
+                    db,
+                    batchItems,
+                    pool,
+                    { reservationKey: adminOrderInventoryClaimKey(id, order.version, "trash-restore") },
+                );
                 if (!reserveResult.success) {
                     throw new ValidationError(
                         `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
@@ -2299,7 +2392,9 @@ export async function restoreOrder(db: Database, id: string) {
 
     if (restoreResult.length === 0) {
         if (reservedEntries.length > 0) {
-            const releaseResult = await releaseMultiple(db, reservedEntries, id);
+            const releaseResult = await releaseReservedStockBatch(db, reservedEntries, id, {
+                releaseKey: adminOrderInventoryClaimKey(id, order.version, "trash-restore-cas-rollback"),
+            });
             if (!releaseResult.success) {
                 console.error(`[orders.admin] Failed to compensate restore reservation for ${id}:`, releaseResult.error);
             }

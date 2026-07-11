@@ -7,6 +7,9 @@ export interface NormalizedCollectionConfig {
     subtitle: string;
 }
 
+// Leave room below D1's 100-bound-parameter ceiling for surrounding predicates.
+export const COLLECTION_CONFIG_ID_LIMIT = 90;
+
 export const DEFAULT_COLLECTION_CONFIG: NormalizedCollectionConfig = {
     categoryIds: [],
     productIds: [],
@@ -41,7 +44,7 @@ function uniqueStringList(value: unknown): string[] {
                 .map((item) => typeof item === "string" ? item.trim() : "")
                 .filter(Boolean),
         ),
-    );
+    ).slice(0, COLLECTION_CONFIG_ID_LIMIT);
 }
 
 function productIdFromUnknown(value: unknown): string {
@@ -59,7 +62,7 @@ function uniqueProductIdList(value: unknown): string[] {
 
     return Array.from(
         new Set(value.map(productIdFromUnknown).filter(Boolean)),
-    );
+    ).slice(0, COLLECTION_CONFIG_ID_LIMIT);
 }
 
 function optionalString(value: unknown): string | undefined {

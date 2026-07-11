@@ -87,6 +87,12 @@ export interface PaginatedResponse<T> {
     total: number;
     totalPages: number;
   };
+  priceRange?: BuyerPriceRange;
+}
+
+export interface BuyerPriceRange {
+  min: number;
+  max: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +115,7 @@ export interface Product {
   discountPercentage: number | null;
   discountAmount: number | null;
   discountedPrice: number;
+  priceVaries?: boolean;
   freeDelivery: boolean;
   isActive: boolean;
   metaTitle: string | null;

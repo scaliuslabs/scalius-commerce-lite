@@ -12,6 +12,7 @@ const VARIANT_MUTATION_HOOKS = [
   "useDeleteProductVariant",
   "useBulkCreateProductVariants",
   "useBulkUpdateProductVariants",
+  "useApplyProductVariantEditPlan",
   "useBulkDeleteProductVariants",
   "useDuplicateProductVariant",
 ];
