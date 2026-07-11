@@ -46,6 +46,7 @@ import {
   convertVariantToAnalyticsData,
 } from "../lib/product-analytics";
 import { TOAST_CONFIG } from "../config";
+import { buildStorefrontComputerAddToCartLabel } from "../lib/computer-add-to-cart";
 const state = {
   variants: [] as Variant[],
   variantIndex: null as VariantIndex | null,
@@ -483,11 +484,12 @@ function updateStockAndActions(): void {
 function addToCartAccessibleName(): string {
   const productName = cache.container?.dataset.productName?.trim() || "product";
   const variantId = state.selection?.selectedVariant?.id;
-  const options = buildSelectedCartOptions()
-    .map((option) => `${option.name} ${option.label}`)
-    .join(", ");
   return variantId
-    ? `Add ${productName}, variant ${variantId}${options ? `, ${options}` : ""} to cart`
+    ? buildStorefrontComputerAddToCartLabel({
+        productName,
+        variantId,
+        options: buildSelectedCartOptions(),
+      })
     : `Add ${productName} to cart`;
 }
 

@@ -258,6 +258,35 @@ describe("ProductShortcode variant compatibility", () => {
     );
   });
 
+  it("keeps a maximum-length shortcode identity authorized under the shared name limit", () => {
+    const longVariantId = `var_${"v".repeat(21)}`;
+    act(() => {
+      root.render(
+        <ProductShortcode
+          productData={productData(
+            [
+              variant(
+                longVariantId,
+                `Size-${"L".repeat(100)}`,
+                `Color-${"B".repeat(100)}`,
+                4_500,
+                5,
+              ),
+            ],
+            { name: `Premium ${"P".repeat(92)}` },
+          )}
+        />,
+      );
+    });
+    const add = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("Add to Cart"));
+    const label = add?.getAttribute("aria-label") ?? "";
+    expect(add?.dataset.scaliusComputerAction).toBe("allow");
+    expect(label.length).toBeLessThanOrEqual(160);
+    expect(label).toContain(`variant ${longVariantId}`);
+    expect(label).toMatch(/ to cart$/u);
+  });
+
   it("supports Arrow-key option switching without preserving an impossible opposing value", () => {
     act(() => {
       root.render(
