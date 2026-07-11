@@ -82,6 +82,17 @@ function isGroundedCatalogPart(part: FlueConversationPart): boolean {
   );
 }
 
+function isPendingBrowserCommandPart(part: FlueConversationPart): boolean {
+  return (
+    part.type === "dynamic-tool" &&
+    part.toolName === "computer" &&
+    part.state === "output-available" &&
+    isRecord(part.output) &&
+    part.output.type === "client_command" &&
+    part.output.status === "awaiting_client_execution"
+  );
+}
+
 /**
  * Collapse Flue's separate tool/answer messages into one visible assistant
  * message per durable submission (or user turn without a submission id).
@@ -89,6 +100,22 @@ function isGroundedCatalogPart(part: FlueConversationPart): boolean {
 export function projectStorefrontAssistantMessages(
   messages: readonly FlueConversationMessage[],
 ): FlueConversationMessage[] {
+  const sourceIndexById = new Map(
+    messages.map((message, index) => [message.id, index]),
+  );
+  const continuationIndexBySubmission = new Map<string, number>();
+  messages.forEach((message, index) => {
+    if (
+      message.submissionId &&
+      message.parts.some(
+        (part) =>
+          part.type === "text" &&
+          isScaliusComputerResultContinuation(part.text, "storefront"),
+      )
+    ) {
+      continuationIndexBySubmission.set(message.submissionId, index);
+    }
+  });
   // Flue persists browser continuations as durable user-role messages. They are
   // control-plane acknowledgements, not buyer-authored transcript content, so
   // classify the exact validated envelope by content rather than role.
@@ -124,6 +151,23 @@ export function projectStorefrontAssistantMessages(
 
   const projectedByIndex = new Map<number, FlueConversationMessage>();
   for (const group of groups.values()) {
+    const submissionId = group.messages[0]?.submissionId;
+    const continuationIndex = submissionId
+      ? continuationIndexBySubmission.get(submissionId)
+      : undefined;
+    const latestCommandIndex = Math.max(
+      -1,
+      ...group.messages.flatMap((message) =>
+        message.parts.some(isPendingBrowserCommandPart)
+          ? [sourceIndexById.get(message.id) ?? -1]
+          : [],
+      ),
+    );
+    // A continuation after a client command completes that command. A later
+    // command is pending again and its provisional narration stays hidden.
+    const awaitsBrowserContinuation =
+      latestCommandIndex >= 0 &&
+      (continuationIndex === undefined || latestCommandIndex > continuationIndex);
     const visibleTextParts = new Map<
       FlueConversationMessage,
       FlueConversationPart[]
@@ -154,7 +198,11 @@ export function projectStorefrontAssistantMessages(
     let lastTextMessage: FlueConversationMessage | undefined;
     for (let index = group.messages.length - 1; index >= 0; index -= 1) {
       const candidate = group.messages[index];
-      if (candidate && (visibleTextParts.get(candidate)?.length ?? 0) > 0) {
+      if (
+        !awaitsBrowserContinuation &&
+        candidate &&
+        (visibleTextParts.get(candidate)?.length ?? 0) > 0
+      ) {
         lastTextMessage = candidate;
         break;
       }

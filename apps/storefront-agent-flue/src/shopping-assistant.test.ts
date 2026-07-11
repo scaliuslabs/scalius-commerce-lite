@@ -84,6 +84,12 @@ describe("Storefront shopping-assistant contract", () => {
       "client_command is still pending",
     );
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "Issue at most one computer command per response",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
+      "stop that response immediately",
+    );
+    expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
       "Browser success is never inventory, checkout, payment, or order authority",
     );
     expect(STOREFRONT_SHOPPING_ASSISTANT_INSTRUCTIONS).toContain(
@@ -155,8 +161,8 @@ describe("Storefront shopping-assistant contract", () => {
       input: { program: "help" },
       signal: new AbortController().signal,
     } as never);
-    await computer?.run({
-      input: { program: "observe" },
+    await scalius?.run({
+      input: { program: "help" },
       signal: new AbortController().signal,
     } as never);
     await scalius?.run({
@@ -164,8 +170,8 @@ describe("Storefront shopping-assistant contract", () => {
       signal: new AbortController().signal,
     } as never);
     await expect(
-      computer?.run({
-        input: { program: "observe" },
+      scalius?.run({
+        input: { program: "help" },
         signal: new AbortController().signal,
       } as never),
     ).rejects.toBeInstanceOf(StorefrontToolCallBudgetExceededError);
@@ -187,5 +193,46 @@ describe("Storefront shopping-assistant contract", () => {
         signal: new AbortController().signal,
       } as never),
     ).resolves.toMatchObject({ capability: "computer" });
+  });
+
+  it("admits exactly one concurrently batched browser command per submission", async () => {
+    const config = createStorefrontShoppingAssistantConfig({
+      id: INSTANCE_ID,
+      env: {
+        CANARY_AUTH_TOKEN: AUTH_TOKEN,
+        THREAD_ID_SIGNING_KEY: THREAD_KEY,
+        COMPUTER_TICKET_SIGNING_KEY: COMPUTER_KEY,
+      },
+    });
+    const computer = config.tools?.find((tool) => tool.name === "computer");
+    const run = (program: string) =>
+      computer?.run({
+        input: { program },
+        signal: new AbortController().signal,
+      } as never);
+
+    const outcomes = await Promise.allSettled([run("observe"), run("observe")]);
+    const fulfilled = outcomes.filter(
+      (outcome): outcome is PromiseFulfilledResult<unknown> =>
+        outcome.status === "fulfilled",
+    );
+    const rejected = outcomes.filter(
+      (outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+    );
+
+    expect(fulfilled).toHaveLength(1);
+    expect(fulfilled[0]?.value).toMatchObject({
+      type: "client_command",
+      status: "awaiting_client_execution",
+      ticket: expect.stringMatching(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/u),
+    });
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "A Storefront page command is already pending",
+        ),
+      }),
+    );
   });
 });

@@ -282,6 +282,44 @@ describe("Storefront Flue computer result proxy", () => {
     expect(agentFetch).toHaveBeenCalledOnce();
   });
 
+  it("forwards the shared protocol's confirmation-required result instead of stranding the continuation", async () => {
+    const agentFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      await expect(new Response(init?.body).json()).resolves.toMatchObject({
+        result: {
+          ok: false,
+          code: "CONFIRMATION_REQUIRED",
+          retryable: false,
+        },
+      });
+      return Response.json(
+        {
+          accepted: true,
+          authoritative: false,
+          status: "queued_for_agent_interpretation",
+          requestId: REQUEST_ID,
+        },
+        { status: 202 },
+      );
+    });
+
+    const response = await proxyStorefrontFlueComputerResult(
+      request(
+        resultBody({
+          result: {
+            ok: false,
+            code: "CONFIRMATION_REQUIRED",
+            output: "Direct confirmation is required.",
+            retryable: false,
+          },
+        }),
+      ),
+      dependencies({ agent: { fetch: agentFetch } }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(agentFetch).toHaveBeenCalledOnce();
+  });
+
   it.each(CROSS_ORIGIN_CASES)(
     "rejects %s before authority resolution",
     async (_label, headers) => {
