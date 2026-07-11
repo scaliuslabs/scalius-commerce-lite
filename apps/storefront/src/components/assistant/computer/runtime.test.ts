@@ -209,19 +209,24 @@ describe("Storefront assistant computer runtime", () => {
   it("permits only the explicitly allowed, enabled Add to Cart control", async () => {
     document.body.innerHTML = `
       <main>
-        <button>Add to Cart</button>
-        <button data-scalius-computer-action="allow">Add to Cart</button>
+        <input type="button" value="Add Shoes, variant var_red to cart" />
+        <div role="button" aria-label="Add Hat, variant var_blue to cart"></div>
+        <button data-scalius-computer-action="allow" aria-label="Add Shoes, variant var_red, Size 40 to cart">Add to Cart</button>
         <button data-scalius-computer-action="allow">Buy Now</button>
-        <button data-scalius-computer-action="allow" disabled>Add to Cart</button>
+        <button data-scalius-computer-action="allow" aria-label="Add Hat, variant var_green to cart" disabled>Add to Cart</button>
       </main>`;
-    const [unannotatedAdd, add, buy, disabledAdd] = Array.from(
+    const unannotatedInput = document.querySelector<HTMLInputElement>("input")!;
+    const unannotatedRole = document.querySelector<HTMLElement>('[role="button"]')!;
+    const [add, buy, disabledAdd] = Array.from(
       document.querySelectorAll<HTMLButtonElement>("button"),
     );
     const addClicked = vi.fn();
-    const unannotatedClicked = vi.fn();
+    const unannotatedInputClicked = vi.fn();
+    const unannotatedRoleClicked = vi.fn();
     const buyClicked = vi.fn();
     const disabledClicked = vi.fn();
-    unannotatedAdd?.addEventListener("click", unannotatedClicked);
+    unannotatedInput.addEventListener("click", unannotatedInputClicked);
+    unannotatedRole.addEventListener("click", unannotatedRoleClicked);
     add?.addEventListener("click", addClicked);
     buy?.addEventListener("click", buyClicked);
     disabledAdd?.addEventListener("click", disabledClicked);
@@ -233,17 +238,21 @@ describe("Storefront assistant computer runtime", () => {
       binding: runtime.binding,
       program: "observe",
     });
-    const addHandles = Array.from(
-      observed.output.matchAll(/(@r\d+\.e\d+) button "Add to Cart"/gu),
-      (match) => match[1],
-    );
-    const unannotatedAddHandle = addHandles[0];
-    const addHandle = addHandles[1];
+    const inputHandle = observed.output.match(
+      /(@r\d+\.e\d+) button "Add Shoes, variant var_red to cart"/u,
+    )?.[1];
+    const roleHandle = observed.output.match(
+      /(@r\d+\.e\d+) button "Add Hat, variant var_blue to cart"/u,
+    )?.[1];
+    const addHandle = observed.output.match(
+      /(@r\d+\.e\d+) button "Add Shoes, variant var_red, Size 40 to cart"/u,
+    )?.[1];
     const buyHandle = observed.output.match(
       /(@r\d+\.e\d+) button "Buy Now"/u,
     )?.[1];
     expect(addHandle).toBeTruthy();
-    expect(unannotatedAddHandle).toBeTruthy();
+    expect(inputHandle).toBeTruthy();
+    expect(roleHandle).toBeTruthy();
     expect(buyHandle).toBeTruthy();
 
     await expect(
@@ -259,14 +268,13 @@ describe("Storefront assistant computer runtime", () => {
     const refreshedBuyHandle = refreshed.output.match(
       /(@r\d+\.e\d+) button "Buy Now"/u,
     )?.[1];
-    const refreshedUnannotatedAddHandle = Array.from(
-      refreshed.output.matchAll(/(@r\d+\.e\d+) button "Add to Cart"/gu),
-      (match) => match[1],
-    )[0];
+    const refreshedInputHandle = refreshed.output.match(
+      /(@r\d+\.e\d+) button "Add Shoes, variant var_red to cart"/u,
+    )?.[1];
     await expect(
       runtime.execute({
         binding: runtime.binding,
-        program: `click ${refreshedUnannotatedAddHandle}`,
+        program: `click ${refreshedInputHandle}`,
       }),
     ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
     const refreshedAfterBlock = await runtime.execute({
@@ -276,15 +284,33 @@ describe("Storefront assistant computer runtime", () => {
     const buyAfterBlock = refreshedAfterBlock.output.match(
       /(@r\d+\.e\d+) button "Buy Now"/u,
     )?.[1];
+    const roleAfterBlock = refreshedAfterBlock.output.match(
+      /(@r\d+\.e\d+) button "Add Hat, variant var_blue to cart"/u,
+    )?.[1];
     await expect(
       runtime.execute({
         binding: runtime.binding,
-        program: `click ${buyAfterBlock}`,
+        program: `click ${roleAfterBlock}`,
+      }),
+    ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
+    const refreshedAfterRole = await runtime.execute({
+      binding: runtime.binding,
+      program: "observe",
+    });
+    const buyAfterRole = refreshedAfterRole.output.match(
+      /(@r\d+\.e\d+) button "Buy Now"/u,
+    )?.[1];
+    await expect(
+      runtime.execute({
+        binding: runtime.binding,
+        program: `click ${buyAfterRole}`,
       }),
     ).resolves.toMatchObject({ ok: false, code: "HUMAN_REQUIRED" });
     expect(addClicked).toHaveBeenCalledOnce();
     expect(refreshedBuyHandle).toBeTruthy();
-    expect(unannotatedClicked).not.toHaveBeenCalled();
+    expect(buyAfterBlock).toBeTruthy();
+    expect(unannotatedInputClicked).not.toHaveBeenCalled();
+    expect(unannotatedRoleClicked).not.toHaveBeenCalled();
     expect(buyHandle).toBeTruthy();
     expect(buyClicked).not.toHaveBeenCalled();
     expect(disabledClicked).not.toHaveBeenCalled();

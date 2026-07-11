@@ -649,7 +649,9 @@ describe("product controller assistant surface", () => {
     )!;
     expect(exactAdd.disabled).toBe(false);
     expect(exactAdd.dataset.scaliusComputerAction).toBe("allow");
-    await expect(clickNamed("Add to Cart")).resolves.toMatchObject({
+    await expect(
+      clickNamed("Rice, variant var_40_red, Weight 40, Style Red"),
+    ).resolves.toMatchObject({
       ok: true,
       code: "EXECUTED",
     });
@@ -677,7 +679,9 @@ describe("product controller assistant surface", () => {
     expect(exactAdd.hasAttribute("data-scalius-computer-action")).toBe(false);
     expect(Object.values(cartStore.get().items)).toHaveLength(1);
     await expect(clickNamed("Green")).resolves.toMatchObject({ ok: true });
-    await expect(clickNamed("Add to Cart")).resolves.toMatchObject({
+    await expect(
+      clickNamed("Rice, variant var_42_green, Weight 42, Style Green"),
+    ).resolves.toMatchObject({
       ok: true,
       code: "EXECUTED",
     });

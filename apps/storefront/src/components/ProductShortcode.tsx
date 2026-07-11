@@ -166,6 +166,11 @@ export default function ProductShortcode({
   const canAddToCart = Boolean(
     matchingVariant && isVariantAvailable(matchingVariant),
   );
+  const addToCartAriaLabel = canAddToCart && matchingVariant
+    ? `Add ${product.name}, variant ${matchingVariant.id}${
+        selectedSize ? `, ${option1Label} ${selectedSize}` : ""
+      }${selectedColor ? `, ${option2Label} ${selectedColor}` : ""} to cart`
+    : `Select an available ${product.name} option to add to cart`;
   const compatibleVariants = filterVariantsBySelection(buyerVariants, {
     selectedSize,
     selectedColor,
@@ -561,6 +566,7 @@ export default function ProductShortcode({
                 canAddToCart ? "allow" : undefined
               }
               disabled={!canAddToCart}
+              aria-label={addToCartAriaLabel}
               onClick={() => handleAddToCart(false)}
             >
               <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
