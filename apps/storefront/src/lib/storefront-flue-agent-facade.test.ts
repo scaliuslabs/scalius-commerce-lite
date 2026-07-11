@@ -372,12 +372,111 @@ describe("Storefront Flue agent facade", () => {
     expect(admitted.status).toBe(200);
     await expect(admitted.json()).resolves.toEqual({ aborted: true });
 
+    const rejectedBody = await proxyStorefrontFlueAgentFacade(
+      browserRequest("/abort", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+      dependencies({ agent: { fetch: agentFetch } }),
+    );
+    expect(rejectedBody.status).toBe(400);
+    await expect(rejectedBody.json()).resolves.toMatchObject({
+      error: { code: "STOREFRONT_FLUE_BODY_FORBIDDEN" },
+    });
+
     const missing = await proxyStorefrontFlueAgentFacade(
       browserRequest("/abort", { method: "POST" }, null),
       dependencies({ agent: { fetch: agentFetch } }),
     );
     expect(missing.status).toBe(401);
     expect(agentFetch).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a live-shaped zero-byte Stop body and completes authoritative settlement", async () => {
+    const stopGeneration = NOW + 2;
+    const gateOrder: string[] = [];
+    const backend = {
+      fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        expect(body.instanceId).toBe(INSTANCE_ID);
+        if (path.endsWith("/stop/begin")) {
+          gateOrder.push("begin");
+          return Response.json({ success: true, data: {
+            status: "pending",
+            stoppedThroughIssuedAtMs: stopGeneration,
+            pendingAdmissions: 1,
+            pendingDispatches: 0,
+          } });
+        }
+        if (path.endsWith("/stop/reconcile")) {
+          gateOrder.push("reconcile");
+          expect(body.stoppedThroughIssuedAtMs).toBe(stopGeneration);
+          return Response.json({ success: true, data: {
+            status: "reconciled",
+            readiness: "ready",
+            stoppedThroughIssuedAtMs: stopGeneration,
+            blockedDispatches: 0,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        if (path.endsWith("/stop/status")) {
+          gateOrder.push("status");
+          return Response.json({ success: true, data: {
+            status: "ready",
+            stoppedThroughIssuedAtMs: stopGeneration,
+            pendingAdmissions: 0,
+            pendingDispatches: 0,
+          } });
+        }
+        expect(path.endsWith("/stop/finish")).toBe(true);
+        gateOrder.push("finish");
+        return Response.json({ success: true, data: { status: "finished" } });
+      }),
+    };
+    const agentFetch = vi.fn(async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      expect(String(input)).toBe(`${PRIVATE_PATH}/abort`);
+      expect(init?.method).toBe("POST");
+      expect(init?.body).toBeUndefined();
+      const headers = new Headers(init?.headers);
+      expect(headers.get("content-type")).toBeNull();
+      expect(headers.get("authorization")).toBe(`Bearer ${SERVICE_TOKEN}`);
+      expect(headers.get("x-flue-abort-through-generation")).toBe(
+        String(stopGeneration),
+      );
+      gateOrder.push("flue-abort");
+      return Response.json(
+        { aborted: true },
+        { headers: { "Set-Cookie": "internal=never" } },
+      );
+    });
+
+    const request = browserRequest("/abort", {
+      method: "POST",
+      body: "",
+    });
+    expect(request.body).not.toBeNull();
+    const response = await proxyStorefrontFlueAgentFacade(
+      request,
+      dependencies({ backend, agent: { fetch: agentFetch } }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.has("set-cookie")).toBe(false);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ aborted: true });
+    expect(gateOrder).toEqual([
+      "begin",
+      "flue-abort",
+      "reconcile",
+      "status",
+      "finish",
+    ]);
   });
 
   it("keeps a failed abort fenced until a retry confirms and finishes Stop", async () => {
