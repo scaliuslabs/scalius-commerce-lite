@@ -1,53 +1,67 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getBucket } from "@scalius/core/integrations/storage";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import {
+  getBucket,
+  validateMediaObjectKey,
+} from "@scalius/core/integrations/storage";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// ─── GET /:key ───────────────────────────────────────────────────────────────
+type RangedR2ObjectBody = R2ObjectBody & {
+  range?: {
+    offset?: number;
+    length?: number;
+  };
+};
 
-const getMediaRoute = createRoute({
-  method: "get",
-  path: "/{key}",
-  tags: ["Media Server"],
-  summary: "Serve R2 objects in local development",
-  request: {
-    params: z.object({
-      key: z.string(),
-    }),
-  },
-  responses: {
-    200: {
-      description: "Media file",
-      content: { "*/*": { schema: z.any() } },
-    },
-    404: { description: "Not found" },
-    500: { description: "R2 bucket not available" },
-  }
-});
-
-app.openapi(getMediaRoute, async (c) => {
-  const key = c.req.valid("param").key;
-
+/**
+ * Local-only R2 passthrough. Media keys intentionally contain a `media/`
+ * prefix, so this route must capture the complete tail rather than one path
+ * segment. Production media is served by the configured R2 custom domain.
+ */
+app.get("/:key{.+}", async (c) => {
+  const key = validateMediaObjectKey(c.req.param("key"));
   const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
   if (!bucket) {
-    return c.text("R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.", 500);
+    return c.text(
+      "R2 Bucket binding not found. Expected binding 'BUCKET' or 'STORAGE'.",
+      500,
+    );
   }
 
-  const object = await bucket.get(key);
-  if (!object || !object.body) {
-    return c.notFound();
-  }
+  const rangeRequested = Boolean(c.req.header("range"));
+  const object = (await bucket.get(
+    key,
+    rangeRequested ? { range: c.req.raw.headers } : undefined,
+  )) as RangedR2ObjectBody | R2Object | null;
+  if (!object || !("body" in object)) return c.notFound();
 
   const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
 
-  if (object.httpMetadata?.contentType) {
-    headers.set("Content-Type", object.httpMetadata.contentType);
+  const offset = object.range?.offset;
+  const length = object.range?.length;
+  const ranged =
+    rangeRequested &&
+    Number.isSafeInteger(offset) &&
+    Number.isSafeInteger(length) &&
+    offset !== undefined &&
+    length !== undefined &&
+    offset >= 0 &&
+    length > 0;
+  if (ranged) {
+    headers.set("Content-Length", String(length));
+    headers.set(
+      "Content-Range",
+      `bytes ${offset}-${offset + length - 1}/${object.size}`,
+    );
+  } else {
+    headers.set("Content-Length", String(object.size));
   }
 
-  headers.set("etag", object.httpEtag);
-  headers.set("Cache-Control", "public, max-age=31536000");
-
-  return new Response(object.body as ReadableStream, { headers });
+  return new Response(object.body, { status: ranged ? 206 : 200, headers });
 });
 
 export { app as serveMediaRoute };
