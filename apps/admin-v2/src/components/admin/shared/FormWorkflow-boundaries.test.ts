@@ -17,6 +17,10 @@ const collectionFormSource = readFileSync(
   new URL("../collection-form/CollectionFormContainer.tsx", import.meta.url),
   "utf8",
 );
+const categoryFormSource = readFileSync(
+  new URL("../CategoryForm.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("admin form workflow boundaries", () => {
   it("replaces navigation links with inert buttons while saving", () => {
@@ -33,6 +37,25 @@ describe("admin form workflow boundaries", () => {
     expect(collectionFormSource).toContain(
       "canCreateNew={collectionActions.canCreate}",
     );
+  });
+
+  it("provides a fail-closed save capability without changing existing consumers", () => {
+    expect(actionBarSource).toContain("canSave = true");
+    expect(actionBarSource).toContain("disabled={isSubmitting || !canSave}");
+    expect(actionBarSource).toContain("if (canSave) onSave();");
+    expect(formContainerSource).toContain("canSave = true");
+    expect(formContainerSource).toContain("if (canSave) onSubmit();");
+    expect(formContainerSource).toContain("canSave={canSave}");
+    expect(formContainerSource).toContain("saveDisabledReason={saveDisabledReason}");
+  });
+
+  it("maps category create and edit forms to their exact save capabilities", () => {
+    expect(categoryFormSource).toContain("const canSave = isEdit");
+    expect(categoryFormSource).toContain("? categoryActions.canEdit");
+    expect(categoryFormSource).toContain(": categoryActions.canCreate;");
+    expect(categoryFormSource).toContain("canSave={canSave}");
+    expect(categoryFormSource).toContain("You do not have permission to edit categories.");
+    expect(categoryFormSource).toContain("You do not have permission to create categories.");
   });
 
   it("gives shared and catalog forms a visible page heading", () => {

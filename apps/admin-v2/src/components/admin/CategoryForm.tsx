@@ -79,6 +79,9 @@ export function CategoryForm({
 }: CategoryFormProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
+  const canSave = isEdit
+    ? categoryActions.canEdit
+    : categoryActions.canCreate;
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -166,6 +169,10 @@ export function CategoryForm({
       newUrl="/admin/categories/new"
       newLabel="New Category"
       canCreateNew={categoryActions.canCreate}
+      canSave={canSave}
+      saveDisabledReason={isEdit
+        ? "You do not have permission to edit categories."
+        : "You do not have permission to create categories."}
       saveLabel={isEdit ? "Save changes" : "Create category"}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
