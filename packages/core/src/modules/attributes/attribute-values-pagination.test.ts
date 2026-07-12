@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
     addAttributeValue,
     createAttribute,
+    listAttributes,
     listAttributeValues,
     renameAttributeValue,
     updateAttribute,
@@ -235,5 +236,24 @@ describe("attribute value pagination", () => {
 
         await expect(renameAttributeValue(db, "finish", "Matte", "glossy"))
             .rejects.toThrow('Value "glossy" already exists for this attribute');
+    });
+
+    it("resolves assigned definitions by one bounded ID set", async () => {
+        insertAttribute("material", []);
+        insertAttribute("brand", []);
+        insertAttribute("hidden", [], 123);
+
+        const result = await listAttributes(db, {
+            ids: ["brand", "missing", "material", "brand"],
+            page: 1,
+            limit: 90,
+        });
+
+        expect(result.attributes.map((attribute) => attribute.id)).toEqual(["brand", "material"]);
+        expect(result.pagination).toMatchObject({ total: 2, page: 1, limit: 90 });
+        await expect(listAttributes(db, {
+            ids: Array.from({ length: 91 }, (_, index) => `attr_${index}`),
+        })).rejects.toThrow("Select at most 90 attributes");
+        expect(Math.max(...boundParameterCounts)).toBeLessThanOrEqual(100);
     });
 });

@@ -79,6 +79,7 @@ export async function listAttributes(
         sort?: string;
         order?: "asc" | "desc";
         showTrashed?: boolean;
+        ids?: string[];
     } = {},
 ) {
     const {
@@ -88,6 +89,7 @@ export async function listAttributes(
         sort = "name",
         order = "asc",
         showTrashed = false,
+        ids: rawIds,
     } = options;
 
     const page = Math.max(1, Math.floor(rawPage));
@@ -109,6 +111,15 @@ export async function listAttributes(
                 like(productAttributes.slug, `%${search}%`),
             ),
         );
+    }
+
+    if (rawIds !== undefined) {
+        const ids = normalizeAttributeIds(rawIds);
+        whereConditions.push(ids.length > 0
+            ? sql`${productAttributes.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})
+            )`
+            : sql`0 = 1`);
     }
 
     const combinedWhereClause =
@@ -256,7 +267,7 @@ function normalizeAttributeIds(ids: string[]): string[] {
     const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
     if (uniqueIds.length === 0) return [];
     if (uniqueIds.length > MAX_ATTRIBUTE_BULK_IDS) {
-        throw new ValidationError(`Delete at most ${MAX_ATTRIBUTE_BULK_IDS} attributes at a time.`);
+        throw new ValidationError(`Select at most ${MAX_ATTRIBUTE_BULK_IDS} attributes at a time.`);
     }
     return uniqueIds;
 }

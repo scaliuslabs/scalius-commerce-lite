@@ -34,6 +34,7 @@ export interface AttributesQueryInput {
   search?: string;
   sort?: "name" | "slug" | "filterable" | "createdAt" | "updatedAt" | string;
   order?: "asc" | "desc" | string;
+  ids?: string;
   trashed?: boolean;
 }
 
@@ -96,6 +97,7 @@ function toAttributesParams(data: AttributesQueryInput): Record<string, string> 
   if (data.search) params.search = data.search;
   if (data.sort) params.sort = data.sort;
   if (data.order) params.order = data.order;
+  if (data.ids) params.ids = data.ids;
   if (data.trashed) params.trashed = "true";
   return params;
 }

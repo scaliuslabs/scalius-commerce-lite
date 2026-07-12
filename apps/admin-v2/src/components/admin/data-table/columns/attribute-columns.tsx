@@ -107,6 +107,7 @@ export function getAttributeColumns(
         return (
           <div className="flex items-center gap-2">
             <Switch
+              aria-label={`${attribute.filterable ? "Disable" : "Enable"} storefront filtering for ${attribute.name}`}
               checked={attribute.filterable}
               onCheckedChange={(checked) =>
                 opts.onToggleFilterable(attribute.id, checked)
@@ -125,7 +126,7 @@ export function getAttributeColumns(
     },
     {
       id: "valueCount",
-      header: "Values Used",
+      header: "Assigned values",
       cell: ({ row }) => {
         const attribute = row.original;
         return (
@@ -133,10 +134,11 @@ export function getAttributeColumns(
             <Button
               variant="ghost"
               size="sm"
+              aria-label={`View ${attribute.name} values and product usage`}
               onClick={() => opts.onViewValues(attribute.id, attribute.name)}
-              disabled={!attribute.valueCount || attribute.valueCount === 0}
+              disabled={opts.showTrashed || Boolean(attribute.deletedAt)}
               className="h-auto p-1"
-              title="View attribute values and usage"
+              title={`${attribute.valueCount ?? 0} assigned values; ${(attribute.options ?? []).length} saved presets`}
             >
               <Badge
                 variant="outline"
