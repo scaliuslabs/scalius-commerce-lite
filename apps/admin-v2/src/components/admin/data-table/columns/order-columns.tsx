@@ -110,9 +110,9 @@ export function getOrderColumns(
         const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
         const customerRoute = opts.orderActions.canEditOrders
           ? hasRecoveryLock
-            ? `/admin/orders/${order.id}`
-            : `/admin/orders/${order.id}/edit`
-          : `/admin/orders/${order.id}`;
+            ? "/admin/orders/$orderId"
+            : "/admin/orders/$orderId/edit"
+          : "/admin/orders/$orderId";
         return (
           <div className="space-y-1.5 max-w-[300px]">
             <div className="flex items-center gap-1.5">
@@ -120,7 +120,8 @@ export function getOrderColumns(
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Link
-                      to={customerRoute as string}
+                      to={customerRoute}
+                      params={{ orderId: order.id }}
                       className="group/link text-sm font-semibold text-[var(--foreground)] transition-all duration-200 hover:text-primary hover:underline"
                     >
                       {order.customerName}
@@ -382,7 +383,9 @@ export function getOrderColumns(
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link
-                    to={`/admin/orders/${order.id}` as string}
+                    to="/admin/orders/$orderId"
+                    params={{ orderId: order.id }}
+                    aria-label={`View order ${order.id}`}
                     className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:scale-105 hover:shadow-sm active:scale-95"
                   >
                     <Eye className="h-4 w-4" />

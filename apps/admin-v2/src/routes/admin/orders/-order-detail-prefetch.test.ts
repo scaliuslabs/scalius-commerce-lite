@@ -51,6 +51,7 @@ function createQueryClient(
   paymentMethod: string | null,
   options?: {
     hangPayments?: boolean;
+    rejectOrder?: boolean;
     rejectPayments?: boolean;
     rejectProviders?: boolean;
     rejectShipments?: boolean;
@@ -58,6 +59,9 @@ function createQueryClient(
 ) {
   const ensureQueryData = vi.fn(async (queryOptions: { queryKey: readonly unknown[] }) => {
     if (queryOptions.queryKey[0] === "orders" && queryOptions.queryKey[1] === "detail") {
+      if (options?.rejectOrder) {
+        throw new Error("order detail temporarily unavailable");
+      }
       return { id: "ord_1", paymentMethod };
     }
     return [];
@@ -135,6 +139,17 @@ describe("order detail prefetch", () => {
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
     await Promise.resolve();
     expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
+  });
+
+  it("rejects when the required order detail read fails so the route can show retry UI", async () => {
+    const { queryClient, prefetchQuery } = createQueryClient("stripe", {
+      rejectOrder: true,
+    });
+
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).rejects.toThrow(
+      "order detail temporarily unavailable",
+    );
+    expect(prefetchQuery).not.toHaveBeenCalled();
   });
 
   it("keeps the order page loadable when delivery provider prefetch fails", async () => {

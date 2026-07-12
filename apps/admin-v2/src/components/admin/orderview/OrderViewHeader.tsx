@@ -277,7 +277,10 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                   Edit locked
                 </>
               ) : (
-                <Link to={`/admin/orders/${order.id}/edit` as string}>
+                <Link
+                  to="/admin/orders/$orderId/edit"
+                  params={{ orderId: order.id }}
+                >
                   <Pencil className="h-4 w-4" />
                   Edit Order
                 </Link>

@@ -469,7 +469,10 @@ function OrdersPage() {
         });
         return;
       }
-      void navigate({ to: `/admin/orders/${id}/edit` as string });
+      void navigate({
+        to: "/admin/orders/$orderId/edit",
+        params: { orderId: id },
+      });
     },
     [navigate, orderActions.canEditOrders],
   );

@@ -1,7 +1,8 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { OrderView } from "~/components/admin/OrderView";
+import { Button } from "~/components/ui/button";
 import type { DeliveryProviderRecord } from "~/types/api-responses";
 import type { Order } from "~/components/admin/orderview/types";
 import {
@@ -13,7 +14,6 @@ import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,
 } from "~/lib/order-detail-prefetch";
-import { RouteErrorComponent } from "~/lib/route-error";
 import type {
   OrderDetailDto,
   OrderShipmentDto,
@@ -132,16 +132,12 @@ function toOrderViewModel(
 
 export const Route = createFileRoute("/admin/orders/$orderId/")({
   loader: async ({ context: { queryClient }, params }) => {
-    try {
-      await prefetchOrderDetailQueries(queryClient, params.orderId);
-    } catch {
-      throw redirect({ to: "/admin/orders" });
-    }
+    await prefetchOrderDetailQueries(queryClient, params.orderId);
   },
   head: ({ params }) => ({
     meta: [{ title: `Order #${params.orderId} | Scalius Admin` }],
   }),
-  errorComponent: RouteErrorComponent,
+  errorComponent: OrderDetailErrorComponent,
   component: OrderViewPage,
 });
 
@@ -167,7 +163,6 @@ function OrderViewPage() {
   });
 
   const fullOrder = useMemo(() => {
-    if (!order) return null;
     const hydratedShipments = isHydrated ? shipments : [];
     const activeProviders = isHydrated && Array.isArray(providers)
       ? (providers as DeliveryProviderRecord[]).filter((p) => p.isActive)
@@ -175,6 +170,30 @@ function OrderViewPage() {
     return toOrderViewModel(order, hydratedShipments, activeProviders);
   }, [isHydrated, order, shipments, providers]);
 
-  // fullOrder is guaranteed non-null — useSuspenseQuery ensures order exists
-  return <OrderView order={fullOrder!} />;
+  return <OrderView order={fullOrder} />;
+}
+
+function OrderDetailErrorComponent({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  return (
+    <section className="mx-auto max-w-xl rounded-lg border bg-card p-6 shadow-sm">
+      <h1 className="text-lg font-semibold">Order could not be loaded</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {error.message || "The order detail service did not return a usable response."}
+      </p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={reset}>
+          Try again
+        </Button>
+        <Button asChild type="button" size="sm" variant="outline">
+          <Link to="/admin/orders">Back to orders</Link>
+        </Button>
+      </div>
+    </section>
+  );
 }

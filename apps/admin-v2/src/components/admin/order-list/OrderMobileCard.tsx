@@ -40,7 +40,6 @@ import {
 import ShipmentStatusIndicator from "../ShipmentStatusIndicator";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { useCurrency } from "@/hooks/use-currency";
-import { useNavigate } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { formatRelativeDate } from "@scalius/shared/timestamps";
 import type { OrderActionPermissions } from "@/lib/order-action-permissions";
@@ -97,7 +96,6 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   onShipmentStatusUpdated,
   orderActions,
 }: OrderMobileCardProps) {
-  const navigate = useNavigate();
   const { symbol } = useCurrency();
   const hasPaymentRecovery =
     order.paymentRecovery != null && order.paymentRecovery.state !== "none";
@@ -109,9 +107,9 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
     hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
   const customerRoute = orderActions.canEditOrders
     ? hasRecoveryLock
-      ? `/admin/orders/${order.id}`
-      : `/admin/orders/${order.id}/edit`
-    : `/admin/orders/${order.id}`;
+      ? "/admin/orders/$orderId"
+      : "/admin/orders/$orderId/edit"
+    : "/admin/orders/$orderId";
   return (
     <Card
       className={`mb-3 overflow-hidden border transition-all duration-200 ${
@@ -150,7 +148,8 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             )}
             <div>
               <Link
-                to={customerRoute as string}
+                to={customerRoute}
+                params={{ orderId: order.id }}
                 className="text-base font-semibold text-[var(--foreground)] hover:text-primary transition-colors"
               >
                 {order.customerName}
@@ -269,13 +268,14 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
             {formatDate(order.createdAt)}
           </span>
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => void navigate({ to: `/admin/orders/${order.id}` as string })}
-            >
-              <Eye className="h-4 w-4" />
+            <Button asChild variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Link
+                to="/admin/orders/$orderId"
+                params={{ orderId: order.id }}
+                aria-label={`View order ${order.id}`}
+              >
+                <Eye className="h-4 w-4" />
+              </Link>
             </Button>
 
             {!showTrashed && orderActions.canEditOrders && !hasActiveRefundOperation && !shipmentLocked && (
