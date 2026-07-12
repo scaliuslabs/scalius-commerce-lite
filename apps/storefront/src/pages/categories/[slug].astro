@@ -101,6 +101,7 @@ const pageDescription =
   `Browse products in the ${category?.name} category.`;
 const productListPathname = Astro.url.pathname;
 const canonicalFilterState = JSON.stringify(currentFilters);
+const hasListingQuery = Astro.url.searchParams.size > 0;
 
 function plainText(value: string | null | undefined): string | null {
   const text = value
@@ -196,6 +197,7 @@ const collectionJsonLd =
   discoverySettings.structuredData.collections &&
   category &&
   !category.noIndex &&
+  !hasListingQuery &&
   canonicalUrl &&
   storefrontUrl
   ? serializeJsonForInlineScript({
@@ -378,17 +380,19 @@ const collectionJsonLd =
               <div class="flex flex-col items-center justify-center py-16 px-4 bg-white rounded-lg shadow-sm border border-gray-100 text-center">
                 <Search className="w-16 h-16 text-gray-400 mb-4" />
                 <h3 class="text-xl font-bold text-gray-900 mb-2">
-                  No products found
+                  {activeFilterCount > 0 ? "No products match these filters" : "No products in this category yet"}
                 </h3>
                 <p class="text-gray-500 mb-6 max-w-md">
-                  Try adjusting your filters to find what you're looking for.
+                  {activeFilterCount > 0
+                    ? "Remove a filter or broaden the price range to see more products."
+                    : "Browse the rest of the store while this category is being prepared."}
                 </p>
                 <a
-                  href={`/categories/${category?.slug}`}
+                  href={activeFilterCount > 0 ? `/categories/${category?.slug}` : "/search"}
                   class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  Reset All Filters
+                  {activeFilterCount > 0 ? "Reset all filters" : "Browse all products"}
                 </a>
               </div>
             )
@@ -446,6 +450,8 @@ const collectionJsonLd =
   function setupSortFunctionality() {
     const sortSelect = document.getElementById("sortBy");
     if (!(sortSelect instanceof HTMLSelectElement)) return;
+    if (sortSelect.dataset.sortBound === "true") return;
+    sortSelect.dataset.sortBound = "true";
 
     sortSelect.addEventListener("change", () => {
       const currentFilters = readCanonicalFilters(sortSelect);

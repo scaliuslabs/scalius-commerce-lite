@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getApiV1Search: vi.fn(),
   getApiV1ProductsSearch: vi.fn(),
   getConfiguredSdkClient: vi.fn(() => ({ baseUrl: "https://api.example.test" })),
+  edgeCacheKeys: [] as string[],
 }));
 
 vi.mock("@scalius/api-client/sdk", () => ({
@@ -24,13 +25,17 @@ vi.mock("./client", () => ({
 vi.mock("@/lib/edge-cache", () => ({
   CACHE_TTL: { LONG: 86400, MEDIUM: 3600, SHORT: 300 },
   withEdgeCache: async <T>(
-    _key: string,
+    key: string,
     fetcher: () => Promise<T | null>,
-  ): Promise<T | null> => fetcher(),
+  ): Promise<T | null> => {
+    mocks.edgeCacheKeys.push(key);
+    return fetcher();
+  },
 }));
 
 import {
   getAllProducts,
+  getProductsByCategory,
   getProductBySlugResult,
   searchProductsForForm,
 } from "./products";
@@ -54,6 +59,7 @@ describe("storefront product API helpers", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
+    mocks.edgeCacheKeys.length = 0;
   });
 
   it("does not convert API product-list errors into an empty catalog", async () => {
@@ -139,6 +145,28 @@ describe("storefront product API helpers", () => {
       facets: [],
       priceRange: undefined,
     });
+  });
+
+  it("uses the fresh category projection cache namespace", async () => {
+    const pagination = { page: 1, limit: 20, total: 0, totalPages: 0 };
+    mocks.getApiV1CategoriesBySlugProducts.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          category: { id: "cat_1", name: "Shoes", slug: "shoes" },
+          products: [],
+          pagination,
+          priceRange: { min: 1200, max: 5000 },
+          facets: [],
+        },
+      },
+    });
+
+    await expect(getProductsByCategory("shoes")).resolves.toMatchObject({
+      priceRange: { min: 1200, max: 5000 },
+    });
+    expect(mocks.edgeCacheKeys).toContain("category_products_v2_shoes_default");
+    expect(mocks.edgeCacheKeys).not.toContain("category_products_shoes_default");
   });
 
   it("uses the product search endpoint for product form lookup", async () => {
