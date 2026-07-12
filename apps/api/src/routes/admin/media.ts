@@ -38,6 +38,7 @@ import {
     MEDIA_SIGNATURE_READ_BYTES,
 } from "@scalius/shared/media-policy";
 import { ValidationError } from "@scalius/core/errors";
+import { readExactMediaPart } from "./media-upload-body";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const mediaErrorResponses = { ...errorResponses, 409: conflictResponse };
@@ -64,50 +65,6 @@ const uploadSessionSchema = z.object({
         size: z.number().int().positive(),
     })).optional(),
 });
-
-async function inspectBodyPrefix(body: ReadableStream<Uint8Array>, byteLimit: number) {
-    const reader = body.getReader();
-    const chunks: Uint8Array[] = [];
-    const signature = new Uint8Array(byteLimit);
-    let signatureLength = 0;
-    while (signatureLength < byteLimit) {
-        const result = await reader.read();
-        if (result.done) break;
-        chunks.push(result.value);
-        const take = Math.min(result.value.byteLength, byteLimit - signatureLength);
-        signature.set(result.value.subarray(0, take), signatureLength);
-        signatureLength += take;
-    }
-    if (signatureLength < byteLimit) {
-        await reader.cancel("Media part ended before its declared length.");
-        throw new ValidationError("Media part ended before its declared length.");
-    }
-    const replay = new ReadableStream<Uint8Array>({
-        async pull(controller) {
-            const chunk = chunks.shift();
-            if (chunk) {
-                controller.enqueue(chunk);
-                return;
-            }
-            const result = await reader.read();
-            if (result.done) controller.close();
-            else controller.enqueue(result.value);
-        },
-        cancel(reason) { return reader.cancel(reason); },
-    });
-    return { signatureBytes: Uint8Array.from(signature).buffer, replay };
-}
-
-function countBody(body: ReadableStream<Uint8Array>) {
-    let actualSize = 0;
-    const stream = body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-        transform(chunk, controller) {
-            actualSize += chunk.byteLength;
-            controller.enqueue(chunk);
-        },
-    }));
-    return { stream, actualSize: () => actualSize };
-}
 
 const listRoute = createRoute({
     method: "get",
@@ -195,17 +152,15 @@ app.openapi(uploadPartRoute, async (c) => {
     const body = c.req.raw.body;
     if (!body) throw new ValidationError("Media part body is required.");
     const { id, partNumber } = c.req.valid("param");
-    const inspected = partNumber === 1
-        ? await inspectBodyPrefix(body, Math.min(declaredLength, MEDIA_SIGNATURE_READ_BYTES))
-        : { signatureBytes: undefined, replay: body };
-    const counted = countBody(inspected.replay);
+    const value = await readExactMediaPart(body, declaredLength);
     return ok(c, await uploadMediaPart(c.get("db"), {
         sessionId: id,
         partNumber,
         size: declaredLength,
-        value: counted.stream,
-        actualSize: counted.actualSize,
-        signatureBytes: inspected.signatureBytes,
+        value,
+        signatureBytes: partNumber === 1
+            ? value.slice(0, Math.min(declaredLength, MEDIA_SIGNATURE_READ_BYTES))
+            : undefined,
     }));
 });
 

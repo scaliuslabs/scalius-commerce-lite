@@ -16,7 +16,6 @@ import {
     deleteFile,
     headMediaObject,
     uploadMediaMultipartPart,
-    type MediaMultipartPartValue,
 } from "../../integrations/storage";
 import {
     MEDIA_MULTIPART_PART_SIZE_BYTES,
@@ -354,8 +353,7 @@ export async function uploadMediaPart(db: Database, input: {
     sessionId: string;
     partNumber: number;
     size: number;
-    value: MediaMultipartPartValue;
-    actualSize?: () => number;
+    value: ArrayBuffer;
     signatureBytes?: ArrayBuffer;
 }) {
     const session = await db.select().from(mediaUploadSessions)
@@ -391,9 +389,6 @@ export async function uploadMediaPart(db: Database, input: {
         isFinal: input.partNumber === session.expectedParts,
         value: input.value,
     });
-    if (input.actualSize && input.actualSize() !== input.size) {
-        throw new ValidationError("Media part length does not match Content-Length.");
-    }
     await safeBatch(db, [
         db.insert(mediaUploadParts).values({
             sessionId: session.id,

@@ -115,13 +115,12 @@ create corrupt previews and buyer surfaces.
 Migration 0017 replaces the demo image-only library with first-class
 image/video authority, flat versioned folders, immutable object keys, coherent
 kind/MIME and lifecycle checks, and durable multipart session/part tables. The
-core/API path now claims D1 before creating R2 multipart state, streams exact
-5 MiB parts, verifies part 1 before R2, reconciles R2-complete/D1-incomplete
-retries, derives URLs at response time, provides stable scoped cursors and CAS
-mutations, and makes trash/permanent deletion repairable. The product/gallery,
-admin workspace, and buyer-surface integration remain separate follow-on
-slices and must satisfy the product/storefront contract above before Media is
-release-complete.
+core/API path now claims D1 before creating R2 multipart state, buffers only
+one exact 5 MiB-or-smaller part into a known-length R2 body, verifies actual
+length and part 1 before R2, reconciles R2-complete/D1-incomplete retries,
+derives URLs at response time, provides stable scoped cursors and CAS mutations,
+and makes trash/permanent deletion repairable. The complete video is never
+buffered in a Worker invocation.
 
 ## Platform evidence
 
