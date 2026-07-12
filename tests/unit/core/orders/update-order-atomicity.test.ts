@@ -204,6 +204,8 @@ function createUpdateOrderDb(options: {
     options.activeRefundAttempt ?? null,
     options.legacyPendingRefund ?? null,
     options.activePaymentSessionAttemptRows ?? [],
+    null, // no item-level return history
+    null, // no issued invoice
     options.existingItems,
     liveSkuRows,
   ];
