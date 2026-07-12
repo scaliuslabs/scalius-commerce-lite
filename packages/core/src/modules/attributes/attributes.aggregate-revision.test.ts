@@ -23,6 +23,7 @@ describe("attribute delete integrity", () => {
 
     it("uses a single JSON lookup bind for large admin attribute pages", () => {
         expect(source).toContain("FROM json_each(${attributeIdsJson})");
+        expect(source).toContain("FROM json_each(${JSON.stringify(ids)})");
         expect(source).not.toContain(".where(inArray(productAttributeValues.attributeId, attributeIds))");
     });
 

@@ -26,21 +26,21 @@ This is the durable implementation record for catalog attributes. Source, migrat
 
 ### P0/P1 correctness
 
-- **Accepted fix:** product detail and product-feed projections currently require `filterable = true`, which drops truthful non-facet facts such as Brand or Material. Remove that condition from fact projections; retain it only in facet/filter resolution.
-- **Accepted fix:** product assignment validation currently permits blank, untrimmed, overlong, and duplicate attribute IDs. Add bounded canonical validation with a 90-assignment cap and normalized unique IDs.
-- **Accepted fix:** definition update and value add/rename/delete currently locate trashed attributes. Require active lifecycle state for every edit.
-- **Accepted fix:** restore is not atomic, bulk restore skips ID/lifecycle/conflict validation, and restore conflict checks are case-sensitive. Route single and bulk restore through one guarded primitive with the same 90-ID boundary as delete.
-- **Accepted fix:** definition create/update conflicts are case-sensitive. Compare `lower(trim(name))` and `lower(trim(slug))` across active and trashed rows and keep the existing actionable trash conflict copy.
-- **Accepted fix:** value rename checks preset collisions but not existing assigned values. Reject a rename when the normalized destination is already used or preset, except a case/whitespace normalization of the same source value.
-- **Accepted fix:** value mutation schemas do not cap the value length even though presets do. Use one 100-character canonical value schema.
+- **Resolved:** product detail and product-feed fact projections no longer require `filterable = true`; facet/filter resolution still does.
+- **Resolved:** product assignments are trimmed, nonempty, at most 100 characters per ID/value, unique by normalized definition ID, and capped at 90. Create/update also resolve all submitted IDs in one bound `json_each()` read and reject missing or trashed definitions before composition writes.
+- **Resolved:** definition update and value add/rename/delete require an active definition.
+- **Resolved:** single and bulk restore share a 90-ID guarded primitive, require exact trash state, detect normalized conflicts, and fail closed on concurrent lifecycle changes.
+- **Resolved:** definition create/update conflict checks compare `lower(trim(name))` and `lower(trim(slug))` across active and trashed rows.
+- **Resolved:** value rename rejects a normalized destination that is already used or preset, except normalization of the same source value.
+- **Resolved:** add/rename/delete value schemas and service boundaries share the 100-character value limit.
 
 ### Admin workflow and UX
 
-- **Accepted fix:** the product form refetches all definitions whenever its own assignment callback updates the parent, can overwrite local edits with racing responses, and truncates definitions at 500. Stabilize prop synchronization and use debounced server search/pagination rather than a catalog-wide preload.
-- **Accepted fix:** the value picker issues duplicate initial requests, has no stale-response protection, guesses `hasMore` from page length, swallows errors, and can append duplicates. Give it an explicit loading/error/retry state, request sequencing, authoritative `totalPages`, and deduplication.
-- **Accepted fix:** assignment create/edit affordances are not permission-aware. Hide definition creation and preset creation when the corresponding catalog permissions are absent while retaining assignment of existing values for product editors.
-- **Accepted fix:** an empty newly assigned value looks saved but is silently dropped. Keep the row visibly incomplete, announce that a value is required, and block product submission through shared validation.
-- **Accepted fix:** icon-only remove/view controls need accessible names; value inspection must remain available when a definition has presets but zero product usage. Distinguish assigned-value count from preset availability in copy.
+- **Resolved:** the product form resolves currently assigned definitions by one bounded ID set and uses debounced server search/pagination for the add picker. Self-emitted parent updates no longer trigger catalog-wide refetch/reset loops, and stale definition responses cannot overwrite newer results.
+- **Resolved:** the value picker has one debounced request path, stale-response protection, explicit loading/error/retry states, authoritative `totalPages`, normalized page deduplication, and separate actions for a product-only custom value versus a reusable preset.
+- **Resolved:** definition creation and reusable preset creation are permission-aware; existing values and product-only custom values remain assignable by product editors.
+- **Resolved:** a new empty assignment is visibly incomplete and shared product validation blocks submission instead of silently dropping it.
+- **Resolved:** remove/view/filter controls have accessible names; active definitions can be inspected with zero assigned values, and table copy distinguishes assigned values from presets.
 - **Accepted constraint:** do not replace generic shared selector/popover components in this slice. Attribute-specific controls may adopt the existing searchable, viewport-aware dropdown behavior. Any generic component change requires a separately reported cross-surface audit.
 
 ## Deferred model work

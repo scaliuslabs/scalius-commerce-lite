@@ -1,5 +1,5 @@
 // src/components/admin/product-form/AttributeManager.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -15,10 +15,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Plus, Trash2, Loader2, Check } from "lucide-react";
+import { AlertCircle, Check, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "@/lib/api-helpers";
+import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import {
   addAttributeValue,
   createAttribute,
@@ -26,6 +27,10 @@ import {
   getAttributeValues,
   type AttributeDto,
 } from "@/lib/api-functions/attributes";
+import {
+  attributeAssignmentSignature,
+  mergeAttributeValuePages,
+} from "./attribute-manager.helpers";
 
 interface AssignedAttribute {
   attributeId: string;
@@ -43,289 +48,401 @@ interface AttributeManagerProps {
 
 type AttributeDefinition = AttributeDto;
 
+function definitionMapFromAssignments(assignments: AssignedAttribute[]) {
+  const definitions = new Map<string, AttributeDefinition>();
+  for (const assignment of assignments) {
+    if (!assignment.name) continue;
+    definitions.set(assignment.attributeId, {
+      id: assignment.attributeId,
+      name: assignment.name,
+      slug: assignment.slug ?? "",
+      filterable: false,
+      options: null,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    });
+  }
+  return definitions;
+}
+
 export function AttributeManager({
   initialAttributes,
   onAttributesChange,
 }: AttributeManagerProps) {
-  const [assignedAttributes, setAssignedAttributes] = useState<
-    AssignedAttribute[]
-  >([]);
-  const [availableAttributes, setAvailableAttributes] = useState<
-    AttributeDefinition[]
-  >([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Create Attribute State
+  const { attributes: attributeActions } = useCatalogActionPermissions();
+  const [assignedAttributes, setAssignedAttributes] = useState<AssignedAttribute[]>(
+    () => initialAttributes.map((attribute) => ({ ...attribute })),
+  );
+  const [definitions, setDefinitions] = useState<Map<string, AttributeDefinition>>(
+    () => definitionMapFromAssignments(initialAttributes),
+  );
+  const [definitionLookupLoading, setDefinitionLookupLoading] = useState(false);
+  const [definitionLookupFailed, setDefinitionLookupFailed] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const lastEmittedSignature = useRef<string | null>(null);
+  const lastAppliedIncomingSignature = useRef(attributeAssignmentSignature(initialAttributes));
+  const definitionLookupRequest = useRef(0);
 
-  const fetchAllAttributes = useCallback(async () => {
-    try {
-      const data = await getAttributes({ data: { limit: 500 } });
-      setAvailableAttributes(data.attributes);
-      return data.attributes;
-    } catch (error: unknown) {
-      toast.error(getServerFnError(error, "Could not load attributes"));
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const incomingSignature = attributeAssignmentSignature(initialAttributes);
+  const incomingIdsKey = useMemo(
+    () => [...new Set(initialAttributes.map((attribute) => attribute.attributeId.trim()).filter(Boolean))]
+      .sort()
+      .join(","),
+    [initialAttributes],
+  );
 
   useEffect(() => {
-    fetchAllAttributes().then((fullAttrs) => {
-      const enhanced = initialAttributes.map((attr) => {
-        const def = fullAttrs.find((d) => d.id === attr.attributeId);
-        return {
-          ...attr,
-          name: def?.name || attr.name || "Unknown",
-          slug: def?.slug || attr.slug || "",
-        };
+    if (lastEmittedSignature.current === incomingSignature) {
+      lastAppliedIncomingSignature.current = incomingSignature;
+      return;
+    }
+    if (lastAppliedIncomingSignature.current === incomingSignature) return;
+    lastAppliedIncomingSignature.current = incomingSignature;
+    setAssignedAttributes(initialAttributes.map((attribute) => ({ ...attribute })));
+  }, [incomingSignature, initialAttributes]);
+
+  useEffect(() => {
+    if (!incomingIdsKey) {
+      setDefinitionLookupLoading(false);
+      setDefinitionLookupFailed(false);
+      return;
+    }
+    const requestId = ++definitionLookupRequest.current;
+    setDefinitionLookupLoading(true);
+    setDefinitionLookupFailed(false);
+    void getAttributes({
+      data: { ids: incomingIdsKey, limit: 90, sort: "name", order: "asc" },
+    }).then((data) => {
+      if (requestId !== definitionLookupRequest.current) return;
+      setDefinitions((current) => {
+        const next = new Map(current);
+        for (const definition of data.attributes) next.set(definition.id, definition);
+        return next;
       });
-      setAssignedAttributes(enhanced);
+    }).catch(() => {
+      if (requestId === definitionLookupRequest.current) setDefinitionLookupFailed(true);
+    }).finally(() => {
+      if (requestId === definitionLookupRequest.current) setDefinitionLookupLoading(false);
     });
-  }, [initialAttributes, fetchAllAttributes]);
+  }, [incomingIdsKey]);
 
-  const updateParent = (updated: AssignedAttribute[]) => {
-    onAttributesChange(
-      updated.map((a) => ({ attributeId: a.attributeId, value: a.value })),
-    );
-  };
+  const rememberDefinitions = useCallback((loaded: AttributeDefinition[]) => {
+    setDefinitions((current) => {
+      const next = new Map(current);
+      for (const definition of loaded) next.set(definition.id, definition);
+      return next;
+    });
+  }, []);
 
-  const handleCreateAttribute = async (name: string) => {
-    if (!name.trim()) return;
-    setIsCreating(true);
+  const commitAssignments = useCallback((updated: AssignedAttribute[]) => {
+    setAssignedAttributes(updated);
+    const stripped = updated.map(({ attributeId, value }) => ({ attributeId, value }));
+    lastEmittedSignature.current = attributeAssignmentSignature(stripped);
+    onAttributesChange(stripped);
+  }, [onAttributesChange]);
 
-    // Auto-generate slug
+  const handleCreateAttribute = async (rawName: string): Promise<boolean> => {
+    const name = rawName.trim();
+    if (!name) return false;
     const slug = name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
+    if (slug.length < 2) {
+      toast.error("Use at least two letters or numbers for the attribute name");
+      return false;
+    }
 
+    setIsCreating(true);
     try {
       const data = await createAttribute({
         data: { name, slug, filterable: true, options: [] },
       });
       const created = data.attribute;
-
-      toast.success("Attribute created");
-      setAvailableAttributes((prev) => [...prev, created]);
-      // Auto-assign the newly created attribute directly to avoid stale state
-      const newAttrs = [
+      rememberDefinitions([created]);
+      commitAssignments([
         ...assignedAttributes,
-        {
-          attributeId: created.id,
-          value: "",
-          name: created.name,
-          slug: created.slug,
-        },
-      ];
-      setAssignedAttributes(newAttrs);
-      updateParent(newAttrs);
+        { attributeId: created.id, value: "", name: created.name, slug: created.slug },
+      ]);
+      toast.success("Attribute created. Choose a value to finish the assignment.");
+      return true;
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to create attribute");
+      toast.error(getServerFnError(error, "Failed to create attribute"));
+      return false;
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleAddAttribute = (attrId: string) => {
-    const def = availableAttributes.find((a) => a.id === attrId);
-    if (!def || assignedAttributes.some((a) => a.attributeId === attrId))
+  const handleAddAttribute = (definition: AttributeDefinition) => {
+    if (assignedAttributes.some((item) => item.attributeId === definition.id)) return;
+    if (assignedAttributes.length >= 90) {
+      toast.error("A product can have at most 90 attributes");
       return;
-
-    // Add new attribute and notify parent immediately
-    const newAttrs = [
+    }
+    rememberDefinitions([definition]);
+    commitAssignments([
       ...assignedAttributes,
-      { attributeId: def.id, value: "", name: def.name, slug: def.slug },
-    ];
-    setAssignedAttributes(newAttrs);
-    updateParent(newAttrs);
+      { attributeId: definition.id, value: "", name: definition.name, slug: definition.slug },
+    ]);
   };
 
-  const handleRemoveAttribute = (index: number) => {
-    const newAttrs = assignedAttributes.filter((_, i) => i !== index);
-    setAssignedAttributes(newAttrs);
-    updateParent(newAttrs);
+  const handleValueChange = (index: number, value: string) => {
+    commitAssignments(assignedAttributes.map((attribute, itemIndex) =>
+      itemIndex === index ? { ...attribute, value } : attribute));
   };
-
-  const handleValueChange = (index: number, val: string) => {
-    const newAttrs = [...assignedAttributes];
-    newAttrs[index].value = val;
-    setAssignedAttributes(newAttrs);
-    updateParent(newAttrs);
-  };
-
-  if (isLoading)
-    return (
-      <div className="p-4 flex justify-center">
-        <Loader2 className="animate-spin text-muted-foreground" />
-      </div>
-    );
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-3">
-        {assignedAttributes.map((attr, index) => (
-          <div
-            key={`${attr.attributeId}-${index}`}
-            className="flex items-center gap-2 p-2 px-3 border rounded-md bg-card group h-12"
-          >
-            <div className="w-[120px] shrink-0 hidden sm:block">
-              <label
-                className="text-sm font-medium truncate block"
-                title={attr.name}
-              >
-                {attr.name}
-              </label>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="sm:hidden text-xs font-medium mb-1 truncate">
-                {attr.name}
-              </div>
-              <AttributeValueSelector
-                attributeId={attr.attributeId}
-                value={attr.value}
-                onChange={(v) => handleValueChange(index, v)}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => handleRemoveAttribute(index)}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {assignedAttributes.map((attribute, index) => {
+          const definition = definitions.get(attribute.attributeId);
+          const unavailable = !definitionLookupLoading && !definitionLookupFailed && !definition;
+          const label = definition?.name ?? attribute.name ?? (
+            definitionLookupLoading ? "Loading attribute…" : "Unavailable attribute"
+          );
+          const needsValue = attribute.value.trim().length === 0;
+
+          return (
+            <div
+              key={attribute.attributeId}
+              className={cn(
+                "grid grid-cols-[minmax(0,1fr)_2rem] gap-x-2 gap-y-1 rounded-md border bg-card p-2 sm:grid-cols-[9rem_minmax(0,1fr)_2rem]",
+                (needsValue || unavailable) && "border-amber-300/80",
+              )}
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
+              <div className="min-w-0 self-center sm:row-span-2">
+                <div className="truncate text-sm font-medium" title={label}>{label}</div>
+                {unavailable && (
+                  <div className="text-xs text-amber-700">Removed or in trash</div>
+                )}
+              </div>
+              <div className="min-w-0 sm:col-start-2">
+                <AttributeValueSelector
+                  attributeId={attribute.attributeId}
+                  attributeName={label}
+                  value={attribute.value}
+                  canSavePreset={attributeActions.canEdit && !unavailable}
+                  disabled={unavailable}
+                  onChange={(value) => handleValueChange(index, value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Remove ${label}`}
+                onClick={() => commitAssignments(
+                  assignedAttributes.filter((_, itemIndex) => itemIndex !== index),
+                )}
+                className="col-start-2 row-start-1 h-8 w-8 text-muted-foreground hover:text-destructive sm:col-start-3"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              {needsValue && !unavailable && (
+                <p className="col-span-2 text-xs text-amber-700 sm:col-start-2 sm:col-span-1">
+                  Choose or enter a value before saving.
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="relative">
-        <AttributeDefinitionCombobox
-          attributes={availableAttributes}
-          assignedIds={new Set(assignedAttributes.map((a) => a.attributeId))}
-          onSelect={handleAddAttribute}
-          onCreate={handleCreateAttribute}
-          isCreating={isCreating}
-        />
-      </div>
+      <AttributeDefinitionCombobox
+        assignedIds={new Set(assignedAttributes.map((attribute) => attribute.attributeId))}
+        canCreate={attributeActions.canCreate}
+        disabled={assignedAttributes.length >= 90}
+        isCreating={isCreating}
+        onDefinitionsLoaded={rememberDefinitions}
+        onSelect={handleAddAttribute}
+        onCreate={handleCreateAttribute}
+      />
 
+      {definitionLookupFailed && assignedAttributes.length > 0 && (
+        <p className="flex items-center gap-1.5 text-xs text-destructive">
+          <AlertCircle className="h-3.5 w-3.5" />
+          Attribute names could not be refreshed. Existing values are preserved.
+        </p>
+      )}
       {assignedAttributes.length === 0 && (
-        <div className="text-center p-6 border-2 border-dashed rounded-lg bg-muted/10 text-muted-foreground text-sm">
-          No attributes added yet.
+        <div className="rounded-md border border-dashed bg-muted/10 px-3 py-4 text-center text-sm text-muted-foreground">
+          Add facts such as brand, material, warranty, or care instructions.
         </div>
       )}
     </div>
   );
 }
 
-// Subcomponents
-
 function AttributeDefinitionCombobox({
-  attributes,
   assignedIds,
+  canCreate,
+  disabled,
+  isCreating,
+  onDefinitionsLoaded,
   onSelect,
   onCreate,
-  isCreating,
 }: {
-  attributes: AttributeDefinition[];
   assignedIds: Set<string>;
-  onSelect: (id: string) => void;
-  onCreate: (name: string) => void;
+  canCreate: boolean;
+  disabled: boolean;
   isCreating: boolean;
+  onDefinitionsLoaded: (definitions: AttributeDefinition[]) => void;
+  onSelect: (definition: AttributeDefinition) => void;
+  onCreate: (name: string) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [items, setItems] = useState<AttributeDefinition[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
+
+  const loadDefinitions = useCallback(async (pageNumber: number, reset: boolean) => {
+    const requestId = ++requestSequence.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getAttributes({
+        data: {
+          page: pageNumber,
+          limit: 25,
+          search: search.trim(),
+          sort: "name",
+          order: "asc",
+        },
+      });
+      if (requestId !== requestSequence.current) return;
+      setItems((current) => reset
+        ? data.attributes
+        : [...new Map([...current, ...data.attributes].map((item) => [item.id, item])).values()]);
+      setPage(data.pagination.page);
+      setTotalPages(data.pagination.totalPages);
+      onDefinitionsLoaded(data.attributes);
+    } catch (loadError: unknown) {
+      if (requestId === requestSequence.current) {
+        setError(getServerFnError(loadError, "Could not load attributes"));
+      }
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
+    }
+  }, [onDefinitionsLoaded, search]);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(
+      () => void loadDefinitions(1, true),
+      search ? 250 : 0,
+    );
+    return () => window.clearTimeout(timer);
+  }, [open, search, loadDefinitions]);
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const exactMatch = items.some((item) => item.name.trim().toLowerCase() === normalizedSearch);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setSearch("");
+    }}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
-          className="w-full justify-start pl-3 text-muted-foreground font-normal h-9"
+          disabled={disabled}
+          aria-expanded={open}
+          className="h-9 w-full justify-start px-3 font-normal text-muted-foreground"
         >
-          <Plus className="mr-2 h-4 w-4" /> Add Attribute...
+          <Plus className="mr-2 h-4 w-4" />
+          {disabled ? "Attribute limit reached" : "Add attribute"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={12}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[20rem] max-w-[calc(100vw-1.5rem)] p-0"
+      >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search attributes..."
+            placeholder="Search attributes…"
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
-            <CommandEmpty className="py-2 px-2">
-              <p className="text-xs text-muted-foreground mb-2 text-center">
-                No attribute found.
-              </p>
-              {search && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full h-8"
-                  disabled={isCreating}
-                  onClick={() => {
-                    setOpen(false);
-                    onCreate(search);
-                  }}
-                >
-                  {isCreating ? (
-                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
-                  ) : (
-                    <Plus className="h-3 w-3 mr-2" />
-                  )}
-                  Create "{search}"
+            {loading && items.length === 0 && (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading attributes…
+              </div>
+            )}
+            {error && (
+              <div className="space-y-2 p-3 text-center text-sm text-destructive">
+                <p>{error}</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => void loadDefinitions(1, true)}>
+                  <RotateCcw className="mr-2 h-3.5 w-3.5" /> Retry
                 </Button>
-              )}
-            </CommandEmpty>
+              </div>
+            )}
+            {!loading && !error && items.length === 0 && (
+              <CommandEmpty className="px-3 py-5 text-center text-sm text-muted-foreground">
+                No matching attributes.
+              </CommandEmpty>
+            )}
             <CommandGroup>
-              {attributes
-                .filter(
-                  (attr: AttributeDefinition) =>
-                    !search ||
-                    attr.name.toLowerCase().includes(search.toLowerCase()) ||
-                    attr.slug.includes(search.toLowerCase()),
-                )
-                .map((attr: AttributeDefinition) => (
-                  <CommandItem
-                    key={attr.id}
-                    value={attr.name}
-                    onSelect={() => {
-                      onSelect(attr.id);
-                      setOpen(false);
-                    }}
-                    disabled={assignedIds.has(attr.id)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        assignedIds.has(attr.id) ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {attr.name}
-                  </CommandItem>
-                ))}
+              {items.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={item.id}
+                  disabled={assignedIds.has(item.id)}
+                  onSelect={() => {
+                    onSelect(item);
+                    setOpen(false);
+                  }}
+                  className="text-sm"
+                >
+                  <Check className={cn("mr-2 h-4 w-4", assignedIds.has(item.id) ? "opacity-100" : "opacity-0")} />
+                  <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                  <span className="ml-3 truncate text-xs text-muted-foreground">{item.slug}</span>
+                </CommandItem>
+              ))}
             </CommandGroup>
-            {search &&
-              !attributes.some(
-                (a: AttributeDefinition) => a.name.toLowerCase() === search.toLowerCase(),
-              ) && (
-                <>
-                  <CommandSeparator />
-                  <CommandGroup>
-                    <CommandItem
-                      onSelect={() => {
-                        setOpen(false);
-                        onCreate(search);
-                      }}
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Create "{search}"
-                    </CommandItem>
-                  </CommandGroup>
-                </>
-              )}
+            {page < totalPages && !error && (
+              <div className="border-t p-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-full text-sm"
+                  disabled={loading}
+                  onClick={() => void loadDefinitions(page + 1, false)}
+                >
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Load more
+                </Button>
+              </div>
+            )}
+            {canCreate && normalizedSearch && !exactMatch && (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    disabled={isCreating}
+                    onSelect={() => void onCreate(search).then((created) => {
+                      if (created) setOpen(false);
+                    })}
+                    className="text-sm"
+                  >
+                    {isCreating
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      : <Plus className="mr-2 h-4 w-4" />}
+                    Create “{search.trim()}”
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -340,171 +457,193 @@ interface FetchedValue {
 
 function AttributeValueSelector({
   attributeId,
+  attributeName,
   value,
+  canSavePreset,
+  disabled,
   onChange,
 }: {
   attributeId: string;
+  attributeName: string;
   value: string;
-  onChange: (val: string) => void;
+  canSavePreset: boolean;
+  disabled: boolean;
+  onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<FetchedValue[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [totalPages, setTotalPages] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const requestSequence = useRef(0);
 
-  const fetchValues = useCallback(
-    async (pageNum: number, text: string, reset = false) => {
-      setLoading(true);
-      try {
-        const data = await getAttributeValues({
-          data: { attributeId, page: pageNum, limit: 10, sort: "desc", ...(text ? { search: text } : {}) },
-        });
-        const values = data.values || [];
-        setItems((prev) => (reset ? values : [...prev, ...values]));
-        setHasMore(values.length === 10);
-      } finally {
-        setLoading(false);
+  const loadValues = useCallback(async (pageNumber: number, reset: boolean) => {
+    const requestId = ++requestSequence.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getAttributeValues({
+        data: {
+          attributeId,
+          page: pageNumber,
+          limit: 20,
+          sort: "asc",
+          ...(search.trim() ? { search: search.trim() } : {}),
+        },
+      });
+      if (requestId !== requestSequence.current) return;
+      setItems((current) => reset
+        ? mergeAttributeValuePages([], data.values)
+        : mergeAttributeValuePages(current, data.values));
+      setPage(data.page);
+      setTotalPages(data.totalPages);
+    } catch (loadError: unknown) {
+      if (requestId === requestSequence.current) {
+        setError(getServerFnError(loadError, "Could not load values"));
       }
-    },
-    [attributeId],
-  );
-
-  useEffect(() => {
-    if (open) {
-      setPage(1);
-      fetchValues(1, "", true);
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [open, attributeId, fetchValues]);
+  }, [attributeId, search]);
 
-  // Debounce search update
   useEffect(() => {
     if (!open) return;
-    const timer = setTimeout(() => {
-      setPage(1);
-      fetchValues(1, search, true);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search, open, fetchValues]);
+    const timer = window.setTimeout(() => void loadValues(1, true), search ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [open, search, loadValues]);
 
-  const handleCreate = async () => {
-    onChange(search);
+  const useCustomValue = () => {
+    const nextValue = search.trim();
+    if (!nextValue) return;
+    onChange(nextValue);
     setOpen(false);
+  };
+
+  const savePresetAndUse = async () => {
+    const nextValue = search.trim();
+    if (!nextValue) return;
+    setSavingPreset(true);
     try {
-      await addAttributeValue({ data: { attributeId, value: search } });
-    } catch (error) {
-      console.error("Failed to create attribute value:", error);
-      toast.error("Failed to create attribute value");
+      await addAttributeValue({ data: { attributeId, value: nextValue } });
+      setItems((current) => mergeAttributeValuePages(current, [{ value: nextValue, isPreset: true }]));
+      onChange(nextValue);
+      setOpen(false);
+      toast.success(`Saved “${nextValue}” as a reusable ${attributeName} value`);
+    } catch (saveError: unknown) {
+      toast.error(getServerFnError(saveError, "Could not save preset value"));
+    } finally {
+      setSavingPreset(false);
     }
   };
 
+  const normalizedSearch = search.trim().toLowerCase();
+  const exactMatch = items.some((item) => item.value.trim().toLowerCase() === normalizedSearch);
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => {
+      setOpen(next);
+      if (!next) setSearch("");
+    }}>
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
+          aria-label={`${attributeName} value`}
           aria-expanded={open}
-          className="w-full justify-between h-8 px-2 font-normal text-left text-xs"
+          aria-invalid={!value.trim()}
+          disabled={disabled}
+          className="h-8 w-full justify-between px-2.5 text-left text-sm font-normal"
         >
-          {value ? (
-            <span className="text-foreground truncate">{value}</span>
-          ) : (
-            <span className="text-muted-foreground truncate">Value...</span>
-          )}
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value || "Choose or enter a value…"}
+          </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        collisionPadding={12}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] max-w-[calc(100vw-1.5rem)] p-0"
+      >
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search values..."
+            placeholder={`Search ${attributeName.toLowerCase()} values…`}
             value={search}
             onValueChange={setSearch}
           />
           <CommandList>
-            {loading && page === 1 && (
-              <div className="py-6 text-center text-xs text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
-                Loading...
+            {loading && items.length === 0 && (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading values…
               </div>
             )}
-            {!loading && items.length === 0 && (
-              <CommandEmpty className="py-2 px-2">
-                <p className="text-xs text-muted-foreground mb-2 text-center">
-                  No results.
-                </p>
-                {search && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full h-8"
-                    onClick={handleCreate}
-                  >
-                    Create "{search}"
-                  </Button>
-                )}
+            {error && (
+              <div className="space-y-2 p-3 text-center text-sm text-destructive">
+                <p>{error}</p>
+                <Button type="button" size="sm" variant="outline" onClick={() => void loadValues(1, true)}>
+                  <RotateCcw className="mr-2 h-3.5 w-3.5" /> Retry
+                </Button>
+              </div>
+            )}
+            {!loading && !error && items.length === 0 && !normalizedSearch && (
+              <CommandEmpty className="px-3 py-5 text-center text-sm text-muted-foreground">
+                No saved values yet. Type a value to use it for this product.
               </CommandEmpty>
             )}
-
             <CommandGroup>
               {items.map((item) => (
                 <CommandItem
-                  key={item.value}
+                  key={item.value.trim().toLowerCase()}
                   value={item.value}
                   onSelect={() => {
                     onChange(item.value);
                     setOpen(false);
                   }}
+                  className="text-sm"
                 >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === item.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  {item.value}
-                  {item.isPreset && (
-                    <span className="ml-2 text-[10px] bg-muted px-1 rounded text-muted-foreground">
-                      Preset
-                    </span>
-                  )}
+                  <Check className={cn("mr-2 h-4 w-4", value === item.value ? "opacity-100" : "opacity-0")} />
+                  <span className="min-w-0 flex-1 truncate">{item.value}</span>
+                  {item.isPreset && <span className="ml-2 text-xs text-muted-foreground">Preset</span>}
                 </CommandItem>
               ))}
             </CommandGroup>
-
-            {hasMore && (
-              <div className="p-1 border-t">
+            {page < totalPages && !error && (
+              <div className="border-t p-1">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  className="w-full text-xs h-7"
+                  className="h-8 w-full text-sm"
                   disabled={loading}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const n = page + 1;
-                    setPage(n);
-                    fetchValues(n, search);
-                  }}
+                  onClick={() => void loadValues(page + 1, false)}
                 >
-                  {loading ? "Loading..." : "Load more"}
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Load more
                 </Button>
               </div>
             )}
-
-            {search &&
-              !items.some(
-                (i) => i.value.toLowerCase() === search.toLowerCase(),
-              ) && (
-                <>
-                  <CommandSeparator />
-                  <CommandGroup>
-                    <CommandItem onSelect={handleCreate}>
-                      <Plus className="mr-2 h-4 w-4" /> Create "{search}"
+            {normalizedSearch && !exactMatch && (
+              <>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem onSelect={useCustomValue} className="text-sm">
+                    <Plus className="mr-2 h-4 w-4" /> Use “{search.trim()}” for this product
+                  </CommandItem>
+                  {canSavePreset && (
+                    <CommandItem disabled={savingPreset} onSelect={() => void savePresetAndUse()} className="text-sm">
+                      {savingPreset
+                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        : <Plus className="mr-2 h-4 w-4" />}
+                      Save as preset and use
                     </CommandItem>
-                  </CommandGroup>
-                </>
-              )}
+                  )}
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

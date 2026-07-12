@@ -66,6 +66,7 @@ const listRoute = createRoute({
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
+            ids: z.string().max(9000).optional().openapi({ description: "Comma-separated attribute IDs (max 90)" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" })
         })
     },
@@ -87,6 +88,7 @@ app.openapi(listRoute, async (c) => {
         search: query.search || "",
         sort: query.sort || "name",
         order: query.order || "asc",
+        ids: query.ids?.split(","),
         showTrashed: query.trashed === "true",
     });
     return ok(c, result);
