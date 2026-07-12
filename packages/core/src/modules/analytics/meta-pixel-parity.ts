@@ -1,6 +1,6 @@
 import { analytics } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 const META_PIXEL_ID_PATTERN = /^\d{5,30}$/;
 
@@ -203,7 +203,7 @@ export async function getMetaPixelParityDiagnostics(
     const scripts = await db
         .select({ config: analytics.config, type: analytics.type })
         .from(analytics)
-        .where(eq(analytics.isActive, true))
+        .where(and(eq(analytics.isActive, true), isNull(analytics.deletedAt)))
         .all();
 
     return buildMetaPixelParityDiagnostics(capiPixelId, scripts);

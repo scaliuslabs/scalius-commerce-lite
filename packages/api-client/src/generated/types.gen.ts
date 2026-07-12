@@ -1741,10 +1741,10 @@ export type GetApiV1AnalyticsConfigurationsResponses = {
         data: {
             analytics: Array<{
                 id: string;
-                name: string;
                 type: string;
                 config: string;
-                isActive: boolean;
+                usePartytown: boolean;
+                location: string;
                 [key: string]: unknown;
             }>;
         };
@@ -15840,7 +15840,16 @@ export type PostApiV1AdminShipmentsByIdCheckStatusResponse = PostApiV1AdminShipm
 export type GetApiV1AdminAnalyticsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        type?: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'tiktok_pixel' | 'cloudflare_web_analytics' | 'custom';
+        status?: 'active' | 'inactive';
+        trashed?: 'true' | 'false';
+        sort?: 'name' | 'type' | 'createdAt' | 'updatedAt';
+        order?: 'asc' | 'desc';
+    };
     url: '/api/v1/admin/analytics';
 };
 
@@ -15917,22 +15926,33 @@ export type GetApiV1AdminAnalyticsError = GetApiV1AdminAnalyticsErrors[keyof Get
 
 export type GetApiV1AdminAnalyticsResponses = {
     /**
-     * Analytics script list
+     * Paginated safe analytics summaries
      */
     200: {
         success: true;
-        data: Array<{
-            id: string;
-            name: string;
-            type: string;
-            config: string;
-            isActive: boolean;
-            usePartytown: boolean;
-            location: string;
-            createdAt: string | number;
-            updatedAt: string | number;
-            [key: string]: unknown;
-        } | null>;
+        data: {
+            scripts: Array<{
+                id: string;
+                name: string;
+                type: string;
+                isActive: boolean;
+                usePartytown: boolean;
+                location: string;
+                revision: number;
+                identifier: string | null;
+                readiness: string;
+                configIssue: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
     };
 };
 
@@ -15946,6 +15966,7 @@ export type PostApiV1AdminAnalyticsData = {
         location: 'head' | 'body_start' | 'body_end';
         isActive?: boolean;
         usePartytown?: boolean;
+        allowDuplicateProvider?: boolean;
     };
     path?: never;
     query?: never;
@@ -15998,6 +16019,17 @@ export type PostApiV1AdminAnalyticsErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16025,16 +16057,26 @@ export type PostApiV1AdminAnalyticsError = PostApiV1AdminAnalyticsErrors[keyof P
 
 export type PostApiV1AdminAnalyticsResponses = {
     /**
-     * Script created
+     * Analytics script created
      */
     201: {
         success: true;
         data: {
             id: string;
-            name: string;
-            type: string;
-            isActive: boolean;
-            [key: string]: unknown;
+            revision: number;
+            script: {
+                id: string;
+                name: string;
+                type: string;
+                isActive: boolean;
+                usePartytown: boolean;
+                location: string;
+                revision: number;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
+                config: string;
+            } | null;
         };
     };
 };
@@ -16160,8 +16202,114 @@ export type GetApiV1AdminAnalyticsHealthResponses = {
 
 export type GetApiV1AdminAnalyticsHealthResponse = GetApiV1AdminAnalyticsHealthResponses[keyof GetApiV1AdminAnalyticsHealthResponses];
 
-export type DeleteApiV1AdminAnalyticsByIdData = {
+export type GetApiV1AdminAnalyticsByIdSourceData = {
     body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/analytics/{id}/source';
+};
+
+export type GetApiV1AdminAnalyticsByIdSourceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAnalyticsByIdSourceError = GetApiV1AdminAnalyticsByIdSourceErrors[keyof GetApiV1AdminAnalyticsByIdSourceErrors];
+
+export type GetApiV1AdminAnalyticsByIdSourceResponses = {
+    /**
+     * Analytics script detail
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            type: string;
+            isActive: boolean;
+            usePartytown: boolean;
+            location: string;
+            revision: number;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
+            config: string;
+        };
+    };
+};
+
+export type GetApiV1AdminAnalyticsByIdSourceResponse = GetApiV1AdminAnalyticsByIdSourceResponses[keyof GetApiV1AdminAnalyticsByIdSourceResponses];
+
+export type DeleteApiV1AdminAnalyticsByIdData = {
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -16215,6 +16363,17 @@ export type DeleteApiV1AdminAnalyticsByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16242,105 +16401,7 @@ export type DeleteApiV1AdminAnalyticsByIdError = DeleteApiV1AdminAnalyticsByIdEr
 
 export type DeleteApiV1AdminAnalyticsByIdResponses = {
     /**
-     * Script deleted
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            deletedScript: {
-                id: string;
-                [key: string]: unknown;
-            };
-        };
-    };
-};
-
-export type DeleteApiV1AdminAnalyticsByIdResponse = DeleteApiV1AdminAnalyticsByIdResponses[keyof DeleteApiV1AdminAnalyticsByIdResponses];
-
-export type GetApiV1AdminAnalyticsByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/analytics/{id}';
-};
-
-export type GetApiV1AdminAnalyticsByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminAnalyticsByIdError = GetApiV1AdminAnalyticsByIdErrors[keyof GetApiV1AdminAnalyticsByIdErrors];
-
-export type GetApiV1AdminAnalyticsByIdResponses = {
-    /**
-     * Script details
+     * Analytics script moved to trash
      */
     200: {
         success: true;
@@ -16348,26 +16409,33 @@ export type GetApiV1AdminAnalyticsByIdResponses = {
             id: string;
             name: string;
             type: string;
-            config: string;
             isActive: boolean;
             usePartytown: boolean;
             location: string;
-            [key: string]: unknown;
+            revision: number;
+            identifier: string | null;
+            readiness: string;
+            configIssue: string | null;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
         };
     };
 };
 
-export type GetApiV1AdminAnalyticsByIdResponse = GetApiV1AdminAnalyticsByIdResponses[keyof GetApiV1AdminAnalyticsByIdResponses];
+export type DeleteApiV1AdminAnalyticsByIdResponse = DeleteApiV1AdminAnalyticsByIdResponses[keyof DeleteApiV1AdminAnalyticsByIdResponses];
 
 export type PutApiV1AdminAnalyticsByIdData = {
     body?: {
         id: string;
+        expectedRevision: number;
         name: string;
         type: 'google_analytics' | 'google_tag_manager' | 'facebook_pixel' | 'tiktok_pixel' | 'cloudflare_web_analytics' | 'custom';
         config: string;
         location: 'head' | 'body_start' | 'body_end';
         isActive: boolean;
         usePartytown: boolean;
+        allowDuplicateProvider?: boolean;
     };
     path: {
         id: string;
@@ -16422,6 +16490,17 @@ export type PutApiV1AdminAnalyticsByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16449,7 +16528,7 @@ export type PutApiV1AdminAnalyticsByIdError = PutApiV1AdminAnalyticsByIdErrors[k
 
 export type PutApiV1AdminAnalyticsByIdResponses = {
     /**
-     * Script updated
+     * Analytics script updated
      */
     200: {
         success: true;
@@ -16459,7 +16538,13 @@ export type PutApiV1AdminAnalyticsByIdResponses = {
                 name: string;
                 type: string;
                 isActive: boolean;
-                [key: string]: unknown;
+                usePartytown: boolean;
+                location: string;
+                revision: number;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
+                config: string;
             };
         };
     };
@@ -16470,6 +16555,8 @@ export type PutApiV1AdminAnalyticsByIdResponse = PutApiV1AdminAnalyticsByIdRespo
 export type PostApiV1AdminAnalyticsByIdToggleData = {
     body?: {
         isActive: boolean;
+        expectedRevision: number;
+        allowDuplicateProvider?: boolean;
     };
     path: {
         id: string;
@@ -16524,6 +16611,17 @@ export type PostApiV1AdminAnalyticsByIdToggleErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16551,7 +16649,7 @@ export type PostApiV1AdminAnalyticsByIdToggleError = PostApiV1AdminAnalyticsById
 
 export type PostApiV1AdminAnalyticsByIdToggleResponses = {
     /**
-     * Script toggled
+     * Analytics script status updated
      */
     200: {
         success: true;
@@ -16559,14 +16657,248 @@ export type PostApiV1AdminAnalyticsByIdToggleResponses = {
             message: string;
             script: {
                 id: string;
+                name: string;
+                type: string;
                 isActive: boolean;
-                [key: string]: unknown;
+                usePartytown: boolean;
+                location: string;
+                revision: number;
+                createdAt: string | null;
+                updatedAt: string | null;
+                deletedAt: string | null;
+                config: string;
             };
         };
     };
 };
 
 export type PostApiV1AdminAnalyticsByIdToggleResponse = PostApiV1AdminAnalyticsByIdToggleResponses[keyof PostApiV1AdminAnalyticsByIdToggleResponses];
+
+export type PostApiV1AdminAnalyticsByIdRestoreData = {
+    body?: {
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/analytics/{id}/restore';
+};
+
+export type PostApiV1AdminAnalyticsByIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAnalyticsByIdRestoreError = PostApiV1AdminAnalyticsByIdRestoreErrors[keyof PostApiV1AdminAnalyticsByIdRestoreErrors];
+
+export type PostApiV1AdminAnalyticsByIdRestoreResponses = {
+    /**
+     * Analytics script restored
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            type: string;
+            isActive: boolean;
+            usePartytown: boolean;
+            location: string;
+            revision: number;
+            identifier: string | null;
+            readiness: string;
+            configIssue: string | null;
+            createdAt: string | null;
+            updatedAt: string | null;
+            deletedAt: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAnalyticsByIdRestoreResponse = PostApiV1AdminAnalyticsByIdRestoreResponses[keyof PostApiV1AdminAnalyticsByIdRestoreResponses];
+
+export type DeleteApiV1AdminAnalyticsByIdPermanentData = {
+    body?: {
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/analytics/{id}/permanent';
+};
+
+export type DeleteApiV1AdminAnalyticsByIdPermanentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAnalyticsByIdPermanentError = DeleteApiV1AdminAnalyticsByIdPermanentErrors[keyof DeleteApiV1AdminAnalyticsByIdPermanentErrors];
+
+export type DeleteApiV1AdminAnalyticsByIdPermanentResponses = {
+    /**
+     * Analytics script permanently deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAnalyticsByIdPermanentResponse = DeleteApiV1AdminAnalyticsByIdPermanentResponses[keyof DeleteApiV1AdminAnalyticsByIdPermanentResponses];
 
 export type GetApiV1AdminDashboardHomeSummaryData = {
     body?: never;

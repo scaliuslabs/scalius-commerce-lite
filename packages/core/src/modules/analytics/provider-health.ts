@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { analytics, metaConversionsSettings } from "@scalius/database/schema";
 
@@ -433,6 +433,7 @@ export async function getAnalyticsProviderHealth(
         isActive: analytics.isActive,
       })
       .from(analytics)
+      .where(isNull(analytics.deletedAt))
       .all(),
     db
       .select({

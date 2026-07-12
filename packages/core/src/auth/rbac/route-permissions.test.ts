@@ -13,6 +13,18 @@ describe("route permissions", () => {
       "/api/v1/admin/analytics/analytics_1/toggle",
       "POST",
     )).toEqual({ permission: PERMISSIONS.ANALYTICS_TOGGLE });
+    expect(getRoutePermission(
+      "/api/v1/admin/analytics/analytics_1/source",
+      "GET",
+    )).toEqual({ permission: PERMISSIONS.ANALYTICS_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/analytics/analytics_1/restore",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.ANALYTICS_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/analytics/analytics_1/permanent",
+      "DELETE",
+    )).toEqual({ permission: PERMISSIONS.ANALYTICS_EDIT });
 
     expect(getRoutePermission(
       "/api/v1/admin/pages/page_1",

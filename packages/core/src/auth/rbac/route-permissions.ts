@@ -496,6 +496,15 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.ANALYTICS_EDIT },
     DELETE: { permission: PERMISSIONS.ANALYTICS_EDIT },
   },
+  "/api/v1/admin/analytics/*/source": {
+    GET: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
+  "/api/v1/admin/analytics/*/restore": {
+    POST: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
+  "/api/v1/admin/analytics/*/permanent": {
+    DELETE: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
   "/api/v1/admin/analytics/*/toggle": {
     POST: { permission: PERMISSIONS.ANALYTICS_TOGGLE },
   },

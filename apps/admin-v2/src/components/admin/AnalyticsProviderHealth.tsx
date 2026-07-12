@@ -1,15 +1,14 @@
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   MinusCircle,
   Monitor,
   Server,
   type LucideIcon,
 } from "lucide-react";
-
 import { Badge } from "../ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "@scalius/shared/utils";
 import type {
   AnalyticsProviderBrowserStatus,
@@ -23,57 +22,20 @@ interface AnalyticsProviderHealthProps {
 
 type StatusBadgeConfig<TStatus extends string> = Record<
   TStatus,
-  {
-    label: string;
-    icon: LucideIcon;
-    className: string;
-  }
+  { label: string; icon: LucideIcon; className: string }
 >;
 
 const browserStatusConfig: StatusBadgeConfig<AnalyticsProviderBrowserStatus> = {
-  ready: {
-    label: "Browser ready",
-    icon: CheckCircle2,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  },
-  draft: {
-    label: "Draft",
-    icon: CircleDashed,
-    className: "border-sky-200 bg-sky-50 text-sky-700",
-  },
-  blocked: {
-    label: "Blocked",
-    icon: AlertTriangle,
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
-  },
-  not_configured: {
-    label: "Not configured",
-    icon: MinusCircle,
-    className: "border-muted bg-muted text-muted-foreground",
-  },
+  ready: { label: "Browser ready", icon: CheckCircle2, className: "text-emerald-700" },
+  draft: { label: "Draft", icon: CircleDashed, className: "text-sky-700" },
+  blocked: { label: "Blocked", icon: AlertTriangle, className: "text-destructive" },
+  not_configured: { label: "Not configured", icon: MinusCircle, className: "text-muted-foreground" },
 };
-
 const serverStatusConfig: StatusBadgeConfig<AnalyticsProviderServerStatus> = {
-  ready: {
-    label: "Server ready",
-    icon: Server,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  },
-  blocked: {
-    label: "Server blocked",
-    icon: AlertTriangle,
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
-  },
-  not_configured: {
-    label: "Server not configured",
-    icon: Server,
-    className: "border-amber-200 bg-amber-50 text-amber-800",
-  },
-  not_applicable: {
-    label: "Browser only",
-    icon: Monitor,
-    className: "border-muted bg-muted text-muted-foreground",
-  },
+  ready: { label: "Server ready", icon: Server, className: "text-emerald-700" },
+  blocked: { label: "Server blocked", icon: AlertTriangle, className: "text-destructive" },
+  not_configured: { label: "Server not configured", icon: Server, className: "text-amber-800" },
+  not_applicable: { label: "Browser only", icon: Monitor, className: "text-muted-foreground" },
 };
 
 function StatusBadge<TStatus extends string>({
@@ -85,95 +47,80 @@ function StatusBadge<TStatus extends string>({
   status: TStatus;
   label?: string;
 }) {
-  const statusConfig = config[status];
-  const Icon = statusConfig.icon;
-
+  const value = config[status];
+  const Icon = value.icon;
   return (
-    <Badge
-      variant="outline"
-      className={cn("gap-1.5 whitespace-nowrap", statusConfig.className)}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label ?? statusConfig.label}
+    <Badge variant="outline" className={cn("gap-1 bg-background", value.className)}>
+      <Icon className="h-3 w-3" />
+      {label ?? value.label}
     </Badge>
   );
 }
 
-export function AnalyticsProviderHealth({
-  health,
-}: AnalyticsProviderHealthProps) {
+export function AnalyticsProviderHealth({ health }: AnalyticsProviderHealthProps) {
   const { summary, providers } = health;
+  const configuredProviders = providers.filter((provider) => provider.browser.configured);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 pb-3 lg:flex-row lg:items-center lg:justify-between">
-        <CardTitle>Provider Readiness</CardTitle>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className="gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            {summary.browserReadyProviders} browser ready
+    <details className="group overflow-hidden rounded-lg border bg-background">
+      <summary className="flex cursor-pointer list-none flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className={cn(
+            "h-8 w-1 shrink-0 rounded-full",
+            summary.blockedProviders > 0 ? "bg-destructive" : "bg-emerald-500",
+          )} />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Provider readiness</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {summary.blockedProviders > 0
+                ? `${summary.blockedProviders} provider${summary.blockedProviders === 1 ? "" : "s"} need attention before reliable tracking.`
+                : `${summary.browserReadyProviders} browser and ${summary.serverReadyProviders} server integrations are ready.`}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="gap-1 text-emerald-700">
+            <CheckCircle2 className="h-3 w-3" />
+            {summary.browserReadyProviders} ready
           </Badge>
           <Badge
             variant="outline"
-            className={cn(
-              "gap-1.5",
-              summary.blockedProviders > 0
-                ? "border-destructive/30 bg-destructive/10 text-destructive"
-                : "text-muted-foreground",
-            )}
+            className={summary.blockedProviders > 0 ? "text-destructive" : "text-muted-foreground"}
           >
-            <AlertTriangle className="h-3.5 w-3.5" />
             {summary.blockedProviders} blocked
           </Badge>
-          <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-            <Server className="h-3.5 w-3.5" />
-            {summary.serverReadyProviders} server ready
-          </Badge>
+          <span className="text-xs text-muted-foreground">
+            {configuredProviders.length} configured
+          </span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </div>
-      </CardHeader>
-      <CardContent>
-        <ul className="divide-y rounded-md border">
-          {providers.map((provider) => (
-            <li
-              key={provider.provider}
-              className="grid gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_auto]"
-            >
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold">{provider.label}</h2>
-                  <span className="text-xs text-muted-foreground">
-                    {provider.browser.activeScriptCount} active,{" "}
-                    {provider.browser.draftScriptCount} draft
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {provider.browser.message}
-                </p>
-                {provider.browser.issues.length > 0 ? (
-                  <p className="text-xs font-medium text-destructive">
-                    {provider.browser.issues.join(" ")}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {provider.serverSide.message}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-start gap-2 lg:justify-end">
-                <StatusBadge
-                  config={browserStatusConfig}
-                  status={provider.browser.status}
-                />
+      </summary>
+
+      <ul className="grid border-t bg-muted/15 lg:grid-cols-2">
+        {providers.map((provider) => (
+          <li
+            key={provider.provider}
+            className="flex min-w-0 items-start justify-between gap-3 border-b px-3 py-2.5 last:border-b-0 lg:odd:border-r lg:[&:nth-last-child(-n+2)]:border-b-0"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{provider.label}</p>
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                {provider.browser.issues[0] ?? provider.browser.message}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <StatusBadge config={browserStatusConfig} status={provider.browser.status} />
+              {provider.provider === "facebook_pixel" ? (
                 <StatusBadge
                   config={serverStatusConfig}
                   status={provider.serverSide.status}
                   label={provider.serverSide.label}
                 />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

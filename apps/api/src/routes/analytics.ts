@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
-import { analytics, type Analytics } from "@scalius/database/schema";
-import { eq } from "drizzle-orm";
+import { analytics } from "@scalius/database/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import { cacheMiddleware } from "../middleware/cache";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -37,10 +37,10 @@ const getConfigurationsRoute = createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({
         analytics: z.array(z.object({
           id: z.string(),
-          name: z.string(),
           type: z.string(),
           config: z.string(),
-          isActive: z.boolean(),
+          usePartytown: z.boolean(),
+          location: z.string(),
         }).passthrough()),
       })) } },
     },
@@ -51,21 +51,31 @@ const getConfigurationsRoute = createRoute({
 app.openapi(getConfigurationsRoute, async (c) => {
   const db = c.get("db");
   const activeAnalyticsScriptsFromDB = await db
-    .select()
+    .select({
+      id: analytics.id,
+      type: analytics.type,
+      config: analytics.config,
+      isActive: analytics.isActive,
+      usePartytown: analytics.usePartytown,
+      location: analytics.location,
+    })
     .from(analytics)
-    .where(eq(analytics.isActive, true))
+    .where(and(eq(analytics.isActive, true), isNull(analytics.deletedAt)))
     .all();
 
   const processedScripts = activeAnalyticsScriptsFromDB
     .filter(shouldInjectAnalyticsScript)
-    .map((script: Analytics) => {
+    .map((script) => {
       let processedConfig = script.config;
       if (shouldUsePartytown(script)) {
         processedConfig = processAnalyticsScript(script);
       }
       return {
-        ...script,
-        config: processedConfig
+        id: script.id,
+        type: script.type,
+        config: processedConfig,
+        usePartytown: script.usePartytown,
+        location: script.location,
       };
     });
 

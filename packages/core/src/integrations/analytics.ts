@@ -11,12 +11,18 @@ declare const window: {
   fbq: (...args: unknown[]) => void;
 } & Record<string, unknown>;
 
-import type { Analytics as AnalyticsConfig } from "@scalius/database/schema";
 import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   isMainThreadOnlyAnalyticsType,
   isPubliclyInjectableAnalyticsConfig,
 } from "../modules/analytics/analytics.validation";
+
+export interface AnalyticsConfig {
+  type: string;
+  config: string;
+  isActive: boolean;
+  usePartytown?: boolean;
+}
 
 /**
  * Processes an analytics script configuration to add Partytown attributes.

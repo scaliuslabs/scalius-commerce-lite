@@ -1,78 +1,105 @@
-# Analytics Administration Audit
+# Analytics Administration Decisions
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
-## Verified current strengths
+This document owns the merchant analytics-script workflow, safe browser
+injection contract, provider readiness, and the boundary with Meta CAPI. Source,
+focused tests, current D1 state, and live browser evidence remain authoritative.
 
-- Browser script types cover GA4, GTM, Meta Pixel, TikTok Pixel, Cloudflare Web
-  Analytics, and explicit custom code.
-- Server validation rejects obvious placeholders and provider/type mismatches;
-  Cloudflare Web Analytics canonicalizes a real token to the official beacon,
-  stays off Partytown, and public injection fails closed for unsafe active rows.
-- Provider health separates browser readiness from server-side Meta CAPI state,
-  and layout caches invalidate after script mutations.
-- RBAC distinguishes view, create, edit, toggle, and delete behavior.
-- New scripts default Inactive, and create/edit services reject activation
-  changes unless the API supplies verified `analytics.toggle` authority.
+## Product job
 
-## P1 authority/workflow defects
+The Analytics page is an operations signal board, not a code-snippet archive. A
+merchant should be able to answer three questions quickly: what is configured,
+what is loading on buyer pages, and what needs attention before activation.
+Executable source belongs only in the edit workflow.
 
-1. Scripts have no version/CAS. Edit and activation can overwrite another
-   operator.
-2. List reads silently cap at 50 and the UI paginates only the already-loaded
-   array. There is no URL-backed server search/provider/status/readiness sort or
-   truthful total.
-3. List responses expose complete script source even though rows only need safe
-   summary/readiness fields. Public configuration also returns more row fields
-   than injection requires.
-4. Delete is immediate hard delete. Operational/audit recovery needs trash or a
-   retained inactive tombstone; active deletion must be explicit.
-5. Provider validation logic is duplicated in the React form and core. The UI
-   can drift from the actual activation authority.
-6. Provider-first use cases are forced through one raw 240px code textarea,
-   location terminology, and Partytown details. Most merchants need an ID/token
-   form, generated snippet, readiness, and test guidance; raw code is Advanced.
-7. Multiple active scripts for the same singleton-style provider/account are
-   not diagnosed. Duplicate page-view injection can corrupt metrics and should
-   be an explicit advanced decision, not an accidental default.
+## Implemented authority
 
-## UI direction
+- `analytics` rows have a positive monotonic `revision` and nullable
+  `deleted_at` from migration `0022_greedy_lucky_pierre.sql`.
+- Create defaults to an inactive draft. Edit, activate, deactivate, trash,
+  restore, and permanent delete require the current revision. A stale write
+  fails with a conflict instead of overwriting another operator.
+- Trash is recoverable and deactivates the script in the same guarded write.
+  Restore always returns it as an inactive draft. Permanent deletion is
+  trash-only.
+- Activation remains separately gated by `analytics.toggle`. Script source is
+  available only through `GET /admin/analytics/{id}/source`, which requires
+  `analytics.edit`; ordinary list viewers receive safe summaries only.
+- A second active first-class provider is rejected unless the operator
+  explicitly confirms duplicate tracking. Existing intentional duplicates do
+  not block an ordinary content edit when provider and activation state stay
+  unchanged.
+- The list is server-paginated and URL-filtered by search, provider, lifecycle,
+  trash, sort, and order. There is no silent 50-row truncation.
+- List rows expose name, masked/public identifier, placement, execution mode,
+  readiness, revision, and timestamps. They never expose executable config.
+- Public analytics configuration and consolidated layout projections include
+  only injection facts: `id`, `type`, `config`, `usePartytown`, and `location`.
+  Trashed rows are excluded from public injection, provider health, and Meta
+  browser/server Pixel parity.
 
-- Compact provider rows/cards show Provider, identifier/account mask, browser
-  status, server status when relevant, placement/performance mode, and last
-  update. One switch opens activation readiness rather than blindly toggling.
-- Top-level health strip summarizes Ready, Draft, and Needs attention; filters
-  and pagination use the shared dense table grammar.
-- Creation begins with provider tiles. Common providers request the minimum
-  identifier/token and generate canonical code. Advanced reveals location,
-  Partytown compatibility, and the generated snippet; Custom Script alone starts
-  with the code editor.
-- Default is Draft. “Activate” is a distinct, readiness-gated action. Preserve
-  drafts and show exactly which identifier/snippet/server credential is missing.
-- Cloudflare Web Analytics is the first recommended privacy/performance-friendly
-  path when the merchant has a Cloudflare site token; never auto-enable it.
+## Provider and runtime rules
 
-## Accepted architecture
+- GA4, GTM, Meta Pixel, TikTok Pixel, Cloudflare Web Analytics, and explicit
+  custom code remain the supported browser integration types.
+- Core validation is activation authority. The React form does not maintain a
+  second provider validator that can drift from the server.
+- Cloudflare Web Analytics accepts a real site token or official beacon,
+  canonicalizes it to the official beacon script, masks the token on list
+  surfaces, and always runs on the main thread at the merchant-selected
+  placement (body end is the UI default).
+- Inactive drafts may contain incomplete GA/GTM/Meta/TikTok snippets so work can
+  be saved. Activation rejects placeholders and provider/type mismatches.
+- Custom code is explicitly described as trusted administrator code that runs
+  on every buyer page while active. It is never presented as a sandbox.
+- Provider health remains read-only and cheap. It does not call external
+  providers, send test events, or reveal saved source or Meta credentials.
+- Meta CAPI keeps its independent fail-closed contract: strict credential reads,
+  same-origin browser events, a 15-minute circuit on non-retryable failures, no
+  hot retries, and no raw provider/PII logging. This slice did not weaken or
+  duplicate that authority.
 
-- Add positive script version and expected-version commands for edit, activate,
-  deactivate, trash, and restore. Public injection reads active validated rows.
-- Make the list server-paginated and return safe summaries plus provider-health
-  status. Detail returns source only to authorized editors.
-- Provider-specific structured config is the authority for first-class types;
-  canonical snippet generation belongs in core. Keep arbitrary trusted code
-  only for `custom`, clearly labelled as running on every buyer page.
-- Add duplicate-provider/account diagnostics and activation confirmation when a
-  second page-view emitter is intentional.
-- Retain an audit-safe tombstone/revision for deleted scripts. Do not preserve
-  the current hard-delete behavior for compatibility.
+## Interface decisions
 
-## Verification bar
+- The page header has one primary action, a reversible trash view, URL-backed
+  search/provider/status filters, and a compact provider-readiness rail.
+- Provider health is collapsed by default; the summary exposes ready/blocked
+  counts without spending a full viewport on six mostly empty cards.
+- Integration rows use a dense five-column grammar: integration identity,
+  delivery, readiness, update time, and actions. Draft activation is explicit;
+  deactivation remains one click.
+- Create/edit begins with provider choice, then asks for the smallest honest
+  input. Cloudflare uses a token field; other first-class providers accept the
+  official base snippet; custom code alone is framed as advanced trusted code.
+- Placement and worker isolation are progressive disclosure. Activation is a
+  separate sidebar decision, with an explicit duplicate-provider acknowledgement.
+- Error and empty copy names the repair action. Source-fetch failures stay on
+  the route error boundary instead of silently redirecting back to the list.
 
-- 50/51+ list pagination, search/filter/sort, concurrent edit/toggle, inactive
-  draft with placeholder, activation readiness, duplicate provider diagnostics,
-  trash/restore, and exact RBAC.
-- Provider ID/token forms generate the same canonical code core injects; no
-  duplicated client validator is authoritative.
-- Public payload minimization, cache freshness, Partytown/main-thread rules,
-  CSP-compatible output where configured, and no duplicate PageView from an
-  unacknowledged second provider instance.
+## Focused verification
+
+- Core analytics validation/service tests cover inactive draft defaults,
+  provider validation, Cloudflare canonicalization/masking, safe list summaries,
+  duplicate activation, and trash deactivation.
+- Admin API tests prove provider health omits credentials/source and paginated
+  list responses do not serialize `config` or `<script>`.
+- RBAC tests prove source, restore, permanent delete, and toggle use their
+  intended permissions.
+- Required checks for this slice: analytics/core/API focused Vitest suites,
+  admin/API/core/database/api-client typechecks, storefront Astro check,
+  package lint, migration metadata check, generated SDK, and a legacy-table
+  migration smoke.
+
+## Remaining release proof
+
+- Deploy migration and Workers through the normal release workflow, then test
+  create draft, validation failure, activation, duplicate acknowledgement,
+  concurrent edit conflict, trash, restore, and permanent delete in production.
+- A future structured provider-config model may replace pasted GA/GTM/Meta/
+  TikTok base snippets when canonical server generators cover each provider.
+  Do not add another client-only generator or preserve two competing sources of
+  truth.
+- Consent-region controls and provider test-event workflows are separate product
+  decisions. Do not fabricate readiness from the presence of an ID or call an
+  external provider from list/health reads.

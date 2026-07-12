@@ -171,6 +171,7 @@ export type AnalyticsScriptType = (typeof analyticsScriptTypes)[number];
 
 export const analyticsFormSchema = z.object({
   id: z.string().optional(),
+  expectedRevision: z.number().int().min(1).optional(),
   name: z
     .string()
     .min(3, "Name must be at least 3 characters")
@@ -178,6 +179,7 @@ export const analyticsFormSchema = z.object({
   type: z.enum(analyticsScriptTypes),
   isActive: z.boolean(),
   usePartytown: z.boolean(),
+  allowDuplicateProvider: z.boolean().default(false),
   config: z.string().min(1, "Configuration is required"),
   location: z.enum(["head", "body_start", "body_end"]),
   createdAt: z.coerce.date().optional(),

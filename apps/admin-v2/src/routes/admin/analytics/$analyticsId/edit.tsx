@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { AnalyticsForm } from "~/components/admin/AnalyticsForm";
 import { analyticsScriptQueryOptions } from "~/lib/api-query-options/analytics";
@@ -8,8 +8,7 @@ import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/form-schem
 
 export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    const data = await queryClient.ensureQueryData({ ...analyticsScriptQueryOptions(params.analyticsId), staleTime: Infinity }).catch(() => null);
-    if (!data) throw redirect({ to: "/admin/analytics" });
+    await queryClient.ensureQueryData(analyticsScriptQueryOptions(params.analyticsId));
   },
   head: () => ({ meta: [{ title: "Edit Analytics Script | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
@@ -23,27 +22,27 @@ function EditAnalyticsPage() {
 
   const validType = (analyticsScriptTypes.includes(s.type as AnalyticsScriptType) ? s.type : "custom") as AnalyticsScriptType;
   const validLocation = (["head", "body_start", "body_end"].includes(s.location) ? s.location : "head") as "head" | "body_start" | "body_end";
+  const config = (() => {
+    if (validType !== "cloudflare_web_analytics" || !s.config) return s.config || "";
+    const match = s.config.match(/data-cf-beacon\s*=\s*(["'])(.*?)\1/is);
+    if (!match?.[2]) return s.config;
+    try {
+      const parsed = JSON.parse(match[2]) as { token?: unknown };
+      return typeof parsed.token === "string" ? parsed.token : s.config;
+    } catch {
+      return s.config;
+    }
+  })();
   const defaultValues = {
     id: s.id,
+    expectedRevision: s.revision,
     name: s.name,
     type: validType,
     isActive: s.isActive,
     usePartytown: s.usePartytown ?? true,
-    config: s.config || "",
+    config,
     location: validLocation,
   };
 
-  return (
-    <div className="container py-10">
-      <div className="mb-10">
-        <h1 className="text-3xl font-bold">Edit Analytics Script</h1>
-        <p className="text-muted-foreground mt-2">
-          Update an existing analytics or tracking script.
-        </p>
-      </div>
-      <div className="max-w-3xl">
-        <AnalyticsForm defaultValues={defaultValues} isEdit={true} />
-      </div>
-    </div>
-  );
+  return <AnalyticsForm defaultValues={defaultValues} isEdit={true} />;
 }
