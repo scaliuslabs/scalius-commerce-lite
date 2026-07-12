@@ -840,7 +840,7 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
             <span
               aria-hidden="true"
               title="Product primary fallback"
-              className="absolute bottom-0 right-0 rounded-tl bg-background/90 px-1 text-[9px] font-semibold leading-3 text-muted-foreground"
+              className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none text-muted-foreground"
             >
               P
             </span>
@@ -868,11 +868,11 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
             {primary
               ? <img src={getOptimizedImageUrl(primary.url)} alt="" className="h-full w-full object-cover" />
               : <ImageIcon className="h-4 w-4" />}
-            {primary ? <span aria-hidden="true" className="absolute bottom-0 right-0 rounded-tl bg-background/90 px-1 text-[9px] font-semibold leading-3">P</span> : null}
+            {primary ? <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none">P</span> : null}
           </span>
           <span>
             <span className="block">Product primary (fallback)</span>
-            <span className="block text-[11px] text-muted-foreground">Clears this SKU's exact image</span>
+            <span className="block text-xs text-muted-foreground">Clears this SKU's exact image</span>
           </span>
         </button>
         <div className="grid max-h-56 grid-cols-4 gap-1 overflow-y-auto">
