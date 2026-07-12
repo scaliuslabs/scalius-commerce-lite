@@ -12,6 +12,43 @@ import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.va
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const MAX_ATTRIBUTE_BULK_IDS = 90;
+const MAX_ATTRIBUTE_PAGE_SIZE = 500;
+const MAX_ATTRIBUTE_VALUE_LENGTH = 100;
+
+function attributeIdentityKey(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+async function findAttributeIdentityConflict(
+    db: Database,
+    identity: { name?: string; slug?: string; excludeId?: string },
+) {
+    const conditions: SQL[] = [];
+    if (identity.name) {
+        conditions.push(
+            sql`lower(trim(${productAttributes.name})) = ${attributeIdentityKey(identity.name)}`,
+        );
+    }
+    if (identity.slug) {
+        conditions.push(
+            sql`lower(trim(${productAttributes.slug})) = ${attributeIdentityKey(identity.slug)}`,
+        );
+    }
+    if (conditions.length === 0) return undefined;
+
+    const rows = await db
+        .select({ id: productAttributes.id, deletedAt: productAttributes.deletedAt })
+        .from(productAttributes)
+        .where(and(
+            or(...conditions),
+            identity.excludeId
+                ? sql`${productAttributes.id} != ${identity.excludeId}`
+                : undefined,
+        ))
+        .limit(2);
+
+    return rows.find((row) => row.deletedAt === null) ?? rows[0];
+}
 
 function productRevisionBumpForAttributeValues(
     db: Database,
@@ -45,13 +82,16 @@ export async function listAttributes(
     } = {},
 ) {
     const {
-        page = 1,
-        limit = 10,
+        page: rawPage = 1,
+        limit: rawLimit = 10,
         search = "",
         sort = "name",
         order = "asc",
         showTrashed = false,
     } = options;
+
+    const page = Math.max(1, Math.floor(rawPage));
+    const limit = Math.min(MAX_ATTRIBUTE_PAGE_SIZE, Math.max(1, Math.floor(rawLimit)));
 
     const offset = (page - 1) * limit;
 
@@ -145,13 +185,7 @@ export async function createAttribute(
 ) {
     const { name, slug, filterable, options } = data;
 
-    const existingAttribute = await db
-        .select({ id: productAttributes.id, deletedAt: productAttributes.deletedAt })
-        .from(productAttributes)
-        .where(
-            or(eq(productAttributes.name, name), eq(productAttributes.slug, slug)),
-        )
-        .get();
+    const existingAttribute = await findAttributeIdentityConflict(db, { name, slug });
 
     if (existingAttribute) {
         if (existingAttribute.deletedAt) {
@@ -184,16 +218,20 @@ export async function updateAttribute(
     id: string,
     data: UpdateAttributeInput,
 ) {
-    if (data.name || data.slug) {
-        const orConditions = [];
-        if (data.name) orConditions.push(eq(productAttributes.name, data.name));
-        if (data.slug) orConditions.push(eq(productAttributes.slug, data.slug));
+    const activeAttribute = await db
+        .select({ id: productAttributes.id })
+        .from(productAttributes)
+        .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
+        .get();
 
-        const existingAttribute = await db
-            .select()
-            .from(productAttributes)
-            .where(and(or(...orConditions), sql`${productAttributes.id} != ${id}`))
-            .get();
+    if (!activeAttribute) throw new NotFoundError("Attribute not found");
+
+    if (data.name || data.slug) {
+        const existingAttribute = await findAttributeIdentityConflict(db, {
+            name: data.name,
+            slug: data.slug,
+            excludeId: id,
+        });
 
         if (existingAttribute) {
             throw new ConflictError("An attribute with that name or slug already exists.");
@@ -206,7 +244,7 @@ export async function updateAttribute(
             ...data,
             updatedAt: sql`(cast(strftime('%s','now') as int))`
         })
-        .where(eq(productAttributes.id, id))
+        .where(and(eq(productAttributes.id, id), isNull(productAttributes.deletedAt)))
         .returning();
 
     if (!updatedAttribute) throw new NotFoundError("Attribute not found");
@@ -336,37 +374,7 @@ async function permanentlyDeleteAttributes(db: Database, ids: string[]): Promise
 }
 
 export async function restoreAttribute(db: Database, id: string) {
-    const attribute = await db
-        .select()
-        .from(productAttributes)
-        .where(eq(productAttributes.id, id))
-        .get();
-
-    if (!attribute) throw new NotFoundError("Attribute not found");
-
-    const conflict = await db
-        .select({ id: productAttributes.id })
-        .from(productAttributes)
-        .where(
-            and(
-                or(
-                    eq(productAttributes.name, attribute.name),
-                    eq(productAttributes.slug, attribute.slug),
-                ),
-                isNull(productAttributes.deletedAt),
-                sql`${productAttributes.id} != ${id}`,
-            ),
-        )
-        .get();
-
-    if (conflict) {
-        throw new ConflictError("Cannot restore: an active attribute with the same name or slug already exists");
-    }
-
-    await db
-        .update(productAttributes)
-        .set({ deletedAt: null })
-        .where(eq(productAttributes.id, id));
+    await restoreAttributes(db, [id]);
 }
 
 export async function bulkDeleteAttributes(db: Database, ids: string[], permanent = false) {
@@ -374,12 +382,114 @@ export async function bulkDeleteAttributes(db: Database, ids: string[], permanen
 }
 
 export async function bulkRestoreAttributes(db: Database, ids: string[]) {
+    await restoreAttributes(db, ids);
+}
+
+function attributeRestoreGuard(db: Database, ids: string[]): SQLiteBatchItem {
+    const idSet = JSON.stringify(ids);
+    return buildBatchGuard(db, sql`
+        CASE WHEN
+            (SELECT count(*) FROM ${productAttributes}
+             WHERE ${productAttributes.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+             ) AND ${productAttributes.deletedAt} IS NOT NULL) = ${ids.length}
+            AND NOT EXISTS (
+                SELECT 1
+                FROM ${productAttributes} AS selected
+                JOIN ${productAttributes} AS active
+                  ON active.deleted_at IS NULL
+                 AND (
+                    lower(trim(active.name)) = lower(trim(selected.name))
+                    OR lower(trim(active.slug)) = lower(trim(selected.slug))
+                 )
+                WHERE selected.id IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+                )
+            )
+        THEN 1 ELSE json_extract('ATTRIBUTE_RESTORE_CONFLICT', '$') END
+    `);
+}
+
+async function restoreAttributes(db: Database, rawIds: string[]): Promise<void> {
+    const ids = normalizeAttributeIds(rawIds);
     if (ids.length === 0) return;
 
-    await db
-        .update(productAttributes)
-        .set({ deletedAt: null })
+    const attributes = await db
+        .select({
+            id: productAttributes.id,
+            name: productAttributes.name,
+            slug: productAttributes.slug,
+            deletedAt: productAttributes.deletedAt,
+        })
+        .from(productAttributes)
         .where(inArray(productAttributes.id, ids));
+
+    if (attributes.length !== ids.length) {
+        throw new NotFoundError("One or more attributes no longer exist. Refresh and try again.");
+    }
+    if (attributes.some((attribute) => attribute.deletedAt === null)) {
+        throw new ConflictError("Restore only attributes that are in trash. Refresh and try again.");
+    }
+
+    const selectedNames = new Set<string>();
+    const selectedSlugs = new Set<string>();
+    for (const attribute of attributes) {
+        const nameKey = attributeIdentityKey(attribute.name);
+        const slugKey = attributeIdentityKey(attribute.slug);
+        if (selectedNames.has(nameKey) || selectedSlugs.has(slugKey)) {
+            throw new ConflictError(
+                "Cannot restore attributes with duplicate normalized names or slugs together.",
+            );
+        }
+        selectedNames.add(nameKey);
+        selectedSlugs.add(slugKey);
+    }
+
+    const idSet = JSON.stringify(ids);
+    const activeConflict = await db
+        .select({ id: productAttributes.id })
+        .from(productAttributes)
+        .where(and(
+            isNull(productAttributes.deletedAt),
+            sql`EXISTS (
+                SELECT 1 FROM ${productAttributes} AS selected
+                WHERE selected.id IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+                ) AND (
+                    lower(trim(selected.name)) = lower(trim(${productAttributes.name}))
+                    OR lower(trim(selected.slug)) = lower(trim(${productAttributes.slug}))
+                )
+            )`,
+        ))
+        .limit(1);
+
+    if (activeConflict.length > 0) {
+        throw new ConflictError(
+            "Cannot restore: an active attribute with the same normalized name or slug already exists.",
+        );
+    }
+
+    const write = db
+        .update(productAttributes)
+        .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+        .where(and(
+            inArray(productAttributes.id, ids),
+            sql`${productAttributes.deletedAt} IS NOT NULL`,
+        ));
+
+    try {
+        await safeBatch(db, [attributeRestoreGuard(db, ids), write] as never);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            /ATTRIBUTE_RESTORE_CONFLICT|malformed json/i.test(error.message)
+        ) {
+            throw new ConflictError(
+                "Attributes changed while the restore was being processed. Refresh and try again.",
+            );
+        }
+        throw error;
+    }
 }
 
 // ─────────────────────────────────────────
@@ -408,12 +518,43 @@ function dedupeAttributeOptions(options: string[]): string[] {
 function normalizeAttributeValue(value: string): string {
     const normalizedValue = value.trim();
     if (!normalizedValue) throw new ValidationError("Attribute value is required");
+    if (normalizedValue.length > MAX_ATTRIBUTE_VALUE_LENGTH) {
+        throw new ValidationError(
+            `Attribute value must be at most ${MAX_ATTRIBUTE_VALUE_LENGTH} characters long`,
+        );
+    }
     return normalizedValue;
 }
 
 function requireExistingAttributeValue(value: string): string {
-    if (!value.trim()) throw new ValidationError("Attribute value is required");
+    const trimmedValue = value.trim();
+    if (!trimmedValue) throw new ValidationError("Attribute value is required");
+    if (trimmedValue.length > MAX_ATTRIBUTE_VALUE_LENGTH) {
+        throw new ValidationError(
+            `Attribute value must be at most ${MAX_ATTRIBUTE_VALUE_LENGTH} characters long`,
+        );
+    }
     return value;
+}
+
+async function usedAttributeValueKeys(
+    db: Database,
+    attributeId: string,
+    keys: string[],
+): Promise<Set<string>> {
+    if (keys.length === 0) return new Set();
+    const rows = await db
+        .select({ valueKey: sql<string>`lower(trim(${productAttributeValues.value}))` })
+        .from(productAttributeValues)
+        .where(and(
+            eq(productAttributeValues.attributeId, attributeId),
+            sql`lower(trim(${productAttributeValues.value})) IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(keys)})
+            )`,
+        ))
+        .groupBy(sql`lower(trim(${productAttributeValues.value}))`)
+        .all();
+    return new Set(rows.map((row) => row.valueKey));
 }
 
 export async function listAttributeValues(
@@ -625,7 +766,7 @@ export async function addAttributeValue(
     const attribute = await db
         .select()
         .from(productAttributes)
-        .where(eq(productAttributes.id, attributeId))
+        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
         .get();
 
     if (!attribute) throw new NotFoundError("Attribute not found");
@@ -639,8 +780,8 @@ export async function addAttributeValue(
     const newOptions = [...currentOptions, normalizedValue];
     await db
         .update(productAttributes)
-        .set({ options: newOptions })
-        .where(eq(productAttributes.id, attributeId));
+        .set({ options: newOptions, updatedAt: sql`unixepoch()` })
+        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)));
 }
 
 export async function renameAttributeValue(
@@ -652,7 +793,7 @@ export async function renameAttributeValue(
     const attribute = await db
         .select()
         .from(productAttributes)
-        .where(eq(productAttributes.id, attributeId))
+        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
         .get();
 
     if (!attribute) throw new NotFoundError("Attribute not found");
@@ -662,9 +803,22 @@ export async function renameAttributeValue(
     const oldValueKey = attributeValueKey(normalizedOldValue);
     const newValueKey = attributeValueKey(normalizedNewValue);
     const rawOptions = (attribute.options as string[]) || [];
+    const usedValueKeys = await usedAttributeValueKeys(
+        db,
+        attributeId,
+        oldValueKey === newValueKey ? [oldValueKey] : [oldValueKey, newValueKey],
+    );
+    const sourceExists = usedValueKeys.has(oldValueKey) || rawOptions.some(
+        (option) => attributeValueKey(option) === oldValueKey,
+    );
+    if (!sourceExists) {
+        throw new NotFoundError(`Attribute value "${oldValue.trim()}" no longer exists`);
+    }
     if (
         oldValueKey !== newValueKey &&
-        rawOptions.some((option) => attributeValueKey(option) === newValueKey)
+        (usedValueKeys.has(newValueKey) || rawOptions.some(
+            (option) => attributeValueKey(option) === newValueKey,
+        ))
     ) {
         throw new ConflictError(
             `Value "${normalizedNewValue}" already exists for this attribute`,
@@ -696,8 +850,8 @@ export async function renameAttributeValue(
         batchOps.push(
             db
                 .update(productAttributes)
-                .set({ options: newOptions })
-                .where(eq(productAttributes.id, attributeId))
+                .set({ options: newOptions, updatedAt: sql`unixepoch()` })
+                .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
         );
     }
 
@@ -712,13 +866,21 @@ export async function deleteAttributeValue(
     const attribute = await db
         .select()
         .from(productAttributes)
-        .where(eq(productAttributes.id, attributeId))
+        .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
         .get();
 
     if (!attribute) throw new NotFoundError("Attribute not found");
 
     const normalizedValue = requireExistingAttributeValue(value);
     const normalizedValueKey = attributeValueKey(normalizedValue);
+    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
+    const usedValueKeys = await usedAttributeValueKeys(db, attributeId, [normalizedValueKey]);
+    const sourceExists = usedValueKeys.has(normalizedValueKey) || currentOptions.some(
+        (option) => attributeValueKey(option) === normalizedValueKey,
+    );
+    if (!sourceExists) {
+        throw new NotFoundError(`Attribute value "${value.trim()}" no longer exists`);
+    }
     const affectedValueCondition = and(
             eq(productAttributeValues.attributeId, attributeId),
             sql`lower(trim(${productAttributeValues.value})) = ${normalizedValueKey}`,
@@ -735,7 +897,6 @@ export async function deleteAttributeValue(
             ),
     ];
 
-    const currentOptions = dedupeAttributeOptions((attribute.options as string[]) || []);
     if (currentOptions.some((option) => attributeValueKey(option) === normalizedValueKey)) {
         const newOptions = currentOptions.filter(
             (option) => attributeValueKey(option) !== normalizedValueKey,
@@ -743,8 +904,8 @@ export async function deleteAttributeValue(
         batchOps.push(
             db
                 .update(productAttributes)
-                .set({ options: newOptions })
-                .where(eq(productAttributes.id, attributeId))
+                .set({ options: newOptions, updatedAt: sql`unixepoch()` })
+                .where(and(eq(productAttributes.id, attributeId), isNull(productAttributes.deletedAt)))
         );
     }
 

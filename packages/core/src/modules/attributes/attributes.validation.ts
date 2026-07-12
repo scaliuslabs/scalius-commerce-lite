@@ -4,9 +4,15 @@
 import { z } from "zod";
 
 const existingAttributeValueSchema = z.string().refine(
-    (value) => value.trim().length > 0,
-    "Value is required",
+    (value) => value.trim().length > 0 && value.trim().length <= 100,
+    "Value must be between 1 and 100 characters",
 );
+
+const attributeValueSchema = z
+    .string()
+    .trim()
+    .min(1, "Value is required")
+    .max(100, "Value must be at most 100 characters long");
 
 const attributeNameSchema = z
     .string()
@@ -31,7 +37,9 @@ export const createAttributeSchema = z.object({
     name: attributeNameSchema,
     slug: z
         .string()
+        .trim()
         .min(2, "Slug must be at least 2 characters long")
+        .max(100, "Slug must be at most 100 characters long")
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
     filterable: z.boolean().default(true),
     options: attributeOptionsSchema.optional()
@@ -41,7 +49,9 @@ export const updateAttributeSchema = z.object({
     name: attributeNameSchema.optional(),
     slug: z
         .string()
+        .trim()
         .min(2, "Slug must be at least 2 characters long")
+        .max(100, "Slug must be at most 100 characters long")
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
         .optional(),
     filterable: z.boolean().optional(),
@@ -54,12 +64,12 @@ export const bulkActionSchema = z.object({
 });
 
 export const addValueSchema = z.object({
-    value: z.string().trim().min(1, "Value is required")
+    value: attributeValueSchema,
 });
 
 export const updateValueSchema = z.object({
     oldValue: existingAttributeValueSchema,
-    newValue: z.string().trim().min(1, "New value is required")
+    newValue: attributeValueSchema,
 });
 
 export const deleteValueSchema = z.object({

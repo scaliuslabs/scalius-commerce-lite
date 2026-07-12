@@ -61,11 +61,11 @@ const listRoute = createRoute({
     summary: "List all product attributes",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(500).default(10).openapi({ description: "Items per page (max 500 for selector dropdowns)" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(500).default(10).openapi({ description: "Items per page (max 500)" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
-            sort: z.string().optional().default("name").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("asc").openapi({ description: "Sort order" }),
+            sort: z.enum(["name", "slug", "filterable", "createdAt", "updatedAt"]).optional().default("name").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" })
         })
     },
@@ -85,8 +85,8 @@ app.openapi(listRoute, async (c) => {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
-        sort: (query.sort || "name") as string,
-        order: (query.order || "asc") as "asc" | "desc",
+        sort: query.sort || "name",
+        order: query.order || "asc",
         showTrashed: query.trashed === "true",
     });
     return ok(c, result);
