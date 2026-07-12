@@ -1,136 +1,63 @@
-// Media gallery grid component with smooth loading states
-
-import React from "react";
-import { ScrollArea } from "~/components/ui/scroll-area";
+import { ImageIcon, Loader2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Loader2, ImageIcon } from "lucide-react";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import { MediaCard } from "./MediaCard";
-import type { MediaFile } from "../types";
+import type { LibraryMediaFile, MediaLibraryView } from "../types";
 
 interface MediaGalleryProps {
-  files: MediaFile[];
+  files: LibraryMediaFile[];
   selectedFileIds: string[];
   selectionMode: boolean;
-  isLoading?: boolean;
-  isLoadingMore?: boolean;
-  hasMore?: boolean;
-  onFileSelect: (file: MediaFile) => void;
-  onFileDelete: (fileId: string) => void;
-  onFilePreview: (file: MediaFile, e: React.MouseEvent) => void;
-  onToggleSelection: (fileId: string) => void;
-  onEditAltText?: (file: MediaFile) => void;
-  onLoadMore?: () => void;
-  emptyMessage?: string;
-  className?: string;
+  view: MediaLibraryView;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
+  onFileSelect: (file: LibraryMediaFile) => void;
+  onFilePreview: (file: LibraryMediaFile, event: React.MouseEvent) => void;
+  onToggleSelection: (id: string) => void;
+  onLifecycle: (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => void;
+  onLoadMore: () => void;
+  onUploadClick?: () => void;
 }
 
-// Skeleton loader component - simple and clean
-function MediaCardSkeleton() {
-  return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="p-2">
-        <div className="relative aspect-square overflow-hidden rounded-md bg-muted/40" />
-        <div className="mt-2 space-y-2">
-          <div className="h-3 bg-muted/40 rounded" />
-          <div className="flex justify-between">
-            <div className="h-2 w-12 bg-muted/40 rounded" />
-            <div className="h-2 w-16 bg-muted/40 rounded" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+function Skeleton() {
+  return <div className="overflow-hidden rounded-lg border"><div className="aspect-[4/3] animate-pulse bg-muted" /><div className="space-y-2 p-2.5"><div className="h-3 animate-pulse rounded bg-muted" /><div className="h-2 w-1/2 animate-pulse rounded bg-muted" /></div></div>;
 }
 
-export function MediaGallery({
-  files,
-  selectedFileIds,
-  selectionMode,
-  isLoading = false,
-  isLoadingMore = false,
-  hasMore = false,
-  onFileSelect,
-  onFileDelete,
-  onFilePreview,
-  onToggleSelection,
-  onEditAltText,
-  onLoadMore,
-  emptyMessage = "No media files found",
-  className = "",
-}: MediaGalleryProps) {
-  // Show skeleton grid while loading initial files (12 cards to match page size)
-  if (isLoading && files.length === 0) {
-    return (
-      <ScrollArea className={`h-full rounded-md border ${className}`}>
-        <div className="p-4">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <MediaCardSkeleton key={i} />
-            ))}
-          </div>
-        </div>
-      </ScrollArea>
-    );
+export function MediaGallery(props: MediaGalleryProps) {
+  const posterById = new Map(props.files.filter((file) => file.kind === "image").map((file) => [file.id, file.url]));
+  if (props.isLoading && !props.files.length) {
+    return <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">{Array.from({ length: 12 }, (_, index) => <Skeleton key={index} />)}</div>;
   }
-
-  // Show empty state if no files and not loading
-  if (files.length === 0 && !isLoading) {
+  if (!props.files.length) {
     return (
-      <div className="flex h-[50vh] flex-col items-center justify-center text-muted-foreground py-10 border rounded-md">
-        <ImageIcon className="h-20 w-20 mb-6 text-gray-300 dark:text-gray-600" />
-        <h3 className="text-xl font-semibold mb-2">No Files Found</h3>
-        <p className="text-center text-sm">{emptyMessage}</p>
+      <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
+        <span className="mb-3 rounded-xl border bg-muted/40 p-3"><ImageIcon className="h-6 w-6 text-muted-foreground" /></span>
+        <h3 className="text-sm font-semibold">{props.view === "trash" ? "Trash is empty" : "No matching assets"}</h3>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.view === "trash" ? "Assets moved to trash stay here until restored or permanently deleted." : "Change the search, folder, or type filter—or upload a new asset."}</p>
+        {props.view === "ready" && props.onUploadClick && <Button type="button" size="sm" className="mt-4 h-8" onClick={props.onUploadClick}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload assets</Button>}
       </div>
     );
   }
-
   return (
-    <ScrollArea className={`h-full rounded-md border ${className}`}>
-      <div className="p-4">
-        {/* File grid with smooth transitions */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {files.map((file) => (
-            <MediaCard
-              key={file.id}
-              file={file}
-              isSelected={selectedFileIds.includes(file.id)}
-              selectionMode={selectionMode}
-              onSelect={() => onFileSelect(file)}
-              onDelete={() => onFileDelete(file.id)}
-              onPreview={(e) => onFilePreview(file, e)}
-              onToggleSelection={() => onToggleSelection(file.id)}
-              onEditAltText={onEditAltText}
-            />
-          ))}
-        </div>
-
-        {/* Loading overlay while switching folders - show existing files with overlay */}
-        {isLoading && files.length > 0 && (
-          <div className="mt-4 flex justify-center">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-full">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading files...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Load More Button & Indicator */}
-        {hasMore && onLoadMore && (
-          <div className="mt-6 flex justify-center">
-            <Button
-              type="button"
-              onClick={isLoadingMore ? undefined : onLoadMore}
-              disabled={isLoadingMore}
-              variant="outline"
-              size="sm"
-              className={isLoadingMore ? "gap-2" : ""}
-            >
-              {isLoadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoadingMore ? "Loading more files..." : "Load More"}
-            </Button>
-          </div>
-        )}
+    <ScrollArea className="h-full">
+      <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+        {props.files.map((file) => (
+          <MediaCard
+            key={file.id}
+            file={file}
+            posterUrl={file.posterMediaId ? posterById.get(file.posterMediaId) : null}
+            selected={props.selectedFileIds.includes(file.id)}
+            selectionMode={props.selectionMode}
+            view={props.view}
+            onActivate={() => props.onFileSelect(file)}
+            onPreview={(event) => props.onFilePreview(file, event)}
+            onToggle={() => props.onToggleSelection(file.id)}
+            onLifecycle={(action) => props.onLifecycle(file, action)}
+          />
+        ))}
       </div>
+      {props.hasMore && <div className="flex justify-center pb-4"><Button type="button" size="sm" variant="outline" className="h-8" disabled={props.isLoadingMore} onClick={props.onLoadMore}>{props.isLoadingMore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Load more</Button></div>}
     </ScrollArea>
   );
 }

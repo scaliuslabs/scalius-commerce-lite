@@ -51,6 +51,7 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
           </div>
           <div className="md:col-span-2 space-y-4">
             <MediaManager
+              capability="image"
               onSelect={handleLogoSelect}
               triggerLabel={logo.src ? "Change Logo" : "Select Logo"}
             />

@@ -1,48 +1,92 @@
-// Media Manager Types
+import type { MediaKind } from "@scalius/shared/media-policy";
+
+export type MediaCapability = "image" | "video" | "both";
+export type MediaLibraryView = "ready" | "trash";
 
 export interface MediaFile {
   id: string;
   url: string;
   filename: string;
   size: number;
-  mimeType?: string; // Optional for backward compatibility
+  createdAt: Date;
+  mimeType?: string;
   altText?: string | null;
   width?: number | null;
   height?: number | null;
   folderId?: string | null;
-  createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface LibraryMediaFile extends MediaFile {
+  objectKey: string;
+  kind: MediaKind;
+  mimeType: string;
+  altText: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  posterMediaId: string | null;
+  posterUrl?: string | null;
+  folderId: string | null;
+  status: "ready" | "trashed" | "deleting" | "deleted";
+  version: number;
+  updatedAt: Date;
+  trashedAt: Date | null;
+  deletedAt: Date | null;
 }
 
 export interface MediaFolder {
   id: string;
   name: string;
-  parentId?: string | null;
+  version: number;
   createdAt: Date;
-  updatedAt?: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
 }
 
-export interface MediaPagination {
-  total: number;
-  page: number;
+export interface CursorPagination {
   limit: number;
-  totalPages: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface MediaApiResponse {
-  files: MediaFile[];
-  pagination: MediaPagination;
+  files: LibraryMediaFile[];
+  pagination: CursorPagination;
 }
 
-export interface MediaFoldersApiResponse {
-  folders: MediaFolder[];
+export interface MediaFilterOptions {
+  search: string;
+  folderId?: string | null;
+  sortBy: "createdAt" | "filename" | "size";
+  sortOrder: "asc" | "desc";
+  kind?: MediaKind;
+  view: MediaLibraryView;
 }
 
-export interface UploadProgress {
-  fileIndex: number;
-  fileName: string;
+export type UploadItemStatus =
+  | "queued"
+  | "initiating"
+  | "uploading"
+  | "paused"
+  | "completing"
+  | "complete"
+  | "failed"
+  | "cancelled";
+
+export interface UploadQueueItem {
+  id: string;
+  file: File;
+  kind: MediaKind;
+  status: UploadItemStatus;
   progress: number;
-  total: number;
+  uploadedParts: number[];
+  expectedParts: number;
+  sessionId: string | null;
+  failedPart: number | null;
+  error: string | null;
+  result: LibraryMediaFile | null;
 }
 
 export interface MediaManagerProps {
@@ -50,60 +94,19 @@ export interface MediaManagerProps {
   onSelectMultiple?: (files: MediaFile[]) => void;
   selectedFiles?: MediaFile[];
   triggerLabel?: string;
-  acceptedFileTypes?: string;
-  maxFileSize?: number; // in MB
-  dialogClassName?: string; // Custom className for DialogContent (e.g., for z-index)
+  capability?: MediaCapability;
+  dialogClassName?: string;
   trigger?: React.ReactNode;
 }
 
-export interface MediaGalleryProps {
-  files: MediaFile[];
-  selectedFileIds: string[];
-  selectionMode: boolean;
-  onFileSelect: (file: MediaFile) => void;
-  onFileDelete: (fileId: string) => void;
-  onFilePreview: (file: MediaFile, e: React.MouseEvent) => void;
-  toggleFileSelection: (fileId: string) => void;
-  isLoading?: boolean;
+export const ITEMS_PER_PAGE = 24;
+
+export function capabilityAccept(capability: MediaCapability): string {
+  if (capability === "image") return "image/jpeg,image/png,image/gif,image/webp,image/avif";
+  if (capability === "video") return "video/mp4,video/webm";
+  return "image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm";
 }
 
-export interface MediaUploadZoneProps {
-  onUpload: (files: FileList | null) => Promise<void>;
-  isUploading: boolean;
-  uploadProgress?: UploadProgress[];
-  acceptedFileTypes?: string;
-  maxFileSize?: number;
+export function capabilityKind(capability: MediaCapability): MediaKind | undefined {
+  return capability === "both" ? undefined : capability;
 }
-
-export interface MediaPreviewDialogProps {
-  open: boolean;
-  file: MediaFile | null;
-  files: MediaFile[];
-  onOpenChange: (open: boolean) => void;
-  onNavigateNext: () => void;
-  onNavigatePrev: () => void;
-  onSelect?: (file: MediaFile) => void;
-  onAltTextUpdate?: (fileId: string, altText: string) => Promise<void>;
-}
-
-export interface MediaFilterOptions {
-  search: string;
-  folderId?: string | null;
-  sortBy?: "createdAt" | "filename" | "size";
-  sortOrder?: "asc" | "desc";
-  mimeType?: string;
-  fileType?: string;
-  dateFrom?: Date;
-  dateTo?: Date;
-}
-
-export interface MediaStats {
-  totalFiles: number;
-  totalSize: number;
-  filesByType: Record<string, number>;
-}
-
-export const DEFAULT_MAX_FILE_SIZE = 10; // MB
-export const MAX_FILES_PER_UPLOAD = 20; // Maximum files per upload
-export const DEFAULT_ACCEPTED_TYPES = "image/*";
-export const ITEMS_PER_PAGE = 20;

@@ -130,6 +130,7 @@ export function SliderTab({
           )}
 
           <MediaManager
+            capability="image"
             onSelect={(file) => handleAddImages([file])}
             onSelectMultiple={(files) => handleAddImages(files)}
             trigger={

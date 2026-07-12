@@ -159,6 +159,11 @@ interface R2Bucket {
       | Blob,
     options?: Record<string, unknown>,
   ): Promise<R2Object>;
+  createMultipartUpload(
+    key: string,
+    options?: Record<string, unknown>,
+  ): Promise<R2MultipartUpload>;
+  resumeMultipartUpload(key: string, uploadId: string): R2MultipartUpload;
   delete(key: string | string[]): Promise<void>;
   list(options?: Record<string, unknown>): Promise<{
     objects: R2Object[];
@@ -166,6 +171,23 @@ interface R2Bucket {
     cursor?: string;
     delimitedPrefixes: string[];
   }>;
+}
+
+interface R2MultipartUpload {
+  readonly key: string;
+  readonly uploadId: string;
+  uploadPart(
+    partNumber: number,
+    value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob,
+    options?: Record<string, unknown>,
+  ): Promise<R2UploadedPart>;
+  abort(): Promise<void>;
+  complete(uploadedParts: R2UploadedPart[]): Promise<R2Object>;
+}
+
+interface R2UploadedPart {
+  partNumber: number;
+  etag: string;
 }
 
 interface Fetcher {

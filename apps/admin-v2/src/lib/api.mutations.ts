@@ -14,7 +14,6 @@ export * from "./api-mutations/collections";
 export * from "./api-mutations/customers";
 export * from "./api-mutations/delivery-locations";
 export * from "./api-mutations/discounts";
-export * from "./api-mutations/media";
 export * from "./api-mutations/orders";
 export * from "./api-mutations/pages";
 export * from "./api-mutations/products";

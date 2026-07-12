@@ -1,344 +1,206 @@
-/**
- * Shared media manager state and handlers used by both
- * MediaManager (dialog picker) and MediaManagerPage (standalone page).
- */
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MediaApiClient } from "../api";
-import { useMediaFiles, useMediaUpload, useFolders } from ".";
-import type { MediaFile } from "../types";
+import { useFolders, useMediaFiles, useMediaUpload } from ".";
+import { capabilityKind, type LibraryMediaFile, type MediaCapability, type MediaFile, type MediaLibraryView } from "../types";
 
 interface UseMediaManagerOptions {
-  /** Auto-load files and folders on mount (false for dialog, true for page) */
   autoLoad: boolean;
-  /** Folder ID to upload to (derived from currentFolderId) */
-  maxFileSize?: number;
-  acceptedFileTypes?: string;
-  /** Called when selecting a single file (dialog mode) */
+  capability: MediaCapability;
   onSelect?: (file: MediaFile) => void;
-  /** Called when selecting multiple files (dialog mode) */
   onSelectMultiple?: (files: MediaFile[]) => void;
 }
 
-export function useMediaManager({
-  autoLoad,
-  maxFileSize = 10,
-  acceptedFileTypes = "image/*",
-  onSelect,
-  onSelectMultiple,
-}: UseMediaManagerOptions) {
-  const [selectionMode, setSelectionMode] = useState(false);
+function folderFilter(folderId: string | null | "all"): string | null | undefined {
+  return folderId === "all" ? undefined : folderId;
+}
+
+async function bounded<T>(values: T[], task: (value: T) => Promise<void>, concurrency = 3) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const value = values[cursor++];
+      await task(value);
+    }
+  });
+  await Promise.all(workers);
+}
+
+export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultiple }: UseMediaManagerOptions) {
+  const media = useMediaFiles(false);
+  const folders = useFolders(autoLoad);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [previewFile, setPreviewFile] = useState<LibraryMediaFile | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewFile, setPreviewFile] = useState<MediaFile | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [pendingDeleteFileId, setPendingDeleteFileId] = useState<string | null>(null);
-  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
-  const [folderSidebarCollapsed, setFolderSidebarCollapsed] = useState(false);
+  const [view, setViewState] = useState<MediaLibraryView>("ready");
+  const [isMutating, setIsMutating] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uploadRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track mount state for safe async updates
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  const {
-    files,
-    setFiles,
-    isLoading,
-    isLoadingMore,
-    currentPage,
-    totalPages,
-    filters,
-    loadFiles,
-    loadMore,
-    applyFilters,
-    deleteFile,
-    deleteFiles: deleteMultipleFiles,
-  } = useMediaFiles(false);
-
-  const {
-    folders,
-    currentFolderId,
-    loadFolders,
-    createFolder,
-    deleteFolder,
-    moveToFolder,
-  } = useFolders(autoLoad);
-
-  const { isUploading, uploadProgress, currentUploadStatus, uploadFiles } =
-    useMediaUpload({
-      maxSizeMB: maxFileSize,
-      acceptedTypes: acceptedFileTypes,
-      folderId: currentFolderId === "all" ? null : currentFolderId,
-      onUploadComplete: (uploadedFiles) => {
-        const folderParam = toFolderParam(currentFolderId);
-        if (autoLoad) {
-          applyFilters({ ...filters, folderId: folderParam });
-        } else {
-          loadFiles(1, { ...filters, folderId: folderParam });
-        }
-
-        if (onSelectMultiple && uploadedFiles.length > 0) {
-          const newFileIds = uploadedFiles.map((f) => f.id);
-          setTimeout(() => {
-            if (!mountedRef.current) return;
-            setSelectedFileIds(newFileIds);
-            setSelectionMode(true);
-            toast.success("Upload Complete", { description: "Files uploaded. Click 'Add' to insert them." });
-          }, 400);
-        } else if (onSelect && uploadedFiles.length > 0) {
-          if (uploadedFiles.length === 1) {
-            const file = uploadedFiles[0];
-            const fileWithDateObject = {
-              ...file,
-              id: `temp_${file.id}`,
-              createdAt: new Date(file.createdAt),
-            };
-            onSelect(fileWithDateObject);
-            toast.success("Image Selected", { description: "Newly uploaded image has been selected." });
-          } else {
-            toast.success("Upload Complete", { description: "Multiple files uploaded. Click one to select." });
-          }
-        } else if (uploadedFiles.length > 0) {
-          const newFileIds = uploadedFiles.map((f) => f.id);
-          setTimeout(() => {
-            if (!mountedRef.current) return;
-            setSelectedFileIds(newFileIds);
-            setSelectionMode(true);
-          }, 400);
-        }
-      },
-    });
-
-  // Map folder ID to API param: "all" = no filter, null = "root" (uncategorized), else folder ID
-  const toFolderParam = (id: string | null): string =>
-    id === "all" ? "all" : id === null ? "root" : id;
-
-  // Load files when folder changes (for page mode)
-  useEffect(() => {
-    if (autoLoad) {
-      applyFilters({ ...filters, folderId: toFolderParam(currentFolderId) });
-    }
-  }, [currentFolderId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Debounced search — use refs to avoid recreating the debounce timer
-  // when dependencies change (which would cancel in-flight searches)
-  const applyFiltersRef = useRef(applyFilters);
-  const currentFolderIdRef = useRef(currentFolderId);
-  applyFiltersRef.current = applyFilters;
-  currentFolderIdRef.current = currentFolderId;
-
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedApplyFilters = useCallback(
-    (newFilters: typeof filters) => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        applyFiltersRef.current({ ...newFilters, folderId: toFolderParam(currentFolderIdRef.current) });
-      }, 500);
+  const upload = useMediaUpload({
+    capability,
+    folderId: folders.currentFolderId === "all" ? null : folders.currentFolderId,
+    onUploadComplete: (uploaded) => {
+      setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
+      if (onSelectMultiple) setSelectionMode(true);
+      if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
+      uploadRefreshTimer.current = setTimeout(() => void media.refresh(), 350);
     },
-    [], // stable — reads latest values from refs
-  );
+  });
 
-  // Cleanup debounce timer on unmount
+  const baseFilters = useMemo(() => ({
+    kind: capabilityKind(capability),
+    folderId: folderFilter(folders.currentFolderId),
+    view,
+  }), [capability, folders.currentFolderId, view]);
+
   useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
+    setSelectedFileIds([]);
+    setSelectionMode(false);
+    if (autoLoad) void media.loadFiles(undefined, { ...media.filters, ...baseFilters });
+    // Filters are deliberately reset by these navigation changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoad, capability, folders.currentFolderId, view]);
+
+  useEffect(() => () => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
   }, []);
 
-  // Selection handlers
-  const toggleFileSelection = (fileId: string) => {
-    setSelectedFileIds((prev) =>
-      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId],
-    );
-  };
+  const load = useCallback(() => media.loadFiles(undefined, { ...media.filters, ...baseFilters }), [baseFilters, media]);
 
-  const toggleSelectionMode = () => {
-    if (selectionMode) setSelectedFileIds([]);
-    setSelectionMode(!selectionMode);
-  };
-
-  const selectAllFiles = () => setSelectedFileIds(files.map((f) => f.id));
-  const clearSelection = () => setSelectedFileIds([]);
-
-  // File handlers
-  const handleFileSelect = (file: MediaFile) => {
-    if (selectionMode) {
-      toggleFileSelection(file.id);
-    } else if (onSelect) {
-      const fileWithDateObject = {
-        ...file,
-        id: `temp_${file.id}`,
-        createdAt: new Date(file.createdAt),
-      };
-      onSelect(fileWithDateObject);
-    }
-  };
-
-  const handleFilePreview = (file: MediaFile, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPreviewFile(file);
-    setShowPreview(true);
-  };
-
-  const handleDeleteConfirmation = (fileId: string) => {
-    setPendingDeleteFileId(fileId);
-    setShowDeleteDialog(true);
-  };
-
-  const reloadFiles = () => {
-    const folderParam = toFolderParam(currentFolderId);
-    if (autoLoad) {
-      applyFilters({ ...filters, folderId: folderParam });
-    } else {
-      loadFiles(1, { ...filters, folderId: folderParam });
-    }
-  };
-
-  const handleFileDelete = async () => {
-    if (!pendingDeleteFileId) return;
-    await deleteFile(pendingDeleteFileId);
-    reloadFiles();
-    setPendingDeleteFileId(null);
-    setShowDeleteDialog(false);
-  };
-
-  const handleBulkDeleteConfirmation = () => {
-    if (selectedFileIds.length === 0) return;
-    setShowBulkDeleteDialog(true);
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedFileIds.length === 0) return;
-    await deleteMultipleFiles(selectedFileIds);
-    reloadFiles();
+  const applyFilters = useCallback((updates: Partial<typeof media.filters>) => {
     setSelectedFileIds([]);
-    setShowBulkDeleteDialog(false);
-  };
+    setSelectionMode(false);
+    void media.loadFiles(undefined, { ...media.filters, ...baseFilters, ...updates });
+  }, [baseFilters, media]);
 
-  const handleMoveToFolder = async (folderId: string | null) => {
-    if (selectedFileIds.length === 0) return;
-    try {
-      const count = selectedFileIds.length;
-      await MediaApiClient.moveFilesToFolder(selectedFileIds, folderId);
-      const folderName = folderId
-        ? folders.find((f) => f.id === folderId)?.name || "folder"
-        : "Uncategorized";
-      toast.success("Files Moved", {
-        description: `Moved ${count} file${count !== 1 ? "s" : ""} to '${folderName}'.`,
-      });
-      setSelectedFileIds([]);
-      setSelectionMode(false);
-      // Navigate to the target folder
-      moveToFolder(folderId);
-    } catch (error: unknown) {
-      toast.error("Move Failed", {
-        description: (error instanceof Error ? error.message : String(error)) || "Could not move files. Please try again.",
-      });
+  const applySearch = useCallback((search: string) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => applyFilters({ search }), 300);
+  }, [applyFilters]);
+
+  const setView = useCallback((next: MediaLibraryView) => {
+    setViewState(next);
+    setSelectedFileIds([]);
+    setSelectionMode(false);
+  }, []);
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedFileIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  }, []);
+
+  const handleFileSelect = useCallback((file: LibraryMediaFile) => {
+    if (selectionMode || onSelectMultiple) {
+      setSelectionMode(true);
+      toggleSelection(file.id);
+      return;
     }
-  };
+    if (onSelect) onSelect(file);
+    else {
+      setPreviewFile(file);
+      setShowPreview(true);
+    }
+  }, [onSelect, onSelectMultiple, selectionMode, toggleSelection]);
 
-  const handleAltTextUpdate = async (fileId: string, altText: string) => {
+  const selectedFiles = media.files.filter((file) => selectedFileIds.includes(file.id));
+
+  const mutateOne = useCallback(async (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
+    setIsMutating(true);
     try {
-      const updatedFile = await MediaApiClient.updateAltText(fileId, altText);
-      const newAltText = updatedFile.altText ?? altText;
-      // Update the file in the local list
-      setFiles((prev: MediaFile[]) =>
-        prev.map((f: MediaFile) => (f.id === fileId ? { ...f, altText: newAltText } : f)),
-      );
-      // Also update preview file if it's the same one
-      if (previewFile && previewFile.id === fileId) {
-        setPreviewFile({ ...previewFile, altText: newAltText });
+      if (action === "trash") await MediaApiClient.trashFile(file);
+      else if (action === "restore") await MediaApiClient.restoreFile(file);
+      else await MediaApiClient.permanentlyDeleteFile(file);
+      toast.success(action === "trash" ? "Moved to trash" : action === "restore" ? "Restored" : "Permanently deleted");
+      await load();
+    } catch (error) {
+      toast.error("Media was not changed", { description: error instanceof Error ? error.message : "Refresh and try again." });
+    } finally {
+      setIsMutating(false);
+    }
+  }, [load]);
+
+  const mutateSelected = useCallback(async (action: "trash" | "restore" | "permanent") => {
+    if (!selectedFiles.length) return;
+    setIsMutating(true);
+    let succeeded = 0;
+    const failures: string[] = [];
+    await bounded(selectedFiles, async (file) => {
+      try {
+        if (action === "trash") await MediaApiClient.trashFile(file);
+        else if (action === "restore") await MediaApiClient.restoreFile(file);
+        else await MediaApiClient.permanentlyDeleteFile(file);
+        succeeded += 1;
+      } catch (error) {
+        failures.push(`${file.filename}: ${error instanceof Error ? error.message : "failed"}`);
       }
-      toast.success("Alt Text Updated", { description: "Alt text has been saved." });
-    } catch (error: unknown) {
-      toast.error("Update Failed", {
-        description: (error instanceof Error ? error.message : String(error)) || "Could not update alt text.",
-      });
+    });
+    setIsMutating(false);
+    setSelectedFileIds([]);
+    await load();
+    if (succeeded) toast.success(`${succeeded} asset${succeeded === 1 ? "" : "s"} updated`);
+    if (failures.length) toast.error(`${failures.length} asset${failures.length === 1 ? "" : "s"} not changed`, { description: failures.slice(0, 3).join("\n") });
+  }, [load, selectedFiles]);
+
+  const moveSelected = useCallback(async (folderId: string | null) => {
+    if (!selectedFiles.length) return;
+    setIsMutating(true);
+    try {
+      await MediaApiClient.moveFiles(selectedFiles, folderId);
+      setSelectedFileIds([]);
+      toast.success("Assets moved");
+      await load();
+    } catch (error) {
+      toast.error("Assets were not moved", { description: error instanceof Error ? error.message : "Refresh and try again." });
+    } finally {
+      setIsMutating(false);
     }
-  };
+  }, [load, selectedFiles]);
 
-  const handleAddSelectedFiles = () => {
-    if (selectedFileIds.length === 0 || !onSelectMultiple) return;
-    const selectedMediaFiles = files.filter((f) => selectedFileIds.includes(f.id));
-    const filesWithDateObjects = selectedMediaFiles.map((file) => ({
-      ...file,
-      id: `temp_${file.id}`,
-      createdAt: new Date(file.createdAt),
-    }));
-    onSelectMultiple(filesWithDateObjects);
-  };
+  const updateFile = useCallback(async (file: LibraryMediaFile, updates: Parameters<typeof MediaApiClient.updateFile>[1]) => {
+    try {
+      const updated = await MediaApiClient.updateFile(file, updates);
+      media.setFiles((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setPreviewFile((current) => current?.id === updated.id ? updated : current);
+      toast.success("Details saved");
+      return updated;
+    } catch (error) {
+      toast.error("Details were not saved", { description: error instanceof Error ? error.message : "Refresh and try again." });
+      throw error;
+    }
+  }, [media]);
 
-  // Preview navigation
-  const navigateToNextImage = () => {
-    if (!previewFile) return;
-    const i = files.findIndex((f) => f.id === previewFile.id);
-    if (i < files.length - 1) setPreviewFile(files[i + 1]);
-  };
-
-  const navigateToPrevImage = () => {
-    if (!previewFile) return;
-    const i = files.findIndex((f) => f.id === previewFile.id);
-    if (i > 0) setPreviewFile(files[i - 1]);
-  };
+  const addSelected = useCallback(() => {
+    if (!onSelectMultiple || !selectedFiles.length) return;
+    onSelectMultiple(selectedFiles);
+  }, [onSelectMultiple, selectedFiles]);
 
   return {
-    // State
-    files,
-    isLoading,
-    isLoadingMore,
-    currentPage,
-    totalPages,
-    filters,
-    folders,
-    currentFolderId,
-    selectionMode,
+    ...media,
+    ...folders,
+    ...upload,
+    view,
+    setView,
     selectedFileIds,
-    showPreview,
-    previewFile,
-    showDeleteDialog,
-    pendingDeleteFileId,
-    showBulkDeleteDialog,
-    folderSidebarCollapsed,
-    isUploading,
-    uploadProgress,
-    currentUploadStatus,
-
-    // Setters
-    setSelectionMode,
     setSelectedFileIds,
-    setShowPreview,
+    selectionMode,
+    setSelectionMode,
+    selectedFiles,
+    previewFile,
     setPreviewFile,
-    setShowDeleteDialog,
-    setPendingDeleteFileId,
-    setShowBulkDeleteDialog,
-    setFolderSidebarCollapsed,
-
-    // Actions
-    loadFiles,
-    loadFolders,
-    loadMore,
+    showPreview,
+    setShowPreview,
+    isMutating,
+    load,
     applyFilters,
-    uploadFiles,
-    createFolder,
-    deleteFolder,
-    moveToFolder,
-    debouncedApplyFilters,
-    toggleFileSelection,
-    toggleSelectionMode,
-    selectAllFiles,
-    clearSelection,
+    applySearch,
+    toggleSelection,
     handleFileSelect,
-    handleFilePreview,
-    handleDeleteConfirmation,
-    handleFileDelete,
-    handleBulkDeleteConfirmation,
-    handleBulkDelete,
-    handleMoveToFolder,
-    handleAddSelectedFiles,
-    handleAltTextUpdate,
-    navigateToNextImage,
-    navigateToPrevImage,
+    mutateOne,
+    mutateSelected,
+    moveSelected,
+    updateFile,
+    addSelected,
   };
 }

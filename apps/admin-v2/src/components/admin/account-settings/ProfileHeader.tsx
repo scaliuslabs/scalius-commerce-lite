@@ -247,6 +247,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             {/* Actions */}
             <div className="flex min-h-8 flex-wrap items-center gap-2">
               <MediaManager
+                capability="image"
                 onSelect={handleImageSelect}
                 triggerLabel={image ? "Change Photo" : "Add Photo"}
                 trigger={

@@ -109,6 +109,7 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
           </div>
         ) : (
           <MediaManager
+            capability="image"
             onSelect={(file) => onIconSelect(link.id, file)}
             trigger={
               <Button variant="outline" size="icon" className="h-9 w-9">

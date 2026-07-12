@@ -1,108 +1,95 @@
 import { createServerFn } from "@tanstack/react-start";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api.server";
 
 export type MediaTimestamp = string | number;
+export type MediaKindDto = "image" | "video";
+export type MediaViewDto = "ready" | "trash";
 
 export interface MediaFileDto {
   id: string;
   filename: string;
   url: string;
+  objectKey: string;
+  kind: MediaKindDto;
   size: number;
   mimeType: string;
   altText?: string | null;
+  caption?: string | null;
   width?: number | null;
   height?: number | null;
-  folderId?: string | null;
+  durationMs?: number | null;
+  posterMediaId?: string | null;
+  folderId: string | null;
+  status: "ready" | "trashed" | "deleting" | "deleted";
+  version: number;
   createdAt: MediaTimestamp;
-  updatedAt?: MediaTimestamp;
+  updatedAt: MediaTimestamp;
+  trashedAt?: MediaTimestamp | null;
   deletedAt?: MediaTimestamp | null;
 }
 
 export interface MediaFolderDto {
   id: string;
   name: string;
-  parentId?: string | null;
+  version: number;
   createdAt: MediaTimestamp;
-  updatedAt?: MediaTimestamp;
+  updatedAt: MediaTimestamp;
   deletedAt?: MediaTimestamp | null;
 }
 
-export interface MediaPagination {
-  total: number;
-  page: number;
+export interface CursorPaginationDto {
   limit: number;
-  totalPages: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
 export interface MediaListPayload {
   files: MediaFileDto[];
-  pagination: MediaPagination;
+  pagination: CursorPaginationDto;
 }
 
 export interface MediaFoldersPayload {
   folders: MediaFolderDto[];
+  pagination: CursorPaginationDto;
 }
 
 export interface MediaListQueryInput {
-  [key: string]: string | number | null | undefined;
-  page?: number;
+  cursor?: string;
   limit?: number;
   search?: string;
   folderId?: string | null;
-  mimeType?: string;
-  type?: string;
-  fileType?: string;
-  sortBy?: "createdAt" | "filename" | "size" | string;
-  sortOrder?: "asc" | "desc" | string;
+  kind?: MediaKindDto;
+  view?: MediaViewDto;
+  sortBy?: "createdAt" | "filename" | "size";
+  sortOrder?: "asc" | "desc";
 }
 
 export interface UpdateMediaInput {
   fileId: string;
   update: {
+    expectedVersion: number;
     filename?: string;
     altText?: string | null;
+    caption?: string | null;
+    width?: number | null;
+    height?: number | null;
+    durationMs?: number | null;
+    posterMediaId?: string | null;
     folderId?: string | null;
   };
 }
 
-export interface MediaFilePayload {
-  file: MediaFileDto;
-}
+export interface MediaFilePayload { file: MediaFileDto }
+export interface MediaFolderPayload { folder: MediaFolderDto }
 
-export interface CreateMediaFolderInput {
-  name: string;
-  parentId?: string | null;
-}
-
-export interface MediaFolderPayload {
-  folder: MediaFolderDto;
-}
-
-export interface RenameMediaFolderInput {
-  folderId: string;
-  name: string;
-}
-
-export interface MoveMediaFilesInput {
-  fileIds: string[];
-  folderId?: string | null;
-}
-
-export interface MoveMediaFilesPayload {
-  message: string;
-  movedCount: number;
-}
-
-function toMediaListParams(data: MediaListQueryInput): Record<string, string> {
+function listParams(data: MediaListQueryInput): Record<string, string> {
   const params: Record<string, string> = {};
-  if (data.page) params.page = String(data.page);
+  if (data.cursor) params.cursor = data.cursor;
   if (data.limit) params.limit = String(data.limit);
-  if (data.search) params.search = data.search;
+  if (data.search?.trim()) params.search = data.search.trim();
   if (data.folderId !== undefined) params.folderId = data.folderId ?? "root";
-
-  const mimeType = data.mimeType ?? data.fileType ?? data.type;
-  if (mimeType) params.mimeType = mimeType;
-
+  if (data.kind) params.kind = data.kind;
+  if (data.view) params.view = data.view;
   if (data.sortBy) params.sortBy = data.sortBy;
   if (data.sortOrder) params.sortOrder = data.sortOrder;
   return params;
@@ -110,53 +97,43 @@ function toMediaListParams(data: MediaListQueryInput): Record<string, string> {
 
 export const getMediaList = createServerFn({ method: "GET" })
   .validator((data: MediaListQueryInput) => data)
-  .handler(async ({ data }) => {
-    return apiGet<MediaListPayload>("/media", toMediaListParams(data));
-  });
-
-export const deleteMedia = createServerFn({ method: "POST" })
-  .validator((data: { fileId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/media/${data.fileId}`);
-  });
+  .handler(async ({ data }) => apiGet<MediaListPayload>("/media", listParams(data)));
 
 export const updateMedia = createServerFn({ method: "POST" })
   .validator((data: UpdateMediaInput) => data)
-  .handler(async ({ data }) => {
-    return apiPut<MediaFilePayload>(`/media/${data.fileId}`, data.update);
-  });
+  .handler(async ({ data }) => apiPatch<MediaFilePayload>(`/media/${data.fileId}`, data.update));
 
-export const getMediaFolders = createServerFn({ method: "GET" }).handler(
-  async () => {
-    return apiGet<MediaFoldersPayload>("/media/folders");
-  },
-);
+export const trashMedia = createServerFn({ method: "POST" })
+  .validator((data: { fileId: string; expectedVersion: number }) => data)
+  .handler(async ({ data }) => apiPost<MediaFilePayload>(`/media/${data.fileId}/trash`, { expectedVersion: data.expectedVersion }));
 
-export const createMediaFolder = createServerFn({ method: "POST" })
-  .validator((data: CreateMediaFolderInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MediaFolderPayload>("/media/folders", data);
-  });
+export const restoreMedia = createServerFn({ method: "POST" })
+  .validator((data: { fileId: string; expectedVersion: number }) => data)
+  .handler(async ({ data }) => apiPost<MediaFilePayload>(`/media/${data.fileId}/restore`, { expectedVersion: data.expectedVersion }));
 
-export const renameMediaFolder = createServerFn({ method: "POST" })
-  .validator((data: RenameMediaFolderInput) => data)
-  .handler(async ({ data }) => {
-    return apiPut<MediaFolderPayload>(`/media/folders/${data.folderId}`, {
-      name: data.name,
-    });
-  });
+export const permanentlyDeleteMedia = createServerFn({ method: "POST" })
+  .validator((data: { fileId: string; expectedVersion: number }) => data)
+  .handler(async ({ data }) => apiDelete(`/media/${data.fileId}/permanent?expectedVersion=${encodeURIComponent(String(data.expectedVersion))}`));
 
 export const moveMediaFiles = createServerFn({ method: "POST" })
-  .validator((data: MoveMediaFilesInput) => data)
-  .handler(async ({ data }) => {
-    return apiPost<MoveMediaFilesPayload>("/media/move", {
-      fileIds: data.fileIds,
-      folderId: data.folderId ?? null,
-    });
-  });
+  .validator((data: { items: Array<{ id: string; expectedVersion: number }>; folderId?: string | null }) => data)
+  .handler(async ({ data }) => apiPost<{ movedCount: number }>("/media/move", { items: data.items, folderId: data.folderId ?? null }));
+
+export const getMediaFolders = createServerFn({ method: "GET" })
+  .validator((data: { cursor?: string; limit?: number }) => data)
+  .handler(async ({ data }) => apiGet<MediaFoldersPayload>("/media/folders", {
+    ...(data.cursor ? { cursor: data.cursor } : {}),
+    limit: String(data.limit ?? 100),
+  }));
+
+export const createMediaFolder = createServerFn({ method: "POST" })
+  .validator((data: { name: string }) => data)
+  .handler(async ({ data }) => apiPost<MediaFolderPayload>("/media/folders", data));
+
+export const renameMediaFolder = createServerFn({ method: "POST" })
+  .validator((data: { folderId: string; name: string; expectedVersion: number }) => data)
+  .handler(async ({ data }) => apiPut<MediaFolderPayload>(`/media/folders/${data.folderId}`, { name: data.name, expectedVersion: data.expectedVersion }));
 
 export const deleteMediaFolder = createServerFn({ method: "POST" })
-  .validator((data: { folderId: string }) => data)
-  .handler(async ({ data }) => {
-    return apiDelete(`/media/folders/${data.folderId}`);
-  });
+  .validator((data: { folderId: string; expectedVersion: number }) => data)
+  .handler(async ({ data }) => apiDelete(`/media/folders/${data.folderId}?expectedVersion=${encodeURIComponent(String(data.expectedVersion))}`));
