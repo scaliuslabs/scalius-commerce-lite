@@ -2,6 +2,67 @@
 
 Last updated: 2026-07-12
 
+## 2026-07-12 catalog release batch
+
+Status: deployed and live-verified on 2026-07-12.
+
+- Product option axes remain merchant-defined facts rather than hard-coded
+  size/color concepts. The compact builder and SKU matrix support exact SKU
+  subsets, omission/restoration, explicit discount modes, safe stock editing,
+  global SKU/barcode identity, and direct per-SKU image selection.
+- Variant-image authority is exact SKU assignment only. An unassigned SKU
+  visibly previews and uses the product primary image; no hidden option-value,
+  positional, or SEO-marker inheritance was reintroduced.
+- Attributes now distinguish product facts from storefront facets, validate
+  active assignments in bounded reads, expose assignment usage, and provide a
+  searchable product editor workflow.
+- Category and collection lifecycle writes are trash-aware, bounded for D1,
+  revision/CAS protected where required, and coupled to truthful storefront,
+  discovery, count, ordering, and cache invalidation behavior.
+- Inventory now includes compact operations, ledger-v2-safe mutation paths,
+  available/reserved/on-hand explanations, movement history, and an actionable
+  low-stock alert inbox with review state.
+- Shared admin forms fail closed on explicit create/edit permission, and native
+  submits plus keyboard shortcuts use the same authority.
+- Item-level return policy, return processing, invoice authority, and order
+  detail loading were hardened as the first slice of the expanded platform
+  release program.
+
+Final repository verification for this batch:
+
+- 487 test files / 3,486 tests passed;
+- typecheck, lint, production builds, environment binding checks, dist-secret
+  checks, migration metadata, and diff checks passed;
+- migration 0015 applied successfully to production;
+- `pnpm release:check` passed after both deployments, covering API readiness,
+  admin auth, storefront/cache behavior, discovery XML, both product feeds,
+  UCP catalog discovery, and Product schema.
+
+Deployed Worker versions:
+
+- API: `f16a32ce-ae97-4549-9c54-f2db0e3a4bfd`
+- Storefront: `e54719ea-62a8-4749-9d80-3dffab8fe3b8`
+- Ops monitor: `3e9e49f7-ca38-4852-84f7-8f6c60e2bbc3`
+- Admin V2: deployed in the same release batch and authenticated-live-verified;
+  the deploy command's retained output did not include its version line.
+
+Live authenticated evidence:
+
+- the product editor rendered generic Color × Weight axes, four exact SKU rows,
+  direct images, explicit discount selectors, omission actions, and compact
+  available/committed stock disclosure without console errors;
+- Inventory loaded its variant table and new Low-stock alerts tab; the current
+  demo catalog truthfully reports 74 sold-out SKUs and no alerts needing review;
+- Attributes, Categories, and Collections loaded their revised list/lifecycle
+  interfaces without console errors;
+- order `16V71E` opened its detail page instead of redirecting, with item,
+  payment, fulfillment, notification, shipment-readiness, invoice, and return
+  state present;
+- a live browser check caught and repaired a post-hydration category price
+  regression: absent URL filters were parsed as zero even though the API and
+  server HTML carried `50–7055`. Commit `17bb64fb` now preserves those API
+  bounds, and `/categories/drinks` renders `৳50–৳7,055` with no console errors.
+
 ## Inventory and catalog-settings hardening
 
 Status: deployed and live-verified on 2026-07-12.
@@ -24,9 +85,8 @@ Status: deployed and live-verified on 2026-07-12.
   stock-version CAS; exact retries replay and changed-payload key reuse fails.
 - Currency code lock, atomic save, supported-code validation, order snapshots,
   and UI lock copy were re-audited with no new mismatch found.
-- Remaining P1/P2 work is recorded in `INVENTORY.md`, especially adjustment
-  alert inbox/acknowledgement UI, audit export/filter depth, and a bounded
-  atomic bulk-stocktake design.
+- Remaining P1/P2 work is recorded in `INVENTORY.md`, especially audit
+  export/filter depth and a bounded atomic bulk-stocktake design.
 - Commit `51f557a6` is deployed as API Worker
   `e0a160ae-12ab-4436-b16a-9e6338e432e3` and Admin Worker
   `09c60e31-d127-46d5-bb88-a581cfb941cc`. The live inventory read returns 86
