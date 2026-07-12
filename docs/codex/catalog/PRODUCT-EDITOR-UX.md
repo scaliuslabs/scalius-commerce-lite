@@ -63,6 +63,9 @@ There is no separate `Option names` feature and no Basic/Advanced mode.
   `@scalius/shared/product-options` and are enforced by UI, core, API, and D1.
 - Size/color/material/pattern are optional discovery mappings. A mapping helps
   feeds and structured data; it never constrains the merchant-facing name.
+- Each option axis is one compact row: name and discovery mapping share the
+  leading control group, values compose inline, and reorder/remove actions stay
+  at the row edge. Do not restore stacked nested cards or a second summary card.
 - A non-`none` standard mapping may be used by only one option per product.
 - Option names and values are unique after trim and case normalization while
   preserving the merchant's first display spelling.
@@ -104,8 +107,11 @@ The matrix replaces the old generator dialog and separate spreadsheet mode.
 - Thirty rows render per page so a 150-row product does not mount two full
   responsive control trees at once.
 - Zero stock is valid and buyer-facing as sold out.
-- Committed and available stock are visible beside on-hand truth. On hand cannot
-  be edited below committed stock.
+- On-hand remains the only permanent quantity in the editable grid. When a SKU
+  has commitments, a focusable inline indicator exposes `available to sell`
+  and the exact `on hand - committed` calculation in a tooltip; never make one
+  row taller with permanent reservation prose. On hand cannot be edited below
+  committed stock.
 - Blank numeric editing never coerces to zero. Invalid/blank drafts revert or
   remain explicitly invalid; they do not perform a destructive stocktake.
 - Every SKU and barcode is globally unique under trimmed case-insensitive
