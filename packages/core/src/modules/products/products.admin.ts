@@ -1558,6 +1558,13 @@ export async function bulkDeleteProducts(
                         message: error.message,
                     });
                 } else {
+                    console.error("[Products] Permanent delete failed unexpectedly", {
+                        productIdPrefix: claim.id.slice(0, 16),
+                        errorName: error instanceof Error ? error.name : "UnknownError",
+                        errorMessage: error instanceof Error
+                            ? error.message
+                            : String(error),
+                    });
                     outcomes.push({
                         id: claim.id,
                         status: "failed",
