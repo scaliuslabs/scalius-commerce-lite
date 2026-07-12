@@ -3,10 +3,27 @@ export const BARCODE_TYPES = [
   "upc",
   "isbn",
   "gtin",
+  "code128",
   "custom",
 ] as const;
 
 export type BarcodeType = (typeof BARCODE_TYPES)[number];
+
+export const INTERNAL_CODE128_BARCODE_PREFIX = "SCALIUS:C128:";
+
+/**
+ * Builds the platform-owned scan identity for a newly persisted SKU. The
+ * colon-delimited namespace cannot be produced by the admin's ordinary SKU
+ * generator, while the stable variant id makes retries deterministic.
+ */
+export function generateInternalCode128Barcode(variantId: string): string {
+  const stableIdentity = variantId.startsWith("var_") ? variantId.slice(4) : variantId;
+  const barcode = `${INTERNAL_CODE128_BARCODE_PREFIX}${stableIdentity}`;
+  if (!stableIdentity || barcode.length > 50) {
+    throw new Error("A stable variant id of 37 characters or fewer is required.");
+  }
+  return barcode;
+}
 
 /**
  * Canonical merchant-facing barcode value. Empty and whitespace-only values
@@ -64,6 +81,13 @@ function hasValidIsbn13Checksum(value: string): boolean {
   return /^(978|979)\d{10}$/.test(value) && hasValidGtinChecksum(value);
 }
 
+function isCode128BText(value: string): boolean {
+  return [...value].every((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && codePoint >= 32 && codePoint <= 126;
+  });
+}
+
 /**
  * Validates the supported product-variant barcode contract. The value is
  * normalized before validation, so surrounding whitespace is discarded while
@@ -104,6 +128,10 @@ export function getBarcodeValidationError(
       return hasValidIsbn10Checksum(barcode) || hasValidIsbn13Checksum(barcode)
         ? null
         : "ISBN must be a valid ISBN-10 or ISBN-13.";
+    case "code128":
+      return barcode.length <= 50 && isCode128BText(barcode)
+        ? null
+        : "Code 128 must be 50 printable ASCII characters or fewer.";
     case "custom":
       return barcode.length <= 50
         ? null

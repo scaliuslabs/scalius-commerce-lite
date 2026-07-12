@@ -26,6 +26,7 @@ import {
     operationalSkuRowPredicate,
 } from "./products.public-eligibility";
 import {
+    generateInternalCode128Barcode,
     getBarcodeIdentityKey,
     getBarcodeValidationError,
     normalizeBarcodeValue,
@@ -154,6 +155,30 @@ export function normalizeVariantBarcode(
     const validationError = getBarcodeValidationError(normalizedBarcode, normalizedType);
     if (validationError) throw new ValidationError(validationError);
     return { barcode: normalizedBarcode, barcodeType: normalizedType };
+}
+
+/**
+ * New SKU rows receive a platform-owned Code 128 scan identity when the
+ * merchant did not provide a retail or custom barcode. Existing SKU updates
+ * deliberately continue to use normalizeVariantBarcode() so clearing a saved
+ * barcode remains an explicit, durable choice.
+ */
+export function resolveNewVariantBarcode(
+    variantId: string,
+    barcode: string | null | undefined,
+    barcodeType: BarcodeType | null | undefined,
+): { barcode: string; barcodeType: BarcodeType } {
+    const normalized = normalizeVariantBarcode(barcode, barcodeType);
+    if (normalized.barcode && normalized.barcodeType) {
+        return {
+            barcode: normalized.barcode,
+            barcodeType: normalized.barcodeType,
+        };
+    }
+    return {
+        barcode: generateInternalCode128Barcode(variantId),
+        barcodeType: "code128",
+    };
 }
 
 export async function assertUniqueVariantBarcodes(
@@ -379,7 +404,8 @@ export async function createVariant(
     );
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
-    const barcodeIdentity = normalizeVariantBarcode(data.barcode, data.barcodeType);
+    const variantId = `var_${nanoid()}`;
+    const barcodeIdentity = resolveNewVariantBarcode(variantId, data.barcode, data.barcodeType);
     const currentVariants = await db
         .select({
             isDefault: productVariants.isDefault,
@@ -416,7 +442,6 @@ export async function createVariant(
         throw new ConflictError("A variant with this SKU already exists");
     }
 
-    const variantId = `var_${nanoid()}`;
     const variantValues = {
         id: variantId,
         productId,

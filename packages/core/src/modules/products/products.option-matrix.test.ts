@@ -3,9 +3,12 @@ import {
     assertOptionMatrixStockAllocation,
     assertOptionMatrixReplacementStockAllocation,
     assertVariantImageOwnership,
+    buildRetiredCombinationCandidates,
+    mergeRetiredVariantRestoreFacts,
     orderSelectedOptionValueIds,
     parseProductOptionMatrix,
     productOptionMatrixSchema,
+    resolveRetiredCombinationCandidate,
     type ProductOptionMatrixInput,
 } from "./products.option-matrix";
 import {
@@ -67,6 +70,17 @@ describe("normalized product option matrix", () => {
         expect(productOptionMatrixSchema.safeParse(validMatrix).success).toBe(true);
     });
 
+    it("accepts an intentional non-empty subset of the Cartesian combinations", () => {
+        const subset = structuredClone(validMatrix);
+        subset.variants = [
+            row("draft_1", ["draft_small", "draft_matte"]),
+            row("draft_2", ["draft_small", "draft_gloss"]),
+            row("draft_3", ["draft_large", "draft_matte"]),
+        ];
+
+        expect(productOptionMatrixSchema.safeParse(subset).success).toBe(true);
+    });
+
     it("canonicalizes selected values by arbitrary axis order", () => {
         const options = [
             { id: "fabric", values: [{ id: "cotton" }, { id: "silk" }] },
@@ -78,11 +92,7 @@ describe("normalized product option matrix", () => {
             .toEqual(["silk", "jamdani", "tangail"]);
     });
 
-    it("rejects missing, duplicate, and cross-axis combinations", () => {
-        const missing = structuredClone(validMatrix);
-        missing.variants.pop();
-        expect(productOptionMatrixSchema.safeParse(missing).success).toBe(false);
-
+    it("rejects duplicate and cross-axis combinations", () => {
         const duplicate = structuredClone(validMatrix);
         duplicate.variants[3]!.selectedOptionValueIds = ["draft_small", "draft_matte"];
         expect(productOptionMatrixSchema.safeParse(duplicate).success).toBe(false);
@@ -90,6 +100,92 @@ describe("normalized product option matrix", () => {
         const sameAxisTwice = structuredClone(validMatrix);
         sameAxisTwice.variants[0]!.selectedOptionValueIds = ["draft_small", "draft_large"];
         expect(productOptionMatrixSchema.safeParse(sameAxisTwice).success).toBe(false);
+    });
+
+    it("rejects declared option values that no active SKU uses", () => {
+        const unusedValue = structuredClone(validMatrix);
+        unusedValue.variants = [
+            row("draft_1", ["draft_small", "draft_matte"]),
+            row("draft_2", ["draft_small", "draft_gloss"]),
+        ];
+
+        const result = productOptionMatrixSchema.safeParse(unusedValue);
+        expect(result.success).toBe(false);
+        if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({
+                message: expect.stringContaining("Large is not used by any active SKU"),
+                path: ["options", 0, "values", 1],
+            }));
+        }
+    });
+
+    it("requires at least one active SKU even when options remain declared", () => {
+        const empty = structuredClone(validMatrix);
+        empty.variants = [];
+
+        expect(productOptionMatrixSchema.safeParse(empty).success).toBe(false);
+    });
+
+    it("restores an omitted combination into its retired SKU and inventory identity", () => {
+        const retiredVariant = {
+            id: "var_white_5kg",
+            stock: 17,
+            trackInventory: true,
+            barcode: "SCB-HISTORICAL",
+            barcodeType: "code128" as const,
+        };
+        const [retired] = buildRetiredCombinationCandidates([
+            { id: "popt_color", values: [{ id: "pval_white" }, { id: "pval_black" }] },
+            { id: "popt_weight", values: [{ id: "pval_1kg" }, { id: "pval_5kg" }] },
+        ], [retiredVariant], new Map([
+            [retiredVariant.id, [
+                { optionDefinitionId: "popt_weight", optionValueId: "pval_5kg" },
+                { optionDefinitionId: "popt_color", optionValueId: "pval_white" },
+            ]],
+        ]));
+        const candidate = resolveRetiredCombinationCandidate(
+            [retired!],
+            "pval_white|pval_5kg",
+        );
+
+        expect(candidate?.id).toBe("var_white_5kg");
+        expect(mergeRetiredVariantRestoreFacts({
+            sku: "NEW-WHITE-5KG",
+            stock: 0,
+            trackInventory: false,
+            barcode: null,
+            barcodeType: null,
+        }, candidate!)).toEqual({
+            id: "var_white_5kg",
+            sku: "NEW-WHITE-5KG",
+            stock: 17,
+            trackInventory: true,
+            barcode: "SCB-HISTORICAL",
+            barcodeType: "code128",
+        });
+    });
+
+    it("allows an explicit barcode override while restoring but rejects ambiguous history", () => {
+        const restored = mergeRetiredVariantRestoreFacts({
+            sku: "WHITE-5KG",
+            stock: 0,
+            trackInventory: false,
+            barcode: "MERCHANT-OVERRIDE",
+            barcodeType: "custom",
+        }, {
+            id: "var_white_5kg",
+            stock: 17,
+            trackInventory: true,
+            barcode: "SCB-HISTORICAL",
+            barcodeType: "code128",
+        });
+        expect(restored.barcode).toBe("MERCHANT-OVERRIDE");
+        expect(restored.barcodeType).toBe("custom");
+
+        expect(() => resolveRetiredCombinationCandidate([
+            { id: "var_old_1", canonicalCombinationKey: "white|5kg" },
+            { id: "var_old_2", canonicalCombinationKey: "white|5kg" },
+        ], "white|5kg")).toThrow(ConflictError);
     });
 
     it("rejects normalized duplicate option names, values, SKUs, and barcodes", () => {

@@ -62,6 +62,20 @@ describe("product validation", () => {
         }
     });
 
+    it("rejects another product's canonical handle until alias routing exists", () => {
+        expect(createProductSchema.safeParse({
+            ...productInput,
+            canonicalPath: "/products/different-product",
+        }).success).toBe(false);
+
+        expect(updateProductSchema.safeParse({
+            ...productInput,
+            id: "prod_1",
+            expectedAggregateRevision: 2,
+            canonicalPath: "/products/different-product",
+        }).success).toBe(false);
+    });
+
     it("accepts only explicit supported product conditions", () => {
         expect(createProductSchema.parse(productInput).productCondition).toBe("new");
         expect(createProductSchema.parse({ ...productInput, productCondition: "used" }).productCondition).toBe("used");
@@ -90,6 +104,19 @@ describe("product validation", () => {
         expect(createProductSchema.safeParse({
             ...productInput,
             metaDescription: "SEO<!--variant_images:option1-->",
+        }).success).toBe(false);
+    });
+
+    it("rejects unsafe product image sources before discovery pagination", () => {
+        expect(createProductSchema.safeParse({
+            ...productInput,
+            images: [{
+                id: "image_1",
+                url: "//untrusted.example/image.jpg",
+                filename: "image.jpg",
+                size: 10,
+                createdAt: new Date(),
+            }],
         }).success).toBe(false);
     });
 

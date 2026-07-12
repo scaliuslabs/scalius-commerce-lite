@@ -6,7 +6,7 @@ type Timestamp = string | number;
 type NullableTimestamp = Timestamp | null;
 
 export type ProductDiscountType = "percentage" | "flat";
-export type BarcodeType = "ean13" | "upc" | "isbn" | "gtin" | "custom";
+export type BarcodeType = "ean13" | "upc" | "isbn" | "gtin" | "code128" | "custom";
 
 export interface PaginationPayload {
   total: number;

@@ -17,11 +17,13 @@ import { nanoid } from "nanoid";
 import {
     MAX_PRODUCT_OPTION_AXES,
     MAX_PRODUCT_OPTION_COMBINATIONS,
+    loadVariantSelectedOptions,
     normalizeOptionIdentity,
 } from "./products.option-model";
 import { MAX_PRODUCT_PRICE, expectedProductAggregateRevisionSchema } from "./products.types";
 import {
     normalizeVariantBarcode,
+    resolveNewVariantBarcode,
     assertUniqueVariantBarcodes,
     reconcileVariantLowStockAlerts,
 } from "./products.variants";
@@ -52,7 +54,7 @@ const matrixVariantInputSchema = z.object({
     trackInventory: z.boolean(),
     weight: z.number().min(0).nullable(),
     barcode: z.string().trim().max(50).nullable(),
-    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).nullable(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable(),
     discountType: z.enum(["percentage", "flat"]),
     discountPercentage: z.number().min(0).max(100).nullable(),
     discountAmount: z.number().min(0).max(MAX_PRODUCT_PRICE).nullable(),
@@ -62,6 +64,39 @@ const productOptionMatrixBaseSchema = z.object({
     options: z.array(optionDefinitionInputSchema).min(1).max(MAX_PRODUCT_OPTION_AXES),
     variants: z.array(matrixVariantInputSchema).min(1).max(MAX_PRODUCT_OPTION_COMBINATIONS),
 });
+
+type MatrixBarcodeType = z.infer<typeof matrixVariantInputSchema>["barcodeType"];
+
+/**
+ * Draft restoration rows may explicitly rename the SKU and may explicitly
+ * replace a barcode. Null barcode means "use the retired identity". Inventory
+ * remains authoritative on the retired row and can be edited after restore.
+ */
+export function mergeRetiredVariantRestoreFacts(
+    input: {
+        sku: string;
+        stock: number;
+        trackInventory: boolean;
+        barcode: string | null;
+        barcodeType: MatrixBarcodeType;
+    },
+    retired: {
+        id: string;
+        stock: number;
+        trackInventory: boolean;
+        barcode: string | null;
+        barcodeType: MatrixBarcodeType;
+    },
+) {
+    return {
+        id: retired.id,
+        sku: input.sku,
+        stock: retired.stock,
+        trackInventory: retired.trackInventory,
+        barcode: input.barcode ?? retired.barcode,
+        barcodeType: input.barcode === null ? retired.barcodeType : input.barcodeType,
+    };
+}
 
 function validateOptionMatrix(
     input: z.infer<typeof productOptionMatrixBaseSchema>,
@@ -126,18 +161,11 @@ function validateOptionMatrix(
             path: ["options"],
         });
     }
-    if (input.variants.length !== expectedCount) {
-        ctx.addIssue({
-            code: "custom",
-            message: `Expected ${expectedCount} SKU combinations, received ${input.variants.length}.`,
-            path: ["variants"],
-        });
-    }
-
     const combinationKeys = new Set<string>();
     const variantIds = new Set<string>();
     const skus = new Set<string>();
     const barcodes = new Set<string>();
+    const selectedValueIds = new Set<string>();
     input.variants.forEach((variant, variantIndex) => {
         if (variantIds.has(variant.id)) {
             ctx.addIssue({ code: "custom", message: "Duplicate SKU row identity.", path: ["variants", variantIndex, "id"] });
@@ -155,6 +183,7 @@ function validateOptionMatrix(
                 ctx.addIssue({ code: "custom", message: "Select only one value per option.", path: ["variants", variantIndex, "selectedOptionValueIds"] });
             }
             selectedByDefinition.set(owner, valueId);
+            selectedValueIds.add(valueId);
         }
         const orderedValueIds = input.options.flatMap((option) => {
             const valueId = selectedByDefinition.get(option.id);
@@ -198,6 +227,18 @@ function validateOptionMatrix(
         ) {
             ctx.addIssue({ code: "custom", message: "A flat discount cannot exceed the SKU price.", path: ["variants", variantIndex, "discountAmount"] });
         }
+    });
+
+    input.options.forEach((option, optionIndex) => {
+        option.values.forEach((value, valueIndex) => {
+            if (!selectedValueIds.has(value.id)) {
+                ctx.addIssue({
+                    code: "custom",
+                    message: `${option.name} value ${value.value} is not used by any active SKU. Remove the value or add a combination that uses it.`,
+                    path: ["options", optionIndex, "values", valueIndex],
+                });
+            }
+        });
     });
 }
 
@@ -265,6 +306,59 @@ export function assertVariantImageOwnership(
     if (imageId && !productImageIds.has(imageId)) {
         throw new ValidationError("A selected SKU image is not on this product.");
     }
+}
+
+type RetiredCombinationCandidate = {
+    id: string;
+    canonicalCombinationKey: string;
+};
+
+export function buildRetiredCombinationCandidates<T extends { id: string }>(
+    options: readonly {
+        id: string;
+        values: ReadonlyArray<{ id: string }>;
+    }[],
+    retiredVariants: readonly T[],
+    selectedOptionsByVariant: ReadonlyMap<string, readonly {
+        optionDefinitionId: string;
+        optionValueId: string;
+    }[]>,
+): Array<T & RetiredCombinationCandidate> {
+    return retiredVariants.flatMap((variant) => {
+        const selectedOptions = selectedOptionsByVariant.get(variant.id) ?? [];
+        if (selectedOptions.length !== options.length) return [];
+        const orderedValueIds = options.flatMap((option) => {
+            const allowedValueIds = new Set(option.values.map((value) => value.id));
+            const selected = selectedOptions.find((item) =>
+                item.optionDefinitionId === option.id
+                && allowedValueIds.has(item.optionValueId)
+            );
+            return selected ? [selected.optionValueId] : [];
+        });
+        return orderedValueIds.length === options.length
+            ? [{ ...variant, canonicalCombinationKey: orderedValueIds.join("|") }]
+            : [];
+    });
+}
+
+/**
+ * A retired combination is SKU history, not a disposable template. Restoring
+ * an exact combination must reuse that identity; ambiguous history fails
+ * closed instead of guessing which stock ledger to revive.
+ */
+export function resolveRetiredCombinationCandidate<T extends RetiredCombinationCandidate>(
+    candidates: readonly T[],
+    canonicalCombinationKey: string,
+): T | null {
+    const matches = candidates.filter(
+        (candidate) => candidate.canonicalCombinationKey === canonicalCombinationKey,
+    );
+    if (matches.length > 1) {
+        throw new ConflictError(
+            "More than one retired SKU uses this option combination. Resolve the duplicate SKU history before restoring it.",
+        );
+    }
+    return matches[0] ?? null;
 }
 
 type StockAllocationVariant = {
@@ -339,7 +433,7 @@ export async function saveProductOptionMatrix(
         .get();
     if (!product) throw new NotFoundError("Product not found");
 
-    const [existingDefinitions, existingValues, existingVariants, productImageRows] = await Promise.all([
+    const [existingDefinitions, existingValues, allProductVariants, productImageRows] = await Promise.all([
         db.select().from(productOptionDefinitions).where(eq(productOptionDefinitions.productId, productId)),
         db.select({
             id: productOptionValues.id,
@@ -353,16 +447,21 @@ export async function saveProductOptionMatrix(
                 eq(productOptionDefinitions.id, productOptionValues.optionDefinitionId),
             )
             .where(eq(productOptionDefinitions.productId, productId)),
-        db.select().from(productVariants).where(and(
-            eq(productVariants.productId, productId),
-            isNull(productVariants.deletedAt),
-        )),
+        db.select().from(productVariants).where(eq(productVariants.productId, productId)),
         db.select({ id: productImages.id }).from(productImages).where(eq(productImages.productId, productId)),
     ]);
 
+    const existingVariants = allProductVariants.filter((variant) => variant.deletedAt === null);
+    const retiredVariants = allProductVariants.filter((variant) =>
+        variant.deletedAt !== null && !variant.isDefault
+    );
+    const retiredSelections = await loadVariantSelectedOptions(
+        db,
+        retiredVariants.map((variant) => variant.id),
+    );
     const definitionById = new Map(existingDefinitions.map((definition) => [definition.id, definition]));
     const valueById = new Map(existingValues.map((value) => [value.id, value]));
-    const variantById = new Map(existingVariants.map((variant) => [variant.id, variant]));
+    const activeVariantById = new Map(existingVariants.map((variant) => [variant.id, variant]));
     const productImageIds = new Set(productImageRows.map((image) => image.id));
     const definitionIdMap = new Map<string, string>();
     const valueIdMap = new Map<string, string>();
@@ -384,8 +483,19 @@ export async function saveProductOptionMatrix(
         }
     }
 
+    const persistedOptions = input.options.map((option) => ({
+        id: definitionIdMap.get(option.id)!,
+        values: option.values.map((value) => ({ id: valueIdMap.get(value.id)! })),
+    }));
+    const retiredCandidates = buildRetiredCombinationCandidates(
+        persistedOptions,
+        retiredVariants,
+        retiredSelections,
+    );
+    const restoredVariantById = new Map<string, (typeof retiredVariants)[number]>();
+
     const normalizedVariants = input.variants.map((variant) => {
-        if (!isDraftId(variant.id) && !variantById.has(variant.id)) {
+        if (!isDraftId(variant.id) && !activeVariantById.has(variant.id)) {
             throw new ValidationError("A SKU changed or no longer exists. Reload and try again.");
         }
         assertVariantImageOwnership(variant.imageId, productImageIds);
@@ -398,15 +508,45 @@ export async function saveProductOptionMatrix(
             if (!mapped) throw new ValidationError("A selected option value is not in this matrix.");
             return mapped;
         });
-        const barcode = normalizeVariantBarcode(variant.barcode, variant.barcodeType);
+        const optionCombinationKey = selectedOptionValueIds.join("|");
+        const activeVariant = activeVariantById.get(variant.id);
+        const retiredVariant = activeVariant || !isDraftId(variant.id)
+            ? null
+            : resolveRetiredCombinationCandidate(retiredCandidates, optionCombinationKey);
+        if (retiredVariant) {
+            if (retiredVariant.reservedStock > 0 || retiredVariant.preorderStock > 0) {
+                throw new ConflictError(
+                    "Release reserved or preorder stock before restoring this combination.",
+                );
+            }
+            restoredVariantById.set(retiredVariant.id, retiredVariant);
+        }
+        const restoredFacts = retiredVariant
+            ? mergeRetiredVariantRestoreFacts(variant, retiredVariant)
+            : null;
+        const persistedVariantId = activeVariant?.id ?? restoredFacts?.id ?? `var_${nanoid()}`;
+        const barcode = activeVariant
+            ? normalizeVariantBarcode(variant.barcode, variant.barcodeType)
+            : retiredVariant
+                ? normalizeVariantBarcode(restoredFacts!.barcode, restoredFacts!.barcodeType)
+                : resolveNewVariantBarcode(persistedVariantId, variant.barcode, variant.barcodeType);
         return {
             ...variant,
-            id: variantById.has(variant.id) ? variant.id : `var_${nanoid()}`,
+            id: persistedVariantId,
             selectedOptionValueIds,
-            optionCombinationKey: selectedOptionValueIds.join("|"),
+            optionCombinationKey,
+            // A draft row cannot authoritatively replace historical physical
+            // stock. Restore first, then edit the persisted SKU if needed.
+            stock: restoredFacts?.stock ?? variant.stock,
+            trackInventory: restoredFacts?.trackInventory ?? variant.trackInventory,
             ...barcode,
         };
     });
+
+    const variantById = new Map([
+        ...activeVariantById,
+        ...restoredVariantById,
+    ]);
 
     await assertUniqueVariantBarcodes(db, normalizedVariants.map((variant) => ({
         id: variantById.has(variant.id) ? variant.id : undefined,
@@ -501,7 +641,9 @@ export async function saveProductOptionMatrix(
             .where(and(
                 eq(productVariants.id, variant.id),
                 eq(productVariants.productId, productId),
-                isNull(productVariants.deletedAt),
+                existing.deletedAt === null
+                    ? isNull(productVariants.deletedAt)
+                    : not(isNull(productVariants.deletedAt)),
             )));
     }
 
@@ -598,6 +740,20 @@ export async function saveProductOptionMatrix(
                   AND ${productVariants.stockVersion} = ${existing.stockVersion}
                   AND ${productVariants.deletedAt} IS NULL
             ) THEN 1 ELSE json_extract('OPTION_MATRIX_STOCK_CONFLICT', '$') END
+        `));
+    }
+    for (const restored of restoredVariantById.values()) {
+        statements.push(buildBatchGuard(db, sql`
+            CASE WHEN EXISTS (
+                SELECT 1 FROM ${productVariants}
+                WHERE ${productVariants.id} = ${restored.id}
+                  AND ${productVariants.productId} = ${productId}
+                  AND ${productVariants.version} = ${restored.version}
+                  AND ${productVariants.stockVersion} = ${restored.stockVersion}
+                  AND ${productVariants.reservedStock} = 0
+                  AND ${productVariants.preorderStock} = 0
+                  AND ${productVariants.deletedAt} IS NOT NULL
+            ) THEN 1 ELSE json_extract('OPTION_MATRIX_RESTORE_CONFLICT', '$') END
         `));
     }
     if (retiringVariants.length > 0) {
@@ -710,6 +866,7 @@ export async function saveProductOptionMatrix(
             statements.push(db.update(productVariants).set({
                 ...fields,
                 stock: variant.stock,
+                deletedAt: null,
                 version: sql`${productVariants.version} + 1`,
                 ...(variant.stock !== existing.stock
                     ? { stockVersion: sql`${productVariants.stockVersion} + 1` }
@@ -717,13 +874,16 @@ export async function saveProductOptionMatrix(
             }).where(and(
                 eq(productVariants.id, variant.id),
                 eq(productVariants.version, existing.version),
-                ...(variant.stock !== existing.stock
+                ...(variant.stock !== existing.stock || existing.deletedAt !== null
                     ? [eq(productVariants.stockVersion, existing.stockVersion)]
                     : []),
-                isNull(productVariants.deletedAt),
+                existing.deletedAt === null
+                    ? isNull(productVariants.deletedAt)
+                    : not(isNull(productVariants.deletedAt)),
             )));
             statements.push(db.delete(productVariantOptionValues)
                 .where(eq(productVariantOptionValues.variantId, variant.id)));
+            if (existing.deletedAt !== null) changedStockVariantIds.push(variant.id);
         }
     }
 
@@ -770,7 +930,7 @@ export async function saveProductOptionMatrix(
         );
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (/OPTION_MATRIX_(STOCK|RETIRE|DEFAULT_(?:STOCK|RETIRE))_CONFLICT|aggregate revision|constraint|unique/i.test(message)) {
+        if (/OPTION_MATRIX_(STOCK|RETIRE|RESTORE|DEFAULT_(?:STOCK|RETIRE))_CONFLICT|aggregate revision|constraint|unique/i.test(message)) {
             throw new ConflictError(
                 "This product changed while you were editing. Reload the latest matrix and try again.",
             );

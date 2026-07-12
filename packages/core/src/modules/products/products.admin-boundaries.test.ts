@@ -28,6 +28,53 @@ const productUpdate = {
 };
 
 describe("admin product SKU invariant boundaries", () => {
+    it("chunks large rich-content and attribute writes below D1's parameter ceiling", async () => {
+        const multiRowStatementSizes: number[] = [];
+        const db = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return { get: async () => null };
+                            },
+                        };
+                    },
+                };
+            },
+            insert() {
+                return {
+                    values(values: unknown) {
+                        if (Array.isArray(values)) multiRowStatementSizes.push(values.length);
+                        return { values };
+                    },
+                };
+            },
+            batch: async () => [],
+        };
+        const largeAggregate = {
+            ...productUpdate,
+            id: undefined,
+            expectedAggregateRevision: undefined,
+            attributes: Array.from({ length: 101 }, (_, index) => ({
+                attributeId: `attr_${index}`,
+                value: `Value ${index}`,
+            })),
+            additionalInfo: Array.from({ length: 101 }, (_, index) => ({
+                id: `item-${index}`,
+                title: `Section ${index}`,
+                content: `Content for section ${index}`,
+                sortOrder: index,
+            })),
+        };
+
+        await createProduct(db as never, largeAggregate as never);
+
+        expect(multiRowStatementSizes).toHaveLength(12);
+        expect(Math.max(...multiRowStatementSizes)).toBe(18);
+        expect(multiRowStatementSizes.reduce((sum, size) => sum + size, 0)).toBe(202);
+    });
+
     it("fails product updates when a non-default SKU has no customer option", async () => {
         let selectCount = 0;
         let batchCalled = false;

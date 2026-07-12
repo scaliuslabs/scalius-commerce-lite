@@ -30,8 +30,11 @@ Last reviewed: 2026-07-12
 - Each SKU selects one value per active definition and no value from another
   product/definition.
 
-Application validation additionally requires exact Cartesian coverage and one
-use of each non-`none` discovery mapping.
+Application validation allows any non-empty subset of the potential Cartesian
+matrix. Every declared option value must still be used by at least one active
+SKU, and each non-`none` discovery mapping may be used by only one axis. This
+permits unavailable combinations such as White / 5KG without creating ghost
+buyer choices.
 
 ## Mutation boundaries
 
@@ -42,7 +45,7 @@ aggregate plus initial stock movements in one D1 batch.
 `PUT /api/v1/admin/products/{id}/options/matrix` is the sole topology/matrix
 writer. It:
 
-1. parses and canonicalizes the complete matrix;
+1. parses and canonicalizes the active matrix subset;
 2. loads current definitions, values, variants, images, and lifecycle blockers;
 3. validates global SKU/barcode identity and image ownership;
 4. validates simple conversion or replacement stock allocation;
@@ -83,7 +86,8 @@ Cart and order display uses ordered generic options / a bounded saved
 
 ## Limits and performance
 
-- Five axes, 150 combinations.
+- Five axes and at most 150 potential Cartesian combinations; the active SKU
+  subset may be smaller.
 - Shared constants live in `@scalius/shared/product-options`.
 - Assignment inserts are chunked to stay below D1's 100-binding limit.
 - Repeated lookup sets use `json_each()` instead of large bound `IN` lists.
@@ -91,6 +95,19 @@ Cart and order display uses ordered generic options / a bounded saved
   Worker invocation limit.
 - Admin matrix renders 30 rows per page and lazy-loads its component from create
   and edit routes.
+
+## Admin workflow
+
+- Option/value edits generate new candidate combinations, but deliberately
+  omitted combinations stay omitted through unrelated edits and axis expansion.
+- A merchant can omit one row or a selection, then restore one omitted row or
+  all missing rows before save. In-session restore preserves the original SKU,
+  image, stock, barcode, price, and discount draft.
+- Discount type is explicit per SKU: none, percentage, or fixed amount.
+- New SKUs without a merchant barcode receive an internal Code 128 identity on
+  save. It is scanner-searchable but is never advertised as UPC/EAN/GTIN in
+  feeds, UCP, or structured data. Clearing an existing barcode remains an
+  intentional persisted null.
 
 ## Migration policy
 

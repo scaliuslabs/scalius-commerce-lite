@@ -36,7 +36,7 @@ const variantMutationSchema = z.object({
         .min(0, "Stock must be greater than or equal to 0"),
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
-    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
+    barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
     discountAmount: z.number().min(0).nullable().optional(),
