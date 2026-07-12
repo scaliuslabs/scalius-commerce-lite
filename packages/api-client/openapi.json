@@ -2068,9 +2068,24 @@
                               },
                               "config": {
                                 "type": "object",
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                "properties": {
+                                  "maxProducts": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 24
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "subtitle": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "maxProducts",
+                                  "title",
+                                  "subtitle"
+                                ]
                               },
                               "sortOrder": {
                                 "type": "number"
@@ -2297,9 +2312,24 @@
                             },
                             "config": {
                               "type": "object",
-                              "additionalProperties": {
-                                "nullable": true
-                              }
+                              "properties": {
+                                "maxProducts": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "maximum": 24
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "subtitle": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "maxProducts",
+                                "title",
+                                "subtitle"
+                              ]
                             },
                             "sortOrder": {
                               "type": "number"
@@ -15502,7 +15532,10 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "required": true,
             "name": "slug",
@@ -15697,7 +15730,10 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
             },
             "required": true,
             "name": "slug",
@@ -15751,6 +15787,7 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 100,
               "description": "Search within category"
             },
             "required": false,
@@ -22486,8 +22523,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000,
               "default": 1,
               "description": "Page number"
             },
@@ -22498,8 +22536,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 500,
               "default": 10,
               "description": "Items per page (max 500 for selector dropdowns)"
@@ -22512,6 +22550,7 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 100,
               "default": "",
               "description": "Search term"
             },
@@ -22523,6 +22562,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
               "description": "Show trashed items"
             },
             "required": false,
@@ -22533,6 +22576,11 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "name",
+                "createdAt",
+                "updatedAt"
+              ],
               "default": "updatedAt",
               "description": "Sort field"
             },
@@ -22544,6 +22592,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "desc",
               "description": "Sort order"
             },
@@ -22947,7 +22999,8 @@
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 100000
                   },
                   "slug": {
                     "type": "string",
@@ -22957,11 +23010,13 @@
                   },
                   "metaTitle": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 70
                   },
                   "metaDescription": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 200
                   },
                   "canonicalPath": {
                     "type": "string",
@@ -22980,16 +23035,23 @@
                     "nullable": true,
                     "properties": {
                       "id": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 180
                       },
                       "url": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 2048
                       },
                       "filename": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
                       },
                       "size": {
-                        "type": "number"
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100000000
                       },
                       "createdAt": {
                         "anyOf": [
@@ -23355,7 +23417,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
             },
             "required": true,
             "name": "id",
@@ -23414,6 +23478,10 @@
                         "excludeFromSitemap": {
                           "type": "boolean"
                         },
+                        "deletedAt": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "createdAt": {
                           "type": "number"
                         },
@@ -23432,6 +23500,7 @@
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
+                        "deletedAt",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -23700,7 +23769,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
             },
             "required": true,
             "name": "id",
@@ -23720,7 +23791,8 @@
                   },
                   "description": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 100000
                   },
                   "slug": {
                     "type": "string",
@@ -23730,11 +23802,13 @@
                   },
                   "metaTitle": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 70
                   },
                   "metaDescription": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "maxLength": 200
                   },
                   "canonicalPath": {
                     "type": "string",
@@ -23753,16 +23827,23 @@
                     "nullable": true,
                     "properties": {
                       "id": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 180
                       },
                       "url": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 2048
                       },
                       "filename": {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
                       },
                       "size": {
-                        "type": "number"
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100000000
                       },
                       "createdAt": {
                         "anyOf": [
@@ -24119,7 +24200,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
             },
             "required": true,
             "name": "id",
@@ -24393,8 +24476,12 @@
                   "categoryIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",
@@ -24572,6 +24659,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -24675,8 +24802,12 @@
                   "categoryIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -24850,6 +24981,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -24947,7 +25118,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
             },
             "required": true,
             "name": "id",
@@ -25255,7 +25428,9 @@
         "parameters": [
           {
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
             },
             "required": true,
             "name": "id",
@@ -25411,6 +25586,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -26570,8 +26785,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -26582,8 +26797,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 100,
               "default": 20,
               "description": "Items per page"
@@ -26635,6 +26850,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "asc",
               "description": "Sort order"
             },
@@ -26688,6 +26907,10 @@
                               "isActive": {
                                 "type": "boolean"
                               },
+                              "version": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
                               "canonicalPath": {
                                 "type": "string",
                                 "nullable": true
@@ -26739,6 +26962,7 @@
                               "config",
                               "sortOrder",
                               "isActive",
+                              "version",
                               "canonicalPath",
                               "noIndex",
                               "excludeFromSitemap",
@@ -27174,6 +27398,10 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "canonicalPath": {
                           "type": "string",
                           "nullable": true
@@ -27225,6 +27453,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "version",
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
@@ -28294,6 +28523,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -28858,6 +29127,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -29156,6 +29465,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -29269,11 +29618,16 @@
                         "sortOrder": {
                           "type": "integer",
                           "minimum": 0
+                        },
+                        "expectedVersion": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
                         "id",
-                        "sortOrder"
+                        "sortOrder",
+                        "expectedVersion"
                       ]
                     },
                     "minItems": 1,
@@ -29474,6 +29828,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -29617,6 +30011,10 @@
                         "isActive": {
                           "type": "boolean"
                         },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "canonicalPath": {
                           "type": "string",
                           "nullable": true
@@ -29668,6 +30066,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "version",
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
@@ -29753,6 +30152,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
                   "name": {
                     "type": "string",
                     "minLength": 3,
@@ -29825,7 +30228,10 @@
                       }
                     }
                   }
-                }
+                },
+                "required": [
+                  "expectedVersion"
+                ]
               }
             }
           }
@@ -29868,6 +30274,10 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "canonicalPath": {
                           "type": "string",
@@ -29920,6 +30330,7 @@
                         "config",
                         "sortOrder",
                         "isActive",
+                        "version",
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
@@ -30059,6 +30470,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -109500,6 +109951,17 @@
             "required": false,
             "description": "Sort order",
             "name": "order",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 9000,
+              "description": "Comma-separated attribute IDs (max 90)"
+            },
+            "required": false,
+            "description": "Comma-separated attribute IDs (max 90)",
+            "name": "ids",
             "in": "query"
           },
           {

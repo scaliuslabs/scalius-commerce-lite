@@ -20,6 +20,7 @@ Last reviewed: 2026-07-12
 14. **Partially resolved in the categories/attributes slice: attribute row and bulk trash/permanent-delete now share a compact impact confirmation, and the service protects assigned values atomically.** Collection destructive actions still need the same confirmation grammar; permanent actions should eventually require typed confirmation at the shared component boundary.
 15. **Resolved in batch 5: product editing is conflict-safe.** A fresh editor-owned snapshot, shared product/SKU revision, draft-preserving dialog, explicit reload, terminal deleted-product action, and persistent action-bar state prevent blind overwrite.
 16. **Resolved in batch 5: option duplication is local and unsaved.** It clears SKU, barcode, stock, and one option axis; the obsolete persisted duplicate and redundant bulk-update APIs are removed.
+17. **Resolved in the category authority slice: category hard delete is trash-only and bulk-safe.** Single and bulk destructive actions share impact confirmation, trash selection respects restore/permanent permissions, active dynamic collections cannot be orphaned, and trashed rows cannot enter edit.
 
 ## P2 workflow and UI findings
 

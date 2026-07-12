@@ -36,6 +36,8 @@ import {
 import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -80,6 +82,11 @@ function toPageInput(values: PageFormValues): CreatePageInput {
 export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission(PERMISSIONS.PAGES_CREATE);
+  const canSave = isEdit
+    ? hasPermission(PERMISSIONS.PAGES_EDIT)
+    : canCreate;
 
   React.useEffect(() => {
     setIsClient(true);
@@ -161,6 +168,11 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       backUrl="/admin/pages"
       newUrl="/admin/pages/new"
       newLabel="New Page"
+      canCreateNew={canCreate}
+      canSave={canSave}
+      saveDisabledReason={isEdit
+        ? "You do not have permission to edit pages."
+        : "You do not have permission to create pages."}
       saveLabel={isEdit ? "Save Page" : "Create Page"}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}

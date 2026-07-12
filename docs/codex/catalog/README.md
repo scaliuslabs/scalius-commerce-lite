@@ -16,11 +16,14 @@ This is the durable working record for the Products, Categories, Attributes, Col
 ## Files
 
 - [ADMIN.md](ADMIN.md) — admin routes, forms, tables, permissions, error states, destructive actions, and settings UX.
+- [CATEGORIES.md](CATEGORIES.md) — category lifecycle authority, admin workflow, public listing/discovery/cache truth, competitive model decisions, and deferred visibility/CAS work.
 - [DOMAIN.md](DOMAIN.md) — schema, services, inventory ledger, variants, attributes, collections, currency, and D1 limits.
 - [ATTRIBUTES.md](ATTRIBUTES.md) — attribute authority, admin assignment/value workflows, public facet versus fact semantics, verified defects, and release tests.
 - [INVENTORY.md](INVENTORY.md) — inventory authority, adjustment/stocktake semantics, movement history, RBAC, currency boundary, and remaining scale gaps.
 - [STOREFRONT.md](STOREFRONT.md) — buyer catalog, caching, pricing, discovery, feeds, UCP, category/search UX, and protected product-page boundaries.
 - [PRODUCT-EDITOR-UX.md](PRODUCT-EDITOR-UX.md) — product create/edit interaction, conflict, keyboard, and responsive UX contract.
+- [VARIANT-IMAGES.md](VARIANT-IMAGES.md) — stable variant-media authority, editor mapping behavior, storefront precedence, and migration boundaries.
+- [COLLECTIONS.md](COLLECTIONS.md) — collection membership, ordering, publication, admin UX, storefront, discovery, cache, and scale decisions.
 - [DECISIONS.md](DECISIONS.md) — accepted decisions, implementation order, verification requirements, and deferred model work.
 - [PROGRESS.md](PROGRESS.md) — landed fixes, regression evidence, known remaining gaps, and the next implementation slice.
 

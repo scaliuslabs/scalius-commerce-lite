@@ -15,11 +15,12 @@ import {
     restoreCategories,
     permanentlyDeleteCategory,
     createCategorySchema,
-    updateCategorySchema
+    updateCategorySchema,
+    CATEGORY_BATCH_LIMIT,
 } from "@scalius/core/modules/categories";
 import type { Database } from "@scalius/database/client";
 import { categories } from "@scalius/database/schema";
-import { inArray, isNull } from "drizzle-orm";
+import { asc, inArray, isNull } from "drizzle-orm";
 import {
     successEnvelope,
     paginatedEnvelope,
@@ -35,6 +36,11 @@ import {
 } from "../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const categoryIdSchema = z.string().trim().min(1).max(180);
+const categoryIdsSchema = z
+    .array(categoryIdSchema)
+    .min(1)
+    .max(CATEGORY_BATCH_LIMIT);
 
 function categoryHtmlPath(slug: string | null | undefined): string[] {
     return slug ? [`/categories/${slug}`] : [];
@@ -79,7 +85,8 @@ app.openapi(formOptionsRoute, async (c) => {
     const result = await db
         .select({ id: categories.id, name: categories.name })
         .from(categories)
-        .where(isNull(categories.deletedAt));
+        .where(isNull(categories.deletedAt))
+        .orderBy(asc(categories.name), asc(categories.id));
     return ok(c, { categories: result });
 });
 
@@ -92,12 +99,12 @@ const listRoute = createRoute({
     summary: "List all categories",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(500).default(10).openapi({ description: "Items per page (max 500 for selector dropdowns)" }),
-            search: z.string().optional().default("").openapi({ description: "Search term" }),
-            trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+            page: z.coerce.number().int().min(1).max(100_000).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(500).default(10).openapi({ description: "Items per page (max 500 for selector dropdowns)" }),
+            search: z.string().trim().max(100).optional().default("").openapi({ description: "Search term" }),
+            trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed items" }),
+            sort: z.enum(["name", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
         })
     },
     responses: {
@@ -131,7 +138,7 @@ const getByIdRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Get a single category by ID",
     request: {
-        params: z.object({ id: z.string() }),
+        params: z.object({ id: categoryIdSchema }),
     },
     responses: {
         200: {
@@ -192,7 +199,7 @@ const bulkDeleteRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        categoryIds: z.array(z.string()),
+                        categoryIds: categoryIdsSchema,
                         permanent: z.boolean().default(false)
                     })
                 }
@@ -202,6 +209,7 @@ const bulkDeleteRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -226,7 +234,7 @@ const bulkRestoreRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({ categoryIds: z.array(z.string()) })
+                    schema: z.object({ categoryIds: categoryIdsSchema })
                 }
             }
         }
@@ -234,6 +242,7 @@ const bulkRestoreRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -255,7 +264,7 @@ const updateCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Update a category",
     request: {
-        params: z.object({ id: z.string() }),
+        params: z.object({ id: categoryIdSchema }),
         body: { content: { "application/json": { schema: updateCategorySchema } } }
     },
     responses: {
@@ -291,7 +300,7 @@ const deleteCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Soft-delete a category",
     request: {
-        params: z.object({ id: z.string() }),
+        params: z.object({ id: categoryIdSchema }),
     },
     responses: {
         204: noContentResponse,
@@ -316,7 +325,7 @@ const permanentDeleteRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Permanently delete a category",
     request: {
-        params: z.object({ id: z.string() }),
+        params: z.object({ id: categoryIdSchema }),
     },
     responses: {
         204: noContentResponse,
@@ -342,7 +351,7 @@ const restoreCategoryRoute = createRoute({
     tags: ["Admin - Categories"],
     summary: "Restore a soft-deleted category",
     request: {
-        params: z.object({ id: z.string() }),
+        params: z.object({ id: categoryIdSchema }),
     },
     responses: {
         200: {
@@ -350,6 +359,7 @@ const restoreCategoryRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 

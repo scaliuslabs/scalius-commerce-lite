@@ -14,12 +14,11 @@ export interface FormActionBarProps {
   newLabel?: string;
   canCreateNew?: boolean;
   /**
-   * Whether the current operator may submit this form. Defaults to true so
-   * existing consumers retain their behavior. Permission-aware forms must
-   * pass their create/edit capability explicitly; API authorization remains
-   * the final enforcement boundary.
+   * Whether the current operator may submit this form. This is required so a
+   * direct form URL cannot accidentally render an enabled save action. API
+   * authorization remains the final enforcement boundary.
    */
-  canSave?: boolean;
+  canSave: boolean;
   /** Optional explanation exposed on a disabled save action. */
   saveDisabledReason?: string;
   saveLabel?: string;
@@ -39,7 +38,7 @@ export function FormActionBar({
   newUrl,
   newLabel,
   canCreateNew = true,
-  canSave = true,
+  canSave,
   saveDisabledReason,
   saveLabel,
   onSave,

@@ -32,6 +32,7 @@ import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
+import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 
 function toCreateOrderInput(values: OrderFormValues): CreateOrderInput {
   return {
@@ -69,6 +70,10 @@ export function OrderForm({
   isEdit = false,
 }: OrderFormProps) {
   const navigate = useNavigate();
+  const orderActions = useOrderActionPermissions();
+  const canSave = isEdit
+    ? orderActions.canEditOrders
+    : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
   const updateMutation = useUpdateOrder();
   const form = useForm<OrderFormValues>({
@@ -210,7 +215,7 @@ export function OrderForm({
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (!isSubmitting && form.getValues("items").length > 0) {
+        if (canSave && !isSubmitting && form.getValues("items").length > 0) {
           e.preventDefault();
           void form.handleSubmit(handleSubmit)();
         }
@@ -218,7 +223,7 @@ export function OrderForm({
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [form, handleSubmit, isSubmitting]);
+  }, [canSave, form, handleSubmit, isSubmitting]);
 
   return (
     <>
@@ -229,7 +234,9 @@ export function OrderForm({
       <Form {...form}>
         <form
           method="post"
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={canSave
+            ? form.handleSubmit(handleSubmit)
+            : (event) => event.preventDefault()}
           className="-mt-4 pb-6 space-y-4"
           noValidate
         >
@@ -263,6 +270,11 @@ export function OrderForm({
         cancelUrl="/admin/orders"
         newUrl="/admin/orders/new"
         newLabel="New Order"
+        canCreateNew={orderActions.canCreateOrders}
+        canSave={canSave}
+        saveDisabledReason={isEdit
+          ? "You do not have permission to edit orders."
+          : "You do not have permission to create orders."}
         onSave={() => form.handleSubmit(handleSubmit)()}
       />
     </>
