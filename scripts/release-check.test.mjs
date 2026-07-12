@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateDiscoveryCacheHeaders,
+  evaluateFeedContinuationLink,
   evaluateRequiredDocs,
   evaluateUcpProfile,
   normalizeHttpBaseUrl,
@@ -164,5 +165,60 @@ describe("release discovery policy", () => {
     });
     expect(unsafe.ok).toBe(false);
     expect(unsafe.errors.join(" ")).toMatch(/only catalog search\/lookup|checkout\/cart\/order\/payment/);
+  });
+});
+
+describe("release feed continuation", () => {
+  const initialUrl = "https://storefront.example.test/api/product-feed.xml?limit=5";
+
+  it("accepts and returns the feed-owned opaque next link", () => {
+    expect(evaluateFeedContinuationLink(
+      '<https://storefront.example.test/api/product-feed.xml?limit=5&cursor=feed-v1.abc.cHJvZF8x>; rel="next"',
+      {
+        initialUrl,
+        storefrontOrigin: "https://storefront.example.test",
+      },
+    )).toEqual({
+      ok: true,
+      errors: [],
+      continuationUrl:
+        "https://storefront.example.test/api/product-feed.xml?limit=5&cursor=feed-v1.abc.cHJvZF8x",
+    });
+  });
+
+  it("treats an absent next link as a truthful final feed window", () => {
+    expect(evaluateFeedContinuationLink(null, {
+      initialUrl,
+      storefrontOrigin: "https://storefront.example.test",
+    })).toEqual({ ok: true, errors: [], continuationUrl: null });
+  });
+
+  it("rejects offset, malformed, off-origin, and wrong-feed continuations", () => {
+    const unsafeLinks = [
+      '<https://storefront.example.test/api/product-feed.xml?page=2&limit=5>; rel="next"',
+      '<https://storefront.example.test/api/product-feed.xml?cursor=page%3A2&limit=5>; rel="next"',
+      '<https://evil.example/api/product-feed.xml?cursor=feed-v1.abc.cHJvZF8x&limit=5>; rel="next"',
+      '<https://storefront.example.test/api/facebook-feed.xml?cursor=feed-v1.abc.cHJvZF8x&limit=5>; rel="next"',
+      '<https://storefront.example.test/api/product-feed.xml?cursor=feed-v1.abc.cHJvZF8x&limit=10>; rel="next"',
+    ];
+
+    for (const link of unsafeLinks) {
+      expect(evaluateFeedContinuationLink(link, {
+        initialUrl,
+        storefrontOrigin: "https://storefront.example.test",
+      })).toMatchObject({ ok: false, continuationUrl: null });
+    }
+  });
+
+  it("rejects duplicate and malformed rel=next declarations", () => {
+    expect(evaluateFeedContinuationLink(
+      '<https://storefront.example.test/api/product-feed.xml?cursor=feed-v1.abc.cHJvZF8x&limit=5>; rel="next", ' +
+        '<https://storefront.example.test/api/product-feed.xml?cursor=feed-v1.abd.cHJvZF8y&limit=5>; rel="next"',
+      { initialUrl, storefrontOrigin: "https://storefront.example.test" },
+    )).toMatchObject({ ok: false, continuationUrl: null });
+    expect(evaluateFeedContinuationLink('not-a-link; rel="next"', {
+      initialUrl,
+      storefrontOrigin: "https://storefront.example.test",
+    })).toMatchObject({ ok: false, continuationUrl: null });
   });
 });
