@@ -2,12 +2,13 @@
 // All DB queries and business logic for the navigation domain.
 
 import { categories, pages, siteSettings } from "@scalius/database/schema";
-import { isNull, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../products/products.storefront";
+import { publicCategoryConditions } from "../categories/categories.publication";
 
 // ─────────────────────────────────────────
 // Types
@@ -30,6 +31,33 @@ export interface NavigationPreviewProductCountInput {
     attributeFilters?: { slug: string; value: string }[];
 }
 
+function categorySlugFromNavigationUrl(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const match = /^\/categories\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/.exec(value.trim());
+    return match?.[1] ?? null;
+}
+
+export function filterNavigationByPublishedCategories(
+    value: unknown,
+    publishedSlugs: ReadonlySet<string>,
+): unknown {
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => filterNavigationByPublishedCategories(item, publishedSlugs))
+            .filter((item) => item !== null);
+    }
+    if (!value || typeof value !== "object") return value;
+
+    const source = value as Record<string, unknown>;
+    const categorySlug = categorySlugFromNavigationUrl(source.href ?? source.url);
+    if (categorySlug && !publishedSlugs.has(categorySlug)) return null;
+
+    return Object.fromEntries(Object.entries(source).map(([key, child]) => [
+        key,
+        filterNavigationByPublishedCategories(child, publishedSlugs),
+    ]));
+}
+
 // ─────────────────────────────────────────
 // Admin Queries
 // ─────────────────────────────────────────
@@ -45,7 +73,7 @@ export async function getNavigationItems(db: Database) {
             type: sql<string>`'category'`.as("type"),
         })
         .from(categories)
-        .where(isNull(categories.deletedAt))
+        .where(and(...publicCategoryConditions()))
         .orderBy(categories.name);
 
     const categoryItems = categoriesData.map((cat) => ({
@@ -118,10 +146,18 @@ export async function getNavigationPreviewProductCount(
  *  Swap: `const { headerConfig, footerConfig } = await getNavigationMenus(db);`
  *  then `return ok(c, { headerConfig, footerConfig });` */
 export async function getNavigationMenus(db: Database) {
-    const [row] = await db
-        .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
-        .from(siteSettings)
-        .limit(1);
+    const [settingsRows, categoryRows] = await db.batch([
+        db
+            .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
+            .from(siteSettings)
+            .limit(1),
+        db
+            .select({ slug: categories.slug })
+            .from(categories)
+            .where(and(...publicCategoryConditions())),
+    ]);
+    const row = settingsRows[0];
+    const publishedSlugs = new Set(categoryRows.map((category) => category.slug));
 
     const headerConfig: Record<string, unknown> = (() => {
         try { return row?.headerConfig ? JSON.parse(row.headerConfig) : {}; } catch { return {}; }
@@ -130,7 +166,10 @@ export async function getNavigationMenus(db: Database) {
         try { return row?.footerConfig ? JSON.parse(row.footerConfig) : {}; } catch { return {}; }
     })();
 
-    return { headerConfig, footerConfig };
+    return {
+        headerConfig: filterNavigationByPublishedCategories(headerConfig, publishedSlugs) as Record<string, unknown>,
+        footerConfig: filterNavigationByPublishedCategories(footerConfig, publishedSlugs) as Record<string, unknown>,
+    };
 }
 
 /** Get a single navigation menu by type (header/footer/footer-menu-id).
@@ -271,7 +310,7 @@ export async function buildDefaultNavigation(db: Database): Promise<NavigationIt
     const categoriesData = await db
         .select({ id: categories.id, name: categories.name, slug: categories.slug })
         .from(categories)
-        .where(isNull(categories.deletedAt))
+        .where(and(...publicCategoryConditions()))
         .orderBy(categories.name);
 
     const pagesData = await db

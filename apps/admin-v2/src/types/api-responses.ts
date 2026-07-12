@@ -107,6 +107,9 @@ export interface Category {
   canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
+  status: "draft" | "published" | "internal";
+  revision: number;
+  publishReady: boolean;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;

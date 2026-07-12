@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ConflictError } from "@scalius/core/errors";
-import { createCategory, updateCategory } from "./categories.service";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
+import {
+  createCategory,
+  updateCategory,
+  updateCategoryStatus,
+} from "./categories.service";
 
 const input = {
   name: "Summer Shoes",
@@ -40,5 +44,29 @@ describe("category lifecycle authority", () => {
       "cat_trashed",
       { ...input, expectedRevision: 1, status: "draft" },
     )).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("blocks hiding a category referenced by an active dynamic collection", async () => {
+    const db = {
+      select() {
+        const chain = {
+          from: () => chain,
+          where: () => chain,
+          limit: () => chain,
+          get: async () => ({ id: "cat_live", revision: 4, deletedAt: null }),
+          all: async () => [{ id: "col_live", name: "Homepage picks" }],
+        };
+        return chain;
+      },
+    };
+
+    await expect(updateCategoryStatus(db as never, "cat_live", {
+      expectedRevision: 4,
+      status: "internal",
+    })).rejects.toBeInstanceOf(ValidationError);
+    await expect(updateCategoryStatus(db as never, "cat_live", {
+      expectedRevision: 4,
+      status: "draft",
+    })).rejects.toThrow(/deactivate those collections/i);
   });
 });

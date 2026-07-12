@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   getCategoryById: vi.fn(),
   createCategory: vi.fn(),
   updateCategory: vi.fn(),
+  updateCategoryStatus: vi.fn(),
+  getCategoryPublishReadiness: vi.fn(),
   deleteCategory: vi.fn(),
   bulkDeleteCategories: vi.fn(),
   restoreCategories: vi.fn(),
@@ -25,6 +27,8 @@ vi.mock("@scalius/core/modules/categories", async () => {
     getCategoryById: mocks.getCategoryById,
     createCategory: mocks.createCategory,
     updateCategory: mocks.updateCategory,
+    updateCategoryStatus: mocks.updateCategoryStatus,
+    getCategoryPublishReadiness: mocks.getCategoryPublishReadiness,
     deleteCategory: mocks.deleteCategory,
     bulkDeleteCategories: mocks.bulkDeleteCategories,
     restoreCategories: mocks.restoreCategories,
@@ -77,8 +81,15 @@ function createTestApp() {
   } as unknown as Env;
 
   mocks.getCategoryById.mockResolvedValue({ id: "cat_1", slug: "old-fish" });
-  mocks.createCategory.mockResolvedValue({ id: "cat_1" });
-  mocks.updateCategory.mockResolvedValue(undefined);
+  mocks.createCategory.mockResolvedValue({ id: "cat_1", revision: 1, status: "draft" });
+  mocks.updateCategory.mockResolvedValue({ revision: 2, status: "published" });
+  mocks.updateCategoryStatus.mockResolvedValue({ revision: 2, status: "published" });
+  mocks.getCategoryPublishReadiness.mockResolvedValue({
+    ready: true,
+    eligibleProductCount: 1,
+    blockers: [],
+    warnings: [],
+  });
   mocks.deleteCategory.mockResolvedValue(undefined);
   mocks.bulkDeleteCategories.mockResolvedValue(undefined);
   mocks.restoreCategories.mockResolvedValue(undefined);
@@ -121,7 +132,7 @@ describe("admin category cache invalidation", () => {
     vi.clearAllMocks();
   });
 
-  it("invalidates category/catalog storefront caches and warms the created category page", async () => {
+  it("invalidates catalog caches without warming a new draft category page", async () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(
@@ -136,7 +147,6 @@ describe("admin category cache invalidation", () => {
     expect(mocks.invalidateCatalogCaches).toHaveBeenCalledWith(
       "categories",
       expect.objectContaining({ env }),
-      { htmlPaths: ["/categories/fresh-fish"] },
     );
   });
 
@@ -148,7 +158,11 @@ describe("admin category cache invalidation", () => {
       env,
       "/cat_1",
       "PUT",
-      createCategoryBody({ slug: "new-fish" }),
+      createCategoryBody({
+        slug: "new-fish",
+        expectedRevision: 1,
+        status: "published",
+      }),
     );
 
     expect(response.status).toBe(200);

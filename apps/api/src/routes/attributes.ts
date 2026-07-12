@@ -17,6 +17,7 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { normalizePublicFtsSearchCacheValue, normalizePublicFtsSearchQuery } from "../utils/public-search-query";
+import { getPublicCategoryById } from "@scalius/core/modules/categories";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 // Cache this endpoint as it changes infrequently
@@ -106,6 +107,9 @@ const categoryAttributesRoute = createRoute({
 app.openapi(categoryAttributesRoute, async (c) => {
   const db = c.get("db");
   const { categoryId } = c.req.valid("param");
+  if (!await getPublicCategoryById(db, categoryId)) {
+    throw new NotFoundError("Category not found");
+  }
   const result = await getPublicAttributesByCategory(db, categoryId);
   return ok(c, result);
 });
@@ -139,7 +143,11 @@ app.openapi(categorySlugAttributesRoute, async (c) => {
   const category = await db
     .select({ id: categories.id })
     .from(categories)
-    .where(and(eq(categories.slug, categorySlug), isNull(categories.deletedAt)))
+    .where(and(
+      eq(categories.slug, categorySlug),
+      eq(categories.status, "published"),
+      isNull(categories.deletedAt),
+    ))
     .get();
 
   if (!category) throw new NotFoundError("Category not found");
@@ -173,6 +181,10 @@ app.openapi(searchFiltersRoute, async (c) => {
   const db = c.get("db");
   const { q, categoryId } = c.req.valid("query");
   const query = normalizePublicFtsSearchQuery(q);
+
+  if (categoryId && !await getPublicCategoryById(db, categoryId)) {
+    throw new NotFoundError("Category not found");
+  }
 
   if (!query) {
     return ok(c, { filters: [] });

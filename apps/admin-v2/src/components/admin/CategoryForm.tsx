@@ -20,7 +20,19 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { ExternalLink } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  LockKeyhole,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { ResourceDiscoveryReadiness } from "@/components/admin/shared/ResourceDiscoveryReadiness";
@@ -32,16 +44,19 @@ import {
   createCategory,
   updateCategory,
   type CategoryImageInput,
+  type CategoryPublishReadiness,
   type CreateCategoryInput,
 } from "@/lib/api-functions/categories";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
+import { readCategoryRevisionConflict } from "@/lib/admin-api-error";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
   isEdit?: boolean;
+  publishReadiness?: CategoryPublishReadiness;
 }
 
 function serializeDate(value: Date | string | undefined): string | undefined {
@@ -73,9 +88,17 @@ function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
   };
 }
 
+function requireCategoryRevision(values: CategoryFormValues): number {
+  if (!values.revision || !Number.isInteger(values.revision) || values.revision < 1) {
+    throw new Error("Category revision is missing. Reload the page before saving.");
+  }
+  return values.revision;
+}
+
 export function CategoryForm({
   defaultValues,
   isEdit = false,
+  publishReadiness,
 }: CategoryFormProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
@@ -87,6 +110,7 @@ export function CategoryForm({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: {
       name: "",
+      status: "draft",
       description: null,
       slug: "",
       metaTitle: null,
@@ -106,7 +130,14 @@ export function CategoryForm({
     entityId: defaultValues?.id,
     createFn: (data) => createCategory({ data: toCategoryInput(data) }),
     updateFn: (data) =>
-      updateCategory({ data: { id: data.id, ...toCategoryInput(data) } }),
+      updateCategory({
+        data: {
+          id: data.id,
+          expectedRevision: requireCategoryRevision(data),
+          status: data.status,
+          ...toCategoryInput(data),
+        },
+      }),
     invalidateKeys: [
       queryKeys.categories.list(),
       queryKeys.categories.formOptions(),
@@ -115,6 +146,12 @@ export function CategoryForm({
     ],
     navigateTo: "/admin/categories",
     onError: (_error, message, setFieldError) => {
+      if (readCategoryRevisionConflict(_error)) {
+        toast.error("This category changed in another session", {
+          description: "Reload the page before saving so you do not overwrite newer changes.",
+        });
+        return true;
+      }
       if (message.includes("exists in trash")) {
         const detail = "A trashed category already uses this URL. Restore it or choose another slug.";
         setFieldError("slug", detail);
@@ -255,6 +292,96 @@ export function CategoryForm({
 
         {/* Right Column (1/3) */}
         <div className="space-y-3">
+          <Card>
+            <CardHeader className="px-4 pb-2 pt-4">
+              <CardTitle className="text-sm">Publication</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 px-4 pb-4">
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Category status</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={!isEdit}
+                    >
+                      <FormControl>
+                        <SelectTrigger aria-label="Category status">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem
+                          value="published"
+                          disabled={
+                            form.getValues("status") !== "published" &&
+                            publishReadiness?.ready === false
+                          }
+                        >
+                          Published
+                        </SelectItem>
+                        <SelectItem value="internal">Internal</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs leading-5">
+                      {!isEdit
+                        ? "New categories start as drafts. Add products, then publish from the edit page."
+                        : field.value === "published"
+                          ? "Visible to buyers and eligible for navigation, discovery, filters, and active dynamic collections."
+                          : field.value === "internal"
+                            ? "Available to admin workflows, but hidden from every buyer-facing surface."
+                            : "Hidden from buyers while you finish setup."}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {isEdit && publishReadiness ? (
+                <div className="rounded-md border bg-muted/20 p-3 text-xs">
+                  <div className="flex items-start gap-2">
+                    {publishReadiness.ready ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    )}
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium text-foreground">
+                        {publishReadiness.ready
+                          ? "Ready to publish"
+                          : "Not ready to publish"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {publishReadiness.eligibleProductCount} active buyer-visible {publishReadiness.eligibleProductCount === 1 ? "product" : "products"}
+                      </p>
+                    </div>
+                  </div>
+                  {publishReadiness.blockers.map((blocker) => (
+                    <p key={blocker.code} className="mt-2 text-amber-700 dark:text-amber-400">
+                      {blocker.message}
+                    </p>
+                  ))}
+                  {publishReadiness.warnings.map((warning) => (
+                    <p key={warning.code} className="mt-2 text-muted-foreground">
+                      {warning.message}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+
+              {isEdit && form.watch("status") !== "published" ? (
+                <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>The storefront category page and discovery links stay unavailable.</span>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           {/* Slug Card */}
           <Card>
             <CardHeader className="pb-3 pt-4 px-4">
@@ -296,7 +423,7 @@ export function CategoryForm({
                   </FormItem>
                 )}
               />
-              {isEdit && form.watch("slug") && (
+              {isEdit && form.watch("status") === "published" && form.watch("slug") && (
                 <Button
                   type="button"
                   variant="outline"

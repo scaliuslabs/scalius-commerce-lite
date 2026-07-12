@@ -188,7 +188,8 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("function parsePublicLookupTokens");
         expect(source).toContain(".slice(\n        0,\n        MAX_PUBLIC_LOOKUP_TOKENS,");
         expect(source).toContain("function buildCategoryLookupCondition(category: string): SQL");
-        expect(source).toContain("eq(categories.slug, category)");
+        expect(source).toContain("${categories.slug} = ${category}");
+        expect(source).toContain("...publicCategoryConditions()");
         expect(source).toContain("buildCategoryLookupCondition(category)");
         expect(lookupHelper).toContain("FROM json_each(${JSON.stringify(lookupTokens)})");
         expect(lookupHelper).toContain("SELECT value FROM public_lookup");
@@ -210,6 +211,7 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("function buildFeedCategorySearchCondition");
         expect(source).toContain('MATCH ${`name : (${sanitized})`}');
         expect(source).toContain("eq(categories.slug, normalizedSlug)");
+        expect(source).toContain("publishedCategoryIdExists(products.categoryId)");
         expect(source).toContain("MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH");
     });
 

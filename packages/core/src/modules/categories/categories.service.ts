@@ -32,6 +32,7 @@ import {
 } from "./categories.revision";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
+const CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION = "CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION";
 
 function categoryProductRevisionBump(
     db: Database,
@@ -62,6 +63,56 @@ function categoryDeleteUsageGuard(
               AND ${products.deletedAt} IS NULL
         ) THEN 1 ELSE json_extract('CATEGORY_DELETE_IN_USE', '$') END
     `);
+}
+
+function activeDynamicCollectionCategoryReferenceCondition(
+    claims: readonly CategoryRevisionClaim[],
+): SQL {
+    return sql`
+        ${collections.deletedAt} IS NULL
+        AND ${collections.isActive} = 1
+        AND CASE
+            WHEN json_valid(${collections.config}) = 1
+             AND json_type(${collections.config}, '$.categoryIds') = 'array'
+             AND json_extract(${collections.config}, '$.source') = 'dynamic'
+            THEN EXISTS (
+                SELECT 1
+                FROM json_each(${collections.config}, '$.categoryIds') AS membership
+                INNER JOIN json_each(${JSON.stringify(claims)}) AS target
+                    ON CAST(membership.value AS TEXT) = CAST(json_extract(target.value, '$.id') AS TEXT)
+            )
+            ELSE 0
+        END = 1
+    `;
+}
+
+function categoryUnpublishUsageGuard(
+    db: Database,
+    claims: readonly CategoryRevisionClaim[],
+): SQLiteBatchItem {
+    return buildBatchGuard(db, sql`
+        CASE WHEN NOT EXISTS (
+            SELECT 1 FROM ${collections}
+            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
+        ) THEN 1 ELSE json_extract(${CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION}, '$') END
+    `);
+}
+
+async function assertCategoriesNotUsedByActiveDynamicCollections(
+    db: Database,
+    claims: readonly CategoryRevisionClaim[],
+): Promise<void> {
+    const referencingCollections = await db
+        .select({ id: collections.id, name: collections.name })
+        .from(collections)
+        .where(activeDynamicCollectionCategoryReferenceCondition(claims))
+        .limit(5)
+        .all();
+    if (referencingCollections.length === 0) return;
+    throw new ValidationError(
+        "Remove this category from active dynamic collections or deactivate those collections before hiding it.",
+        { referencingCollections },
+    );
 }
 
 function allCategoriesTrashedCondition(
@@ -96,8 +147,9 @@ export async function listCategories(
         page?: number;
         limit?: number;
         search?: string;
+        status?: "draft" | "published" | "internal";
         showTrashed?: boolean;
-        sort?: "name" | "createdAt" | "updatedAt";
+        sort?: "name" | "status" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
     } = {},
 ) {
@@ -105,6 +157,7 @@ export async function listCategories(
         page: rawPage = 1,
         limit: rawLimit = 10,
         search = "",
+        status,
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
@@ -126,6 +179,7 @@ export async function listCategories(
         const cond = ftsMatch("categories_fts", "categories", search);
         if (cond) whereConditions.push(cond);
     }
+    if (status) whereConditions.push(eq(categories.status, status));
 
     const offset = (page - 1) * limit;
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
@@ -138,6 +192,7 @@ export async function listCategories(
     const sortField = (() => {
         switch (sort) {
             case "name": return categories.name;
+            case "status": return categories.status;
             case "createdAt": return categories.createdAt;
             default: return categories.updatedAt;
         }
@@ -252,9 +307,13 @@ export async function getCategoryById(db: Database, id: string) {
         .where(eq(categories.id, id))
         .get();
     if (!category) return undefined;
+    const publishReadiness = await getCategoryPublishReadiness(db, id);
+    if (!publishReadiness) {
+        throw new Error("Category publication readiness could not be resolved.");
+    }
     return {
         ...category,
-        publishReadiness: await getCategoryPublishReadiness(db, id),
+        publishReadiness,
     };
 }
 
@@ -361,6 +420,9 @@ export async function updateCategory(
         ];
         if (data.status === "published") {
             statements.push(buildCategoryPublishReadyGuard(db, id));
+        } else {
+            await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+            statements.push(categoryUnpublishUsageGuard(db, claims));
         }
         statements.push(
             db
@@ -406,6 +468,12 @@ export async function updateCategory(
         } catch (translated) {
             if (translated !== error) throw translated;
         }
+        if (data.status !== "published" && error instanceof Error && /malformed json/i.test(error.message)) {
+            await assertCategoriesNotUsedByActiveDynamicCollections(
+                db,
+                [{ id, expectedRevision: data.expectedRevision }],
+            );
+        }
         if (
             data.status === "published" &&
             error instanceof Error &&
@@ -427,7 +495,6 @@ export async function updateCategoryStatus(
     const category = await db
         .select({
             id: categories.id,
-            status: categories.status,
             revision: categories.revision,
             deletedAt: categories.deletedAt,
         })
@@ -436,21 +503,13 @@ export async function updateCategoryStatus(
         .get();
     if (!category) throw new NotFoundError("Category not found");
     if (category.deletedAt) throw new ConflictError("Restore this category before changing its status.");
-    if (category.status === data.status) {
-        if (category.revision !== data.expectedRevision) {
-            await rethrowCategoryRevisionConflict(
-                db,
-                [{ id, expectedRevision: data.expectedRevision }],
-                new Error(CATEGORY_REVISION_CONFLICT),
-                "active",
-            );
-        }
-        return { revision: category.revision, status: category.status };
-    }
-
     const claims = [{ id, expectedRevision: data.expectedRevision }];
     const statements: SQLiteBatchItem[] = [buildCategoryRevisionGuard(db, claims, "active")];
     if (data.status === "published") statements.push(buildCategoryPublishReadyGuard(db, id));
+    else {
+        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+        statements.push(categoryUnpublishUsageGuard(db, claims));
+    }
     statements.push(
         db.update(categories)
             .set({
@@ -475,6 +534,9 @@ export async function updateCategoryStatus(
             await rethrowCategoryRevisionConflict(db, claims, error, "active");
         } catch (translated) {
             if (translated !== error) throw translated;
+        }
+        if (data.status !== "published" && error instanceof Error && /malformed json/i.test(error.message)) {
+            await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
         }
         if (
             data.status === "published" &&
@@ -707,9 +769,11 @@ export async function bulkDeleteCategories(
             throw error;
         }
     } else {
+        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
         try {
             await safeBatch(db, [
                 buildCategoryRevisionGuard(db, claims, "active"),
+                categoryUnpublishUsageGuard(db, claims),
                 categoryDeleteUsageGuard(db, claims),
                 db
                     .update(categories)
@@ -730,6 +794,9 @@ export async function bulkDeleteCategories(
                 await rethrowCategoryRevisionConflict(db, claims, error, "active");
             } catch (translated) {
                 if (translated !== error) throw translated;
+            }
+            if (error instanceof Error && /malformed json/i.test(error.message)) {
+                await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
             }
             if (
                 error instanceof Error &&

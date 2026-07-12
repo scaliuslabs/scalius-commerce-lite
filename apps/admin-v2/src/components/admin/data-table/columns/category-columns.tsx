@@ -7,6 +7,7 @@ import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 import type { Category } from "~/types/api-responses";
 import { getPlainText } from "~/lib/format-utils";
+import { Badge } from "~/components/ui/badge";
 
 /** Extended category type that includes the product count from list responses */
 export interface CategoryListItem extends Category {
@@ -22,9 +23,9 @@ interface CategoryColumnOptions {
   canRestore: boolean;
   canPermanentDelete: boolean;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRestore: (id: string) => void;
-  onPermanentDelete: (id: string) => void;
+  onDelete: (category: CategoryListItem) => void;
+  onRestore: (category: CategoryListItem) => void;
+  onPermanentDelete: (category: CategoryListItem) => void;
 }
 
 export function getCategoryColumns(
@@ -94,6 +95,38 @@ export function getCategoryColumns(
       size: 300,
     },
     {
+      accessorKey: "status",
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Status" />
+      ),
+      cell: ({ row }) => {
+        const category = row.original;
+        const label = category.status === "published"
+          ? "Published"
+          : category.status === "internal"
+            ? "Internal"
+            : "Draft";
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge
+              variant="outline"
+              className={cn(
+                "font-medium",
+                category.status === "published" && "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+                category.status === "draft" && "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+              )}
+            >
+              {label}
+            </Badge>
+            {category.status !== "published" && !category.publishReady ? (
+              <span className="text-[11px] text-muted-foreground">Needs an active product</span>
+            ) : null}
+          </div>
+        );
+      },
+      size: 130,
+    },
+    {
       id: "productCount",
       header: "Products",
       cell: ({ row }) => {
@@ -137,15 +170,16 @@ export function getCategoryColumns(
                     "_blank",
                   )
               : undefined,
+            canView: (c) => c.status === "published",
             onEdit: opts.canEdit && !opts.showTrashed ? (c) => opts.onEdit(c.id) : undefined,
             onDelete: opts.canDelete && !opts.showTrashed
-              ? (c) => opts.onDelete(c.id)
+              ? (c) => opts.onDelete(c)
               : undefined,
             onRestore: opts.canRestore
-              ? (c) => opts.onRestore(c.id)
+              ? (c) => opts.onRestore(c)
               : undefined,
             onPermanentDelete: opts.canPermanentDelete
-              ? (c) => opts.onPermanentDelete(c.id)
+              ? (c) => opts.onPermanentDelete(c)
               : undefined,
           }),
         ]

@@ -6642,6 +6642,7 @@ export type GetApiV1AdminCategoriesFormOptionsResponses = {
             categories: Array<{
                 id: string;
                 name: string;
+                status: 'draft' | 'published' | 'internal';
             }>;
         };
     };
@@ -6666,13 +6667,17 @@ export type GetApiV1AdminCategoriesData = {
          */
         search?: string;
         /**
+         * Publication status
+         */
+        status?: 'draft' | 'published' | 'internal';
+        /**
          * Show trashed items
          */
         trashed?: 'true' | 'false';
         /**
          * Sort field
          */
-        sort?: 'name' | 'createdAt' | 'updatedAt';
+        sort?: 'name' | 'status' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
@@ -6774,6 +6779,9 @@ export type GetApiV1AdminCategoriesResponses = {
                 updatedAt: string | null;
                 deletedAt: string | null;
                 productCount: number;
+                status: 'draft' | 'published' | 'internal';
+                revision: number;
+                publishReady: boolean;
             }>;
             pagination: {
                 page: number;
@@ -6900,14 +6908,121 @@ export type PostApiV1AdminCategoriesResponses = {
         success: true;
         data: {
             id: string;
+            revision: number;
+            status: 'draft';
         };
     };
 };
 
 export type PostApiV1AdminCategoriesResponse = PostApiV1AdminCategoriesResponses[keyof PostApiV1AdminCategoriesResponses];
 
-export type DeleteApiV1AdminCategoriesByIdData = {
+export type GetApiV1AdminCategoriesByIdPublishReadinessData = {
     body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}/publish-readiness';
+};
+
+export type GetApiV1AdminCategoriesByIdPublishReadinessErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdPublishReadinessError = GetApiV1AdminCategoriesByIdPublishReadinessErrors[keyof GetApiV1AdminCategoriesByIdPublishReadinessErrors];
+
+export type GetApiV1AdminCategoriesByIdPublishReadinessResponses = {
+    /**
+     * Category publication readiness
+     */
+    200: {
+        success: true;
+        data: {
+            ready: boolean;
+            eligibleProductCount: number;
+            blockers: Array<{
+                code: string;
+                message: string;
+            }>;
+            warnings: Array<{
+                code: string;
+                message: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCategoriesByIdPublishReadinessResponse = GetApiV1AdminCategoriesByIdPublishReadinessResponses[keyof GetApiV1AdminCategoriesByIdPublishReadinessResponses];
+
+export type DeleteApiV1AdminCategoriesByIdData = {
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -6953,6 +7068,17 @@ export type DeleteApiV1AdminCategoriesByIdErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -7095,6 +7221,20 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             deletedAt: number | null;
             createdAt: number;
             updatedAt: number;
+            status: 'draft' | 'published' | 'internal';
+            revision: number;
+            publishReadiness: {
+                ready: boolean;
+                eligibleProductCount: number;
+                blockers: Array<{
+                    code: string;
+                    message: string;
+                }>;
+                warnings: Array<{
+                    code: string;
+                    message: string;
+                }>;
+            };
         };
     };
 };
@@ -7118,6 +7258,8 @@ export type PutApiV1AdminCategoriesByIdData = {
             size: number;
             createdAt: string | string;
         } | null;
+        expectedRevision: number;
+        status: 'draft' | 'published' | 'internal';
     };
     path: {
         id: string;
@@ -7215,7 +7357,8 @@ export type PutApiV1AdminCategoriesByIdResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            revision: number;
+            status: 'draft' | 'published' | 'internal';
         };
     };
 };
@@ -7224,7 +7367,10 @@ export type PutApiV1AdminCategoriesByIdResponse = PutApiV1AdminCategoriesByIdRes
 
 export type PostApiV1AdminCategoriesBulkDeleteData = {
     body?: {
-        categoryIds: Array<string>;
+        categories: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
         permanent?: boolean;
     };
     path?: never;
@@ -7325,7 +7471,10 @@ export type PostApiV1AdminCategoriesBulkDeleteResponse = PostApiV1AdminCategorie
 
 export type PostApiV1AdminCategoriesBulkRestoreData = {
     body?: {
-        categoryIds: Array<string>;
+        categories: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
     };
     path?: never;
     query?: never;
@@ -7423,8 +7572,119 @@ export type PostApiV1AdminCategoriesBulkRestoreResponses = {
 
 export type PostApiV1AdminCategoriesBulkRestoreResponse = PostApiV1AdminCategoriesBulkRestoreResponses[keyof PostApiV1AdminCategoriesBulkRestoreResponses];
 
+export type PatchApiV1AdminCategoriesByIdStatusData = {
+    body?: {
+        expectedRevision: number;
+        status: 'draft' | 'published' | 'internal';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/categories/{id}/status';
+};
+
+export type PatchApiV1AdminCategoriesByIdStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminCategoriesByIdStatusError = PatchApiV1AdminCategoriesByIdStatusErrors[keyof PatchApiV1AdminCategoriesByIdStatusErrors];
+
+export type PatchApiV1AdminCategoriesByIdStatusResponses = {
+    /**
+     * Category status changed
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            status: 'draft' | 'published' | 'internal';
+        };
+    };
+};
+
+export type PatchApiV1AdminCategoriesByIdStatusResponse = PatchApiV1AdminCategoriesByIdStatusResponses[keyof PatchApiV1AdminCategoriesByIdStatusResponses];
+
 export type DeleteApiV1AdminCategoriesByIdPermanentData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -7524,7 +7784,9 @@ export type DeleteApiV1AdminCategoriesByIdPermanentResponses = {
 export type DeleteApiV1AdminCategoriesByIdPermanentResponse = DeleteApiV1AdminCategoriesByIdPermanentResponses[keyof DeleteApiV1AdminCategoriesByIdPermanentResponses];
 
 export type PostApiV1AdminCategoriesByIdRestoreData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -7716,6 +7978,7 @@ export type GetApiV1AdminCollectionsFormOptionsResponses = {
             categories: Array<{
                 id: string;
                 name: string;
+                status: 'draft' | 'published' | 'internal';
             }>;
             products: Array<{
                 id: string;
@@ -7817,6 +8080,7 @@ export type GetApiV1AdminCollectionsCategoryOptionsResponses = {
             categories: Array<{
                 id: string;
                 name: string;
+                status: 'draft' | 'published' | 'internal';
             }>;
         };
     };
@@ -12055,38 +12319,15 @@ export type GetApiV1AdminMediaData = {
     body?: never;
     path?: never;
     query?: {
-        /**
-         * Page number
-         */
-        page?: number | null;
-        /**
-         * Items per page
-         */
-        limit?: number | null;
-        /**
-         * Search term
-         */
+        cursor?: string;
+        limit?: number;
         search?: string;
-        /**
-         * Folder ID filter
-         */
         folderId?: string;
-        /**
-         * Sort field
-         */
         sortBy?: 'createdAt' | 'size' | 'filename';
-        /**
-         * Sort direction
-         */
         sortOrder?: 'asc' | 'desc';
-        /**
-         * MIME type filter prefix (e.g. 'image/')
-         */
         mimeType?: string;
-        /**
-         * Legacy MIME type filter prefix
-         */
-        type?: string;
+        kind?: 'image' | 'video';
+        view?: 'ready' | 'trash';
     };
     url: '/api/v1/admin/media';
 };
@@ -12137,6 +12378,17 @@ export type GetApiV1AdminMediaErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12164,7 +12416,7 @@ export type GetApiV1AdminMediaError = GetApiV1AdminMediaErrors[keyof GetApiV1Adm
 
 export type GetApiV1AdminMediaResponses = {
     /**
-     * Media list with pagination
+     * Media page
      */
     200: {
         success: true;
@@ -12173,21 +12425,28 @@ export type GetApiV1AdminMediaResponses = {
                 id: string;
                 filename: string;
                 url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
                 size: number;
                 mimeType: string;
                 altText?: string | null;
+                caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
                 folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
+                trashedAt: string | number | null;
                 deletedAt: string | number | null;
             }>;
             pagination: {
-                page: number;
                 limit: number;
-                total: number;
-                totalPages: number;
+                hasMore: boolean;
+                nextCursor: string | null;
             };
         };
     };
@@ -12195,14 +12454,19 @@ export type GetApiV1AdminMediaResponses = {
 
 export type GetApiV1AdminMediaResponse = GetApiV1AdminMediaResponses[keyof GetApiV1AdminMediaResponses];
 
-export type PostApiV1AdminMediaUploadData = {
-    body?: never;
+export type PostApiV1AdminMediaUploadsData = {
+    body?: {
+        filename: string;
+        mimeType: string;
+        size: number;
+        folderId?: string | null;
+    };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/media/upload';
+    url: '/api/v1/admin/media/uploads';
 };
 
-export type PostApiV1AdminMediaUploadErrors = {
+export type PostApiV1AdminMediaUploadsErrors = {
     /**
      * Validation error
      */
@@ -12248,133 +12512,9 @@ export type PostApiV1AdminMediaUploadErrors = {
         };
     };
     /**
-     * Rate limit exceeded
+     * Conflict
      */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminMediaUploadError = PostApiV1AdminMediaUploadErrors[keyof PostApiV1AdminMediaUploadErrors];
-
-export type PostApiV1AdminMediaUploadResponses = {
-    /**
-     * Upload result (partial success or info)
-     */
-    200: {
-        success: true;
-        data: {
-            files: Array<{
-                id: string;
-                filename: string;
-                url: string;
-                size: number;
-                mimeType: string;
-                altText?: string | null;
-                width?: number | null;
-                height?: number | null;
-                createdAt: string | number;
-            }>;
-            summary?: string;
-            warnings?: Array<{
-                filename: string;
-                error: string;
-            }>;
-            partialSuccess?: boolean;
-        };
-    };
-    /**
-     * All files uploaded successfully
-     */
-    201: {
-        success: true;
-        data: {
-            files: Array<{
-                id: string;
-                filename: string;
-                url: string;
-                size: number;
-                mimeType: string;
-                altText?: string | null;
-                width?: number | null;
-                height?: number | null;
-                createdAt: string | number;
-            }>;
-            summary?: string;
-            warnings?: Array<{
-                filename: string;
-                error: string;
-            }>;
-            partialSuccess?: boolean;
-        };
-    };
-};
-
-export type PostApiV1AdminMediaUploadResponse = PostApiV1AdminMediaUploadResponses[keyof PostApiV1AdminMediaUploadResponses];
-
-export type DeleteApiV1AdminMediaByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/media/{id}';
-};
-
-export type DeleteApiV1AdminMediaByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
+    409: {
         success: false;
         error: {
             code: string;
@@ -12417,21 +12557,643 @@ export type DeleteApiV1AdminMediaByIdErrors = {
     };
 };
 
-export type DeleteApiV1AdminMediaByIdError = DeleteApiV1AdminMediaByIdErrors[keyof DeleteApiV1AdminMediaByIdErrors];
+export type PostApiV1AdminMediaUploadsError = PostApiV1AdminMediaUploadsErrors[keyof PostApiV1AdminMediaUploadsErrors];
 
-export type DeleteApiV1AdminMediaByIdResponses = {
+export type PostApiV1AdminMediaUploadsResponses = {
+    /**
+     * Upload initiated
+     */
+    201: {
+        success: true;
+        data: {
+            session: {
+                id: string;
+                mediaId: string;
+                filename: string;
+                kind: 'image' | 'video';
+                mimeType: string;
+                size: number;
+                expectedParts: number;
+                partSize: number;
+                state: 'initializing' | 'initiated' | 'uploading' | 'completing' | 'committed' | 'aborting' | 'aborted' | 'expired' | 'failed';
+                version: number;
+                expiresAt: string | number;
+                uploadedParts?: Array<{
+                    partNumber: number;
+                    size: number;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsResponse = PostApiV1AdminMediaUploadsResponses[keyof PostApiV1AdminMediaUploadsResponses];
+
+export type DeleteApiV1AdminMediaUploadsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/uploads/{id}';
+};
+
+export type DeleteApiV1AdminMediaUploadsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminMediaUploadsByIdError = DeleteApiV1AdminMediaUploadsByIdErrors[keyof DeleteApiV1AdminMediaUploadsByIdErrors];
+
+export type DeleteApiV1AdminMediaUploadsByIdResponses = {
     /**
      * No content
      */
     204: void;
 };
 
-export type DeleteApiV1AdminMediaByIdResponse = DeleteApiV1AdminMediaByIdResponses[keyof DeleteApiV1AdminMediaByIdResponses];
+export type DeleteApiV1AdminMediaUploadsByIdResponse = DeleteApiV1AdminMediaUploadsByIdResponses[keyof DeleteApiV1AdminMediaUploadsByIdResponses];
+
+export type GetApiV1AdminMediaUploadsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/uploads/{id}';
+};
+
+export type GetApiV1AdminMediaUploadsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaUploadsByIdError = GetApiV1AdminMediaUploadsByIdErrors[keyof GetApiV1AdminMediaUploadsByIdErrors];
+
+export type GetApiV1AdminMediaUploadsByIdResponses = {
+    /**
+     * Upload status
+     */
+    200: {
+        success: true;
+        data: {
+            session: {
+                id: string;
+                mediaId: string;
+                filename: string;
+                kind: 'image' | 'video';
+                mimeType: string;
+                size: number;
+                expectedParts: number;
+                partSize: number;
+                state: 'initializing' | 'initiated' | 'uploading' | 'completing' | 'committed' | 'aborting' | 'aborted' | 'expired' | 'failed';
+                version: number;
+                expiresAt: string | number;
+                uploadedParts?: Array<{
+                    partNumber: number;
+                    size: number;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminMediaUploadsByIdResponse = GetApiV1AdminMediaUploadsByIdResponses[keyof GetApiV1AdminMediaUploadsByIdResponses];
+
+export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberData = {
+    body?: never;
+    path: {
+        id: string;
+        partNumber: number;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/uploads/{id}/parts/{partNumber}';
+};
+
+export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberError = PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors[keyof PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors];
+
+export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses = {
+    /**
+     * Part stored
+     */
+    200: {
+        success: true;
+        data: {
+            partNumber: number;
+            size: number;
+        };
+    };
+};
+
+export type PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponse = PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses[keyof PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses];
+
+export type PostApiV1AdminMediaUploadsByIdCompleteData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/uploads/{id}/complete';
+};
+
+export type PostApiV1AdminMediaUploadsByIdCompleteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsByIdCompleteError = PostApiV1AdminMediaUploadsByIdCompleteErrors[keyof PostApiV1AdminMediaUploadsByIdCompleteErrors];
+
+export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
+    /**
+     * Media committed
+     */
+    200: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                trashedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsByIdCompleteResponse = PostApiV1AdminMediaUploadsByIdCompleteResponses[keyof PostApiV1AdminMediaUploadsByIdCompleteResponses];
+
+export type PostApiV1AdminMediaUploadsReconcileData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/admin/media/uploads/reconcile';
+};
+
+export type PostApiV1AdminMediaUploadsReconcileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsReconcileError = PostApiV1AdminMediaUploadsReconcileErrors[keyof PostApiV1AdminMediaUploadsReconcileErrors];
+
+export type PostApiV1AdminMediaUploadsReconcileResponses = {
+    /**
+     * Reconciliation result
+     */
+    200: {
+        success: true;
+        data: {
+            scanned: number;
+            expired: number;
+            retrySessionIds: Array<string>;
+            hasMore: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaUploadsReconcileResponse = PostApiV1AdminMediaUploadsReconcileResponses[keyof PostApiV1AdminMediaUploadsReconcileResponses];
 
 export type PatchApiV1AdminMediaByIdData = {
     body?: {
+        expectedVersion: number;
         filename?: string;
         altText?: string | null;
+        caption?: string | null;
+        width?: number | null;
+        height?: number | null;
+        durationMs?: number | null;
+        posterMediaId?: string | null;
         folderId?: string | null;
     };
     path: {
@@ -12487,6 +13249,17 @@ export type PatchApiV1AdminMediaByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12523,14 +13296,22 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 id: string;
                 filename: string;
                 url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
                 size: number;
                 mimeType: string;
                 altText?: string | null;
+                caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
                 folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
+                trashedAt: string | number | null;
                 deletedAt: string | number | null;
             };
         };
@@ -12539,20 +13320,18 @@ export type PatchApiV1AdminMediaByIdResponses = {
 
 export type PatchApiV1AdminMediaByIdResponse = PatchApiV1AdminMediaByIdResponses[keyof PatchApiV1AdminMediaByIdResponses];
 
-export type PutApiV1AdminMediaByIdData = {
+export type PostApiV1AdminMediaByIdTrashData = {
     body?: {
-        filename?: string;
-        altText?: string | null;
-        folderId?: string | null;
+        expectedVersion: number;
     };
     path: {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/media/{id}';
+    url: '/api/v1/admin/media/{id}/trash';
 };
 
-export type PutApiV1AdminMediaByIdErrors = {
+export type PostApiV1AdminMediaByIdTrashErrors = {
     /**
      * Validation error
      */
@@ -12598,6 +13377,17 @@ export type PutApiV1AdminMediaByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12621,11 +13411,11 @@ export type PutApiV1AdminMediaByIdErrors = {
     };
 };
 
-export type PutApiV1AdminMediaByIdError = PutApiV1AdminMediaByIdErrors[keyof PutApiV1AdminMediaByIdErrors];
+export type PostApiV1AdminMediaByIdTrashError = PostApiV1AdminMediaByIdTrashErrors[keyof PostApiV1AdminMediaByIdTrashErrors];
 
-export type PutApiV1AdminMediaByIdResponses = {
+export type PostApiV1AdminMediaByIdTrashResponses = {
     /**
-     * Media updated
+     * Move media to trash
      */
     200: {
         success: true;
@@ -12634,25 +13424,277 @@ export type PutApiV1AdminMediaByIdResponses = {
                 id: string;
                 filename: string;
                 url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
                 size: number;
                 mimeType: string;
                 altText?: string | null;
+                caption?: string | null;
                 width?: number | null;
                 height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
                 folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
+                trashedAt: string | number | null;
                 deletedAt: string | number | null;
             };
         };
     };
 };
 
-export type PutApiV1AdminMediaByIdResponse = PutApiV1AdminMediaByIdResponses[keyof PutApiV1AdminMediaByIdResponses];
+export type PostApiV1AdminMediaByIdTrashResponse = PostApiV1AdminMediaByIdTrashResponses[keyof PostApiV1AdminMediaByIdTrashResponses];
+
+export type PostApiV1AdminMediaByIdRestoreData = {
+    body?: {
+        expectedVersion: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/restore';
+};
+
+export type PostApiV1AdminMediaByIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminMediaByIdRestoreError = PostApiV1AdminMediaByIdRestoreErrors[keyof PostApiV1AdminMediaByIdRestoreErrors];
+
+export type PostApiV1AdminMediaByIdRestoreResponses = {
+    /**
+     * Restore trashed media
+     */
+    200: {
+        success: true;
+        data: {
+            file: {
+                id: string;
+                filename: string;
+                url: string;
+                kind: 'image' | 'video';
+                objectKey: string;
+                size: number;
+                mimeType: string;
+                altText?: string | null;
+                caption?: string | null;
+                width?: number | null;
+                height?: number | null;
+                durationMs?: number | null;
+                posterMediaId?: string | null;
+                folderId: string | null;
+                status: 'ready' | 'trashed' | 'deleting' | 'deleted';
+                version: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                trashedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminMediaByIdRestoreResponse = PostApiV1AdminMediaByIdRestoreResponses[keyof PostApiV1AdminMediaByIdRestoreResponses];
+
+export type DeleteApiV1AdminMediaByIdPermanentData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedVersion: number;
+    };
+    url: '/api/v1/admin/media/{id}/permanent';
+};
+
+export type DeleteApiV1AdminMediaByIdPermanentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminMediaByIdPermanentError = DeleteApiV1AdminMediaByIdPermanentErrors[keyof DeleteApiV1AdminMediaByIdPermanentErrors];
+
+export type DeleteApiV1AdminMediaByIdPermanentResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminMediaByIdPermanentResponse = DeleteApiV1AdminMediaByIdPermanentResponses[keyof DeleteApiV1AdminMediaByIdPermanentResponses];
 
 export type PostApiV1AdminMediaMoveData = {
     body?: {
-        fileIds: Array<string>;
+        items: Array<{
+            id: string;
+            expectedVersion: number;
+        }>;
         folderId?: string | null;
     };
     path?: never;
@@ -12706,6 +13748,17 @@ export type PostApiV1AdminMediaMoveErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12733,12 +13786,12 @@ export type PostApiV1AdminMediaMoveError = PostApiV1AdminMediaMoveErrors[keyof P
 
 export type PostApiV1AdminMediaMoveResponses = {
     /**
-     * Files moved
+     * Media moved
      */
     200: {
         success: true;
         data: {
-            message: string;
+            movedCount: number;
         };
     };
 };
@@ -12748,7 +13801,10 @@ export type PostApiV1AdminMediaMoveResponse = PostApiV1AdminMediaMoveResponses[k
 export type GetApiV1AdminMediaFoldersData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        cursor?: string;
+        limit?: number;
+    };
     url: '/api/v1/admin/media/folders';
 };
 
@@ -12798,6 +13854,17 @@ export type GetApiV1AdminMediaFoldersErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12825,7 +13892,7 @@ export type GetApiV1AdminMediaFoldersError = GetApiV1AdminMediaFoldersErrors[key
 
 export type GetApiV1AdminMediaFoldersResponses = {
     /**
-     * Folder list
+     * Folder page
      */
     200: {
         success: true;
@@ -12833,11 +13900,16 @@ export type GetApiV1AdminMediaFoldersResponses = {
             folders: Array<{
                 id: string;
                 name: string;
-                parentId: string | null;
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;
             }>;
+            pagination: {
+                limit: number;
+                hasMore: boolean;
+                nextCursor: string | null;
+            };
         };
     };
 };
@@ -12847,7 +13919,6 @@ export type GetApiV1AdminMediaFoldersResponse = GetApiV1AdminMediaFoldersRespons
 export type PostApiV1AdminMediaFoldersData = {
     body?: {
         name: string;
-        parentId?: string | null;
     };
     path?: never;
     query?: never;
@@ -12900,6 +13971,17 @@ export type PostApiV1AdminMediaFoldersErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -12935,7 +14017,7 @@ export type PostApiV1AdminMediaFoldersResponses = {
             folder: {
                 id: string;
                 name: string;
-                parentId: string | null;
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;
@@ -12951,7 +14033,9 @@ export type DeleteApiV1AdminMediaFoldersByIdData = {
     path: {
         id: string;
     };
-    query?: never;
+    query: {
+        expectedVersion: number;
+    };
     url: '/api/v1/admin/media/folders/{id}';
 };
 
@@ -13001,6 +14085,17 @@ export type DeleteApiV1AdminMediaFoldersByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -13038,6 +14133,7 @@ export type DeleteApiV1AdminMediaFoldersByIdResponse = DeleteApiV1AdminMediaFold
 export type PutApiV1AdminMediaFoldersByIdData = {
     body?: {
         name: string;
+        expectedVersion: number;
     };
     path: {
         id: string;
@@ -13092,6 +14188,17 @@ export type PutApiV1AdminMediaFoldersByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -13127,7 +14234,7 @@ export type PutApiV1AdminMediaFoldersByIdResponses = {
             folder: {
                 id: string;
                 name: string;
-                parentId: string | null;
+                version: number;
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt: string | number | null;

@@ -9,6 +9,7 @@
  * their original locations and are re-exported here.
  */
 import { z } from "zod";
+import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import {
   isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
@@ -50,6 +51,8 @@ const mediaFileFormSchema = z.object({
 
 export const categoryFormSchema = z.object({
   id: z.string().optional(),
+  revision: z.number().int().min(1).optional(),
+  status: categoryStatusSchema,
   name: z
     .string()
     .trim()

@@ -20,6 +20,7 @@ const canonicalPathSchema = z
 export interface Category {
   id: string;
   name: string;
+  status: "draft" | "published" | "internal";
 }
 
 export interface Product {

@@ -14,22 +14,46 @@ classification (`products.category_id`) and they own a public
 dynamic merchandising model. Do not add collection conditions to categories or
 silently merge these domains.
 
-The flat category model has no publication, internal/private, hierarchy, rank,
-or redirect authority. Every non-trashed category is public and eligible for
-navigation/sitemap reads. This is the largest remaining model gap:
+Category visibility is one explicit enum: `draft | published | internal`.
+Creation is always draft. Only published categories own buyer-facing category
+authority: public lookup/list/tree, category filters, saved/default navigation,
+category sitemap/discovery, feed/UCP category metadata, and dynamic collection
+membership. Draft and internal categories remain available to admin workflows.
 
-- Shopify collections separate membership from channel publication and are
-  unpublished by default; its list surfaces publication and rule truth.
-- Medusa categories separate active storefront status from internal visibility
-  and support parent/child ranking.
+A buyer-resolvable product does not become private merely because its assigned
+category is draft/internal. General product reads and explicit/manual collection
+membership still return the product, but public category ID and metadata are
+set to null. This prevents an unpublished category from leaking while preserving
+the independent product publication decision.
 
-Adding only an `isActive` field would be incomplete. A category visibility
-change must atomically align public category lookup, generic product category
-filters, navigation, collections, sitemap/discovery, feeds/UCP, cache
-invalidation, and admin readiness. Treat that as a dedicated schema release,
-not a cosmetic status badge.
+Publishing requires at least one active assigned product with a buyer-resolvable
+SKU. Image, description, and meta description are readiness warnings rather
+than blockers. An active dynamic collection may reference only published
+categories; the error distinguishes missing categories from categories that
+must be published.
 
 ## Resolved in the 2026-07-12 hardening slice
+
+- Migration `0016` adds the checked publication enum and monotonic `revision`.
+  Existing demo categories migrate to published; all new rows default to draft.
+- Every edit, status call, trash, restore, and hard-delete claim carries the
+  expected revision. Successful non-delete mutations advance it exactly once;
+  hard delete removes the claimed row. Bulk claims are capped at 90 and guarded
+  in the same D1 batch as the write. Trash and restore force draft.
+- The admin list exposes status and readiness. The edit sidebar explains each
+  state, shows blockers/warnings, and exposes the storefront link only when
+  published. Collection pickers accept only published categories for new
+  dynamic membership and explain stale unpublished selections.
+- Public products assigned to draft/internal categories stay buyer-resolvable
+  in general and manual reads with `categoryId`/metadata omitted. Category
+  filters and category-backed dynamic membership reject them.
+- Saved nested navigation is recursively filtered against published slugs;
+  category public APIs, attribute scopes, search, feeds, UCP, collections, and
+  storefront layout all share the same publication predicate.
+- Moving a category to draft/internal or trash is transactionally blocked while
+  an active dynamic collection references it. The merchant must remove the
+  reference or deactivate the collection first, so collection validity cannot
+  be broken from the category editor.
 
 - Permanent deletion is trash-only. A preflight gives a clear conflict and the
   final D1 delete is state-conditioned and row-count checked so a concurrent
@@ -69,27 +93,24 @@ page are unchanged.
 
 ## Remaining prioritized gaps
 
-1. **P1 — category visibility model:** design active versus internal/private
-   semantics across every consumer named above, including draft-by-default
-   creation and publish readiness.
-2. **P1 — concurrent editing:** categories lack their own revision/CAS. Add it
-   before multi-user editing is called conflict-safe.
-3. **P2 — scale:** public category navigation/sitemap reads are unpaginated and
+1. **P2 — scale:** public category navigation/sitemap reads are unpaginated and
    admin form options load every active category. Introduce a cursor/search
    projection without breaking sitemap completeness.
-4. **P2 — hierarchy:** evaluate parent/rank only after visibility semantics are
-   explicit; do not overload slug or collection order.
-5. **P2 — shared form capability:** `FormContainer` has no category-specific
+2. **P2 — hierarchy:** evaluate parent/rank without overloading slug or
+   collection order. Parent visibility must never make a child implicitly
+   public.
+3. **P2 — shared form capability:** `FormContainer` has no category-specific
    `canSave` boundary, so direct unauthorized create/edit routes rely on API
    denial. Add a generic permission-aware save contract in its own shared UI
    slice.
 
 ## Verification contract
 
-- Focused tests cover validation normalization/bounds, request limits, D1 set
-  bounds, trash-only permanent deletion, assignment races, collection-source
-  protection, row-count projection, bulk confirmation/restore, trash edit
-  routing, storefront cache namespace, and category listing accessibility.
+- Focused tests cover publication readiness, revision conflicts, request and
+  D1 claim bounds, exact revision payloads, trash-only permanent deletion,
+  assignment races, collection-source protection, recursive navigation
+  filtering, and a real SQLite public-product boundary proving unpublished
+  category metadata is omitted without hiding explicit products.
 - Run core/API/admin/storefront affected typechecks and lints, regenerate the SDK
   after category OpenAPI changes, and run API/admin/storefront production builds.
 - After deploy, verify active list/create/edit/trash at desktop and 390×844,

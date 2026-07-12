@@ -295,7 +295,11 @@ describe("bulkActivateCollections", () => {
                 config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_1"], featuredProductId: "prod_2" }),
             },
         ];
-        const selectedRows = [rows, [{ id: "prod_1" }, { id: "prod_2" }], [{ id: "cat_1" }]];
+        const selectedRows = [
+            rows,
+            [{ id: "prod_1" }, { id: "prod_2" }],
+            [{ id: "cat_1", status: "published" }],
+        ];
         const select = vi.fn(() => {
             const result = selectedRows.shift() ?? [];
             const chain: Record<string, unknown> = {};
@@ -321,6 +325,27 @@ describe("bulkActivateCollections", () => {
 
         expect(select).toHaveBeenCalledTimes(3);
         expect(update).toHaveBeenCalledTimes(2);
+    });
+
+    it("distinguishes unpublished categories from missing references", async () => {
+        const rows = [{
+            id: "col_dynamic",
+            version: 3,
+            config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_draft"] }),
+        }];
+        const selectedRows = [rows, [{ id: "cat_draft", status: "draft" }]];
+        const select = vi.fn(() => {
+            const result = selectedRows.shift() ?? [];
+            const chain: Record<string, unknown> = {};
+            chain.from = vi.fn(() => chain);
+            chain.where = vi.fn(() => chain);
+            chain.all = vi.fn(async () => result);
+            return chain;
+        });
+        const db = { select } as unknown as Database;
+
+        await expect(bulkActivateCollections(db, ["col_dynamic"]))
+            .rejects.toThrow(/Publish the selected categories/i);
     });
 });
 

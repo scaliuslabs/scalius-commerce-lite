@@ -39,6 +39,10 @@ import {
     loadVariantSelectedOptions,
     type SelectedProductOption,
 } from "./products.option-model";
+import {
+    publicCategoryConditions,
+    publishedCategoryIdExists,
+} from "../categories/categories.publication";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -178,15 +182,12 @@ function parsePublicLookupTokens(ids: string | undefined): string[] {
 }
 
 function buildCategoryLookupCondition(category: string): SQL {
-    return sql`(
-        ${products.categoryId} = ${category}
-        OR EXISTS (
-            SELECT 1
-            FROM "categories"
-            WHERE ${eq(categories.id, products.categoryId)}
-              AND ${eq(categories.slug, category)}
-              AND ${isNull(categories.deletedAt)}
-        )
+    return sql`EXISTS (
+        SELECT 1
+        FROM "categories"
+        WHERE ${eq(categories.id, products.categoryId)}
+          AND ${and(...publicCategoryConditions())}
+          AND (${categories.id} = ${category} OR ${categories.slug} = ${category})
     )`;
 }
 
@@ -212,7 +213,7 @@ function buildFeedCategorySearchCondition(search: string): SQL | undefined {
         SELECT 1
         FROM "categories"
         WHERE ${eq(categories.id, products.categoryId)}
-          AND ${isNull(categories.deletedAt)}
+          AND ${and(...publicCategoryConditions())}
           AND ${categoryMatch}
     )`;
 }
@@ -791,7 +792,10 @@ async function readStorefrontCatalogPage(
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
-                .where(inArray(categories.id, categoryIds))
+                .where(and(
+                    inArray(categories.id, categoryIds),
+                    ...publicCategoryConditions(),
+                ))
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
     ]);
@@ -802,15 +806,17 @@ async function readStorefrontCatalogPage(
         ...product
     }: StorefrontProductListRowWithVariants) => {
         const image = imageMap.get(product.id);
+        const category = scope.fixedCategory ?? (
+            product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
+        );
         return {
             ...product,
+            categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
             imageUrl: image?.url ?? null,
             imageAlt: image?.alt ?? null,
-            category: scope.fixedCategory ?? (
-                product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
-            ),
+            category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
             priceVaries: product.maxBuyerPrice > product.discountedPrice,
@@ -913,7 +919,10 @@ export async function getStorefrontFeedProducts(
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
-                .where(inArray(categories.id, categoryIds))
+                .where(and(
+                    inArray(categories.id, categoryIds),
+                    ...publicCategoryConditions(),
+                ))
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
@@ -924,6 +933,7 @@ export async function getStorefrontFeedProducts(
 
     const feedProducts: StorefrontFeedProduct[] = productsList.map((product: StorefrontFeedProductListRow) => {
         const imgData = imageMap.get(product.id);
+        const category = product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         return {
             id: product.id,
             name: product.name,
@@ -942,14 +952,14 @@ export async function getStorefrontFeedProducts(
                 product.discountAmount,
             ),
             freeDelivery: product.freeDelivery,
-            categoryId: product.categoryId,
+            categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
             productCondition: product.productCondition,
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
             imageUrl: imgData?.url || null,
             imageAlt: imgData?.alt || null,
-            category: product.categoryId ? categoryMap.get(product.categoryId) || null : null,
+            category,
             attributes: attributeMap.get(product.id) ?? [],
             variants: variantMap.get(product.id) ?? [],
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
@@ -1055,6 +1065,7 @@ export async function getStorefrontCollectionProducts(
             ) OR (
                 json_extract(collection_membership.value, '$.kind') = 'category'
                 AND json_extract(collection_membership.value, '$.id') = ${products.categoryId}
+                AND ${publishedCategoryIdExists(products.categoryId)}
             )
         )`
         : sql`0 = 1`;
@@ -1179,7 +1190,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 metaTitle: categories.metaTitle, metaDescription: categories.metaDescription,
                 canonicalPath: categories.canonicalPath,
                 noIndex: categories.noIndex, excludeFromSitemap: categories.excludeFromSitemap,
-            }).from(categories).where(eq(categories.id, product.categoryId!)).get()
+            }).from(categories).where(and(
+                eq(categories.id, product.categoryId!),
+                ...publicCategoryConditions(),
+            )).get()
                 .then((res: { id: string; name: string; slug: string; description: string | null; imageUrl: string | null; metaTitle: string | null; metaDescription: string | null; canonicalPath: string | null; noIndex: boolean; excludeFromSitemap: boolean } | undefined) => ({ type: "category", data: res })),
         );
 
@@ -1277,6 +1291,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     return {
         product: {
             ...product,
+            categoryId: category ? product.categoryId : null,
             hasVariants,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,

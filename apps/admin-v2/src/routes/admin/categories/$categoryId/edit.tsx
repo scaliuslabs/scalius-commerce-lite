@@ -43,7 +43,11 @@ function EditCategoryPage() {
 
   return (
     <div className="container max-w-7xl py-4 pb-8">
-      <CategoryForm defaultValues={defaultValues} isEdit={true} />
+      <CategoryForm
+        defaultValues={defaultValues}
+        isEdit={true}
+        publishReadiness={c.publishReadiness}
+      />
     </div>
   );
 }

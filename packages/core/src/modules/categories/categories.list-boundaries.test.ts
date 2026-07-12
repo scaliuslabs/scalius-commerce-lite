@@ -20,7 +20,8 @@ describe("category list projection", () => {
   });
 
   it("reads only affected or malformed collection configs during hard delete", () => {
-    expect(source).toContain("INNER JOIN json_each(${JSON.stringify(uniqueCategoryIds)}) AS target");
+    expect(source).toContain("INNER JOIN json_each(${JSON.stringify(claims)}) AS target");
+    expect(source).toContain("json_extract(target.value, '$.id')");
     expect(source).toContain("WHEN json_valid(${collections.config}) = 0 THEN 1");
   });
 });

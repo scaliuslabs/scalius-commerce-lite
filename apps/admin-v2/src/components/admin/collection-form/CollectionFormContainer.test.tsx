@@ -104,7 +104,7 @@ vi.mock("~/hooks/use-catalog-action-permissions", () => ({
 }));
 
 const categories: Category[] = [
-  { id: "cat_curated", name: "Curated Picks" },
+  { id: "cat_curated", name: "Curated Picks", status: "published" },
 ];
 
 const collectionDefaults: Partial<CollectionFormValues> = {

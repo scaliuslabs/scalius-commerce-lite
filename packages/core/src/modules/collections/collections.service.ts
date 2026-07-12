@@ -24,6 +24,10 @@ import {
 import { ftsMatch } from "../../search/fts5";
 import { getStorefrontCollectionProducts } from "../products/products.storefront";
 import type { StorefrontProductFilterInput } from "../products/products.types";
+import {
+    publicCategoryConditions,
+    publishedCategoryIdExists,
+} from "../categories/categories.publication";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -176,7 +180,7 @@ async function assertCollectionReferenceSetsExist(
             )).all()
             : Promise.resolve([]),
         categoryIdList.length > 0
-            ? db.select({ id: categories.id }).from(categories).where(and(
+            ? db.select({ id: categories.id, status: categories.status }).from(categories).where(and(
                 sql`${categories.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdList)})
                 )`,
@@ -186,12 +190,21 @@ async function assertCollectionReferenceSetsExist(
     ]);
     const foundProductIds = new Set(productRows.map((row) => row.id));
     const foundCategoryIds = new Set(categoryRows.map((row) => row.id));
+    const unpublishedCategoryIds = categoryRows
+        .filter((row) => row.status !== "published")
+        .map((row) => row.id);
     const missingProductIds = productIdList.filter((id) => !foundProductIds.has(id));
     const missingCategoryIds = categoryIdList.filter((id) => !foundCategoryIds.has(id));
     if (missingProductIds.length > 0 || missingCategoryIds.length > 0) {
         throw new ValidationError(
             "Collection membership references products or categories that no longer exist.",
             { missingProductIds, missingCategoryIds },
+        );
+    }
+    if (unpublishedCategoryIds.length > 0) {
+        throw new ValidationError(
+            "Publish the selected categories before activating this dynamic collection, or keep the collection inactive.",
+            { unpublishedCategoryIds },
         );
     }
 }
@@ -217,7 +230,7 @@ export async function getCollectionsByIds(db: Database, ids: string[]) {
 
 export async function getCollectionCategoryOptions(db: Database) {
     return db
-        .select({ id: categories.id, name: categories.name })
+        .select({ id: categories.id, name: categories.name, status: categories.status })
         .from(categories)
         .where(isNull(categories.deletedAt))
         .orderBy(asc(categories.name), asc(categories.id))
@@ -615,11 +628,6 @@ export async function getPublicCollectionCatalog(
 
     const config = normalizeCollectionConfig(collection.config);
     const membership = collectionMembershipForConfig(config);
-    const catalog = await getStorefrontCollectionProducts(db, {
-        productIds: membership.productIds,
-        categoryIds: membership.categoryIds,
-    }, params);
-
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const categoryIdsJson = JSON.stringify(membership.categoryIds);
     const categoryPromise: Promise<Array<{ id: string; name: string; slug: string }>> =
@@ -631,10 +639,14 @@ export async function getPublicCollectionCatalog(
                     sql`${categories.id} IN (
                         SELECT CAST(value AS TEXT) FROM json_each(${categoryIdsJson})
                     )`,
-                    isNull(categories.deletedAt),
+                    ...publicCategoryConditions(),
                 ))
                 .all()
             : Promise.resolve([]);
+    const catalogPromise = getStorefrontCollectionProducts(db, {
+        productIds: membership.productIds,
+        categoryIds: membership.categoryIds,
+    }, params);
     const featuredPromise: Promise<RawProduct[]> = config.featuredProductId
             ? db
                 .select(buildCollectionProductSelect(buyerPricing))
@@ -648,9 +660,10 @@ export async function getPublicCollectionCatalog(
                 .limit(1)
                 .all() as Promise<RawProduct[]>
             : Promise.resolve([]);
-    const [categoryRows, featuredRows] = await Promise.all([
+    const [categoryRows, featuredRows, catalog] = await Promise.all([
         categoryPromise,
         featuredPromise,
+        catalogPromise,
     ]);
     const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
 
@@ -806,11 +819,17 @@ export async function resolveCollectionProducts(
         const batchResults = await db.batch([
             db.select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
-                .where(and(inArray(categories.id, specificCategoryIds), isNull(categories.deletedAt))),
+                .where(and(
+                    inArray(categories.id, specificCategoryIds),
+                    ...publicCategoryConditions(),
+                )),
             db.select(buildCollectionProductSelect(buyerPricing))
                 .from(products)
                 .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                .where(and(...publicCollectionProductConditions(inArray(products.categoryId, specificCategoryIds))))
+                .where(and(
+                    ...publicCollectionProductConditions(inArray(products.categoryId, specificCategoryIds)),
+                    publishedCategoryIdExists(products.categoryId),
+                ))
                 .orderBy(desc(products.createdAt))
                 .limit(maxProducts),
             hasFeaturedProduct
@@ -910,7 +929,10 @@ export async function resolveCollectionProductsBatch(
             db.select(buildCollectionProductSelect(buyerPricing))
                 .from(products)
                 .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                .where(and(...publicCollectionProductConditions(eq(products.categoryId, categoryId))))
+                .where(and(
+                    ...publicCollectionProductConditions(eq(products.categoryId, categoryId)),
+                    publishedCategoryIdExists(products.categoryId),
+                ))
                 .orderBy(desc(products.createdAt), asc(products.id))
                 .limit(maxProducts),
         ),
@@ -919,7 +941,7 @@ export async function resolveCollectionProductsBatch(
                 sql`${categories.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdsArr)})
                 )`,
-                isNull(categories.deletedAt),
+                ...publicCategoryConditions(),
             ))
             : noopQuery,
         featuredIdsArr.length > 0

@@ -36,6 +36,8 @@ import {
 } from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
+import { publicCategoryConditions } from "../categories/categories.publication";
+import { filterNavigationByPublishedCategories } from "../navigation/navigation.service";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
@@ -264,7 +266,7 @@ export async function getLayoutData(
         slug: categories.slug,
       })
       .from(categories)
-      .where(isNull(categories.deletedAt))
+      .where(and(...publicCategoryConditions()))
       .orderBy(categories.name),
 
     // 3. Published pages (for navigation fallback)
@@ -354,6 +356,9 @@ export async function getLayoutData(
     businessResults,
     seoReturnPolicyResults,
   ] = batchResults;
+  const publishedCategorySlugs = new Set(
+    (categoriesData as { slug: string }[]).map((category) => category.slug),
+  );
 
   // Process Analytics
   const processedAnalytics = (analyticsResults as Analytics[])
@@ -383,10 +388,10 @@ export async function getLayoutData(
   let navigationData: NestedNavigationItem[] = [];
 
   if (siteSettingsData?.headerConfig) {
-    const headerConfig = safeJsonParse<Record<string, unknown>>(
-      siteSettingsData.headerConfig,
-      {},
-    );
+    const headerConfig = filterNavigationByPublishedCategories(
+      safeJsonParse<Record<string, unknown>>(siteSettingsData.headerConfig, {}),
+      publishedCategorySlugs,
+    ) as Record<string, unknown>;
     const topBarConfig = asRecord(headerConfig.topBar);
     const logoConfig = asRecord(headerConfig.logo);
     const faviconConfig = asRecord(headerConfig.favicon);
@@ -471,10 +476,10 @@ export async function getLayoutData(
   // Process Footer
   let footerData: Record<string, unknown>;
   if (siteSettingsData?.footerConfig) {
-    const footerConfig = safeJsonParse<Record<string, unknown>>(
-      siteSettingsData.footerConfig,
-      {},
-    );
+    const footerConfig = filterNavigationByPublishedCategories(
+      safeJsonParse<Record<string, unknown>>(siteSettingsData.footerConfig, {}),
+      publishedCategorySlugs,
+    ) as Record<string, unknown>;
     const footerLogoConfig = asRecord(footerConfig.logo);
     const footerFaviconConfig = asRecord(footerConfig.favicon);
 

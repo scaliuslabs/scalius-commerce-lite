@@ -15,7 +15,10 @@ vi.mock("../products/products.storefront", () => ({
     getStorefrontProducts: mocks.getStorefrontProducts,
 }));
 
-import { getNavigationPreviewProductCount } from "./navigation.service";
+import {
+    filterNavigationByPublishedCategories,
+    getNavigationPreviewProductCount,
+} from "./navigation.service";
 
 describe("navigation preview product count", () => {
     const db = {} as Database;
@@ -68,5 +71,24 @@ describe("navigation preview product count", () => {
             getNavigationPreviewProductCount(db, { categoryId: "cat_deleted" }),
         ).rejects.toBeInstanceOf(NotFoundError);
         expect(mocks.getStorefrontProducts).not.toHaveBeenCalled();
+    });
+});
+
+describe("published category navigation filtering", () => {
+    it("removes unpublished category links recursively without disturbing other links", () => {
+        expect(filterNavigationByPublishedCategories({
+            primary: [
+                { label: "Shoes", href: "/categories/shoes" },
+                { label: "Draft", url: "/categories/launch-preview" },
+                { label: "About", href: "/about" },
+            ],
+            nested: { items: [{ href: "/categories/internal-notes/" }] },
+        }, new Set(["shoes"]))).toEqual({
+            primary: [
+                { label: "Shoes", href: "/categories/shoes" },
+                { label: "About", href: "/about" },
+            ],
+            nested: { items: [] },
+        });
     });
 });
