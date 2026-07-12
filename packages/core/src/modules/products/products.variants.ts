@@ -10,7 +10,8 @@ import {
     products,
     productVariants,
     productVariantOptionValues,
-    productImages,
+    productMedia,
+    media,
 } from "@scalius/database/schema";
 import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -139,6 +140,29 @@ function normalizeSku(value: string): string {
 
 function normalizedSkuKey(value: string): string {
     return normalizeSku(value).toLocaleLowerCase("en-US");
+}
+
+async function assertSelectableVariantImage(
+    db: DrizzleD1Database<typeof schema>,
+    productId: string,
+    imageId: string | null,
+    retainedImageId: string | null = null,
+): Promise<void> {
+    if (!imageId) return;
+    const association = await db
+        .select({ status: media.status })
+        .from(productMedia)
+        .innerJoin(media, eq(media.id, productMedia.mediaId))
+        .where(and(
+            eq(productMedia.id, imageId),
+            eq(productMedia.productId, productId),
+            eq(media.kind, "image"),
+        ))
+        .get();
+    const retainedTrash = imageId === retainedImageId && association?.status === "trashed";
+    if (!association || (association.status !== "ready" && !retainedTrash)) {
+        throw new ValidationError("The selected SKU image must be a ready image attached to this product.");
+    }
 }
 
 function isAtomicVariantConflict(error: unknown): boolean {
@@ -424,13 +448,7 @@ export async function createVariant(
     await assertProductVariantOptionAxes(db, productId, [{ selectedOptionValueIds: selection.valueIds }]);
     await assertUniqueVariantBarcodes(db, [{ ...barcodeIdentity }]);
 
-    if (data.imageId) {
-        const image = await db.select({ id: productImages.id })
-            .from(productImages)
-            .where(and(eq(productImages.id, data.imageId), eq(productImages.productId, productId)))
-            .get();
-        if (!image) throw new ValidationError("The selected SKU image is not on this product.");
-    }
+    await assertSelectableVariantImage(db, productId, data.imageId);
 
     const existingVariant = await db
         .select({ id: productVariants.id })
@@ -577,13 +595,12 @@ export async function updateVariant(
         );
     }
 
-    if (data.imageId) {
-        const image = await db.select({ id: productImages.id })
-            .from(productImages)
-            .where(and(eq(productImages.id, data.imageId), eq(productImages.productId, productId)))
-            .get();
-        if (!image) throw new ValidationError("The selected SKU image is not on this product.");
-    }
+    await assertSelectableVariantImage(
+        db,
+        productId,
+        data.imageId,
+        existingVariant.imageId,
+    );
 
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);

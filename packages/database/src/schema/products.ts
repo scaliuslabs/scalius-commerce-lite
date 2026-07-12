@@ -7,6 +7,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { taxClasses } from "./tax";
+import { media } from "./media";
 
 export const products = sqliteTable(
     "products",
@@ -57,6 +58,52 @@ export const products = sqliteTable(
     ],
 );
 
+export const productMedia = sqliteTable("product_media", {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+        .notNull()
+        .references(() => products.id, { onDelete: "cascade" }),
+    mediaId: text("media_id")
+        .notNull()
+        .references(() => media.id, { onDelete: "restrict" }),
+    altText: text("alt_text"),
+    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+    sortOrder: integer("sort_order").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    check(
+        "product_media_id_valid",
+        sql`substr(${table.id}, 1, 5) = 'pmed_' AND length(${table.id}) BETWEEN 10 AND 80 AND ${table.id} NOT GLOB '*[^A-Za-z0-9_-]*'`,
+    ),
+    check(
+        "product_media_alt_text_valid",
+        sql`${table.altText} IS NULL OR (${table.altText} = trim(${table.altText}) AND length(${table.altText}) <= 500)`,
+    ),
+    check("product_media_primary_valid", sql`${table.isPrimary} IN (0, 1)`),
+    check("product_media_sort_order_valid", sql`${table.sortOrder} >= 0`),
+    uniqueIndex("product_media_product_asset_uidx").on(table.productId, table.mediaId),
+    uniqueIndex("product_media_product_order_uidx").on(table.productId, table.sortOrder),
+    uniqueIndex("product_media_one_primary_uidx")
+        .on(table.productId)
+        .where(sql`${table.isPrimary} = 1`),
+    index("product_media_product_order_idx").on(table.productId, table.sortOrder, table.id),
+    index("product_media_asset_product_idx").on(table.mediaId, table.productId),
+    index("product_media_primary_lookup_idx")
+        .on(table.productId, table.id)
+        .where(sql`${table.isPrimary} = 1`),
+]);
+
+/**
+ * Transitional read-only declaration for public consumers that are being
+ * migrated in the next integration slice. Product commands must not write
+ * this table. The final cutover migration removes it after every reader uses
+ * productMedia.
+ */
 export const productImages = sqliteTable("product_images", {
     id: text("id").primaryKey(),
     productId: text("product_id")
@@ -140,7 +187,7 @@ export const productVariants = sqliteTable("product_variants", {
         .references(() => products.id, { onDelete: "cascade" }),
     optionCombinationKey: text("option_combination_key"),
     imageId: text("image_id")
-        .references(() => productImages.id, { onDelete: "set null" }),
+        .references(() => productMedia.id, { onDelete: "set null" }),
     weight: real("weight"),
     sku: text("sku").notNull(),
     price: real("price").notNull(),
@@ -336,6 +383,8 @@ export const productRichContent = sqliteTable("product_rich_content", {
 ]);
 
 export type Product = InferSelectModel<typeof products>;
+export type ProductMedia = InferSelectModel<typeof productMedia>;
+/** @deprecated Integration bridge only. Do not add new productImages consumers. */
 export type ProductImage = InferSelectModel<typeof productImages>;
 export type ProductOptionDefinition = InferSelectModel<typeof productOptionDefinitions>;
 export type ProductOptionValue = InferSelectModel<typeof productOptionValues>;

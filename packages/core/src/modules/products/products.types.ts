@@ -1,13 +1,14 @@
 // src/modules/products/products.types.ts
 // Zod schemas and TypeScript interfaces shared across product modules.
 import { z } from "zod";
-import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
+import type { Product, ProductVariant } from "@scalius/database/schema";
 import type {
     ProductOptionDefinitionRecord,
     ProductOptionStandardMapping,
     SelectedProductOption,
 } from "./products.option-model";
 import type { ProductCondition } from "@scalius/shared/product-condition";
+import type { ProductMediaProjection } from "./products.media";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -27,7 +28,9 @@ export const expectedProductAggregateRevisionSchema = z
 
 const variantMutationSchema = z.object({
     selectedOptionValueIds: z.array(z.string().trim().min(1)).max(5),
-    imageId: z.string().trim().min(1).nullable(),
+    imageId: z.string().trim().min(10).max(80)
+        .regex(/^pmed_[A-Za-z0-9_-]+$/u)
+        .nullable(),
     weight: z.number().min(0).nullable(),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: variantPriceSchema,
@@ -58,7 +61,7 @@ export interface ProductWithDetails extends Product {
     category: { name: string };
     variants: Array<ProductVariant & { selectedOptions: SelectedProductOption[] }>;
     options: ProductOptionDefinitionRecord[];
-    images: ProductImage[];
+    media: ProductMediaProjection[];
     additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
     attributes: Array<{ attributeId: string; value: string }>;
 }
@@ -81,7 +84,7 @@ export interface ProductListItem {
         name: string;
     };
     variantCount: number;
-    imageCount: number;
+    mediaCount: number;
     primaryImage: string | null;
     sku?: string;
 }

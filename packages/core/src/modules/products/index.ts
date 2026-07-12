@@ -7,3 +7,4 @@ export * from "./products.variants";
 export * from "./products.option-model";
 export * from "./products.option-matrix";
 export * from "./products.validation";
+export * from "./products.media";

@@ -21,7 +21,7 @@ const productUpdate = {
     discountPercentage: 0,
     discountAmount: 0,
     freeDelivery: false,
-    images: [],
+    media: [],
     attributes: [],
     additionalInfo: [],
     expectedAggregateRevision: 1,
@@ -417,7 +417,7 @@ describe("admin product SKU invariant boundaries", () => {
             discountPercentage: 0,
             discountAmount: 0,
             freeDelivery: false,
-            images: [],
+            media: [],
             attributes: [],
             additionalInfo: [],
             optionMatrix: {

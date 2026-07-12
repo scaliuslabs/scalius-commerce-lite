@@ -99,7 +99,8 @@ the schema declarations are the source of truth.
 | Table | Purpose |
 |-------|---------|
 | `products` | Core product. `slug`, `categoryId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery` |
-| `productImages` | Product gallery. `productId` FK (cascade), `isPrimary`, `sortOrder` |
+| `productMedia` | Ordered product association to global `media`; immutable asset identity, unique dense order, and exactly one featured row for non-empty galleries |
+| `productImages` | Temporary read-only integration bridge for pre-cutover public readers; no product command may write it, and the final cutover drops it |
 | `productVariants` | SKU-level variants. `size`, `color`, `stock`, `reservedStock`, `preorderStock`, `version`, `stockVersion`, `barcode`, `barcodeType` |
 | `categories` | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription` |
 | `collections` | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder` |
@@ -226,7 +227,7 @@ All entity IDs are `text` primary keys generated as `"prefix_" + nanoid()`.
 | Prefix | Entity | Table |
 |--------|--------|-------|
 | `prod_` | Product | `products` |
-| `img_` | Product image | `productImages` |
+| `pmed_` | Product media association | `productMedia` |
 | `var_` | Product variant | `productVariants` |
 | `cat_` | Category | `categories` |
 | `prc_` | Rich content section | `productRichContent` |

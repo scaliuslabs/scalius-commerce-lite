@@ -31,7 +31,7 @@ describe("normalized product option and SKU media schema boundaries", () => {
       'imageId: text("image_id")',
     );
     expect(schemaSource).toContain(
-      'references(() => productImages.id, { onDelete: "set null" })',
+      'references(() => productMedia.id, { onDelete: "set null" })',
     );
     expect(schemaSource).toContain(
       'export const productVariantOptionValues = sqliteTable("product_variant_option_values"',

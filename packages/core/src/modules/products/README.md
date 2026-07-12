@@ -1,6 +1,6 @@
 # Products Core Module
 
-Product CRUD, variant management, image handling, rich content (additional info), product attributes, barcode support, and storefront queries. Split across three service files by consumer: admin, storefront, and variant-specific operations.
+Product CRUD, variant management, ordered image/video associations, rich content (additional info), product attributes, barcode support, and storefront queries.
 
 ## Features
 
@@ -9,11 +9,12 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Product CRUD with slug uniqueness enforcement
 - Soft delete / restore / permanent delete lifecycle with order/discount safety checks
 - Bulk soft-delete and bulk permanent-delete with order/discount guards
-- Product images: ordered, first = primary, stored via `productImages` table
+- Ordered product media: up to 250 immutable associations to global Media assets, with one explicit featured item and dense request order stored in `productMedia`
+- Image-only projection uses featured image, featured-video poster, ordered image, then ordered-video poster; it never returns a placeholder or video URL as an image
 - Rich content sections (additional info): arbitrary titled HTML blocks stored in `productRichContent`, ordered by `sortOrder`
 - Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
 - Normalized product options: up to five merchant-named axes and 150 potential Cartesian combinations, with any non-empty active SKU subset stored in `productOptionDefinitions`, `productOptionValues`, and `productVariantOptionValues`
-- Variant CRUD: selected option values, per-SKU image, weight, globally unique SKU/barcode identities, price, stock, and percentage or flat discount
+- Variant CRUD: selected option values, optional exact image association, weight, globally unique SKU/barcode identities, price, stock, and percentage or flat discount. `NULL` image means featured/product image fallback; videos are never exact SKU images.
 - Atomic full-matrix save with aggregate-revision concurrency, stock-version guards, movement-ledger claims, safe combination retirement, and D1-batched writes
 - Soft-deleted variants filtered out: all variant queries use `isNull(deletedAt)` or `deletedAt IS NULL` conditions
 - Discount type support: both percentage and flat amount discounts at product and variant level
@@ -41,7 +42,7 @@ Admin UI (ProductForm.tsx)
   --> fetch(/api/v1/admin/products) [POST/PUT]
     --> apps/api/src/routes/admin/products.ts [Hono route, Zod validation]
       --> packages/core/src/modules/products/products.admin.ts [createProduct/updateProduct]
-        --> D1 batch: products + productImages + productRichContent + productAttributeValues
+        --> D1 batch: products + productMedia + productRichContent + productAttributeValues
 
 Admin option-matrix editor
   --> PUT /api/v1/admin/products/{id}/options/matrix
@@ -79,7 +80,8 @@ Storefront category ([slug].astro)
 |------|-------------|
 | `index.ts` | Barrel re-exports from all submodules |
 | `products.types.ts` | Zod schemas for single-SKU create/update operations and shared product/storefront projection types. |
-| `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes (`{attributeId, value}`), and additional info (`{id, title, content, sortOrder}`). Discount percentage capped at 0-100. |
+| `products.validation.ts` | Zod schemas for product create/update, including stable ordered media association IDs, exactly-one-featured validation, attributes, and additional info. |
+| `products.media.ts` | Bounded association loader and the shared pure product/SKU image representation resolvers. |
 | `products.option-model.ts` | Normalized option reads, assignment resolution, axis-ordered combination labels/keys, and the five-axis/150-combination limits. |
 | `products.option-matrix.ts` | Active matrix-subset validation and atomic save. Owns arbitrary axes, potential-combination limits, used-value/unique-combination invariants, unique standard mappings, canonical combination order, per-SKU image ownership, SKU/barcode conflicts, discount consistency, stock allocation, assignment replacement, and safe retirement. |
 | `products.public-eligibility.ts` | Shared public catalog predicates and default simple-SKU values. Any storefront/catalog/search surface that exposes buyer product cards must use these predicates instead of checking only `products.isActive` and `products.deletedAt`. |

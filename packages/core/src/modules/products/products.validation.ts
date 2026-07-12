@@ -12,7 +12,7 @@ import {
 } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_PRICE } from "./products.types";
 import { createProductOptionMatrixSchema } from "./products.option-matrix";
-import { isCatalogDiscoveryImageSource } from "@scalius/shared/catalog-discovery-media";
+import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./products.media";
 
 const canonicalPathSchema = z
     .string()
@@ -25,18 +25,50 @@ const canonicalPathSchema = z
 
 const productConditionSchema = z.enum(PRODUCT_CONDITION_VALUES);
 
-/** Shared image schema used in create and update */
-const productImageSchema = z.object({
-    id: z.string(),
-    url: z.string().refine(isCatalogDiscoveryImageSource, {
-        message: "Product image must be a relative path or an absolute HTTP(S) URL.",
-    }),
-    filename: z.string(),
-    size: z.number(),
-    createdAt: z
-        .date()
-        .or(z.string())
-        .transform((val) => (val instanceof Date ? val : new Date(val))),
+export const productMediaAssociationIdSchema = z.string()
+    .trim()
+    .min(10)
+    .max(80)
+    .regex(/^pmed_[A-Za-z0-9_-]+$/u, "Product media association ID is invalid.");
+
+const globalMediaIdSchema = z.string()
+    .trim()
+    .min(8)
+    .max(160)
+    .regex(/^[A-Za-z0-9_-]+$/u, "Media ID is invalid.");
+
+/** Ordered product association contract; request order becomes dense sortOrder. */
+export const productMediaInputSchema = z.array(z.object({
+    id: productMediaAssociationIdSchema,
+    mediaId: globalMediaIdSchema,
+    altText: z.string().trim().max(500).nullable()
+        .transform((value) => value?.trim() ? value.trim() : null),
+    isPrimary: z.boolean(),
+})).max(
+    MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+    `Attach at most ${MAX_PRODUCT_MEDIA_ASSOCIATIONS} media items to a product.`,
+).superRefine((items, context) => {
+    const ids = new Set<string>();
+    const mediaIds = new Set<string>();
+    let primaryCount = 0;
+    items.forEach((item, index) => {
+        if (ids.has(item.id)) {
+            context.addIssue({ code: "custom", path: [index, "id"], message: "Each product media association ID must be unique." });
+        }
+        if (mediaIds.has(item.mediaId)) {
+            context.addIssue({ code: "custom", path: [index, "mediaId"], message: "The same media asset can be attached only once." });
+        }
+        ids.add(item.id);
+        mediaIds.add(item.mediaId);
+        if (item.isPrimary) primaryCount += 1;
+    });
+    if (items.length > 0 && primaryCount !== 1) {
+        context.addIssue({
+            code: "custom",
+            message: "Choose exactly one featured media item.",
+            path: [Math.max(0, items.findIndex((item) => item.isPrimary)), "isPrimary"],
+        });
+    }
 });
 
 /** Shared attribute schema used in create and update */
@@ -99,7 +131,7 @@ const productBaseSchema = z.object({
         .min(3)
         .max(100)
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    images: z.array(productImageSchema),
+    media: productMediaInputSchema,
     attributes: productAttributeSchema,
     additionalInfo: productAdditionalInfoSchema,
 });
@@ -129,6 +161,12 @@ export const updateProductSchema = productBaseSchema
     .extend({
         id: z.string(),
         expectedAggregateRevision: z.number().int().min(1),
+        acknowledgedSkuImageRemovalIds: z.array(productMediaAssociationIdSchema)
+            .max(MAX_PRODUCT_MEDIA_ASSOCIATIONS)
+            .refine((ids) => new Set(ids).size === ids.length, {
+                message: "Each acknowledged product media association must be unique.",
+            })
+            .optional(),
     })
     .superRefine(requireCanonicalProductHandle);
 
