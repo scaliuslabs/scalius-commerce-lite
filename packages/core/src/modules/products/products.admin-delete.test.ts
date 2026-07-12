@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { drizzle } from "drizzle-orm/d1";
 import { ConflictError } from "@scalius/core/errors";
 import { productLowStockAlerts, productVariants } from "@scalius/database/schema";
-import { bulkDeleteProducts, permanentlyDeleteProduct } from "./products.admin";
+import {
+    buildPermanentProductDeleteBatch,
+    bulkDeleteProducts,
+    permanentlyDeleteProduct,
+} from "./products.admin";
 
 type DeleteStatement = {
     kind: "delete";
@@ -67,6 +72,26 @@ function expectLowStockAlertCleanupBeforeVariantDelete(batch: unknown[]) {
 }
 
 describe("admin product permanent delete inventory guards", () => {
+    it("compiles the permanent-delete batch without ambiguous columns", () => {
+        const db = drizzle({} as D1Database);
+        const statements = buildPermanentProductDeleteBatch(
+            db as never,
+            "prod_1",
+            1,
+            ["var_1"],
+        );
+        const referenceGuard = (statements[1] as unknown as {
+            toSQL(): { sql: string };
+        }).toSQL().sql;
+
+        expect(referenceGuard).toContain(
+            'ON "permanent_delete_inventory_movement"."variant_id" = "permanent_delete_product_variant"."id"',
+        );
+        expect(referenceGuard).toContain(
+            'WHERE "permanent_delete_product_variant"."product_id" IN',
+        );
+        expect(referenceGuard).not.toContain('ON "variant_id" = "id"');
+    });
     it("rejects single permanent product delete when a SKU has inventory history", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
