@@ -129,7 +129,13 @@ describe("tax Admin jurisdiction authority", () => {
     const statements: Array<{ kind: string }> = [];
     let productUpdateCount = 0;
     const db = {
-      run: vi.fn(() => ({ kind: "guard" })),
+      select() {
+        return {
+          from() {
+            return { kind: "guard" };
+          },
+        };
+      },
       update(table: unknown) {
         expect(table).toBe(products);
         productUpdateCount += 1;

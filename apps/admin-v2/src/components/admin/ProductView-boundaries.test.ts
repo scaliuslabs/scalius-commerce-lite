@@ -15,10 +15,9 @@ describe("ProductView catalog truth boundaries", () => {
     expect(source).toContain("Product SKU");
     expect(source).not.toContain("Simple product SKU");
     expect(source).toContain("No stock limit");
-    expect(source).toContain("${product.variantOption1Label}: ${v.size}");
-    expect(source).toContain("${product.variantOption2Label}: ${v.color}");
-    expect(source).not.toContain("Option 1: ${v.size}");
-    expect(source).not.toContain("Option 2: ${v.color}");
+    expect(source).toContain("v.selectedOptions.map((option) => `${option.name}: ${option.value}`)");
+    expect(source).not.toContain("variantOption1Label");
+    expect(source).not.toContain("variantOption2Label");
     expect(source).toContain("available === null");
     expect(source).not.toContain("const available = v.stock - v.reservedStock");
   });

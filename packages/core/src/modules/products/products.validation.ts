@@ -8,14 +8,10 @@ import {
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import {
-    DEFAULT_PRODUCT_OPTION_LABELS,
-    DEFAULT_PRODUCT_OPTION_SCHEMA,
-    PRODUCT_OPTION_SCHEMA_VALUES,
-} from "@scalius/shared/product-options";
-import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_PRICE } from "./products.types";
+import { createProductOptionMatrixSchema } from "./products.option-matrix";
 
 const canonicalPathSchema = z
     .string()
@@ -26,28 +22,7 @@ const canonicalPathSchema = z
         message: "Canonical path must be a product route such as /products/main-shoe.",
     });
 
-const productOptionLabelSchema = z.string().trim().min(1).max(40);
-const productOptionSchemaSchema = z.enum(PRODUCT_OPTION_SCHEMA_VALUES);
 const productConditionSchema = z.enum(PRODUCT_CONDITION_VALUES);
-const variantImageAxisSchema = z.enum(["option1", "option2"]);
-
-const variantImageMappingSchema = z.object({
-    imageId: z.string().trim().min(1),
-    variantId: z.string().trim().min(1).nullable().optional(),
-    optionAxis: variantImageAxisSchema.nullable().optional(),
-    optionValue: z.string().trim().min(1).max(100).nullable().optional(),
-    sortOrder: z.number().int().min(0).optional(),
-}).superRefine((mapping, ctx) => {
-    const hasVariant = Boolean(mapping.variantId);
-    const hasOption = Boolean(mapping.optionAxis && mapping.optionValue);
-    if (hasVariant === hasOption) {
-        ctx.addIssue({
-            code: "custom",
-            message: "Map each image to either one SKU or one option value",
-            path: [],
-        });
-    }
-});
 
 /** Shared image schema used in create and update */
 const productImageSchema = z.object({
@@ -93,28 +68,13 @@ const productBaseSchema = z.object({
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable().refine(
         (value) => !value?.includes("<!--variant_images:"),
-        "Legacy variant-image metadata is not allowed. Use explicit image mappings.",
+        "Legacy variant-image metadata is not allowed. Assign images directly to SKUs.",
     ),
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     excludeFromProductFeed: z.boolean().optional().default(false),
     productCondition: productConditionSchema,
-    variantOption1Label: productOptionLabelSchema
-        .optional()
-        .default(DEFAULT_PRODUCT_OPTION_LABELS.option1),
-    variantOption2Label: productOptionLabelSchema
-        .optional()
-        .default(DEFAULT_PRODUCT_OPTION_LABELS.option2),
-    variantOption1Schema: productOptionSchemaSchema
-        .optional()
-        .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option1),
-    variantOption2Schema: productOptionSchemaSchema
-        .optional()
-        .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option2),
-    variantImagesEnabled: z.boolean(),
-    variantImageAxis: variantImageAxisSchema,
-    variantImageMappings: z.array(variantImageMappingSchema).max(250),
     slug: z
         .string()
         .min(3)
@@ -126,7 +86,9 @@ const productBaseSchema = z.object({
 });
 
 /** Schema for creating a new product (POST /api/products) */
-export const createProductSchema = productBaseSchema;
+export const createProductSchema = productBaseSchema.extend({
+    optionMatrix: createProductOptionMatrixSchema.optional(),
+});
 
 /** Schema for updating an existing product (PUT /api/products/[id]) */
 export const updateProductSchema = productBaseSchema.extend({

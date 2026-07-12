@@ -56,11 +56,9 @@ const OrderItemRow = ({
           <h3 className="truncate font-medium text-foreground">
             {item.productName || "Unnamed Product"}
           </h3>
-          {(item.variantSize || item.variantColor) && (
+          {item.variantLabel && (
             <p className="text-xs text-muted-foreground">
-              {item.variantSize && `Size: ${item.variantSize}`}
-              {item.variantSize && item.variantColor && " / "}
-              {item.variantColor && `Color: ${item.variantColor}`}
+              {item.variantLabel}
             </p>
           )}
           <Link

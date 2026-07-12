@@ -2814,8 +2814,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     productName: string | null;
                     productSlug: string | null;
                     productImage: string | null;
-                    variantSize: string | null;
-                    variantColor: string | null;
+                    variantLabel: string | null;
                     [key: string]: unknown;
                 }>;
                 [key: string]: unknown;
@@ -2981,8 +2980,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 productName: string | null;
                 productSlug: string | null;
                 productImage: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
+                variantLabel: string | null;
                 unitPrice: number;
                 lineTotal: number;
                 unitPriceMinor: number | null;
@@ -4371,10 +4369,12 @@ export type GetApiV1ProductsFeedResponses = {
                 name: string;
                 slug: string;
                 canonicalPath: string | null;
-                variantOption1Label: string;
-                variantOption2Label: string;
-                variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
-                variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                options: Array<{
+                    id: string;
+                    name: string;
+                    position: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
                 description: string | null;
                 price: number;
                 discountType: string | null;
@@ -4402,8 +4402,17 @@ export type GetApiV1ProductsFeedResponses = {
                 variants: Array<{
                     id: string;
                     productId: string;
-                    size: string | null;
-                    color: string | null;
+                    imageId: string | null;
+                    imageUrl: string | null;
+                    selectedOptions: Array<{
+                        optionDefinitionId: string;
+                        optionValueId: string;
+                        name: string;
+                        value: string;
+                        position: number;
+                        valuePosition: number;
+                        standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                    }>;
                     weight: number | null;
                     sku: string;
                     price: number;
@@ -4416,8 +4425,6 @@ export type GetApiV1ProductsFeedResponses = {
                     discountType: string | null;
                     discountPercentage: number | null;
                     discountAmount: number | null;
-                    colorSortOrder: number | null;
-                    sizeSortOrder: number | null;
                     deletedAt: string | null;
                 }>;
                 updatedAt: string | null;
@@ -4554,9 +4561,6 @@ export type GetApiV1ProductsBySlugResponses = {
                 [key: string]: unknown;
             }>;
             variants: Array<{
-                [key: string]: unknown;
-            }>;
-            variantImageMappings: Array<{
                 [key: string]: unknown;
             }>;
             relatedProducts: Array<{
@@ -6026,8 +6030,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     price: number;
                     productName: string | null;
                     productImage: string | null;
-                    variantSize: string | null;
-                    variantColor: string | null;
+                    variantLabel: string | null;
                     unitPriceMinor: number | null;
                     lineSubtotalMinor: number | null;
                     discountAmountMinor: number | null;
@@ -13087,8 +13090,7 @@ export type GetApiV1AdminInventoryResponses = {
                 productId: string;
                 productName: string | null;
                 sku: string;
-                size: string | null;
-                color: string | null;
+                optionLabel: string | null;
                 price: number;
                 stock: number;
                 reservedStock: number;
@@ -13124,8 +13126,7 @@ export type GetApiV1AdminInventoryResponses = {
                 resolvedAt: string | number | null;
                 productName: string | null;
                 variantSku: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
+                variantLabel: string | null;
                 [key: string]: unknown;
             }>;
             pagination?: {
@@ -13180,8 +13181,7 @@ export type GetApiV1AdminInventoryAlertsResponses = {
                 resolvedAt: string | number | null;
                 productName: string | null;
                 variantSku: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
+                variantLabel: string | null;
                 [key: string]: unknown;
             }>;
         };
@@ -13313,8 +13313,7 @@ export type GetApiV1AdminInventoryScannerLookupResponses = {
             variant: {
                 id: string;
                 sku: string;
-                size: string | null;
-                color: string | null;
+                optionLabel: string | null;
                 price: number;
                 stock: number;
                 reservedStock: number;
@@ -25584,8 +25583,7 @@ export type GetApiV1AdminOrdersIdInvoiceResponses = {
                     price: number;
                     productName: string | null;
                     productImage: string | null;
-                    variantSize: string | null;
-                    variantColor: string | null;
+                    variantLabel: string | null;
                     [key: string]: unknown;
                 }>;
                 [key: string]: unknown;
@@ -26741,8 +26739,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 price: number;
                 productName: string | null;
                 productImage: string | null;
-                variantSize: string | null;
-                variantColor: string | null;
+                variantLabel: string | null;
                 fulfillmentStatus: string;
                 unitPriceMinor: number | null;
                 lineSubtotalMinor: number | null;
@@ -27144,8 +27141,7 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             price: number;
             productName: string | null;
             productImage: string | null;
-            variantSize: string | null;
-            variantColor: string | null;
+            variantLabel: string | null;
             fulfillmentStatus: string;
             unitPriceMinor: number | null;
             lineSubtotalMinor: number | null;
@@ -27467,8 +27463,17 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 variants: Array<{
                     id: string;
                     productId: string;
-                    size: string | null;
-                    color: string | null;
+                    optionCombinationKey: string | null;
+                    imageId: string | null;
+                    selectedOptions?: Array<{
+                        optionDefinitionId: string;
+                        optionValueId: string;
+                        name: string;
+                        value: string;
+                        position: number;
+                        valuePosition: number;
+                        standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                    }>;
                     weight: number | null;
                     sku: string;
                     price: number;
@@ -27488,8 +27493,6 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     discountAmount?: number | null;
                     barcode?: string | null;
                     barcodeType?: string | null;
-                    colorSortOrder?: number | null;
-                    sizeSortOrder?: number | null;
                     createdAt?: string | number;
                     updatedAt?: string | number;
                     deletedAt?: string | number | null;
@@ -27681,8 +27684,16 @@ export type GetApiV1AdminProductsLookupBarcodeResponses = {
             variant: {
                 id: string;
                 sku: string;
-                size: string | null;
-                color: string | null;
+                imageId: string | null;
+                selectedOptions: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
                 weight: number | null;
                 price: number;
                 stock: number;
@@ -27871,19 +27882,6 @@ export type PostApiV1AdminProductsData = {
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
-        variantOption1Label?: string;
-        variantOption2Label?: string;
-        variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantImagesEnabled: boolean;
-        variantImageAxis: 'option1' | 'option2';
-        variantImageMappings: Array<{
-            imageId: string;
-            variantId?: string | null;
-            optionAxis?: 'option1' | 'option2' | null;
-            optionValue?: string | null;
-            sortOrder?: number;
-        }>;
         slug: string;
         images: Array<{
             id: string;
@@ -27902,6 +27900,32 @@ export type PostApiV1AdminProductsData = {
             content: string;
             sortOrder: number;
         }>;
+        optionMatrix?: {
+            options: Array<{
+                id: string;
+                name: string;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                values: Array<{
+                    id: string;
+                    value: string;
+                }>;
+            }>;
+            variants: Array<{
+                id: string;
+                selectedOptionValueIds: Array<string>;
+                imageId: string | null;
+                sku: string;
+                price: number;
+                stock: number;
+                trackInventory: boolean;
+                weight: number | null;
+                barcode: string | null;
+                barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+                discountType: 'percentage' | 'flat';
+                discountPercentage: number | null;
+                discountAmount: number | null;
+            }>;
+        };
     };
     path?: never;
     query?: never;
@@ -28384,12 +28408,17 @@ export type GetApiV1AdminProductsByIdResponses = {
             excludeFromSitemap: boolean;
             excludeFromProductFeed: boolean;
             productCondition: 'new' | 'refurbished' | 'used' | null;
-            variantOption1Label: string;
-            variantOption2Label: string;
-            variantOption1Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
-            variantOption2Schema: 'size' | 'color' | 'material' | 'pattern' | 'none';
-            variantImagesEnabled: boolean;
-            variantImageAxis: 'option1' | 'option2';
+            options: Array<{
+                id: string;
+                name: string;
+                position: number;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                values: Array<{
+                    id: string;
+                    value: string;
+                    position: number;
+                }>;
+            }>;
             aggregateRevision: number;
             discountPercentage: number | null;
             discountType: 'percentage' | 'flat' | null;
@@ -28404,8 +28433,17 @@ export type GetApiV1AdminProductsByIdResponses = {
             variants: Array<{
                 id: string;
                 productId: string;
-                size: string | null;
-                color: string | null;
+                optionCombinationKey: string | null;
+                imageId: string | null;
+                selectedOptions?: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
                 weight: number | null;
                 sku: string;
                 price: number;
@@ -28425,8 +28463,6 @@ export type GetApiV1AdminProductsByIdResponses = {
                 discountAmount?: number | null;
                 barcode?: string | null;
                 barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
@@ -28441,16 +28477,6 @@ export type GetApiV1AdminProductsByIdResponses = {
                 isPrimary: boolean;
                 sortOrder: number;
                 createdAt: string | number;
-            }>;
-            variantImageMappings: Array<{
-                id: string;
-                productId: string;
-                imageId: string;
-                variantId: string | null;
-                optionAxis: 'option1' | 'option2' | null;
-                optionValue: string | null;
-                normalizedOptionValue: string | null;
-                sortOrder: number;
             }>;
             additionalInfo: Array<{
                 id: string;
@@ -28486,19 +28512,6 @@ export type PutApiV1AdminProductsByIdData = {
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
-        variantOption1Label?: string;
-        variantOption2Label?: string;
-        variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantImagesEnabled: boolean;
-        variantImageAxis: 'option1' | 'option2';
-        variantImageMappings: Array<{
-            imageId: string;
-            variantId?: string | null;
-            optionAxis?: 'option1' | 'option2' | null;
-            optionValue?: string | null;
-            sortOrder?: number;
-        }>;
         slug: string;
         images: Array<{
             id: string;
@@ -28973,8 +28986,17 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
             variants: Array<{
                 id: string;
                 productId: string;
-                size: string | null;
-                color: string | null;
+                optionCombinationKey: string | null;
+                imageId: string | null;
+                selectedOptions?: Array<{
+                    optionDefinitionId: string;
+                    optionValueId: string;
+                    name: string;
+                    value: string;
+                    position: number;
+                    valuePosition: number;
+                    standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                }>;
                 weight: number | null;
                 sku: string;
                 price: number;
@@ -28994,8 +29016,6 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 discountAmount?: number | null;
                 barcode?: string | null;
                 barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
                 createdAt?: string | number;
                 updatedAt?: string | number;
                 deletedAt?: string | number | null;
@@ -29010,8 +29030,8 @@ export type GetApiV1AdminProductsByIdVariantsResponse = GetApiV1AdminProductsByI
 
 export type PostApiV1AdminProductsByIdVariantsData = {
     body?: {
-        size: string | null;
-        color: string | null;
+        selectedOptionValueIds: Array<string>;
+        imageId: string | null;
         weight: number | null;
         sku: string;
         price: number;
@@ -29132,8 +29152,17 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
         data: {
             id: string;
             productId: string;
-            size: string | null;
-            color: string | null;
+            optionCombinationKey: string | null;
+            imageId: string | null;
+            selectedOptions?: Array<{
+                optionDefinitionId: string;
+                optionValueId: string;
+                name: string;
+                value: string;
+                position: number;
+                valuePosition: number;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            }>;
             weight: number | null;
             sku: string;
             price: number;
@@ -29153,8 +29182,6 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             discountAmount?: number | null;
             barcode?: string | null;
             barcodeType?: string | null;
-            colorSortOrder?: number | null;
-            sizeSortOrder?: number | null;
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: string | number | null;
@@ -29287,8 +29314,8 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdResponse = DeleteApiV
 
 export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
     body?: {
-        size: string | null;
-        color: string | null;
+        selectedOptionValueIds: Array<string>;
+        imageId: string | null;
         weight: number | null;
         sku: string;
         price: number;
@@ -29410,8 +29437,17 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
         data: {
             id: string;
             productId: string;
-            size: string | null;
-            color: string | null;
+            optionCombinationKey: string | null;
+            imageId: string | null;
+            selectedOptions?: Array<{
+                optionDefinitionId: string;
+                optionValueId: string;
+                name: string;
+                value: string;
+                position: number;
+                valuePosition: number;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            }>;
             weight: number | null;
             sku: string;
             price: number;
@@ -29431,8 +29467,6 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             discountAmount?: number | null;
             barcode?: string | null;
             barcodeType?: string | null;
-            colorSortOrder?: number | null;
-            sizeSortOrder?: number | null;
             createdAt?: string | number;
             updatedAt?: string | number;
             deletedAt?: string | number | null;
@@ -29445,232 +29479,31 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
 
 export type PutApiV1AdminProductsByIdVariantsByVariantIdResponse = PutApiV1AdminProductsByIdVariantsByVariantIdResponses[keyof PutApiV1AdminProductsByIdVariantsByVariantIdResponses];
 
-export type PostApiV1AdminProductsByIdVariantsEditPlanData = {
+export type PutApiV1AdminProductsByIdOptionsMatrixData = {
     body?: {
-        creates?: Array<{
-            size: string | null;
-            color: string | null;
-            weight: number | null;
-            sku: string;
-            price: number;
-            stock: number;
-            trackInventory?: boolean;
-            barcode?: string | null;
-            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
-            discountType: 'percentage' | 'flat';
-            discountPercentage: number | null;
-            discountAmount: number | null;
-            colorSortOrder?: number;
-            sizeSortOrder?: number;
-        }>;
-        updates?: Array<{
+        options: Array<{
             id: string;
-            size?: string | null;
-            color?: string | null;
-            weight?: number | null;
-            sku?: string;
-            price?: number;
-            stock?: number;
-            trackInventory?: boolean;
-            barcode?: string | null;
-            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+            name: string;
+            standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+            values: Array<{
+                id: string;
+                value: string;
+            }>;
         }>;
-        expectedAggregateRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/edit-plan';
-};
-
-export type PostApiV1AdminProductsByIdVariantsEditPlanErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Product revision or domain conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: 'PRODUCT_REVISION_CONFLICT';
-            message: string;
-            details: {
-                expectedRevision: number;
-                currentRevision: number | null;
-            };
-        };
-    } | {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsEditPlanError = PostApiV1AdminProductsByIdVariantsEditPlanErrors[keyof PostApiV1AdminProductsByIdVariantsEditPlanErrors];
-
-export type PostApiV1AdminProductsByIdVariantsEditPlanResponses = {
-    /**
-     * Variant edit plan applied
-     */
-    200: {
-        success: true;
-        data: {
-            created: Array<{
-                id: string;
-                productId: string;
-                size: string | null;
-                color: string | null;
-                weight: number | null;
-                sku: string;
-                price: number;
-                stock: number;
-                reservedStock: number;
-                preorderStock?: number;
-                isDefault?: boolean;
-                trackInventory?: boolean;
-                lowStockThreshold?: number | null;
-                allowPreorder?: boolean;
-                preorderDate?: string | number | null;
-                preorderMessage?: string | null;
-                allowBackorder?: boolean;
-                backorderLimit?: number;
-                discountPercentage?: number | null;
-                discountType?: string | null;
-                discountAmount?: number | null;
-                barcode?: string | null;
-                barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: string | number | null;
-                stockVersion?: number;
-                version?: number;
-            }>;
-            updated: Array<{
-                id: string;
-                productId: string;
-                size: string | null;
-                color: string | null;
-                weight: number | null;
-                sku: string;
-                price: number;
-                stock: number;
-                reservedStock: number;
-                preorderStock?: number;
-                isDefault?: boolean;
-                trackInventory?: boolean;
-                lowStockThreshold?: number | null;
-                allowPreorder?: boolean;
-                preorderDate?: string | number | null;
-                preorderMessage?: string | null;
-                allowBackorder?: boolean;
-                backorderLimit?: number;
-                discountPercentage?: number | null;
-                discountType?: string | null;
-                discountAmount?: number | null;
-                barcode?: string | null;
-                barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: string | number | null;
-                stockVersion?: number;
-                version?: number;
-            }>;
-            aggregateRevision: number;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsEditPlanResponse = PostApiV1AdminProductsByIdVariantsEditPlanResponses[keyof PostApiV1AdminProductsByIdVariantsEditPlanResponses];
-
-export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
-    body?: {
         variants: Array<{
-            size: string | null;
-            color: string | null;
-            weight: number | null;
+            id: string;
+            selectedOptionValueIds: Array<string>;
+            imageId: string | null;
             sku: string;
             price: number;
             stock: number;
-            trackInventory?: boolean;
-            barcode?: string | null;
-            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+            trackInventory: boolean;
+            weight: number | null;
+            barcode: string | null;
+            barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
             discountType: 'percentage' | 'flat';
             discountPercentage: number | null;
             discountAmount: number | null;
-            colorSortOrder?: number;
-            sizeSortOrder?: number;
         }>;
         expectedAggregateRevision: number;
     };
@@ -29678,10 +29511,10 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateData = {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/products/{id}/variants/bulk-create';
+    url: '/api/v1/admin/products/{id}/options/matrix';
 };
 
-export type PostApiV1AdminProductsByIdVariantsBulkCreateErrors = {
+export type PutApiV1AdminProductsByIdOptionsMatrixErrors = {
     /**
      * Validation error
      */
@@ -29771,162 +29604,11 @@ export type PostApiV1AdminProductsByIdVariantsBulkCreateErrors = {
     };
 };
 
-export type PostApiV1AdminProductsByIdVariantsBulkCreateError = PostApiV1AdminProductsByIdVariantsBulkCreateErrors[keyof PostApiV1AdminProductsByIdVariantsBulkCreateErrors];
+export type PutApiV1AdminProductsByIdOptionsMatrixError = PutApiV1AdminProductsByIdOptionsMatrixErrors[keyof PutApiV1AdminProductsByIdOptionsMatrixErrors];
 
-export type PostApiV1AdminProductsByIdVariantsBulkCreateResponses = {
+export type PutApiV1AdminProductsByIdOptionsMatrixResponses = {
     /**
-     * Variants created
-     */
-    201: {
-        success: true;
-        data: {
-            variants: Array<{
-                id: string;
-                productId: string;
-                size: string | null;
-                color: string | null;
-                weight: number | null;
-                sku: string;
-                price: number;
-                stock: number;
-                reservedStock: number;
-                preorderStock?: number;
-                isDefault?: boolean;
-                trackInventory?: boolean;
-                lowStockThreshold?: number | null;
-                allowPreorder?: boolean;
-                preorderDate?: string | number | null;
-                preorderMessage?: string | null;
-                allowBackorder?: boolean;
-                backorderLimit?: number;
-                discountPercentage?: number | null;
-                discountType?: string | null;
-                discountAmount?: number | null;
-                barcode?: string | null;
-                barcodeType?: string | null;
-                colorSortOrder?: number | null;
-                sizeSortOrder?: number | null;
-                createdAt?: string | number;
-                updatedAt?: string | number;
-                deletedAt?: string | number | null;
-                stockVersion?: number;
-                version?: number;
-            }>;
-            count: number;
-            aggregateRevision: number;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkCreateResponse = PostApiV1AdminProductsByIdVariantsBulkCreateResponses[keyof PostApiV1AdminProductsByIdVariantsBulkCreateResponses];
-
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteData = {
-    body?: {
-        variantIds: Array<string>;
-        expectedAggregateRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/bulk-delete';
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Product revision or domain conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: 'PRODUCT_REVISION_CONFLICT';
-            message: string;
-            details: {
-                expectedRevision: number;
-                currentRevision: number | null;
-            };
-        };
-    } | {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteError = PostApiV1AdminProductsByIdVariantsBulkDeleteErrors[keyof PostApiV1AdminProductsByIdVariantsBulkDeleteErrors];
-
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponses = {
-    /**
-     * Variants deleted
+     * Option matrix saved
      */
     200: {
         success: true;
@@ -29936,233 +29618,7 @@ export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponses = {
     };
 };
 
-export type PostApiV1AdminProductsByIdVariantsBulkDeleteResponse = PostApiV1AdminProductsByIdVariantsBulkDeleteResponses[keyof PostApiV1AdminProductsByIdVariantsBulkDeleteResponses];
-
-export type GetApiV1AdminProductsByIdVariantsSortOrderData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/sort-order';
-};
-
-export type GetApiV1AdminProductsByIdVariantsSortOrderErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminProductsByIdVariantsSortOrderError = GetApiV1AdminProductsByIdVariantsSortOrderErrors[keyof GetApiV1AdminProductsByIdVariantsSortOrderErrors];
-
-export type GetApiV1AdminProductsByIdVariantsSortOrderResponses = {
-    /**
-     * Sort order data
-     */
-    200: {
-        success: true;
-        data: {
-            colors: Array<{
-                value: string;
-                sortOrder: number;
-            }>;
-            sizes: Array<{
-                value: string;
-                sortOrder: number;
-            }>;
-        };
-    };
-};
-
-export type GetApiV1AdminProductsByIdVariantsSortOrderResponse = GetApiV1AdminProductsByIdVariantsSortOrderResponses[keyof GetApiV1AdminProductsByIdVariantsSortOrderResponses];
-
-export type PostApiV1AdminProductsByIdVariantsSortOrderData = {
-    body?: {
-        colors: Array<{
-            value: string;
-            sortOrder: number;
-        }>;
-        sizes: Array<{
-            value: string;
-            sortOrder: number;
-        }>;
-        expectedAggregateRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/products/{id}/variants/sort-order';
-};
-
-export type PostApiV1AdminProductsByIdVariantsSortOrderErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Product revision or domain conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: 'PRODUCT_REVISION_CONFLICT';
-            message: string;
-            details: {
-                expectedRevision: number;
-                currentRevision: number | null;
-            };
-        };
-    } | {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsSortOrderError = PostApiV1AdminProductsByIdVariantsSortOrderErrors[keyof PostApiV1AdminProductsByIdVariantsSortOrderErrors];
-
-export type PostApiV1AdminProductsByIdVariantsSortOrderResponses = {
-    /**
-     * Sort order updated
-     */
-    200: {
-        success: true;
-        data: {
-            aggregateRevision: number;
-        };
-    };
-};
-
-export type PostApiV1AdminProductsByIdVariantsSortOrderResponse = PostApiV1AdminProductsByIdVariantsSortOrderResponses[keyof PostApiV1AdminProductsByIdVariantsSortOrderResponses];
+export type PutApiV1AdminProductsByIdOptionsMatrixResponse = PutApiV1AdminProductsByIdOptionsMatrixResponses[keyof PutApiV1AdminProductsByIdOptionsMatrixResponses];
 
 export type GetApiV1AdminAuthUsersData = {
     body?: never;

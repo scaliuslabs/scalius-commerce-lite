@@ -327,8 +327,7 @@ export interface CustomerOrderItem {
   productName: string | null;
   productSlug: string | null;
   productImage: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;

@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { ProductOptionSchema } from "@scalius/shared/product-options";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 
@@ -98,25 +97,6 @@ export interface ProductAdditionalInfoInput {
   sortOrder: number;
 }
 
-export interface ProductVariantImageMappingInput {
-  imageId: string;
-  variantId?: string | null;
-  optionAxis?: "option1" | "option2" | null;
-  optionValue?: string | null;
-  sortOrder?: number;
-}
-
-export interface ProductVariantImageMappingDto {
-  id: string;
-  productId: string;
-  imageId: string;
-  variantId: string | null;
-  optionAxis: "option1" | "option2" | null;
-  optionValue: string | null;
-  normalizedOptionValue: string | null;
-  sortOrder: number;
-}
-
 export interface ProductWriteInput {
   name: string;
   description: string | null;
@@ -134,17 +114,11 @@ export interface ProductWriteInput {
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   productCondition: ProductCondition;
-  variantOption1Label: string;
-  variantOption2Label: string;
-  variantOption1Schema: ProductOptionSchema;
-  variantOption2Schema: ProductOptionSchema;
-  variantImagesEnabled: boolean;
-  variantImageAxis: "option1" | "option2";
-  variantImageMappings: ProductVariantImageMappingInput[];
   slug: string;
   images: ProductImageInput[];
   attributes: ProductAttributeInput[];
   additionalInfo: ProductAdditionalInfoInput[];
+  optionMatrix?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision">;
 }
 
 export type CreateProductInput = ProductWriteInput;
@@ -189,8 +163,9 @@ export interface ProductImageDto {
 export interface ProductVariantDto {
   id: string;
   productId: string;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
+  imageId: string | null;
+  selectedOptions: SelectedProductOptionDto[];
   weight: number | null;
   sku: string;
   price: number;
@@ -210,13 +185,37 @@ export interface ProductVariantDto {
   discountAmount: number | null;
   barcode: string | null;
   barcodeType: string | null;
-  colorSortOrder?: number | null;
-  sizeSortOrder?: number | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   deletedAt: NullableTimestamp;
   stockVersion?: number;
   version?: number;
+}
+
+export type ProductOptionStandardMapping = "size" | "color" | "material" | "pattern" | "none";
+
+export interface ProductOptionValueDto {
+  id: string;
+  value: string;
+  position: number;
+}
+
+export interface ProductOptionDefinitionDto {
+  id: string;
+  name: string;
+  position: number;
+  standardMapping: ProductOptionStandardMapping;
+  values: ProductOptionValueDto[];
+}
+
+export interface SelectedProductOptionDto {
+  optionDefinitionId: string;
+  optionValueId: string;
+  name: string;
+  value: string;
+  position: number;
+  valuePosition: number;
+  standardMapping: ProductOptionStandardMapping;
 }
 
 export interface ProductDetailDto {
@@ -233,12 +232,7 @@ export interface ProductDetailDto {
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   productCondition: ProductCondition | null;
-  variantOption1Label: string;
-  variantOption2Label: string;
-  variantOption1Schema: ProductOptionSchema;
-  variantOption2Schema: ProductOptionSchema;
-  variantImagesEnabled: boolean;
-  variantImageAxis: "option1" | "option2";
+  options: ProductOptionDefinitionDto[];
   aggregateRevision: number;
   isActive: boolean;
   discountPercentage: number | null;
@@ -251,14 +245,13 @@ export interface ProductDetailDto {
   category: { name: string | null } | null;
   variants: ProductVariantDto[];
   images: ProductImageDto[];
-  variantImageMappings: ProductVariantImageMappingDto[];
   additionalInfo: ProductAdditionalInfoInput[];
   attributes: ProductAttributeInput[];
 }
 
 export interface ProductVariantInput {
-  size: string | null;
-  color: string | null;
+  selectedOptionValueIds: string[];
+  imageId: string | null;
   weight: number | null;
   sku: string;
   price: number;
@@ -271,62 +264,37 @@ export interface ProductVariantInput {
   discountAmount?: number | null;
 }
 
-export interface BulkProductVariantInput extends ProductVariantInput {
-  discountType: ProductDiscountType;
-  discountPercentage: number | null;
-  discountAmount: number | null;
-  colorSortOrder?: number;
-  sizeSortOrder?: number;
-}
-
-export interface ProductVariantUpdateInput {
-  id: string;
-  size?: string | null;
-  color?: string | null;
-  weight?: number | null;
-  sku?: string;
-  price?: number;
-  stock?: number;
-  trackInventory?: boolean;
-  barcode?: string | null;
-  barcodeType?: BarcodeType | string | null;
+export interface ProductOptionMatrixInput {
+  options: Array<{
+    id: string;
+    name: string;
+    standardMapping: ProductOptionStandardMapping;
+    values: Array<{ id: string; value: string }>;
+  }>;
+  variants: Array<{
+    id: string;
+    selectedOptionValueIds: string[];
+    imageId: string | null;
+    sku: string;
+    price: number;
+    stock: number;
+    trackInventory: boolean;
+    weight: number | null;
+    barcode: string | null;
+    barcodeType: BarcodeType | null;
+    discountType: ProductDiscountType;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+  }>;
+  expectedAggregateRevision: number;
 }
 
 export interface ProductVariantsPayload {
   variants: ProductVariantDto[];
 }
 
-export interface BulkProductVariantsPayload {
-  variants: ProductVariantDto[];
-  count: number;
-  aggregateRevision: number;
-}
-
-export interface ProductVariantEditPlanInput {
-  creates: BulkProductVariantInput[];
-  updates: ProductVariantUpdateInput[];
-}
-
-export interface ProductVariantEditPlanPayload {
-  created: ProductVariantDto[];
-  updated: ProductVariantDto[];
-  aggregateRevision: number;
-}
-
 export type ProductVariantMutationPayload = ProductVariantDto &
   ProductAggregateRevisionResult;
-
-export interface VariantSortItem {
-  value: string;
-  sortOrder: number;
-}
-
-export interface VariantSortOrderPayload {
-  colors: VariantSortItem[];
-  sizes: VariantSortItem[];
-}
-
-export type VariantSortMutationPayload = ProductAggregateRevisionResult;
 
 function toProductsParams(input: ProductsQueryInput): Record<string, string> {
   const params: Record<string, string> = {};
@@ -416,6 +384,15 @@ export const getProductVariants = createServerFn({ method: "GET" })
     return apiGet<ProductVariantsPayload>(`/products/${data.productId}/variants`);
   });
 
+export const saveProductOptionMatrix = createServerFn({ method: "POST" })
+  .validator((data: { productId: string; matrix: ProductOptionMatrixInput }) => data)
+  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
+    return apiPut<ProductAggregateRevisionResult>(
+      `/products/${data.productId}/options/matrix`,
+      data.matrix,
+    );
+  });
+
 export const createProductVariant = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -462,80 +439,5 @@ export const deleteProductVariant = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
     return apiDelete<ProductAggregateRevisionResult>(
       `/products/${data.productId}/variants/${data.variantId}?expectedAggregateRevision=${data.expectedAggregateRevision}`,
-    );
-  });
-
-export const bulkCreateProductVariants = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      productId: string;
-      variants: BulkProductVariantInput[];
-      expectedAggregateRevision: number;
-    }) => data,
-  )
-  .handler(async ({ data }): Promise<BulkProductVariantsPayload> => {
-    return apiPost<BulkProductVariantsPayload>(
-      `/products/${data.productId}/variants/bulk-create`,
-      {
-        variants: data.variants,
-        expectedAggregateRevision: data.expectedAggregateRevision,
-      },
-    );
-  });
-
-export const applyProductVariantEditPlan = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      productId: string;
-      plan: ProductVariantEditPlanInput;
-      expectedAggregateRevision: number;
-    }) => data,
-  )
-  .handler(async ({ data }): Promise<ProductVariantEditPlanPayload> => {
-    return apiPost<ProductVariantEditPlanPayload>(
-      `/products/${data.productId}/variants/edit-plan`,
-      {
-        ...data.plan,
-        expectedAggregateRevision: data.expectedAggregateRevision,
-      },
-    );
-  });
-
-export const bulkDeleteProductVariants = createServerFn({ method: "POST" })
-  .validator((data: {
-    productId: string;
-    variantIds: string[];
-    expectedAggregateRevision: number;
-  }) => data)
-  .handler(async ({ data }): Promise<ProductAggregateRevisionResult> => {
-    return apiPost<ProductAggregateRevisionResult>(`/products/${data.productId}/variants/bulk-delete`, {
-      variantIds: data.variantIds,
-      expectedAggregateRevision: data.expectedAggregateRevision,
-    });
-  });
-
-export const getVariantSortOrder = createServerFn({ method: "GET" })
-  .validator((data: { productId: string }) => data)
-  .handler(async ({ data }): Promise<VariantSortOrderPayload> => {
-    return apiGet<VariantSortOrderPayload>(
-      `/products/${data.productId}/variants/sort-order`,
-    );
-  });
-
-export const updateVariantSortOrder = createServerFn({ method: "POST" })
-  .validator(
-    (data: {
-      productId: string;
-      expectedAggregateRevision: number;
-    } & VariantSortOrderPayload) => data,
-  )
-  .handler(async ({ data }): Promise<VariantSortMutationPayload> => {
-    return apiPost<VariantSortMutationPayload>(
-      `/products/${data.productId}/variants/sort-order`,
-      {
-        colors: data.colors,
-        sizes: data.sizes,
-        expectedAggregateRevision: data.expectedAggregateRevision,
-      },
     );
   });

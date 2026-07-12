@@ -3,11 +3,8 @@ import { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  ProductFormValues,
-  ProductVariantImageMappingFormValue,
-} from "../types";
-import { formatFormValuesForSubmission, type VariantImageAxis } from "../utils";
+import type { ProductFormValues } from "../types";
+import { formatFormValuesForSubmission } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import { createProduct, updateProduct } from "~/lib/api-functions/products";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -15,13 +12,11 @@ import {
   readProductRevisionConflict,
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
+import type { ProductOptionMatrixInput } from "~/lib/api-functions/products";
 
 interface UseProductSubmitOptions {
   isEdit: boolean;
   productId?: string;
-  enableVariantImages: boolean;
-  variantImageAxis: VariantImageAxis;
-  variantImageMappings: ProductVariantImageMappingFormValue[];
   form: UseFormReturn<ProductFormValues>;
   aggregateRevision?: number;
   revisionConflict?: ProductRevisionConflict | null;
@@ -30,6 +25,8 @@ interface UseProductSubmitOptions {
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   onSuccess?: () => void;
+  optionMatrixDraft?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null;
+  optionMatrixIssue?: string | null;
 }
 
 interface UseProductSubmitReturn {
@@ -43,9 +40,6 @@ interface UseProductSubmitReturn {
 export function useProductSubmit({
   isEdit,
   productId,
-  enableVariantImages,
-  variantImageAxis,
-  variantImageMappings,
   form,
   aggregateRevision,
   revisionConflict = null,
@@ -54,6 +48,8 @@ export function useProductSubmit({
   onOpenRevisionConflict,
   onProductSaved,
   onSuccess,
+  optionMatrixDraft,
+  optionMatrixIssue = null,
 }: UseProductSubmitOptions): UseProductSubmitReturn {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -62,12 +58,7 @@ export function useProductSubmit({
 
   const mutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
-      const formattedValues = formatFormValuesForSubmission(
-        values,
-        enableVariantImages,
-        variantImageAxis,
-        variantImageMappings,
-      );
+      const formattedValues = formatFormValuesForSubmission(values);
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId) throw new Error("Product ID is required for update");
@@ -82,7 +73,12 @@ export function useProductSubmit({
           },
         });
       }
-      return createProduct({ data: formattedValues });
+      return createProduct({
+        data: {
+          ...formattedValues,
+          ...(optionMatrixDraft ? { optionMatrix: optionMatrixDraft } : {}),
+        },
+      });
     },
     onSuccess: (result, values) => {
       toast.success("Success", {
@@ -145,6 +141,12 @@ export function useProductSubmit({
   const handleSubmit = async (values: ProductFormValues) => {
     if (revisionConflict) {
       onOpenRevisionConflict?.();
+      return false;
+    }
+    if (optionMatrixIssue) {
+      setAlertMessage(optionMatrixIssue);
+      setShowAlert(true);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-option-matrix]")?.focus());
       return false;
     }
     try {

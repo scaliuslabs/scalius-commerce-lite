@@ -1,9 +1,10 @@
 import { map } from "nanostores";
+import {
+  normalizeCartItemOptions,
+  type CartItemOption,
+} from "@/lib/cart/item-options";
 
-export type CartItemOption = {
-  name: string;
-  label: string;
-};
+export type { CartItemOption } from "@/lib/cart/item-options";
 
 export type CartItem = {
   id: string;
@@ -13,8 +14,6 @@ export type CartItem = {
   quantity: number;
   image?: string;
   variantId?: string;
-  size?: string;
-  color?: string;
   options?: CartItemOption[];
   freeDelivery?: boolean;
 };
@@ -121,26 +120,6 @@ function toNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function normalizeStoredCartOptions(value: unknown): CartItemOption[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const options: CartItemOption[] = [];
-  for (const entry of value) {
-    if (!isRecord(entry)) continue;
-    if (typeof entry.name !== "string" || typeof entry.label !== "string") {
-      continue;
-    }
-
-    const name = entry.name.trim();
-    const label = entry.label.trim();
-    if (!name || !label) continue;
-    options.push({ name, label });
-    if (options.length >= 2) break;
-  }
-
-  return options.length > 0 ? options : undefined;
-}
-
 function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
   if (!isRecord(value)) return null;
   if (typeof value.id !== "string" || typeof value.name !== "string") return null;
@@ -171,9 +150,7 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
     ),
     image: typeof value.image === "string" ? value.image : undefined,
     variantId,
-    size: typeof value.size === "string" ? value.size : undefined,
-    color: typeof value.color === "string" ? value.color : undefined,
-    options: normalizeStoredCartOptions(value.options),
+    options: normalizeCartItemOptions(value.options),
     freeDelivery:
       typeof value.freeDelivery === "boolean" ? value.freeDelivery : undefined,
   };
@@ -364,6 +341,12 @@ export function addToCart(
   const quantity = existingItem
     ? Math.min(MAX_CART_QUANTITY, existingItem.quantity + requestedQuantity)
     : requestedQuantity;
+  const options = normalizeCartItemOptions(item.options);
+  const normalizedItem: Omit<CartItem, "quantity"> = {
+    ...item,
+    variantId,
+    ...(options ? { options } : { options: undefined }),
+  };
 
   return applyLocalLinePatch([
     {
@@ -371,7 +354,7 @@ export function addToCart(
       productId: item.id,
       variantId,
       quantity,
-      ...(!existingItem ? { item } : {}),
+      ...(!existingItem ? { item: normalizedItem } : {}),
     },
   ]).ok;
 }
@@ -446,8 +429,6 @@ export function updateCartItemsByKeyAtomically(
       price: refreshed.price,
       ...(refreshed.image ? { image: refreshed.image } : {}),
       variantId: existingItem.variantId,
-      ...(refreshed.size ? { size: refreshed.size } : {}),
-      ...(refreshed.color ? { color: refreshed.color } : {}),
       ...(refreshed.options ? { options: refreshed.options } : {}),
       ...(refreshed.freeDelivery !== undefined
         ? { freeDelivery: refreshed.freeDelivery }

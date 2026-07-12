@@ -73,12 +73,7 @@ export function OrderItemsTable() {
                   </TableCell>
                   <TableCell>
                     {variant
-                      ? [
-                          variant.size && `Size: ${variant.size}`,
-                          variant.color && `Color: ${variant.color}`,
-                        ]
-                          .filter(Boolean)
-                          .join(", ") ||
+                      ? variant.selectedOptions.map((option) => `${option.name}: ${option.value}`).join(", ") ||
                         (product?.variants.length ? "Variant" : "—")
                       : "—"}
                   </TableCell>

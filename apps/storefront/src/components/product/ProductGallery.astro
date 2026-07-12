@@ -3,7 +3,6 @@
 import type {
   Product,
   ProductImage,
-  ProductVariantImageMapping,
 } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import ProductImageZoom from "./ProductImageZoom";
@@ -18,10 +17,9 @@ import {
 interface Props {
   product: Product;
   images: ProductImage[];
-  variantImageMappings: ProductVariantImageMapping[];
 }
 
-const { product, images, variantImageMappings } = Astro.props;
+const { product, images } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 const galleryImages: ProductImage[] = images.filter((img) =>
@@ -43,10 +41,8 @@ if (galleryImages.length === 0) {
 const hasMultipleImages = galleryImages.length > 1;
 
 const optimizedImages = galleryImages.map((img) => {
-  const mapping = variantImageMappings.find((candidate) => candidate.imageId === img.id);
   return {
     original: img,
-    mapping,
     thumbUrl: getProductImageUrl(img.url, {
       width: desktopThumb.imageSize,
       height: desktopThumb.imageSize,
@@ -129,9 +125,6 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
                 data-image-url={imgData.mainUrl}
                 data-image-id={imgData.original.id}
                 data-image-primary={imgData.original.isPrimary ? "true" : undefined}
-                data-variant-id={imgData.mapping?.variantId || undefined}
-                data-option-axis={imgData.mapping?.optionAxis || undefined}
-                data-option-value={imgData.mapping?.optionValue || undefined}
                 data-zoom-url={imgData.zoomUrl}
                 data-index={index}
                 aria-label={`View image ${index + 1}`}
@@ -231,9 +224,6 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
                       data-image-url={imgData.mainUrl}
                       data-image-id={imgData.original.id}
                       data-image-primary={imgData.original.isPrimary ? "true" : undefined}
-                      data-variant-id={imgData.mapping?.variantId || undefined}
-                      data-option-axis={imgData.mapping?.optionAxis || undefined}
-                      data-option-value={imgData.mapping?.optionValue || undefined}
                       data-zoom-url={imgData.zoomUrl}
                       data-index={index}
                     >

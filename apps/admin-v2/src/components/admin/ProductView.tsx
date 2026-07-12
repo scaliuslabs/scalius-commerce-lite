@@ -37,8 +37,8 @@ import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissi
 
 interface ProductVariant {
   id: string;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
+  selectedOptions: Array<{ name: string; value: string }>;
   weight: number | null;
   sku: string | null;
   price: number | null;
@@ -71,8 +71,6 @@ interface ProductViewProps {
     slug: string;
     metaTitle: string | null;
     metaDescription: string | null;
-    variantOption1Label: string;
-    variantOption2Label: string;
     isActive: boolean;
     discountPercentage: number | null;
     freeDelivery: boolean;
@@ -336,14 +334,13 @@ export function ProductView({ product }: ProductViewProps) {
                   </TableHeader>
                   <TableBody>
                     {product.variants.map((v) => {
-                      const isSimpleDefaultSku = v.isDefault === true && !v.size && !v.color;
+                      const isSimpleDefaultSku = v.isDefault === true && !v.optionCombinationKey;
                       const inventoryTracked = v.trackInventory !== false;
                       const available = inventoryTracked ? Math.max(0, v.stock - v.reservedStock) : null;
                       const attributes = isSimpleDefaultSku
                         ? "Product SKU"
                         : [
-                            v.size && `${product.variantOption1Label}: ${v.size}`,
-                            v.color && `${product.variantOption2Label}: ${v.color}`,
+                            ...v.selectedOptions.map((option) => `${option.name}: ${option.value}`),
                             v.weight && `${v.weight}g`,
                           ].filter(Boolean).join(" • ") || "—";
                       return (

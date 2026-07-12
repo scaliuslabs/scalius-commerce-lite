@@ -33,13 +33,6 @@ import { resolveExactVariantSelection } from "@/components/product/lib/variant-s
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  DEFAULT_PRODUCT_OPTION_SCHEMA,
-  normalizeProductOptionLabel,
-  normalizeProductOptionSchema,
-  type ProductOptionSchema,
-} from "@scalius/shared/product-options";
-import {
   normalizeSavedProductCondition,
   PRODUCT_CONDITION_SCHEMA_URLS,
 } from "@scalius/shared/product-condition";
@@ -49,7 +42,6 @@ import {
   getDecimalPlaces,
 } from "@scalius/shared/currency";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
-import { resolveProductVariantImageConfiguration } from "@/lib/variant-image-mapping";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -84,7 +76,6 @@ const {
   category,
   images,
   variants,
-  variantImageMappings,
   relatedProducts,
 } = productData;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -105,8 +96,7 @@ const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
 const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants, {
-  selectedSize: Astro.url.searchParams.get("size"),
-  selectedColor: Astro.url.searchParams.get("color"),
+  variantId: Astro.url.searchParams.get("variant"),
 });
 const queryVariantSelection =
   requestedQueryVariantSelection &&
@@ -145,12 +135,6 @@ const fbViewVariants = selectedBuyerVariant
         price: buyerDisplayedPrice,
       }));
 
-const variantImageConfiguration = resolveProductVariantImageConfiguration({
-  product,
-  mappings: variantImageMappings ?? [],
-});
-const isVariantSpecificImagesEnabled = variantImageConfiguration.enabled;
-const variantImageAxis = variantImageConfiguration.axis;
 const pageMetaDescription = product.metaDescription?.trim() || "";
 
 const productCategory = category ?? null;
@@ -162,25 +146,7 @@ const productCategoryUrl = productCategory
     )
   : null;
 
-const sizeOrderMap = new Map<string, number>();
-buyerVariants.forEach((v) => {
-  if (v.size && !sizeOrderMap.has(v.size)) {
-    sizeOrderMap.set(v.size, v.sizeSortOrder);
-  }
-});
-const sizeOptions = Array.from(sizeOrderMap.entries())
-  .sort((a, b) => a[1] - b[1])
-  .map((entry) => entry[0]);
-
-const colorOrderMap = new Map<string, number>();
-buyerVariants.forEach((v) => {
-  if (v.color && !colorOrderMap.has(v.color)) {
-    colorOrderMap.set(v.color, v.colorSortOrder);
-  }
-});
-const colorOptions = Array.from(colorOrderMap.entries())
-  .sort((a, b) => a[1] - b[1])
-  .map((entry) => entry[0]);
+const productOptions = product.options ?? [];
 
 const pageTitle = product.metaTitle || product.name;
 const pageDescription = pageMetaDescription;
@@ -264,65 +230,17 @@ function normalizedVariantOption(value: string | null | undefined): string | nul
   return normalized ? normalized : null;
 }
 
-type VariantOptionAxis = "option1" | "option2";
-
-const PRODUCT_OPTION_SCHEMA_URLS: Record<Exclude<ProductOptionSchema, "none">, string> = {
+const PRODUCT_OPTION_SCHEMA_URLS = {
   size: "https://schema.org/size",
   color: "https://schema.org/color",
   material: "https://schema.org/material",
   pattern: "https://schema.org/pattern",
-};
-
-const productOptionMetadata: Record<
-  VariantOptionAxis,
-  { label: string; schema: ProductOptionSchema }
-> = {
-  option1: {
-    label: normalizeProductOptionLabel(
-      product.variantOption1Label,
-      DEFAULT_PRODUCT_OPTION_LABELS.option1,
-    ),
-    schema: normalizeProductOptionSchema(
-      product.variantOption1Schema,
-      DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
-    ),
-  },
-  option2: {
-    label: normalizeProductOptionLabel(
-      product.variantOption2Label,
-      DEFAULT_PRODUCT_OPTION_LABELS.option2,
-    ),
-    schema: normalizeProductOptionSchema(
-      product.variantOption2Schema,
-      DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-    ),
-  },
-};
-
-function getProductOptionSchema(axis: VariantOptionAxis): ProductOptionSchema {
-  return productOptionMetadata[axis].schema;
-}
-
-function getProductOptionLabel(axis: VariantOptionAxis): string {
-  return productOptionMetadata[axis].label;
-}
+} as const;
 
 function mappedVariantSchemaProps(variant: typeof buyerVariants[number]): Record<string, string> {
   const props: Record<string, string> = {};
-  const options = [
-    {
-      axis: "option1" as const,
-      value: normalizedVariantOption(variant.size),
-    },
-    {
-      axis: "option2" as const,
-      value: normalizedVariantOption(variant.color),
-    },
-  ];
-
-  for (const option of options) {
-    if (!option.value) continue;
-    const schema = getProductOptionSchema(option.axis);
+  for (const option of variant.selectedOptions) {
+    const schema = option.standardMapping;
     if (schema === "none" || props[schema]) continue;
     props[schema] = option.value;
   }
@@ -334,26 +252,12 @@ function buildVariantProductUrl(variant: typeof buyerVariants[number]): string |
   if (!canonicalUrl) return null;
 
   const url = new URL(canonicalUrl);
-  const size = normalizedVariantOption(variant.size);
-  const color = normalizedVariantOption(variant.color);
-  if (size) url.searchParams.set("size", size);
-  if (color) url.searchParams.set("color", color);
+  url.searchParams.set("variant", variant.id);
   return url.toString();
 }
 
 function getVariantSchemaName(variant: typeof buyerVariants[number]): string {
-  const options = [
-    {
-      axis: "option1" as const,
-      value: normalizedVariantOption(variant.size),
-    },
-    {
-      axis: "option2" as const,
-      value: normalizedVariantOption(variant.color),
-    },
-  ]
-    .filter((option) => Boolean(option.value))
-    .map((option) => `${getProductOptionLabel(option.axis)}: ${option.value}`);
+  const options = variant.selectedOptions.map((option) => `${option.name}: ${option.value}`);
   return options.length > 0 ? `${product.name} - ${options.join(" / ")}` : product.name;
 }
 
@@ -371,14 +275,9 @@ function getVariantSchemaPrice(variant: typeof buyerVariants[number]): number {
   );
 }
 
-const productGroupVariesBy = [
-  ...(sizeOptions.length > 0 && getProductOptionSchema("option1") !== "none"
-    ? [PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option1") as Exclude<ProductOptionSchema, "none">]]
-    : []),
-  ...(colorOptions.length > 0 && getProductOptionSchema("option2") !== "none"
-    ? [PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option2") as Exclude<ProductOptionSchema, "none">]]
-    : []),
-].filter((value, index, values) => values.indexOf(value) === index);
+const productGroupVariesBy = productOptions
+  .flatMap((option) => option.standardMapping === "none" ? [] : [PRODUCT_OPTION_SCHEMA_URLS[option.standardMapping]])
+  .filter((value, index, values) => values.indexOf(value) === index);
 const shouldEmitProductGroupJsonLd =
   discoverySettings.structuredData.productGroups &&
   !selectedBuyerVariant &&
@@ -599,20 +498,15 @@ const productCategoryAnalytics = productCategory
         <ProductGallery
           product={product}
           images={images}
-          variantImageMappings={variantImageConfiguration.mappings}
         />
         <ProductSummary
           product={product}
           category={productCategory}
           variants={buyerVariants}
-          sizeOptions={sizeOptions}
-          colorOptions={colorOptions}
-          isVariantSpecificImagesEnabled={isVariantSpecificImagesEnabled}
-          variantImageAxis={variantImageAxis}
+          options={productOptions}
           currencySymbol={currencySymbol}
           currencyDecimalPlaces={currencyDecimalPlaces}
-          initialSelectedSize={queryVariantSelection?.selectedSize}
-          initialSelectedColor={queryVariantSelection?.selectedColor}
+          initialVariant={queryVariantSelection?.variant}
           initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
           quickBuyNotice={quickBuyNotice}
         />

@@ -1,10 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  applyProductVariantEditPlan,
-  bulkCreateProductVariants,
   bulkDeleteProducts,
-  bulkDeleteProductVariants,
   createProduct,
   createProductVariant,
   deleteProduct,
@@ -13,12 +10,9 @@ import {
   restoreProduct,
   updateProduct,
   updateProductVariant,
-  type BulkProductVariantInput,
   type BulkDeleteProductsInput,
   type CreateProductInput,
   type ProductVariantInput,
-  type ProductVariantEditPlanInput,
-  type ProductVariantEditPlanPayload,
   type UpdateProductInput,
   type ProductAggregateRevisionClaim,
 } from "../api-functions/products";
@@ -63,9 +57,6 @@ function invalidateProductVariantMutationQueries(
   });
   queryClient.invalidateQueries({
     queryKey: queryKeys.products.variants(productId),
-  });
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.products.variantSortOrder(productId),
   });
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() });
 }
@@ -246,58 +237,5 @@ export function useDeleteProductVariant() {
     },
     onError: (err) =>
       toastUnlessProductRevisionConflict(err, "Failed to delete option"),
-  });
-}
-
-export function useBulkCreateProductVariants() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      variants: BulkProductVariantInput[];
-      expectedAggregateRevision: number;
-    }) => bulkCreateProductVariants({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success("Options created");
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to create options"),
-  });
-}
-
-export function useApplyProductVariantEditPlan() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      plan: ProductVariantEditPlanInput;
-      expectedAggregateRevision: number;
-    }): Promise<ProductVariantEditPlanPayload> =>
-      applyProductVariantEditPlan({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success("Option changes saved");
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to save option changes"),
-  });
-}
-
-export function useBulkDeleteProductVariants() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: {
-      productId: string;
-      variantIds: string[];
-      expectedAggregateRevision: number;
-    }) =>
-      bulkDeleteProductVariants({ data }),
-    onSuccess: (_data, variables) => {
-      invalidateProductVariantMutationQueries(queryClient, variables.productId);
-      toast.success(`${variables.variantIds.length} options deleted`);
-    },
-    onError: (err) =>
-      toastUnlessProductRevisionConflict(err, "Failed to delete options"),
   });
 }

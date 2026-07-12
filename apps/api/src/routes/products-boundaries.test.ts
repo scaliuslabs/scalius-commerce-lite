@@ -115,8 +115,12 @@ describe("product route query boundaries", () => {
 
     expect(variantSchema).toContain("id: z.string()");
     expect(variantSchema).toContain("productId: z.string()");
-    expect(variantSchema).toContain("size: z.string().nullable()");
-    expect(variantSchema).toContain("color: z.string().nullable()");
+    expect(variantSchema).toContain("imageId: z.string().nullable()");
+    expect(variantSchema).toContain("imageUrl: z.string().nullable()");
+    expect(variantSchema).toContain("selectedOptions: z.array(z.object({");
+    expect(variantSchema).toContain("optionDefinitionId: z.string()");
+    expect(variantSchema).toContain("optionValueId: z.string()");
+    expect(variantSchema).toContain("standardMapping: z.enum([\"size\", \"color\", \"material\", \"pattern\", \"none\"])");
     expect(variantSchema).toContain("weight: z.number().nullable()");
     expect(variantSchema).toContain("sku: z.string()");
     expect(variantSchema).toContain("price: z.number()");
@@ -129,9 +133,8 @@ describe("product route query boundaries", () => {
     expect(variantSchema).toContain("discountType: z.string().nullable()");
     expect(variantSchema).toContain("discountPercentage: z.number().nullable()");
     expect(variantSchema).toContain("discountAmount: z.number().nullable()");
-    expect(variantSchema).toContain("colorSortOrder: z.number().nullable()");
-    expect(variantSchema).toContain("sizeSortOrder: z.number().nullable()");
     expect(variantSchema).toContain("deletedAt: z.string().nullable()");
+    expect(variantSchema).not.toContain("optionCombinationKey");
     expect(variantSchema).not.toContain("createdAt");
     expect(variantSchema).not.toContain("updatedAt");
   });

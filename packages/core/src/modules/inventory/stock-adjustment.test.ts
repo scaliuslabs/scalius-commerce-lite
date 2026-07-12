@@ -86,8 +86,7 @@ function createStockDbMock(variant: {
 type LookupRow = {
   variantId: string;
   variantSku: string;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   variantPrice: number;
   variantStock: number;
   variantReservedStock: number;
@@ -104,8 +103,7 @@ type LookupRow = {
 const lookupRow: LookupRow = {
   variantId: "variant_1",
   variantSku: "SKU-1",
-  variantSize: "M",
-  variantColor: "Red",
+  variantLabel: "Size: M / Color: Red",
   variantPrice: 120,
   variantStock: 8,
   variantReservedStock: 2,
@@ -242,8 +240,7 @@ describe("scanner barcode identity lookup", () => {
       variant: {
         id: "variant_1",
         sku: "SKU-1",
-        size: "M",
-        color: "Red",
+        optionLabel: "Size: M / Color: Red",
         price: 120,
         stock: 8,
         reservedStock: 2,

@@ -30,6 +30,7 @@ import {
     conflictResponse,
     serviceUnavailableResponse,
 } from "../../schemas/responses";
+import { variantOptionLabelSql } from "@scalius/core/modules/products/products.option-model";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,
@@ -911,8 +912,7 @@ app.openapi(getItemsRoute, async (c) => {
             productName: products.name,
             productImage: productImages.url,
             variantId: orderItems.variantId,
-            variantSize: productVariants.size,
-            variantColor: productVariants.color,
+            variantLabel: variantOptionLabelSql(productVariants.id),
             quantity: orderItems.quantity,
             price: orderItems.price,
             fulfillmentStatus: orderItems.fulfillmentStatus,

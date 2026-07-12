@@ -8,8 +8,7 @@ type TestVariant = {
   id: string;
   deletedAt: string | null;
   isDefault?: boolean;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
   stock: number;
   reservedStock?: number;
   trackInventory?: boolean;
@@ -20,8 +19,7 @@ function variant(overrides: Partial<TestVariant> = {}): TestVariant {
     id: "var_simple",
     deletedAt: null,
     isDefault: false,
-    size: null,
-    color: null,
+    optionCombinationKey: null,
     stock: 0,
     reservedStock: 0,
     trackInventory: true,
@@ -82,8 +80,7 @@ describe("product sellable variant resolution", () => {
     });
     const optionSku = variant({
       id: "var_red_m",
-      size: "M",
-      color: "Red",
+      optionCombinationKey: "m|red",
       stock: 8,
       trackInventory: true,
     });
@@ -107,13 +104,12 @@ describe("product sellable variant resolution", () => {
     });
   });
 
-  it("fails closed when active option SKUs mix option-axis shapes", () => {
+  it("fails closed when an invalid empty combination coexists with option SKUs", () => {
     const resolution = resolveBuyerVariants([
-      variant({ id: "var_size_42", size: "42", color: null, stock: 4 }),
+      variant({ id: "var_size_42", optionCombinationKey: "42", stock: 4 }),
       variant({
         id: "var_size_41_green",
-        size: "41",
-        color: "Green",
+        optionCombinationKey: null,
         stock: 4,
       }),
     ]);
@@ -127,7 +123,7 @@ describe("product sellable variant resolution", () => {
 
   it("fails closed when a no-option non-default row coexists with option SKUs", () => {
     const resolution = resolveBuyerVariants([
-      variant({ id: "var_size_m", size: "M", stock: 4 }),
+      variant({ id: "var_size_m", optionCombinationKey: "m", stock: 4 }),
       variant({
         id: "var_invalid_no_option",
         isDefault: false,
@@ -148,11 +144,11 @@ describe("product sellable variant resolution", () => {
     ])).toMatchObject({ canPurchaseAny: true, text: "In Stock" });
 
     expect(getBuyerStockSummary([
-      variant({ id: "var_red_m", size: "M", stock: 3, reservedStock: 1 }),
+      variant({ id: "var_red_m", optionCombinationKey: "m", stock: 3, reservedStock: 1 }),
     ])).toMatchObject({ canPurchaseAny: true, text: "Low Stock" });
 
     expect(getBuyerStockSummary([
-      variant({ id: "var_red_m", size: "M", stock: 1, reservedStock: 1 }),
+      variant({ id: "var_red_m", optionCombinationKey: "m", stock: 1, reservedStock: 1 }),
     ])).toMatchObject({ canPurchaseAny: false, text: "Out of Stock" });
   });
 });

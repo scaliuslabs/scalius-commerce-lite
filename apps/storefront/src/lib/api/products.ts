@@ -7,7 +7,6 @@ import type {
   Product,
   ProductVariant,
   ProductImage,
-  ProductVariantImageMapping,
   PaginatedResponse,
   BuyerPriceRange,
   ProductFacet,
@@ -33,7 +32,6 @@ export interface ProductPageData {
   category: Product["category"];
   images: ProductImage[];
   variants: ProductVariant[];
-  variantImageMappings?: ProductVariantImageMapping[];
   relatedProducts: Product[];
 }
 
@@ -56,12 +54,7 @@ function normalizeProductPageData(payload: unknown): ProductPageData | null {
     return null;
   }
 
-  return {
-    ...candidate,
-    variantImageMappings: Array.isArray(candidate.variantImageMappings)
-      ? candidate.variantImageMappings
-      : [],
-  };
+  return candidate;
 }
 
 /**

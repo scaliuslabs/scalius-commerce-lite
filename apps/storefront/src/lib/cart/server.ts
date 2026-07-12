@@ -10,6 +10,11 @@ import {
 } from "@/lib/api";
 import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import {
+  cartItemVariantLabel,
+  normalizeCartItemOptions,
+  type CartItemOption,
+} from "./item-options";
 
 type ProcessOrderOptions = {
   customerSessionToken?: string | null;
@@ -40,8 +45,7 @@ interface ValidatedCartItem {
   quantity: number;
   image?: string;
   variantId: string;
-  size?: string;
-  color?: string;
+  options?: CartItemOption[];
   freeDelivery?: boolean;
 }
 
@@ -110,16 +114,14 @@ function parseCartItems(raw: unknown): ValidatedCartItem[] {
       quantity: item.quantity as number,
       image: optionalStr("image"),
       variantId: item.variantId.trim(),
-      size: optionalStr("size"),
-      color: optionalStr("color"),
+      options: normalizeCartItemOptions(item.options),
       freeDelivery: typeof item.freeDelivery === "boolean" ? item.freeDelivery : undefined,
     };
   });
 }
 
 function displayVariantLabel(item: ValidatedCartItem): string | null {
-  const parts = [item.size, item.color].filter((value): value is string => Boolean(value));
-  return parts.length > 0 ? parts.join(" / ") : null;
+  return cartItemVariantLabel(item.options);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

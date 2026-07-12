@@ -287,14 +287,18 @@ export default function CartFlyout() {
                             </a>
                           </h3>
 
-                          {/* Separator Based Variants - UPDATED: Dots are now darker (bg-gray-400) */}
-                          {(item.size || item.color) && (
+                          {item.options && item.options.length > 0 && (
                             <div className="flex items-center text-[10px] sm:text-[11px] font-medium text-muted-foreground leading-none">
-                              {item.size && <span>{item.size}</span>}
-                              {item.size && item.color && (
-                                <span className="mx-1.5 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
-                              )}
-                              {item.color && <span>{item.color}</span>}
+                              {item.options.map((option, index) => (
+                                <span key={`${option.name}:${option.label}`} className="contents">
+                                  {index > 0 && (
+                                    <span className="mx-1.5 h-1 w-1 rounded-full bg-muted-foreground shrink-0" />
+                                  )}
+                                  <span className="truncate">
+                                    {option.name}: {option.label}
+                                  </span>
+                                </span>
+                              ))}
                             </div>
                           )}
                         </div>

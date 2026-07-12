@@ -7,7 +7,7 @@ import { sql, and, isNull, isNotNull, eq, desc, asc, inArray, type SQL } from "d
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.validation";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 
@@ -29,8 +29,8 @@ function categoryDeleteUsageGuard(
     db: Database,
     categoryIds: string[],
 ): SQLiteBatchItem {
-    return db.run(sql`
-        SELECT CASE WHEN NOT EXISTS (
+    return buildBatchGuard(db, sql`
+        CASE WHEN NOT EXISTS (
             SELECT 1 FROM ${products}
             WHERE ${inArray(products.categoryId, categoryIds)}
               AND ${products.deletedAt} IS NULL

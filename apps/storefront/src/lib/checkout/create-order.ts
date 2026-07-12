@@ -5,6 +5,7 @@
 import { getCheckoutErrorMessage } from "./error-messages";
 import type { CreateOrderPayload } from "../api/types";
 import type { CartValidationIssue } from "../api/orders";
+import { cartItemVariantLabel } from "../cart/item-options";
 
 type PaymentMethod = NonNullable<CreateOrderPayload["paymentMethod"]>;
 
@@ -30,8 +31,7 @@ type CheckoutCartLine = {
   quantity: number;
   price: number;
   name?: string;
-  size?: string;
-  color?: string;
+  options?: unknown;
 };
 
 type ErrorPayload = {
@@ -75,10 +75,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function variantLabelForCartLine(item: CheckoutCartLine): string | null {
-  const parts = [item.size, item.color]
-    .filter((part): part is string => typeof part === "string" && part.trim() !== "")
-    .map((part) => part.trim());
-  return parts.length > 0 ? parts.join(" / ") : null;
+  return cartItemVariantLabel(item.options);
 }
 
 function readPersistedVariantId(value: unknown): string {

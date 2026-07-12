@@ -9,7 +9,6 @@ import {
     normalizeCatalogDiscoveryBaseUrl,
     resolveCatalogDiscoveryImageUrl,
 } from "@scalius/shared/catalog-discovery-media";
-import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
@@ -84,8 +83,7 @@ export interface ProductFeedDiagnosticScanProduct {
 export interface ProductFeedDiagnosticScanVariant {
     id: string;
     productId: string;
-    size: string | null;
-    color: string | null;
+    optionCombinationKey: string | null;
     stock: number;
     reservedStock: number;
     isDefault: boolean;
@@ -164,7 +162,7 @@ function addReason(
 }
 
 function hasCustomerOption(variant: ProductFeedDiagnosticScanVariant): boolean {
-    return Boolean(variant.size?.trim() || variant.color?.trim());
+    return Boolean(variant.optionCombinationKey?.trim());
 }
 
 function isBuyerOptionSku(variant: ProductFeedDiagnosticScanVariant): boolean {
@@ -177,10 +175,7 @@ function getBuyerTopology(variants: ProductFeedDiagnosticScanVariant[]) {
     const optionSkus = nonDefaultSkus.filter(isBuyerOptionSku);
     const simpleSku = activeSkus.length === 1 && activeSkus[0]?.isDefault ? activeSkus[0] : null;
 
-    if (
-        classifyProductVariantOptionAxes(nonDefaultSkus) === "mixed" ||
-        (optionSkus.length > 0 && nonDefaultSkus.some((variant) => !hasCustomerOption(variant)))
-    ) {
+    if (optionSkus.length > 0 && nonDefaultSkus.some((variant) => !hasCustomerOption(variant))) {
         return {
             mode: "inconsistent" as const,
             candidateVariantRows: optionSkus.length,
@@ -506,8 +501,7 @@ export async function getProductFeedDiagnostics(
                     .select({
                         id: productVariants.id,
                         productId: productVariants.productId,
-                        size: productVariants.size,
-                        color: productVariants.color,
+                        optionCombinationKey: productVariants.optionCombinationKey,
                         stock: productVariants.stock,
                         reservedStock: productVariants.reservedStock,
                         isDefault: productVariants.isDefault,
@@ -543,8 +537,7 @@ export async function getProductFeedDiagnostics(
         productVariantsForProduct.push({
             id: row.id,
             productId: row.productId,
-            size: row.size,
-            color: row.color,
+            optionCombinationKey: row.optionCombinationKey,
             stock: row.stock,
             reservedStock: row.reservedStock,
             isDefault: Boolean(row.isDefault),

@@ -35,7 +35,6 @@ import type {
   PostApiV1OrdersResponse as PostOrdersResponse,
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import type { ProductOptionSchema } from "@scalius/shared/product-options";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 
 export type {
@@ -118,15 +117,24 @@ export interface ProductRichContent {
   content: string;
 }
 
-export interface ProductVariantImageMapping {
+export type ProductOptionStandardMapping = "size" | "color" | "material" | "pattern" | "none";
+
+export interface ProductOptionDefinition {
   id: string;
-  productId: string;
-  imageId: string;
-  variantId: string | null;
-  optionAxis: "option1" | "option2" | null;
-  optionValue: string | null;
-  normalizedOptionValue: string | null;
-  sortOrder: number;
+  name: string;
+  position: number;
+  standardMapping: ProductOptionStandardMapping;
+  values: Array<{ id: string; value: string; position: number }>;
+}
+
+export interface SelectedProductOption {
+  optionDefinitionId: string;
+  optionValueId: string;
+  name: string;
+  value: string;
+  position: number;
+  valuePosition: number;
+  standardMapping: ProductOptionStandardMapping;
 }
 
 export interface Product {
@@ -146,12 +154,7 @@ export interface Product {
   metaDescription: string | null;
   canonicalPath?: string | null;
   productCondition?: ProductCondition | null;
-  variantOption1Label?: string | null;
-  variantOption2Label?: string | null;
-  variantOption1Schema?: ProductOptionSchema | null;
-  variantOption2Schema?: ProductOptionSchema | null;
-  variantImagesEnabled?: boolean;
-  variantImageAxis?: "option1" | "option2";
+  options?: ProductOptionDefinition[];
   noIndex?: boolean;
   features?: string[];
   additionalInfo?: ProductRichContent[];
@@ -171,8 +174,10 @@ export interface Product {
 export interface ProductVariant {
   id: string;
   productId: string;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
+  imageId: string | null;
+  imageUrl?: string | null;
+  selectedOptions: SelectedProductOption[];
   weight: number | null;
   sku: string;
   price: number;
@@ -185,8 +190,6 @@ export interface ProductVariant {
   discountType: "percentage" | "flat" | null;
   discountPercentage: number | null;
   discountAmount: number | null;
-  colorSortOrder: number;
-  sizeSortOrder: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -400,8 +403,7 @@ export interface OrderItem {
   price: number;
   productName: string | null;
   productImage: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;

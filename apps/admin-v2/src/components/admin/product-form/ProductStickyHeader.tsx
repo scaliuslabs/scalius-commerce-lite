@@ -107,8 +107,8 @@ export function ProductActionBar({
               : hasRevisionConflict
                 ? "Review conflict"
               : isEdit
-                ? "Save Product"
-                : "Create Product"}
+                ? "Save changes"
+                : "Create product"}
           </Button>
         </div>
       </div>

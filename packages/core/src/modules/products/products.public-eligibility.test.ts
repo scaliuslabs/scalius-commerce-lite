@@ -16,7 +16,7 @@ describe("public product SKU eligibility", () => {
         const query = dialect.sqlToQuery(publicProductHasBuyerResolvableSku());
 
         expect(query.sql).toContain("buyer_option_sku");
-        expect(query.sql).toContain("buyer_option_shape_sku");
+        expect(query.sql).toContain("buyer_shape_sku");
         expect(query.sql).toContain("buyer_active_sku");
         expect(query.sql).toContain("buyer_simple_sku");
         expect(query.sql).toContain("product_id");
@@ -26,9 +26,10 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("is_default");
         expect(query.sql).toContain("buyer_simple_sku.is_default");
         expect(query.sql).toContain("count(*)");
-        expect(query.sql).toContain("min(CASE");
-        expect(query.sql).toContain("max(CASE");
-        expect(query.sql).not.toContain("count(DISTINCT");
+        expect(query.sql).toContain("product_option_definitions");
+        expect(query.sql).toContain("product_variant_option_values");
+        expect(query.sql).toContain("product_option_values");
+        expect(query.sql).toContain("option_combination_key");
     });
 
     it("treats is_default as the simple-SKU authority even if old option labels drifted", () => {
@@ -47,7 +48,7 @@ describe("public product SKU eligibility", () => {
 
         expect(conditions).toHaveLength(3);
         expect(query.sql).toContain("buyer_option_sku");
-        expect(query.sql).toContain("buyer_option_shape_sku");
+        expect(query.sql).toContain("buyer_shape_sku");
         expect(query.sql).toContain("buyer_simple_sku");
     });
 
@@ -59,10 +60,9 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("is_default");
         expect(query.sql).toContain("= 0");
         expect(query.sql).toContain("trim(coalesce");
-        expect(query.sql).toContain("size");
-        expect(query.sql).toContain("color");
+        expect(query.sql).toContain("option_combination_key");
+        expect(query.sql).toContain("product_option_definitions");
         expect(query.sql).not.toContain("buyer_simple_sku");
-        expect(query.sql).not.toContain("count(*)");
     });
 
     it("projects buyer purchase availability from the same SKU topology", () => {
@@ -70,7 +70,7 @@ describe("public product SKU eligibility", () => {
         const query = dialect.sqlToQuery(publicProductHasAvailableBuyerSku());
 
         expect(query.sql).toContain("buyer_available_option_sku");
-        expect(query.sql).toContain("buyer_available_option_shape_sku");
+        expect(query.sql).toContain("buyer_shape_sku");
         expect(query.sql).toContain("buyer_available_simple_sku");
         expect(query.sql).toContain("track_inventory");
         expect(query.sql).toContain("stock");
@@ -89,8 +89,7 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("operational_option_sku.product_id = product_variants.product_id");
         expect(query.sql).toContain("operational_option_sku.is_default = 0");
         expect(query.sql).toContain("operational_option_sku.deleted_at IS NULL");
-        expect(query.sql).toContain("trim(coalesce(operational_option_sku.size");
-        expect(query.sql).toContain("trim(coalesce(operational_option_sku.color");
+        expect(query.sql).toContain("operational_option_sku.option_combination_key");
     });
 
     it("creates the protected untracked default SKU shape for simple products", () => {
@@ -98,8 +97,7 @@ describe("public product SKU eligibility", () => {
             id: "var_default_prod_1",
             productId: "prod_1",
             sku: "SIMPLE-prod_1",
-            size: null,
-            color: null,
+            optionCombinationKey: null,
             price: 1250,
             stock: 0,
             reservedStock: 0,
@@ -112,26 +110,20 @@ describe("public product SKU eligibility", () => {
     it("normalizes protected default SKU option labels before exposing DTOs", () => {
         expect(
             normalizeDefaultSkuOptions({
-                id: "var_default_prod_1",
                 isDefault: true,
-                size: "Default",
-                color: "Default",
+                optionCombinationKey: null,
             }),
         ).toMatchObject({
-            size: null,
-            color: null,
+            optionCombinationKey: null,
         });
 
         expect(
             normalizeDefaultSkuOptions({
-                id: "var_option_1",
                 isDefault: false,
-                size: "2KG",
-                color: "Red",
+                optionCombinationKey: "2kg|red",
             }),
         ).toMatchObject({
-            size: "2KG",
-            color: "Red",
+            optionCombinationKey: "2kg|red",
         });
     });
 });

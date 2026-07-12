@@ -781,7 +781,7 @@ const orderId = Astro.params.id ?? "";
           ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" class="h-16 w-16 rounded-lg object-cover">` : `<div class="h-16 w-16 rounded-lg bg-muted"></div>`}
           <div class="min-w-0 flex-1">
             <h3 class="font-semibold text-foreground">${escapeHtml(item.productName || "Product unavailable")}</h3>
-            <p class="mt-1 text-xs text-muted-foreground">${escapeHtml([item.variantSize, item.variantColor].filter(Boolean).join(" / ") || "Standard")}</p>
+            <p class="mt-1 text-xs text-muted-foreground">${escapeHtml(item.variantLabel || "Standard")}</p>
             <p class="mt-1 text-sm text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unitPrice)}</p>
             ${savedLine && savedMoneySummary && savedLine.discountMinor > 0 ? `<p class="mt-1 text-xs text-muted-foreground">Item discount: −${escapeHtml(formatSavedMinorAmount(savedLine.discountMinor, savedMoneySummary))}</p>` : ""}
             ${savedLine && savedMoneySummary && savedLine.taxMinor > 0 ? `<p class="mt-1 text-xs text-muted-foreground">${escapeHtml(savedMoneySummary.taxLabel)}${savedMoneySummary.pricesIncludeTax ? " included" : " added"}: ${escapeHtml(formatSavedMinorAmount(savedLine.taxMinor, savedMoneySummary))}</p>` : ""}

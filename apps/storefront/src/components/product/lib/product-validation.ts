@@ -204,8 +204,6 @@ export interface AddToCartValidation {
     price: number;
     quantity: number;
     variantId?: string;
-    size?: string;
-    color?: string;
     image?: string;
     freeDelivery?: boolean;
   } | null;
@@ -221,8 +219,6 @@ export function validateAddToCart(input: {
   reservedStock?: number;
   trackInventory?: boolean;
   variantId?: string;
-  size?: string;
-  color?: string;
   image?: string;
   freeDelivery?: boolean;
 }): AddToCartValidation {
@@ -279,8 +275,6 @@ export function validateAddToCart(input: {
       price: input.price!,
       quantity: quantityValidation.value,
       variantId: input.variantId,
-      size: input.size,
-      color: input.color,
       image: input.image,
       freeDelivery: input.freeDelivery,
     },

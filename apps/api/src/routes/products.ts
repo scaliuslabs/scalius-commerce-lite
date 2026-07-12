@@ -1,7 +1,6 @@
 // src/server/routes/products.ts
 // Storefront product routes — thin HTTP layer.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { PRODUCT_OPTION_SCHEMA_VALUES } from "@scalius/shared/product-options";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { cacheMiddleware } from "../middleware/cache";
 import {
@@ -234,8 +233,17 @@ const productFacetSchema = z.object({
 const storefrontFeedVariantSchema = z.object({
   id: z.string(),
   productId: z.string(),
-  size: z.string().nullable(),
-  color: z.string().nullable(),
+  imageId: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  selectedOptions: z.array(z.object({
+    optionDefinitionId: z.string(),
+    optionValueId: z.string(),
+    name: z.string(),
+    value: z.string(),
+    position: z.number().int(),
+    valuePosition: z.number().int(),
+    standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+  })),
   weight: z.number().nullable(),
   sku: z.string(),
   price: z.number(),
@@ -248,8 +256,6 @@ const storefrontFeedVariantSchema = z.object({
   discountType: z.string().nullable(),
   discountPercentage: z.number().nullable(),
   discountAmount: z.number().nullable(),
-  colorSortOrder: z.number().nullable(),
-  sizeSortOrder: z.number().nullable(),
   deletedAt: z.string().nullable(),
 });
 
@@ -264,10 +270,12 @@ const storefrontFeedProductSchema = z.object({
   name: z.string(),
   slug: z.string(),
   canonicalPath: z.string().nullable(),
-  variantOption1Label: z.string(),
-  variantOption2Label: z.string(),
-  variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
-  variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
+  options: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    position: z.number().int(),
+    standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+  })),
   description: z.string().nullable(),
   price: z.number(),
   discountType: z.string().nullable(),
@@ -300,7 +308,6 @@ const productDetailDataSchema = z.object({
   category: productDetailRecordSchema.nullable(),
   images: z.array(productDetailRecordSchema),
   variants: z.array(productDetailRecordSchema),
-  variantImageMappings: z.array(productDetailRecordSchema),
   relatedProducts: z.array(productDetailRecordSchema),
 });
 type ProductDetailData = z.infer<typeof productDetailDataSchema>;

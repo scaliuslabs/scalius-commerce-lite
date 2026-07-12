@@ -26,6 +26,7 @@ import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { variantOptionLabelSql } from "../products/products.option-model";
 import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
@@ -77,8 +78,7 @@ type CustomerOrderListItem = {
     productName: string | null;
     productSlug: string | null;
     productImage: string | null;
-    variantSize: string | null;
-    variantColor: string | null;
+    variantLabel: string | null;
 };
 
 export interface CustomerOrderDetailTimelineEvent {
@@ -817,8 +817,7 @@ export async function getCustomerOrders(
                         AND ${productImages.isPrimary} = 1
                         LIMIT 1
                     )`.as("productImage"),
-                    variantSize: productVariants.size,
-                    variantColor: productVariants.color
+                    variantLabel: variantOptionLabelSql(productVariants.id),
                 })
                 .from(orderItems)
                 .leftJoin(products, eq(products.id, orderItems.productId))
@@ -1019,8 +1018,7 @@ export async function getCustomerOrderDetailForOrder(
                     AND ${productImages.isPrimary} = 1
                     LIMIT 1
                 )`.as("productImage"),
-                variantSize: productVariants.size,
-                variantColor: productVariants.color,
+                variantLabel: variantOptionLabelSql(productVariants.id),
                 unitPrice: orderItems.price,
                 lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
                 fulfillmentStatus: orderItems.fulfillmentStatus,
@@ -1136,8 +1134,7 @@ export async function getCustomerOrderDetailForOrder(
             productName: string | null;
             productSlug: string | null;
             productImage: string | null;
-            variantSize: string | null;
-            variantColor: string | null;
+            variantLabel: string | null;
             unitPrice: number;
             lineTotal: number;
             fulfillmentStatus: string;

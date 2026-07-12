@@ -12,8 +12,7 @@ type PopoverOrderItem = {
   productName: string | null;
   productImage: string | null;
   variantId: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   quantity: number;
   price: number;
 };
@@ -94,11 +93,9 @@ export function OrderItemsPopover({
                     >
                       {item.productName || "N/A"}
                     </p>
-                    {(item.variantSize || item.variantColor) && (
+                    {item.variantLabel && (
                       <p className="text-[var(--muted-foreground)] truncate">
-                        {item.variantSize}
-                        {item.variantSize && item.variantColor ? " / " : ""}
-                        {item.variantColor}
+                        {item.variantLabel}
                       </p>
                     )}
                   </div>

@@ -6,8 +6,7 @@ export interface InventoryVariant {
   productId: string;
   productName: string | null;
   sku: string;
-  size: string | null;
-  color: string | null;
+  optionLabel: string | null;
   price: number;
   stock: number;
   reservedStock: number;
@@ -64,8 +63,7 @@ export interface InventoryAlert {
   resolvedAt: string | number | null;
   productName: string | null;
   variantSku: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
 }
 
 export interface InventoryPagination {

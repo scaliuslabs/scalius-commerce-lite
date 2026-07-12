@@ -7,6 +7,7 @@ import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/err
 import { buildStockMovementClaim } from "./stock-movement-claims";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
+import { variantOptionLabelSql } from "../products/products.option-model";
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -58,8 +59,7 @@ export async function getInventoryOverview(db: Database, params: {
                 productId: productVariants.productId,
                 productName: products.name,
                 sku: productVariants.sku,
-                size: productVariants.size,
-                color: productVariants.color,
+                optionLabel: variantOptionLabelSql(productVariants.id),
                 price: productVariants.price,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
@@ -209,8 +209,7 @@ export async function getInventoryOverview(db: Database, params: {
                 resolvedAt: productLowStockAlerts.resolvedAt,
                 productName: products.name,
                 variantSku: productVariants.sku,
-                variantSize: productVariants.size,
-                variantColor: productVariants.color,
+                variantLabel: variantOptionLabelSql(productVariants.id),
             })
             .from(productLowStockAlerts)
             .leftJoin(products, eq(products.id, productLowStockAlerts.productId))

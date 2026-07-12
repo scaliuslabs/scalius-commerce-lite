@@ -5,6 +5,7 @@ import {
   type CheckoutTaxQuote,
   type TaxQuoteRequest,
 } from "./tax-quote-contract";
+import { cartItemVariantLabel } from "../cart/item-options";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
 const TAX_QUOTE_TIMEOUT_MS = 10_000;
@@ -14,8 +15,7 @@ type CheckoutCartLine = {
   variantId?: unknown;
   quantity?: unknown;
   name?: unknown;
-  size?: unknown;
-  color?: unknown;
+  options?: unknown;
 };
 
 export class TaxQuoteUnavailableError extends Error {
@@ -64,10 +64,7 @@ function readDiscountCode(data: Record<string, unknown>): string | undefined {
 }
 
 function variantLabel(item: CheckoutCartLine): string | undefined {
-  const labels = [item.size, item.color]
-    .map((value) => cleanOptionalText(value, 100))
-    .filter((value): value is string => Boolean(value));
-  return labels.length > 0 ? labels.join(" / ").slice(0, 200) : undefined;
+  return cartItemVariantLabel(item.options) ?? undefined;
 }
 
 export function buildTaxQuoteRequest(

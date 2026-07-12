@@ -14,6 +14,7 @@ import {
 import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
 import { buildStockMovementClaim } from "./stock-movement-claims";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
+import { variantOptionLabelSql } from "../products/products.option-model";
 
 const MAX_CAS_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -241,8 +242,7 @@ export async function lookupByBarcodeOrSku(
   const lookupFields = {
     variantId: productVariants.id,
     variantSku: productVariants.sku,
-    variantSize: productVariants.size,
-    variantColor: productVariants.color,
+    variantLabel: variantOptionLabelSql(productVariants.id),
     variantPrice: productVariants.price,
     variantStock: productVariants.stock,
     variantReservedStock: productVariants.reservedStock,
@@ -306,8 +306,7 @@ export async function lookupByBarcodeOrSku(
     variant: {
       id: variant.variantId,
       sku: variant.variantSku,
-      size: variant.variantSize,
-      color: variant.variantColor,
+      optionLabel: variant.variantLabel,
       price: variant.variantPrice,
       stock: variant.variantStock,
       reservedStock: variant.variantReservedStock,

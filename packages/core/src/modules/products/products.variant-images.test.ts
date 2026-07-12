@@ -1,74 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
 import {
-    getOrderedVariantImageOptionValues,
-    normalizeVariantImageOptionValue,
-    prepareVariantImageMappingsForWrite,
-} from "./products.variant-images";
+    assertVariantImageOwnership,
+    productOptionMatrixSchema,
+} from "./products.option-matrix";
 
-const variants = [
-    {
-        id: "var_large",
-        size: "Large",
-        color: "Red",
-        sizeSortOrder: 2,
-        colorSortOrder: 0,
-        isDefault: false,
-        createdAt: 2,
-    },
-    {
-        id: "var_small",
-        size: "Small",
-        color: "Blue",
-        sizeSortOrder: 1,
-        colorSortOrder: 1,
-        isDefault: false,
-        createdAt: 1,
-    },
-];
-describe("product variant image associations", () => {
-    it("orders and normalizes only explicit merchant option values", () => {
-        expect(getOrderedVariantImageOptionValues(variants, "option1")).toEqual([
-            "Small",
-            "Large",
-        ]);
-        expect(normalizeVariantImageOptionValue("  ReD  ")).toBe("red");
+describe("normalized option-matrix image ownership", () => {
+    it("keeps image selection on each concrete SKU row", () => {
+        const result = productOptionMatrixSchema.safeParse({
+            options: [{
+                id: "option_fabric",
+                name: "Fabric",
+                standardMapping: "material",
+                values: [{ id: "value_cotton", value: "Cotton" }],
+            }],
+            variants: [{
+                id: "variant_cotton",
+                selectedOptionValueIds: ["value_cotton"],
+                imageId: "img_cotton",
+                sku: "FABRIC-COTTON",
+                price: 500,
+                stock: 3,
+                trackInventory: true,
+                weight: null,
+                barcode: null,
+                barcodeType: null,
+                discountType: "percentage",
+                discountPercentage: null,
+                discountAmount: null,
+            }],
+            expectedAggregateRevision: 1,
+        });
+
+        expect(result.success).toBe(true);
+        if (result.success) expect(result.data.variants[0]!.imageId).toBe("img_cotton");
     });
 
-    it("validates image, SKU, axis, and option ownership before writes", () => {
-        const common = {
-            productId: "prod_1",
-            enabled: true,
-            axis: "option1" as const,
-            imageIdMap: new Map([["client_1", "img_1"]]),
-            variants,
-            createId: () => "mapping_1",
-        };
-        expect(prepareVariantImageMappingsForWrite({
-            ...common,
-            mappings: [{
-                imageId: "client_1",
-                optionAxis: "option1",
-                optionValue: " small ",
-            }],
-        })).toMatchObject([{
-            imageId: "img_1",
-            optionAxis: "option1",
-            optionValue: "Small",
-            normalizedOptionValue: "small",
-        }]);
-
-        expect(() => prepareVariantImageMappingsForWrite({
-            ...common,
-            mappings: [{ imageId: "missing", optionAxis: "option1", optionValue: "Small" }],
-        })).toThrow(ValidationError);
-        expect(() => prepareVariantImageMappingsForWrite({
-            ...common,
-            mappings: [{ imageId: "client_1", optionAxis: "option2", optionValue: "Red" }],
-        })).toThrow(ValidationError);
-        expect(() => prepareVariantImageMappingsForWrite({
-            ...common,
-            mappings: [{ imageId: "client_1", variantId: "missing" }],
-        })).toThrow(ValidationError);
+    it("rejects a concrete SKU image owned by another product", () => {
+        expect(() => assertVariantImageOwnership(
+            "img_other_product",
+            new Set(["img_this_product"]),
+        )).toThrow(ValidationError);
     });
 });

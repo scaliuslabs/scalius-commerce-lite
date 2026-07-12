@@ -1,4 +1,4 @@
-import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, type Database } from "@scalius/database/client";
 import {
     deliveryLocations,
     productVariants,
@@ -14,6 +14,7 @@ import type { TaxJurisdictionType } from "./types";
 import {
     executeProductAggregateMutationBatch,
 } from "../products/products.aggregate-revision";
+import { variantOptionLabelSql } from "../products/products.option-model";
 
 const DEFAULT_SETTINGS = {
     id: "default" as const,
@@ -384,8 +385,7 @@ export async function listTaxClassifications(db: Database, input: {
         search ? or(
             like(products.name, `%${search}%`),
             like(productVariants.sku, `%${search}%`),
-            like(productVariants.size, `%${search}%`),
-            like(productVariants.color, `%${search}%`),
+            sql`${variantOptionLabelSql(productVariants.id)} LIKE ${`%${search}%`}`,
         ) : undefined,
     );
     const [rows, totalRow] = await Promise.all([
@@ -393,7 +393,7 @@ export async function listTaxClassifications(db: Database, input: {
             id: productVariants.id,
             productId: products.id,
             productName: products.name,
-            label: sql<string>`trim(${products.name} || ' · ' || coalesce(${productVariants.size}, '') || CASE WHEN ${productVariants.color} IS NOT NULL THEN ' / ' || ${productVariants.color} ELSE '' END)`,
+            label: sql<string>`trim(${products.name} || CASE WHEN ${variantOptionLabelSql(productVariants.id)} <> '' THEN ' · ' || ${variantOptionLabelSql(productVariants.id)} ELSE '' END)`,
             sku: productVariants.sku,
             taxClassId: productVariants.taxClassId,
             taxClassName: taxClasses.name,
@@ -417,8 +417,8 @@ export async function updateTaxClassification(db: Database, input: {
 }) {
     await assertActiveTaxClass(db, input.taxClassId, "Tax class");
     if (input.kind === "product") {
-        const classificationGuard = db.run(sql`
-            SELECT CASE WHEN EXISTS (
+        const classificationGuard = buildBatchGuard(db, sql`
+            CASE WHEN EXISTS (
                 SELECT 1 FROM ${products}
                 WHERE ${products.id} = ${input.id}
                   AND ${products.taxClassificationVersion} = ${input.expectedVersion}
@@ -467,8 +467,8 @@ export async function updateTaxClassification(db: Database, input: {
         if (!variant) {
             throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
         }
-        const classificationGuard = db.run(sql`
-            SELECT CASE WHEN EXISTS (
+        const classificationGuard = buildBatchGuard(db, sql`
+            CASE WHEN EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${input.id}
                   AND ${productVariants.productId} = ${variant.productId}

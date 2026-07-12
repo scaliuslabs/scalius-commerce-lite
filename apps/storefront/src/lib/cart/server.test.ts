@@ -163,6 +163,31 @@ describe("cart server order processing", () => {
     );
   });
 
+  it("preserves ordered merchant option labels during authoritative validation", async () => {
+    const formData = buildCodFormData();
+    formData.set("cartItems", JSON.stringify({
+      line_1: {
+        id: "product-1",
+        name: "Product 1",
+        price: 100,
+        quantity: 1,
+        variantId: "variant_1",
+        options: [
+          { name: "Weight", label: "2KG" },
+          { name: "Roast", label: "Medium" },
+          { name: "Packaging", label: "Gift box" },
+        ],
+      },
+    }));
+
+    await processOrder(formData);
+
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(
+      [expect.objectContaining({ variantLabel: "2KG / Medium / Gift box" })],
+      expect.any(Object),
+    );
+  });
+
   it("does not wait for abandoned checkout cleanup after successful COD order creation", async () => {
     mocks.deleteAbandonedCheckout.mockReturnValueOnce(new Promise<void>(() => undefined));
 

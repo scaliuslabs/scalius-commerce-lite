@@ -138,21 +138,11 @@ describe("storefront product query boundaries", () => {
         const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
         const detailBody = getFunctionBody(source, "getStorefrontProductBySlug");
 
-        for (const field of [
-            "variantOption1Label",
-            "variantOption2Label",
-            "variantOption1Schema",
-            "variantOption2Schema",
-        ]) {
-            expect(feedBody).toContain(`${field}: products.${field}`);
-            expect(detailBody).toContain(`${field}: products.${field}`);
-            expect(listBody).not.toContain(`${field}: products.${field}`);
-        }
-
-        expect(detailBody).toContain("variantOption1Label: normalizeProductOptionLabel(");
-        expect(detailBody).toContain("variantOption2Label: normalizeProductOptionLabel(");
-        expect(detailBody).toContain("variantOption1Schema: normalizeProductOptionSchema(");
-        expect(detailBody).toContain("variantOption2Schema: normalizeProductOptionSchema(");
+        expect(feedBody).toContain("loadProductOptions(db, productIds)");
+        expect(feedBody).toContain("options: (optionMap.get(product.id) ?? [])");
+        expect(detailBody).toContain("loadProductOptions(db, [product.id])");
+        expect(detailBody).toContain("options: optionMap.get(product.id) ?? []");
+        expect(listBody).not.toContain("loadProductOptions");
     });
 
     it("lets feed reuse safe public filters with UCP lookup support", () => {
@@ -216,7 +206,7 @@ describe("storefront product query boundaries", () => {
             "const productIds = productsList.map((product) => product.id);",
         );
         const enrichmentWaveIndex = feedBody.indexOf(
-            "const [imageMap, categoriesData, attributeMap, variantMap] = await Promise.all([",
+            "const [imageMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([",
         );
 
         expect(readWaveIndex).toBeGreaterThan(-1);
@@ -242,8 +232,9 @@ describe("storefront product query boundaries", () => {
         expect(variantHelperStart).toBeGreaterThan(-1);
         expect(variantHelper).toContain("id: productVariants.id");
         expect(variantHelper).toContain("productId: productVariants.productId");
-        expect(variantHelper).toContain("size: productVariants.size");
-        expect(variantHelper).toContain("color: productVariants.color");
+        expect(variantHelper).toContain("optionCombinationKey: productVariants.optionCombinationKey");
+        expect(variantHelper).toContain("imageId: productVariants.imageId");
+        expect(variantHelper).toContain("imageUrl: productImages.url");
         expect(variantHelper).toContain("weight: productVariants.weight");
         expect(variantHelper).toContain("sku: productVariants.sku");
         expect(variantHelper).toContain("barcode: productVariants.barcode");
@@ -256,14 +247,14 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("discountType: productVariants.discountType");
         expect(variantHelper).toContain("discountPercentage: productVariants.discountPercentage");
         expect(variantHelper).toContain("discountAmount: productVariants.discountAmount");
-        expect(variantHelper).toContain("colorSortOrder: productVariants.colorSortOrder");
-        expect(variantHelper).toContain("sizeSortOrder: productVariants.sizeSortOrder");
         expect(variantHelper).toContain("deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`");
         expect(variantHelper).toContain("inArray(productVariants.productId, productIdChunk)");
         expect(variantHelper).toContain("isNull(productVariants.deletedAt)");
         expect(variantHelper).toContain("normalizeDefaultSkuOptions({");
-        expect(variantHelper).not.toContain("createdAt");
-        expect(variantHelper).not.toContain("updatedAt");
+        expect(variantHelper).toContain("loadVariantSelectedOptions(db, rows.map((row) => row.id))");
+        expect(variantHelper).toContain("selectedOptions: selectedOptionMap.get(row.id) ?? []");
+        expect(variantHelper).not.toContain("createdAt: productVariants.createdAt");
+        expect(variantHelper).not.toContain("updatedAt: productVariants.updatedAt");
         expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");
     });
 

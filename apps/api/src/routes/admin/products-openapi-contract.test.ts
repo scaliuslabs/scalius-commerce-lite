@@ -60,7 +60,7 @@ describe("admin product mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
-        expectResponses(spec, "/api/v1/admin/products/{id}/variants/edit-plan", "post", [
+        expectResponses(spec, "/api/v1/admin/products/{id}/options/matrix", "put", [
             "200",
             "400",
             "401",

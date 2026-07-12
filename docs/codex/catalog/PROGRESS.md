@@ -2,156 +2,74 @@
 
 Last updated: 2026-07-12
 
-This log records implementation state. The finding files remain the source for open risk; a finding is not closed merely because a partial mitigation exists.
+## Normalized option-matrix release
 
-## Landed in safety batch 1
+Status: deployed and live-verified on 2026-07-12.
 
-- Currency settings now reject non-finite, partial, zero, and negative exchange rates; code changes are blocked after the first product or order; symbol/rate corrections remain possible; all three fields commit in one D1 batch. The GET contract exposes `currencyCodeLocked`, the admin explains and enforces the lock, and the generated SDK was regenerated.
-- Expired preorder reservations restore `preorderStock` rather than moving units into the regular pool. Reserve, deduct, and release boundaries reject zero, negative, fractional, `NaN`, and infinite quantities before database work.
-- Low-stock status uses one policy: only an explicit positive threshold enables it. Manual adjustments, scanner writes, and absolute stock sets reconcile alerts after increases, decreases, and no-op corrections.
-- Product HTML requests containing `size` or `color` bypass the shared HTML cache and return a private/no-store response. Base and tracking-only product URLs retain cache behavior. No product-page visual layout was changed.
-- Product and collection detail reads preserve `found | not_found | unavailable`; only an authoritative API 404 becomes a page 404, while 5xx, timeout, thrown, non-2xx, and malformed responses become no-store 503 responses.
-- Product admin timestamps now use the shared timestamp normalizer, internal variant-image metadata is removed from visible SEO copy, merchant option labels replace generic labels, and deleted-category products render as Uncategorized.
-- Collection drag reorder is disabled unless the full ordered collection set is loaded, preventing a paginated slice from being renumbered as the global order.
-- Product, category, attribute, collection, sortable-table, and inventory query failures render an explicit retry state instead of an empty catalog. Destructive/bulk actions are disabled while list authority is unavailable.
-- Inventory movement UI derives the displayed signed change from its before/after stock transition. Inventory tabs have tab semantics, adjustment controls have accessible names/labels, and both inventory queries expose Retry.
+Implemented:
 
-## Landed in reliability batch 2
+- normalized five-axis / 150-combination option, value, assignment, and SKU
+  schema with migrations 0007–0008;
+- direct `product_variants.image_id` and primary product-media fallback;
+- one create/edit option builder and paginated SKU matrix;
+- explicit topology plan, stock-preserving expansion/contraction, simple stock
+  allocation, committed/open-order guards, direct image and SKU discounts;
+- normalized admin/API/storefront/cart/checkout/order/inventory/scanner/feed/UCP
+  reads; fixed size/color and serialized mapping readers removed;
+- atomic initial product + option matrix creation and aggregate-CAS matrix edits;
+- old generator, spreadsheet, bulk-create/delete/edit-plan/sort-order, and image
+  mapping code/routes removed;
+- shared limits, focused matrix/model tests, generated SDK refresh, and durable
+  architecture/UX docs;
+- storefront product-page visual layout preserved.
+- additional-section rich-text state is controlled without the former maximum
+  update-depth crash;
+- optioned creation omits the hidden default SKU, and simple-to-optioned
+  conversion soft-retires it after stock allocation;
+- parameterized D1 mutation guards use prepared `SELECT` builders rather than
+  raw `db.run(sql...)` objects, fixing live atomic matrix/category/tax/SKU
+  batches under Drizzle 0.45.
 
-- Admin product, category, and collection detail loaders redirect only for an authoritative API 404. The admin transport preserves status/code, and 401/403/409/5xx/timeout failures reach the route error boundary.
-- One API-grounded catalog capability model gates create, edit, inline edit, status toggle, reorder, delete, restore, permanent delete, bulk selection, and stock adjustment across Products, Categories, Attributes, Collections, Inventory, product detail, and edit-form create-another shortcuts.
-- Product and shared form action bars replace navigation anchors with inert buttons while a save is in flight. Option add/edit/bulk drafts participate in navigation protection.
-- New products and collections start as Draft. Product, collection, and shared entity forms expose a compact visible page heading and concise workflow context.
-- Variant creates keep parameter-safe four-row statements but commit every chunk in one D1 transaction. Bulk updates reject duplicate variant IDs before reads.
-- New or changed SKU option combinations are compared after trim/case normalization and cannot duplicate an active sibling. The guard allows one SKU at a time to repair legacy duplicates.
-- Single and bulk category permanent deletion share one primitive. Collection-config cleanup and category deletion commit atomically; malformed collection configuration blocks deletion instead of leaving a dangling reference.
-- Attribute values use server-backed debounced search and pagination with authoritative global/search-scoped value and product totals. Presets reconcile against the complete used-value set through D1-safe `json_each()` lookups; trim/case duplicates and rename collisions are rejected while merchant casing is preserved. Loading failures expose Retry instead of an empty state.
+Verification green:
 
-## Verification evidence
+- full repository tests: 438 files / 3,234 tests;
+- repository typecheck, lint, and production build;
+- Worker environment, distribution-secret, admin-performance, migration
+  metadata, and diff checks;
+- generated API client and 267-route OpenAPI contract;
+- `pnpm ops:check --queues` passed with 4/4 readiness samples;
+- `pnpm release:check` passed, including admin auth, storefront, discovery,
+  feeds, UCP, and product schema;
+- remote D1 foreign-key check returned no rows.
 
-- Full repository suite after reliability batch 2: 426 files and 3,213 tests passed.
-- Full workspace typecheck: eight runnable packages passed; Astro reported zero errors, warnings, or hints across 286 files.
-- Full workspace lint, Worker environment parity, admin performance checks, generated SDK diff check, and `git diff --check` passed.
-- Post-deploy `pnpm release:check` passed API health/readiness, OpenAPI, dashboard auth gate, storefront health/pages/cache headers, discovery XML/feeds, UCP discovery/search/lookup/product, and Product schema.
-- Reliability batch 3 integrated suite: 432 files and 3,246 tests passed after the legacy order-atomicity harness was migrated to deterministic claim/release APIs.
-- Full workspace typecheck passed across eight runnable packages; Astro reported zero errors, warnings, or hints across 287 files. Full workspace lint, Worker binding parity, admin performance constraints, distribution secret checks, production builds, SDK regeneration, and `git diff --check` passed.
-- An executable SQLite projection test proves hidden default-SKU exclusion, purchasable-SKU preference, SKU-over-product discount inheritance, sold-out fallback, and exact interval matching. Read-only production D1 probes ranked roughly 400 rows into 28 product projections in 12.10 ms cold and 1.52 ms warm with zero writes.
-- Reliability batch 4 integrated suite: 439 files and 3,283 tests passed. Full workspace TypeScript/Astro checks passed across 290 storefront files with zero diagnostics; full workspace lint passed without warnings after listing-loader cleanup.
-- Migration metadata validation passed with five contiguous SQL/journal/snapshot entries. A full SQLite 0000→0004 apply, foreign-key check, stable variant-image backfill, ledger-v2 trigger test, and no-rebuild legacy movement preservation smoke passed.
-- Read-only production preflight found three legacy variant-image marker products with valid absolute images and bounded option/image sets, plus 310 version-1 inventory movement rows across 24 SKUs and zero currently partial reservation groups. No production rows were changed.
+Deployed Worker versions:
 
-## Deployment and live evidence
+- API: `1f933970-107a-411a-b835-4396a54607d3`
+- Admin V2: `7b6d96a5-6360-43ee-8230-b9923c268524`
+- Storefront: `2f88f991-3b28-40d7-8446-4eb3c42fe79e`
+- Ops monitor: `37764ca0-3abd-45d8-a8dc-6b7abc1074ef`
 
-- API version `b6c213f5-e945-4a98-a39e-398e5a5f483a` serves 100% traffic; four post-deploy readiness samples passed.
-- Admin version `63cea645-5d5e-446a-8b8a-fe1883fbcf38` serves 100% traffic.
-- Storefront version `0b090a73-0c85-47b2-8cfd-30a1adb24be5` serves 100% traffic; health passed and critical catalog pages were warmed.
-- Authenticated Chrome confirmed the repaired 2026 product timestamp, merchant option label, absent internal SEO marker, 63 loaded inventory SKUs, accessible inventory tabs, truthful `Deducted -1 / 3 → 2`, and the locked BDT currency control.
-- Live HTTP confirmed base product HTML remains cacheable, a `size`-selected product request returns `X-Cache-Status: BYPASS_VARIANT_SELECTION` plus private/no-store, and an authoritative missing product remains 404.
-- Pre-existing release warnings remain for the unconfigured ops-monitor email channel and unexpected `worker:testdash` queue producer bindings; they are not introduced by this catalog batch and remain operational follow-up items.
-- Reliability batch 2 API version `d6a04312-94d7-4036-88b9-3261fe9f051e` and admin version `7a0808d3-a7c6-4c8a-a641-956061f3b0e1` each serve 100% traffic; API health and four readiness samples passed.
-- Fresh authenticated Chrome tabs confirmed current assets hydrate without console errors. New Product and New Collection show visible headings and unchecked Draft status. Attribute `brand` reports five values/nine product assignments, search for `Apple` reports one value/four assignments, and the compact pagination contract renders from authoritative totals.
-- Reliability batch 3 API version `4ce4408c-cbac-43df-8d3d-25e3e13a5f79`, admin version `c5992f88-48b5-4b98-bd21-b4333d411601`, and storefront version `f306dfd3-1d97-4c80-9515-773fc4ce0f53` each serve 100% traffic.
-- The serial post-deploy `pnpm ops:check --queues` and `pnpm release:check` gates passed: API health, four readiness samples, 272 OpenAPI paths, eight queue bindings, admin/API auth rejection, dashboard redirect, storefront health/home/search, cache policy, robots and six sitemap checks, both five-item product feeds, UCP search/lookup/product, and a live Product schema route.
-- Live catalog HTTP responses confirmed the batch 3 buyer projection contract: the global listing exposes `maxBuyerPrice`, `priceVaries`, `availableForSale`, and effective `priceRange`; product search exposes buyer availability and variant-aware price state; and category listing derives its own effective SKU price bounds (`Mobile Top up` currently reports 10–10).
-- The zero-price `Xrink` record remains a live-data quality finding. This release does not silently rewrite merchant catalog data; discovery feeds continue to omit non-positive rows under the existing fail-closed policy.
-- Reliability batch 4 API version `6a68cab4-b1c5-483e-b2bd-86d7865e5ee3`, admin version `54d3612c-e0c3-48f0-a9c1-cfc2dae267f5`, and storefront version `7301c3ac-30c3-4d20-a20a-6a9ea1516e14` each serve 100% traffic. D1 migrations 0001 through 0004 applied successfully before the new readers were rolled out.
-- Post-migration read-only D1 verification found three configured variant-image products, six stable mapping rows, the three intentionally retained rolling-deploy markers, 310 preserved ledger-v1 rows, zero ledger-v2 rows before the next stock write, and zero incomplete ledger-v2 rows.
-- The catalog cache groups were invalidated after rollout. Live HTML for search, category, collection, and product routes now reports storefront build `src-5b0cce55a584452f`; live product/category/collection APIs expose result-scoped facets, dynamic price bounds, pagination, and three stable mappings for the Khaki legacy product.
-- The serial post-deploy `pnpm ops:check --queues` and `pnpm release:check` gates passed API health, four readiness samples, 272 OpenAPI paths, eight queues, dashboard/API auth rejection, storefront pages/cache policy, robots and six sitemap checks, both five-item feeds, UCP discovery/search/lookup/product, and Product schema. Existing logs-only email alerts and the unexpected `worker:testdash` bindings on three producer queues remain operational follow-up items.
+Live authenticated evidence:
 
-## Landed in reliability batch 3 (deployed and live verified)
+- draft `prod_KyaDjWL28lOsRaynv9oOu` was created through the deployed admin;
+- axes `Finish × Plug × Pack` persist as 3 definitions, 6 values, 8 active
+  SKUs, and 24 normalized assignments;
+- total stock is 96, one SKU has a 10% discount, and no active default SKU
+  remains;
+- the additional section persists its rich text and reloads collapsed;
+- create/edit reloads completed without browser console or page errors after
+  the rich-text fix.
 
-- The option spreadsheet now submits one atomic mixed create/update edit plan. D1 version and stock-version guards execute inside the transaction, SKU swaps use temporary transaction-private values, normalized SKU/option/axis conflicts fail before commit, stock movements share the batch, and the UI reconciles only authoritative returned rows while preserving failed drafts.
-- Collection product selection now uses one debounced, cancellable, paginated multi-category endpoint and TanStack infinite query. It has authoritative loading/empty/error/retry/load-more states, stable selected labels, a 90-category parameter boundary, and no per-category request fan-out.
-- Production order, payment, fulfillment, stale-checkout, manual-edit, and trash-restore workflows no longer call the replay-unsafe sequential inventory APIs. Manual order edits use version-scoped deterministic reservation/release/deduct/restore claims with stock CAS batches, guarded rollback evidence, and pool-correct preorder behavior. The sequential exports remain compatibility-only.
-- Global listings, category listings, collection cards/home modules, related cards, feed filtering/sorting, UCP's feed-backed catalog, and command-palette product search now share the buyer-SKU pricing projection. It prefers purchasable SKUs, falls back truthfully when all are sold out, applies SKU-over-product discount inheritance, exposes `From`/sold-out card state, and computes availability-scoped discount truth.
-- Price filtering requires an actual SKU inside the requested interval; a product with only 50 and 150 price points does not falsely match 80–120. Category and search controls receive live effective SKU bounds, retain fractional values, and no longer treat 50,000 as a magic ceiling.
-- Public search no longer converts backend failure into an empty result. The command palette has a retryable failure state, dialog/combobox/listbox semantics, focus containment/restoration, labelled close control, keyboard-focusable result options, and buyer-SKU prices.
-- Collection config ID arrays are write-validated and legacy-normalized to 90. Cross-collection lookup sets use one bound `json_each()` token instead of exceeding D1's parameter ceiling.
+Known operations warnings outside this catalog release remain visible in the
+passing release check: ops email alerts are logs-only, and legacy worker
+`testdash` still owns three unexpected production queue producer bindings.
 
-## Landed in reliability batch 4 (deployed and live verified)
+## Durable release bars
 
-- Variant images now use stable image-ID associations to either an exact active SKU or normalized merchant option value. Reordering/removing images cannot shift later mappings, temp IDs reconcile to authoritative persisted IDs, exact SKU mapping wins over option mapping, and the protected product-page layout is unchanged.
-- Generated migration 0001 adds product configuration and the mapping table; custom migration 0002 materializes the three live legacy positional configurations but retains their markers for old-reader rollout safety. New API/storefront readers prefer explicit rows, and successful new-admin writes remove markers atomically. Database triggers plus core validation reject invalid axes, negative order, cross-product images/SKUs, default/deleted SKU targets, and stale option values.
-- Ledger v2 writes one pool-aware event in the same batch as each production stock-version CAS edge. It records physical, reserved, and preorder before/after/delta counters, reservation generation, and a unique per-SKU version sequence; database triggers reject incomplete or operation-inconsistent rows. The admin movement view shows the counters that actually changed plus pool/generation instead of implying every event changes physical stock.
-- Reservation expiry subtracts pool/generation-specific deductions and releases and frees only the outstanding orphan quantity. Re-reservation advances generation only after the prior generation closes. Multi-order or multi-pool requests that would create multiple ledger events for one CAS edge fail closed.
-- Product, category, and collection listings now return result-scoped multi-select facets. Values OR within one attribute and attributes AND across axes; counts exclude the facet's own selection, selected zero-count values remain removable, unknown values canonicalize away, and repeated cache keys retain stable identities.
-- Public collection detail is a truthful paginated buyer catalog. Membership is the deduplicated union of explicit products and categories; curated products appear first in saved order, category-derived products follow the requested/default sort, and the response includes totals, dynamic SKU price bounds, facets, categories, and optional featured product.
-
-## Still open after batch 6
-
-- The buyer projection is a derived window query. Correctness is unified, but very large catalogs should move it to a transactionally maintained projection table after write-path coverage and benchmark evidence exist.
-- The mobile admin catalog table, route-backed settings architecture, and broader keyboard/accessibility pass remain open.
-- Dedicated RBAC permissions do not yet exist for attribute restore/permanent delete, collection permanent delete, or bulk-permanent operations; the UI intentionally mirrors the current API permission map rather than inventing authority.
-- Minor-unit catalog money remains open P1 model work.
-- Collection membership remains JSON configuration shared with merchandising metadata; a normalized membership/rules model with revisioned ordering is still required for very large catalogs and concurrent editors.
-- Attribute visibility/export/schema roles remain coupled to `filterable`; quick-buy pricing, UCP eligible pagination, and feed cursor pagination retain their documented gaps.
-- The category/collection mobile filter drawer still needs a complete focus trap and automated accessibility coverage.
-- Product creation still persists the product/default SKU before option SKUs. A future `createProductAggregate` contract must make initial product plus option topology atomic rather than hiding follow-up variant requests.
-- Fulfillment type remains implicit. Add an explicit `requiresShipping` authority before exposing digital/service product UI; do not infer it from weight, stock tracking, or category.
-- The current storage model supports two merchant-named option axes. A third axis requires normalized option definition/value/combination tables, not JSON or encoded strings.
-
-## Next implementation slice
-
-1. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
-2. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
-3. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
-
-## Product editor workflow batch 7 (local verification complete)
-
-- The editor main column now owns Details, Media, Pricing, Option names, Attributes, and Search/discovery; the narrow rail owns Status and Organization. This removes the structural dead region beneath Media without spacer CSS or storefront changes.
-- Option names are buyer/admin/feed/schema labels rather than a hidden feed-only mapping. Unsaved label edits flow into the open SKU editor without replacing the merchant draft.
-- Simple products expose `Generate combinations` and `Add one option` together. Dirty simple-SKU fields save first, and the generator inherits price, tracking, weight, and discount defaults.
-- The generator is a compact Values → Defaults → Review workflow with normalized value deduplication, stable draft identities, explicit identity regeneration, editable SKU/price/stock rows, selectable exclusions, topology/identity conflicts, and inline retry-preserving failures.
-- First simple-to-optioned conversion blocks live reservations and requires exact allocation of the tracked default SKU's on-hand stock. The dormant default SKU is excluded from inventory overview/stats, scanner lookup, barcode lookup, and low-stock projections while active customer options exist.
-- Stock is integer-only at API boundaries. Bulk create and mixed edit plans share a 150-row total-operation ceiling and bounded five-wide low-stock reconciliation. Disabling tracking/thresholds or dormancy resolves stale low-stock alerts.
-- Comparative product-creation findings and the normalized multi-axis, fulfillment, and atomic initial-create targets are preserved in `PRODUCT-EDITOR-UX.md`.
-- Local evidence: 449 test files / 3,334 tests passed; full workspace typecheck, lint, and build passed; SDK generation, Worker env parity, admin performance, distribution-secret scan, and diff checks passed.
-
-## Reliability batch 5 (deployed and live verified)
-
-- Every product-composition mutation now requires and advances `aggregateRevision`; stale writes return typed `PRODUCT_REVISION_CONFLICT` details. Active editor writes reject trashed products, while restore/permanent delete require trash state.
-- The admin starts from a force-fetched authoritative product and owns one stable product/SKU snapshot. Background query invalidation cannot remount or rewrite a dirty draft. Explicit reload is the only replacement path.
-- The compact conflict dialog preserves drafts, exposes expected/current revisions, keeps `Out of date · Draft kept` in the action bar, blocks stale retries, and provides a terminal return action when the product no longer exists.
-- Option duplication now creates a local unsaved identity-safe draft. Persisted duplicate and redundant bulk-update APIs, permissions, hooks, tests, docs, and generated SDK routes were removed.
-- Barcode values are trimmed, paired with a supported type, checksum-validated, normalized for global duplicate detection/search/lookup, and duplicate lookup fails closed.
-- Bulk create reuses the atomic edit plan so initial stock always records ledger-v2 movement. SKU deletion always soft-retires identity and uses in-batch reservation/open-order/final-option guards. Permanent product deletion rechecks order, discount, and inventory history inside its D1 batch.
-- Attribute/category cascades use set-based revision bumps evaluated in the same transaction, closing the read-then-write race. Category permanent delete has a transactional active-product usage guard.
-- Local release evidence: 447 test files / 3,325 tests passed; full workspace typecheck/lint/build passed; SDK generation, Worker env parity, admin performance, distribution secret scan, and diff checks passed.
-- D1 migration `0005_deep_morg.sql` applied successfully before the new Workers. A read-only production query found 30 product rows, aggregate revisions from 1 through 1, and zero null or invalid revisions.
-- API version `d31366a7-14b7-4861-9656-2b4bf6f72cf1` and admin version `ab05cbbb-a9f4-4baf-aa4c-fc6cfe1aa5a6` each serve 100% traffic. The storefront was not deployed because this batch has no storefront code or product-page UI change.
-- Authenticated Chrome loaded the live 28-product catalog and Khaki editor from fresh deployed assets. The editor showed the compact action bar, disabled no-op save, authoritative four-option table, image mapping, pricing, discovery, and option workflows without an auth or render failure.
-- Post-deploy `pnpm ops:check --queues` and `pnpm release:check` passed API health, four readiness samples, the 270-path OpenAPI contract, eight queues, dashboard/API auth rejection, storefront pages/cache policy, discovery XML and feeds, UCP search/lookup/product, and Product schema. Existing logs-only alert email and `worker:testdash` producer warnings remain operational follow-up items.
-
-## Reliability batch 6 (deployed and live verified)
-
-- Migration 0006 has a fail-closed production-state guard, soft-retires only the three exact unreferenced Mojo copy SKUs, canonicalizes option/SKU/barcode whitespace, strips all historical variant-image markers, and bumps each affected product aggregate exactly once. Copied stock is deliberately not summed without physical inventory evidence.
-- Global normalized SKU and barcode identities plus active per-product Option 1/Option 2 identity are database unique indexes. Canonical triggers reject whitespace, empty identities, default-SKU option drift, optionless normal SKUs, malformed barcode/type pairs, and retired marker reintroduction.
-- SKU create/update/edit-plan and scanner lookup now share trimmed case-insensitive identity. Database race errors map to merchant-safe conflicts instead of generic failures.
-- Product create/update requires explicit variant-image enabled/axis/mapping fields. API, core, admin, shortcode, and storefront detail readers use only persisted product fields and mapping rows; every positional/marker fallback was deleted without changing the protected product-page layout.
-- Production preflight found zero normalized SKU or barcode collisions, one exact four-row Mojo option collision, six trailing-space `Purple ` values, four empty legacy Option 2 strings, and three already-materialized marker products with six stable mapping rows. The three redundant Mojo rows have zero order, movement, alert, reservation, or image-mapping references.
-- Local evidence: all seven migrations apply to an empty SQLite database; production-shaped repair, fail-closed drift, trigger, normalized-index, and shared lookup-predicate tests pass; 449 test files / 3,323 tests pass; all workspace typecheck/lint/build gates pass with 290 storefront files and zero diagnostics; SDK generation, migration metadata, Worker env parity, admin performance, distribution secret scan, and diff checks pass.
-- D1 migration `0006_outgoing_captain_midlands.sql` passed its just-in-time production guard and applied 24 statements in 47.74 ms. Post-migration reads found zero normalized option collisions, zero marker rows, zero noncanonical options, one active Mojo SKU with stock 20, three retired copies, and all six explicit image mappings preserved; every affected product advanced to revision 2 exactly once.
-- API version `a8cc22a3-d06b-412f-8ea5-3843d7e768fd`, admin version `6e40daf1-6912-420a-a74e-9093d9b7b810`, and storefront version `3dad6e98-0ebc-4fba-a3f0-ea46abac38ce` serve 100% traffic. Fresh storefront responses use build `src-1519fc27cc9e4322` and cache generation `1780000204` after the authenticated global purge.
-- Live D1 query plans use `product_variants_sku_identity_uidx` and `product_variants_active_option_identity_uidx`. The first barcode plan exposed SQLite's partial-index implication requirement; all product lookup/search/scanner/preflight paths now share the exact non-null/non-empty predicate, and the corrected API was redeployed before final release verification.
-- Authenticated Chrome confirmed Mojo renders as one option in the admin list, Purple/Ruby/Khaki read from explicit mappings, the cache purge succeeded, and the protected Khaki storefront product layout, gallery, option controls, purchase controls, description, and related products remain visually and behaviorally intact.
-- Final `pnpm release:check` passed health, four readiness samples, the 270-path OpenAPI contract, eight queues, auth gates, dashboard redirect, fresh storefront pages/cache policy, discovery XML and both feeds, UCP search/lookup/product, and Product schema. The pre-existing logs-only alert email and `worker:testdash` producer warnings remain operational follow-up items.
-
-## Product editor density and option-model correction (deployed 2026-07-12)
-
-- The desktop authoring canvas is constrained to a readable width; Details is one cohesive card; Media uses a tight six-column grid, no blank caption reservation, a compact Add media action, and mapping controls that reveal the axis only while mapping is enabled.
-- Pricing is one compact primary control plus a disclosure summary. The saved 10% discount now shows the computed customer price (`৳4,050.00` from `৳4,500.00`) without rendering two full-width secondary inputs until the merchant opens them. Validation errors force the relevant disclosure open.
-- Product option names, optional standard mappings, the default SKU, arbitrary option values, generated variants, and bulk tools now live in one Product options card. The standalone Option names concept was removed. Axis names are unrestricted merchant choices; standard size/color/material/pattern mapping is optional and does not restrict names such as Shape, Pack, Format, or 2-in-1. The current two-axis storage ceiling remains explicit.
-- Search and discovery moved to the right rail. Its collapsed state retains a search title/path/description preview instead of becoming an opaque heading. Attributes remain a secondary main-flow disclosure.
-- The shared Radix Select content no longer overrides popper geometry with fixed positioning, so catalog/settings selects prefer the space below and collision-flip above. Newly added Additional Sections immediately expand title plus rich-text content and collapse the previously edited section.
-- Admin version `81cef24b-ae39-41ed-8844-3e4aca92abd4` serves 100% traffic. Authenticated production HTML returned 200 and contained the unified Product options, Choice axes, Standard mapping, and Search and discovery contracts with the old standalone Option names heading absent.
-- Local evidence: 449 test files / 3,339 tests passed; admin typecheck, lint, production build, performance boundary, distribution-secret scan, and diff checks passed. `pnpm ops:check --queues` passed. The corrected feed-cache smoke retries one legitimate cold `BYPASS_GENERATION` transition and still requires a subsequent generation marker; `pnpm release:check --timeout-ms 30000` passed the complete production contract.
-
-## Admin authenticated-read timeout incident (2026-07-12)
-
-- Production product edit and dashboard summary requests crossed the admin proxy's 15-second deadline while the public readiness endpoint stayed healthy. The dashboard's zero cards were unavailable-data placeholders; authenticated retries after reconciliation returned the authoritative 28 products and 22 customers, so no catalog data was lost.
-- API tail evidence identified the blocking work: an expired/missing RBAC seed marker made ordinary authenticated reads await code-owned permission and system-role reconciliation. The sequential repair path completed after about 26.5 seconds, after both proxy requests had already returned 504.
-- RBAC reconciliation is maintenance, not request authority. Admin page guards now read only current persisted grants. API admin middleware resolves effective permissions first and schedules reconciliation through the Worker execution context; ordinary admins remain fail-closed on persisted D1 authority and known super admins receive the complete code-owned permission set.
-- Reconciliation now deduplicates concurrent attempts per isolate and batches missing permissions, system roles, and role grants with idempotent conflict handling. A marker miss no longer multiplies hundreds of sequential D1 round trips across simultaneous admin requests.
-- Local regression evidence: focused auth middleware/seed tests passed, the affected core/API/admin typechecks, lint, and builds passed, Worker environment parity and distribution-secret checks passed, and the full repository suite passed 449 files / 3,335 tests.
-- API version `99fdabfe-4dff-4b8a-90de-6be3dae46a92` and admin version `bf230a37-4b30-4dda-943c-91e6bfd15424` serve 100% traffic. With the new v2 marker cold, authenticated dashboard summary returned the authoritative 28-product/22-customer payload in 2,791 ms and product detail returned in 1,209 ms. The authenticated product editor HTML rendered in 2,716 ms and dashboard HTML in 223 ms, both without the former timeout state.
+- Full suite, typecheck, lint, build, SDK, migration metadata, Worker binding,
+  performance, secret scan, and diff checks must pass.
+- `pnpm ops:check --queues` and `pnpm release:check` must pass after deployment.
+- No deployed claim is recorded until the live version and authenticated browser
+  flow have been observed.
+- The historical pre-0007 deployment evidence is available in Git history; it
+  is intentionally not repeated here because it described the deleted model.

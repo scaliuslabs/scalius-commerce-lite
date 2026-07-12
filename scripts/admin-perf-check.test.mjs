@@ -97,24 +97,22 @@ function createPassingFixture({ dist = true } = {}) {
     }
   `);
 
-  write(root, "apps/admin-v2/src/components/admin/product-form/variants/VariantManager.tsx", `
-    import { lazy, Suspense } from "react";
-    const VariantSortModal = lazy(() => import("./VariantSortModal"));
-    export function VariantManager() {
-      return <Suspense><VariantSortModal /></Suspense>;
-    }
+  write(root, "apps/admin-v2/src/routes/admin/products/new.tsx", `
+    import { lazy } from "react";
+    const OptionMatrixEditor = lazy(() => import("~/components/admin/product-form/variants/OptionMatrixEditor"));
+    export default OptionMatrixEditor;
   `);
-
-  write(root, "apps/admin-v2/src/components/admin/product-form/variants/VariantActionsToolbar.tsx", `
-    import { lazy, Suspense } from "react";
-    const BulkVariantGenerator = lazy(() => import("./bulk-generator"));
-    const VariantImportExport = lazy(() => import("./VariantImportExport"));
-    export function VariantActionsToolbar() {
-      async function handleExport() {
-        await import("./utils/csvHelpers");
-      }
-      return <Suspense><BulkVariantGenerator /><VariantImportExport /></Suspense>;
-    }
+  write(root, "apps/admin-v2/src/routes/admin/products/$productId/edit.tsx", `
+    import { lazy } from "react";
+    import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+    const OptionMatrixEditor = lazy(() => import("~/components/admin/product-form/variants/OptionMatrixEditor"));
+    export default OptionMatrixEditor;
+  `);
+  write(root, "apps/admin-v2/src/components/admin/product-form/variants/OptionMatrixEditor.tsx", `
+    const pageSize = 30;
+    const filteredVariants = [];
+    const page = 0;
+    export const visibleVariants = filteredVariants.slice(page * pageSize, (page + 1) * pageSize);
   `);
 
   write(root, "apps/admin-v2/src/components/admin/navigation/NavigationBuilder.tsx", `

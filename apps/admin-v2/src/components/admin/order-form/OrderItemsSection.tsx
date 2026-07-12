@@ -31,8 +31,8 @@ interface ProductVariantsResult {
 function normalizeVariant(variant: RawProductVariant): ProductVariant {
   return {
     id: variant.id,
-    size: variant.size,
-    color: variant.color,
+    optionCombinationKey: variant.optionCombinationKey,
+    selectedOptions: variant.selectedOptions ?? [],
     weight:
       typeof variant.weight === "string"
         ? parseFloat(variant.weight) || null

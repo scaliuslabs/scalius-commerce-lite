@@ -18,8 +18,7 @@ const orderItemSchema = z.object({
     price: z.number(),
     productName: z.string().nullable(),
     productImage: z.string().nullable(),
-    variantSize: z.string().nullable(),
-    variantColor: z.string().nullable(),
+    variantLabel: z.string().nullable(),
 }).passthrough();
 
 const invoiceOrderSchema = z.object({

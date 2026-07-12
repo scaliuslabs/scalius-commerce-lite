@@ -14,6 +14,7 @@ describe("category permanent delete integrity", () => {
         return {
           from() {
             return {
+              kind: "guard",
               where() {
                 if (selectCount === 1) {
                   return { limit: () => ({ all: async () => [] }) };
@@ -64,7 +65,7 @@ describe("category permanent delete integrity", () => {
 
     expect(batchCalls).toHaveLength(1);
     expect(batchCalls[0]).toHaveLength(4);
-    expect(batchCalls[0]?.[0]).toEqual({ kind: "guard" });
+    expect(batchCalls[0]?.[0]).toMatchObject({ kind: "guard" });
     expect(batchCalls[0]?.[1]).toMatchObject({
       kind: "update",
       table: products,
@@ -95,6 +96,7 @@ describe("category permanent delete integrity", () => {
         return {
           from() {
             return {
+              kind: "guard",
               where() {
                 return selectCount === 1
                   ? { limit: () => ({ all: async () => [] }) }

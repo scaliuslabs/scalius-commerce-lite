@@ -23,8 +23,7 @@ const inventoryVariantSchema = z.object({
     productId: z.string(),
     productName: z.string().nullable(),
     sku: z.string(),
-    size: z.string().nullable(),
-    color: z.string().nullable(),
+    optionLabel: z.string().nullable(),
     price: z.number(),
     stock: z.number(),
     reservedStock: z.number(),
@@ -69,8 +68,7 @@ const inventoryAlertSchema = z.object({
     resolvedAt: nullableTimestampSchema,
     productName: z.string().nullable(),
     variantSku: z.string().nullable(),
-    variantSize: z.string().nullable(),
-    variantColor: z.string().nullable(),
+    variantLabel: z.string().nullable(),
 }).passthrough();
 
 // The inventory overview endpoint returns different shapes per section
@@ -100,8 +98,7 @@ const scannerLookupSchema = z.object({
     variant: z.object({
         id: z.string(),
         sku: z.string(),
-        size: z.string().nullable(),
-        color: z.string().nullable(),
+        optionLabel: z.string().nullable(),
         price: z.number(),
         stock: z.number(),
         reservedStock: z.number(),

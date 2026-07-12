@@ -6,8 +6,6 @@ import {
   Plus,
   Package,
   Hash,
-  Ruler,
-  Palette,
   Box,
   ArrowRightLeft,
   ChevronDown,
@@ -164,17 +162,8 @@ export function ManualSheet({
                 {product.productName}
               </h3>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-400 mt-0.5">
-                {product.size && (
-                  <span className="flex items-center gap-1">
-                    <Ruler className="h-3 w-3" />
-                    {product.size}
-                  </span>
-                )}
-                {product.color && (
-                  <span className="flex items-center gap-1">
-                    <Palette className="h-3 w-3" />
-                    {product.color}
-                  </span>
+                {product.optionLabel && (
+                  <span>{product.optionLabel}</span>
                 )}
                 <span className="flex items-center gap-1">
                   <Hash className="h-3 w-3" />

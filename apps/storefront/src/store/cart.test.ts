@@ -158,11 +158,10 @@ describe("cart store", () => {
             name: "Premium Rice",
             price: 100,
             quantity: 1,
-            size: "2KG",
-            color: "Gift Box",
             options: [
               { name: " Weight ", label: " 2KG " },
               { name: "Style", label: "Gift Box" },
+              { name: "Packaging", label: "Reusable tin" },
             ],
           },
           duplicate: {
@@ -184,11 +183,10 @@ describe("cart store", () => {
     expect(Object.keys(hydrated.items)).toEqual([lineKey]);
     expect(hydrated.items[lineKey]).toMatchObject({
       quantity: 3,
-      size: "2KG",
-      color: "Gift Box",
       options: [
         { name: "Weight", label: "2KG" },
         { name: "Style", label: "Gift Box" },
+        { name: "Packaging", label: "Reusable tin" },
       ],
     });
   });

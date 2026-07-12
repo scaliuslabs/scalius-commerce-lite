@@ -69,8 +69,8 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
                 PARTITION BY ${pricingSku.productId}
             )`.as("buyer_available_for_sale"),
             hasCustomerOptions: sql<number>`MAX(CASE
-                WHEN trim(coalesce(${pricingSku.size}, '')) <> ''
-                  OR trim(coalesce(${pricingSku.color}, '')) <> ''
+                WHEN ${pricingSku.isDefault} = 0
+                  AND trim(coalesce(${pricingSku.optionCombinationKey}, '')) <> ''
                 THEN 1 ELSE 0
             END) OVER (PARTITION BY ${pricingSku.productId})`.as("buyer_has_customer_options"),
             hasAnyDiscount: sql<number>`MAX(CASE
@@ -104,10 +104,7 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
                       AND buyer_option_sku.deleted_at IS NULL
                       AND buyer_option_sku.id <> 'default'
                       AND buyer_option_sku.is_default = 0
-                      AND (
-                          trim(coalesce(buyer_option_sku.size, '')) <> ''
-                          OR trim(coalesce(buyer_option_sku.color, '')) <> ''
-                      )
+                      AND trim(coalesce(buyer_option_sku.option_combination_key, '')) <> ''
                 )
             )`,
         ))
@@ -187,10 +184,7 @@ export function buyerCatalogHasSkuInPriceRange(
                     AND buyer_filter_option_sku.deleted_at IS NULL
                     AND buyer_filter_option_sku.id <> 'default'
                     AND buyer_filter_option_sku.is_default = 0
-                    AND (
-                        trim(coalesce(buyer_filter_option_sku.size, '')) <> ''
-                        OR trim(coalesce(buyer_filter_option_sku.color, '')) <> ''
-                    )
+                    AND trim(coalesce(buyer_filter_option_sku.option_combination_key, '')) <> ''
               )
           )
           AND (
@@ -210,10 +204,7 @@ export function buyerCatalogHasSkuInPriceRange(
                               AND buyer_filter_available_option_sku.deleted_at IS NULL
                               AND buyer_filter_available_option_sku.id <> 'default'
                               AND buyer_filter_available_option_sku.is_default = 0
-                              AND (
-                                  trim(coalesce(buyer_filter_available_option_sku.size, '')) <> ''
-                                  OR trim(coalesce(buyer_filter_available_option_sku.color, '')) <> ''
-                              )
+                              AND trim(coalesce(buyer_filter_available_option_sku.option_combination_key, '')) <> ''
                         )
                     )
                     AND (

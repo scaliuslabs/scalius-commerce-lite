@@ -366,54 +366,36 @@ function checkProductImagesBoundary(context) {
 }
 
 function checkVariantToolBoundaries(context) {
-  runCheck(context, "source: variant heavy tools are lazy/on-demand", () => {
-    const manager = "apps/admin-v2/src/components/admin/product-form/variants/VariantManager.tsx";
-    const toolbar =
-      "apps/admin-v2/src/components/admin/product-form/variants/VariantActionsToolbar.tsx";
-
-    requireContains(
-      context,
-      manager,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/VariantSortModal["']\)/,
-      "source",
-      "expected VariantSortModal to be lazy-loaded.",
-    );
-    requireContains(
-      context,
-      toolbar,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/bulk-generator["']\)/,
-      "source",
-      "expected bulk-generator to be lazy-loaded.",
-    );
-    requireContains(
-      context,
-      toolbar,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\/VariantImportExport["']\)/,
-      "source",
-      "expected VariantImportExport to be lazy-loaded.",
-    );
-    requireContains(
-      context,
-      toolbar,
-      /import\(["']\.\/utils\/csvHelpers["']\)/,
-      "source",
-      "expected csvHelpers to load only from the export action.",
-    );
-
-    const blocked = /(?:bulk-generator|VariantSortModal|VariantImportExport|utils\/csvHelpers)$/;
+  runCheck(context, "source: option matrix is lazy and bounded", () => {
+    const routes = [
+      "apps/admin-v2/src/routes/admin/products/new.tsx",
+      "apps/admin-v2/src/routes/admin/products/$productId/edit.tsx",
+    ];
+    const matrix = "apps/admin-v2/src/components/admin/product-form/variants/OptionMatrixEditor.tsx";
+    for (const route of routes) {
+      requireContains(
+        context,
+        route,
+        /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']~\/components\/admin\/product-form\/variants\/OptionMatrixEditor["']\)/,
+        "source",
+        "expected OptionMatrixEditor to be lazy-loaded.",
+      );
+      requireNoStaticImports(
+        context,
+        route,
+        /(?:^|\/)OptionMatrixEditor$/,
+        "source",
+        "product routes must not statically import the option matrix",
+      );
+    }
+    requireContains(context, matrix, /const pageSize = 30;/, "source", "expected bounded matrix pagination.");
+    requireContains(context, matrix, /filteredVariants\.slice\(/, "source", "expected the matrix to render one page at a time.");
     requireNoStaticImports(
       context,
-      manager,
-      blocked,
+      matrix,
+      /(?:bulk-generator|VariantSortModal|VariantImportExport|csvHelpers|MediaManager)$/,
       "source",
-      "variant manager must not statically import heavy variant tools",
-    );
-    requireNoStaticImports(
-      context,
-      toolbar,
-      blocked,
-      "source",
-      "variant toolbar must not statically import heavy variant tools",
+      "option matrix must not restore deleted heavy variant tools",
     );
   });
 }

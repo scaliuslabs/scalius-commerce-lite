@@ -40,7 +40,7 @@ function formatStatus(status: string) {
 }
 
 function getItemLabel(item: OrderItem) {
-  const variantParts = [item.variantSize, item.variantColor].filter(Boolean);
+  const variantParts = item.variantLabel ? [item.variantLabel] : [];
   return variantParts.length > 0
     ? `${item.productName ?? "Unnamed product"} (${variantParts.join(" / ")})`
     : item.productName ?? "Unnamed product";
