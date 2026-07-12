@@ -33,7 +33,9 @@ type MockChain = {
   __kind?: string;
   from: ReturnType<typeof vi.fn>;
   innerJoin: ReturnType<typeof vi.fn>;
+  leftJoin: ReturnType<typeof vi.fn>;
   where: ReturnType<typeof vi.fn>;
+  orderBy: ReturnType<typeof vi.fn>;
   select: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   values: ReturnType<typeof vi.fn>;
@@ -149,7 +151,9 @@ function createChain(result: unknown): MockChain {
   const chain = {} as MockChain;
   chain.from = vi.fn(() => chain);
   chain.innerJoin = vi.fn(() => chain);
+  chain.leftJoin = vi.fn(() => chain);
   chain.where = vi.fn(() => chain);
+  chain.orderBy = vi.fn(() => chain);
   chain.select = vi.fn((callback?: unknown) => {
     if (typeof callback === "function") {
       const qbSelect = vi.fn(() => chain);
@@ -208,6 +212,7 @@ function createUpdateOrderDb(options: {
     null, // no issued invoice
     options.existingItems,
     liveSkuRows,
+    [], // no product media for order-item snapshots
   ];
 
   return {
