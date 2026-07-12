@@ -5,6 +5,7 @@ import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   analyticsScriptTypes,
   createAnalyticsSchema,
+  getAnalyticsProviderIdentifier,
   isPubliclyInjectableAnalyticsConfig,
   normalizeCloudflareWebAnalyticsConfig,
   updateAnalyticsSchema,
@@ -103,6 +104,7 @@ describe("analytics validation", () => {
       });
       const updateResult = updateAnalyticsSchema.safeParse({
         id: "analytics_1",
+        expectedRevision: 1,
         name: "Analytics Script",
         type: testCase.type,
         isActive: true,
@@ -174,6 +176,17 @@ describe("analytics validation", () => {
     ).toBe(
       `<script defer src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" data-cf-beacon='{"token":"site_token_123"}'></script>`,
     );
+  });
+
+  it("extracts safe list identifiers and masks Cloudflare site tokens", () => {
+    expect(getAnalyticsProviderIdentifier("google_analytics", VALID_GA4_CONFIG)).toBe(
+      "G-ABC123DEF4",
+    );
+    expect(getAnalyticsProviderIdentifier(
+      "cloudflare_web_analytics",
+      normalizeCloudflareWebAnalyticsConfig("site_token_123"),
+    )).toBe("••••_123");
+    expect(getAnalyticsProviderIdentifier("custom", "<script>secret()</script>")).toBeNull();
   });
 
   it("rejects active snippets that still contain provider placeholder IDs", () => {
@@ -277,6 +290,7 @@ describe("analytics validation", () => {
     });
     const inactiveUpdate = updateAnalyticsSchema.safeParse({
       id: "analytics_1",
+      expectedRevision: 1,
       name: "Draft Analytics Script",
       type: "facebook_pixel",
       isActive: false,
@@ -286,6 +300,7 @@ describe("analytics validation", () => {
     });
     const activeUpdate = updateAnalyticsSchema.safeParse({
       id: "analytics_1",
+      expectedRevision: 1,
       name: "Draft Analytics Script",
       type: "tiktok_pixel",
       isActive: true,
@@ -310,6 +325,7 @@ describe("analytics validation", () => {
     });
     const activeUpdate = updateAnalyticsSchema.safeParse({
       id: "analytics_1",
+      expectedRevision: 1,
       name: "Draft Facebook Pixel",
       type: "facebook_pixel",
       isActive: true,

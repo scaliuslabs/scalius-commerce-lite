@@ -3,15 +3,16 @@ import {
   getAnalyticsProviderHealth,
   getAnalyticsScript,
   getAnalyticsScripts,
+  type AnalyticsQueryInput,
 } from "../api-functions/analytics";
 import { queryKeys } from "../query-keys";
 
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
 
-export const analyticsScriptsQueryOptions = () =>
+export const analyticsScriptsQueryOptions = (params: AnalyticsQueryInput) =>
   queryOptions({
-    queryKey: queryKeys.analytics.list(),
-    queryFn: () => getAnalyticsScripts(),
+    queryKey: queryKeys.analytics.list(params),
+    queryFn: () => getAnalyticsScripts({ data: params }),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 

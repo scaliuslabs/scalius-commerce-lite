@@ -104,6 +104,41 @@ function isValidCloudflareWebAnalyticsToken(token: string): boolean {
     );
 }
 
+/**
+ * Returns a safe, non-executable identifier for list/readiness surfaces.
+ * Provider identifiers are public browser configuration, but Cloudflare site
+ * tokens are still masked so list responses do not become a token inventory.
+ */
+export function getAnalyticsProviderIdentifier(
+    type: AnalyticsScriptType | string,
+    config: string,
+): string | null {
+    const value = (() => {
+        switch (type) {
+            case "google_analytics":
+                return config.match(GA4_MEASUREMENT_ID_PATTERN)?.[0] ?? null;
+            case "google_tag_manager":
+                return config.match(GOOGLE_TAG_MANAGER_ID_PATTERN)?.[0] ?? null;
+            case "facebook_pixel":
+                return config.match(FACEBOOK_PIXEL_INIT_PATTERN)?.[3] ?? null;
+            case "tiktok_pixel":
+                return config.match(TIKTOK_PIXEL_LOAD_PATTERN)?.[2]
+                    ?? config.match(TIKTOK_PIXEL_SDK_ID_PATTERN)?.[1]
+                    ?? null;
+            case "cloudflare_web_analytics":
+                return /<script/i.test(config)
+                    ? extractCloudflareWebAnalyticsToken(config)
+                    : config.trim() || null;
+            default:
+                return null;
+        }
+    })();
+
+    if (!value) return null;
+    if (type !== "cloudflare_web_analytics") return value;
+    return value.length <= 4 ? "••••" : `••••${value.slice(-4)}`;
+}
+
 const analyticsFields = {
     name: z.string().min(3).max(100),
     type: analyticsScriptTypeSchema,
@@ -240,15 +275,24 @@ export const createAnalyticsSchema = z.object({
     ...analyticsFields,
     isActive: z.boolean().default(false),
     usePartytown: z.boolean().default(true),
+    allowDuplicateProvider: z.boolean().optional(),
 }).superRefine(validateAnalyticsConfig);
 
 export const updateAnalyticsSchema = z.object({
     id: z.string(),
+    expectedRevision: z.number().int().min(1),
     ...analyticsFields,
     isActive: z.boolean(),
     usePartytown: z.boolean(),
+    allowDuplicateProvider: z.boolean().optional(),
 }).superRefine(validateAnalyticsConfig);
 
 export const toggleAnalyticsSchema = z.object({
     isActive: z.boolean(),
+    expectedRevision: z.number().int().min(1),
+    allowDuplicateProvider: z.boolean().optional().default(false),
+});
+
+export const analyticsRevisionSchema = z.object({
+    expectedRevision: z.number().int().min(1),
 });

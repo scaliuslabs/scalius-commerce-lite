@@ -714,8 +714,28 @@ export interface AnalyticsScript {
   usePartytown: boolean;
   config: string | null;
   location: string;
+  revision: number;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
+  deletedAt: Date | string | number | null;
+}
+
+export type AnalyticsScriptReadiness =
+  | "ready"
+  | "blocked"
+  | "draft"
+  | "ready_to_activate"
+  | "trashed";
+
+export interface AnalyticsScriptSummary extends Omit<AnalyticsScript, "config"> {
+  identifier: string | null;
+  readiness: AnalyticsScriptReadiness;
+  configIssue: string | null;
+}
+
+export interface AnalyticsScriptsListResponse {
+  scripts: AnalyticsScriptSummary[];
+  pagination: PaginationResponse;
 }
 
 export type AnalyticsProviderType =

@@ -132,7 +132,19 @@ function MetaPixelParityPanel({
         </div>
         {pixelParity.status !== "ok" ? (
           <Button asChild variant="outline" size="sm" className="mt-2">
-            <Link to="/admin/analytics">
+            <Link
+              to="/admin/analytics"
+              search={{
+                page: 1,
+                limit: 20,
+                search: "",
+                sort: "updatedAt",
+                order: "desc",
+                trashed: false,
+                type: undefined,
+                status: undefined,
+              }}
+            >
               Review browser Pixel
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>

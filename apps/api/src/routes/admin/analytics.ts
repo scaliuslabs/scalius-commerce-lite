@@ -1,85 +1,128 @@
-// src/server/routes/admin/analytics.ts
-// Admin OpenAPI routes for analytics scripts.
-
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-    OpenAPIHono,
-    createRoute,
-    z,
-    type RouteConfig,
-    type RouteHandler,
-} from "@hono/zod-openapi";
-import {
-    listAnalyticsScripts,
-    getAnalyticsScript,
-    createAnalyticsScript,
-    updateAnalyticsScript,
-    deleteAnalyticsScript,
-    toggleAnalyticsScript,
-    createAnalyticsSchema,
-    updateAnalyticsSchema,
-    toggleAnalyticsSchema,
-    getAnalyticsProviderHealth,
     analyticsProviderHealthBrowserStatuses,
     analyticsProviderHealthServerStatuses,
+    analyticsRevisionSchema,
+    analyticsScriptTypes,
+    createAnalyticsSchema,
+    createAnalyticsScript,
+    deleteAnalyticsScript,
+    getAnalyticsProviderHealth,
+    getAnalyticsScript,
+    listAnalyticsScripts,
+    permanentlyDeleteAnalyticsScript,
+    restoreAnalyticsScript,
+    toggleAnalyticsSchema,
+    toggleAnalyticsScript,
+    updateAnalyticsSchema,
+    updateAnalyticsScript,
 } from "@scalius/core/modules/analytics";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-
-import { ok, created } from "../../utils/api-response";
-import { successEnvelope, errorResponses } from "../../schemas/responses";
+import { created, ok } from "../../utils/api-response";
+import {
+    conflictResponse,
+    errorResponses,
+    paginatedEnvelope,
+    successEnvelope,
+} from "../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
+
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
 
-type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
-type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
+const timestampSchema = z.string().nullable();
+const analyticsSummarySchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    isActive: z.boolean(),
+    usePartytown: z.boolean(),
+    location: z.string(),
+    revision: z.number().int().min(1),
+    identifier: z.string().nullable(),
+    readiness: z.string(),
+    configIssue: z.string().nullable(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+    deletedAt: timestampSchema,
+});
 
-// ── List Analytics Scripts ──
+const analyticsDetailSchema = analyticsSummarySchema.omit({
+    identifier: true,
+    readiness: true,
+    configIssue: true,
+}).extend({ config: z.string() });
 
 const listRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Analytics"],
-    summary: "List all analytics scripts",
+    summary: "List analytics scripts without executable source",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(100).default(20),
+            search: z.string().max(100).optional().default(""),
+            type: z.enum(analyticsScriptTypes).optional(),
+            status: z.enum(["active", "inactive"]).optional(),
+            trashed: z.enum(["true", "false"]).optional(),
+            sort: z.enum(["name", "type", "createdAt", "updatedAt"]).default("updatedAt"),
+            order: z.enum(["asc", "desc"]).default("desc"),
+        }),
+    },
     responses: {
-        200: { description: "Analytics script list", content: { "application/json": { schema: successEnvelope(z.array(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string(), createdAt: z.union([z.string(), z.number()]), updatedAt: z.union([z.string(), z.number()]) }).passthrough().nullable())) } } },
+        200: {
+            description: "Paginated safe analytics summaries",
+            content: {
+                "application/json": {
+                    schema: paginatedEnvelope("scripts", analyticsSummarySchema),
+                },
+            },
+        },
         ...errorResponses,
-    }
+    },
 });
 
-app.openapi(listRoute, (async (c: AdminRouteContext<typeof listRoute>) => {
-    const db = c.get("db");
-    const scripts = await listAnalyticsScripts(db);
-    return ok(c, scripts);
-}) as unknown as AdminRouteHandler<typeof listRoute>);
+app.openapi(listRoute, async (c) => {
+    const query = c.req.valid("query");
+    return ok(c, await listAnalyticsScripts(c.get("db"), {
+        ...query,
+        showTrashed: query.trashed === "true",
+    }));
+});
 
-// ── Create Analytics Script ──
-
-const createScriptRoute = createRoute({
+const createRouteDefinition = createRoute({
     method: "post",
     path: "/",
     tags: ["Admin - Analytics"],
-    summary: "Create an analytics script",
-    request: {
-        body: { content: { "application/json": { schema: createAnalyticsSchema } } }
-    },
+    summary: "Create an inactive analytics draft",
+    request: { body: { content: { "application/json": { schema: createAnalyticsSchema } } } },
     responses: {
-        201: { description: "Script created", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), name: z.string(), type: z.string(), isActive: z.boolean() }).passthrough()) } } },
+        201: {
+            description: "Analytics script created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        id: z.string(),
+                        revision: z.number().int().min(1),
+                        script: analyticsDetailSchema.nullable(),
+                    })),
+                },
+            },
+        },
         ...errorResponses,
-    }
+        409: conflictResponse,
+    },
 });
 
-app.openapi(createScriptRoute, (async (c: AdminRouteContext<typeof createScriptRoute>) => {
-    const db = c.get("db");
-    const data = c.req.valid("json");
-    const result = await createAnalyticsScript(db, data, {
+app.openapi(createRouteDefinition, async (c) => {
+    const result = await createAnalyticsScript(c.get("db"), c.req.valid("json"), {
         canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
     });
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return created(c, result);
-}) as unknown as AdminRouteHandler<typeof createScriptRoute>);
-
-// ── Analytics Provider Health ──
+});
 
 const providerHealthBrowserSchema = z.object({
     status: z.enum(analyticsProviderHealthBrowserStatuses),
@@ -91,7 +134,6 @@ const providerHealthBrowserSchema = z.object({
     message: z.string(),
     issues: z.array(z.string()),
 });
-
 const providerHealthServerSchema = z.object({
     status: z.enum(analyticsProviderHealthServerStatuses),
     configured: z.boolean(),
@@ -103,165 +145,215 @@ const providerHealthRoute = createRoute({
     method: "get",
     path: "/health",
     tags: ["Admin - Analytics"],
-    summary: "Get analytics provider health",
+    summary: "Get analytics provider readiness without provider calls",
     responses: {
         200: {
             description: "Analytics provider health",
             content: {
                 "application/json": {
-                    schema: successEnvelope(
-                        z.object({
-                            summary: z.object({
-                                totalProviders: z.number().int().nonnegative(),
-                                browserReadyProviders: z.number().int().nonnegative(),
-                                draftProviders: z.number().int().nonnegative(),
-                                blockedProviders: z.number().int().nonnegative(),
-                                notConfiguredProviders: z.number().int().nonnegative(),
-                                serverReadyProviders: z.number().int().nonnegative(),
-                            }),
-                            providers: z.array(
-                                z.object({
-                                    provider: z.enum([
-                                        "google_analytics",
-                                        "google_tag_manager",
-                                        "facebook_pixel",
-                                        "tiktok_pixel",
-                                        "cloudflare_web_analytics",
-                                        "custom",
-                                    ]),
-                                    label: z.string(),
-                                    browser: providerHealthBrowserSchema,
-                                    serverSide: providerHealthServerSchema,
-                                }),
-                            ),
+                    schema: successEnvelope(z.object({
+                        summary: z.object({
+                            totalProviders: z.number().int().nonnegative(),
+                            browserReadyProviders: z.number().int().nonnegative(),
+                            draftProviders: z.number().int().nonnegative(),
+                            blockedProviders: z.number().int().nonnegative(),
+                            notConfiguredProviders: z.number().int().nonnegative(),
+                            serverReadyProviders: z.number().int().nonnegative(),
                         }),
-                    ),
+                        providers: z.array(z.object({
+                            provider: z.enum(analyticsScriptTypes),
+                            label: z.string(),
+                            browser: providerHealthBrowserSchema,
+                            serverSide: providerHealthServerSchema,
+                        })),
+                    })),
                 },
             },
         },
         ...errorResponses,
-    }
+    },
 });
 
-app.openapi(providerHealthRoute, (async (c: AdminRouteContext<typeof providerHealthRoute>) => {
-    const db = c.get("db");
-    const health = await getAnalyticsProviderHealth(db, {
-        credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
-    });
-    return ok(c, health);
-}) as unknown as AdminRouteHandler<typeof providerHealthRoute>);
-
-// ── Get Analytics Script ──
+app.openapi(providerHealthRoute, async (c) => ok(c, await getAnalyticsProviderHealth(
+    c.get("db"),
+    { credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY },
+)));
 
 const getByIdRoute = createRoute({
     method: "get",
-    path: "/{id}",
+    path: "/{id}/source",
     tags: ["Admin - Analytics"],
-    summary: "Get an analytics script by ID",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
+    summary: "Get analytics script source for the editor",
+    request: { params: z.object({ id: z.string() }) },
     responses: {
-        200: { description: "Script details", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), name: z.string(), type: z.string(), config: z.string(), isActive: z.boolean(), usePartytown: z.boolean(), location: z.string() }).passthrough()) } } },
+        200: {
+            description: "Analytics script detail",
+            content: { "application/json": { schema: successEnvelope(analyticsDetailSchema) } },
+        },
         ...errorResponses,
-    }
+    },
 });
 
 app.openapi(getByIdRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const script = await getAnalyticsScript(db, id);
+    const script = await getAnalyticsScript(c.get("db"), c.req.valid("param").id);
     if (!script) throw new NotFoundError("Analytics script not found");
     return ok(c, script);
 });
 
-// ── Update Analytics Script ──
-
-const updateScriptRoute = createRoute({
+const updateRoute = createRoute({
     method: "put",
     path: "/{id}",
     tags: ["Admin - Analytics"],
-    summary: "Update an analytics script",
+    summary: "Update an analytics script with optimistic concurrency",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateAnalyticsSchema } } }
+        body: { content: { "application/json": { schema: updateAnalyticsSchema } } },
     },
     responses: {
-        200: { description: "Script updated", content: { "application/json": { schema: successEnvelope(z.object({ script: z.object({ id: z.string(), name: z.string(), type: z.string(), isActive: z.boolean() }).passthrough() })) } } },
+        200: {
+            description: "Analytics script updated",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ script: analyticsDetailSchema })),
+                },
+            },
+        },
         ...errorResponses,
-    }
+        409: conflictResponse,
+    },
 });
 
-app.openapi(updateScriptRoute, async (c) => {
-    const db = c.get("db");
+app.openapi(updateRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-
-    if (data.id && data.id !== id) {
-        throw new ValidationError("ID mismatch");
-    }
-
-    const updated = await updateAnalyticsScript(db, id, data, {
+    if (data.id !== id) throw new ValidationError("ID mismatch");
+    const script = await updateAnalyticsScript(c.get("db"), id, data, {
         canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
     });
-    if (!updated) throw new NotFoundError("Analytics script not found");
+    if (!script) throw new NotFoundError("Analytics script not found");
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    return ok(c, { script: updated });
+    return ok(c, { script });
 });
 
-// ── Delete Analytics Script ──
-
-const deleteScriptRoute = createRoute({
-    method: "delete",
-    path: "/{id}",
-    tags: ["Admin - Analytics"],
-    summary: "Delete an analytics script",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        200: { description: "Script deleted", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), deletedScript: z.object({ id: z.string() }).passthrough() })) } } },
-        ...errorResponses,
-    }
-});
-
-app.openapi(deleteScriptRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const deleted = await deleteAnalyticsScript(db, id);
-    if (!deleted) throw new NotFoundError("Analytics script not found");
-    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    return ok(c, { message: "Analytics script deleted", deletedScript: deleted });
-});
-
-// ── Toggle Analytics Script ──
-
-const toggleScriptRoute = createRoute({
+const toggleRoute = createRoute({
     method: "post",
     path: "/{id}/toggle",
     tags: ["Admin - Analytics"],
-    summary: "Toggle an analytics script active status",
+    summary: "Activate or deactivate an analytics script with revision protection",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: toggleAnalyticsSchema } } }
+        body: { content: { "application/json": { schema: toggleAnalyticsSchema } } },
     },
     responses: {
-        200: { description: "Script toggled", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), script: z.object({ id: z.string(), isActive: z.boolean() }).passthrough() })) } } },
+        200: {
+            description: "Analytics script status updated",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ message: z.string(), script: analyticsDetailSchema })),
+                },
+            },
+        },
         ...errorResponses,
-    }
+        409: conflictResponse,
+    },
 });
 
-app.openapi(toggleScriptRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
+app.openapi(toggleRoute, async (c) => {
     const data = c.req.valid("json");
-    const toggled = await toggleAnalyticsScript(db, id, data.isActive);
-    if (!toggled) throw new NotFoundError("Analytics script not found");
+    const script = await toggleAnalyticsScript(c.get("db"), c.req.valid("param").id, data);
+    if (!script) throw new NotFoundError("Analytics script not found");
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return ok(c, {
         message: `Analytics script ${data.isActive ? "activated" : "deactivated"}`,
-        script: toggled
+        script,
     });
+});
+
+const trashRoute = createRoute({
+    method: "delete",
+    path: "/{id}",
+    tags: ["Admin - Analytics"],
+    summary: "Move an analytics script to trash",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: analyticsRevisionSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Analytics script moved to trash",
+            content: { "application/json": { schema: successEnvelope(analyticsSummarySchema) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(trashRoute, async (c) => {
+    const result = await deleteAnalyticsScript(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").expectedRevision,
+    );
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
+});
+
+const restoreRoute = createRoute({
+    method: "post",
+    path: "/{id}/restore",
+    tags: ["Admin - Analytics"],
+    summary: "Restore an analytics script as inactive",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: analyticsRevisionSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Analytics script restored",
+            content: { "application/json": { schema: successEnvelope(analyticsSummarySchema) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(restoreRoute, async (c) => {
+    const result = await restoreAnalyticsScript(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").expectedRevision,
+    );
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
+});
+
+const permanentDeleteRoute = createRoute({
+    method: "delete",
+    path: "/{id}/permanent",
+    tags: ["Admin - Analytics"],
+    summary: "Permanently delete a trashed analytics script",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: analyticsRevisionSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Analytics script permanently deleted",
+            content: { "application/json": { schema: successEnvelope(z.object({ id: z.string() })) } },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(permanentDeleteRoute, async (c) => {
+    const result = await permanentlyDeleteAnalyticsScript(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").expectedRevision,
+    );
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
 });
 
 export { app as adminAnalyticsRoutes };

@@ -537,14 +537,10 @@ export interface DiscountValidationResponse {
 
 export interface AnalyticsConfig {
   id: string;
-  name: string;
   type: string;
-  isActive: boolean;
   usePartytown: boolean;
   config: string;
   location: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface SearchResults {

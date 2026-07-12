@@ -2,8 +2,9 @@
 // System/platform tables: settings, siteSettings, analytics, adminFcmTokens,
 // shippingMethods, checkoutLanguages.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
 
@@ -65,14 +66,18 @@ export const analytics = sqliteTable("analytics", {
     usePartytown: integer("use_partytown", { mode: "boolean" }).notNull().default(true),
     config: text("config").notNull(),
     location: text("location").notNull(),
+    revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("analytics_type_idx").on(table.type),
+    index("analytics_deleted_updated_idx").on(table.deletedAt, table.updatedAt),
+    check("analytics_revision_positive", sql.raw(`"revision" >= 1`)),
 ]);
 
 export const adminFcmTokens = sqliteTable("admin_fcm_tokens", {

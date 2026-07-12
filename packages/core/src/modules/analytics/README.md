@@ -20,12 +20,14 @@ Third-party analytics script management, Meta Conversions API integration, and a
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `listAnalyticsScripts` | `(db: Database)` | Returns all analytics rows with formatted ISO timestamps |
+| `listAnalyticsScripts` | `(db, options)` | Server-paginated/searchable safe summaries; never returns executable config |
 | `getAnalyticsScript` | `(db: Database, id: string)` | Get single script by ID |
 | `createAnalyticsScript` | `(db, data, authority?)` | Defaults inactive; active create requires verified `analytics.toggle` authority. |
-| `updateAnalyticsScript` | `(db, id, data, authority?)` | Ordinary edit may preserve status; changing it requires verified `analytics.toggle` authority. |
-| `toggleAnalyticsScript` | `(db: Database, id: string, isActive: boolean)` | Toggle active status only |
-| `deleteAnalyticsScript` | `(db: Database, id: string)` | Hard-delete. Returns the deleted script for confirmation, null if not found |
+| `updateAnalyticsScript` | `(db, id, data, authority?)` | Revision-guarded edit; changing status requires verified `analytics.toggle` authority. |
+| `toggleAnalyticsScript` | `(db, id, { isActive, expectedRevision, allowDuplicateProvider? })` | Revision-guarded lifecycle command with duplicate-provider acknowledgement |
+| `deleteAnalyticsScript` | `(db, id, expectedRevision)` | Deactivates and moves the current row to recoverable trash |
+| `restoreAnalyticsScript` | `(db, id, expectedRevision)` | Restores the current trash row as inactive |
+| `permanentlyDeleteAnalyticsScript` | `(db, id, expectedRevision)` | Permanently removes only the current trash row |
 
 ### Zod Schemas (`analytics.validation.ts`)
 
