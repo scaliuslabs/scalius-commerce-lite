@@ -234,6 +234,40 @@ describe("UCP catalog mapping", () => {
     });
   });
 
+  it("uses exact SKU media and falls back to product media for unsafe exact URLs", async () => {
+    const product = productFixture();
+    product.variants![0]!.imageId = "pmed_red";
+    product.variants![0]!.imageUrl = "/images/shoe-red.jpg";
+    product.variants![1]!.imageId = "pmed_blue";
+    product.variants![1]!.imageUrl = "//untrusted.example.test/shoe-blue.jpg";
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [product],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const result = await searchCatalog({ query: "khaki" }, context);
+
+    expect(result.status).toBe(200);
+    expect(result.body.products[0].media).toEqual([
+      {
+        type: "image",
+        url: "https://storefront.example.test/images/shoe.jpg",
+        alt_text: "Khaki shoe",
+      },
+    ]);
+    expect(result.body.products[0].variants[0].media).toEqual([
+      {
+        type: "image",
+        url: "https://storefront.example.test/images/shoe-red.jpg",
+        alt_text: "Khaki Shoes - Weight: 2KG / Style: Red",
+      },
+    ]);
+    expect(result.body.products[0].variants[1].media).toEqual(
+      result.body.products[0].media,
+    );
+    expect(JSON.stringify(result.body)).not.toContain("untrusted.example.test");
+  });
+
   it("preserves fractional variant discounts in UCP minor units", async () => {
     const product = productFixture();
     product.price = 10.4;
