@@ -26,9 +26,14 @@ const hasManyTabs = tabs.length > 4;
 
 {
   tabs.length > 0 && (
-    <div class="mt-2 pt-2 border-t border-gray-200">
-      <div class="product-details-tabs">
-        <div class="border-b border-gray-200 relative">
+    <div
+      id="product-details"
+      class="mt-1.5 border-t border-gray-200 pt-1.5 lg:mt-2 lg:pt-2"
+    >
+      <div class="product-details-tabs" data-product-details-tabs>
+        <div
+          class="product-details-tab-rail sticky z-40 border-b border-gray-200 bg-white/95 backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
+        >
           {hasManyTabs && (
             <button
               type="button"
@@ -42,19 +47,23 @@ const hasManyTabs = tabs.length > 4;
 
           <nav
             id="tab-nav"
-            class="-mb-px flex space-x-4 md:space-x-6 overflow-x-auto scrollbar-hide scroll-smooth px-2 md:px-0"
+            class="-mb-px flex space-x-3 overflow-x-auto px-1.5 sm:space-x-4 md:space-x-6 md:px-0"
             role="tablist"
+            aria-label="Product information"
             style="scrollbar-width: none; -ms-overflow-style: none;"
           >
             {tabs.map((tab, index) => (
               <button
                 type="button"
+                id={`details-tab-${tab.id}`}
                 role="tab"
                 data-tab-id={tab.id}
+                data-tab-anchor={`details-panel-${tab.id}`}
                 aria-selected={index === 0 ? "true" : "false"}
-                aria-controls={`panel-${tab.id}`}
+                aria-controls={`details-panel-${tab.id}`}
+                tabindex={index === 0 ? 0 : -1}
                 class:list={[
-                  "shrink-0 whitespace-nowrap py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-sm transition-all duration-200 min-h-[44px] flex items-center",
+                  "flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 px-1.5 py-2.5 text-sm font-medium transition-colors duration-150 md:px-1 md:py-3",
                   index === 0
                     ? "border-primary text-primary"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
@@ -90,13 +99,13 @@ const hasManyTabs = tabs.length > 4;
           )}
         </div>
 
-        <div class="mt-4">
+        <div class="mt-3 lg:mt-4">
           {(product.description ||
             (product.features && product.features.length > 0)) && (
             <div
-              id="panel-description"
+              id="details-panel-description"
               role="tabpanel"
-              aria-labelledby="description"
+              aria-labelledby="details-tab-description"
               data-tab-panel="description"
               class="tab-panel"
             >
@@ -127,9 +136,9 @@ const hasManyTabs = tabs.length > 4;
             <>
               {product.additionalInfo.map((section) => (
                 <div
-                  id={`panel-${section.id}`}
+                  id={`details-panel-${section.id}`}
                   role="tabpanel"
-                  aria-labelledby={section.id}
+                  aria-labelledby={`details-tab-${section.id}`}
                   data-tab-panel={section.id}
                   class="tab-panel hidden"
                 >
@@ -152,7 +161,7 @@ const hasManyTabs = tabs.length > 4;
   /* Tab panel animation - GPU accelerated */
   .tab-panel {
     animation: fadeIn 0.2s ease-in-out;
-    will-change: opacity, transform;
+    scroll-margin-top: calc(var(--header-height, 3.5rem) + 3.25rem);
   }
 
   @keyframes fadeIn {
@@ -170,6 +179,10 @@ const hasManyTabs = tabs.length > 4;
   #tab-nav {
     -webkit-overflow-scrolling: touch;
     scroll-behavior: smooth;
+  }
+
+  .product-details-tab-rail {
+    top: calc(var(--header-height, 3.5rem) - 1px);
   }
 
   #tab-nav::-webkit-scrollbar {
@@ -195,5 +208,17 @@ const hasManyTabs = tabs.length > 4;
   #scroll-left:not([style*="opacity: 0"]),
   #scroll-right:not([style*="opacity: 0"]) {
     pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tab-panel {
+      animation: none;
+    }
+
+    #tab-nav,
+    [role="tab"] {
+      scroll-behavior: auto;
+      transition-duration: 0.01ms;
+    }
   }
 </style>

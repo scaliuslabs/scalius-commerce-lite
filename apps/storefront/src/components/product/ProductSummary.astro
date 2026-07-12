@@ -129,8 +129,8 @@ function optionAriaLabel(
 
 <div class="lg:col-span-5 xl:col-span-6">
   <div class="flex h-full flex-col">
-    <div class="mb-2 border-b border-border pb-2">
-      <h1 class="mb-2 text-lg font-bold leading-tight text-foreground lg:text-3xl">{product.name}</h1>
+    <div class="mb-1.5 border-b border-border pb-1.5 lg:mb-2 lg:pb-2">
+      <h1 class="mb-1 text-[17px] font-bold leading-tight text-foreground sm:text-lg lg:mb-2 lg:text-3xl">{product.name}</h1>
       {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
       <div class="flex flex-nowrap items-center gap-x-1.5 overflow-x-auto lg:gap-x-2">
         <p class="product-price whitespace-nowrap text-lg font-bold text-primary lg:text-3xl" aria-live="polite">
@@ -145,13 +145,13 @@ function optionAriaLabel(
         </div>
         {product.freeDelivery ? <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm lg:px-2 lg:text-xs"><Truck className="mr-0.5 h-2.5 w-2.5 lg:mr-1 lg:h-3 lg:w-3" />Free Delivery</span> : null}
       </div>
-      <div class="mt-2 flex items-center gap-2">
+      <div class="mt-1.5 flex items-center gap-2 lg:mt-2">
         <h2 class="text-xs font-medium text-foreground lg:text-sm">Qty:</h2>
         <div class="flex items-center">
           <label for="quantity" class="sr-only">Product quantity</label>
-          <button type="button" id="quantity-minus" class="inline-flex h-6 w-6 items-center justify-center rounded-l-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Decrease quantity"><Minus className="h-3 w-3" /></button>
-          <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" aria-label="Product quantity" class="h-6 w-10 border-y border-input text-center text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 lg:h-8 lg:w-12 lg:text-sm" />
-          <button type="button" id="quantity-plus" class="inline-flex h-6 w-6 items-center justify-center rounded-r-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Increase quantity"><Plus className="h-3 w-3" /></button>
+          <button type="button" id="quantity-minus" class="inline-flex h-8 w-8 items-center justify-center rounded-l-md border border-input bg-background shadow-sm lg:w-8" aria-label="Decrease quantity"><Minus className="h-3 w-3" /></button>
+          <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" aria-label="Product quantity" class="h-8 w-10 border-y border-input text-center text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 lg:w-12 lg:text-sm" />
+          <button type="button" id="quantity-plus" class="inline-flex h-8 w-8 items-center justify-center rounded-r-md border border-input bg-background shadow-sm lg:w-8" aria-label="Increase quantity"><Plus className="h-3 w-3" /></button>
         </div>
       </div>
     </div>
@@ -159,7 +159,7 @@ function optionAriaLabel(
     <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
     <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
-    <div id="product-actions" class="space-y-2 pt-1 lg:space-y-3 lg:pt-2">
+    <div id="product-actions" class="space-y-1.5 pt-0.5 lg:space-y-3 lg:pt-2">
       <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
         {initialUnavailableVariant ? `The requested ${unavailableLabel} combination is out of stock. Choose another available option.` : ""}
       </div>
@@ -168,7 +168,7 @@ function optionAriaLabel(
         const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
         return (
           <div class="variant-option-selector" data-option-definition-id={option.id}>
-            <h2 id={`product-option-${option.id}`} class="mb-1 text-sm font-medium text-foreground"><span class="text-destructive">*</span> {option.name}</h2>
+            <h2 id={`product-option-${option.id}`} class="mb-0.5 text-sm font-medium text-foreground lg:mb-1"><span class="text-destructive">*</span> {option.name}</h2>
             <div class="flex flex-wrap gap-1.5" role="group" aria-labelledby={`product-option-${option.id}`}>
               {option.values.map((value) => {
                 const selected = initialSelection[option.id] === value.id;
@@ -177,7 +177,7 @@ function optionAriaLabel(
                   <button
                     type="button"
                     class:list={[
-                      "variant-option-btn flex h-7 min-w-8 cursor-pointer items-center justify-center rounded-md border px-2 text-xs font-medium shadow-sm transition-all duration-200 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none",
+                      "variant-option-btn flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md border px-2 text-xs font-medium shadow-sm transition-all duration-200 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none lg:h-7",
                       {
                         "border-black bg-black text-white": selected && status !== "sold_out",
                         "border-input bg-background text-foreground": !selected && status === "available",
@@ -202,10 +202,10 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="grid grid-cols-2 gap-2 pt-1 lg:pt-3">
-        <button type="button" data-action="add-to-cart" disabled={!addToCartAvailable} class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:py-2.5" aria-label={addToCartAvailable ? `Add ${product.name} to cart` : `Select an available ${product.name} option to add to cart`}>
+        <button type="button" data-action="add-to-cart" disabled={!addToCartAvailable} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary/5 px-2 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:py-2.5" aria-label={addToCartAvailable ? `Add ${product.name} to cart` : `Select an available ${product.name} option to add to cart`}>
           <ShoppingCart className="mr-1.5 h-4 w-4" /><span data-action-label="add-to-cart">{addToCartAvailable ? "Add to Cart" : "Select Options"}</span>
         </button>
-        <button type="button" data-action="buy-now" disabled={purchaseUnavailable} class="flex items-center justify-center rounded-lg border border-primary bg-primary py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:opacity-50 lg:py-2.5" aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}>
+        <button type="button" data-action="buy-now" disabled={purchaseUnavailable} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:opacity-50 lg:py-2.5" aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}>
           <Check className="mr-1.5 h-4 w-4" /><span data-action-label="buy-now">{purchaseUnavailable ? "Unavailable" : "Buy Now"}</span>
         </button>
       </div>
