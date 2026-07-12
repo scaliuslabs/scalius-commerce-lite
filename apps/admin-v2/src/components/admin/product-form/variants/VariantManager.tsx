@@ -136,6 +136,7 @@ interface VariantManagerProps {
   onRevisionConflict: (conflict: ProductRevisionConflict) => void;
   onOpenRevisionConflict: () => void;
   onVariantChange?: () => void;
+  embedded?: boolean;
 }
 
 type BulkVariantDraftUpdate = {
@@ -164,6 +165,7 @@ export function VariantManager({
   onRevisionConflict,
   onOpenRevisionConflict,
   onVariantChange,
+  embedded = false,
 }: VariantManagerProps) {
   const { symbol } = useCurrency();
   const normalizedOptionLabels = useMemo(
@@ -567,6 +569,7 @@ export function VariantManager({
         productSlug={productSlug}
         optionLabels={normalizedOptionLabels}
         isSubmitting={isSubmitting}
+        embedded={embedded}
       />
     );
   }
@@ -582,12 +585,15 @@ export function VariantManager({
         isDirty={hasUnsavedVariantDrafts}
         isSubmitting={isSubmitting}
       />
-      <Card>
+      <Card
+        data-variant-editor
+        className={embedded ? "rounded-none border-0 shadow-none" : undefined}
+      >
         <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
               <CardTitle className="text-base font-semibold tracking-tight flex items-center gap-2">
-                Product Options
+                {embedded ? "Variants" : "Product Options"}
                 {stats.total > 0 && (
                   <span className="text-xs font-normal text-muted-foreground">
                     ({stats.total} total)

@@ -45,14 +45,17 @@ const itemSchema = z.object({
 
 function SortableRichContentItem({
   item,
+  isExpanded,
+  onExpandedChange,
   onUpdate,
   onRemove,
 }: {
   item: RichContentItem;
+  isExpanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   onUpdate: (id: string, data: Partial<RichContentItem>) => void;
   onRemove: (id: string) => void;
 }) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
   const {
     attributes,
     listeners,
@@ -94,8 +97,10 @@ function SortableRichContentItem({
             </div>
             <button
               type="button"
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={() => onExpandedChange(!isExpanded)}
               className="p-1 hover:bg-muted rounded"
+              aria-expanded={isExpanded}
+              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.title || "untitled section"}`}
             >
               <ChevronDown className={cn("h-4 w-4 transition-transform", !isExpanded && "-rotate-90")} />
             </button>
@@ -163,6 +168,7 @@ export function AdditionalInfoManager({
 }: AdditionalInfoManagerProps) {
   const [items, setItems] = React.useState<RichContentItem[]>([]);
   const [isClient, setIsClient] = React.useState(false);
+  const [expandedItemId, setExpandedItemId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setIsClient(true);
@@ -202,6 +208,7 @@ export function AdditionalInfoManager({
     };
     const newItems = [...items, newItem];
     setItems(newItems);
+    setExpandedItemId(newItem.id);
     triggerChange(newItems);
   };
 
@@ -216,6 +223,7 @@ export function AdditionalInfoManager({
   }, [triggerChange]);
 
   const handleRemoveItem = React.useCallback((id: string) => {
+    setExpandedItemId((currentId) => currentId === id ? null : currentId);
     setItems((currentItems) => {
       const newItems = currentItems.filter((item) => item.id !== id);
       triggerChange(newItems);
@@ -243,6 +251,10 @@ export function AdditionalInfoManager({
             <SortableRichContentItem
               key={item.id}
               item={item}
+              isExpanded={expandedItemId === item.id}
+              onExpandedChange={(expanded) => {
+                setExpandedItemId(expanded ? item.id : null);
+              }}
               onUpdate={handleUpdateItem}
               onRemove={handleRemoveItem}
             />

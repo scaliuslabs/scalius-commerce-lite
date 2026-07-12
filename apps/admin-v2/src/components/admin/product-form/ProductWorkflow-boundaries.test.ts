@@ -29,6 +29,14 @@ const gallerySource = readFileSync(
   new URL("../DraggableImageGallery.tsx", import.meta.url),
   "utf8",
 );
+const additionalInfoSource = readFileSync(
+  new URL("./AdditionalInfoManager.tsx", import.meta.url),
+  "utf8",
+);
+const selectSource = readFileSync(
+  new URL("../../ui/select.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("product editing workflow boundaries", () => {
   it("does not leave live navigation anchors active during product save", () => {
@@ -72,18 +80,20 @@ describe("product editing workflow boundaries", () => {
     expect(mediaIndex).toBeLessThan(pricingIndex);
     expect(pricingIndex).toBeLessThan(optionNamesIndex);
     expect(optionNamesIndex).toBeLessThan(attributesIndex);
-    expect(attributesIndex).toBeLessThan(seoIndex);
-    expect(seoIndex).toBeLessThan(railIndex);
+    expect(attributesIndex).toBeLessThan(railIndex);
     expect(railIndex).toBeLessThan(statusIndex);
     expect(statusIndex).toBeLessThan(organizationIndex);
+    expect(organizationIndex).toBeLessThan(seoIndex);
     expect(productFormSource.slice(railIndex)).not.toContain("<PricingCard");
-    expect(productFormSource.slice(railIndex)).not.toContain("<SeoSection");
+    expect(productFormSource.slice(railIndex)).toContain("<SeoSection");
   });
 
   it("describes option labels as buyer-visible names rather than feed-only metadata", () => {
-    expect(optionNamesSource).toContain('title="Option names"');
-    expect(optionNamesSource).toContain("storefront, feeds, and structured data");
+    expect(optionNamesSource).toContain('title="Product options"');
+    expect(optionNamesSource).toContain("Choice axes");
+    expect(optionNamesSource).toContain("Shape, Pack");
     expect(optionNamesSource).toContain("Option name");
+    expect(optionNamesSource).toContain("Standard mapping");
     expect(optionNamesSource).not.toContain("feeds and ProductGroup JSON-LD only");
   });
 
@@ -98,5 +108,23 @@ describe("product editing workflow boundaries", () => {
     expect(pricingSource).toContain("showDiscount || Boolean(discountErrors)");
     expect(pricingSource).toContain("Customer price");
     expect(pricingSource).toContain("discountSummary.effectivePrice");
+  });
+
+  it("keeps option definitions with their variant editor and discovery visible in the rail", () => {
+    expect(productFormSource).toContain('id="product-options"');
+    expect(productFormSource).toContain("Define customer choices, then manage the sellable SKU combinations in one place.");
+    expect(productFormSource).toContain("<OptionDiscoverySection form={form} embedded />");
+    expect(productFormSource).toContain("{optionManager}");
+    expect(productFormSource).toContain("<SeoSection");
+    expect(productFormSource).toContain("defaultOpen={false}");
+  });
+
+  it("opens each newly added rich-text section and fixes shared select collision positioning", () => {
+    expect(additionalInfoSource).toContain("setExpandedItemId(newItem.id)");
+    expect(additionalInfoSource).toContain("expandedItemId === item.id");
+    expect(additionalInfoSource).toContain("setExpandedItemId(expanded ? item.id : null)");
+    expect(selectSource).toContain('position = "popper"');
+    expect(selectSource).toContain('"relative z-[9999]');
+    expect(selectSource).not.toContain('"fixed z-[9999]');
   });
 });

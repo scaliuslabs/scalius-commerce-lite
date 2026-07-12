@@ -131,6 +131,45 @@ revision conflicts, media-to-option mapping, and atomic combination planning,
 while making the common path feel lighter than Shopify's rather than visibly
 heavier.
 
+### Product-option relationship correction
+
+The earlier interface exposed `Option names` in the product form and `Product
+Options` in a separate SKU manager. That split was rejected in live review
+because it made one domain concept look like two unrelated features.
+
+The merchant model is now explicit:
+
+- A **choice axis** has a merchant-defined name such as Size, Color, Shape,
+  Finish, Pack, Format, Duration, License, or 2-in-1.
+- An axis has ordered **values**. Sellable combinations of those values are
+  persisted SKU variants with price, stock, barcode, weight, and discount facts.
+- **Standard mapping** is optional metadata for feeds/search/schema. Mapping an
+  axis to size, color, material, or pattern never constrains its displayed name
+  or values. An arbitrary commerce choice uses `No standard mapping` truthfully.
+- The current database supports two axes. Both are arbitrary merchant choices;
+  neither is semantically hard-coded to size/color despite the legacy column
+  names. The UI must not imply more than two until normalized option definition,
+  value, and combination tables replace those columns.
+
+The editor therefore presents one `Product options` card: choice-axis names and
+optional standard mappings first, then the default SKU or generated variant
+table immediately below. There is no standalone option-name card. Simple-to-
+optioned actions and the combination generator consume the same visible names.
+
+### Secondary editor interaction decisions
+
+- Search and discovery belongs in the right rail beside publication and
+  organization. Its collapsed state must still show the current search title,
+  product path, and description preview; collapse hides editing detail, not the
+  merchant's understanding of the saved outcome.
+- Shared select menus use Radix popper positioning as a relative portal child,
+  prefer the bottom side, and collision-flip above when viewport space runs out.
+  Do not apply `position: fixed` to the content node; that breaks the primitive's
+  computed placement across catalog and settings forms.
+- Additional rich-content sections use one controlled expanded item. Creating a
+  section expands its title and rich-text editor immediately and collapses the
+  previously edited section. Existing sections remain title-only until opened.
+
 Authoritative behavior references:
 
 - Shopify documents arbitrary per-product option names, up to three axes, exact

@@ -8,6 +8,7 @@ interface CollapsibleCardProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  summary?: React.ReactNode;
   defaultOpen?: boolean;
   className?: string;
 }
@@ -16,6 +17,7 @@ export function CollapsibleCard({
   title,
   description,
   children,
+  summary,
   defaultOpen = false,
   className,
 }: CollapsibleCardProps) {
@@ -48,6 +50,9 @@ export function CollapsibleCard({
           />
         </button>
       </CardHeader>
+      {!isOpen && summary ? (
+        <div className="px-4 pb-3">{summary}</div>
+      ) : null}
       {isOpen && (
         <CardContent className="space-y-3 px-4 pb-4 pt-0 animate-in fade-in-50 duration-150">
           {children}
