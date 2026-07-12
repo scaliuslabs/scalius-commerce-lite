@@ -3,6 +3,7 @@ import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { MediaCard } from "./MediaCard";
 import type { LibraryMediaFile, MediaLibraryView } from "../types";
+import { resolveSavedPoster } from "../utils/poster";
 
 interface MediaGalleryProps {
   files: LibraryMediaFile[];
@@ -25,7 +26,6 @@ function Skeleton() {
 }
 
 export function MediaGallery(props: MediaGalleryProps) {
-  const posterById = new Map(props.files.filter((file) => file.kind === "image").map((file) => [file.id, file.url]));
   if (props.isLoading && !props.files.length) {
     return <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">{Array.from({ length: 12 }, (_, index) => <Skeleton key={index} />)}</div>;
   }
@@ -46,7 +46,7 @@ export function MediaGallery(props: MediaGalleryProps) {
           <MediaCard
             key={file.id}
             file={file}
-            posterUrl={file.posterMediaId ? posterById.get(file.posterMediaId) : null}
+            posterUrl={resolveSavedPoster(file, props.files).posterUrl}
             selected={props.selectedFileIds.includes(file.id)}
             selectionMode={props.selectionMode}
             view={props.view}

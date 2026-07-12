@@ -63,6 +63,7 @@ export function toMediaFile(file: MediaFileDto): LibraryMediaFile {
     height: file.height ?? null,
     durationMs: file.durationMs ?? null,
     posterMediaId: file.posterMediaId ?? null,
+    posterUrl: file.posterUrl,
     folderId: file.folderId,
     status: file.status,
     version: file.version,
