@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Trash2 } from "lucide-react";
 import { DataTableToolbar } from "../DataTableToolbar";
 
@@ -45,19 +39,22 @@ export function ProductToolbar({
   bulkActionsDisabled = false,
 }: ProductToolbarProps) {
   const filters: ReactNode = (
-    <Select value={selectedCategory} onValueChange={onCategoryChange}>
-      <SelectTrigger className="h-9 w-auto sm:w-[160px] text-xs shrink-0">
-        <SelectValue placeholder="All Categories" />
-      </SelectTrigger>
-      <SelectContent className="rounded-xl bg-background">
-        <SelectItem value={ALL_CATEGORIES}>All Categories</SelectItem>
-        {categories.map((category) => (
-          <SelectItem key={category.id} value={category.id}>
-            {category.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      value={selectedCategory}
+      onValueChange={onCategoryChange}
+      options={[
+        { value: ALL_CATEGORIES, label: "All categories" },
+        ...categories.map((category) => ({
+          value: category.id,
+          label: category.name,
+        })),
+      ]}
+      placeholder="All categories"
+      searchPlaceholder="Search categories..."
+      emptyMessage="No categories found."
+      ariaLabel="Filter products by category"
+      triggerClassName="w-full shrink-0 sm:w-[190px]"
+    />
   );
 
   const bulkActions: ReactNode =
