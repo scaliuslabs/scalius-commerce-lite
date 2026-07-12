@@ -16,6 +16,7 @@ import {
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
+import { alias } from "drizzle-orm/sqlite-core";
 import {
     buyerResolvableCategoryProductExists,
     getCategoryPublishReadiness,
@@ -180,6 +181,7 @@ export async function listCategories(
         }
     })();
 
+    const assignedProducts = alias(products, "category_assigned_product");
     const resultsQuery = db
         .select({
             id: categories.id,
@@ -197,12 +199,12 @@ export async function listCategories(
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
-            productCount: sql<number>`(
-                SELECT count(*)
-                FROM ${products}
-                WHERE ${products.categoryId} = ${categories.id}
-                  AND ${products.deletedAt} IS NULL
-            )`,
+             productCount: sql<number>`(
+                 SELECT count(*)
+                 FROM ${assignedProducts}
+                 WHERE ${sql.raw('"category_assigned_product"."category_id"')} = ${sql.raw('"categories"."id"')}
+                   AND ${sql.raw('"category_assigned_product"."deleted_at"')} IS NULL
+             )`,
             publishReady: sql<number>`CASE
                 WHEN ${buyerResolvableCategoryProductExists(categories.id)} THEN 1
                 ELSE 0
