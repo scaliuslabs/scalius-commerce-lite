@@ -217,6 +217,7 @@ describe("admin product permanent delete inventory guards", () => {
     });
 
     it("reports an unexpected per-row D1 failure and continues with the next safe product", async () => {
+        const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
         const emptyChecks = [
             [{ count: 0 }],
             [{ count: 0 }],
@@ -256,5 +257,13 @@ describe("admin product permanent delete inventory guards", () => {
             },
         ]);
         expect(batchCalls).toHaveLength(2);
+        expect(consoleError).toHaveBeenCalledWith(
+            "[Products] Permanent delete failed unexpectedly",
+            expect.objectContaining({
+                productIdPrefix: "prod_failed",
+                errorMessage: "too many SQL variables",
+            }),
+        );
+        consoleError.mockRestore();
     });
 });
