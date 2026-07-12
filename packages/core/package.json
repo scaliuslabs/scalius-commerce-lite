@@ -12,6 +12,7 @@
     "./modules/customers": "./src/modules/customers/index.ts",
     "./modules/delivery": "./src/modules/delivery/index.ts",
     "./modules/discounts": "./src/modules/discounts/index.ts",
+    "./modules/hero-sliders": "./src/modules/hero-sliders/index.ts",
     "./modules/fraud-checker": "./src/modules/fraud-checker/index.ts",
     "./modules/inventory": "./src/modules/inventory/index.ts",
     "./modules/media": "./src/modules/media/index.ts",

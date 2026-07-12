@@ -3229,7 +3229,11 @@ export const deleteApiV1AdminSettingsHeroSlidersById = <ThrowOnError extends boo
             type: 'apiKey'
         }],
     url: '/api/v1/admin/settings/hero-sliders/{id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

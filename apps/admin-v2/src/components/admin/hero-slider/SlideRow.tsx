@@ -5,6 +5,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { cn } from "@scalius/shared/utils";
+import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import type { SliderImage } from "./helpers";
 
 interface SlideRowProps {
@@ -30,24 +31,25 @@ export function SlideRow({
   rowRef,
   style,
 }: SlideRowProps) {
+  const linkResult = parseNavigationHref(image.link);
+  const titleMissing = image.title.trim().length === 0;
   return (
     <div
       ref={rowRef}
       style={style}
       className={cn(
-        "group relative flex flex-col md:flex-row gap-4 p-4 rounded-xl border bg-card text-card-foreground shadow-xs transition-all hover:shadow-md",
+        "group relative flex flex-col gap-2 rounded-lg border bg-background p-2.5 shadow-xs transition-shadow hover:shadow-sm md:flex-row md:items-start",
         isDragging && "opacity-30 z-0 ring-2 ring-primary/20",
-        "bg-background",
       )}
     >
       {dragHandle}
 
       <div
         className={cn(
-          "relative shrink-0 overflow-hidden rounded-lg border bg-muted/30",
+          "relative shrink-0 overflow-hidden rounded-md border bg-muted/30",
           type === "desktop"
-            ? "aspect-16/5 w-full md:w-[280px]"
-            : "aspect-16/5 w-full md:w-[200px]",
+            ? "aspect-16/5 w-full md:w-[180px]"
+            : "aspect-16/5 w-full md:w-[132px]",
         )}
       >
         <img
@@ -57,54 +59,59 @@ export function SlideRow({
           loading="lazy"
           decoding="async"
         />
-        <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-lg" />
-        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-full font-medium">
-          Slide {index + 1}
+        <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-black/5" />
+        <div className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
+          {index + 1}
         </div>
       </div>
 
-      <div className="flex-1 grid gap-4">
+      <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.2fr)]">
         <div className="grid gap-1.5">
           <Label
             htmlFor={`title-${image.id}`}
-            className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
           >
             <Type className="w-3.5 h-3.5" />
-            Title / Alt Text
+            Image text
           </Label>
           <Input
             id={`title-${image.id}`}
             value={image.title}
             onChange={(e) => onUpdate(image.id, { title: e.target.value })}
-            placeholder="e.g. Summer Sale Collection"
-            className="h-9 transition-colors focus-visible:ring-primary/20"
+            placeholder="New season collection"
+            aria-invalid={titleMissing}
+            className="h-8 text-sm"
           />
+          {titleMissing ? <p className="text-xs text-destructive">Describe this image for customers.</p> : null}
         </div>
         <div className="grid gap-1.5">
           <Label
             htmlFor={`link-${image.id}`}
-            className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5"
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
           >
             <LinkIcon className="w-3.5 h-3.5" />
-            Destination URL
+            Destination <span className="font-normal opacity-70">(optional)</span>
           </Label>
           <Input
             id={`link-${image.id}`}
             value={image.link}
             onChange={(e) => onUpdate(image.id, { link: e.target.value })}
-            placeholder="e.g. /collections/summer-sale"
-            className="h-9 transition-colors focus-visible:ring-primary/20 bg-muted/20 focus:bg-background"
+            placeholder="/collections/new or https://example.com"
+            aria-invalid={!linkResult.ok}
+            className="h-8 bg-muted/15 text-sm focus:bg-background"
           />
+          {!linkResult.ok ? <p className="text-xs text-destructive">{linkResult.reason}</p> : null}
         </div>
       </div>
 
-      <div className="flex md:flex-col items-center justify-end md:justify-start gap-2 pt-2 md:pt-0 border-t md:border-t-0 md:border-l md:pl-4">
+      <div className="flex items-center justify-end border-t pt-2 md:border-l md:border-t-0 md:pl-2 md:pt-0">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          className="h-8 w-8 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           onClick={() => onRemove(image.id)}
-          title="Remove Slide"
+          title={`Remove slide ${index + 1}`}
+          aria-label={`Remove slide ${index + 1}`}
         >
           <X className="w-4 h-4" />
         </Button>

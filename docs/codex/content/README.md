@@ -15,6 +15,8 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   folders, image/video behavior, product integration, and gallery rules.
 - [NAVIGATION.md](NAVIGATION.md) — versioned menus, header/footer placements,
   typed resource links, WordPress-like builder direction, and storefront truth.
+- [HERO.md](HERO.md) — revision-guarded hero documents, safe slide links,
+  explicit draft/save/conflict workflow, and storefront rendering rules.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,
   scalable list/edit workflows, activation, and public injection.
 - [ACTIVATION-PERMISSIONS.md](ACTIVATION-PERMISSIONS.md) — shared draft-first

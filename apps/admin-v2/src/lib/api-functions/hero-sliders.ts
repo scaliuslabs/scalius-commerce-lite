@@ -15,6 +15,7 @@ export interface HeroSliderRecord {
   type: HeroSliderType;
   images: SliderImage[];
   isActive: boolean;
+  revision: number;
   createdAt?: string | number;
   updatedAt?: string | number;
   deletedAt?: string | number | null;
@@ -27,6 +28,7 @@ export interface HeroSliderWriteInput {
 }
 
 export interface HeroSliderUpdateInput {
+  expectedRevision: number;
   images?: SliderImage[];
   isActive?: boolean;
 }
@@ -46,6 +48,12 @@ export const createHeroSlider = createServerFn({ method: "POST" })
   .validator((data: HeroSliderWriteInput) => data)
   .handler(async ({ data }) => {
     return apiPost<HeroSliderRecord>("/settings/hero-sliders", data);
+  });
+
+export const getHeroSlider = createServerFn({ method: "GET" })
+  .validator((id: string) => id)
+  .handler(async ({ data: id }) => {
+    return apiGet<HeroSliderRecord>(`/settings/hero-sliders/${id}`);
   });
 
 export const updateHeroSlider = createServerFn({ method: "POST" })

@@ -28,6 +28,11 @@ export interface CategoryRevisionConflict {
   currentRevision: number | null;
 }
 
+export interface HeroSliderRevisionConflict {
+  expectedRevision: number;
+  currentRevision: number;
+}
+
 export interface ProductMediaSkuReferenceConflict {
   affectedCount: number;
   affectedAssociationIds: string[];
@@ -206,6 +211,38 @@ export function readCategoryRevisionConflict(
     return null;
   }
 
+  return {
+    expectedRevision: details.expectedRevision,
+    currentRevision: details.currentRevision,
+  };
+}
+
+export function readHeroSliderRevisionConflict(
+  error: unknown,
+): HeroSliderRevisionConflict | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 409 ||
+    parsed.code !== "HERO_SLIDER_REVISION_CONFLICT" ||
+    !parsed.details ||
+    typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+  const details = parsed.details as {
+    expectedRevision?: unknown;
+    currentRevision?: unknown;
+  };
+  if (
+    typeof details.expectedRevision !== "number" ||
+    !Number.isInteger(details.expectedRevision) ||
+    details.expectedRevision < 1 ||
+    typeof details.currentRevision !== "number" ||
+    !Number.isInteger(details.currentRevision) ||
+    details.currentRevision < 1
+  ) {
+    return null;
+  }
   return {
     expectedRevision: details.expectedRevision,
     currentRevision: details.currentRevision,

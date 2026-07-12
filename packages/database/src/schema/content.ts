@@ -69,19 +69,29 @@ export const heroSections = sqliteTable("hero_sections", {
         .default(UNIX_NOW),
 });
 
-export const heroSliders = sqliteTable("hero_sliders", {
-    id: text("id").primaryKey(),
-    type: text("type", { enum: ["desktop", "mobile"] }).notNull(),
-    images: text("images").notNull(),
-    isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    deletedAt: integer("deleted_at", { mode: "timestamp" }),
-});
+export const heroSliders = sqliteTable(
+    "hero_sliders",
+    {
+        id: text("id").primaryKey(),
+        type: text("type", { enum: ["desktop", "mobile"] }).notNull(),
+        images: text("images").notNull(),
+        isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+        revision: integer("revision").notNull().default(1),
+        createdAt: integer("created_at", { mode: "timestamp" })
+            .notNull()
+            .default(UNIX_NOW),
+        updatedAt: integer("updated_at", { mode: "timestamp" })
+            .notNull()
+            .default(UNIX_NOW),
+        deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    },
+    (table) => [
+        check("hero_sliders_revision_positive", sql.raw(`"revision" >= 1`)),
+        uniqueIndex("hero_sliders_active_type_unique")
+            .on(table.type)
+            .where(sql`${table.deletedAt} IS NULL`),
+    ],
+);
 
 export const pageTemplates = sqliteTable("page_templates", {
     id: text("id").primaryKey(),

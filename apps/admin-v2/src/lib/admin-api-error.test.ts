@@ -5,6 +5,7 @@ import {
   nullForAdminApiNotFound,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
+  readHeroSliderRevisionConflict,
 } from "./admin-api-error";
 
 describe("admin API detail-loader errors", () => {
@@ -77,6 +78,22 @@ describe("admin API detail-loader errors", () => {
     first.cause = second;
 
     expect(isAdminApiNotFoundError(first)).toBe(false);
+  });
+
+  it("extracts only a typed hero slider revision conflict", () => {
+    expect(readHeroSliderRevisionConflict(new AdminApiResponseError(
+      "Hero changed",
+      409,
+      "HERO_SLIDER_REVISION_CONFLICT",
+      { expectedRevision: 2, currentRevision: 3 },
+    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
+
+    expect(readHeroSliderRevisionConflict(new AdminApiResponseError(
+      "Wrong shape",
+      409,
+      "HERO_SLIDER_REVISION_CONFLICT",
+      { expectedRevision: 2, currentRevision: null },
+    ))).toBeNull();
   });
 
   it("accepts only bounded typed product-media SKU conflicts", () => {

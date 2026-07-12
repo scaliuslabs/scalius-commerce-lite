@@ -173,7 +173,7 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 |-------|---------|
 | `pages` | CMS pages. Slug, content, published flags/timestamps, featured image, SEO fields |
 | `heroSections` | Legacy hero config. Type and JSON config |
-| `heroSliders` | Homepage sliders. Desktop/mobile type and image array |
+| `heroSliders` | Revision-guarded desktop/mobile homepage hero documents with one current row per viewport |
 | `pageTemplates` | Page template definitions. Type and JSON config |
 
 ### `system.ts` -- System Domain
@@ -199,7 +199,7 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 | `siteSettings.footerConfig` | `{ logo: { src, alt }, favicon: { src, alt }, tagline, description, copyrightText, social: SocialLink[], menus: { id, title, items: { id, label, href }[] }[] }` |
 | `siteSettings.socialLinks` | `string` (JSON, legacy -- header/footerConfig now contains social data) |
 | `siteSettings.contactInfo` | `string` (JSON, legacy) |
-| `heroSliders.images` | `{ url: string, alt?: string }[]` |
+| `heroSliders.images` | `{ id: string, url: credential-free HTTPS URL, title: string, link: safe internal/HTTPS destination or "" }[]` (maximum 12, unique IDs) |
 | `heroSections.config` | `string` (JSON, provider-specific hero configuration) |
 | `pageTemplates.config` | `string` (JSON, template-specific configuration) |
 | `analytics.config` | `string` (raw HTML `<script>` content, may include Partytown attributes) |
