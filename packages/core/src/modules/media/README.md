@@ -16,7 +16,9 @@ are never durable authority.
 
 Supported launch formats are JPEG, PNG, GIF, WebP, AVIF (20 MiB) and MP4/WebM
 (100 MiB). Every upload uses 5 MiB R2 multipart parts except the final part.
-Part 1 must match the declared MIME signature before any R2 part write.
+The API materializes exactly one bounded part at a time as a known-length
+`ArrayBuffer` before R2, never the complete media object. This makes actual
+length and part-1 signature checks finish before the storage side effect.
 
 ## Lifecycle rules
 

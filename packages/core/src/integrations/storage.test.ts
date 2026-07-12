@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MEDIA_MULTIPART_PART_SIZE_BYTES } from "@scalius/shared/media-policy";
 
 import {
   AmbiguousStorageWriteError,
@@ -203,6 +204,23 @@ describe("R2 media multipart primitives", () => {
         bucket,
       }),
     ).rejects.toThrow("part size");
+  });
+
+  it("passes a known-length ArrayBuffer to R2 without wrapping the body", async () => {
+    const { bucket, multipart } = fixture();
+    const part = new ArrayBuffer(MEDIA_MULTIPART_PART_SIZE_BYTES);
+
+    await uploadMediaMultipartPart({
+      objectKey: "media/med_abcdefghijklmnop.mp4",
+      uploadId: "upload_abcdefghijklmnop",
+      partNumber: 1,
+      size: part.byteLength,
+      isFinal: false,
+      value: part,
+      bucket,
+    });
+
+    expect(multipart.uploadPart).toHaveBeenCalledWith(1, part);
   });
 
   it("sorts completion parts and exposes abort/head operations", async () => {
