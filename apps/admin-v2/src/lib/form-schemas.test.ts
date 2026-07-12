@@ -20,12 +20,8 @@ describe("analytics form schema", () => {
     expect(formSchemasSource).toMatch(
       /analyticsScriptTypes = \[[\s\S]*"google_tag_manager"/,
     );
-    expect(analyticsFormSource).toContain(
-      "google_tag_manager: `<!-- Google Tag Manager -->",
-    );
-    expect(analyticsFormSource).toContain(
-      '<SelectItem value="google_tag_manager">',
-    );
+    expect(analyticsFormSource).toContain("google_tag_manager: `<!-- Google Tag Manager -->");
+    expect(analyticsFormSource).toContain('type: "google_tag_manager"');
     expect(analyticsFormSource).toContain("GTM-XXXXXXX");
     expect(analyticsFormSource).toContain("G-XXXXXXXXXX");
   });
@@ -41,27 +37,23 @@ describe("analytics form schema", () => {
     expect(analyticsFormSource).toContain(
       "tiktok_pixel: `<!-- TikTok Pixel Code -->",
     );
-    expect(analyticsFormSource).toContain(
-      '<SelectItem value="tiktok_pixel">',
-    );
+    expect(analyticsFormSource).toContain('type: "tiktok_pixel"');
     expect(analyticsFormSource).toContain(
       "https://analytics.tiktok.com/i18n/pixel/events.js",
     );
     expect(analyticsFormSource).toContain("ttq.load('PIXEL_ID')");
     expect(analyticsFormSource).toContain("ttq.page()");
-    expect(analyticsListSource).toContain('case "tiktok_pixel":');
-    expect(analyticsListSource).toContain('return "TikTok Pixel";');
+    expect(analyticsListSource).toContain('tiktok_pixel: "TikTok Pixel"');
   });
 
   it("blocks active Cloudflare Web Analytics placeholder tokens in the guided form", () => {
+    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
     const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
 
-    expect(analyticsFormSource).toContain(
-      "YOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN",
-    );
-    expect(analyticsFormSource).toContain(
-      "/\\bYOUR_CLOUDFLARE_WEB_ANALYTICS_TOKEN\\b/i",
-    );
+    expect(formSchemasSource).toContain("getActiveAnalyticsConfigError(data)");
+    expect(formSchemasSource).toContain('path: ["config"]');
+    expect(analyticsFormSource).toContain('type: "cloudflare_web_analytics"');
+    expect(analyticsFormSource).toContain('placeholder="Paste the Web Analytics site token"');
   });
 });
 
