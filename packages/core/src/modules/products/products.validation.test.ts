@@ -120,6 +120,34 @@ describe("product validation", () => {
         }).success).toBe(false);
     });
 
+    it("canonicalizes and bounds product attribute assignments", () => {
+        const parsed = createProductSchema.parse({
+            ...productInput,
+            attributes: [{ attributeId: "  attr_material  ", value: "  Cotton  " }],
+        });
+        expect(parsed.attributes).toEqual([
+            { attributeId: "attr_material", value: "Cotton" },
+        ]);
+
+        for (const attributes of [
+            [{ attributeId: "attr_material", value: "   " }],
+            [{ attributeId: "attr_material", value: "x".repeat(101) }],
+            [
+                { attributeId: "attr_material", value: "Cotton" },
+                { attributeId: "ATTR_MATERIAL", value: "Linen" },
+            ],
+            Array.from({ length: 91 }, (_, index) => ({
+                attributeId: `attr_${index}`,
+                value: `Value ${index}`,
+            })),
+        ]) {
+            expect(createProductSchema.safeParse({
+                ...productInput,
+                attributes,
+            }).success).toBe(false);
+        }
+    });
+
     it("enforces the bounded Cartesian limit for create and update matrices", () => {
         const values = Array.from(
             { length: MAX_PRODUCT_OPTION_COMBINATIONS + 1 },

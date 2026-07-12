@@ -36,7 +36,13 @@ describe("admin product SKU invariant boundaries", () => {
                     from() {
                         return {
                             where() {
-                                return { get: async () => null };
+                                return {
+                                    get: async () => null,
+                                    all: async () => Array.from(
+                                        { length: 90 },
+                                        (_, index) => ({ id: `attr_${index}` }),
+                                    ),
+                                };
                             },
                         };
                     },
@@ -56,7 +62,7 @@ describe("admin product SKU invariant boundaries", () => {
             ...productUpdate,
             id: undefined,
             expectedAggregateRevision: undefined,
-            attributes: Array.from({ length: 101 }, (_, index) => ({
+            attributes: Array.from({ length: 90 }, (_, index) => ({
                 attributeId: `attr_${index}`,
                 value: `Value ${index}`,
             })),
@@ -70,9 +76,79 @@ describe("admin product SKU invariant boundaries", () => {
 
         await createProduct(db as never, largeAggregate as never);
 
-        expect(multiRowStatementSizes).toHaveLength(12);
+        expect(multiRowStatementSizes).toHaveLength(11);
         expect(Math.max(...multiRowStatementSizes)).toBe(18);
-        expect(multiRowStatementSizes.reduce((sum, size) => sum + size, 0)).toBe(202);
+        expect(multiRowStatementSizes.reduce((sum, size) => sum + size, 0)).toBe(191);
+    });
+
+    it("rejects unavailable attribute definitions before create composition writes", async () => {
+        let selectCount = 0;
+        let batchCalled = false;
+        const db = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 1) return { get: async () => null };
+                                return { all: async () => [{ id: "attr_active" }] };
+                            },
+                        };
+                    },
+                };
+            },
+            async batch() {
+                batchCalled = true;
+                return [];
+            },
+        };
+
+        await expect(createProduct(db as never, {
+            ...productUpdate,
+            id: undefined,
+            expectedAggregateRevision: undefined,
+            attributes: [
+                { attributeId: "attr_active", value: "Cotton" },
+                { attributeId: "attr_trashed", value: "Linen" },
+            ],
+        } as never)).rejects.toThrow(
+            "One or more assigned attributes are unavailable or in trash",
+        );
+        expect(batchCalled).toBe(false);
+    });
+
+    it("rejects unavailable attribute definitions before update composition rewrites", async () => {
+        let selectCount = 0;
+        let batchCalled = false;
+        const db = {
+            select() {
+                selectCount++;
+                return {
+                    from() {
+                        return {
+                            where() {
+                                if (selectCount === 1) return { get: async () => ({ id: "prod_1" }) };
+                                if (selectCount === 2) return { get: async () => null };
+                                return { all: async () => [] };
+                            },
+                        };
+                    },
+                };
+            },
+            async batch() {
+                batchCalled = true;
+                return [];
+            },
+        };
+
+        await expect(updateProduct(db as never, "prod_1", {
+            ...productUpdate,
+            attributes: [{ attributeId: "attr_trashed", value: "Linen" }],
+        } as never)).rejects.toThrow(
+            "One or more assigned attributes are unavailable or in trash",
+        );
+        expect(batchCalled).toBe(false);
     });
 
     it("fails product updates when a non-default SKU has no customer option", async () => {

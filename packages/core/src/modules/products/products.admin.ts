@@ -7,6 +7,7 @@ import {
     productImages,
     productRichContent,
     productAttributeValues,
+    productAttributes,
     orderItems,
     discountProducts,
     inventoryMovements,
@@ -47,6 +48,37 @@ type SQLiteBatchItem = BatchItem<"sqlite">;
 // Each D1 statement accepts at most 100 bound parameters. Keep multi-row
 // product aggregate inserts comfortably below that boundary.
 const PRODUCT_AGGREGATE_INSERT_CHUNK = 18;
+const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
+
+async function assertActiveAttributeAssignments(
+    db: Database,
+    assignments: Array<{ attributeId: string }>,
+): Promise<void> {
+    const attributeIds = [...new Set(assignments.map((item) => item.attributeId.trim()).filter(Boolean))];
+    if (attributeIds.length === 0) return;
+    if (attributeIds.length > MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS) {
+        throw new ValidationError(
+            `Assign at most ${MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS} attributes to a product.`,
+        );
+    }
+
+    const activeAttributes = await db
+        .select({ id: productAttributes.id })
+        .from(productAttributes)
+        .where(and(
+            isNull(productAttributes.deletedAt),
+            sql`${productAttributes.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(attributeIds)})
+            )`,
+        ))
+        .all();
+
+    if (activeAttributes.length !== attributeIds.length) {
+        throw new ValidationError(
+            "One or more assigned attributes are unavailable or in trash. Remove them and try again.",
+        );
+    }
+}
 
 function requireProductTimestamp(
     value: Date | number | string | null | undefined,
@@ -590,6 +622,8 @@ export async function createProduct(
         throw new ConflictError("A product with this slug already exists");
     }
 
+    await assertActiveAttributeAssignments(db, data.attributes ?? []);
+
     const productId = "prod_" + nanoid();
     const defaultVariant = defaultVariantValues(productId, data.price);
     const preparedImages = prepareProductImageRows(productId, data.images, true);
@@ -823,6 +857,8 @@ export async function updateProduct(
     if (existingSlug) {
         throw new ConflictError("A product with this slug already exists");
     }
+
+    await assertActiveAttributeAssignments(db, data.attributes ?? []);
 
     const attributeValuesToInsert = (data.attributes ?? [])
         .filter((attr) => attr.attributeId && attr.value.trim())
