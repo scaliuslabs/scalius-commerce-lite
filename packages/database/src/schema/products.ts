@@ -1,8 +1,8 @@
 // src/db/schema/products.ts
 // Product domain tables: products, images, variants, categories, collections,
-// attributes, attribute values, rich content, and media.
+// attributes, attribute values, and rich content.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
@@ -335,43 +335,6 @@ export const productRichContent = sqliteTable("product_rich_content", {
     index("product_rich_content_product_id_idx").on(table.productId),
 ]);
 
-export const mediaFolders = sqliteTable("media_folders", {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    parentId: text("parent_id").references((): AnySQLiteColumn => mediaFolders.id, { onDelete: "set null" }),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    deletedAt: integer("deleted_at", { mode: "timestamp" }),
-}, (table) => [
-    index("media_folders_parent_id_idx").on(table.parentId),
-]);
-
-export const media = sqliteTable("media", {
-    id: text("id").primaryKey(),
-    filename: text("filename").notNull(),
-    url: text("url").notNull(),
-    size: integer("size").notNull(),
-    mimeType: text("mime_type").notNull(),
-    altText: text("alt_text"),
-    width: integer("width"),
-    height: integer("height"),
-    folderId: text("folder_id").references(() => mediaFolders.id, { onDelete: "set null" }),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    updatedAt: integer("updated_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-    deletedAt: integer("deleted_at", { mode: "timestamp" }),
-}, (table) => [
-    index("media_folder_id_idx").on(table.folderId),
-    index("media_deleted_at_idx").on(table.deletedAt),
-]);
-
 export type Product = InferSelectModel<typeof products>;
 export type ProductImage = InferSelectModel<typeof productImages>;
 export type ProductOptionDefinition = InferSelectModel<typeof productOptionDefinitions>;
@@ -383,4 +346,3 @@ export type Collection = InferSelectModel<typeof collections>;
 export type ProductAttribute = InferSelectModel<typeof productAttributes>;
 export type ProductAttributeValue = InferSelectModel<typeof productAttributeValues>;
 export type ProductRichContent = InferSelectModel<typeof productRichContent>;
-export type Media = InferSelectModel<typeof media>;

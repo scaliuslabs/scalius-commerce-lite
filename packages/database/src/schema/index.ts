@@ -10,6 +10,7 @@ export * from "./enums";
 export * from "./auth";
 export * from "./rbac";
 export * from "./products";
+export * from "./media";
 export * from "./customers";
 export * from "./orders";
 export * from "./inventory";

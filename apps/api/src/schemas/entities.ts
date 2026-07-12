@@ -6,6 +6,7 @@
 
 import { z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
+import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
@@ -425,6 +426,9 @@ export const categorySummarySchema = z
     updatedAt: z.string().nullable(),
     deletedAt: z.string().nullable(),
     productCount: z.number(),
+    status: categoryStatusSchema,
+    revision: z.number().int().min(1),
+    publishReady: z.boolean(),
   })
 
 /** Category detail — returned by getCategoryById (admin). */
@@ -443,6 +447,14 @@ export const categoryDetailSchema = z
     deletedAt: z.number().nullable(),
     createdAt: z.number(),
     updatedAt: z.number(),
+    status: categoryStatusSchema,
+    revision: z.number().int().min(1),
+    publishReadiness: z.object({
+      ready: z.boolean(),
+      eligibleProductCount: z.number().int().min(0),
+      blockers: z.array(z.object({ code: z.string(), message: z.string() })),
+      warnings: z.array(z.object({ code: z.string(), message: z.string() })),
+    }),
   })
 
 /** Category stats — returned by getCategoryStats (admin). */
@@ -619,14 +631,22 @@ export const mediaSchema = z
     id: z.string(),
     filename: z.string(),
     url: z.string(),
+    kind: z.enum(["image", "video"]),
+    objectKey: z.string(),
     size: z.number(),
     mimeType: z.string(),
     altText: z.string().nullable().optional(),
+    caption: z.string().nullable().optional(),
     width: z.number().nullable().optional(),
     height: z.number().nullable().optional(),
+    durationMs: z.number().nullable().optional(),
+    posterMediaId: z.string().nullable().optional(),
     folderId: z.string().nullable(),
+    status: z.enum(["ready", "trashed", "deleting", "deleted"]),
+    version: z.number().int().min(1),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
+    trashedAt: nullableTimestampSchema,
     deletedAt: nullableTimestampSchema,
   })
 
@@ -635,7 +655,7 @@ export const mediaFolderSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    parentId: z.string().nullable(),
+    version: z.number().int().min(1),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     deletedAt: nullableTimestampSchema,

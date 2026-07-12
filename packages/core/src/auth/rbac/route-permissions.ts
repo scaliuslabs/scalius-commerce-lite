@@ -400,7 +400,20 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
-  "/api/v1/admin/media/upload": {
+  "/api/v1/admin/media/uploads": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/uploads/reconcile": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/uploads/*": {
+    GET: { permission: PERMISSIONS.MEDIA_VIEW },
+    DELETE: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/uploads/*/parts/*": {
+    PUT: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/uploads/*/complete": {
     POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
   },
   "/api/v1/admin/media/move": {
@@ -410,6 +423,15 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     PUT: { permission: PERMISSIONS.MEDIA_UPLOAD },
     PATCH: { permission: PERMISSIONS.MEDIA_UPLOAD },
+    DELETE: { permission: PERMISSIONS.MEDIA_DELETE },
+  },
+  "/api/v1/admin/media/*/trash": {
+    POST: { permission: PERMISSIONS.MEDIA_DELETE },
+  },
+  "/api/v1/admin/media/*/restore": {
+    POST: { permission: PERMISSIONS.MEDIA_UPLOAD },
+  },
+  "/api/v1/admin/media/*/permanent": {
     DELETE: { permission: PERMISSIONS.MEDIA_DELETE },
   },
   "/api/v1/admin/media/folders": {
