@@ -19550,6 +19550,7 @@ export type GetApiV1AdminSettingsThemeResponses = {
             colors: {
                 [key: string]: string;
             };
+            revision: number;
             [key: string]: unknown;
         };
     };
@@ -19559,6 +19560,7 @@ export type GetApiV1AdminSettingsThemeResponse = GetApiV1AdminSettingsThemeRespo
 
 export type PostApiV1AdminSettingsThemeData = {
     body?: {
+        expectedRevision: number;
         colors: {
             [key: string]: string;
         };
@@ -19646,6 +19648,10 @@ export type PostApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
+            colors: {
+                [key: string]: string;
+            };
+            revision: number;
             message: string;
         };
     };

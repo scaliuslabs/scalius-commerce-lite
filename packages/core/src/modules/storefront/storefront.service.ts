@@ -14,6 +14,7 @@ import {
   metaConversionsSettings,
   pages,
   settings,
+  themeSettings,
 } from "@scalius/database/schema";
 import { eq, isNull, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -53,6 +54,23 @@ function parsePersistedNavigationConfig(
     throw new ServiceUnavailableError(
       `Stored ${type} configuration is invalid. Re-save it in Settings.`,
     );
+  }
+}
+
+export function resolveStorefrontThemeColors(
+  versionedValue: string | null | undefined,
+  legacyValue: string | null | undefined,
+): Record<string, string> {
+  const value = versionedValue ?? legacyValue;
+  if (!value) return {};
+  try {
+    return sanitizeStorefrontThemeColors(JSON.parse(value));
+  } catch (e: unknown) {
+    console.warn(
+      "[Storefront] Failed to parse theme colors JSON:",
+      e instanceof Error ? e.message : e,
+    );
+    return {};
   }
 }
 
@@ -274,7 +292,14 @@ export async function getLayoutData(
       .from(settings)
       .where(eq(settings.category, "currency")),
 
-    // 5. Theme color overrides
+    // 5. Versioned theme color overrides
+    db
+      .select({ value: themeSettings.colors })
+      .from(themeSettings)
+      .where(eq(themeSettings.id, "default"))
+      .limit(1),
+
+    // 6. Legacy theme color fallback (used only when no versioned row exists)
     db
       .select({ value: settings.value })
       .from(settings)
@@ -286,7 +311,7 @@ export async function getLayoutData(
       )
       .limit(1),
 
-    // 6. Media/image optimization settings
+    // 7. Media/image optimization settings
     db
       .select({ value: settings.value })
       .from(settings)
@@ -298,7 +323,7 @@ export async function getLayoutData(
       )
       .limit(1),
 
-    // 7. Meta CAPI browser dispatch readiness
+    // 8. Meta CAPI browser dispatch readiness
     db
       .select({
         isEnabled: metaConversionsSettings.isEnabled,
@@ -309,20 +334,20 @@ export async function getLayoutData(
       .where(eq(metaConversionsSettings.id, "singleton"))
       .limit(1),
 
-    // 8. SEO discovery policy
+    // 9. SEO discovery policy
     db
       .select({ value: settings.value })
       .from(settings)
       .where(and(eq(settings.category, "seo"), eq(settings.key, "discovery")))
       .limit(1),
 
-    // 9. Business identity for public OnlineStore JSON-LD
+    // 10. Business identity for public OnlineStore JSON-LD
     db
       .select({ key: settings.key, value: settings.value })
       .from(settings)
       .where(eq(settings.category, "business_info")),
 
-    // 10. Merchant return-policy schema settings
+    // 11. Merchant return-policy schema settings
     db
       .select({ value: settings.value })
       .from(settings)
@@ -342,6 +367,7 @@ export async function getLayoutData(
     pagesData,
     currencyResults,
     themeResults,
+    legacyThemeResults,
     mediaResults,
     metaCapiResults,
     seoDiscoveryResults,
@@ -534,18 +560,10 @@ export async function getLayoutData(
       };
 
   // Process Theme
-  let themeColors: Record<string, string> = {};
-  const themeRow = (themeResults as { value?: string }[])[0];
-  if (themeRow?.value) {
-    try {
-      themeColors = sanitizeStorefrontThemeColors(JSON.parse(themeRow.value));
-    } catch (e: unknown) {
-      console.warn(
-        "[Storefront] Failed to parse theme colors JSON:",
-        e instanceof Error ? e.message : e,
-      );
-    }
-  }
+  const themeColors = resolveStorefrontThemeColors(
+    (themeResults as { value?: string }[])[0]?.value,
+    (legacyThemeResults as { value?: string }[])[0]?.value,
+  );
 
   const mediaRow = (mediaResults as { value?: string }[])[0];
   const media = parseMediaOptimizationSettings(mediaRow?.value);

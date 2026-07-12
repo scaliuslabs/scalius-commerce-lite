@@ -66481,10 +66481,15 @@
                           "additionalProperties": {
                             "type": "string"
                           }
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
                         }
                       },
                       "required": [
-                        "colors"
+                        "colors",
+                        "revision"
                       ],
                       "additionalProperties": {
                         "nullable": true
@@ -66757,6 +66762,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "colors": {
                     "type": "object",
                     "additionalProperties": {
@@ -66765,6 +66774,7 @@
                   }
                 },
                 "required": [
+                  "expectedRevision",
                   "colors"
                 ]
               }
@@ -66788,11 +66798,24 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "colors": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
                         "message": {
                           "type": "string"
                         }
                       },
                       "required": [
+                        "colors",
+                        "revision",
                         "message"
                       ]
                     }

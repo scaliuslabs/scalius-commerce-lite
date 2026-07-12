@@ -341,7 +341,10 @@ const getThemeRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z
-              .object({ colors: z.record(z.string(), z.string()) })
+              .object({
+                colors: z.record(z.string(), z.string()),
+                revision: z.number().int().nonnegative(),
+              })
               .passthrough(),
           ),
         },
@@ -358,6 +361,7 @@ app.openapi(getThemeRoute, async (c) => {
 });
 
 const saveThemeSchema = z.object({
+  expectedRevision: z.number().int().nonnegative(),
   colors: z.record(z.string(), z.string()).superRefine((colors, ctx) => {
     const invalidEntries = listInvalidStorefrontThemeColorEntries(colors);
     if (invalidEntries.length === 0) return;
@@ -379,7 +383,15 @@ const saveThemeRoute = createRoute({
   responses: {
     200: {
       description: "Theme saved",
-      content: { "application/json": { schema: messageResponse } },
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            colors: z.record(z.string(), z.string()),
+            revision: z.number().int().positive(),
+            message: z.string(),
+          })),
+        },
+      },
     },
     ...errorResponses,
   },
@@ -388,9 +400,16 @@ const saveThemeRoute = createRoute({
 app.openapi(saveThemeRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  await saveThemeSettings(db, body.colors);
+  const saved = await saveThemeSettings(
+    db,
+    body.colors,
+    body.expectedRevision,
+  );
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-  return ok(c, { message: "Theme settings saved successfully" });
+  return ok(c, {
+    ...saved,
+    message: "Theme settings saved successfully",
+  });
 });
 
 // ─────────────────────────────────────────

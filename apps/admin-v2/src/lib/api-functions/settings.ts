@@ -142,10 +142,14 @@ export interface FirebaseSettingsPayload extends SettingsPayload {
 export type UpdateFirebaseSettingsInput = SettingsPayload;
 export type BusinessSettingsPayload = SettingsPayload;
 export type UpdateBusinessSettingsInput = SettingsPayload;
-export interface ThemeSettingsPayload extends SettingsPayload {
-  colors: SettingsPayload;
+export interface ThemeSettingsPayload {
+  colors: Record<string, string>;
+  revision: number;
 }
-export type UpdateThemeSettingsInput = SettingsPayload;
+export interface UpdateThemeSettingsInput {
+  expectedRevision: number;
+  colors: Record<string, string>;
+}
 export type MediaSettingsPayload = SettingsPayload;
 export type UpdateMediaSettingsInput = SettingsPayload;
 export type SmsProvider = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet";
@@ -364,7 +368,7 @@ export const getThemeSettings = createServerFn({ method: "GET" }).handler(
 export const updateThemeSettings = createServerFn({ method: "POST" })
   .validator((data: UpdateThemeSettingsInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<MessagePayload>("/settings/theme", data);
+    return apiPost<ThemeSettingsPayload & MessagePayload>("/settings/theme", data);
   });
 
 export const getMediaSettings = createServerFn({ method: "GET" }).handler(

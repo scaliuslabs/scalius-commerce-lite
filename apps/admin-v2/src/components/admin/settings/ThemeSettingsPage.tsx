@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, RotateCcw, Save, Palette } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCcw, Save, Palette } from "lucide-react";
 import { getThemeSettings, updateThemeSettings } from "@/lib/api-functions/settings";
+import { isAdminApiConflictError } from "@/lib/admin-api-error";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { usePermissions } from "@/contexts/PermissionContext";
 
 // ---------------------------------------------------------------------------
 // Default storefront colors (must match global.css :root vars in storefront).
@@ -156,7 +159,12 @@ const PREDEFINED_PALETTES: Record<string, { label: string; colors: Record<string
 const isHex = (str: string) => /^#([0-9A-F]{3}){1,2}$/i.test(str);
 
 export default function ThemeSettingsPage() {
+    const { hasPermission } = usePermissions();
+    const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
     const [colors, setColors] = useState<Record<string, string>>({});
+    const [savedColors, setSavedColors] = useState<Record<string, string>>({});
+    const [revision, setRevision] = useState(0);
+    const [conflict, setConflict] = useState<{ colors: Record<string, string>; revision: number } | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -178,8 +186,12 @@ export default function ThemeSettingsPage() {
     const fetchColors = useCallback(async () => {
         try {
             setLoading(true);
-            const data = await getThemeSettings() as Record<string, unknown>;
-            setColors((data.colors as Record<string, string>) || {});
+            const data = await getThemeSettings();
+            setColors(data.colors);
+            setSavedColors(data.colors);
+            setRevision(data.revision);
+            setDirty(false);
+            setConflict(null);
         } catch {
             setMessage({ type: "error", text: "Failed to load theme settings." });
         } finally {
@@ -204,6 +216,24 @@ export default function ThemeSettingsPage() {
         setActivePicker(null);
     };
 
+    const handleDiscard = () => {
+        setColors(savedColors);
+        setDirty(false);
+        setConflict(null);
+        setMessage(null);
+        setActivePicker(null);
+    };
+
+    const loadConflictingVersion = () => {
+        if (!conflict) return;
+        setColors(conflict.colors);
+        setSavedColors(conflict.colors);
+        setRevision(conflict.revision);
+        setDirty(false);
+        setConflict(null);
+        setMessage(null);
+    };
+
     const applyPalette = (paletteName: string) => {
         const palette = PREDEFINED_PALETTES[paletteName];
         if (palette) {
@@ -223,11 +253,28 @@ export default function ThemeSettingsPage() {
             for (const [k, v] of Object.entries(colors)) {
                 if (v && v.trim()) cleaned[k] = v.trim();
             }
-            await updateThemeSettings({ data: { colors: cleaned } });
+            const saved = await updateThemeSettings({
+                data: { colors: cleaned, expectedRevision: revision },
+            });
+            setColors(saved.colors);
+            setSavedColors(saved.colors);
+            setRevision(saved.revision);
             setDirty(false);
-            setMessage({ type: "success", text: "Theme saved. Storefront cache has been invalidated." });
-        } catch {
-            setMessage({ type: "error", text: "Failed to save theme settings." });
+            setConflict(null);
+            setMessage({ type: "success", text: "Theme published to the storefront." });
+        } catch (error) {
+            if (isAdminApiConflictError(error)) {
+                try {
+                    const latest = await getThemeSettings();
+                    setRevision(latest.revision);
+                    setConflict(latest);
+                    setMessage(null);
+                } catch {
+                    setMessage({ type: "error", text: "The theme changed elsewhere, and the latest version could not be loaded. Reload before publishing." });
+                }
+            } else {
+                setMessage({ type: "error", text: "Theme could not be published. Your draft is still in this tab." });
+            }
         } finally {
             setSaving(false);
         }
@@ -242,17 +289,42 @@ export default function ThemeSettingsPage() {
     }
 
     return (
-        <div className="max-w-5xl mx-auto">
-            <div className="mb-6">
+        <div className="mx-auto max-w-7xl pb-24">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <div>
                 <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                     <Palette className="h-6 w-6" />
                     Storefront Theme
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                    Customize the storefront color palette. Leave a field empty to use the
-                    default. Changes are reflected on the storefront after save.
+                    Choose a palette, then fine-tune only the colors you need. Publishing updates every buyer-facing route.
                 </p>
+                </div>
+                <span className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+                    Published revision {revision || "not yet published"}
+                </span>
             </div>
+
+            {!canManage && (
+                <div className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    You can review the published theme, but your role cannot publish changes.
+                </div>
+            )}
+
+            {conflict && (
+                <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div>
+                            <p className="font-medium">Another session published revision {conflict.revision}.</p>
+                            <p className="text-xs opacity-80">Your draft is preserved. Load the latest theme, or review this draft and publish again to replace it.</p>
+                        </div>
+                    </div>
+                    <button type="button" onClick={loadConflictingVersion} className="shrink-0 rounded-md border border-amber-400 bg-background px-3 py-1.5 text-xs font-medium">
+                        Load latest
+                    </button>
+                </div>
+            )}
 
             {message && (
                 <div
@@ -265,21 +337,22 @@ export default function ThemeSettingsPage() {
                 </div>
             )}
 
-            <div className="flex flex-col xl:flex-row gap-8">
+            <div className="flex flex-col gap-4 xl:flex-row">
                 {/* Left Column: Form & Palettes */}
-                <div className="flex-1 space-y-8">
+                <div className="min-w-0 flex-1 space-y-4">
                     {/* Predefined Palettes */}
                     <div className="border border-border rounded-xl bg-card overflow-hidden">
                         <div className="p-4 border-b border-border bg-muted/30">
                             <h3 className="font-semibold text-foreground">Predefined Palettes</h3>
                             <p className="text-xs text-muted-foreground">Select a complete theme to get started quickly. Presets are tuned for readable contrast on primary/destructive actions.</p>
                         </div>
-                        <div className="p-4 flex flex-wrap gap-4">
+                        <div className="flex flex-wrap gap-2 p-3">
                             {Object.entries(PREDEFINED_PALETTES).map(([key, palette]) => (
                                 <button
                                     key={key}
                                     onClick={() => applyPalette(key)}
-                                    className="flex items-center gap-3 px-4 py-2 rounded-lg border border-border hover:border-primary transition-all bg-background shadow-sm hover:shadow active:scale-95"
+                                    disabled={!canManage}
+                                    className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 transition-colors hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                     <div className="w-5 h-5 rounded-full shadow-inner ring-1 ring-black/10" style={{ backgroundColor: palette.bg }} />
                                     <span className="text-sm font-medium text-foreground">{palette.label}</span>
@@ -289,12 +362,12 @@ export default function ThemeSettingsPage() {
                     </div>
 
                     {/* Color Fields */}
-                    <div>
-                        <div className="mb-4">
+                    <details className="rounded-xl border bg-card">
+                        <summary className="cursor-pointer list-none px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                             <h3 className="font-semibold text-foreground">Color Variables</h3>
-                            <p className="text-xs text-muted-foreground">Fine-tune individual semantic color tokens.</p>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <p className="text-xs text-muted-foreground">Advanced · {Object.keys(colors).length} storefront overrides</p>
+                        </summary>
+                        <div className="grid grid-cols-1 gap-2 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
                             {COLOR_FIELDS.map((field) => {
                                 const val = colors[field.key] || "";
                                 const bgColor = val || "#e5e5e5";
@@ -302,7 +375,7 @@ export default function ThemeSettingsPage() {
                                 return (
                                     <div
                                         key={field.key}
-                                        className="relative border border-border rounded-lg p-4 flex flex-col gap-2 bg-card shadow-sm hover:shadow-md transition-shadow"
+                                        className="relative flex flex-col gap-2 rounded-md border border-border bg-background p-3"
                                     >
                                         <div className="flex items-center justify-between">
                                             <div>
@@ -320,6 +393,7 @@ export default function ThemeSettingsPage() {
                                                 className="w-8 h-8 rounded-md border border-border shrink-0 shadow-inner ring-offset-1 focus:ring-2 ring-primary transition-all"
                                                 style={{ backgroundColor: bgColor }}
                                                 title="Click to pick color"
+                                                disabled={!canManage}
                                             />
                                         </div>
                                         <input
@@ -328,6 +402,7 @@ export default function ThemeSettingsPage() {
                                             placeholder="e.g. #3b82f6"
                                             value={val}
                                             onChange={(e) => handleChange(field.key, e.target.value)}
+                                            disabled={!canManage}
                                             className="w-full px-3 py-1.5 text-xs font-mono rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                                         />
 
@@ -339,6 +414,7 @@ export default function ThemeSettingsPage() {
                                                     className="w-48 h-48 border-0 p-0 rounded-md cursor-pointer block bg-transparent"
                                                     value={isHex(val) ? val : "#000000"}
                                                     onChange={(e) => handleChange(field.key, e.target.value)}
+                                                    disabled={!canManage}
                                                     style={{ WebkitAppearance: 'none' }}
                                                 />
                                                 <div className="mt-3 flex gap-2">
@@ -347,6 +423,7 @@ export default function ThemeSettingsPage() {
                                                         className="flex-1 text-xs border border-input rounded px-2 font-mono bg-background text-foreground"
                                                         value={val}
                                                         onChange={(e) => handleChange(field.key, e.target.value)}
+                                                        disabled={!canManage}
                                                     />
                                                 </div>
                                             </div>
@@ -355,11 +432,11 @@ export default function ThemeSettingsPage() {
                                 )
                             })}
                         </div>
-                    </div>
+                    </details>
                 </div>
 
                 {/* Right Column: Live Preview Sticky */}
-                <div className="w-full xl:w-80 shrink-0">
+                <div className="w-full shrink-0 xl:w-80">
                     <div className="sticky top-24 border border-border rounded-xl bg-card overflow-hidden shadow-sm">
                         <div className="p-3 border-b border-border bg-muted/30">
                             <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
@@ -445,10 +522,13 @@ export default function ThemeSettingsPage() {
                 </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-3">
+            <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
+              <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">{dirty ? "Unpublished changes in this tab" : "Published theme is up to date"}</p>
+                <div className="flex items-center gap-2">
                 <button
                     onClick={handleSave}
-                    disabled={saving || !dirty}
+                    disabled={!canManage || saving || !dirty}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     {saving ? (
@@ -456,17 +536,26 @@ export default function ThemeSettingsPage() {
                     ) : (
                         <Save className="h-4 w-4" />
                     )}
-                    {saving ? "Saving…" : "Save Changes"}
+                    {saving ? "Publishing…" : "Publish theme"}
                 </button>
 
                 <button
                     onClick={handleReset}
-                    disabled={saving}
+                    disabled={!canManage || saving}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md border border-border bg-background text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     <RotateCcw className="h-4 w-4" />
-                    Reset to Defaults
+                    Use defaults
                 </button>
+                <button
+                    onClick={handleDiscard}
+                    disabled={saving || !dirty}
+                    className="inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                >
+                    Discard draft
+                </button>
+                </div>
+              </div>
             </div>
         </div>
     );
