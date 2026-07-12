@@ -2,8 +2,8 @@ import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
-import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { variantOptionLabelSql } from "../products/products.option-model";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -103,8 +103,8 @@ interface ProductRow {
 interface VariantRow {
     id: string;
     productId: string;
-    size: string | null;
-    color: string | null;
+    optionCombinationKey: string | null;
+    optionLabel: string | null;
     stock: number;
     reservedStock: number;
     preorderStock: number;
@@ -120,14 +120,13 @@ interface VariantRow {
     taxClassId: string | null;
 }
 
-function variantLabel(variant: Pick<VariantRow, "isDefault" | "size" | "color"> | undefined): string | null {
+function variantLabel(variant: Pick<VariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
     if (!variant || variant.isDefault) return null;
-    const parts = [variant.size, variant.color].filter((value): value is string => Boolean(value));
-    return parts.length > 0 ? parts.join(" / ") : null;
+    return variant.optionLabel;
 }
 
-function hasCustomerOption(variant: Pick<VariantRow, "size" | "color">): boolean {
-    return Boolean(variant.size?.trim() || variant.color?.trim());
+function hasCustomerOption(variant: Pick<VariantRow, "optionCombinationKey">): boolean {
+    return Boolean(variant.optionCombinationKey?.trim());
 }
 
 function isSimpleDefaultSku(variant: Pick<VariantRow, "isDefault">): boolean {
@@ -282,8 +281,8 @@ export async function validateStorefrontCartItems(
             .select({
                 id: productVariants.id,
                 productId: productVariants.productId,
-                size: productVariants.size,
-                color: productVariants.color,
+                optionCombinationKey: productVariants.optionCombinationKey,
+                optionLabel: variantOptionLabelSql(productVariants.id),
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
                 preorderStock: productVariants.preorderStock,
@@ -344,14 +343,11 @@ export async function validateStorefrontCartItems(
         const nonDefaultVariants = productVariantsForProduct.filter((variant) =>
             !variant.isDefault
         );
-        const optionTopology = classifyProductVariantOptionAxes(nonDefaultVariants);
-        const hasCustomerOptions = optionTopology !== "none";
+        const hasCustomerOptions = nonDefaultVariants.length > 0;
         const hasInvalidNoOptionSku = nonDefaultVariants.some(
             (variant) => !hasCustomerOption(variant)
         );
-        const hasConsistentCustomerOptions = optionTopology !== "none" &&
-            optionTopology !== "mixed" &&
-            !hasInvalidNoOptionSku;
+        const hasConsistentCustomerOptions = hasCustomerOptions && !hasInvalidNoOptionSku;
         const requestedVariant = variantMap.get(item.variantId);
         const requestedVariantLabel = displayVariantLabel(item, requestedVariant);
 
@@ -383,7 +379,7 @@ export async function validateStorefrontCartItems(
                 ? productVariantsForProduct
                 : [];
         if (!buyerResolvableVariants.some((variant) => variant.id === requestedVariant.id)) {
-            const hasInvalidOptionTopology = optionTopology === "mixed" || hasInvalidNoOptionSku;
+            const hasInvalidOptionTopology = hasInvalidNoOptionSku;
             addIssue(issues, item, index, {
                 code: hasCustomerOptions && !hasInvalidOptionTopology ? "VARIANT_REQUIRED" : "PRODUCT_UNAVAILABLE",
                 action: hasCustomerOptions && !hasInvalidOptionTopology ? "select_variant" : "remove",

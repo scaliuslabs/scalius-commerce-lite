@@ -31,8 +31,7 @@ export interface ScannedProduct {
   stock: number;
   reserved: number;
   productImage: string | null;
-  size: string | null;
-  color: string | null;
+  optionLabel: string | null;
   weight: number | null;
 }
 
@@ -45,8 +44,7 @@ export interface ScanResult {
     variantId: string;
     sku: string;
     image?: string;
-    size?: string;
-    color?: string;
+    optionLabel?: string;
   } | null;
   action: "add" | "deduct" | "set" | "error";
   quantity: number;
@@ -229,8 +227,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         stock: v.stock ?? 0,
         reserved: v.reservedStock ?? 0,
         productImage: p.imageUrl ?? null,
-        size: v.size ?? null,
-        color: v.color ?? null,
+        optionLabel: v.optionLabel ?? null,
         weight: null,
       } satisfies ScannedProduct;
     },
@@ -254,8 +251,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
           variantId: product.variantId,
           sku: product.sku,
           image: product.productImage ?? undefined,
-          size: product.size ?? undefined,
-          color: product.color ?? undefined,
+          optionLabel: product.optionLabel ?? undefined,
         },
         action: isAdd ? "add" : "deduct",
         quantity: Math.abs(quantity),
@@ -430,8 +426,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
             variantId: product.variantId,
             sku: product.sku,
             image: product.productImage ?? undefined,
-            size: product.size ?? undefined,
-            color: product.color ?? undefined,
+            optionLabel: product.optionLabel ?? undefined,
           },
           action: isAbsolute ? "set" : adjustment > 0 ? "add" : "deduct",
           quantity: Math.abs(isAbsolute ? newStock - oldStock : adjustment),

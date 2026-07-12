@@ -128,8 +128,7 @@ describe("order success state", () => {
           price: 500,
           productName: "Product",
           productImage: null,
-          variantSize: null,
-          variantColor: null,
+          variantLabel: null,
         },
       ],
     );

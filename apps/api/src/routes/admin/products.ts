@@ -2,15 +2,15 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import * as ProductsVariants from "@scalius/core/modules/products/products.variants";
 import { createProductSchema, updateProductSchema } from "@scalius/core/modules/products/products.validation";
+import {
+    productOptionMatrixSchema,
+    saveProductOptionMatrix,
+} from "@scalius/core/modules/products/products.option-matrix";
 import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
 import {
     createVariantSchema,
-    updateVariantSchema,
-    bulkCreateVariantsSchema,
-    bulkDeleteVariantsSchema,
-    variantEditPlanSchema,
-    updateSortOrderSchema
+    updateVariantSchema
 } from "@scalius/core/modules/products/products.types";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
@@ -26,6 +26,7 @@ import {
     productStatsSchema,
     productVariantSchema,
     productVariantMutationSchema,
+    selectedProductOptionSchema,
 } from "../../schemas/entities";
 import {
     invalidateCatalogCaches,
@@ -201,8 +202,8 @@ const barcodeLookupRoute = createRoute({
                 variant: z.object({
                     id: z.string(),
                     sku: z.string(),
-                    size: z.string().nullable(),
-                    color: z.string().nullable(),
+                    imageId: z.string().nullable(),
+                    selectedOptions: z.array(selectedProductOptionSchema),
                     weight: z.number().nullable(),
                     price: z.number(),
                     stock: z.number(),
@@ -692,175 +693,29 @@ app.openapi(deleteVariantRoute, async (c) => {
     }
 });
 
-// ── Atomic Variant Edit Plan ──
-
-const variantEditPlanRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/edit-plan",
+const saveOptionMatrixRoute = createRoute({
+    method: "put",
+    path: "/{id}/options/matrix",
     tags: ["Admin - Products"],
-    summary: "Atomically create and update product variants",
+    summary: "Save the complete normalized product option matrix",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: variantEditPlanSchema } } },
+        body: { content: { "application/json": { schema: productOptionMatrixSchema } } },
     },
     responses: {
         200: {
-            description: "Variant edit plan applied",
-            content: { "application/json": { schema: successEnvelope(z.object({
-                created: z.array(productVariantSchema),
-                updated: z.array(productVariantSchema),
-                aggregateRevision: z.number().int().min(1),
-            }) as z.ZodTypeAny) } },
+            description: "Option matrix saved",
+            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
         },
         ...conflictMutationErrorResponses,
     },
 });
 
-app.openapi(variantEditPlanRoute, async (c) => {
+app.openapi(saveOptionMatrixRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const plan = c.req.valid("json");
     const user = c.get("user");
-    const result = await ProductsVariants.applyVariantEditPlan(db, id, plan, user?.id);
-    await invalidateProductCatalogCaches(db, c, [id]);
-    return ok(c, result);
-});
-
-// ── Bulk Create Variants ──
-
-const bulkCreateVariantsRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/bulk-create",
-    tags: ["Admin - Products"],
-    summary: "Bulk create variants",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: bulkCreateVariantsSchema } } }
-    },
-    responses: {
-        201: {
-            description: "Variants created",
-            content: { "application/json": { schema: successEnvelope(z.object({
-                variants: z.array(productVariantSchema),
-                count: z.number(),
-                aggregateRevision: z.number().int().min(1),
-            }) as z.ZodTypeAny) } },
-        },
-        ...conflictMutationErrorResponses,
-    }
-});
-
-app.openapi(bulkCreateVariantsRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    try {
-        const result = await ProductsVariants.bulkCreateVariants(
-            db,
-            id,
-            data.variants,
-            data.expectedAggregateRevision,
-        );
-        await invalidateProductCatalogCaches(db, c, [id]);
-        return created(c, {
-            variants: result.variants,
-            count: result.variants.length,
-            aggregateRevision: result.aggregateRevision,
-        });
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
-        throw error;
-    }
-});
-
-// ── Bulk Delete Variants ──
-
-const bulkDeleteVariantsRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/bulk-delete",
-    tags: ["Admin - Products"],
-    summary: "Bulk delete variants",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: bulkDeleteVariantsSchema } } }
-    },
-    responses: {
-        200: {
-            description: "Variants deleted",
-            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
-        },
-        ...conflictMutationErrorResponses,
-    }
-});
-
-app.openapi(bulkDeleteVariantsRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const result = await ProductsVariants.bulkDeleteVariants(
-        db,
-        id,
-        data.variantIds,
-        data.expectedAggregateRevision,
-    );
-    await invalidateProductCatalogCaches(db, c, [id]);
-    return ok(c, result);
-});
-
-// ── Get Variant Sort Order ──
-
-const getVariantSortOrderRoute = createRoute({
-    method: "get",
-    path: "/{id}/variants/sort-order",
-    tags: ["Admin - Products"],
-    summary: "Get variant sort order",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        200: {
-            description: "Sort order data",
-            content: { "application/json": { schema: successEnvelope(z.object({
-                colors: z.array(z.object({ value: z.string(), sortOrder: z.number() })),
-                sizes: z.array(z.object({ value: z.string(), sortOrder: z.number() })),
-            })) } },
-        },
-        ...errorResponses,
-    }
-});
-
-app.openapi(getVariantSortOrderRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const result = await ProductsVariants.getVariantSortOrder(db, id);
-    return ok(c, result);
-});
-
-// ── Update Variant Sort Order ──
-
-const updateVariantSortOrderRoute = createRoute({
-    method: "post",
-    path: "/{id}/variants/sort-order",
-    tags: ["Admin - Products"],
-    summary: "Update variant sort order",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateSortOrderSchema } } }
-    },
-    responses: {
-        200: {
-            description: "Sort order updated",
-            content: { "application/json": { schema: successEnvelope(aggregateRevisionResponseSchema) } },
-        },
-        ...conflictMutationErrorResponses,
-    }
-});
-
-app.openapi(updateVariantSortOrderRoute, async (c) => {
-    const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const data = c.req.valid("json");
-    const result = await ProductsVariants.updateVariantSortOrder(db, id, data);
+    const result = await saveProductOptionMatrix(db, id, c.req.valid("json"), user?.id);
     await invalidateProductCatalogCaches(db, c, [id]);
     return ok(c, result);
 });

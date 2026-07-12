@@ -12,9 +12,9 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Product images: ordered, first = primary, stored via `productImages` table
 - Rich content sections (additional info): arbitrary titled HTML blocks stored in `productRichContent`, ordered by `sortOrder`
 - Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
-- Variant CRUD: size, color, weight, SKU (unique), price, stock, barcode, barcode type, discount (percentage or flat)
-- Bulk variant create (chunked for D1 parameter limits), guarded bulk delete, bulk update
-- Variant sort order: separate `colorSortOrder` and `sizeSortOrder` columns, updated per-value across all variants of a product
+- Normalized product options: up to five merchant-named axes and 150 Cartesian SKU combinations, stored in `productOptionDefinitions`, `productOptionValues`, and `productVariantOptionValues`
+- Variant CRUD: selected option values, per-SKU image, weight, globally unique SKU/barcode identities, price, stock, and percentage or flat discount
+- Atomic full-matrix save with aggregate-revision concurrency, stock-version guards, movement-ledger claims, safe combination retirement, and D1-batched writes
 - Soft-deleted variants filtered out: all variant queries use `isNull(deletedAt)` or `deletedAt IS NULL` conditions
 - Discount type support: both percentage and flat amount discounts at product and variant level
 - `ProductWithDetails` type includes `additionalInfo` (`{id, title, content, sortOrder}[]`) and `attributes` (`{attributeId, value}[]`)
@@ -27,8 +27,8 @@ Product CRUD, variant management, image handling, rich content (additional info)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
-- SKU-first purchasability: every sellable product must have a real `productVariants` row. Simple products use one hidden/default SKU (`isDefault = true`, logically no customer options); optioned products require an explicit selected SKU; SKU-less or ambiguous no-option products fail closed. Merchant-created variants must include at least one customer option (`size` or `color`) so the hidden simple SKU stays the only no-option SKU. All customer-option SKUs for one product must use the same option axes: Option 1 only, Option 2 only, or both options on every SKU. `isDefault` is the protected simple-SKU authority; admin/API/storefront projections normalize legacy default SKU option labels to `null`, and the storefront no longer synthesizes fake `default` variants.
-- Option-axis discovery is product-owned: `variantOption1Label`, `variantOption2Label`, `variantOption1Schema`, and `variantOption2Schema` describe how generic merchant options should appear in catalog feeds and ProductGroup JSON-LD. Size/color remain defaults for ordinary merchants, but products can map axes to `size`, `color`, `material`, `pattern`, or `none`; storefront feed/schema code must not infer that every Option 1 value is a size or every Option 2 value is a color.
+- SKU-first purchasability: every sellable product has a persisted `productVariants` row. Simple products use exactly one protected default SKU with no option assignments. Optioned products use non-default SKUs whose assignment set contains exactly one active value for every active product option; incomplete, mixed-shape, or fake default rows fail closed.
+- Product options are arbitrary merchant-defined axes, not fixed size/color slots. An axis may explicitly map to `size`, `color`, `material`, `pattern`, or `none` for catalog standards; each non-`none` mapping can be claimed by only one axis. Combination identity is the axis-ordered option-value ID sequence, independent of request order.
 - Product editor concurrency is aggregate-versioned. Admin detail and list/trash rows expose `aggregateRevision`; every direct product-editor mutation requires `expectedAggregateRevision`, increments the product revision exactly once in the same D1 batch, and returns the new revision. External category/attribute/tax cascades bump affected product revisions atomically so an open editor becomes stale. Stale direct writes fail with `PRODUCT_REVISION_CONFLICT` and safe expected/current revision details. Operational inventory transitions remain separately guarded by SKU `stockVersion` and ledger v2.
 - SKU and barcode writes trim values and use global case-insensitive identity. Barcode/type pairs validate supported shape and checksum rules before D1 writes. Migration 0006 installs normalized unique indexes plus canonical row triggers, and scanner/admin lookup uses those indexed identities.
 - Public catalog eligibility is centralized in `products.public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads. The dedicated feed projection carries `canonicalPath`, option-axis mapping, and supported variant barcode fields so storefront XML can emit canonical product links, `variant_option` pairs, ProductGroup-compatible standard attributes, and true GTINs without expanding normal listing cards.
@@ -42,6 +42,12 @@ Admin UI (ProductForm.tsx)
     --> apps/api/src/routes/admin/products.ts [Hono route, Zod validation]
       --> packages/core/src/modules/products/products.admin.ts [createProduct/updateProduct]
         --> D1 batch: products + productImages + productRichContent + productAttributeValues
+
+Admin option-matrix editor
+  --> PUT /api/v1/admin/products/{id}/options/matrix
+    --> saveProductOptionMatrix()
+      --> validate complete Cartesian matrix + identities + image ownership + discounts
+      --> D1 batch: option definitions/values + SKU rows/assignments + stock ledger + one aggregate revision bump
 
 Admin UI (ProductView.tsx)
   --> Astro loader: getProductViewData()
@@ -72,12 +78,14 @@ Storefront category ([slug].astro)
 | File | Description |
 |------|-------------|
 | `index.ts` | Barrel re-exports from all submodules |
-| `products.types.ts` | Zod schemas for variant operations (`createVariantSchema`, `updateVariantSchema`, `bulkVariantSchema`, `bulkCreateVariantsSchema`, `bulkDeleteVariantsSchema`, `variantEditPlanSchema`, `updateSortOrderSchema`) and TypeScript interfaces (`ProductWithDetails`, `ProductListItem`, `StorefrontProductFilterInput`). Discount percentage is capped at 0-100 in all schemas. |
+| `products.types.ts` | Zod schemas for single-SKU create/update operations and shared product/storefront projection types. |
 | `products.validation.ts` | Zod schemas for product create/update: `createProductSchema`, `updateProductSchema` with shared sub-schemas for images, attributes (`{attributeId, value}`), and additional info (`{id, title, content, sortOrder}`). Discount percentage capped at 0-100. |
+| `products.option-model.ts` | Normalized option reads, assignment resolution, axis-ordered combination labels/keys, and the five-axis/150-combination limits. |
+| `products.option-matrix.ts` | Full Cartesian matrix validation and atomic save. Owns arbitrary axes, unique standard mappings, canonical combination order, per-SKU image ownership, SKU/barcode conflicts, discount consistency, stock allocation, assignment replacement, and safe retirement. |
 | `products.public-eligibility.ts` | Shared public catalog predicates and default simple-SKU values. Any storefront/catalog/search surface that exposes buyer product cards must use these predicates instead of checking only `products.isActive` and `products.deletedAt`. |
 | `products.admin.ts` | Admin read queries (`getProducts`, `getProductDetails`, `getProductStats`, `getCategoryStats`) and product write mutations (`createProduct`, `updateProduct`, `deleteProduct`, `restoreProduct`, `permanentDeleteProduct`, `bulkDeleteProducts`). `getProducts` returns `discountType` and `discountAmount`. `getProductDetails` fetches `productRichContent` and `productAttributeValues`. All variant queries filter `deletedAt IS NULL`. |
 | `products.storefront.ts` | Storefront read queries (`getStorefrontProducts`, `getStorefrontProductBySlug`, `searchStorefrontProducts`) with discount calculation (percentage and flat), feature extraction, SKU/default-SKU metadata, and attribute-based filtering. All variant queries filter `isNull(deletedAt)`; buyer purchase flows must use real variant rows and cart validation as inventory proof. |
-| `products.variants.ts` | Variant-specific operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`, `applyVariantEditPlan`, `bulkCreateVariants`, `bulkDeleteVariants`, `getVariantSortOrder`, `updateVariantSortOrder`). All queries filter soft-deleted variants. Normal variants must have a customer option and consistent option axes; persisted exact duplication is intentionally unsupported because a clone would violate option/barcode identity. Variant deletion rejects active reservations/open orders and always retires the SKU with a soft delete so audit identity is preserved. |
+| `products.variants.ts` | Single-SKU operations (`lookupByBarcode`, `getProductVariants`, `createVariant`, `updateVariant`, `deleteVariant`) and shared normalized identity/axis guards. All reads filter soft-deleted variants; deletion rejects active reservations/open orders and preserves audit history. |
 
 ## API Endpoints
 
@@ -99,10 +107,7 @@ Storefront category ([slug].astro)
 | GET | `/{id}/variants` | `getProductVariants` | List variants for product (soft-deleted filtered) |
 | PUT | `/{id}/variants/{variantId}` | `updateVariant` | Update single variant |
 | DELETE | `/{id}/variants/{variantId}` | `deleteVariant` | Soft-delete the SKU after transactional reservation/open-order/final-option guards |
-| POST | `/{id}/variants/bulk-create` | `bulkCreateVariants` | Bulk create (chunked for D1 parameter limits) |
-| POST | `/{id}/variants/bulk-delete` | `bulkDeleteVariants` | Bulk soft-delete SKUs after transactional reservation/open-order/final-option guards |
-| GET | `/{id}/variants/sort-order` | `getVariantSortOrder` | Get color/size sort order |
-| POST | `/{id}/variants/sort-order` | `updateVariantSortOrder` | Set color/size sort order |
+| PUT | `/{id}/options/matrix` | `saveProductOptionMatrix` | Atomically replace the complete normalized option definition/value/SKU matrix |
 
 ### Admin Attributes (`/api/v1/admin/attributes`)
 
@@ -149,27 +154,23 @@ Storefront category ([slug].astro)
 
 1. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`).
 
-2. **Variant sort order updates are not batched**: `updateVariantSortOrder()` in `products.variants.ts` runs individual UPDATE queries per color and per size value rather than using `db.batch()`, which could be slow for many distinct values.
+2. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain business logic inline rather than delegating to a core service module.
 
-3. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain all business logic inline in the route handlers rather than delegating to a core service module.
-
-4. **Variant images use explicit stable associations**: Product enable/axis settings live on `products`; `product_variant_image_mappings` links an image ID to either a SKU or normalized option value. Migration 0002 materialized the historical positional configuration once; migration 0006 removes every marker, rejects reintroduction, and deletes all positional readers. Explicit fields and rows are now the only authority.
-
-5. **Optioned -> simple remains an explicit future workflow**: The backend is SKU-first. Admin edit presents one protected default no-option SKU as a `Product SKU` panel, hides that dormant SKU from optioned product tables and operational inventory projections, and rejects non-default/no-option SKUs everywhere option rows can be created. Simple -> optioned now requires an exact allocation of the tracked default SKU's on-hand stock across the first option rows and blocks conversion while reservations exist. The reverse transition still needs a deliberate stock-merge policy and cached-cart invalidation guidance; do not infer it by deleting the final option SKU.
+3. **Optioned -> simple remains an explicit future workflow**: Simple -> optioned requires exact allocation of tracked default-SKU stock and blocks while reservations/preorders exist. The reverse transition still needs a deliberate stock merge and cached-cart invalidation policy; do not infer it by deleting the final option SKU.
 
 ## Inventory Rules
 
-- Migration `0055_default_sku_inventory_tracking` established the SKU-first columns/backfill. Migration `0057_simple_sku_legacy_repair` gave active SKU-less products a protected untracked default SKU. Migration `0062_default_sku_option_cleanup` clears legacy size/color labels from default SKUs. Current runtime rules are strict: `isDefault` default SKUs are treated and projected as optionless, and every non-default SKU must expose at least one customer option.
-- Product variant edit and bulk edit split `stock` out of ordinary metadata writes. Existing-SKU stock changes must batch the movement claim with the guarded variant stock/`stockVersion` update so `inventory_movements`, stock, and low-stock checks stay in sync.
+- `isDefault` is the simple-SKU authority. Every non-default SKU must have an axis-ordered `optionCombinationKey` and one assignment row per active option definition.
+- Option-matrix stock edits batch a stock-version guard, movement claim, SKU update, and aggregate revision bump. A tracked default SKU can become optioned only when its entire on-hand quantity is allocated across tracked option rows; its stock is then deducted in the same batch. Topology edits that retire and create combinations must also preserve the affected tracked-stock total.
 - Variant delete and bulk delete must preserve order/inventory history. SKUs with `reservedStock > 0` or non-terminal order references are rejected; SKUs referenced only by terminal `order_items` history or `inventory_movements` are soft-deleted with a zero-reservation guard; only unused, unreserved SKUs may be hard-deleted.
 - Product permanent delete must preserve SKU audit history too. If any SKU under the product has `inventory_movements`, the hard delete is blocked and the merchant should keep the product trashed/soft-deleted; only movement-free products may delete their variants and low-stock alerts permanently.
-- Optioned SKUs for one product must not mix option axes. A product can be Option 1 only, Option 2 only, or Option 1 + Option 2, but not a mix of those shapes across active non-default SKUs.
+- Optioned SKUs for one product cannot mix shapes: every active combination selects one value from every active arbitrary axis.
 - Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 
 ## Dependencies
 
 ### This module depends on:
-- `@scalius/database/schema` -- `products`, `productVariants`, `productImages`, `productRichContent`, `productAttributes`, `productAttributeValues`, `categories`, `orderItems`, `discountProducts`
+- `@scalius/database/schema` -- products, normalized option definitions/values/assignments, variants, images, rich content, attributes, categories, orders, and inventory history
 - `@scalius/core/search` -- `ftsMatch`, `sanitizeFtsQuery` for FTS5 full-text search
 - `@scalius/core/errors` -- `NotFoundError`, `ConflictError`, `ValidationError`
 - `drizzle-orm` -- query building, batch operations

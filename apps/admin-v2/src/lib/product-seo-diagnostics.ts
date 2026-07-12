@@ -26,8 +26,7 @@ export interface ProductSeoDiagnosticImage {
 
 export interface ProductSeoDiagnosticVariant {
   id?: string | null;
-  size?: string | null;
-  color?: string | null;
+  optionCombinationKey?: string | null;
   sku?: string | null;
   stock?: number | null;
   reservedStock?: number | null;
@@ -122,7 +121,7 @@ function normalizeSlug(value: string | null | undefined): string {
 }
 
 function hasCustomerOption(variant: ProductSeoDiagnosticVariant): boolean {
-  return Boolean(variant.size?.trim() || variant.color?.trim());
+  return Boolean(variant.optionCombinationKey?.trim());
 }
 
 function isActivePersistedSku(variant: ProductSeoDiagnosticVariant): boolean {

@@ -36,7 +36,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
 function EditOrderPage() {
   const { orderId } = Route.useParams();
   const { data } = useSuspenseQuery(orderFormDataQueryOptions(orderId));
-  const r = data as OrderFormDataResult;
+  const r = data as unknown as OrderFormDataResult;
 
   const productsWithVariants = (r.productsWithVariants || []).map((p) => ({
     ...p,

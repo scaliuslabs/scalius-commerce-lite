@@ -8,8 +8,8 @@ vi.mock("../inventory/alerts", () => ({
 }));
 
 const variantInput = {
-  size: "M",
-  color: "Black",
+  selectedOptionValueIds: [],
+  imageId: null,
   weight: null,
   sku: "SKU-001",
   price: 120,
@@ -40,25 +40,23 @@ describe("product variant stock ledger routing", () => {
           from() {
             return {
               where() {
-                if (selectCount === 2) {
-                  return Promise.resolve([]);
-                }
-
                 return {
                   get: async () => (
                     selectCount === 1
                       ? {
                           id: "variant_1",
-                          isDefault: false,
-                          size: "M",
-                          color: "Black",
+                          isDefault: true,
+                          optionCombinationKey: null,
+                          imageId: null,
                           stock: 5,
                           reservedStock: 0,
                           preorderStock: 0,
                           stockVersion: 3,
                           trackInventory: true,
+                          barcode: null,
+                          barcodeType: null,
                         }
-                      : null
+                      : selectCount === 3 ? { price: 120 } : null
                   ),
                 };
               },

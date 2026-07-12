@@ -13,10 +13,6 @@ import {
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
-import {
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  normalizeProductOptionLabel,
-} from "@scalius/shared/product-options";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 export const UCP_VERSION = "2026-04-08";
@@ -458,47 +454,19 @@ function uniqueLookupIdentifiers(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
 
-function normalizedOption(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
-function getProductOptionLabel(product: Product, axis: "option1" | "option2"): string {
-  return normalizeProductOptionLabel(
-    axis === "option1"
-      ? product.variantOption1Label
-      : product.variantOption2Label,
-    axis === "option1"
-      ? DEFAULT_PRODUCT_OPTION_LABELS.option1
-      : DEFAULT_PRODUCT_OPTION_LABELS.option2,
-  );
-}
-
-function selectedOptions(product: Product, variant: ProductVariant) {
-  return [
-    { name: getProductOptionLabel(product, "option1"), label: normalizedOption(variant.size) },
-    { name: getProductOptionLabel(product, "option2"), label: normalizedOption(variant.color) },
-  ].flatMap((option) => option.label ? [{ name: option.name, label: option.label }] : []);
+function selectedOptions(_product: Product, variant: ProductVariant) {
+  return variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
 }
 
 function productOptions(product: Product, variants: ProductVariant[]) {
-  const option1Values = uniqueStrings(variants.map((variant) => variant.size ?? ""));
-  const option2Values = uniqueStrings(variants.map((variant) => variant.color ?? ""));
-  const options = [];
-
-  if (option1Values.length > 0) {
-    options.push({
-      name: getProductOptionLabel(product, "option1"),
-      values: option1Values.map((label) => ({ label })),
-    });
-  }
-  if (option2Values.length > 0) {
-    options.push({
-      name: getProductOptionLabel(product, "option2"),
-      values: option2Values.map((label) => ({ label })),
-    });
-  }
-
+  const names = product.options?.map((option) => option.name)
+    ?? uniqueStrings(variants.flatMap((variant) => variant.selectedOptions.map((option) => option.name)));
+  const options = names.map((name) => ({
+    name,
+    values: uniqueStrings(variants.flatMap((variant) => variant.selectedOptions
+      .filter((option) => namesMatch(option.name, name))
+      .map((option) => option.value))).map((label) => ({ label })),
+  })).filter((option) => option.values.length > 0);
   return options.length > 0 ? options : undefined;
 }
 
@@ -574,10 +542,7 @@ function productUrl(product: Product, baseUrl: string): string {
 
 function variantUrl(product: Product, variant: ProductVariant, baseUrl: string): string {
   const url = new URL(productUrl(product, baseUrl));
-  const option1 = normalizedOption(variant.size);
-  const option2 = normalizedOption(variant.color);
-  if (option1) url.searchParams.set("size", option1);
-  if (option2) url.searchParams.set("color", option2);
+  url.searchParams.set("variant", variant.id);
   return url.toString();
 }
 

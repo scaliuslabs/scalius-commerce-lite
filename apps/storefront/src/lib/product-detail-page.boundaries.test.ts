@@ -117,15 +117,15 @@ describe("product detail page SKU boundaries", () => {
     expect(availableOnlyPresentation.pricing.finalPrice).toBe(41_040);
     expect(allSoldOutPresentation.pricing.finalPrice).toBe(4_050);
     expect(source).toContain(
-      "getBuyerVariantPricePresentation(\n  productPricing,\n  initialPricingVariants,",
+      "getBuyerVariantPricePresentation(productPricing, pricingVariants)",
     );
     expect(source).toContain("const showsStartingPrice = shouldShowStartingVariantPrice(");
-    expect(source).toContain("initialStockVariant,");
+    expect(source).toContain("const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;");
     expect(source).toContain(
-      '`${showsStartingPrice ? "From " : ""}${formatPrice(initialDisplayedPrice)}`',
+      '{showsStartingPrice ? "From " : ""}{formatPrice(pricePresentation.pricing.finalPrice)}',
     );
-    expect(source).toContain("{ hidden: !initialExactPricing?.hasDiscount }");
-    expect(source).toContain("{ hidden: !discountBadgeText }");
+    expect(source).toContain("{ hidden: !exactPricing?.hasDiscount }");
+    expect(source).toContain("{ hidden: !discountBadge }");
   });
 
   it("uses the shared buyer price for product metadata and initial analytics", () => {
@@ -164,10 +164,7 @@ describe("product detail page SKU boundaries", () => {
       "const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants",
     );
     expect(source).toContain(
-      'selectedSize: Astro.url.searchParams.get("size")',
-    );
-    expect(source).toContain(
-      'selectedColor: Astro.url.searchParams.get("color")',
+      'variantId: Astro.url.searchParams.get("variant")',
     );
     expect(source).toContain(
       "isVariantAvailable(requestedQueryVariantSelection.variant)",
@@ -180,15 +177,12 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain(
       "const primarySchemaVariant = selectedBuyerVariant",
     );
-    expect(source).toContain(
-      "initialSelectedSize={queryVariantSelection?.selectedSize}",
-    );
-    expect(source).toContain(
-      "initialSelectedColor={queryVariantSelection?.selectedColor}",
-    );
+    expect(source).toContain("initialVariant={queryVariantSelection?.variant}");
     expect(source).toContain(
       "initialUnavailableVariant={unavailableQueryVariantSelection?.variant}",
     );
+    expect(source).not.toContain('Astro.url.searchParams.get("size")');
+    expect(source).not.toContain('Astro.url.searchParams.get("color")');
   });
 
   it("SSR-classifies accessible option toggles without disabling compatible switches", () => {
@@ -196,33 +190,32 @@ describe("product detail page SKU boundaries", () => {
 
     expect(source).toContain("getVariantOptionAvailabilityMap(");
     expect(source).toContain('type="button"');
-    expect(source).toContain('aria-pressed={isSelected ? "true" : "false"}');
-    expect(source).toContain("data-option-availability={availability}");
-    expect(source).toContain('disabled={availability === "sold_out"}');
-    expect(source).toContain('availability === "incompatible"');
+    expect(source).toContain('aria-pressed={selected ? "true" : "false"}');
+    expect(source).toContain("data-option-availability={status}");
+    expect(source).toContain('disabled={status === "sold_out"}');
+    expect(source).toContain('status === "incompatible"');
     expect(source).toContain(
-      "bg-muted text-foreground border-dashed border-muted-foreground",
+      "border-dashed border-muted-foreground bg-muted text-foreground",
     );
     expect(source).not.toContain(
       "bg-muted/50 text-muted-foreground border-dashed border-muted-foreground/40 opacity-50",
     );
-    expect(source).toContain("line-through cursor-not-allowed");
+    expect(source).toContain("cursor-not-allowed border-input bg-background text-foreground opacity-50 line-through");
     expect(source).toContain('id="variant-availability-status"');
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain("Selected; activate again to clear.");
-    expect(source).toContain("globalSizeAvailability");
-    expect(source).toContain('!== "sold_out"');
+    expect(source).toContain("options.map((option) =>");
+    expect(source).toContain("option.values.map((value) =>");
     expect(source).toContain('id="product-stock-badge"');
     expect(source).toContain('id="variant-unavailable-query-notice"');
     expect(source).toContain('data-action-label="add-to-cart"');
     expect(source).toContain(
-      "initialUnavailableVariant ?? initialSelectedVariant ?? null",
+      "initialUnavailableVariant ?? initialSelectedVariant",
     );
-    expect(source).toContain(
-      "initialPricingVariants = initialUnavailableVariant",
-    );
+    expect(source).toContain("const pricingVariants = initialSelectedVariant");
     expect(source).toContain("shouldShowStartingVariantPrice(");
-    expect(source).toContain("initialStockVariant,");
+    expect(source).toContain("stockVariant ? [stockVariant] : variants");
+    expect(source).not.toContain("globalSizeAvailability");
     expect(source).not.toContain('type="radio"');
   });
 
@@ -248,8 +241,7 @@ describe("product detail page SKU boundaries", () => {
     expect(source).toContain(
       "url: buildVariantProductUrl(variant) ?? canonicalUrl",
     );
-    expect(source).toContain('url.searchParams.set("size", size)');
-    expect(source).toContain('url.searchParams.set("color", color)');
+    expect(source).toContain('url.searchParams.set("variant", variant.id)');
     expect(source).toContain("isVariantAvailable(variant)");
     expect(source).toContain('"@type": "Product"');
     expect(source).toContain("mappedVariantSchemaProps(variant)");
@@ -260,26 +252,19 @@ describe("product detail page SKU boundaries", () => {
   it("maps ProductGroup variant labels and schema from merchant-defined option axes", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain("const productOptionMetadata");
-    expect(source).toContain("product.variantOption1Label");
-    expect(source).toContain("product.variantOption2Label");
-    expect(source).toContain("product.variantOption1Schema");
-    expect(source).toContain("product.variantOption2Schema");
-    expect(source).toContain("return productOptionMetadata[axis].schema");
-    expect(source).toContain("return productOptionMetadata[axis].label");
+    expect(source).toContain("const productOptions = product.options ?? [];");
+    expect(source).toContain("for (const option of variant.selectedOptions)");
+    expect(source).toContain("const schema = option.standardMapping;");
     expect(source).toContain(
       'if (schema === "none" || props[schema]) continue;',
     );
     expect(source).toContain("props[schema] = option.value;");
     expect(source).toContain(
-      "`${getProductOptionLabel(option.axis)}: ${option.value}`",
+      "`${option.name}: ${option.value}`",
     );
-    expect(source).toContain(
-      'PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option1")',
-    );
-    expect(source).toContain(
-      'PRODUCT_OPTION_SCHEMA_URLS[getProductOptionSchema("option2")',
-    );
+    expect(source).toContain("PRODUCT_OPTION_SCHEMA_URLS[option.standardMapping]");
+    expect(source).not.toContain("variantOption1Label");
+    expect(source).not.toContain("variantOption2Label");
     expect(source).not.toContain("`${product.name} - Size:");
     expect(source).not.toContain("`${product.name} - Color:");
     expect(source).not.toContain("props.size =");

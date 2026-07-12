@@ -1333,13 +1333,13 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toContain("const VariantManager = lazy(");
+    expect(source).toContain("const OptionMatrixEditor = lazy(");
     expect(source).toContain(
-      'import("~/components/admin/product-form/variants/VariantManager")',
+      'import("~/components/admin/product-form/variants/OptionMatrixEditor")',
     );
     expect(source).toContain('<LoadingFallback height="h-48" />');
     expect(source).not.toMatch(
-      /import\s+\{\s*VariantManager\s*\}\s+from\s+["']~\/components\/admin\/product-form\/variants["']/,
+      /import\s+\{\s*OptionMatrixEditor\s*\}\s+from\s+["']~\/components\/admin\/product-form\/variants/,
     );
   });
 

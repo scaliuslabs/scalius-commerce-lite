@@ -1,6 +1,7 @@
 // src/modules/products/products.variants.ts
 // Variant-specific queries and mutations + barcode lookup.
 import type { DrizzleD1Database } from "drizzle-orm/d1";
+import { buildBatchGuard } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import {
     orders,
@@ -8,6 +9,8 @@ import {
     OrderStatus,
     products,
     productVariants,
+    productVariantOptionValues,
+    productImages,
 } from "@scalius/database/schema";
 import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -18,16 +21,10 @@ import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
     createVariantSchema,
     updateVariantSchema,
-    updateSortOrderSchema,
-    bulkVariantSchema,
-    variantEditPlanSchema,
-    type VariantEditPlan,
 } from "./products.types";
 import {
-    normalizeDefaultSkuOptions,
     operationalSkuRowPredicate,
 } from "./products.public-eligibility";
-import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import {
     getBarcodeIdentityKey,
     getBarcodeValidationError,
@@ -42,6 +39,10 @@ import {
     productVariantBarcodeIdentityEquals,
     productVariantBarcodeIdentityIn,
 } from "./products.variant-identity";
+import {
+    loadVariantSelectedOptions,
+    resolveSelectedOptionValueIds,
+} from "./products.option-model";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -70,13 +71,11 @@ async function executeProductAggregateMutationBatch(
     }
 }
 
-function normalizeOptionValue(value: string | null | undefined): string | null {
-    const normalized = value?.trim();
-    return normalized ? normalized : null;
-}
-
-function hasCustomerOption(value: { size?: string | null; color?: string | null }): boolean {
-    return Boolean(normalizeOptionValue(value.size) || normalizeOptionValue(value.color));
+function hasCustomerOption(value: {
+    selectedOptionValueIds?: readonly string[];
+    optionCombinationKey?: string | null;
+}): boolean {
+    return Boolean(value.selectedOptionValueIds?.length || value.optionCombinationKey?.trim());
 }
 
 const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
@@ -87,16 +86,17 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.PARTIALLY_REFUNDED,
 ];
 
-export function assertConsistentVariantOptionAxes(variants: Array<{ size?: string | null; color?: string | null }>) {
-    if (classifyProductVariantOptionAxes(variants) === "mixed") {
-        throw new ValidationError("Use the same option fields for every SKU on this product: Option 1 only, Option 2 only, or both options on every SKU.");
+export function assertConsistentVariantOptionAxes(
+    variants: Array<{ selectedOptionValueIds?: readonly string[]; optionCombinationKey?: string | null }>,
+) {
+    if (variants.some((variant) => !hasCustomerOption(variant))) {
+        throw new ValidationError("Every option SKU must select one value for every active product option.");
     }
 }
 
 type TransitionSku = {
     isDefault?: boolean;
-    size?: string | null;
-    color?: string | null;
+    optionCombinationKey?: string | null;
     stock: number;
     reservedStock?: number;
     preorderStock?: number;
@@ -132,22 +132,17 @@ export function assertSimpleSkuTransitionStockAllocation(
     }
 }
 
-function normalizedOptionCombinationKey(value: {
-    size?: string | null;
-    color?: string | null;
-}): string {
-    return JSON.stringify([
-        normalizeOptionValue(value.size)?.toLowerCase() ?? "",
-        normalizeOptionValue(value.color)?.toLowerCase() ?? "",
-    ]);
-}
-
 function normalizeSku(value: string): string {
     return value.trim();
 }
 
 function normalizedSkuKey(value: string): string {
     return normalizeSku(value).toLocaleLowerCase("en-US");
+}
+
+function isAtomicVariantConflict(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /constraint|unique|malformed json|variant_edit_conflict/i.test(message);
 }
 
 export function normalizeVariantBarcode(
@@ -202,36 +197,20 @@ export async function assertUniqueVariantBarcodes(
     }
 }
 
-function assertUniqueNormalizedValues(
-    values: string[],
-    label: string,
-): void {
-    const seen = new Set<string>();
-    const duplicates = new Set<string>();
-    for (const value of values) {
-        const key = normalizedSkuKey(value);
-        if (seen.has(key)) duplicates.add(normalizeSku(value));
-        seen.add(key);
-    }
-    if (duplicates.size > 0) {
-        throw new ValidationError(
-            `${label}: ${Array.from(duplicates).join(", ")}`,
-        );
-    }
-}
-
 export function assertUniqueChangedVariantOptions(
-    changedVariants: Array<{ size?: string | null; color?: string | null }>,
-    existingVariants: Array<{ size?: string | null; color?: string | null }> = [],
+    changedVariants: Array<{ optionCombinationKey: string }>,
+    existingVariants: Array<{ optionCombinationKey: string | null }> = [],
 ): void {
-    const changedKeys = changedVariants.map(normalizedOptionCombinationKey);
+    const changedKeys = changedVariants.map((variant) => variant.optionCombinationKey);
     if (new Set(changedKeys).size !== changedKeys.length) {
         throw new ValidationError(
             "Each active SKU must use a unique option combination.",
         );
     }
 
-    const existingKeys = new Set(existingVariants.map(normalizedOptionCombinationKey));
+    const existingKeys = new Set(existingVariants.flatMap((variant) =>
+        variant.optionCombinationKey ? [variant.optionCombinationKey] : []
+    ));
     if (changedKeys.some((key) => existingKeys.has(key))) {
         throw new ConflictError(
             "An active SKU already uses this option combination.",
@@ -242,11 +221,14 @@ export function assertUniqueChangedVariantOptions(
 export async function assertProductVariantOptionAxes(
     db: DrizzleD1Database<typeof schema>,
     productId: string,
-    changedVariants: Array<{ id?: string; size?: string | null; color?: string | null }>,
+    changedVariants: Array<{ id?: string; selectedOptionValueIds: string[] }>,
     excludedVariantIds: string[] = [],
 ) {
-    assertConsistentVariantOptionAxes(changedVariants);
-    assertUniqueChangedVariantOptions(changedVariants);
+    const resolved = await Promise.all(changedVariants.map((variant) =>
+        resolveSelectedOptionValueIds(db, productId, variant.selectedOptionValueIds)
+    ));
+    const changedKeys = resolved.map((item) => ({ optionCombinationKey: item.combinationKey }));
+    assertUniqueChangedVariantOptions(changedKeys);
 
     const conditions = [
         eq(productVariants.productId, productId),
@@ -260,24 +242,22 @@ export async function assertProductVariantOptionAxes(
     const existingVariants = await db
         .select({
             id: productVariants.id,
-            size: productVariants.size,
-            color: productVariants.color,
+            optionCombinationKey: productVariants.optionCombinationKey,
         })
         .from(productVariants)
         .where(and(...conditions));
 
-    assertConsistentVariantOptionAxes([...existingVariants, ...changedVariants]);
-    assertUniqueChangedVariantOptions(changedVariants, existingVariants);
+    assertUniqueChangedVariantOptions(changedKeys, existingVariants);
 }
 
-function assertNormalVariantHasCustomerOption(value: { size?: string | null; color?: string | null }) {
+function assertNormalVariantHasCustomerOption(value: { selectedOptionValueIds?: readonly string[]; optionCombinationKey?: string | null }) {
     if (!hasCustomerOption(value)) {
         throw new ValidationError("Add at least one customer option. Products without options use the built-in simple SKU.");
     }
 }
 
 function customerOptionPredicate() {
-    return sql`(trim(coalesce(${productVariants.size}, '')) <> '' OR trim(coalesce(${productVariants.color}, '')) <> '')`;
+    return sql`trim(coalesce(${productVariants.optionCombinationKey}, '')) <> ''`;
 }
 
 async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>, variantId: string): Promise<boolean> {
@@ -293,25 +273,6 @@ async function variantHasOpenOrderReference(db: DrizzleD1Database<typeof schema>
         .get();
 
     return (openOrderReference?.count ?? 0) > 0;
-}
-
-async function loadOpenOrderBackedVariantIds(db: DrizzleD1Database<typeof schema>, variantIds: string[]): Promise<Set<string>> {
-    const openOrderReferences = await db
-        .select({ variantId: orderItems.variantId })
-        .from(orderItems)
-        .innerJoin(orders, eq(orderItems.orderId, orders.id))
-        .where(and(
-            inArray(orderItems.variantId, variantIds),
-            isNull(orders.deletedAt),
-            not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT)),
-        ))
-        .groupBy(orderItems.variantId);
-
-    return new Set(openOrderReferences.map((row) => row.variantId).filter((id): id is string => Boolean(id)));
-}
-
-function uniqueVariantIds(variantIds: string[]): string[] {
-    return Array.from(new Set(variantIds.map((id) => id.trim()).filter(Boolean)));
 }
 
 // ─────────────────────────────────────────
@@ -330,8 +291,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
         .select({
             variantId: productVariants.id,
             variantSku: productVariants.sku,
-            variantSize: productVariants.size,
-            variantColor: productVariants.color,
+            variantImageId: productVariants.imageId,
             variantWeight: productVariants.weight,
             variantPrice: productVariants.price,
             variantStock: productVariants.stock,
@@ -359,20 +319,15 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
 
     if (!variant) return null;
 
-    const normalizedVariant = normalizeDefaultSkuOptions({
-        id: variant.variantId,
-        sku: variant.variantSku,
-        size: variant.variantSize,
-        color: variant.variantColor,
-        isDefault: variant.variantIsDefault,
-    });
+    const selectedOptions = (await loadVariantSelectedOptions(db, [variant.variantId]))
+        .get(variant.variantId) ?? [];
 
     return {
         variant: {
             id: variant.variantId,
             sku: variant.variantSku,
-            size: normalizedVariant.size,
-            color: normalizedVariant.color,
+            imageId: variant.variantImageId,
+            selectedOptions,
             weight: variant.variantWeight,
             price: variant.variantPrice,
             stock: variant.variantStock,
@@ -395,38 +350,19 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
 // ─────────────────────────────────────────
 
 export async function getProductVariants(db: DrizzleD1Database<typeof schema>, productId: string) {
-    const variants = await db
-        .select({
-            id: productVariants.id,
-            size: productVariants.size,
-            color: productVariants.color,
-            weight: productVariants.weight,
-            sku: productVariants.sku,
-            price: productVariants.price,
-            stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
-            isDefault: productVariants.isDefault,
-            trackInventory: productVariants.trackInventory,
-            barcode: productVariants.barcode,
-            barcodeType: productVariants.barcodeType,
-            discountType: productVariants.discountType,
-            discountPercentage: productVariants.discountPercentage,
-            discountAmount: productVariants.discountAmount,
-            colorSortOrder: productVariants.colorSortOrder,
-            sizeSortOrder: productVariants.sizeSortOrder,
-            createdAt: sql<string>`datetime(${productVariants.createdAt}, 'unixepoch', 'localtime')`,
-            updatedAt: sql<string>`datetime(${productVariants.updatedAt}, 'unixepoch', 'localtime')`,
-        })
+    const variants = await db.select()
         .from(productVariants)
         .where(
             sql`${productVariants.productId} = ${productId} AND ${productVariants.deletedAt} IS NULL`,
         )
-        .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt);
-
-    return variants.map((variant: { id: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: string; updatedAt: string }) => ({
-        ...normalizeDefaultSkuOptions(variant),
-        createdAt: new Date(variant.createdAt),
-        updatedAt: new Date(variant.updatedAt),
+        .orderBy(productVariants.createdAt);
+    const selectedOptionsByVariant = await loadVariantSelectedOptions(
+        db,
+        variants.map((variant) => variant.id),
+    );
+    return variants.map((variant) => ({
+        ...variant,
+        selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
     }));
 }
 
@@ -436,16 +372,18 @@ export async function createVariant(
     data: z.infer<typeof createVariantSchema>,
 ): Promise<PersistedVariant & ProductAggregateRevisionResult> {
     assertNormalVariantHasCustomerOption(data);
-    const size = normalizeOptionValue(data.size);
-    const color = normalizeOptionValue(data.color);
+    const selection = await resolveSelectedOptionValueIds(
+        db,
+        productId,
+        data.selectedOptionValueIds,
+    );
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
     const barcodeIdentity = normalizeVariantBarcode(data.barcode, data.barcodeType);
     const currentVariants = await db
         .select({
             isDefault: productVariants.isDefault,
-            size: productVariants.size,
-            color: productVariants.color,
+            optionCombinationKey: productVariants.optionCombinationKey,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
             preorderStock: productVariants.preorderStock,
@@ -457,8 +395,16 @@ export async function createVariant(
             isNull(productVariants.deletedAt),
         ));
     assertSimpleSkuTransitionStockAllocation(currentVariants, [data]);
-    await assertProductVariantOptionAxes(db, productId, [{ size, color }]);
+    await assertProductVariantOptionAxes(db, productId, [{ selectedOptionValueIds: selection.valueIds }]);
     await assertUniqueVariantBarcodes(db, [{ ...barcodeIdentity }]);
+
+    if (data.imageId) {
+        const image = await db.select({ id: productImages.id })
+            .from(productImages)
+            .where(and(eq(productImages.id, data.imageId), eq(productImages.productId, productId)))
+            .get();
+        if (!image) throw new ValidationError("The selected SKU image is not on this product.");
+    }
 
     const existingVariant = await db
         .select({ id: productVariants.id })
@@ -474,8 +420,8 @@ export async function createVariant(
     const variantValues = {
         id: variantId,
         productId,
-        size,
-        color,
+        optionCombinationKey: selection.combinationKey,
+        imageId: data.imageId,
         weight: data.weight,
         sku,
         price: data.price,
@@ -494,12 +440,19 @@ export async function createVariant(
         updatedAt: sql`unixepoch()`,
     };
     const insert = db.insert(productVariants).values(variantValues).returning();
+    const assignmentInserts = selection.assignments.map((assignment) =>
+        db.insert(productVariantOptionValues).values({
+            variantId,
+            optionDefinitionId: assignment.optionDefinitionId,
+            optionValueId: assignment.optionValueId,
+        })
+    );
     if (data.stock === 0) {
         const result = await executeProductAggregateMutationBatch(
             db,
             productId,
             data.expectedAggregateRevision,
-            [insert],
+            [insert, ...assignmentInserts],
         );
         const variant = (result.mutationResults[0] as PersistedVariant[] | undefined)?.[0];
         if (!variant) throw new ConflictError("The created variant could not be confirmed.");
@@ -541,13 +494,10 @@ export async function createVariant(
         db,
         productId,
         data.expectedAggregateRevision,
-        [insert, movement, update],
+        [insert, ...assignmentInserts, movement, update],
     );
-    const [, movementRows, updatedRows] = result.mutationResults as [
-        PersistedVariant[],
-        Array<{ id: string }>,
-        PersistedVariant[],
-    ];
+    const movementRows = result.mutationResults[1 + assignmentInserts.length] as Array<{ id: string }>;
+    const updatedRows = result.mutationResults[2 + assignmentInserts.length] as PersistedVariant[];
     if ((movementRows?.length ?? 0) === 0 || (updatedRows?.length ?? 0) === 0) {
         throw new ConflictError("Initial variant stock could not be recorded");
     }
@@ -566,8 +516,8 @@ export async function updateVariant(
         .select({
             id: productVariants.id,
             isDefault: productVariants.isDefault,
-            size: productVariants.size,
-            color: productVariants.color,
+            optionCombinationKey: productVariants.optionCombinationKey,
+            imageId: productVariants.imageId,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
             preorderStock: productVariants.preorderStock,
@@ -584,16 +534,30 @@ export async function updateVariant(
         throw new NotFoundError("Variant not found");
     }
 
-    const size = normalizeOptionValue(data.size);
-    const color = normalizeOptionValue(data.color);
     const existingIsSimpleSku = existingVariant.isDefault;
+    const selection = existingIsSimpleSku
+        ? { valueIds: [], combinationKey: null, assignments: [] }
+        : await resolveSelectedOptionValueIds(db, productId, data.selectedOptionValueIds);
     if (existingIsSimpleSku) {
-        if (size || color) {
+        if (data.selectedOptionValueIds.length > 0) {
             throw new ValidationError("The simple product SKU cannot be turned into an option. Add a new variant instead.");
         }
     } else {
-        assertNormalVariantHasCustomerOption({ size, color });
-        await assertProductVariantOptionAxes(db, productId, [{ id: variantId, size, color }], [variantId]);
+        assertNormalVariantHasCustomerOption(data);
+        await assertProductVariantOptionAxes(
+            db,
+            productId,
+            [{ id: variantId, selectedOptionValueIds: selection.valueIds }],
+            [variantId],
+        );
+    }
+
+    if (data.imageId) {
+        const image = await db.select({ id: productImages.id })
+            .from(productImages)
+            .where(and(eq(productImages.id, data.imageId), eq(productImages.productId, productId)))
+            .get();
+        if (!image) throw new ValidationError("The selected SKU image is not on this product.");
     }
 
     const sku = normalizeSku(data.sku);
@@ -632,8 +596,8 @@ export async function updateVariant(
     }
 
     const updateValues = {
-        size,
-        color,
+        optionCombinationKey: selection.combinationKey,
+        imageId: data.imageId,
         weight: data.weight,
         sku,
         price: simpleProductPricing?.price ?? data.price,
@@ -649,6 +613,18 @@ export async function updateVariant(
             : (data.discountType || "percentage") === "flat" ? (data.discountAmount || null) : 0,
         updatedAt: sql`unixepoch()`,
     };
+    const assignmentStatements = existingIsSimpleSku
+        ? []
+        : [
+            db.delete(productVariantOptionValues).where(eq(productVariantOptionValues.variantId, variantId)),
+            ...selection.assignments.map((assignment) =>
+                db.insert(productVariantOptionValues).values({
+                    variantId,
+                    optionDefinitionId: assignment.optionDefinitionId,
+                    optionValueId: assignment.optionValueId,
+                })
+            ),
+        ];
 
     if (data.stock !== existingVariant.stock) {
         const delta = data.stock - existingVariant.stock;
@@ -686,8 +662,8 @@ export async function updateVariant(
                 isNull(productVariants.deletedAt),
             ))
             .returning();
-        const stockGuard = db.run(sql`
-            SELECT CASE WHEN EXISTS (
+        const stockGuard = buildBatchGuard(db, sql`
+            CASE WHEN EXISTS (
                 SELECT 1 FROM ${productVariants}
                 WHERE ${productVariants.id} = ${variantId}
                   AND ${productVariants.productId} = ${productId}
@@ -702,7 +678,7 @@ export async function updateVariant(
                 db,
                 productId,
                 data.expectedAggregateRevision,
-                [stockGuard, movementInsert, variantUpdate],
+                [stockGuard, ...assignmentStatements, movementInsert, variantUpdate],
             );
         } catch (error) {
             if (isAtomicVariantConflict(error)) {
@@ -712,11 +688,8 @@ export async function updateVariant(
             }
             throw error;
         }
-        const [, movementRows, variantRows] = result.mutationResults as [
-            unknown,
-            Array<{ id: string }>,
-            PersistedVariant[],
-        ];
+        const movementRows = result.mutationResults[1 + assignmentStatements.length] as Array<{ id: string }>;
+        const variantRows = result.mutationResults[2 + assignmentStatements.length] as PersistedVariant[];
 
         if ((movementRows?.length ?? 0) === 0 || (variantRows?.length ?? 0) === 0) {
             throw new ConflictError("Stock changed concurrently before variant update could be saved");
@@ -740,9 +713,9 @@ export async function updateVariant(
         db,
         productId,
         data.expectedAggregateRevision,
-        [variantUpdate],
+        [...assignmentStatements, variantUpdate],
     );
-    const variant = (result.mutationResults[0] as PersistedVariant[] | undefined)?.[0];
+    const variant = (result.mutationResults[assignmentStatements.length] as PersistedVariant[] | undefined)?.[0];
     if (!variant) throw new NotFoundError("Variant not found");
     return { ...variant, aggregateRevision: result.aggregateRevision };
 }
@@ -805,8 +778,8 @@ export async function deleteVariant(
         eq(productVariants.reservedStock, 0),
     );
 
-    const transactionalDeleteGuard = db.run(sql`
-        SELECT CASE WHEN EXISTS (
+    const transactionalDeleteGuard = buildBatchGuard(db, sql`
+        CASE WHEN EXISTS (
             SELECT 1 FROM ${productVariants}
             WHERE ${productVariants.id} = ${variantId}
               AND ${productVariants.productId} = ${productId}
@@ -881,674 +854,4 @@ export async function reconcileVariantLowStockAlerts(
             wave.map((variantId) => checkAndAlertLowStock(db, variantId)),
         );
     }
-}
-
-function firstValidationMessage(error: z.ZodError): string {
-    return error.issues[0]?.message ?? "Variant edit plan is invalid";
-}
-
-function isAtomicVariantConflict(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return /constraint|unique|malformed json|variant_edit_conflict/i.test(message);
-}
-
-/**
- * Applies a mixed set of new and existing SKU edits in one D1 transaction.
- *
- * Validation happens before statement construction. Each write is deliberately
- * one row per statement so it remains comfortably below D1's 100-bound-
- * parameter ceiling, while safeBatch keeps the complete plan all-or-nothing.
- */
-export async function applyVariantEditPlan(
-    db: DrizzleD1Database<typeof schema>,
-    productId: string,
-    input: VariantEditPlan,
-    adminUserId?: string,
-): Promise<{
-    created: PersistedVariant[];
-    updated: PersistedVariant[];
-    aggregateRevision: number;
-}> {
-    const parsed = variantEditPlanSchema.safeParse(input);
-    if (!parsed.success) {
-        throw new ValidationError(firstValidationMessage(parsed.error));
-    }
-    const plan = parsed.data;
-
-    const updateIds = plan.updates.map((update) => update.id);
-    if (new Set(updateIds).size !== updateIds.length) {
-        throw new ValidationError("Each variant may appear only once in an edit plan.");
-    }
-    assertUniqueNormalizedValues(
-        plan.creates.map((variant) => variant.sku),
-        "Duplicate SKUs found in edit plan",
-    );
-
-    const product = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(and(eq(products.id, productId), isNull(products.deletedAt)))
-        .get();
-    if (!product) throw new NotFoundError("Product not found");
-
-    const currentVariants = await db
-        .select()
-        .from(productVariants)
-        .where(and(
-            eq(productVariants.productId, productId),
-            isNull(productVariants.deletedAt),
-        ));
-    assertSimpleSkuTransitionStockAllocation(currentVariants, plan.creates);
-    const currentById = new Map(currentVariants.map((variant) => [variant.id, variant]));
-
-    for (const update of plan.updates) {
-        const current = currentById.get(update.id);
-        if (!current) throw new NotFoundError(`Variant ${update.id} was not found`);
-        if (current.isDefault || !hasCustomerOption(current)) {
-            throw new ValidationError(
-                "The protected simple product SKU cannot be edited from the option spreadsheet.",
-            );
-        }
-    }
-
-    const effectiveVariants: Array<{
-        id: string;
-        isDefault: boolean;
-        size: string | null;
-        color: string | null;
-        sku: string;
-        barcode: string | null;
-        barcodeType: BarcodeType | null;
-    }> = currentVariants.map((variant) => ({
-        id: variant.id,
-        isDefault: variant.isDefault,
-        size: normalizeOptionValue(variant.size),
-        color: normalizeOptionValue(variant.color),
-        sku: normalizeSku(variant.sku),
-        barcode: variant.barcode,
-        barcodeType: variant.barcodeType,
-    }));
-    const effectiveById = new Map(effectiveVariants.map((variant) => [variant.id, variant]));
-
-    for (const update of plan.updates) {
-        const effective = effectiveById.get(update.id)!;
-        if ("size" in update) effective.size = normalizeOptionValue(update.size);
-        if ("color" in update) effective.color = normalizeOptionValue(update.color);
-        if ("sku" in update && update.sku) effective.sku = normalizeSku(update.sku);
-        if ("barcode" in update) effective.barcode = normalizeBarcodeValue(update.barcode);
-        if ("barcodeType" in update) effective.barcodeType = update.barcodeType ?? null;
-        Object.assign(
-            effective,
-            normalizeVariantBarcode(effective.barcode, effective.barcodeType),
-        );
-        assertNormalVariantHasCustomerOption(effective);
-    }
-
-    const createsWithIds = plan.creates.map((variant) => {
-        const barcodeIdentity = normalizeVariantBarcode(
-            variant.barcode,
-            variant.barcodeType,
-        );
-        return {
-            ...variant,
-            ...barcodeIdentity,
-            id: `var_${nanoid()}`,
-            size: normalizeOptionValue(variant.size),
-            color: normalizeOptionValue(variant.color),
-            sku: normalizeSku(variant.sku),
-        };
-    });
-    effectiveVariants.push(...createsWithIds.map((variant) => ({
-        id: variant.id,
-        isDefault: false,
-        size: variant.size,
-        color: variant.color,
-        sku: variant.sku,
-        barcode: variant.barcode,
-        barcodeType: variant.barcodeType,
-    })));
-
-    await assertUniqueVariantBarcodes(db, [
-        ...createsWithIds.map((variant) => ({
-            barcode: variant.barcode,
-            barcodeType: variant.barcodeType,
-        })),
-        ...plan.updates.map((update) => {
-            const effective = effectiveById.get(update.id)!;
-            return {
-                id: update.id,
-                barcode: effective.barcode,
-                barcodeType: effective.barcodeType,
-            };
-        }),
-    ]);
-
-    assertUniqueNormalizedValues(
-        effectiveVariants.map((variant) => variant.sku),
-        "Each active SKU must be unique",
-    );
-    const optionedVariants = effectiveVariants.filter((variant) => !variant.isDefault);
-    optionedVariants.forEach(assertNormalVariantHasCustomerOption);
-    assertConsistentVariantOptionAxes(optionedVariants);
-    assertUniqueChangedVariantOptions(optionedVariants);
-
-    const candidateSkuOwner = new Map<string, string | null>();
-    const plannedUpdateSkuById = new Map(
-        plan.updates.map((update) => [
-            update.id,
-            normalizedSkuKey(effectiveById.get(update.id)!.sku),
-        ]),
-    );
-    for (const variant of createsWithIds) {
-        candidateSkuOwner.set(normalizedSkuKey(variant.sku), null);
-    }
-    for (const update of plan.updates) {
-        if ("sku" in update && update.sku) {
-            candidateSkuOwner.set(normalizedSkuKey(update.sku), update.id);
-        }
-    }
-    const candidateSkuKeys = Array.from(candidateSkuOwner.keys());
-    if (candidateSkuKeys.length > 0) {
-        const matchingSkuRows = await db
-            .select({ id: productVariants.id, sku: productVariants.sku })
-            .from(productVariants)
-            .where(sql`lower(trim(${productVariants.sku})) IN (
-                SELECT CAST(value AS TEXT)
-                FROM json_each(${JSON.stringify(candidateSkuKeys)})
-            )`);
-        const collision = matchingSkuRows.find((row) => {
-            const currentKey = normalizedSkuKey(row.sku);
-            const plannedKey = plannedUpdateSkuById.get(row.id);
-            if (plannedKey !== undefined && plannedKey !== currentKey) {
-                return false;
-            }
-            return candidateSkuOwner.get(currentKey) !== row.id;
-        });
-        if (collision) {
-            throw new ConflictError(`SKU ${collision.sku} is already in use.`);
-        }
-    }
-
-    const statements = [];
-    const createResultIndices: number[] = [];
-    const updateResultIndices: number[] = [];
-    const movementResultIndices: number[] = [];
-    const stockChangedVariantIds: string[] = [];
-
-    // Validate every optimistic version inside the transaction before its first
-    // write. The false branch intentionally raises a SQLite JSON error, which
-    // makes D1 roll the whole batch back instead of accepting a zero-row CAS.
-    for (const update of plan.updates) {
-        const current = currentById.get(update.id)!;
-        const stockChanged = update.stock !== undefined && update.stock !== current.stock;
-        statements.push(db.run(sql`
-            SELECT CASE WHEN EXISTS (
-                SELECT 1 FROM ${productVariants}
-                WHERE ${productVariants.id} = ${update.id}
-                  AND ${productVariants.productId} = ${productId}
-                  AND ${productVariants.deletedAt} IS NULL
-                  AND ${productVariants.version} = ${current.version}
-                  ${stockChanged
-                    ? sql`AND ${productVariants.stockVersion} = ${current.stockVersion}`
-                    : sql``}
-            ) THEN 1 ELSE json_extract('VARIANT_EDIT_CONFLICT', '$') END
-        `));
-    }
-
-    // SQLite unique constraints are immediate. Move edited SKU values to
-    // transaction-private placeholders first so swaps and reuse of an edited-
-    // away SKU remain atomic without a transient uniqueness failure.
-    for (const update of plan.updates) {
-        const current = currentById.get(update.id)!;
-        if (update.sku === undefined || normalizeSku(update.sku) === current.sku) continue;
-        statements.push(
-            db.update(productVariants)
-                .set({ sku: `__variant_edit_${update.id}_${nanoid()}` })
-                .where(and(
-                    eq(productVariants.id, update.id),
-                    eq(productVariants.productId, productId),
-                    isNull(productVariants.deletedAt),
-                ))
-                .returning({ id: productVariants.id }),
-        );
-    }
-
-    for (const variant of createsWithIds) {
-        const hasInitialStock = variant.stock > 0;
-        const insertIndex = statements.length;
-        statements.push(
-            db.insert(productVariants).values({
-                id: variant.id,
-                productId,
-                size: variant.size,
-                color: variant.color,
-                weight: variant.weight ?? null,
-                sku: variant.sku,
-                price: variant.price,
-                stock: hasInitialStock ? 0 : variant.stock,
-                reservedStock: 0,
-                preorderStock: 0,
-                isDefault: false,
-                trackInventory: variant.trackInventory ?? true,
-                version: 1,
-                stockVersion: 1,
-                allowPreorder: false,
-                allowBackorder: false,
-                backorderLimit: 0,
-                barcode: variant.barcode,
-                barcodeType: variant.barcodeType,
-                discountType: variant.discountType,
-                discountPercentage: variant.discountPercentage ?? 0,
-                discountAmount: variant.discountAmount ?? 0,
-                colorSortOrder: variant.colorSortOrder ?? 0,
-                sizeSortOrder: variant.sizeSortOrder ?? 0,
-                createdAt: sql`unixepoch()`,
-                updatedAt: sql`unixepoch()`,
-            }).returning(),
-        );
-        if (hasInitialStock) {
-            movementResultIndices.push(statements.length);
-            statements.push(buildStockMovementClaim(db, {
-                movementId: crypto.randomUUID(),
-                variantId: variant.id,
-                pool: "regular",
-                quantity: variant.stock,
-                before: {
-                    stock: 0,
-                    reservedStock: 0,
-                    preorderStock: 0,
-                    stockVersion: 1,
-                },
-                after: {
-                    stock: variant.stock,
-                    reservedStock: 0,
-                    preorderStock: 0,
-                    stockVersion: 2,
-                },
-                notes: "Stocktake: Initial product variant stock",
-                adminUserId,
-            }));
-            createResultIndices.push(statements.length);
-            statements.push(
-                db.update(productVariants)
-                    .set({
-                        stock: variant.stock,
-                        stockVersion: sql`${productVariants.stockVersion} + 1`,
-                        updatedAt: sql`unixepoch()`,
-                    })
-                    .where(and(
-                        eq(productVariants.id, variant.id),
-                        eq(productVariants.productId, productId),
-                        eq(productVariants.stockVersion, 1),
-                        isNull(productVariants.deletedAt),
-                    ))
-                    .returning(),
-            );
-            // New option SKUs cannot configure a low-stock threshold in this
-            // create contract, so there is no alert lifecycle to reconcile.
-        } else {
-            createResultIndices.push(insertIndex);
-        }
-    }
-
-    for (const update of plan.updates) {
-        const current = currentById.get(update.id)!;
-        const effective = effectiveById.get(update.id)!;
-        const stockChanged = update.stock !== undefined && update.stock !== current.stock;
-
-        if (stockChanged) {
-            movementResultIndices.push(statements.length);
-            statements.push(buildStockMovementClaim(db, {
-                movementId: crypto.randomUUID(),
-                variantId: update.id,
-                pool: "regular",
-                quantity: update.stock! - current.stock,
-                before: {
-                    stock: current.stock,
-                    reservedStock: current.reservedStock,
-                    preorderStock: current.preorderStock,
-                    stockVersion: current.stockVersion,
-                },
-                after: {
-                    stock: update.stock!,
-                    reservedStock: current.reservedStock,
-                    preorderStock: current.preorderStock,
-                    stockVersion: current.stockVersion + 1,
-                },
-                notes: "Stocktake: Product variant edit plan",
-                adminUserId,
-            }));
-            stockChangedVariantIds.push(update.id);
-        }
-
-        const updateValues = {
-            ...(update.size !== undefined ? { size: normalizeOptionValue(update.size) } : {}),
-            ...(update.color !== undefined ? { color: normalizeOptionValue(update.color) } : {}),
-            ...(update.weight !== undefined ? { weight: update.weight } : {}),
-            ...(update.sku !== undefined ? { sku: normalizeSku(update.sku) } : {}),
-            ...(update.price !== undefined ? { price: update.price } : {}),
-            ...(update.stock !== undefined ? { stock: update.stock } : {}),
-            ...(update.trackInventory !== undefined ? { trackInventory: update.trackInventory } : {}),
-            ...(update.barcode !== undefined || update.barcodeType !== undefined
-                ? {
-                    barcode: effective.barcode,
-                    barcodeType: effective.barcodeType,
-                }
-                : {}),
-            version: sql`${productVariants.version} + 1`,
-            ...(stockChanged
-                ? { stockVersion: sql`${productVariants.stockVersion} + 1` }
-                : {}),
-            updatedAt: sql`unixepoch()`,
-        };
-        updateResultIndices.push(statements.length);
-        statements.push(
-            db.update(productVariants)
-                .set(updateValues)
-                .where(and(
-                    eq(productVariants.id, update.id),
-                    eq(productVariants.productId, productId),
-                    isNull(productVariants.deletedAt),
-                ))
-                .returning(),
-        );
-    }
-
-    let results: Array<Array<PersistedVariant | { id: string }> | undefined>;
-    let aggregateRevision: number;
-    try {
-        const aggregateResult = await executeProductAggregateMutationBatch(
-            db,
-            productId,
-            plan.expectedAggregateRevision,
-            statements,
-        );
-        results = aggregateResult.mutationResults as typeof results;
-        aggregateRevision = aggregateResult.aggregateRevision;
-    } catch (error) {
-        if (isAtomicVariantConflict(error)) {
-            throw new ConflictError(
-                "One or more SKUs changed while you were editing. Review the latest values and try again.",
-            );
-        }
-        throw error;
-    }
-
-    const created = createResultIndices.map((index) => results[index]?.[0] as PersistedVariant | undefined);
-    const updated = updateResultIndices.map((index) => results[index]?.[0] as PersistedVariant | undefined);
-    const hasMissingResult = [...created, ...updated].some((row) => !row)
-        || movementResultIndices.some((index) => (results[index]?.length ?? 0) === 0);
-    if (hasMissingResult) {
-        // All guarded writes should return one row. Reaching this branch means
-        // the storage adapter violated the D1 batch response contract.
-        throw new ConflictError("The variant edit could not be confirmed. Reload and try again.");
-    }
-
-    // Alert reconciliation is secondary to the authoritative stock transaction.
-    // Do not report the edit as failed after its D1 batch has already committed.
-    await reconcileVariantLowStockAlerts(db, stockChangedVariantIds);
-
-    return {
-        created: created as PersistedVariant[],
-        updated: updated as PersistedVariant[],
-        aggregateRevision,
-    };
-}
-
-export async function bulkCreateVariants(
-    db: DrizzleD1Database<typeof schema>,
-    productId: string,
-    variants: z.infer<typeof bulkVariantSchema>[],
-    expectedAggregateRevision: number,
-): Promise<{
-    variants: PersistedVariant[];
-    aggregateRevision: number;
-}> {
-    variants.forEach(assertNormalVariantHasCustomerOption);
-    assertConsistentVariantOptionAxes(variants);
-    variants.forEach((variant) => {
-        normalizeVariantBarcode(variant.barcode, variant.barcodeType);
-    });
-    const result = await applyVariantEditPlan(
-        db,
-        productId,
-        {
-            creates: variants,
-            updates: [],
-            expectedAggregateRevision,
-        },
-    );
-    return {
-        variants: result.created,
-        aggregateRevision: result.aggregateRevision,
-    };
-}
-
-export async function bulkDeleteVariants(
-    db: DrizzleD1Database<typeof schema>,
-    productId: string,
-    variantIds: string[],
-    expectedAggregateRevision: number,
-): Promise<ProductAggregateRevisionResult> {
-    const ids = uniqueVariantIds(variantIds);
-    if (ids.length === 0) throw new ValidationError("No variant IDs provided");
-
-    const variantsToDelete = await db
-        .select({
-            id: productVariants.id,
-            isDefault: productVariants.isDefault,
-            reservedStock: productVariants.reservedStock,
-        })
-        .from(productVariants)
-        .where(and(
-            eq(productVariants.productId, productId),
-            inArray(productVariants.id, ids),
-            isNull(productVariants.deletedAt),
-        ));
-    const foundIds = new Set(variantsToDelete.map((variant) => variant.id));
-    const missingIds = ids.filter((id) => !foundIds.has(id));
-    if (missingIds.length > 0) {
-        throw new NotFoundError("Variant not found");
-    }
-
-    const protectedVariant = variantsToDelete.find((variant) => variant.isDefault);
-    if (protectedVariant) {
-        throw new ValidationError("The protected simple product SKU cannot be deleted from the generic option editor.");
-    }
-
-    const reservedVariant = variantsToDelete.find((variant) => variant.reservedStock > 0);
-    if (reservedVariant) {
-        throw new ConflictError("Cannot delete SKUs while stock is reserved for open orders.");
-    }
-
-    const openOrderBackedVariantIds = await loadOpenOrderBackedVariantIds(db, ids);
-    if (openOrderBackedVariantIds.size > 0) {
-        throw new ConflictError("Cannot delete SKUs while open orders still reference them.");
-    }
-
-    const product = await db
-        .select({ isActive: products.isActive })
-        .from(products)
-        .where(eq(products.id, productId))
-        .get();
-    const remainingCustomerOptionCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(productVariants)
-        .where(and(
-            eq(productVariants.productId, productId),
-            not(inArray(productVariants.id, ids)),
-            isNull(productVariants.deletedAt),
-            customerOptionPredicate(),
-        ))
-        .get();
-    if (product?.isActive && (remainingCustomerOptionCount?.count ?? 0) === 0) {
-        throw new ValidationError("Add another customer option, or deactivate this product, before removing the final customer option.");
-    }
-
-    const idSet = JSON.stringify(ids);
-    const transactionalDeleteGuard = db.run(sql`
-        SELECT CASE WHEN (
-            SELECT count(*) FROM ${productVariants}
-            WHERE ${productVariants.productId} = ${productId}
-              AND ${productVariants.id} IN (
-                  SELECT CAST(value AS TEXT) FROM json_each(${idSet})
-              )
-              AND ${productVariants.isDefault} = 0
-              AND ${productVariants.reservedStock} = 0
-              AND ${productVariants.deletedAt} IS NULL
-        ) = ${ids.length} AND NOT EXISTS (
-            SELECT 1 FROM ${orderItems}
-            INNER JOIN ${orders} ON ${orderItems.orderId} = ${orders.id}
-            WHERE ${orderItems.variantId} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
-            )
-              AND ${orders.deletedAt} IS NULL
-              AND ${not(inArray(orders.status, ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT))}
-        ) AND (
-            coalesce((
-                SELECT ${products.isActive} FROM ${products}
-                WHERE ${products.id} = ${productId}
-            ), 0) = 0
-            OR EXISTS (
-                SELECT 1 FROM ${productVariants}
-                WHERE ${productVariants.productId} = ${productId}
-                  AND ${productVariants.id} NOT IN (
-                      SELECT CAST(value AS TEXT) FROM json_each(${idSet})
-                  )
-                  AND ${productVariants.deletedAt} IS NULL
-                  AND ${customerOptionPredicate()}
-            )
-        ) THEN 1 ELSE json_extract('VARIANT_DELETE_CONFLICT', '$') END
-    `);
-    const deleteStatement = db
-        .update(productVariants)
-        .set({
-            deletedAt: sql`unixepoch()`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(productVariants.productId, productId),
-            sql`${productVariants.id} IN (
-                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
-            )`,
-            isNull(productVariants.deletedAt),
-            eq(productVariants.reservedStock, 0),
-        ))
-        .returning({ id: productVariants.id });
-
-    let aggregateResult;
-    try {
-        aggregateResult = await executeProductAggregateMutationBatch(
-            db,
-            productId,
-            expectedAggregateRevision,
-            [transactionalDeleteGuard, deleteStatement],
-        );
-    } catch (error) {
-        if (isAtomicVariantConflict(error)) {
-            throw new ConflictError(
-                "One or more SKUs can no longer be removed. Reload the latest product and try again.",
-            );
-        }
-        throw error;
-    }
-    const affectedRows = aggregateResult.mutationResults[1] as Array<{ id: string }> | undefined;
-    const affectedCount = affectedRows?.length ?? 0;
-    if (affectedCount !== ids.length) {
-        throw new ConflictError("One or more variants changed before they could be deleted. Refresh and try again.");
-    }
-    return { aggregateRevision: aggregateResult.aggregateRevision };
-}
-
-export async function getVariantSortOrder(db: DrizzleD1Database<typeof schema>, productId: string) {
-    const variants = await db
-        .select({
-            color: productVariants.color,
-            size: productVariants.size,
-            colorSortOrder: productVariants.colorSortOrder,
-            sizeSortOrder: productVariants.sizeSortOrder,
-            isDefault: productVariants.isDefault,
-        })
-        .from(productVariants)
-        .where(
-            and(
-                eq(productVariants.productId, productId),
-                isNull(productVariants.deletedAt)
-            )
-        );
-
-    const colorMap = new Map<string, number>();
-    const sizeMap = new Map<string, number>();
-
-    variants.forEach((variant: { color: string | null; size: string | null; colorSortOrder: number | null; sizeSortOrder: number | null; isDefault: boolean }) => {
-        if (variant.isDefault) return;
-        if (variant.color && !colorMap.has(variant.color)) {
-            colorMap.set(variant.color, variant.colorSortOrder || 0);
-        }
-        if (variant.size && !sizeMap.has(variant.size)) {
-            sizeMap.set(variant.size, variant.sizeSortOrder || 0);
-        }
-    });
-
-    const colors = Array.from(colorMap.entries())
-        .map(([value, sortOrder]) => ({ value, sortOrder }))
-        .sort((a, b) => a.sortOrder - b.sortOrder);
-
-    const sizes = Array.from(sizeMap.entries())
-        .map(([value, sortOrder]) => ({ value, sortOrder }))
-        .sort((a, b) => a.sortOrder - b.sortOrder);
-
-    return { colors, sizes };
-}
-
-export async function updateVariantSortOrder(
-    db: DrizzleD1Database<typeof schema>,
-    productId: string,
-    data: z.infer<typeof updateSortOrderSchema>,
-): Promise<ProductAggregateRevisionResult> {
-    const batchOps = [];
-
-    for (const color of data.colors) {
-        batchOps.push(
-            db
-                .update(productVariants)
-                .set({
-                    colorSortOrder: color.sortOrder,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(
-                    and(
-                        eq(productVariants.productId, productId),
-                        eq(productVariants.color, color.value),
-                        isNull(productVariants.deletedAt)
-                    )
-                )
-        );
-    }
-
-    for (const size of data.sizes) {
-        batchOps.push(
-            db
-                .update(productVariants)
-                .set({
-                    sizeSortOrder: size.sortOrder,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(
-                    and(
-                        eq(productVariants.productId, productId),
-                        eq(productVariants.size, size.value),
-                        isNull(productVariants.deletedAt)
-                    )
-                )
-        );
-    }
-
-    const result = await executeProductAggregateMutationBatch(
-        db,
-        productId,
-        data.expectedAggregateRevision,
-        batchOps,
-    );
-    return { aggregateRevision: result.aggregateRevision };
 }

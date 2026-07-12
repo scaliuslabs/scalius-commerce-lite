@@ -5,7 +5,6 @@ import {
   getProductsByIds,
   getProductStats,
   getProductVariants,
-  getVariantSortOrder,
   type ProductsByIdsPayload,
   type ProductsQueryInput,
 } from "../api-functions/products";
@@ -65,12 +64,5 @@ export const productVariantsQueryOptions = (productId: string) =>
   queryOptions({
     queryKey: queryKeys.products.variants(productId),
     queryFn: () => getProductVariants({ data: { productId } }),
-    staleTime: MODERATE_STALE_TIME_MS,
-  });
-
-export const variantSortOrderQueryOptions = (productId: string) =>
-  queryOptions({
-    queryKey: queryKeys.products.variantSortOrder(productId),
-    queryFn: () => getVariantSortOrder({ data: { productId } }),
     staleTime: MODERATE_STALE_TIME_MS,
   });

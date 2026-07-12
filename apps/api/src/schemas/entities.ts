@@ -5,7 +5,6 @@
 // Entity schemas define strict shapes for OpenAPI documentation and SDK type generation.
 
 import { z } from "@hono/zod-openapi";
-import { PRODUCT_OPTION_SCHEMA_VALUES } from "@scalius/shared/product-options";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import {
   nullableTimestampSchema,
@@ -54,12 +53,35 @@ export const productImageSchema = z
   })
 
 /** Product variant — returned by variant CRUD endpoints. */
+export const selectedProductOptionSchema = z.object({
+  optionDefinitionId: z.string(),
+  optionValueId: z.string(),
+  name: z.string(),
+  value: z.string(),
+  position: z.number().int(),
+  valuePosition: z.number().int(),
+  standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+});
+
+export const productOptionDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  position: z.number().int(),
+  standardMapping: z.enum(["size", "color", "material", "pattern", "none"]),
+  values: z.array(z.object({
+    id: z.string(),
+    value: z.string(),
+    position: z.number().int(),
+  })),
+});
+
 export const productVariantSchema = z
   .object({
     id: z.string(),
     productId: z.string(),
-    size: z.string().nullable(),
-    color: z.string().nullable(),
+    optionCombinationKey: z.string().nullable(),
+    imageId: z.string().nullable(),
+    selectedOptions: z.array(selectedProductOptionSchema).optional(),
     weight: z.number().nullable(),
     sku: z.string(),
     price: z.number(),
@@ -79,8 +101,6 @@ export const productVariantSchema = z
     discountAmount: z.number().nullable().optional(),
     barcode: z.string().nullable().optional(),
     barcodeType: z.string().nullable().optional(),
-    colorSortOrder: z.number().nullable().optional(),
-    sizeSortOrder: z.number().nullable().optional(),
     createdAt: optionalTimestampSchema,
     updatedAt: optionalTimestampSchema,
     deletedAt: optionalNullableTimestampSchema,
@@ -109,17 +129,6 @@ export const productAttributeValueSchema = z
     value: z.string(),
   })
 
-export const productVariantImageMappingSchema = z.object({
-  id: z.string(),
-  productId: z.string(),
-  imageId: z.string(),
-  variantId: z.string().nullable(),
-  optionAxis: z.enum(["option1", "option2"]).nullable(),
-  optionValue: z.string().nullable(),
-  normalizedOptionValue: z.string().nullable(),
-  sortOrder: z.number(),
-});
-
 /** Product detail — returned by getProductDetails (admin). */
 export const productDetailSchema = z
   .object({
@@ -137,12 +146,7 @@ export const productDetailSchema = z
     excludeFromSitemap: z.boolean(),
     excludeFromProductFeed: z.boolean(),
     productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable(),
-    variantOption1Label: z.string(),
-    variantOption2Label: z.string(),
-    variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
-    variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
-    variantImagesEnabled: z.boolean(),
-    variantImageAxis: z.enum(["option1", "option2"]),
+    options: z.array(productOptionDefinitionSchema),
     aggregateRevision: z.number().int().min(1),
     discountPercentage: z.number().nullable(),
     discountType: z.enum(["percentage", "flat"]).nullable(),
@@ -154,7 +158,6 @@ export const productDetailSchema = z
     category: z.object({ name: z.string().nullable() }).nullable(),
     variants: z.array(productVariantSchema),
     images: z.array(productImageSchema),
-    variantImageMappings: z.array(productVariantImageMappingSchema),
     additionalInfo: z.array(productRichContentSchema),
     attributes: z.array(productAttributeValueSchema),
   })
@@ -273,8 +276,7 @@ export const orderItemSchema = z
     price: z.number(),
     productName: z.string().nullable(),
     productImage: z.string().nullable(),
-    variantSize: z.string().nullable(),
-    variantColor: z.string().nullable(),
+    variantLabel: z.string().nullable(),
     fulfillmentStatus: z.string(),
     unitPriceMinor: z.number().int().nullable(),
     lineSubtotalMinor: z.number().int().nullable(),

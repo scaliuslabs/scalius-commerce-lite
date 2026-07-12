@@ -75,10 +75,6 @@ function createCatalogSchema(): void {
             exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
             exclude_from_product_feed INTEGER NOT NULL DEFAULT 0,
             product_condition TEXT,
-            variant_option_1_label TEXT NOT NULL DEFAULT 'Size',
-            variant_option_2_label TEXT NOT NULL DEFAULT 'Color',
-            variant_option_1_schema TEXT NOT NULL DEFAULT 'size',
-            variant_option_2_schema TEXT NOT NULL DEFAULT 'color',
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             deleted_at INTEGER,
@@ -94,8 +90,8 @@ function createCatalogSchema(): void {
         CREATE TABLE product_variants (
             id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,
-            size TEXT,
-            color TEXT,
+            option_combination_key TEXT,
+            image_id TEXT,
             weight REAL,
             sku TEXT NOT NULL UNIQUE,
             price REAL NOT NULL,
@@ -108,11 +104,31 @@ function createCatalogSchema(): void {
             discount_amount REAL DEFAULT 0,
             barcode TEXT,
             barcode_type TEXT,
-            color_sort_order INTEGER DEFAULT 0,
-            size_sort_order INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL DEFAULT 1,
             deleted_at INTEGER
         );
         CREATE INDEX product_variants_product_id_idx ON product_variants(product_id);
+
+        CREATE TABLE product_option_definitions (
+            id TEXT PRIMARY KEY,
+            product_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            standard_mapping TEXT NOT NULL DEFAULT 'none',
+            deleted_at INTEGER
+        );
+        CREATE TABLE product_option_values (
+            id TEXT PRIMARY KEY,
+            option_definition_id TEXT NOT NULL,
+            value TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            deleted_at INTEGER
+        );
+        CREATE TABLE product_variant_option_values (
+            variant_id TEXT NOT NULL,
+            option_definition_id TEXT NOT NULL,
+            option_value_id TEXT NOT NULL
+        );
 
         CREATE TABLE product_images (
             id TEXT PRIMARY KEY,
@@ -207,7 +223,7 @@ function insertSimpleSku(productId: string): void {
     sqlite
         .prepare(
             `INSERT INTO product_variants (
-                id, product_id, size, color, weight, sku, price, stock,
+                id, product_id, option_combination_key, image_id, weight, sku, price, stock,
                 reserved_stock, is_default, track_inventory
             ) VALUES (?, ?, NULL, NULL, NULL, ?, 1000, 0, 0, 1, 0)`,
         )
@@ -215,20 +231,34 @@ function insertSimpleSku(productId: string): void {
 }
 
 function insertMixedTopologySkus(productId: string): void {
+    sqlite.exec(`
+        INSERT INTO product_option_definitions (id, product_id, name, position, standard_mapping)
+        VALUES ('option_size', '${productId}', 'Size', 0, 'size'),
+               ('option_color', '${productId}', 'Color', 1, 'color');
+        INSERT INTO product_option_values (id, option_definition_id, value, position)
+        VALUES ('value_42', 'option_size', '42', 0),
+               ('value_41', 'option_size', '41', 1),
+               ('value_green', 'option_color', 'Green', 0);
+    `);
     const statement = sqlite.prepare(
         `INSERT INTO product_variants (
-            id, product_id, size, color, weight, sku, price, stock,
+            id, product_id, option_combination_key, image_id, weight, sku, price, stock,
             reserved_stock, is_default, track_inventory
-        ) VALUES (?, ?, ?, ?, NULL, ?, 1000, 5, 0, 0, 1)`,
+        ) VALUES (?, ?, ?, NULL, NULL, ?, 1000, 5, 0, 0, 1)`,
     );
-    statement.run("var_mixed_size", productId, "42", null, "MIXED-SIZE");
+    statement.run("var_mixed_size", productId, "value_42", "MIXED-SIZE");
     statement.run(
         "var_mixed_size_color",
         productId,
-        "41",
-        "Green",
+        "value_41|value_green",
         "MIXED-SIZE-COLOR",
     );
+    sqlite.exec(`
+        INSERT INTO product_variant_option_values VALUES
+            ('var_mixed_size', 'option_size', 'value_42'),
+            ('var_mixed_size_color', 'option_size', 'value_41'),
+            ('var_mixed_size_color', 'option_color', 'value_green');
+    `);
 }
 
 function insertAttribute(

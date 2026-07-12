@@ -426,7 +426,7 @@ export function InventoryManager() {
                           </TableCell>
                           <TableCell className="py-2 font-mono text-[11px] text-muted-foreground">{v.sku}</TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground">
-                            {[v.size, v.color].filter(Boolean).join(" / ") || "\u2014"}
+                            {v.optionLabel || "\u2014"}
                           </TableCell>
                           <TableCell className="py-2 text-right text-xs">{v.stock}</TableCell>
                           <TableCell className="py-2 text-right text-xs">

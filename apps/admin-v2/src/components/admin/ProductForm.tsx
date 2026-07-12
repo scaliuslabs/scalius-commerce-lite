@@ -3,13 +3,6 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form } from "../ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import { ProductActionBar } from "./product-form/ProductStickyHeader";
 import {
@@ -26,30 +19,21 @@ import {
   ProductImagesSection,
   TitleDescriptionSection,
   SeoSection,
-  OptionDiscoverySection,
   AttributesSection,
   PricingCard,
   StatusCard,
   OrganizationCard,
-  InfoBanner,
   useProductSubmit,
-  extractUniqueVariantOptionValues,
   productFormSchema,
-  resolveVariantImageAxis,
-  reconcileVariantImageMappings,
   generateSlug,
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  DEFAULT_PRODUCT_OPTION_SCHEMA,
   DEFAULT_PRODUCT_CONDITION,
   type ProductFormValues,
-  type ProductVariantImageMappingFormValue,
   type Category,
 } from "./product-form";
-import type {
-  ProductVariant as EditorProductVariant,
-  VariantOptionLabels,
-} from "./product-form/variants/types";
+import type { ProductSeoDiagnosticVariant } from "@/lib/product-seo-diagnostics";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
+import type { ProductOptionMatrixInput } from "@/lib/api-functions/products";
+import type { ProductImageDetail } from "@/types/api-responses";
 
 interface ProductFormProps {
   categories: Category[];
@@ -58,14 +42,22 @@ interface ProductFormProps {
   >;
   isEdit?: boolean;
   aggregateRevision?: number;
-  editorVariants?: EditorProductVariant[];
+  editorVariants?: ProductSeoDiagnosticVariant[];
   revisionConflict?: ProductRevisionConflict | null;
   onAggregateRevisionChange?: (revision: number) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
-  onOptionLabelsChange?: (labels: VariantOptionLabels) => void;
-  optionManager?: React.ReactNode;
+  optionManager?: React.ReactNode | ((context: {
+    images: ProductImageDetail[];
+    productName: string;
+    productPrice: number;
+  }) => React.ReactNode);
+  optionMatrixDraft?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null;
+  optionMatrixIssue?: string | null;
+  optionMatrixDirty?: boolean;
+  optionMatrixSaving?: boolean;
+  onOptionMatrixSave?: () => void;
 }
 
 export function ProductForm({
@@ -79,31 +71,16 @@ export function ProductForm({
   onRevisionConflict,
   onOpenRevisionConflict,
   onProductSaved,
-  onOptionLabelsChange,
   optionManager,
+  optionMatrixDraft,
+  optionMatrixIssue = null,
+  optionMatrixDirty = false,
+  optionMatrixSaving = false,
+  onOptionMatrixSave,
 }: ProductFormProps) {
   const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
 
-  const resolvedDefaultValues = React.useMemo(() => {
-    if (!defaultValues) return undefined;
-
-    return {
-      ...defaultValues,
-      variantImagesEnabled: defaultValues.variantImagesEnabled ?? false,
-      variantImageAxis: defaultValues.variantImageAxis ?? "option2",
-      variantImageMappings: defaultValues.variantImageMappings ?? [],
-    };
-  }, [defaultValues]);
-
   const variants = editorVariants;
-  const uniqueOptionOneValues = React.useMemo(
-    () => extractUniqueVariantOptionValues(variants, "option1"),
-    [variants],
-  );
-  const uniqueOptionTwoValues = React.useMemo(
-    () => extractUniqueVariantOptionValues(variants, "option2"),
-    [variants],
-  );
   // Initialize form
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -123,119 +100,20 @@ export function ProductForm({
       excludeFromSitemap: false,
       excludeFromProductFeed: false,
       productCondition: DEFAULT_PRODUCT_CONDITION,
-      variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
-      variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
-      variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
-      variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-      variantImagesEnabled: false,
-      variantImageAxis: "option2",
-      variantImageMappings: [],
       slug: "",
       images: [],
       slugEdited: false,
       attributes: [],
       additionalInfo: [],
-      ...resolvedDefaultValues,
+      ...defaultValues,
     },
   });
-
-  const enableVariantImages = form.watch("variantImagesEnabled");
-  const variantImageAxis = form.watch("variantImageAxis");
-  const variantImageMappings = form.watch("variantImageMappings");
-  const images = form.watch("images");
-  const effectiveVariantImageAxis = React.useMemo(
-    () =>
-      resolveVariantImageAxis(
-        variantImageAxis,
-        uniqueOptionOneValues,
-        uniqueOptionTwoValues,
-      ),
-    [uniqueOptionOneValues, uniqueOptionTwoValues, variantImageAxis],
-  );
-  const optionValuesForAxis = React.useCallback(
-    (axis: "option1" | "option2") =>
-      axis === "option1" ? uniqueOptionOneValues : uniqueOptionTwoValues,
-    [uniqueOptionOneValues, uniqueOptionTwoValues],
-  );
-  const activeVariantIds = React.useMemo(
-    () => variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id),
-    [variants],
-  );
-
-  const setVariantImageMappings = React.useCallback((
-    next: ProductVariantImageMappingFormValue[],
-  ) => {
-    form.setValue("variantImageMappings", next, { shouldDirty: true });
-  }, [form]);
-
-  const setEnableVariantImages = React.useCallback((enabled: boolean) => {
-    form.setValue("variantImagesEnabled", enabled, { shouldDirty: true });
-    setVariantImageMappings(enabled
-      ? reconcileVariantImageMappings({
-          mappings: form.getValues("variantImageMappings"),
-          images: form.getValues("images"),
-          axis: effectiveVariantImageAxis,
-          optionValues: optionValuesForAxis(effectiveVariantImageAxis),
-          variantIds: activeVariantIds,
-          fillMissing: true,
-        })
-      : []);
-  }, [activeVariantIds, effectiveVariantImageAxis, form, optionValuesForAxis, setVariantImageMappings]);
-
-  const setVariantImageAxis = React.useCallback((axis: "option1" | "option2") => {
-    form.setValue("variantImageAxis", axis, { shouldDirty: true });
-    setVariantImageMappings(reconcileVariantImageMappings({
-      mappings: form.getValues("variantImageMappings").filter((mapping) => mapping.variantId),
-      images: form.getValues("images"),
-      axis,
-      optionValues: optionValuesForAxis(axis),
-      variantIds: activeVariantIds,
-      fillMissing: true,
-    }));
-  }, [activeVariantIds, form, optionValuesForAxis, setVariantImageMappings]);
-
-  React.useEffect(() => {
-    if (effectiveVariantImageAxis !== variantImageAxis) {
-      setVariantImageAxis(effectiveVariantImageAxis);
-      return;
-    }
-    const next = reconcileVariantImageMappings({
-      mappings: form.getValues("variantImageMappings"),
-      images,
-      axis: effectiveVariantImageAxis,
-      optionValues: optionValuesForAxis(effectiveVariantImageAxis),
-      variantIds: activeVariantIds,
-      fillMissing: false,
-    });
-    if (JSON.stringify(next) !== JSON.stringify(form.getValues("variantImageMappings"))) {
-      setVariantImageMappings(next);
-    }
-  }, [activeVariantIds, effectiveVariantImageAxis, form, images, optionValuesForAxis, setVariantImageAxis, setVariantImageMappings, variantImageAxis]);
-
-  const variantOption1Label = form.watch("variantOption1Label");
-  const variantOption2Label = form.watch("variantOption2Label");
-  const variantOptionLabels = React.useMemo<VariantOptionLabels>(
-    () => ({
-      option1:
-        variantOption1Label?.trim() || DEFAULT_PRODUCT_OPTION_LABELS.option1,
-      option2:
-        variantOption2Label?.trim() || DEFAULT_PRODUCT_OPTION_LABELS.option2,
-    }),
-    [variantOption1Label, variantOption2Label],
-  );
-
-  React.useEffect(() => {
-    onOptionLabelsChange?.(variantOptionLabels);
-  }, [onOptionLabelsChange, variantOptionLabels]);
 
   // Set up form submission handler
   const { isSubmitting, showAlert, alertMessage, setShowAlert, handleSubmit } =
     useProductSubmit({
       isEdit,
       productId: defaultValues?.id,
-      enableVariantImages,
-      variantImageAxis: effectiveVariantImageAxis,
-      variantImageMappings,
       form,
       aggregateRevision,
       revisionConflict,
@@ -243,7 +121,11 @@ export function ProductForm({
       onRevisionConflict,
       onOpenRevisionConflict,
       onProductSaved,
+      optionMatrixDraft,
+      optionMatrixIssue,
     });
+  const hasUnsavedChanges = form.formState.isDirty || optionMatrixDirty;
+  const isSaving = isSubmitting || optionMatrixSaving;
 
   // Auto-generate slug from name - ONLY for new products
   React.useEffect(() => {
@@ -268,8 +150,8 @@ export function ProductForm({
     <ErrorBoundary fallback={<div className="p-4 text-center text-muted-foreground">Something went wrong loading the product form. <button onClick={() => window.location.reload()} className="underline">Reload</button></div>}>
     <>
       <UnsavedChangesGuard
-        isDirty={form.formState.isDirty}
-        isSubmitting={isSubmitting}
+        isDirty={hasUnsavedChanges}
+        isSubmitting={isSaving}
       />
       <Form {...form}>
         <form
@@ -284,7 +166,7 @@ export function ProductForm({
               tabIndex={-1}
               className="text-xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              {isEdit ? "Edit Product" : "Create Product"}
+              {isEdit ? "Edit product" : "Create product"}
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
               {isEdit
@@ -300,54 +182,10 @@ export function ProductForm({
               <TitleDescriptionSection form={form} />
 
               {/* Product Images */}
-              <ProductImagesSection
-                form={form}
-                enableVariantImages={enableVariantImages}
-                setEnableVariantImages={setEnableVariantImages}
-                variantImageAxis={effectiveVariantImageAxis}
-                setVariantImageAxis={setVariantImageAxis}
-                uniqueOptionOneValues={uniqueOptionOneValues}
-                uniqueOptionTwoValues={uniqueOptionTwoValues}
-                optionLabels={variantOptionLabels}
-                variantImageMappings={variantImageMappings}
-                setVariantImageMappings={setVariantImageMappings}
-                activeVariantIds={activeVariantIds}
-              />
+              <ProductImagesSection form={form} />
 
               {/* Product composition belongs in the main reading flow. */}
               <PricingCard form={form} />
-
-              <Card id="product-options">
-                <CardHeader className="px-4 py-3">
-                  <CardTitle className="text-sm">Product options</CardTitle>
-                  <CardDescription className="text-xs">
-                    Define customer choices, then manage the sellable SKU combinations in one place.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 px-4 pb-4 pt-0">
-                  <OptionDiscoverySection form={form} embedded />
-                  {optionManager ? (
-                    <div
-                      className="border-t pt-4"
-                      onKeyDownCapture={(event) => {
-                        if (
-                          event.key === "Enter" &&
-                          event.target instanceof HTMLElement &&
-                          event.target.closest("[data-variant-editor]")
-                        ) {
-                          event.preventDefault();
-                        }
-                      }}
-                    >
-                      {optionManager}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-                      Create the product first, then add option values and SKU combinations here.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
               <AttributesSection form={form} />
             </div>
@@ -382,14 +220,41 @@ export function ProductForm({
             </div>
           </div>
 
-          {!isEdit && (
-            <div className="mt-4">
-              <InfoBanner
-                title="Next Steps"
-                message="After creating this product, manage its product SKU or add customer options from the edit page."
-              />
-            </div>
-          )}
+          <div id="product-options" className="mt-3">
+            {optionManager ? (
+              <div
+                onKeyDownCapture={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    event.target instanceof HTMLElement &&
+                    event.target.closest("[data-variant-editor]") &&
+                    !event.target.closest("[data-option-value-composer]")
+                  ) {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {typeof optionManager === "function"
+                  ? optionManager({
+                      images: form.watch("images").map((image, sortOrder) => ({
+                        ...image,
+                        productId: defaultValues?.id ?? "draft",
+                        alt: image.filename,
+                        isPrimary: sortOrder === 0,
+                        sortOrder,
+                        createdAt: image.createdAt.toISOString(),
+                      })),
+                      productName: form.watch("name"),
+                      productPrice: form.watch("price"),
+                    })
+                  : optionManager}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                Customer options are unavailable for this product.
+              </div>
+            )}
+          </div>
 
           <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
             <AlertDialogContent aria-describedby="alert-description">
@@ -408,13 +273,15 @@ export function ProductForm({
       </Form>
       <ProductActionBar
         isEdit={isEdit}
-        isSubmitting={isSubmitting}
-        isDirty={form.formState.isDirty}
+        isSubmitting={isSaving}
+        isDirty={hasUnsavedChanges}
         hasRevisionConflict={revisionConflict !== null}
         onSave={
           revisionConflict
             ? onOpenRevisionConflict
-            : () => form.handleSubmit(handleSubmit)()
+            : form.formState.isDirty || !isEdit
+              ? () => form.handleSubmit(handleSubmit)()
+              : onOptionMatrixSave
         }
       />
     </>

@@ -6,55 +6,78 @@ const schemaSource = readFileSync(
   fileURLToPath(new URL("../src/schema/products.ts", import.meta.url)),
   "utf8",
 );
-const schemaMigration = readFileSync(
-  fileURLToPath(new URL("../migrations/0001_lying_marvex.sql", import.meta.url)),
-  "utf8",
-);
-const backfillMigration = readFileSync(
-  fileURLToPath(
-    new URL("../migrations/0002_backfill_variant_image_mappings.sql", import.meta.url),
-  ),
-  "utf8",
-);
 const cutoverMigration = readFileSync(
   fileURLToPath(
-    new URL("../migrations/0006_outgoing_captain_midlands.sql", import.meta.url),
+    new URL("../migrations/0007_bored_vulcan.sql", import.meta.url),
+  ),
+  "utf8",
+);
+const lifecycleMigration = readFileSync(
+  fileURLToPath(
+    new URL("../migrations/0008_empty_ikaris.sql", import.meta.url),
   ),
   "utf8",
 );
 
-describe("product variant image schema boundaries", () => {
-  it("uses stable image and target foreign keys with one target per image", () => {
+describe("normalized product option and SKU media schema boundaries", () => {
+  it("uses normalized option identities and a direct stable SKU image foreign key", () => {
     expect(schemaSource).toContain(
-      'export const productVariantImageMappings = sqliteTable("product_variant_image_mappings"',
-    );
-    expect(schemaSource).toContain(
-      'references(() => productImages.id, { onDelete: "cascade" })',
+      'export const productOptionDefinitions = sqliteTable("product_option_definitions"',
     );
     expect(schemaSource).toContain(
-      'references(() => productVariants.id, { onDelete: "cascade" })',
+      'export const productOptionValues = sqliteTable("product_option_values"',
     );
     expect(schemaSource).toContain(
-      'uniqueIndex("product_variant_image_mappings_image_uidx").on(table.imageId)',
+      'imageId: text("image_id")',
     );
-    expect(schemaMigration).toContain(
-      "product_variant_image_mappings_target_check",
+    expect(schemaSource).toContain(
+      'references(() => productImages.id, { onDelete: "set null" })',
     );
+    expect(schemaSource).toContain(
+      'export const productVariantOptionValues = sqliteTable("product_variant_option_values"',
+    );
+    expect(schemaSource).toContain(
+      "primaryKey({ columns: [table.variantId, table.optionDefinitionId] })",
+    );
+    expect(schemaSource).toContain(
+      'uniqueIndex("product_option_definitions_name_uidx")',
+    );
+    expect(schemaSource).toContain(
+      'uniqueIndex("product_option_values_value_uidx")',
+    );
+    expect(schemaSource).not.toContain("productVariantImageMappings");
   });
 
-  it("materializes old positions once and then permanently retires metadata markers", () => {
-    expect(backfillMigration).toContain("row_number() OVER");
-    expect(backfillMigration).toContain(
-      "ranked_images.`position` = ranked_options.`position`",
+  it("cuts over to normalized options and direct SKU media without retaining mapping tables", () => {
+    expect(cutoverMigration).toContain(
+      "DROP TABLE `product_variant_image_mappings`",
     );
-    expect(backfillMigration).toContain(
-      "products_variant_image_axis_insert_guard",
+    expect(cutoverMigration).toContain(
+      "CREATE TABLE `product_option_definitions`",
     );
-    expect(backfillMigration).toContain(
-      "product_variant_image_mapping_insert_guard",
+    expect(cutoverMigration).toContain(
+      "CREATE TABLE `product_option_values`",
     );
-    expect(cutoverMigration).toContain("product_variants_active_option_identity_uidx");
-    expect(cutoverMigration).toContain("products_variant_image_marker_insert_guard");
-    expect(cutoverMigration).toContain("replace(coalesce(`meta_description`, '')");
+    expect(cutoverMigration).toContain(
+      "CREATE TABLE `product_variant_option_values`",
+    );
+    expect(cutoverMigration).toContain(
+      "FOREIGN KEY (`image_id`) REFERENCES `product_images`(`id`) ON UPDATE no action ON DELETE set null",
+    );
+    expect(cutoverMigration).toContain(
+      "NEW.`image_id` IS NOT NULL AND NOT EXISTS",
+    );
+    expect(cutoverMigration).toContain(
+      "ALTER TABLE `products` DROP COLUMN `variant_image_axis`",
+    );
+    expect(lifecycleMigration).toContain(
+      "CREATE UNIQUE INDEX `product_option_definitions_name_uidx`",
+    );
+    expect(lifecycleMigration).toContain(
+      'WHERE "product_option_definitions"."deleted_at" IS NULL',
+    );
+    expect(lifecycleMigration).toContain(
+      'WHERE "product_option_values"."deleted_at" IS NULL',
+    );
   });
 });

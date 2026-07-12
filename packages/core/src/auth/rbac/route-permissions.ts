@@ -60,20 +60,8 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
     DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
-  "/api/v1/admin/products/*/variants/bulk-create": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/v1/admin/products/*/variants/bulk-delete": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/v1/admin/products/*/variants/edit-plan": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/v1/admin/products/*/variants/sort-order": {
+  "/api/v1/admin/products/*/options/matrix": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/products": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -105,19 +93,8 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
     DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
-  "/api/products/*/variants/bulk-create": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/products/*/variants/bulk-delete": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/products/*/variants/edit-plan": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/products/*/variants/sort-order": {
+  "/api/products/*/options/matrix": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   // =============================================
   // Categories API

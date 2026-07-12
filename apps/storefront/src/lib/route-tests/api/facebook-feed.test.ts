@@ -36,6 +36,40 @@ function context(url = "https://storefront.example.test/api/facebook-feed.xml") 
   return { url: new URL(url) } as never;
 }
 
+type FeedOptionFixture = {
+  name: string;
+  value: string;
+  standardMapping: "size" | "color" | "material" | "pattern" | "none";
+};
+
+function optionedVariant<T extends Record<string, unknown>>(
+  variant: T & { options: FeedOptionFixture[] },
+) {
+  const { options, ...rest } = variant;
+  const selectedOptions = options.map((option, position) => {
+    const optionKey = option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const valueKey = option.value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    return {
+      optionDefinitionId: `opt_${optionKey}`,
+      optionValueId: `val_${optionKey}_${valueKey}`,
+      name: option.name,
+      value: option.value,
+      position,
+      valuePosition: position,
+      standardMapping: option.standardMapping,
+    };
+  });
+
+  return {
+    ...rest,
+    optionCombinationKey: selectedOptions
+      .map((option) => option.optionValueId)
+      .join("|"),
+    imageId: null,
+    selectedOptions,
+  };
+}
+
 function feedItemById(body: string, id: string): string {
   const item = (body.match(/<item>[\s\S]*?<\/item>/g) ?? []).find((candidate) =>
     candidate.includes(`<g:id>${id}</g:id>`)
@@ -337,11 +371,13 @@ describe("Facebook product feed route", () => {
             { name: "Material", slug: "material", value: "Cotton" },
           ],
           variants: [
-            {
+            optionedVariant({
               id: "var_red_m",
               productId: "prod_shirt",
-              size: "M",
-              color: "Red",
+              options: [
+                { name: "Size", value: "M", standardMapping: "size" },
+                { name: "Color", value: "Red", standardMapping: "color" },
+              ],
               sku: "SKU-RED-M",
               barcode: "012345678905",
               barcodeType: "upc",
@@ -354,12 +390,14 @@ describe("Facebook product feed route", () => {
               discountType: "flat",
               discountAmount: 100,
               discountPercentage: null,
-            },
-            {
+            }),
+            optionedVariant({
               id: "var_blue_l",
               productId: "prod_shirt",
-              size: "L",
-              color: "Blue",
+              options: [
+                { name: "Size", value: "L", standardMapping: "size" },
+                { name: "Color", value: "Blue", standardMapping: "color" },
+              ],
               sku: "SKU-BLUE-L",
               price: 1100,
               stock: 0,
@@ -370,12 +408,14 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
-            {
+            }),
+            optionedVariant({
               id: "var_free_xl",
               productId: "prod_shirt",
-              size: "XL",
-              color: "Green",
+              options: [
+                { name: "Size", value: "XL", standardMapping: "size" },
+                { name: "Color", value: "Green", standardMapping: "color" },
+              ],
               sku: "SKU-FREE-XL",
               price: 100,
               stock: 2,
@@ -386,7 +426,7 @@ describe("Facebook product feed route", () => {
               discountType: "flat",
               discountAmount: 100,
               discountPercentage: null,
-            },
+            }),
           ],
         },
       ],
@@ -407,7 +447,7 @@ describe("Facebook product feed route", () => {
       "<g:title>Linen Shirt - Size: M / Color: Red</g:title>",
     );
     expect(body).toContain(
-      "<g:link>https://storefront.example.test/products/linen-shirt?size=M&amp;color=Red</g:link>",
+      "<g:link>https://storefront.example.test/products/linen-shirt?variant=var_red_m</g:link>",
     );
     const discountedVariant = feedItemById(body, "SKU-RED-M");
     expect(discountedVariant).toContain("<g:price>1000.00 BDT</g:price>");
@@ -442,16 +482,15 @@ describe("Facebook product feed route", () => {
           hasVariants: true,
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/pack.jpg",
-          variantOption1Label: "Weight",
-          variantOption2Label: "Style",
-          variantOption1Schema: "none",
-          variantOption2Schema: "pattern",
           variants: [
-            {
+            optionedVariant({
               id: "var_pack_premium",
               productId: "prod_pack",
-              size: "2KG",
-              color: "Premium",
+              options: [
+                { name: "Weight", value: "2KG", standardMapping: "none" },
+                { name: "Style", value: "Premium", standardMapping: "pattern" },
+                { name: "Packaging", value: "Gift box", standardMapping: "none" },
+              ],
               sku: "PACK-2KG-PREMIUM",
               price: 1200,
               stock: 4,
@@ -462,7 +501,7 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
+            }),
           ],
         },
       ],
@@ -476,13 +515,15 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain(
-      "<g:title>Premium Pack - Weight: 2KG / Style: Premium</g:title>",
+      "<g:title>Premium Pack - Weight: 2KG / Style: Premium / Packaging: Gift box</g:title>",
     );
     expect(body).toContain("<g:item_group_title>Premium Pack</g:item_group_title>");
     expect(body).toContain("<g:name>Weight</g:name>");
     expect(body).toContain("<g:value>2KG</g:value>");
     expect(body).toContain("<g:name>Style</g:name>");
     expect(body).toContain("<g:value>Premium</g:value>");
+    expect(body).toContain("<g:name>Packaging</g:name>");
+    expect(body).toContain("<g:value>Gift box</g:value>");
     expect(body).toContain("<g:pattern>Premium</g:pattern>");
     expect(body).not.toContain("<g:size>2KG</g:size>");
     expect(body).not.toContain("<g:color>Premium</g:color>");
@@ -505,11 +546,13 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/shirt.jpg",
           variants: [
-            {
+            optionedVariant({
               id: "var_red_m",
               productId: "prod_shirt",
-              size: "M",
-              color: "Red",
+              options: [
+                { name: "Size", value: "M", standardMapping: "size" },
+                { name: "Color", value: "Red", standardMapping: "color" },
+              ],
               sku: "SKU-RED-M",
               barcode: null,
               barcodeType: null,
@@ -522,7 +565,7 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
+            }),
           ],
         },
       ],
@@ -536,7 +579,7 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain(
-      "<g:link>https://storefront.example.test/products/linen-shirt-canonical?size=M&amp;color=Red</g:link>",
+      "<g:link>https://storefront.example.test/products/linen-shirt-canonical?variant=var_red_m</g:link>",
     );
     expect(body).not.toContain("https://storefront.example.test/shop/linen-shirt");
     expect(body).toContain("<g:item_group_title>Linen Shirt</g:item_group_title>");
@@ -566,11 +609,13 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/bundle.jpg",
           variants: [
-            {
+            optionedVariant({
               id: "var_a",
               productId: "prod_bundle",
-              size: "A",
-              color: "Red",
+              options: [
+                { name: "Tier", value: "A", standardMapping: "none" },
+                { name: "Finish", value: "Red", standardMapping: "color" },
+              ],
               sku: "SKU-A",
               price: 1000,
               stock: 4,
@@ -581,12 +626,14 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
-            {
+            }),
+            optionedVariant({
               id: "var_b",
               productId: "prod_bundle",
-              size: "B",
-              color: "Blue",
+              options: [
+                { name: "Tier", value: "B", standardMapping: "none" },
+                { name: "Finish", value: "Blue", standardMapping: "color" },
+              ],
               sku: "SKU-B",
               price: 1100,
               stock: 4,
@@ -597,12 +644,14 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
-            {
+            }),
+            optionedVariant({
               id: "var_c",
               productId: "prod_bundle",
-              size: "C",
-              color: "Green",
+              options: [
+                { name: "Tier", value: "C", standardMapping: "none" },
+                { name: "Finish", value: "Green", standardMapping: "color" },
+              ],
               sku: "SKU-C",
               price: 1200,
               stock: 4,
@@ -613,7 +662,7 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountAmount: null,
               discountPercentage: null,
-            },
+            }),
           ],
         },
       ],
@@ -669,11 +718,13 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/shirt.jpg",
           variants: [
-            {
+            optionedVariant({
               id: "var_red_m",
               productId: "prod_shirt",
-              size: "M",
-              color: "Red",
+              options: [
+                { name: "Size", value: "M", standardMapping: "size" },
+                { name: "Color", value: "Red", standardMapping: "color" },
+              ],
               sku: "SKU-RED-M",
               price: 1000,
               stock: 4,
@@ -681,7 +732,7 @@ describe("Facebook product feed route", () => {
               trackInventory: true,
               isDefault: false,
               deletedAt: null,
-            },
+            }),
           ],
         },
       ],
@@ -720,8 +771,9 @@ describe("Facebook product feed route", () => {
             {
               id: "var_simple",
               productId: "prod_simple",
-              size: null,
-              color: null,
+              optionCombinationKey: null,
+              imageId: null,
+              selectedOptions: [],
               sku: "SIMPLE-SHIRT",
               barcode: "8801234567890",
               barcodeType: "ean13",
@@ -776,11 +828,13 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/shirt.jpg",
           variants: [
-            {
+            optionedVariant({
               id: "var_red_m",
               productId: "prod_shirt",
-              size: "M",
-              color: "Red",
+              options: [
+                { name: "Size", value: "M", standardMapping: "size" },
+                { name: "Color", value: "Red", standardMapping: "color" },
+              ],
               sku: "SKU-RED-M",
               price: 1000,
               stock: 3,
@@ -788,12 +842,14 @@ describe("Facebook product feed route", () => {
               trackInventory: true,
               isDefault: false,
               deletedAt: null,
-            },
-            {
+            }),
+            optionedVariant({
               id: "var_blue_l",
               productId: "prod_shirt",
-              size: "L",
-              color: "Blue",
+              options: [
+                { name: "Size", value: "L", standardMapping: "size" },
+                { name: "Color", value: "Blue", standardMapping: "color" },
+              ],
               sku: "SKU-BLUE-L",
               price: 1100,
               stock: 0,
@@ -801,7 +857,7 @@ describe("Facebook product feed route", () => {
               trackInventory: true,
               isDefault: false,
               deletedAt: null,
-            },
+            }),
           ],
         },
       ],
@@ -1175,11 +1231,12 @@ describe("Facebook product feed route", () => {
           availableForSale: true,
           imageUrl: "https://cdn.example.test/products/fractional.jpg",
           variants: [
-            {
+            optionedVariant({
               id: "var_fractional",
               productId: "prod_fractional",
-              size: "M",
-              color: null,
+              options: [
+                { name: "Size", value: "M", standardMapping: "size" },
+              ],
               sku: "SKU-FRACTIONAL",
               price: 10.4,
               stock: 3,
@@ -1190,7 +1247,7 @@ describe("Facebook product feed route", () => {
               discountType: null,
               discountPercentage: null,
               discountAmount: null,
-            },
+            }),
           ],
         },
       ],

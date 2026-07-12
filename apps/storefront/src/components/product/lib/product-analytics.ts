@@ -15,8 +15,7 @@ export interface ProductAnalyticsData {
 
 export interface VariantAnalyticsData {
   id: string;
-  size?: string;
-  color?: string;
+  options?: Array<{ name: string; value: string }>;
   price: number;
 }
 
@@ -113,9 +112,8 @@ export function convertVariantToAnalyticsData(
 
   return {
     id: variant.id,
-    size: variant.size || undefined,
-    color: variant.color || undefined,
-    price: variant.discountedPrice,
+    options: variant.selectedOptions.map(({ name, value }) => ({ name, value })),
+    price: variant.discountedPrice ?? variant.price,
   };
 }
 

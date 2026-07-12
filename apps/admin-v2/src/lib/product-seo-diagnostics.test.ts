@@ -297,8 +297,7 @@ describe("buildProductSeoDiagnostics", () => {
         {
           id: "var_orphan",
           isDefault: false,
-          size: null,
-          color: null,
+          optionCombinationKey: null,
           stock: 10,
           reservedStock: 0,
           trackInventory: true,

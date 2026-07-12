@@ -40,6 +40,10 @@ import {
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
 } from "../checkout/session-state";
+import {
+  cartItemVariantLabel as optionVariantLabel,
+  normalizeCartItemOptions,
+} from "./item-options";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -340,8 +344,7 @@ function updateDiscountUI() {
 }
 
 function cartItemVariantLabel(item: CartItem): string | null {
-  const parts = [item.size, item.color].filter((value): value is string => Boolean(value));
-  return parts.length > 0 ? parts.join(" / ") : null;
+  return optionVariantLabel(item.options);
 }
 
 function cartValidationPayload(items: Record<string, VariantCartItem>) {
@@ -671,14 +674,17 @@ export async function renderCartItems() {
         }),
       );
       const jsCartKey = inlineJsString(cartKey);
-      const safeSize = item.size ? escapeHtml(item.size) : "";
-      const safeColor = item.color ? escapeHtml(item.color) : "";
+      const safeOptions = normalizeCartItemOptions(item.options)?.map((option) => ({
+        name: escapeHtml(option.name),
+        label: escapeHtml(option.label),
+      }));
       const issueBlock = renderCartItemIssues(cartKey);
 
-      const variantInfo =
-        safeSize || safeColor
-          ? `<div class="space-x-1">${safeSize ? `<span>Size: ${safeSize}</span>` : ""}${safeSize && safeColor ? "<span>•</span>" : ""}${safeColor ? `<span>Color: ${safeColor}</span>` : ""}</div>`
-          : "";
+      const variantInfo = safeOptions
+        ? `<div class="space-x-1">${safeOptions
+            .map((option) => `<span>${option.name}: ${option.label}</span>`)
+            .join("<span>•</span>")}</div>`
+        : "";
 
       return `
       <div class="py-2.5 sm:py-3 first:pt-0"><div class="flex gap-2.5 sm:gap-3">

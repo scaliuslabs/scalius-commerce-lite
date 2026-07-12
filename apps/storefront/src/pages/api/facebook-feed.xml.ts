@@ -21,13 +21,6 @@ import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
 } from "@scalius/shared/seo-discovery";
-import {
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  DEFAULT_PRODUCT_OPTION_SCHEMA,
-  normalizeProductOptionLabel,
-  normalizeProductOptionSchema,
-  type ProductOptionSchema,
-} from "@scalius/shared/product-options";
 import { normalizeSavedProductCondition } from "@scalius/shared/product-condition";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
@@ -75,7 +68,7 @@ type FeedVariantRow = {
 type FeedItem = FeedProductRow | FeedVariantRow;
 type FeedFormat = "google" | "meta";
 type FeedAvailability = "in_stock" | "out_of_stock";
-type VariantOptionAxis = "option1" | "option2";
+type ProductOptionSchema = "size" | "color" | "material" | "pattern" | "none";
 
 /**
  * Escapes XML special characters
@@ -183,31 +176,6 @@ function formatFeedAvailability(
 function normalizedOption(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
-}
-
-function getProductOptionSchema(
-  product: Product,
-  axis: VariantOptionAxis,
-): ProductOptionSchema {
-  return normalizeProductOptionSchema(
-    axis === "option1"
-      ? product.variantOption1Schema
-      : product.variantOption2Schema,
-    axis === "option1"
-      ? DEFAULT_PRODUCT_OPTION_SCHEMA.option1
-      : DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-  );
-}
-
-function getProductOptionLabel(product: Product, axis: VariantOptionAxis): string {
-  return normalizeProductOptionLabel(
-    axis === "option1"
-      ? product.variantOption1Label
-      : product.variantOption2Label,
-    axis === "option1"
-      ? DEFAULT_PRODUCT_OPTION_LABELS.option1
-      : DEFAULT_PRODUCT_OPTION_LABELS.option2,
-  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -377,10 +345,7 @@ function buildFeedItemUrl(feedItem: FeedItem, baseUrl: string): string {
     `/products/${feedItem.product.slug}`;
   const productUrl = new URL(productPath, `${baseUrl}/`);
   if (feedItem.kind === "variant") {
-    const size = normalizedOption(feedItem.variant.size);
-    const color = normalizedOption(feedItem.variant.color);
-    if (size) productUrl.searchParams.set("size", size);
-    if (color) productUrl.searchParams.set("color", color);
+    productUrl.searchParams.set("variant", feedItem.variant.id);
   }
   return productUrl.toString();
 }
@@ -404,18 +369,8 @@ function getFeedItemTitle(feedItem: FeedItem): string {
     return feedItem.product.name;
   }
 
-  const optionLabels = [
-    {
-      axis: "option1" as const,
-      value: normalizedOption(feedItem.variant.size),
-    },
-    {
-      axis: "option2" as const,
-      value: normalizedOption(feedItem.variant.color),
-    },
-  ]
-    .filter((option) => Boolean(option.value))
-    .map((option) => `${getProductOptionLabel(feedItem.product, option.axis)}: ${option.value}`);
+  const optionLabels = feedItem.variant.selectedOptions
+    .map((option) => `${option.name}: ${option.value}`);
 
   return optionLabels.length > 0
     ? `${feedItem.product.name} - ${optionLabels.join(" / ")}`
@@ -427,30 +382,13 @@ function getFeedItemGroupTitle(product: Product): string {
 }
 
 function getVariantOptionPairs(
-  product: Product,
+  _product: Product,
   variant: ProductVariant,
 ): Array<{ name: string; value: string }> {
-  return [
-    {
-      axis: "option1" as const,
-      value: normalizedOption(variant.size),
-    },
-    {
-      axis: "option2" as const,
-      value: normalizedOption(variant.color),
-    },
-  ].flatMap((option) => {
-    if (!option.value) {
-      return [];
-    }
-
-    return [
-      {
-        name: getProductOptionLabel(product, option.axis).slice(0, 250),
-        value: option.value.slice(0, 250),
-      },
-    ];
-  });
+  return variant.selectedOptions.map((option) => ({
+    name: option.name.slice(0, 250),
+    value: option.value.slice(0, 250),
+  }));
 }
 
 function getSupportedVariantGtin(variant: ProductVariant): string | null {
@@ -616,20 +554,14 @@ function generateProductItem(
   }
 
   if (feedItem.kind === "variant") {
-    const optionValues = [
-      {
-        axis: "option1" as const,
-        value: normalizedOption(feedItem.variant.size),
-      },
-      {
-        axis: "option2" as const,
-        value: normalizedOption(feedItem.variant.color),
-      },
-    ];
+    const optionValues = feedItem.variant.selectedOptions.map((option) => ({
+      schema: option.standardMapping,
+      value: normalizedOption(option.value),
+    }));
     const emittedOptionSchemas = new Set<ProductOptionSchema>();
     for (const option of optionValues) {
       if (!option.value) continue;
-      const optionSchema = getProductOptionSchema(product, option.axis);
+      const optionSchema = option.schema;
       if (optionSchema === "none" || emittedOptionSchemas.has(optionSchema)) {
         continue;
       }

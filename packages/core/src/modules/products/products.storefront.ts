@@ -5,7 +5,6 @@ import {
     categories,
     productVariants,
     productImages,
-    productVariantImageMappings,
     productRichContent,
     productAttributeValues,
     productAttributes,
@@ -14,12 +13,6 @@ import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
-import {
-    DEFAULT_PRODUCT_OPTION_LABELS,
-    DEFAULT_PRODUCT_OPTION_SCHEMA,
-    normalizeProductOptionLabel,
-    normalizeProductOptionSchema,
-} from "@scalius/shared/product-options";
 import type {
     StorefrontFeedProduct,
     StorefrontFeedProductAttribute,
@@ -38,6 +31,11 @@ import {
     buyerCatalogHasSkuInPriceRange,
     type BuyerCatalogPricingProjection,
 } from "./products.buyer-projection";
+import {
+    loadProductOptions,
+    loadVariantSelectedOptions,
+    type SelectedProductOption,
+} from "./products.option-model";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -80,10 +78,6 @@ type StorefrontFeedProductListRow = {
     price: number;
     slug: string;
     canonicalPath: string | null;
-    variantOption1Label: string;
-    variantOption2Label: string;
-    variantOption1Schema: string;
-    variantOption2Schema: string;
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
@@ -102,7 +96,8 @@ type StorefrontSitemapProductRow = {
     updatedAt: number;
 };
 
-type StorefrontFeedVariantRow = Omit<StorefrontFeedProductVariant, "deletedAt"> & {
+type StorefrontFeedVariantRow = Omit<StorefrontFeedProductVariant, "deletedAt" | "selectedOptions"> & {
+    optionCombinationKey: string | null;
     deletedAt: number | null;
 };
 
@@ -589,8 +584,9 @@ async function readStorefrontFeedVariantMap(
             .select({
                 id: productVariants.id,
                 productId: productVariants.productId,
-                size: productVariants.size,
-                color: productVariants.color,
+                optionCombinationKey: productVariants.optionCombinationKey,
+                imageId: productVariants.imageId,
+                imageUrl: productImages.url,
                 weight: productVariants.weight,
                 sku: productVariants.sku,
                 barcode: productVariants.barcode,
@@ -603,27 +599,24 @@ async function readStorefrontFeedVariantMap(
                 discountType: productVariants.discountType,
                 discountPercentage: productVariants.discountPercentage,
                 discountAmount: productVariants.discountAmount,
-                colorSortOrder: productVariants.colorSortOrder,
-                sizeSortOrder: productVariants.sizeSortOrder,
                 deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
             })
             .from(productVariants)
+            .leftJoin(productImages, eq(productVariants.imageId, productImages.id))
             .where(and(
                 inArray(productVariants.productId, productIdChunk),
                 isNull(productVariants.deletedAt),
             ))
-            .orderBy(
-                productVariants.productId,
-                productVariants.colorSortOrder,
-                productVariants.sizeSortOrder,
-            )
+            .orderBy(productVariants.productId, productVariants.createdAt, productVariants.id)
             .all() as StorefrontFeedVariantRow[]);
     }
 
+    const selectedOptionMap = await loadVariantSelectedOptions(db, rows.map((row) => row.id));
     const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
     for (const row of rows) {
         const variant = normalizeDefaultSkuOptions({
             ...row,
+            selectedOptions: selectedOptionMap.get(row.id) ?? [],
             deletedAt: row.deletedAt ? unixToDate(row.deletedAt)?.toISOString() ?? null : null,
         });
         const variants = variantMap.get(row.productId) ?? [];
@@ -840,10 +833,6 @@ export async function getStorefrontFeedProducts(
             slug: products.slug,
             canonicalPath: products.canonicalPath,
             productCondition: products.productCondition,
-            variantOption1Label: products.variantOption1Label,
-            variantOption2Label: products.variantOption2Label,
-            variantOption1Schema: products.variantOption1Schema,
-            variantOption2Schema: products.variantOption2Schema,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
             discountAmount: products.discountAmount,
@@ -871,7 +860,7 @@ export async function getStorefrontFeedProducts(
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
 
-    const [imageMap, categoriesData, attributeMap, variantMap] = await Promise.all([
+    const [imageMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([
         readPrimaryProductImageMap(db, productIds),
         categoryIds.length > 0
             ? db
@@ -882,6 +871,7 @@ export async function getStorefrontFeedProducts(
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
         readStorefrontFeedVariantMap(db, productIds),
+        loadProductOptions(db, productIds),
     ]);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
@@ -892,22 +882,7 @@ export async function getStorefrontFeedProducts(
             name: product.name,
             slug: product.slug,
             canonicalPath: product.canonicalPath,
-            variantOption1Label: normalizeProductOptionLabel(
-                product.variantOption1Label,
-                DEFAULT_PRODUCT_OPTION_LABELS.option1,
-            ),
-            variantOption2Label: normalizeProductOptionLabel(
-                product.variantOption2Label,
-                DEFAULT_PRODUCT_OPTION_LABELS.option2,
-            ),
-            variantOption1Schema: normalizeProductOptionSchema(
-                product.variantOption1Schema,
-                DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
-            ),
-            variantOption2Schema: normalizeProductOptionSchema(
-                product.variantOption2Schema,
-                DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-            ),
+            options: (optionMap.get(product.id) ?? []).map(({ values: _values, ...option }) => option),
             description: product.description,
             price: product.price,
             discountType: product.discountType,
@@ -1061,12 +1036,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             metaDescription: products.metaDescription,
             canonicalPath: products.canonicalPath,
             productCondition: products.productCondition,
-            variantOption1Label: products.variantOption1Label,
-            variantOption2Label: products.variantOption2Label,
-            variantOption1Schema: products.variantOption1Schema,
-            variantOption2Schema: products.variantOption2Schema,
-            variantImagesEnabled: products.variantImagesEnabled,
-            variantImageAxis: products.variantImageAxis,
             noIndex: products.noIndex,
             discountType: products.discountType,
             discountPercentage: products.discountPercentage,
@@ -1098,25 +1067,16 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             isPrimary: productImages.isPrimary,
             sortOrder: productImages.sortOrder,
             createdAt: sql<number>`CAST(${productImages.createdAt} AS INTEGER)`,
-            mappingId: productVariantImageMappings.id,
-            mappingVariantId: productVariantImageMappings.variantId,
-            mappingOptionAxis: productVariantImageMappings.optionAxis,
-            mappingOptionValue: productVariantImageMappings.optionValue,
-            mappingNormalizedOptionValue: productVariantImageMappings.normalizedOptionValue,
-            mappingSortOrder: productVariantImageMappings.sortOrder,
         }).from(productImages)
-            .leftJoin(
-                productVariantImageMappings,
-                eq(productVariantImageMappings.imageId, productImages.id),
-            )
             .where(eq(productImages.productId, product.id)).orderBy(productImages.sortOrder).all()
             .then((res) => ({ type: "images", data: res })),
 
         db.select({
             id: productVariants.id,
             productId: productVariants.productId,
-            size: productVariants.size,
-            color: productVariants.color,
+            optionCombinationKey: productVariants.optionCombinationKey,
+            imageId: productVariants.imageId,
+            imageUrl: productImages.url,
             weight: productVariants.weight,
             sku: productVariants.sku,
             price: productVariants.price,
@@ -1129,15 +1089,14 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             discountType: productVariants.discountType,
             discountPercentage: productVariants.discountPercentage,
             discountAmount: productVariants.discountAmount,
-            colorSortOrder: productVariants.colorSortOrder,
-            sizeSortOrder: productVariants.sizeSortOrder,
             createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
             deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
         }).from(productVariants)
+            .leftJoin(productImages, eq(productVariants.imageId, productImages.id))
             .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
-            .orderBy(productVariants.colorSortOrder, productVariants.sizeSortOrder, productVariants.createdAt)
-            .all().then((res: Array<{ id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null }>) => ({ type: "variants", data: res })),
+            .orderBy(productVariants.createdAt, productVariants.id)
+            .all().then((res) => ({ type: "variants", data: res })),
 
         db.select({
             id: productRichContent.id,
@@ -1232,8 +1191,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
-    interface VariantResult { id: string; productId: string; size: string | null; color: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; colorSortOrder: number | null; sizeSortOrder: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
-    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; mappingId: string | null; mappingVariantId: string | null; mappingOptionAxis: "option1" | "option2" | null; mappingOptionValue: string | null; mappingNormalizedOptionValue: string | null; mappingSortOrder: number | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; imageUrl: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
     const typedVariants = variants as VariantResult[];
     const typedImages = images as ImageResult[];
     const cleanImages = typedImages.map((image) => ({
@@ -1245,28 +1204,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         sortOrder: image.sortOrder,
         createdAt: image.createdAt,
     }));
-    const storedVariantImageMappings = typedImages.flatMap((image) =>
-        image.mappingId
-            ? [{
-                id: image.mappingId,
-                productId: product.id,
-                imageId: image.id,
-                variantId: image.mappingVariantId,
-                optionAxis: image.mappingOptionAxis,
-                optionValue: image.mappingOptionValue,
-                normalizedOptionValue: image.mappingNormalizedOptionValue,
-                sortOrder: image.mappingSortOrder ?? 0,
-            }]
-            : []
-    );
     const hasVariants = typedVariants.some((variant) =>
-        variant.isDefault !== true && Boolean(variant.size?.trim() || variant.color?.trim()),
+        variant.isDefault !== true && Boolean(variant.optionCombinationKey?.trim()),
     );
 
+    const [optionMap, selectedOptionMap] = await Promise.all([
+        loadProductOptions(db, [product.id]),
+        loadVariantSelectedOptions(db, typedVariants.map((variant) => variant.id)),
+    ]);
     const formattedVariants = typedVariants.map((variant) => {
         const v = normalizeDefaultSkuOptions(variant);
         return {
             ...v,
+            selectedOptions: selectedOptionMap.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
@@ -1279,22 +1229,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
-            variantOption1Label: normalizeProductOptionLabel(
-                product.variantOption1Label,
-                DEFAULT_PRODUCT_OPTION_LABELS.option1,
-            ),
-            variantOption2Label: normalizeProductOptionLabel(
-                product.variantOption2Label,
-                DEFAULT_PRODUCT_OPTION_LABELS.option2,
-            ),
-            variantOption1Schema: normalizeProductOptionSchema(
-                product.variantOption1Schema,
-                DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
-            ),
-            variantOption2Schema: normalizeProductOptionSchema(
-                product.variantOption2Schema,
-                DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-            ),
+            options: optionMap.get(product.id) ?? [],
             discountType: product.discountType || "percentage",
             discountPercentage: product.discountPercentage || 0,
             discountAmount: product.discountAmount || 0,
@@ -1314,7 +1249,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             alt: img.alt || product.name,
         })),
         variants: formattedVariants,
-        variantImageMappings: storedVariantImageMappings,
         relatedProducts,
     };
 }
@@ -1326,8 +1260,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 type StorefrontSearchProductVariant = {
     id: string;
     productId: string;
-    size: string | null;
-    color: string | null;
+    optionCombinationKey: string | null;
+    imageId: string | null;
+    selectedOptions: SelectedProductOption[];
     weight: number | null;
     sku: string;
     price: number;
@@ -1338,8 +1273,6 @@ type StorefrontSearchProductVariant = {
     discountType: string | null;
     discountPercentage: number | null;
     discountAmount: number | null;
-    colorSortOrder: number | null;
-    sizeSortOrder: number | null;
 };
 
 async function readStorefrontSearchVariantMap(
@@ -1360,8 +1293,8 @@ async function readStorefrontSearchVariantMap(
             .select({
                 id: productVariants.id,
                 productId: productVariants.productId,
-                size: productVariants.size,
-                color: productVariants.color,
+                optionCombinationKey: productVariants.optionCombinationKey,
+                imageId: productVariants.imageId,
                 weight: productVariants.weight,
                 sku: productVariants.sku,
                 price: productVariants.price,
@@ -1372,24 +1305,22 @@ async function readStorefrontSearchVariantMap(
                 discountType: productVariants.discountType,
                 discountPercentage: productVariants.discountPercentage,
                 discountAmount: productVariants.discountAmount,
-                colorSortOrder: productVariants.colorSortOrder,
-                sizeSortOrder: productVariants.sizeSortOrder,
             })
             .from(productVariants)
             .where(and(
                 inArray(productVariants.productId, productIdChunk),
                 isNull(productVariants.deletedAt),
             ))
-            .orderBy(
-                productVariants.productId,
-                productVariants.colorSortOrder,
-                productVariants.sizeSortOrder,
-            )
+            .orderBy(productVariants.productId, productVariants.createdAt, productVariants.id)
             .all();
 
+        const selectedOptionMap = await loadVariantSelectedOptions(db, rows.map((row) => row.id));
         for (const row of rows) {
             const variants = variantMap.get(row.productId) ?? [];
-            variants.push(normalizeDefaultSkuOptions(row));
+            variants.push(normalizeDefaultSkuOptions({
+                ...row,
+                selectedOptions: selectedOptionMap.get(row.id) ?? [],
+            }));
             variantMap.set(row.productId, variants);
         }
     }

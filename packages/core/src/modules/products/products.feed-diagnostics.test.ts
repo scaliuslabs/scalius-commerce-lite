@@ -42,8 +42,7 @@ function variant(
     return {
         id,
         productId,
-        size: null,
-        color: null,
+        optionCombinationKey: null,
         stock: 0,
         reservedStock: 0,
         isDefault: false,
@@ -85,12 +84,12 @@ describe("product feed diagnostics", () => {
                     "optioned",
                     [
                         variant("var_red", "optioned", {
-                            color: "Red",
+                            optionCombinationKey: "red",
                             trackInventory: true,
                             stock: 3,
                         }),
                         variant("var_blue", "optioned", {
-                            color: "Blue",
+                            optionCombinationKey: "blue",
                             trackInventory: true,
                             stock: 1,
                             reservedStock: 1,
@@ -200,7 +199,7 @@ describe("product feed diagnostics", () => {
     });
 
     it.each([
-        ["variants", 2],
+        ["variants", 1],
         ["products", 1],
     ] as const)(
         "reports mixed option-axis topology before %s feed rows are emitted",
@@ -215,14 +214,12 @@ describe("product feed diagnostics", () => {
                         "mixed_axes",
                         [
                             variant("var_size_42", "mixed_axes", {
-                                size: "42",
-                                color: null,
+                                optionCombinationKey: "42",
                                 stock: 4,
                                 trackInventory: true,
                             }),
                             variant("var_size_41_green", "mixed_axes", {
-                                size: "41",
-                                color: "Green",
+                                optionCombinationKey: null,
                                 stock: 4,
                                 trackInventory: true,
                             }),
@@ -419,13 +416,13 @@ describe("product feed diagnostics", () => {
                     "variant_prices",
                     [
                         variant("var_free", "variant_prices", {
-                            size: "S",
+                            optionCombinationKey: "small",
                             price: 100,
                             discountType: "flat",
                             discountAmount: 100,
                         }),
                         variant("var_paid", "variant_prices", {
-                            size: "M",
+                            optionCombinationKey: "medium",
                             price: 100,
                         }),
                     ],

@@ -9,17 +9,22 @@ Last reviewed: 2026-07-12
 3. Lock base currency after catalog/order money exists until a real conversion workflow is designed. Never silently reinterpret live values.
 4. Treat inventory quantities as positive finite integers at every mutation boundary; relative stock adjustment is the only signed input and must record the effective delta.
 5. Replace replay-unsafe inventory paths with deterministic claim + counter CAS batches.
-6. Stop storing variant-media configuration inside SEO fields. Migrate to stable explicit associations.
+6. Product media owns primary order; an SKU optionally points directly to one same-product image. No axis/value/positional image mapping layer exists.
 7. Separate catalog collection membership from homepage merchandising layout/config.
 8. Use one buyer-catalog price/availability projection across listing, search, category, collection, related, feed diagnostics, UCP, and cards.
 9. Operational failure is not not-found. Preserve typed 404/403/409/503 semantics through API clients, loaders, and UI.
 10. Every admin mutation control is gated by the same capability used by its API route.
 11. Product composition uses mandatory aggregate CAS; operational inventory traffic remains on SKU stock-version/ledger CAS.
-12. Never preserve persisted exact-duplicate or duplicate bulk-writer APIs. Option duplication creates a local draft; mixed option updates use one atomic edit plan.
+12. Never preserve duplicate bulk-writer APIs. One complete normalized option matrix is the only topology/SKU composition writer.
 13. SKU deletion always soft-retires the identity. Permanent product deletion is trash-only and transactionally guards order, discount, and inventory history.
 14. An editor owns one stable product/SKU snapshot. Background query refresh may update caches but only explicit Reload latest can replace a merchant draft.
-15. Simple and optioned products are one SKU topology workflow, not separate product types. The protected default SKU becomes dormant when customer-option SKUs exist; first conversion must preserve reservations and allocate tracked stock exactly once.
-16. Bulk option generation uses one shared 150-row atomic-plan ceiling across UI and API. The ceiling covers total creates plus updates and is derived from D1's paid-plan query budget including worst-case stock-ledger and low-stock lifecycle work; larger prepared changes use CSV import.
+15. Simple and optioned products are one SKU topology workflow, not separate product types. A simple product has exactly one active protected default SKU; an optioned product has no active default SKU. First conversion must preserve reservations, allocate tracked stock exactly once, then soft-retire the default identity for audit history.
+16. Option composition uses shared five-axis and 150-combination ceilings across UI, core, API, and D1; the dense matrix replaces separate generator and spreadsheet modes.
+17. Option names are arbitrary merchant-defined buyer choices. Size/color/material/pattern are optional discovery mappings, not storage semantics.
+18. Topology edits are staged and explicitly materialized. Expansion/contraction preserves tracked physical stock and never clones stock into every generated child.
+19. Initial product creation may atomically include the complete option matrix, direct media references, assignments, discounts, and initial stock ledger movements.
+20. Demo data has no compatibility obligation for migration 0007. Remove the legacy model cleanly, then reseed through normalized writers.
+21. Parameterized atomic D1 guards must use `buildBatchGuard()` (a prepared `SELECT` builder). Never put parameterized `db.run(sql...)` raw objects into a Drizzle D1 batch; Drizzle 0.45 cannot bind them.
 
 ## Implementation order
 

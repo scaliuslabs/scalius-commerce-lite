@@ -19,6 +19,7 @@ function createProductDeleteDb(selectRows: unknown[][]) {
         run: vi.fn(() => ({ kind: "guard" })),
         select: vi.fn(() => ({
             from: vi.fn(() => ({
+                kind: "guard",
                 where: vi.fn(async () => selectRows[selectIndex++] ?? []),
             })),
         })),

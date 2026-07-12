@@ -4,10 +4,10 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
-  it("gates atomic variant edit plans behind product edit permission", () => {
+  it("gates the atomic normalized option matrix behind product edit permission", () => {
     expect(getRoutePermission(
-      "/api/v1/admin/products/prod_1/variants/edit-plan",
-      "POST",
+      "/api/v1/admin/products/prod_1/options/matrix",
+      "PUT",
     )).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
   });
 

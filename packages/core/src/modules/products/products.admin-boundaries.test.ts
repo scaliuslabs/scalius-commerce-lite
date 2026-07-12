@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
-import { restoreProduct, updateProduct } from "./products.admin";
+import { createProduct, restoreProduct, updateProduct } from "./products.admin";
 
 const productUpdate = {
     id: "prod_1",
@@ -16,13 +16,6 @@ const productUpdate = {
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
     productCondition: "new" as const,
-    variantOption1Label: "Option 1",
-    variantOption2Label: "Option 2",
-    variantOption1Schema: "size" as const,
-    variantOption2Schema: "color" as const,
-    variantImagesEnabled: false,
-    variantImageAxis: "option2" as const,
-    variantImageMappings: [],
     isActive: true,
     discountType: "percentage" as const,
     discountPercentage: 0,
@@ -181,7 +174,7 @@ describe("admin product SKU invariant boundaries", () => {
         expect(batchCalled).toBe(false);
     });
 
-    it("repairs legacy default SKU option labels during product updates", async () => {
+    it("rejects a mixed active default and option SKU topology", async () => {
         let selectCount = 0;
         let batchCalled = false;
         const updateSets: Array<Record<string, unknown>> = [];
@@ -198,14 +191,12 @@ describe("admin product SKU invariant boundaries", () => {
                                         {
                                             id: "var_default_prod_1",
                                             isDefault: true,
-                                            size: "Default",
-                                            color: "Default",
+                                            optionCombinationKey: null,
                                         },
                                         {
                                             id: "var_red",
                                             isDefault: false,
-                                            size: null,
-                                            color: "Red",
+                                            optionCombinationKey: "pval_red",
                                         },
                                     ]);
                                 }
@@ -254,13 +245,90 @@ describe("admin product SKU invariant boundaries", () => {
             },
         };
 
-        await updateProduct(db as never, "prod_1", productUpdate);
+        await expect(updateProduct(db as never, "prod_1", productUpdate))
+            .rejects.toBeInstanceOf(ValidationError);
+        expect(batchCalled).toBe(false);
+        expect(updateSets.some((values) => "size" in values || "color" in values)).toBe(false);
+    });
 
-        expect(batchCalled).toBe(true);
-        expect(updateSets).toContainEqual(expect.objectContaining({
-            size: null,
-            color: null,
-        }));
+    it("creates an optioned product without an active hidden default SKU", async () => {
+        const insertedValues: unknown[] = [];
+        const db = {
+            select() {
+                return {
+                    from() {
+                        return {
+                            where() {
+                                return { get: async () => null };
+                            },
+                        };
+                    },
+                };
+            },
+            insert() {
+                return {
+                    values(values: unknown) {
+                        insertedValues.push(values);
+                        return { statement: "insert", values };
+                    },
+                };
+            },
+            batch: async (statements: unknown[]) => statements.map(() => []),
+        };
+
+        await createProduct(db as never, {
+            name: "Optioned product",
+            description: null,
+            price: 250,
+            categoryId: "cat_1",
+            slug: "optioned-product",
+            metaTitle: null,
+            metaDescription: null,
+            canonicalPath: null,
+            noIndex: false,
+            excludeFromSitemap: false,
+            excludeFromProductFeed: false,
+            productCondition: "new",
+            isActive: false,
+            discountType: "percentage",
+            discountPercentage: 0,
+            discountAmount: 0,
+            freeDelivery: false,
+            images: [],
+            attributes: [],
+            additionalInfo: [],
+            optionMatrix: {
+                options: [{
+                    id: "draft_finish",
+                    name: "Finish",
+                    standardMapping: "none",
+                    values: [{ id: "draft_matte", value: "Matte" }],
+                }],
+                variants: [{
+                    id: "draft_variant",
+                    selectedOptionValueIds: ["draft_matte"],
+                    imageId: null,
+                    sku: "OPTIONED-MATTE",
+                    price: 250,
+                    stock: 0,
+                    trackInventory: true,
+                    weight: null,
+                    barcode: null,
+                    barcodeType: null,
+                    discountType: "percentage",
+                    discountPercentage: null,
+                    discountAmount: null,
+                }],
+            },
+        });
+
+        const variantRows = insertedValues
+            .flatMap((value) => Array.isArray(value) ? value : [value])
+            .filter((value): value is Record<string, unknown> =>
+                Boolean(value) && typeof value === "object" && "isDefault" in value
+            );
+        expect(variantRows).toHaveLength(1);
+        expect(variantRows[0]).toMatchObject({ isDefault: false, sku: "OPTIONED-MATTE" });
     });
 
     it("repairs active SKU-less product restores with a protected simple SKU", async () => {

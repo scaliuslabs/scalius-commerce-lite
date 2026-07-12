@@ -2,10 +2,7 @@ import { products } from "@scalius/database/schema";
 import { eq, isNull, sql, type SQL } from "drizzle-orm";
 
 function hasCustomerOptionPredicate(alias: string): SQL {
-    return sql`(
-        trim(coalesce(${sql.raw(`${alias}.size`)}, '')) <> ''
-        OR trim(coalesce(${sql.raw(`${alias}.color`)}, '')) <> ''
-    )`;
+    return sql`trim(coalesce(${sql.raw(`${alias}.option_combination_key`)}, '')) <> ''`;
 }
 
 function activePersistedSkuPredicate(alias: string, productId: SQL): SQL {
@@ -38,10 +35,7 @@ export function operationalSkuRowPredicate(alias = "product_variants"): SQL {
             WHERE operational_option_sku.product_id = ${sql.raw(`${alias}.product_id`)}
               AND operational_option_sku.is_default = 0
               AND operational_option_sku.deleted_at IS NULL
-              AND (
-                  trim(coalesce(operational_option_sku.size, '')) <> ''
-                  OR trim(coalesce(operational_option_sku.color, '')) <> ''
-              )
+              AND trim(coalesce(operational_option_sku.option_combination_key, '')) <> ''
         )
     )`;
 }
@@ -52,7 +46,6 @@ function buyerOptionTopologyPredicate(
     requireAvailable: boolean,
 ): SQL {
     const optionAlias = `${aliasPrefix}_option_sku`;
-    const shapeAlias = `${aliasPrefix}_option_shape_sku`;
     const availability = requireAvailable
         ? sql`AND ${availableSkuPredicate(optionAlias)}`
         : sql``;
@@ -66,27 +59,29 @@ function buyerOptionTopologyPredicate(
               AND ${hasCustomerOptionPredicate(optionAlias)}
               ${availability}
         )
-        AND (
-            SELECT (
-                min(CASE
-                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.size`)}, '')) <> '' THEN 1
-                    ELSE 0
-                END) = max(CASE
-                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.size`)}, '')) <> '' THEN 1
-                    ELSE 0
-                END)
-                AND min(CASE
-                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.color`)}, '')) <> '' THEN 1
-                    ELSE 0
-                END) = max(CASE
-                    WHEN trim(coalesce(${sql.raw(`${shapeAlias}.color`)}, '')) <> '' THEN 1
-                    ELSE 0
-                END)
-            )
-            FROM "product_variants" AS ${sql.raw(shapeAlias)}
-            WHERE ${activePersistedSkuPredicate(shapeAlias, productId)}
-              AND ${sql.raw(`${shapeAlias}.is_default`)} = 0
-        ) = 1
+        AND (SELECT count(*) FROM "product_option_definitions" AS buyer_axis
+             WHERE buyer_axis.product_id = ${productId} AND buyer_axis.deleted_at IS NULL) > 0
+        AND NOT EXISTS (
+            SELECT 1
+            FROM "product_variants" AS buyer_shape_sku
+            WHERE ${activePersistedSkuPredicate("buyer_shape_sku", productId)}
+              AND buyer_shape_sku.is_default = 0
+              AND (
+                SELECT count(*)
+                FROM "product_variant_option_values" AS buyer_assignment
+                JOIN "product_option_definitions" AS buyer_definition
+                  ON buyer_definition.id = buyer_assignment.option_definition_id
+                 AND buyer_definition.deleted_at IS NULL
+                JOIN "product_option_values" AS buyer_value
+                  ON buyer_value.id = buyer_assignment.option_value_id
+                 AND buyer_value.deleted_at IS NULL
+                WHERE buyer_assignment.variant_id = buyer_shape_sku.id
+              ) <> (
+                SELECT count(*) FROM "product_option_definitions" AS buyer_required_axis
+                WHERE buyer_required_axis.product_id = ${productId}
+                  AND buyer_required_axis.deleted_at IS NULL
+              )
+        )
     )`;
 }
 
@@ -164,8 +159,8 @@ export function defaultProductSkuValues(productId: string, price: number) {
     return {
         id: `var_default_${productId}`,
         productId,
-        size: null,
-        color: null,
+        optionCombinationKey: null,
+        imageId: null,
         weight: null,
         sku: `SIMPLE-${productId}`,
         price,
@@ -182,24 +177,21 @@ export function defaultProductSkuValues(productId: string, price: number) {
         discountPercentage: 0,
         discountType: "percentage" as const,
         discountAmount: 0,
-        colorSortOrder: 0,
-        sizeSortOrder: 0,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
         deletedAt: null,
     };
 }
 
-export function normalizeDefaultSkuOptions<T extends { isDefault: boolean; size: string | null; color: string | null }>(
+export function normalizeDefaultSkuOptions<T extends { isDefault: boolean; optionCombinationKey: string | null }>(
     variant: T,
 ): T {
-    if (!variant.isDefault || (!variant.size?.trim() && !variant.color?.trim())) {
+    if (!variant.isDefault || variant.optionCombinationKey === null) {
         return variant;
     }
 
     return {
         ...variant,
-        size: null,
-        color: null,
+        optionCombinationKey: null,
     };
 }

@@ -1,13 +1,11 @@
 import type { ProductVariant } from "@/lib/api/types";
-import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 
 type BuyerVariant = Pick<
   ProductVariant,
   | "id"
   | "deletedAt"
   | "isDefault"
-  | "size"
-  | "color"
+  | "optionCombinationKey"
   | "stock"
   | "reservedStock"
   | "trackInventory"
@@ -25,17 +23,10 @@ export interface BuyerVariantResolution<TVariant extends BuyerVariant> {
   hasCustomerOptions: boolean;
 }
 
-function normalizedOption(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
 export function hasCustomerOption(
-  variant: Pick<BuyerVariant, "size" | "color">,
+  variant: Pick<BuyerVariant, "optionCombinationKey">,
 ): boolean {
-  return Boolean(
-    normalizedOption(variant.size) || normalizedOption(variant.color),
-  );
+  return Boolean(variant.optionCombinationKey?.trim());
 }
 
 export function isActivePersistedVariant(
@@ -72,10 +63,7 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
   );
 
   if (optionVariants.length > 0) {
-    if (
-      classifyProductVariantOptionAxes(activeNonDefaultVariants) === "mixed" ||
-      activeNonDefaultVariants.some((variant) => !hasCustomerOption(variant))
-    ) {
+    if (activeNonDefaultVariants.some((variant) => !hasCustomerOption(variant))) {
       return {
         mode: "ambiguous",
         variants: [],

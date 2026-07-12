@@ -43,6 +43,7 @@ function createDb(options: {
             return {
                 from() {
                     return {
+                        kind: "guard",
                         where() {
                             return {
                                 get: async () => ({

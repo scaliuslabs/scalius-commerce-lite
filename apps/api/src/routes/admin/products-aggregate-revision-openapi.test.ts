@@ -33,10 +33,7 @@ describe("admin product aggregate revision OpenAPI contract", () => {
             ["/api/v1/admin/products/{id}/variants", "post"],
             ["/api/v1/admin/products/{id}/variants/{variantId}", "put"],
             ["/api/v1/admin/products/{id}/variants/{variantId}", "delete"],
-            ["/api/v1/admin/products/{id}/variants/edit-plan", "post"],
-            ["/api/v1/admin/products/{id}/variants/bulk-create", "post"],
-            ["/api/v1/admin/products/{id}/variants/bulk-delete", "post"],
-            ["/api/v1/admin/products/{id}/variants/sort-order", "post"],
+            ["/api/v1/admin/products/{id}/options/matrix", "put"],
         ] as const;
 
         for (const [path, method] of mutations) {

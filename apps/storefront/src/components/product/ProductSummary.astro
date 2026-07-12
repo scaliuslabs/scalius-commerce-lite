@@ -1,7 +1,7 @@
 ---
 import { Check, Circle, Minus, Plus, ShoppingCart, Truck } from "lucide-react";
 import ProductDetails from "./ProductDetails.astro";
-import type { Product, ProductVariant } from "@/lib/api";
+import type { Product, ProductOptionDefinition, ProductVariant } from "@/lib/api";
 import {
   getBuyerVariantPricePresentation,
   getVariantDiscountedPrice,
@@ -12,160 +12,56 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import {
+  createInitialSelection,
   filterVariantsBySelection,
   getVariantOptionAvailabilityMap,
   resolveExactVariantSelection,
+  selectedValueMap,
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
-  type VariantOptionAxis,
 } from "./lib/variant-state-machine";
 
 interface Props {
   product: Product;
   category: Product["category"] | null;
   variants: ProductVariant[];
-  sizeOptions: string[];
-  colorOptions: string[];
-  isVariantSpecificImagesEnabled: boolean;
-  variantImageAxis: "option1" | "option2";
+  options: ProductOptionDefinition[];
   currencySymbol?: string;
   currencyDecimalPlaces?: number;
-  initialSelectedSize?: string;
-  initialSelectedColor?: string;
-  initialUnavailableVariant?: ProductVariant;
+  initialVariant?: ProductVariant | null;
+  initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
 }
 
 const {
   product,
   variants,
-  sizeOptions,
-  colorOptions,
-  isVariantSpecificImagesEnabled,
-  variantImageAxis,
+  options,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyDecimalPlaces = DEFAULT_CURRENCY.decimalPlaces,
-  initialSelectedSize: querySelectedSize,
-  initialSelectedColor: querySelectedColor,
+  initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
 } = Astro.props;
 
-const formatPrice = (price: number) =>
-  `${currencySymbol}${price.toLocaleString("en-US", {
-    minimumFractionDigits: currencyDecimalPlaces,
-    maximumFractionDigits: currencyDecimalPlaces,
-  })}`;
+const formatPrice = (price: number) => `${currencySymbol}${price.toLocaleString("en-US", {
+  minimumFractionDigits: currencyDecimalPlaces,
+  maximumFractionDigits: currencyDecimalPlaces,
+})}`;
 
-const option1Label = product.variantOption1Label?.trim() || "Option 1";
-const option2Label = product.variantOption2Label?.trim() || "Option 2";
-const globalSizeAvailability = getVariantOptionAvailabilityMap(
-  variants,
-  "size",
-  sizeOptions,
-  {},
-);
-const globalColorAvailability = getVariantOptionAvailabilityMap(
-  variants,
-  "color",
-  colorOptions,
-  {},
-);
-const initialSelectedSize = initialUnavailableVariant
-  ? undefined
-  : querySelectedSize?.trim() ||
-    (sizeOptions.length === 1 &&
-    globalSizeAvailability.get(sizeOptions[0] ?? "") !== "sold_out"
-      ? sizeOptions[0]
-      : undefined);
-const initialSelectedColor = initialUnavailableVariant
-  ? undefined
-  : querySelectedColor?.trim() ||
-    (colorOptions.length === 1 &&
-    globalColorAvailability.get(colorOptions[0] ?? "") !== "sold_out"
-      ? colorOptions[0]
-      : undefined);
-const initialOptionSelection = {
-  selectedSize: initialSelectedSize,
-  selectedColor: initialSelectedColor,
-};
-const initialSizeAvailability = getVariantOptionAvailabilityMap(
-  variants,
-  "size",
-  sizeOptions,
-  initialOptionSelection,
-);
-const initialColorAvailability = getVariantOptionAvailabilityMap(
-  variants,
-  "color",
-  colorOptions,
-  initialOptionSelection,
-);
-const initialSelectedVariant = resolveExactVariantSelection(
-  variants,
-  initialOptionSelection,
-)?.variant;
-const initialStockVariant =
-  initialUnavailableVariant ?? initialSelectedVariant ?? null;
-const buyerStockSummary = getBuyerStockSummary(
-  initialStockVariant ? [initialStockVariant] : variants,
-);
+const initialSelection = initialUnavailableVariant
+  ? {}
+  : initialVariant
+    ? selectedValueMap(initialVariant)
+    : createInitialSelection(options, variants);
+const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
+const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
+const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
 const purchaseUnavailable = !buyerStockSummary.canPurchaseAny;
-const initialAddToCartAvailable = Boolean(
-  initialSelectedVariant &&
-    !initialUnavailableVariant &&
-    getBuyerStockSummary([initialSelectedVariant]).canPurchaseAny,
-);
-const initialAddToCartAriaLabel =
-  initialAddToCartAvailable && initialSelectedVariant
-    ? `Add ${product.name} to cart`
-    : `Select an available ${product.name} option to add to cart`;
-const stockStatus =
-  buyerStockSummary.tone === "available"
-    ? {
-        text: buyerStockSummary.text,
-        color: "text-primary",
-        bg: "bg-primary/10",
-      }
-    : {
-        text: buyerStockSummary.text,
-        color: "text-destructive",
-        bg: "bg-destructive/10",
-      };
-const unavailableRequestedOptions = initialUnavailableVariant
-  ? [
-      initialUnavailableVariant.size
-        ? `${option1Label} ${initialUnavailableVariant.size}`
-        : null,
-      initialUnavailableVariant.color
-        ? `${option2Label} ${initialUnavailableVariant.color}`
-        : null,
-    ].filter((value): value is string => Boolean(value))
-  : [];
-
-const optionAriaLabel = (
-  axis: VariantOptionAxis,
-  value: string,
-  availability: VariantOptionAvailability,
-  selected: boolean,
-) => {
-  const axisLabel = axis === "size" ? option1Label : option2Label;
-  if (availability === "sold_out") {
-    return `${axisLabel}: ${value}. Out of stock.`;
-  }
-  if (selected) {
-    return `${axisLabel}: ${value}. Selected; activate again to clear.`;
-  }
-  if (availability === "incompatible") {
-    const opposingLabel = axis === "size" ? option2Label : option1Label;
-    const opposingValue =
-      axis === "size" ? initialSelectedColor : initialSelectedSize;
-    return opposingValue
-      ? `${axisLabel}: ${value}. Not available with ${opposingLabel} ${opposingValue}; selecting it clears ${opposingLabel}.`
-      : `${axisLabel}: ${value}. Not available with the current selection.`;
-  }
-  return `${axisLabel}: ${value}`;
-};
+const addToCartAvailable = Boolean(initialSelectedVariant && !initialUnavailableVariant && getBuyerStockSummary([initialSelectedVariant]).canPurchaseAny);
+const stockStatus = buyerStockSummary.tone === "available"
+  ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
+  : { text: buyerStockSummary.text, color: "text-destructive", bg: "bg-destructive/10" };
 
 const productPricing: ProductPricing = {
   basePrice: product.price,
@@ -174,358 +70,146 @@ const productPricing: ProductPricing = {
   discountAmount: product.discountAmount,
   currencyDecimalPlaces,
 };
-const initialPricingVariants = initialUnavailableVariant
-  ? [initialUnavailableVariant]
-  : initialSelectedSize || initialSelectedColor
-    ? filterVariantsBySelection(variants, {
-        selectedSize: initialSelectedSize || undefined,
-        selectedColor: initialSelectedColor || undefined,
-      })
+const pricingVariants = initialSelectedVariant
+  ? [initialSelectedVariant]
+  : Object.keys(initialSelection).length
+    ? filterVariantsBySelection(variants, initialSelection)
     : variants;
-const initialPricePresentation = getBuyerVariantPricePresentation(
-  productPricing,
-  initialPricingVariants,
-);
-const showsStartingPrice = shouldShowStartingVariantPrice(
-  sizeOptions.length > 0 || colorOptions.length > 0,
-  initialStockVariant,
-);
-const initialExactPricing = showsStartingPrice
-  ? null
-  : initialPricePresentation.pricing;
-const initialDisplayedPrice = initialPricePresentation.pricing.finalPrice;
-const initialPriceText = `${showsStartingPrice ? "From " : ""}${formatPrice(initialDisplayedPrice)}`;
-const initialCompareAtText = initialExactPricing
-  ? formatPrice(initialExactPricing.originalPrice)
-  : "";
-const discountBadgeText = initialExactPricing
-  ? formatDiscountBadge(
-      initialExactPricing.discountType,
-      initialExactPricing.discountPercentage,
-      initialExactPricing.discountAmount,
-      currencySymbol,
-      currencyDecimalPlaces,
-    )
-  : null;
+const pricePresentation = getBuyerVariantPricePresentation(productPricing, pricingVariants);
+const showsStartingPrice = shouldShowStartingVariantPrice(options.length > 0, initialSelectedVariant);
+const exactPricing = showsStartingPrice ? null : pricePresentation.pricing;
+const discountBadge = exactPricing ? formatDiscountBadge(
+  exactPricing.discountType,
+  exactPricing.discountPercentage,
+  exactPricing.discountAmount,
+  currencySymbol,
+  currencyDecimalPlaces,
+) : null;
 
-const productVariantsJson = serializeJsonForInlineScript(
-  variants.map((variant) => {
-    const variantPrice = variant.price ?? product.price;
-    const discountedVariantPrice = getVariantDiscountedPrice(
-      variant.price,
-      product.price,
-      variant.discountType,
-      variant.discountPercentage,
-      variant.discountAmount,
-      product.discountType,
-      product.discountPercentage,
-      product.discountAmount,
-      currencyDecimalPlaces,
-    );
-    const variantDiscountPercent =
-      variantPrice > 0
-        ? Math.round(
-            ((variantPrice - discountedVariantPrice) / variantPrice) * 100,
-          )
-        : 0;
-    return {
-      ...variant,
-      price: variantPrice,
-      discountedPrice: discountedVariantPrice,
-      discount: variantDiscountPercent,
-      // Fallbacks for missing fields if any
-      discountType:
-        variant.discountType || product.discountType || "percentage",
-      discountPercentage:
-        variant.discountPercentage ?? product.discountPercentage ?? 0,
-      discountAmount: variant.discountAmount ?? product.discountAmount ?? 0,
-    };
-  }),
-);
+const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
+  const variantPrice = variant.price ?? product.price;
+  const discountedPrice = getVariantDiscountedPrice(
+    variant.price,
+    product.price,
+    variant.discountType,
+    variant.discountPercentage,
+    variant.discountAmount,
+    product.discountType,
+    product.discountPercentage,
+    product.discountAmount,
+    currencyDecimalPlaces,
+  );
+  return {
+    ...variant,
+    price: variantPrice,
+    discountedPrice,
+    discount: variantPrice > 0 ? Math.round(((variantPrice - discountedPrice) / variantPrice) * 100) : 0,
+    discountType: variant.discountType || product.discountType || "percentage",
+    discountPercentage: variant.discountPercentage ?? product.discountPercentage ?? 0,
+    discountAmount: variant.discountAmount ?? product.discountAmount ?? 0,
+  };
+}));
+const optionsJson = serializeJsonForInlineScript(options);
+const unavailableLabel = initialUnavailableVariant?.selectedOptions
+  .map((option) => `${option.name} ${option.value}`)
+  .join(" / ");
+
+function optionAriaLabel(
+  option: ProductOptionDefinition,
+  value: string,
+  availability: VariantOptionAvailability,
+  selected: boolean,
+) {
+  if (availability === "sold_out") return `${option.name}: ${value}. Out of stock.`;
+  if (selected) return `${option.name}: ${value}. Selected; activate again to clear.`;
+  if (availability === "incompatible") return `${option.name}: ${value}. Not available with the current selection.`;
+  return `${option.name}: ${value}`;
+}
 ---
 
-{
-  isVariantSpecificImagesEnabled && (
-    <>
-      <meta name="variant-images-enabled" content="true" />
-      <meta name="variant-images-axis" content={variantImageAxis} />
-    </>
-  )
-}
-
 <div class="lg:col-span-5 xl:col-span-6">
-  <div class="flex flex-col h-full">
-    <div class="mb-2 pb-2 border-b border-border">
-      <h1
-        class="text-lg lg:text-3xl font-bold text-foreground leading-tight mb-2"
-      >
-        {product.name}
-      </h1>
-      {
-        quickBuyNotice && (
-          <div
-            class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive"
-            role="alert"
-          >
-            {quickBuyNotice}
-          </div>
-        )
-      }
-
-      <div
-        class="flex flex-nowrap items-center gap-x-1.5 lg:gap-x-2 overflow-x-auto hide-scrollbar"
-      >
-        <p
-          class="text-lg lg:text-3xl font-bold text-primary product-price whitespace-nowrap"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {initialPriceText}
+  <div class="flex h-full flex-col">
+    <div class="mb-2 border-b border-border pb-2">
+      <h1 class="mb-2 text-lg font-bold leading-tight text-foreground lg:text-3xl">{product.name}</h1>
+      {quickBuyNotice ? <div class="mb-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive" role="alert">{quickBuyNotice}</div> : null}
+      <div class="flex flex-nowrap items-center gap-x-1.5 overflow-x-auto lg:gap-x-2">
+        <p class="product-price whitespace-nowrap text-lg font-bold text-primary lg:text-3xl" aria-live="polite">
+          {showsStartingPrice ? "From " : ""}{formatPrice(pricePresentation.pricing.finalPrice)}
         </p>
-        <p
-          class:list={[
-            "text-[10px] sm:text-xs text-muted-foreground line-through product-original-price whitespace-nowrap",
-            { hidden: !initialExactPricing?.hasDiscount },
-          ]}
-        >
-          {initialCompareAtText}
+        <p class:list={["product-original-price whitespace-nowrap text-[10px] text-muted-foreground line-through sm:text-xs", { hidden: !exactPricing?.hasDiscount }]}>
+          {exactPricing ? formatPrice(exactPricing.originalPrice) : ""}
         </p>
-        <span
-          class:list={[
-            "discount-badge text-[10px] sm:text-xs font-semibold text-primary whitespace-nowrap",
-            { hidden: !discountBadgeText },
-          ]}
-        >
-          {discountBadgeText ?? ""}
-        </span>
-        <div
-          id="product-stock-badge"
-          class={`flex items-center px-1.5 lg:px-2 py-0.5 rounded-full border ${stockStatus.color} ${stockStatus.bg} text-[10px] lg:text-xs shadow-sm whitespace-nowrap shrink-0`}
-          data-stock-tone={buyerStockSummary.tone}
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <Circle className="h-2 w-2 mr-0.5 lg:mr-1 fill-current" />
-          <span id="product-stock-text" class="font-medium">
-            {stockStatus.text}
-          </span>
+        <span class:list={["discount-badge whitespace-nowrap text-[10px] font-semibold text-primary sm:text-xs", { hidden: !discountBadge }]}>{discountBadge ?? ""}</span>
+        <div id="product-stock-badge" class={`flex shrink-0 items-center whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10px] shadow-sm lg:px-2 lg:text-xs ${stockStatus.color} ${stockStatus.bg}`} data-stock-tone={buyerStockSummary.tone} aria-live="polite">
+          <Circle className="mr-0.5 h-2 w-2 fill-current lg:mr-1" /><span id="product-stock-text" class="font-medium">{stockStatus.text}</span>
         </div>
-        {
-          product.freeDelivery && (
-            <span class="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 px-1.5 lg:px-2 py-0.5 text-[10px] lg:text-xs font-medium text-primary shadow-sm whitespace-nowrap shrink-0">
-              <Truck className="mr-0.5 lg:mr-1 h-2.5 w-2.5 lg:h-3 lg:w-3 text-primary" />{" "}
-              Free Delivery
-            </span>
-          )
-        }
+        {product.freeDelivery ? <span class="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary shadow-sm lg:px-2 lg:text-xs"><Truck className="mr-0.5 h-2.5 w-2.5 lg:mr-1 lg:h-3 lg:w-3" />Free Delivery</span> : null}
       </div>
-
       <div class="mt-2 flex items-center gap-2">
-        <h2 class="text-xs lg:text-sm font-medium text-foreground">Qty:</h2>
+        <h2 class="text-xs font-medium text-foreground lg:text-sm">Qty:</h2>
         <div class="flex items-center">
           <label for="quantity" class="sr-only">Product quantity</label>
-          <button
-            type="button"
-            id="quantity-minus"
-            class="inline-flex h-6 w-6 lg:h-8 lg:w-8 items-center justify-center rounded-l-md border border-input bg-background text-foreground hover:bg-muted hover:border-primary/50 active:bg-accent active:scale-95 shadow-sm transition-all duration-150 cursor-pointer"
-            aria-label="Decrease quantity"
-          >
-            <Minus className="h-3 w-3" />
-          </button>
-          <input
-            type="number"
-            id="quantity"
-            name="quantity"
-            min="1"
-            max="99"
-            value="1"
-            aria-label="Product quantity"
-            class="h-6 w-10 lg:h-8 lg:w-12 border-y border-input text-center text-xs lg:text-sm font-medium text-foreground linear-gradient-to-r from-background to-transparent [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50 tabular-nums"
-            onkeydown="return event.keyCode !== 69 && event.keyCode !== 189"
-          />
-          <button
-            type="button"
-            id="quantity-plus"
-            class="inline-flex h-6 w-6 lg:h-8 lg:w-8 items-center justify-center rounded-r-md border border-input bg-background text-foreground hover:bg-muted hover:border-primary/50 active:bg-accent active:scale-95 shadow-sm transition-all duration-150 cursor-pointer"
-            aria-label="Increase quantity"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
+          <button type="button" id="quantity-minus" class="inline-flex h-6 w-6 items-center justify-center rounded-l-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Decrease quantity"><Minus className="h-3 w-3" /></button>
+          <input type="number" id="quantity" name="quantity" min="1" max="99" value="1" aria-label="Product quantity" class="h-6 w-10 border-y border-input text-center text-xs font-medium tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50 lg:h-8 lg:w-12 lg:text-sm" />
+          <button type="button" id="quantity-plus" class="inline-flex h-6 w-6 items-center justify-center rounded-r-md border border-input bg-background shadow-sm lg:h-8 lg:w-8" aria-label="Increase quantity"><Plus className="h-3 w-3" /></button>
         </div>
       </div>
     </div>
 
-    <script
-      is:inline
-      type="application/json"
-      id="product-variants-data"
-      set:html={productVariantsJson}
-    />
+    <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
+    <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
-    <div
-      id="product-actions"
-      class="space-y-2 lg:space-y-3 pt-1 lg:pt-2"
-      data-option1-label={option1Label}
-      data-option2-label={option2Label}
-    >
-      <div
-        id="variant-unavailable-query-notice"
-        class:list={[
-          "rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive",
-          { hidden: !initialUnavailableVariant },
-        ]}
-        role="alert"
-      >
-        {
-          initialUnavailableVariant
-            ? `The requested ${unavailableRequestedOptions.join(" / ")} combination is out of stock. Choose another available option.`
-            : ""
-        }
+    <div id="product-actions" class="space-y-2 pt-1 lg:space-y-3 lg:pt-2">
+      <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
+        {initialUnavailableVariant ? `The requested ${unavailableLabel} combination is out of stock. Choose another available option.` : ""}
       </div>
-      {
-        sizeOptions.length > 0 && (
-          <div class="size-selector">
-            <h2
-              id="product-option1-label"
-              class="text-sm font-medium text-foreground mb-1"
-            >
-              <span class="text-destructive">*</span> {option1Label}
-            </h2>
-            <div
-              class="flex flex-wrap gap-1.5"
-              role="group"
-              aria-labelledby="product-option1-label"
-            >
-              {sizeOptions.map((size) => {
-                const isSelected = initialSelectedSize === size;
-                const availability =
-                  initialSizeAvailability.get(size) ?? "sold_out";
+
+      {options.map((option) => {
+        const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
+        return (
+          <div class="variant-option-selector" data-option-definition-id={option.id}>
+            <h2 id={`product-option-${option.id}`} class="mb-1 text-sm font-medium text-foreground"><span class="text-destructive">*</span> {option.name}</h2>
+            <div class="flex flex-wrap gap-1.5" role="group" aria-labelledby={`product-option-${option.id}`}>
+              {option.values.map((value) => {
+                const selected = initialSelection[option.id] === value.id;
+                const status = availability.get(value.id) ?? "sold_out";
                 return (
                   <button
                     type="button"
                     class:list={[
-                      "size-btn h-7 min-w-8 flex items-center justify-center rounded-md border px-2 text-xs font-medium cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200 shadow-sm disabled:pointer-events-none",
+                      "variant-option-btn flex h-7 min-w-8 cursor-pointer items-center justify-center rounded-md border px-2 text-xs font-medium shadow-sm transition-all duration-200 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none",
                       {
-                        "bg-black text-white border-black":
-                          isSelected && availability !== "sold_out",
-                        "bg-background text-foreground border-input":
-                          !isSelected && availability === "available",
-                        "bg-muted text-foreground border-dashed border-muted-foreground":
-                          !isSelected && availability === "incompatible",
-                        "bg-background text-foreground border-input opacity-50 line-through cursor-not-allowed":
-                          availability === "sold_out",
+                        "border-black bg-black text-white": selected && status !== "sold_out",
+                        "border-input bg-background text-foreground": !selected && status === "available",
+                        "border-dashed border-muted-foreground bg-muted text-foreground": !selected && status === "incompatible",
+                        "cursor-not-allowed border-input bg-background text-foreground opacity-50 line-through": status === "sold_out",
                       },
                     ]}
-                    data-size={size}
-                    data-option-availability={availability}
-                    aria-pressed={isSelected ? "true" : "false"}
-                    aria-label={optionAriaLabel(
-                      "size",
-                      size,
-                      availability,
-                      isSelected,
-                    )}
-                    disabled={availability === "sold_out"}
-                  >
-                    {size}
-                  </button>
+                    data-option-definition-id={option.id}
+                    data-option-value-id={value.id}
+                    data-option-value={value.value}
+                    data-option-availability={status}
+                    aria-pressed={selected ? "true" : "false"}
+                    aria-label={optionAriaLabel(option, value.value, status, selected)}
+                    disabled={status === "sold_out"}
+                  >{value.value}</button>
                 );
               })}
             </div>
           </div>
-        )
-      }
+        );
+      })}
 
-      {
-        colorOptions.length > 0 && (
-          <div class="color-selector">
-            <h2
-              id="product-option2-label"
-              class="text-sm font-medium text-foreground mb-1"
-            >
-              <span class="text-destructive">*</span> {option2Label}
-            </h2>
-            <div
-              class="flex flex-wrap gap-1.5"
-              role="group"
-              aria-labelledby="product-option2-label"
-            >
-              {colorOptions.map((color) => {
-                const isSelected = initialSelectedColor === color;
-                const availability =
-                  initialColorAvailability.get(color) ?? "sold_out";
-                return (
-                  <button
-                    type="button"
-                    class:list={[
-                      "color-btn h-7 min-w-8 flex items-center justify-center rounded-md border px-2 text-xs font-medium cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-95 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-all duration-200 shadow-sm disabled:pointer-events-none",
-                      {
-                        "bg-black text-white border-black":
-                          isSelected && availability !== "sold_out",
-                        "bg-background text-foreground border-input":
-                          !isSelected && availability === "available",
-                        "bg-muted text-foreground border-dashed border-muted-foreground":
-                          !isSelected && availability === "incompatible",
-                        "bg-background text-foreground border-input opacity-50 line-through cursor-not-allowed":
-                          availability === "sold_out",
-                      },
-                    ]}
-                    data-color={color}
-                    data-option-availability={availability}
-                    aria-pressed={isSelected ? "true" : "false"}
-                    aria-label={optionAriaLabel(
-                      "color",
-                      color,
-                      availability,
-                      isSelected,
-                    )}
-                    disabled={availability === "sold_out"}
-                  >
-                    {color}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )
-      }
-
-      <p
-        id="variant-availability-status"
-        class="sr-only"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-      </p>
-
+      <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="grid grid-cols-2 gap-2 pt-1 lg:pt-3">
-        <button
-          type="button"
-          data-action="add-to-cart"
-          disabled={!initialAddToCartAvailable}
-          class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 lg:py-2.5 text-sm font-medium text-primary shadow-sm hover:bg-primary/10 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:border-border disabled:hover:scale-100 cursor-pointer"
-          aria-label={initialAddToCartAriaLabel}
-        >
-          <ShoppingCart className="mr-1.5 h-4 w-4" />
-          <span data-action-label="add-to-cart">
-            {initialAddToCartAvailable ? "Add to Cart" : "Select Options"}
-          </span>
+        <button type="button" data-action="add-to-cart" disabled={!addToCartAvailable} class="flex items-center justify-center rounded-lg border border-primary bg-primary/5 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:py-2.5" aria-label={addToCartAvailable ? `Add ${product.name} to cart` : `Select an available ${product.name} option to add to cart`}>
+          <ShoppingCart className="mr-1.5 h-4 w-4" /><span data-action-label="add-to-cart">{addToCartAvailable ? "Add to Cart" : "Select Options"}</span>
         </button>
-        <button
-          type="button"
-          data-action="buy-now"
-          disabled={purchaseUnavailable}
-          class="flex items-center justify-center rounded-lg border border-primary bg-primary py-2 lg:py-2.5 text-sm font-medium text-primary-foreground shadow-md hover:bg-primary/90 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-muted disabled:border-border disabled:hover:scale-100 cursor-pointer"
-          aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}
-        >
-          <Check className="mr-1.5 h-4 w-4" />
-          <span data-action-label="buy-now">
-            {purchaseUnavailable ? "Unavailable" : "Buy Now"}
-          </span>
+        <button type="button" data-action="buy-now" disabled={purchaseUnavailable} class="flex items-center justify-center rounded-lg border border-primary bg-primary py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:opacity-50 lg:py-2.5" aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}>
+          <Check className="mr-1.5 h-4 w-4" /><span data-action-label="buy-now">{purchaseUnavailable ? "Unavailable" : "Buy Now"}</span>
         </button>
       </div>
     </div>
-
     <ProductDetails product={product} />
   </div>
 </div>

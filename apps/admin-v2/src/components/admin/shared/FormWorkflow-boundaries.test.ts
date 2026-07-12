@@ -38,7 +38,7 @@ describe("admin form workflow boundaries", () => {
   it("gives shared and catalog forms a visible page heading", () => {
     expect(formContainerSource).toContain("<h1");
     expect(formContainerSource).toContain("Create ${entityLabel}");
-    expect(productFormSource).toContain('"Create Product"');
+    expect(productFormSource).toContain('"Create product"');
     expect(collectionFormSource).toContain('"Create Collection"');
   });
 

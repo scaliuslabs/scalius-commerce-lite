@@ -85,8 +85,8 @@ interface ProductRow {
 interface VariantRow {
   id: string;
   productId: string;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
+  optionLabel: string | null;
   stock: number;
   reservedStock: number;
   preorderStock: number;
@@ -137,8 +137,8 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
   return {
     id: "var_standard",
     productId: "prod_standard",
-    size: null,
-    color: null,
+    optionCombinationKey: null,
+    optionLabel: null,
     stock: 10,
     reservedStock: 0,
     preorderStock: 0,
@@ -611,24 +611,24 @@ describe("createStorefrontOrder product availability verification", () => {
     );
   });
 
-  it("accepts the advertised simple SKU when legacy default option labels have drifted", async () => {
+  it("never exposes an option label for the protected simple SKU", async () => {
     const result = await placeOrder({
       variants: [createVariant({
         isDefault: true,
-        size: "Default",
-        color: "Default",
+        optionCombinationKey: null,
+        optionLabel: "Ignored default label",
         trackInventory: false,
       })],
       inputOverrides: {
         items: [
           {
-            cartKey: "line_simple_legacy_labels",
+            cartKey: "line_simple_default",
             productId: "prod_standard",
             variantId: "var_standard",
             quantity: 1,
             price: 125,
             productName: "Standard Product",
-            variantLabel: "Default / Default",
+            variantLabel: "Ignored default label",
           },
         ],
       },
@@ -647,7 +647,12 @@ describe("createStorefrontOrder product availability verification", () => {
     const result = await placeOrder({
       variants: [
         createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
-        createVariant({ id: "var_option_m", size: "M", isDefault: false }),
+        createVariant({
+          id: "var_option_m",
+          optionCombinationKey: "value_m",
+          optionLabel: "M",
+          isDefault: false,
+        }),
       ],
       inputOverrides: {
         items: [{
@@ -669,20 +674,20 @@ describe("createStorefrontOrder product availability verification", () => {
     }));
   });
 
-  it("rejects checkout when legacy active SKUs mix option-axis shapes", async () => {
+  it("rejects checkout when an active option SKU lacks combination identity", async () => {
     await expect(
       placeOrder({
         variants: [
           createVariant({
             id: "var_size_42",
-            size: "42",
-            color: null,
+            optionCombinationKey: "value_42",
+            optionLabel: "42",
             isDefault: false,
           }),
           createVariant({
             id: "var_size_41_green",
-            size: "41",
-            color: "Green",
+            optionCombinationKey: null,
+            optionLabel: "41 / Green",
             isDefault: false,
           }),
         ],
@@ -753,7 +758,13 @@ describe("createStorefrontOrder product availability verification", () => {
       placeOrder({
         variants: [
           createVariant({ id: "var_default", isDefault: true, trackInventory: false }),
-          createVariant({ id: "var_option_m", size: "M", isDefault: false, price: 125 }),
+          createVariant({
+            id: "var_option_m",
+            optionCombinationKey: "value_m",
+            optionLabel: "M",
+            isDefault: false,
+            price: 125,
+          }),
         ],
         inputOverrides: {
           items: [

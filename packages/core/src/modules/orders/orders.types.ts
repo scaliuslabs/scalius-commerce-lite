@@ -135,8 +135,7 @@ export interface OrderDetails extends OrderListItem {
         price: number;
         productName: string | null;
         productImage: string | null;
-        variantSize: string | null;
-        variantColor: string | null;
+        variantLabel: string | null;
         fulfillmentStatus: string;
         unitPriceMinor: number | null;
         lineSubtotalMinor: number | null;

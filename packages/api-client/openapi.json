@@ -8703,11 +8703,7 @@
                                       "type": "string",
                                       "nullable": true
                                     },
-                                    "variantSize": {
-                                      "type": "string",
-                                      "nullable": true
-                                    },
-                                    "variantColor": {
+                                    "variantLabel": {
                                       "type": "string",
                                       "nullable": true
                                     }
@@ -8720,8 +8716,7 @@
                                     "productName",
                                     "productSlug",
                                     "productImage",
-                                    "variantSize",
-                                    "variantColor"
+                                    "variantLabel"
                                   ],
                                   "additionalProperties": {
                                     "nullable": true
@@ -9343,11 +9338,7 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "variantSize": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "variantColor": {
+                              "variantLabel": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -9400,8 +9391,7 @@
                               "productName",
                               "productSlug",
                               "productImage",
-                              "variantSize",
-                              "variantColor",
+                              "variantLabel",
                               "unitPrice",
                               "lineTotal",
                               "unitPriceMinor",
@@ -14552,31 +14542,38 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "variantOption1Label": {
-                                "type": "string"
-                              },
-                              "variantOption2Label": {
-                                "type": "string"
-                              },
-                              "variantOption1Schema": {
-                                "type": "string",
-                                "enum": [
-                                  "size",
-                                  "color",
-                                  "material",
-                                  "pattern",
-                                  "none"
-                                ]
-                              },
-                              "variantOption2Schema": {
-                                "type": "string",
-                                "enum": [
-                                  "size",
-                                  "color",
-                                  "material",
-                                  "pattern",
-                                  "none"
-                                ]
+                              "options": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "position": {
+                                      "type": "integer"
+                                    },
+                                    "standardMapping": {
+                                      "type": "string",
+                                      "enum": [
+                                        "size",
+                                        "color",
+                                        "material",
+                                        "pattern",
+                                        "none"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "position",
+                                    "standardMapping"
+                                  ]
+                                }
                               },
                               "description": {
                                 "type": "string",
@@ -14687,13 +14684,58 @@
                                     "productId": {
                                       "type": "string"
                                     },
-                                    "size": {
+                                    "imageId": {
                                       "type": "string",
                                       "nullable": true
                                     },
-                                    "color": {
+                                    "imageUrl": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "selectedOptions": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "optionDefinitionId": {
+                                            "type": "string"
+                                          },
+                                          "optionValueId": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "value": {
+                                            "type": "string"
+                                          },
+                                          "position": {
+                                            "type": "integer"
+                                          },
+                                          "valuePosition": {
+                                            "type": "integer"
+                                          },
+                                          "standardMapping": {
+                                            "type": "string",
+                                            "enum": [
+                                              "size",
+                                              "color",
+                                              "material",
+                                              "pattern",
+                                              "none"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "optionDefinitionId",
+                                          "optionValueId",
+                                          "name",
+                                          "value",
+                                          "position",
+                                          "valuePosition",
+                                          "standardMapping"
+                                        ]
+                                      }
                                     },
                                     "weight": {
                                       "type": "number",
@@ -14737,14 +14779,6 @@
                                       "type": "number",
                                       "nullable": true
                                     },
-                                    "colorSortOrder": {
-                                      "type": "number",
-                                      "nullable": true
-                                    },
-                                    "sizeSortOrder": {
-                                      "type": "number",
-                                      "nullable": true
-                                    },
                                     "deletedAt": {
                                       "type": "string",
                                       "nullable": true
@@ -14753,8 +14787,9 @@
                                   "required": [
                                     "id",
                                     "productId",
-                                    "size",
-                                    "color",
+                                    "imageId",
+                                    "imageUrl",
+                                    "selectedOptions",
                                     "weight",
                                     "sku",
                                     "price",
@@ -14767,8 +14802,6 @@
                                     "discountType",
                                     "discountPercentage",
                                     "discountAmount",
-                                    "colorSortOrder",
-                                    "sizeSortOrder",
                                     "deletedAt"
                                   ]
                                 }
@@ -14783,10 +14816,7 @@
                               "name",
                               "slug",
                               "canonicalPath",
-                              "variantOption1Label",
-                              "variantOption2Label",
-                              "variantOption1Schema",
-                              "variantOption2Schema",
+                              "options",
                               "description",
                               "price",
                               "discountType",
@@ -15189,15 +15219,6 @@
                             }
                           }
                         },
-                        "variantImageMappings": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "additionalProperties": {
-                              "nullable": true
-                            }
-                          }
-                        },
                         "relatedProducts": {
                           "type": "array",
                           "items": {
@@ -15213,7 +15234,6 @@
                         "category",
                         "images",
                         "variants",
-                        "variantImageMappings",
                         "relatedProducts"
                       ]
                     }
@@ -20031,11 +20051,7 @@
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "variantSize": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
-                                  "variantColor": {
+                                  "variantLabel": {
                                     "type": "string",
                                     "nullable": true
                                   },
@@ -20067,8 +20083,7 @@
                                   "price",
                                   "productName",
                                   "productImage",
-                                  "variantSize",
-                                  "variantColor",
+                                  "variantLabel",
                                   "unitPriceMinor",
                                   "lineSubtotalMinor",
                                   "discountAmountMinor",
@@ -43903,11 +43918,7 @@
                               "sku": {
                                 "type": "string"
                               },
-                              "size": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "color": {
+                              "optionLabel": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -43936,8 +43947,7 @@
                               "productId",
                               "productName",
                               "sku",
-                              "size",
-                              "color",
+                              "optionLabel",
                               "price",
                               "stock",
                               "reservedStock",
@@ -44087,11 +44097,7 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "variantSize": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "variantColor": {
+                              "variantLabel": {
                                 "type": "string",
                                 "nullable": true
                               }
@@ -44108,8 +44114,7 @@
                               "resolvedAt",
                               "productName",
                               "variantSku",
-                              "variantSize",
-                              "variantColor"
+                              "variantLabel"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -44292,11 +44297,7 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "variantSize": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "variantColor": {
+                              "variantLabel": {
                                 "type": "string",
                                 "nullable": true
                               }
@@ -44313,8 +44314,7 @@
                               "resolvedAt",
                               "productName",
                               "variantSku",
-                              "variantSize",
-                              "variantColor"
+                              "variantLabel"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -44638,11 +44638,7 @@
                             "sku": {
                               "type": "string"
                             },
-                            "size": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "color": {
+                            "optionLabel": {
                               "type": "string",
                               "nullable": true
                             },
@@ -44674,8 +44670,7 @@
                           "required": [
                             "id",
                             "sku",
-                            "size",
-                            "color",
+                            "optionLabel",
                             "price",
                             "stock",
                             "reservedStock",
@@ -85567,11 +85562,7 @@
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "variantSize": {
-                                    "type": "string",
-                                    "nullable": true
-                                  },
-                                  "variantColor": {
+                                  "variantLabel": {
                                     "type": "string",
                                     "nullable": true
                                   }
@@ -85584,8 +85575,7 @@
                                   "price",
                                   "productName",
                                   "productImage",
-                                  "variantSize",
-                                  "variantColor"
+                                  "variantLabel"
                                 ],
                                 "additionalProperties": {
                                   "nullable": true
@@ -89861,11 +89851,7 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "variantSize": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "variantColor": {
+                              "variantLabel": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -89900,8 +89886,7 @@
                               "price",
                               "productName",
                               "productImage",
-                              "variantSize",
-                              "variantColor",
+                              "variantLabel",
                               "fulfillmentStatus",
                               "unitPriceMinor",
                               "lineSubtotalMinor",
@@ -91737,11 +91722,7 @@
                             "type": "string",
                             "nullable": true
                           },
-                          "variantSize": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "variantColor": {
+                          "variantLabel": {
                             "type": "string",
                             "nullable": true
                           },
@@ -91776,8 +91757,7 @@
                           "price",
                           "productName",
                           "productImage",
-                          "variantSize",
-                          "variantColor",
+                          "variantLabel",
                           "fulfillmentStatus",
                           "unitPriceMinor",
                           "lineSubtotalMinor",
@@ -93135,13 +93115,58 @@
                                     "productId": {
                                       "type": "string"
                                     },
-                                    "size": {
+                                    "optionCombinationKey": {
                                       "type": "string",
                                       "nullable": true
                                     },
-                                    "color": {
+                                    "imageId": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "selectedOptions": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "optionDefinitionId": {
+                                            "type": "string"
+                                          },
+                                          "optionValueId": {
+                                            "type": "string"
+                                          },
+                                          "name": {
+                                            "type": "string"
+                                          },
+                                          "value": {
+                                            "type": "string"
+                                          },
+                                          "position": {
+                                            "type": "integer"
+                                          },
+                                          "valuePosition": {
+                                            "type": "integer"
+                                          },
+                                          "standardMapping": {
+                                            "type": "string",
+                                            "enum": [
+                                              "size",
+                                              "color",
+                                              "material",
+                                              "pattern",
+                                              "none"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "optionDefinitionId",
+                                          "optionValueId",
+                                          "name",
+                                          "value",
+                                          "position",
+                                          "valuePosition",
+                                          "standardMapping"
+                                        ]
+                                      }
                                     },
                                     "weight": {
                                       "type": "number",
@@ -93216,14 +93241,6 @@
                                       "type": "string",
                                       "nullable": true
                                     },
-                                    "colorSortOrder": {
-                                      "type": "number",
-                                      "nullable": true
-                                    },
-                                    "sizeSortOrder": {
-                                      "type": "number",
-                                      "nullable": true
-                                    },
                                     "createdAt": {
                                       "anyOf": [
                                         {
@@ -93265,8 +93282,8 @@
                                   "required": [
                                     "id",
                                     "productId",
-                                    "size",
-                                    "color",
+                                    "optionCombinationKey",
+                                    "imageId",
                                     "weight",
                                     "sku",
                                     "price",
@@ -93811,13 +93828,54 @@
                             "sku": {
                               "type": "string"
                             },
-                            "size": {
+                            "imageId": {
                               "type": "string",
                               "nullable": true
                             },
-                            "color": {
-                              "type": "string",
-                              "nullable": true
+                            "selectedOptions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "optionDefinitionId": {
+                                    "type": "string"
+                                  },
+                                  "optionValueId": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "value": {
+                                    "type": "string"
+                                  },
+                                  "position": {
+                                    "type": "integer"
+                                  },
+                                  "valuePosition": {
+                                    "type": "integer"
+                                  },
+                                  "standardMapping": {
+                                    "type": "string",
+                                    "enum": [
+                                      "size",
+                                      "color",
+                                      "material",
+                                      "pattern",
+                                      "none"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "optionDefinitionId",
+                                  "optionValueId",
+                                  "name",
+                                  "value",
+                                  "position",
+                                  "valuePosition",
+                                  "standardMapping"
+                                ]
+                              }
                             },
                             "weight": {
                               "type": "number",
@@ -93844,8 +93902,8 @@
                           "required": [
                             "id",
                             "sku",
-                            "size",
-                            "color",
+                            "imageId",
+                            "selectedOptions",
                             "weight",
                             "price",
                             "stock",
@@ -94625,90 +94683,6 @@
                       "used"
                     ]
                   },
-                  "variantOption1Label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "default": "Size"
-                  },
-                  "variantOption2Label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "default": "Color"
-                  },
-                  "variantOption1Schema": {
-                    "type": "string",
-                    "enum": [
-                      "size",
-                      "color",
-                      "material",
-                      "pattern",
-                      "none"
-                    ],
-                    "default": "size"
-                  },
-                  "variantOption2Schema": {
-                    "type": "string",
-                    "enum": [
-                      "size",
-                      "color",
-                      "material",
-                      "pattern",
-                      "none"
-                    ],
-                    "default": "color"
-                  },
-                  "variantImagesEnabled": {
-                    "type": "boolean"
-                  },
-                  "variantImageAxis": {
-                    "type": "string",
-                    "enum": [
-                      "option1",
-                      "option2"
-                    ]
-                  },
-                  "variantImageMappings": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "imageId": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "variantId": {
-                          "type": "string",
-                          "nullable": true,
-                          "minLength": 1
-                        },
-                        "optionAxis": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": [
-                            "option1",
-                            "option2",
-                            null
-                          ]
-                        },
-                        "optionValue": {
-                          "type": "string",
-                          "nullable": true,
-                          "minLength": 1,
-                          "maxLength": 100
-                        },
-                        "sortOrder": {
-                          "type": "integer",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "imageId"
-                      ]
-                    },
-                    "maxItems": 250
-                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -94796,6 +94770,174 @@
                         "sortOrder"
                       ]
                     }
+                  },
+                  "optionMatrix": {
+                    "type": "object",
+                    "properties": {
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "standardMapping": {
+                              "type": "string",
+                              "enum": [
+                                "size",
+                                "color",
+                                "material",
+                                "pattern",
+                                "none"
+                              ]
+                            },
+                            "values": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "value"
+                                ]
+                              },
+                              "minItems": 1,
+                              "maxItems": 150
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "standardMapping",
+                            "values"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                      },
+                      "variants": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "selectedOptionValueIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "minItems": 1,
+                              "maxItems": 5
+                            },
+                            "imageId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 1
+                            },
+                            "sku": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 100
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            },
+                            "stock": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "trackInventory": {
+                              "type": "boolean"
+                            },
+                            "weight": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0
+                            },
+                            "barcode": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 50
+                            },
+                            "barcodeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "ean13",
+                                "upc",
+                                "isbn",
+                                "gtin",
+                                "custom",
+                                null
+                              ]
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage",
+                                "flat"
+                              ]
+                            },
+                            "discountPercentage": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 1000000000000
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "selectedOptionValueIds",
+                            "imageId",
+                            "sku",
+                            "price",
+                            "stock",
+                            "trackInventory",
+                            "weight",
+                            "barcode",
+                            "barcodeType",
+                            "discountType",
+                            "discountPercentage",
+                            "discountAmount"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 150
+                      }
+                    },
+                    "required": [
+                      "options",
+                      "variants"
+                    ]
                   }
                 },
                 "required": [
@@ -94808,9 +94950,6 @@
                   "metaTitle",
                   "metaDescription",
                   "productCondition",
-                  "variantImagesEnabled",
-                  "variantImageAxis",
-                  "variantImageMappings",
                   "slug",
                   "images"
                 ]
@@ -95973,41 +96112,61 @@
                             null
                           ]
                         },
-                        "variantOption1Label": {
-                          "type": "string"
-                        },
-                        "variantOption2Label": {
-                          "type": "string"
-                        },
-                        "variantOption1Schema": {
-                          "type": "string",
-                          "enum": [
-                            "size",
-                            "color",
-                            "material",
-                            "pattern",
-                            "none"
-                          ]
-                        },
-                        "variantOption2Schema": {
-                          "type": "string",
-                          "enum": [
-                            "size",
-                            "color",
-                            "material",
-                            "pattern",
-                            "none"
-                          ]
-                        },
-                        "variantImagesEnabled": {
-                          "type": "boolean"
-                        },
-                        "variantImageAxis": {
-                          "type": "string",
-                          "enum": [
-                            "option1",
-                            "option2"
-                          ]
+                        "options": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "position": {
+                                "type": "integer"
+                              },
+                              "standardMapping": {
+                                "type": "string",
+                                "enum": [
+                                  "size",
+                                  "color",
+                                  "material",
+                                  "pattern",
+                                  "none"
+                                ]
+                              },
+                              "values": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "position": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "value",
+                                    "position"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "position",
+                              "standardMapping",
+                              "values"
+                            ]
+                          }
                         },
                         "aggregateRevision": {
                           "type": "integer",
@@ -96088,13 +96247,58 @@
                               "productId": {
                                 "type": "string"
                               },
-                              "size": {
+                              "optionCombinationKey": {
                                 "type": "string",
                                 "nullable": true
                               },
-                              "color": {
+                              "imageId": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "selectedOptions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "optionDefinitionId": {
+                                      "type": "string"
+                                    },
+                                    "optionValueId": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "position": {
+                                      "type": "integer"
+                                    },
+                                    "valuePosition": {
+                                      "type": "integer"
+                                    },
+                                    "standardMapping": {
+                                      "type": "string",
+                                      "enum": [
+                                        "size",
+                                        "color",
+                                        "material",
+                                        "pattern",
+                                        "none"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "optionDefinitionId",
+                                    "optionValueId",
+                                    "name",
+                                    "value",
+                                    "position",
+                                    "valuePosition",
+                                    "standardMapping"
+                                  ]
+                                }
                               },
                               "weight": {
                                 "type": "number",
@@ -96169,14 +96373,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "colorSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sizeSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -96218,8 +96414,8 @@
                             "required": [
                               "id",
                               "productId",
-                              "size",
-                              "color",
+                              "optionCombinationKey",
+                              "imageId",
                               "weight",
                               "sku",
                               "price",
@@ -96271,57 +96467,6 @@
                               "isPrimary",
                               "sortOrder",
                               "createdAt"
-                            ]
-                          }
-                        },
-                        "variantImageMappings": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "productId": {
-                                "type": "string"
-                              },
-                              "imageId": {
-                                "type": "string"
-                              },
-                              "variantId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "optionAxis": {
-                                "type": "string",
-                                "nullable": true,
-                                "enum": [
-                                  "option1",
-                                  "option2",
-                                  null
-                                ]
-                              },
-                              "optionValue": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "normalizedOptionValue": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "sortOrder": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "productId",
-                              "imageId",
-                              "variantId",
-                              "optionAxis",
-                              "optionValue",
-                              "normalizedOptionValue",
-                              "sortOrder"
                             ]
                           }
                         },
@@ -96385,12 +96530,7 @@
                         "excludeFromSitemap",
                         "excludeFromProductFeed",
                         "productCondition",
-                        "variantOption1Label",
-                        "variantOption2Label",
-                        "variantOption1Schema",
-                        "variantOption2Schema",
-                        "variantImagesEnabled",
-                        "variantImageAxis",
+                        "options",
                         "aggregateRevision",
                         "discountPercentage",
                         "discountType",
@@ -96402,7 +96542,6 @@
                         "category",
                         "variants",
                         "images",
-                        "variantImageMappings",
                         "additionalInfo",
                         "attributes"
                       ]
@@ -96559,90 +96698,6 @@
                       "used"
                     ]
                   },
-                  "variantOption1Label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "default": "Size"
-                  },
-                  "variantOption2Label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 40,
-                    "default": "Color"
-                  },
-                  "variantOption1Schema": {
-                    "type": "string",
-                    "enum": [
-                      "size",
-                      "color",
-                      "material",
-                      "pattern",
-                      "none"
-                    ],
-                    "default": "size"
-                  },
-                  "variantOption2Schema": {
-                    "type": "string",
-                    "enum": [
-                      "size",
-                      "color",
-                      "material",
-                      "pattern",
-                      "none"
-                    ],
-                    "default": "color"
-                  },
-                  "variantImagesEnabled": {
-                    "type": "boolean"
-                  },
-                  "variantImageAxis": {
-                    "type": "string",
-                    "enum": [
-                      "option1",
-                      "option2"
-                    ]
-                  },
-                  "variantImageMappings": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "imageId": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "variantId": {
-                          "type": "string",
-                          "nullable": true,
-                          "minLength": 1
-                        },
-                        "optionAxis": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": [
-                            "option1",
-                            "option2",
-                            null
-                          ]
-                        },
-                        "optionValue": {
-                          "type": "string",
-                          "nullable": true,
-                          "minLength": 1,
-                          "maxLength": 100
-                        },
-                        "sortOrder": {
-                          "type": "integer",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "imageId"
-                      ]
-                    },
-                    "maxItems": 250
-                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -96749,9 +96804,6 @@
                   "metaTitle",
                   "metaDescription",
                   "productCondition",
-                  "variantImagesEnabled",
-                  "variantImageAxis",
-                  "variantImageMappings",
                   "slug",
                   "images",
                   "id",
@@ -98341,13 +98393,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "size": {
-                    "type": "string",
-                    "nullable": true
+                  "selectedOptionValueIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 5
                   },
-                  "color": {
+                  "imageId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "minLength": 1
                   },
                   "weight": {
                     "type": "number",
@@ -98411,8 +98468,8 @@
                   }
                 },
                 "required": [
-                  "size",
-                  "color",
+                  "selectedOptionValueIds",
+                  "imageId",
                   "weight",
                   "sku",
                   "price",
@@ -98446,13 +98503,58 @@
                         "productId": {
                           "type": "string"
                         },
-                        "size": {
+                        "optionCombinationKey": {
                           "type": "string",
                           "nullable": true
                         },
-                        "color": {
+                        "imageId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "selectedOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "optionDefinitionId": {
+                                "type": "string"
+                              },
+                              "optionValueId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "position": {
+                                "type": "integer"
+                              },
+                              "valuePosition": {
+                                "type": "integer"
+                              },
+                              "standardMapping": {
+                                "type": "string",
+                                "enum": [
+                                  "size",
+                                  "color",
+                                  "material",
+                                  "pattern",
+                                  "none"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "optionDefinitionId",
+                              "optionValueId",
+                              "name",
+                              "value",
+                              "position",
+                              "valuePosition",
+                              "standardMapping"
+                            ]
+                          }
                         },
                         "weight": {
                           "type": "number",
@@ -98527,14 +98629,6 @@
                           "type": "string",
                           "nullable": true
                         },
-                        "colorSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "sizeSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -98580,8 +98674,8 @@
                       "required": [
                         "id",
                         "productId",
-                        "size",
-                        "color",
+                        "optionCombinationKey",
+                        "imageId",
                         "weight",
                         "sku",
                         "price",
@@ -98985,13 +99079,58 @@
                               "productId": {
                                 "type": "string"
                               },
-                              "size": {
+                              "optionCombinationKey": {
                                 "type": "string",
                                 "nullable": true
                               },
-                              "color": {
+                              "imageId": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "selectedOptions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "optionDefinitionId": {
+                                      "type": "string"
+                                    },
+                                    "optionValueId": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "position": {
+                                      "type": "integer"
+                                    },
+                                    "valuePosition": {
+                                      "type": "integer"
+                                    },
+                                    "standardMapping": {
+                                      "type": "string",
+                                      "enum": [
+                                        "size",
+                                        "color",
+                                        "material",
+                                        "pattern",
+                                        "none"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "optionDefinitionId",
+                                    "optionValueId",
+                                    "name",
+                                    "value",
+                                    "position",
+                                    "valuePosition",
+                                    "standardMapping"
+                                  ]
+                                }
                               },
                               "weight": {
                                 "type": "number",
@@ -99066,14 +99205,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "colorSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sizeSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -99115,8 +99246,8 @@
                             "required": [
                               "id",
                               "productId",
-                              "size",
-                              "color",
+                              "optionCombinationKey",
+                              "imageId",
                               "weight",
                               "sku",
                               "price",
@@ -99513,13 +99644,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "size": {
-                    "type": "string",
-                    "nullable": true
+                  "selectedOptionValueIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 5
                   },
-                  "color": {
+                  "imageId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "minLength": 1
                   },
                   "weight": {
                     "type": "number",
@@ -99583,8 +99719,8 @@
                   }
                 },
                 "required": [
-                  "size",
-                  "color",
+                  "selectedOptionValueIds",
+                  "imageId",
                   "weight",
                   "sku",
                   "price",
@@ -99618,13 +99754,58 @@
                         "productId": {
                           "type": "string"
                         },
-                        "size": {
+                        "optionCombinationKey": {
                           "type": "string",
                           "nullable": true
                         },
-                        "color": {
+                        "imageId": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "selectedOptions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "optionDefinitionId": {
+                                "type": "string"
+                              },
+                              "optionValueId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "position": {
+                                "type": "integer"
+                              },
+                              "valuePosition": {
+                                "type": "integer"
+                              },
+                              "standardMapping": {
+                                "type": "string",
+                                "enum": [
+                                  "size",
+                                  "color",
+                                  "material",
+                                  "pattern",
+                                  "none"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "optionDefinitionId",
+                              "optionValueId",
+                              "name",
+                              "value",
+                              "position",
+                              "valuePosition",
+                              "standardMapping"
+                            ]
+                          }
                         },
                         "weight": {
                           "type": "number",
@@ -99699,14 +99880,6 @@
                           "type": "string",
                           "nullable": true
                         },
-                        "colorSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "sizeSortOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -99752,8 +99925,8 @@
                       "required": [
                         "id",
                         "productId",
-                        "size",
-                        "color",
+                        "optionCombinationKey",
+                        "imageId",
                         "weight",
                         "sku",
                         "price",
@@ -100525,12 +100698,12 @@
         ]
       }
     },
-    "/api/v1/admin/products/{id}/variants/edit-plan": {
-      "post": {
+    "/api/v1/admin/products/{id}/options/matrix": {
+      "put": {
         "tags": [
           "Admin - Products"
         ],
-        "summary": "Atomically create and update product variants",
+        "summary": "Save the complete normalized product option matrix",
         "parameters": [
           {
             "schema": {
@@ -100547,100 +100720,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "creates": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "size": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "color": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "weight": {
-                          "type": "number",
-                          "nullable": true,
-                          "minimum": 0
-                        },
-                        "sku": {
-                          "type": "string",
-                          "minLength": 3
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1000000000000
-                        },
-                        "stock": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "trackInventory": {
-                          "type": "boolean"
-                        },
-                        "barcode": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 50
-                        },
-                        "barcodeType": {
-                          "type": "string",
-                          "nullable": true,
-                          "enum": [
-                            "ean13",
-                            "upc",
-                            "isbn",
-                            "gtin",
-                            "custom",
-                            null
-                          ]
-                        },
-                        "discountType": {
-                          "type": "string",
-                          "enum": [
-                            "percentage",
-                            "flat"
-                          ]
-                        },
-                        "discountPercentage": {
-                          "type": "number",
-                          "nullable": true,
-                          "minimum": 0,
-                          "maximum": 100
-                        },
-                        "discountAmount": {
-                          "type": "number",
-                          "nullable": true,
-                          "minimum": 0
-                        },
-                        "colorSortOrder": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "sizeSortOrder": {
-                          "type": "number",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "size",
-                        "color",
-                        "weight",
-                        "sku",
-                        "price",
-                        "stock",
-                        "discountType",
-                        "discountPercentage",
-                        "discountAmount"
-                      ]
-                    },
-                    "maxItems": 150,
-                    "default": []
-                  },
-                  "updates": {
+                  "options": {
                     "type": "array",
                     "items": {
                       "type": "object",
@@ -100649,800 +100729,82 @@
                           "type": "string",
                           "minLength": 1
                         },
-                        "size": {
+                        "name": {
                           "type": "string",
-                          "nullable": true,
-                          "maxLength": 50
+                          "minLength": 1,
+                          "maxLength": 40
                         },
-                        "color": {
+                        "standardMapping": {
                           "type": "string",
-                          "nullable": true,
-                          "maxLength": 50
-                        },
-                        "weight": {
-                          "type": "number",
-                          "nullable": true,
-                          "minimum": 0
-                        },
-                        "sku": {
-                          "type": "string",
-                          "minLength": 3
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1000000000000
-                        },
-                        "stock": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "trackInventory": {
-                          "type": "boolean"
-                        },
-                        "barcode": {
-                          "type": "string",
-                          "nullable": true,
-                          "maxLength": 50
-                        },
-                        "barcodeType": {
-                          "type": "string",
-                          "nullable": true,
                           "enum": [
-                            "ean13",
-                            "upc",
-                            "isbn",
-                            "gtin",
-                            "custom",
-                            null
+                            "size",
+                            "color",
+                            "material",
+                            "pattern",
+                            "none"
                           ]
-                        }
-                      },
-                      "required": [
-                        "id"
-                      ]
-                    },
-                    "maxItems": 150,
-                    "default": []
-                  },
-                  "expectedAggregateRevision": {
-                    "type": "integer",
-                    "minimum": 1
-                  }
-                },
-                "required": [
-                  "expectedAggregateRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Variant edit plan applied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "created": {
+                        },
+                        "values": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
                               "id": {
-                                "type": "string"
-                              },
-                              "productId": {
-                                "type": "string"
-                              },
-                              "size": {
                                 "type": "string",
-                                "nullable": true
+                                "minLength": 1
                               },
-                              "color": {
+                              "value": {
                                 "type": "string",
-                                "nullable": true
-                              },
-                              "weight": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sku": {
-                                "type": "string"
-                              },
-                              "price": {
-                                "type": "number"
-                              },
-                              "stock": {
-                                "type": "number"
-                              },
-                              "reservedStock": {
-                                "type": "number"
-                              },
-                              "preorderStock": {
-                                "type": "number"
-                              },
-                              "isDefault": {
-                                "type": "boolean"
-                              },
-                              "trackInventory": {
-                                "type": "boolean"
-                              },
-                              "lowStockThreshold": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "allowPreorder": {
-                                "type": "boolean"
-                              },
-                              "preorderDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "preorderMessage": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "allowBackorder": {
-                                "type": "boolean"
-                              },
-                              "backorderLimit": {
-                                "type": "number"
-                              },
-                              "discountPercentage": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "discountAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "barcode": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "barcodeType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "colorSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sizeSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "stockVersion": {
-                                "type": "number"
-                              },
-                              "version": {
-                                "type": "number"
+                                "minLength": 1,
+                                "maxLength": 100
                               }
                             },
                             "required": [
                               "id",
-                              "productId",
-                              "size",
-                              "color",
-                              "weight",
-                              "sku",
-                              "price",
-                              "stock",
-                              "reservedStock"
+                              "value"
                             ]
-                          }
-                        },
-                        "updated": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "productId": {
-                                "type": "string"
-                              },
-                              "size": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "color": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "weight": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sku": {
-                                "type": "string"
-                              },
-                              "price": {
-                                "type": "number"
-                              },
-                              "stock": {
-                                "type": "number"
-                              },
-                              "reservedStock": {
-                                "type": "number"
-                              },
-                              "preorderStock": {
-                                "type": "number"
-                              },
-                              "isDefault": {
-                                "type": "boolean"
-                              },
-                              "trackInventory": {
-                                "type": "boolean"
-                              },
-                              "lowStockThreshold": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "allowPreorder": {
-                                "type": "boolean"
-                              },
-                              "preorderDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "preorderMessage": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "allowBackorder": {
-                                "type": "boolean"
-                              },
-                              "backorderLimit": {
-                                "type": "number"
-                              },
-                              "discountPercentage": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "discountAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "barcode": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "barcodeType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "colorSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sizeSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "stockVersion": {
-                                "type": "number"
-                              },
-                              "version": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "productId",
-                              "size",
-                              "color",
-                              "weight",
-                              "sku",
-                              "price",
-                              "stock",
-                              "reservedStock"
-                            ]
-                          }
-                        },
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "created",
-                        "updated",
-                        "aggregateRevision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Product revision or domain conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "PRODUCT_REVISION_CONFLICT"
-                              ]
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "type": "object",
-                              "properties": {
-                                "expectedRevision": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "currentRevision": {
-                                  "type": "integer",
-                                  "nullable": true,
-                                  "minimum": 1
-                                }
-                              },
-                              "required": [
-                                "expectedRevision",
-                                "currentRevision"
-                              ]
-                            }
                           },
-                          "required": [
-                            "code",
-                            "message",
-                            "details"
-                          ]
+                          "minItems": 1,
+                          "maxItems": 150
                         }
                       },
                       "required": [
-                        "success",
-                        "error"
+                        "id",
+                        "name",
+                        "standardMapping",
+                        "values"
                       ]
                     },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "error"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
+                    "minItems": 1,
+                    "maxItems": 5
                   },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/products/{id}/variants/bulk-create": {
-      "post": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Bulk create variants",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
                   "variants": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
-                        "size": {
+                        "id": {
                           "type": "string",
-                          "nullable": true
+                          "minLength": 1
                         },
-                        "color": {
+                        "selectedOptionValueIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "minItems": 1,
+                          "maxItems": 5
+                        },
+                        "imageId": {
                           "type": "string",
-                          "nullable": true
-                        },
-                        "weight": {
-                          "type": "number",
                           "nullable": true,
-                          "minimum": 0
+                          "minLength": 1
                         },
                         "sku": {
                           "type": "string",
-                          "minLength": 3
+                          "minLength": 3,
+                          "maxLength": 100
                         },
                         "price": {
                           "type": "number",
@@ -101455,6 +100817,11 @@
                         },
                         "trackInventory": {
                           "type": "boolean"
+                        },
+                        "weight": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0
                         },
                         "barcode": {
                           "type": "string",
@@ -101489,24 +100856,21 @@
                         "discountAmount": {
                           "type": "number",
                           "nullable": true,
-                          "minimum": 0
-                        },
-                        "colorSortOrder": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "sizeSortOrder": {
-                          "type": "number",
-                          "minimum": 0
+                          "minimum": 0,
+                          "maximum": 1000000000000
                         }
                       },
                       "required": [
-                        "size",
-                        "color",
-                        "weight",
+                        "id",
+                        "selectedOptionValueIds",
+                        "imageId",
                         "sku",
                         "price",
                         "stock",
+                        "trackInventory",
+                        "weight",
+                        "barcode",
+                        "barcodeType",
                         "discountType",
                         "discountPercentage",
                         "discountAmount"
@@ -101521,6 +100885,7 @@
                   }
                 },
                 "required": [
+                  "options",
                   "variants",
                   "expectedAggregateRevision"
                 ]
@@ -101529,1365 +100894,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Variants created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "variants": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "productId": {
-                                "type": "string"
-                              },
-                              "size": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "color": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "weight": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sku": {
-                                "type": "string"
-                              },
-                              "price": {
-                                "type": "number"
-                              },
-                              "stock": {
-                                "type": "number"
-                              },
-                              "reservedStock": {
-                                "type": "number"
-                              },
-                              "preorderStock": {
-                                "type": "number"
-                              },
-                              "isDefault": {
-                                "type": "boolean"
-                              },
-                              "trackInventory": {
-                                "type": "boolean"
-                              },
-                              "lowStockThreshold": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "allowPreorder": {
-                                "type": "boolean"
-                              },
-                              "preorderDate": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "preorderMessage": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "allowBackorder": {
-                                "type": "boolean"
-                              },
-                              "backorderLimit": {
-                                "type": "number"
-                              },
-                              "discountPercentage": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "discountAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "barcode": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "barcodeType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "colorSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "sizeSortOrder": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "updatedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
-                                ],
-                                "nullable": true
-                              },
-                              "stockVersion": {
-                                "type": "number"
-                              },
-                              "version": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "productId",
-                              "size",
-                              "color",
-                              "weight",
-                              "sku",
-                              "price",
-                              "stock",
-                              "reservedStock"
-                            ]
-                          }
-                        },
-                        "count": {
-                          "type": "number"
-                        },
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "variants",
-                        "count",
-                        "aggregateRevision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Product revision or domain conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "PRODUCT_REVISION_CONFLICT"
-                              ]
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "type": "object",
-                              "properties": {
-                                "expectedRevision": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "currentRevision": {
-                                  "type": "integer",
-                                  "nullable": true,
-                                  "minimum": 1
-                                }
-                              },
-                              "required": [
-                                "expectedRevision",
-                                "currentRevision"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message",
-                            "details"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "error"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/products/{id}/variants/bulk-delete": {
-      "post": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Bulk delete variants",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "variantIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "expectedAggregateRevision": {
-                    "type": "integer",
-                    "minimum": 1
-                  }
-                },
-                "required": [
-                  "variantIds",
-                  "expectedAggregateRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
           "200": {
-            "description": "Variants deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "aggregateRevision": {
-                          "type": "integer",
-                          "minimum": 1
-                        }
-                      },
-                      "required": [
-                        "aggregateRevision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Product revision or domain conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string",
-                              "enum": [
-                                "PRODUCT_REVISION_CONFLICT"
-                              ]
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "type": "object",
-                              "properties": {
-                                "expectedRevision": {
-                                  "type": "integer",
-                                  "minimum": 1
-                                },
-                                "currentRevision": {
-                                  "type": "integer",
-                                  "nullable": true,
-                                  "minimum": 1
-                                }
-                              },
-                              "required": [
-                                "expectedRevision",
-                                "currentRevision"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message",
-                            "details"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "error"
-                      ]
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [
-                            false
-                          ]
-                        },
-                        "error": {
-                          "type": "object",
-                          "properties": {
-                            "code": {
-                              "type": "string"
-                            },
-                            "message": {
-                              "type": "string"
-                            },
-                            "details": {
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "code",
-                            "message"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "success",
-                        "error"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      }
-    },
-    "/api/v1/admin/products/{id}/variants/sort-order": {
-      "get": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Get variant sort order",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sort order data",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "colors": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "type": "string"
-                              },
-                              "sortOrder": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "value",
-                              "sortOrder"
-                            ]
-                          }
-                        },
-                        "sizes": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "type": "string"
-                              },
-                              "sortOrder": {
-                                "type": "number"
-                              }
-                            },
-                            "required": [
-                              "value",
-                              "sortOrder"
-                            ]
-                          }
-                        }
-                      },
-                      "required": [
-                        "colors",
-                        "sizes"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Admin - Products"
-        ],
-        "summary": "Update variant sort order",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "colors": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "type": "string"
-                        },
-                        "sortOrder": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "value",
-                        "sortOrder"
-                      ]
-                    }
-                  },
-                  "sizes": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "type": "string"
-                        },
-                        "sortOrder": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "value",
-                        "sortOrder"
-                      ]
-                    }
-                  },
-                  "expectedAggregateRevision": {
-                    "type": "integer",
-                    "minimum": 1
-                  }
-                },
-                "required": [
-                  "colors",
-                  "sizes",
-                  "expectedAggregateRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Sort order updated",
+            "description": "Option matrix saved",
             "content": {
               "application/json": {
                 "schema": {

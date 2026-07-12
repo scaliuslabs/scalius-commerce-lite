@@ -255,8 +255,11 @@ describe("checkout cart freshness", () => {
           quantity: 2,
           price: 150,
           name: "Cotton Panjabi",
-          size: "M",
-          color: "Blue",
+          options: [
+            { name: "Fit", label: "M" },
+            { name: "Shade", label: "Blue" },
+            { name: "Sleeve", label: "Long" },
+          ],
         },
       }),
     });
@@ -269,7 +272,7 @@ describe("checkout cart freshness", () => {
         quantity: 2,
         price: 150,
         productName: "Cotton Panjabi",
-        variantLabel: "M / Blue",
+        variantLabel: "M / Blue / Long",
       },
     ]);
   });

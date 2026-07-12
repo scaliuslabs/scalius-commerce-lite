@@ -40,8 +40,7 @@ function createSchema(sqlite: DatabaseSync): void {
         CREATE TABLE product_variants (
             id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,
-            size TEXT,
-            color TEXT,
+            option_combination_key TEXT,
             stock INTEGER NOT NULL,
             reserved_stock INTEGER NOT NULL,
             is_default INTEGER NOT NULL,
@@ -69,10 +68,10 @@ function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
     `);
     const insertVariant = sqlite.prepare(`
         INSERT INTO product_variants (
-            id, product_id, size, color, stock, reserved_stock, is_default,
+            id, product_id, option_combination_key, stock, reserved_stock, is_default,
             track_inventory, price, discount_type, discount_percentage,
             discount_amount, deleted_at
-        ) VALUES (?, ?, NULL, NULL, 0, 0, 1, 0, 1200, NULL, NULL, NULL, NULL)
+        ) VALUES (?, ?, NULL, 0, 0, 1, 0, 1200, NULL, NULL, NULL, NULL)
     `);
 
     for (let index = 0; index < count; index += 1) {

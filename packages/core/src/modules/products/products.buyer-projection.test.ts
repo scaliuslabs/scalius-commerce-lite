@@ -52,8 +52,7 @@ describe("buyer catalog pricing projection", () => {
             CREATE TABLE product_variants (
                 id TEXT PRIMARY KEY,
                 product_id TEXT NOT NULL,
-                size TEXT,
-                color TEXT,
+                option_combination_key TEXT,
                 price REAL NOT NULL,
                 stock INTEGER NOT NULL,
                 reserved_stock INTEGER NOT NULL,
@@ -68,12 +67,12 @@ describe("buyer catalog pricing projection", () => {
                 ('p1', 'percentage', 10, 0),
                 ('p2', 'percentage', 10, 0);
             INSERT INTO product_variants VALUES
-                ('p1-hidden-default', 'p1', NULL, NULL, 1, 50, 0, 0, 1, NULL, 0, 0, NULL),
-                ('p1-cheapest-sold-out', 'p1', 'S', NULL, 40, 0, 0, 1, 0, NULL, 0, 0, NULL),
-                ('p1-available', 'p1', 'M', NULL, 150, 5, 0, 1, 0, 'flat', 0, 100, NULL),
-                ('p1-other-sold-out', 'p1', 'L', NULL, 100, 0, 0, 1, 0, NULL, 0, 0, NULL),
-                ('p2-lowest', 'p2', NULL, NULL, 20, 0, 0, 1, 1, NULL, 0, 0, NULL),
-                ('p2-other', 'p2', NULL, NULL, 30, 0, 0, 1, 0, NULL, 0, 0, NULL);
+                ('p1-hidden-default', 'p1', NULL, 1, 50, 0, 0, 1, NULL, 0, 0, NULL),
+                ('p1-cheapest-sold-out', 'p1', 'value_s', 40, 0, 0, 1, 0, NULL, 0, 0, NULL),
+                ('p1-available', 'p1', 'value_m', 150, 5, 0, 1, 0, 'flat', 0, 100, NULL),
+                ('p1-other-sold-out', 'p1', 'value_l', 100, 0, 0, 1, 0, NULL, 0, 0, NULL),
+                ('p2-lowest', 'p2', NULL, 20, 0, 0, 1, 1, NULL, 0, 0, NULL),
+                ('p2-other', 'p2', NULL, 30, 0, 0, 1, 0, NULL, 0, 0, NULL);
             ${query};
         `;
         const result = spawnSync("sqlite3", ["-json", ":memory:"], {
@@ -129,8 +128,7 @@ describe("buyer catalog pricing projection", () => {
             CREATE TABLE product_variants (
                 id TEXT PRIMARY KEY,
                 product_id TEXT NOT NULL,
-                size TEXT,
-                color TEXT,
+                option_combination_key TEXT,
                 price REAL NOT NULL,
                 stock INTEGER NOT NULL,
                 reserved_stock INTEGER NOT NULL,
@@ -143,10 +141,10 @@ describe("buyer catalog pricing projection", () => {
             );
             INSERT INTO products VALUES ('p_gap', NULL, 0, 0), ('p_match', NULL, 0, 0);
             INSERT INTO product_variants VALUES
-                ('gap-hidden-default', 'p_gap', NULL, NULL, 1, 1, 0, 0, 1, NULL, 0, 0, NULL),
-                ('gap-low', 'p_gap', 'S', NULL, 50, 1, 0, 1, 0, NULL, 0, 0, NULL),
-                ('gap-high', 'p_gap', 'M', NULL, 150, 1, 0, 1, 0, NULL, 0, 0, NULL),
-                ('match', 'p_match', NULL, NULL, 100, 1, 0, 1, 1, NULL, 0, 0, NULL);
+                ('gap-hidden-default', 'p_gap', NULL, 1, 1, 0, 0, 1, NULL, 0, 0, NULL),
+                ('gap-low', 'p_gap', 'value_s', 50, 1, 0, 1, 0, NULL, 0, 0, NULL),
+                ('gap-high', 'p_gap', 'value_m', 150, 1, 0, 1, 0, NULL, 0, 0, NULL),
+                ('match', 'p_match', NULL, 100, 1, 0, 1, 1, NULL, 0, 0, NULL);
             ${query};
         `;
         const result = spawnSync("sqlite3", ["-json", ":memory:"], {

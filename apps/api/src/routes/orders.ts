@@ -19,6 +19,7 @@ import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/cu
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
+import { variantOptionLabelSql } from "@scalius/core/modules/products/products.option-model";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getAllowedCountries, getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
@@ -594,8 +595,7 @@ const orderReceiptSchema = z.object({
     price: z.number(),
     productName: z.string().nullable(),
     productImage: z.string().nullable(),
-    variantSize: z.string().nullable(),
-    variantColor: z.string().nullable(),
+    variantLabel: z.string().nullable(),
     unitPriceMinor: z.number().int().nullable(),
     lineSubtotalMinor: z.number().int().nullable(),
     discountAmountMinor: z.number().int().nullable(),
@@ -851,8 +851,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           AND ${productImages.isPrimary} = 1
           LIMIT 1
         )`.as("productImage"),
-        variantSize: productVariants.size,
-        variantColor: productVariants.color,
+        variantLabel: variantOptionLabelSql(productVariants.id),
         unitPriceMinor: orderItems.unitPriceMinor,
         lineSubtotalMinor: orderItems.lineSubtotalMinor,
         discountAmountMinor: orderItems.discountAmountMinor,

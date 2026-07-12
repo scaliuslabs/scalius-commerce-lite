@@ -17,12 +17,8 @@ const mocks = vi.hoisted(() => ({
   createVariant: vi.fn(),
   updateVariant: vi.fn(),
   deleteVariant: vi.fn(),
-  bulkCreateVariants: vi.fn(),
-  applyVariantEditPlan: vi.fn(),
-  bulkDeleteVariants: vi.fn(),
   getProductVariants: vi.fn(),
-  getVariantSortOrder: vi.fn(),
-  updateVariantSortOrder: vi.fn(),
+  saveProductOptionMatrix: vi.fn(),
   invalidateCatalogCaches: vi.fn(),
 }));
 
@@ -43,13 +39,18 @@ vi.mock("@scalius/core/modules/products/products.variants", () => ({
   createVariant: mocks.createVariant,
   updateVariant: mocks.updateVariant,
   deleteVariant: mocks.deleteVariant,
-  bulkCreateVariants: mocks.bulkCreateVariants,
-  applyVariantEditPlan: mocks.applyVariantEditPlan,
-  bulkDeleteVariants: mocks.bulkDeleteVariants,
   getProductVariants: mocks.getProductVariants,
-  getVariantSortOrder: mocks.getVariantSortOrder,
-  updateVariantSortOrder: mocks.updateVariantSortOrder,
 }));
+
+vi.mock("@scalius/core/modules/products/products.option-matrix", async () => {
+  const actual = await vi.importActual<
+    typeof import("@scalius/core/modules/products/products.option-matrix")
+  >("@scalius/core/modules/products/products.option-matrix");
+  return {
+    ...actual,
+    saveProductOptionMatrix: mocks.saveProductOptionMatrix,
+  };
+});
 
 vi.mock("../../utils/cache-invalidation", async () => {
   const actual = await vi.importActual<typeof import("../../utils/cache-invalidation")>(
@@ -95,8 +96,8 @@ function createProductBody(overrides: Record<string, unknown> = {}) {
 
 function createVariantBody(overrides: Record<string, unknown> = {}) {
   return {
-    size: null,
-    color: null,
+    selectedOptionValueIds: ["pval_medium"],
+    imageId: null,
     weight: null,
     sku: "SKU-1",
     price: 1200,
@@ -151,14 +152,7 @@ function createTestApp() {
   mocks.createVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
   mocks.updateVariant.mockResolvedValue({ id: "var_1", aggregateRevision: 2 });
   mocks.deleteVariant.mockResolvedValue({ aggregateRevision: 2 });
-  mocks.bulkCreateVariants.mockResolvedValue({ variants: [{ id: "var_1" }], aggregateRevision: 2 });
-  mocks.applyVariantEditPlan.mockResolvedValue({
-    created: [{ id: "var_new" }],
-    updated: [{ id: "var_1" }],
-    aggregateRevision: 2,
-  });
-  mocks.bulkDeleteVariants.mockResolvedValue({ aggregateRevision: 2 });
-  mocks.updateVariantSortOrder.mockResolvedValue({ aggregateRevision: 2 });
+  mocks.saveProductOptionMatrix.mockResolvedValue({ aggregateRevision: 2 });
   mocks.invalidateCatalogCaches.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -264,44 +258,35 @@ describe("admin product cache invalidation", () => {
     { label: "update variant", path: "/prod_1/variants/var_1", method: "PUT", body: createVariantBody(), status: 200 },
     { label: "delete variant", path: "/prod_1/variants/var_1?expectedAggregateRevision=1", method: "DELETE", status: 200 },
     {
-      label: "bulk create variants",
-      path: "/prod_1/variants/bulk-create",
-      method: "POST",
+      label: "save normalized option matrix",
+      path: "/prod_1/options/matrix",
+      method: "PUT",
       body: {
         expectedAggregateRevision: 1,
+        options: [{
+          id: "popt_size",
+          name: "Size",
+          standardMapping: "size",
+          values: [{ id: "pval_medium", value: "Medium" }],
+        }],
         variants: [
           {
-            ...createVariantBody(),
+            id: "var_1",
+            selectedOptionValueIds: ["pval_medium"],
+            imageId: null,
+            weight: null,
+            sku: "SKU-1",
+            price: 1200,
+            stock: 10,
+            trackInventory: true,
+            barcode: null,
+            barcodeType: null,
             discountType: "percentage",
             discountPercentage: null,
             discountAmount: null,
           },
         ],
       },
-      status: 201,
-    },
-    {
-      label: "atomic variant edit plan",
-      path: "/prod_1/variants/edit-plan",
-      method: "POST",
-      body: {
-        expectedAggregateRevision: 1,
-        creates: [{
-          ...createVariantBody({ size: "M", sku: "SKU-NEW" }),
-          discountType: "percentage",
-          discountPercentage: null,
-          discountAmount: null,
-        }],
-        updates: [{ id: "var_1", price: 1300 }],
-      },
-      status: 200,
-    },
-    { label: "bulk delete variants", path: "/prod_1/variants/bulk-delete", method: "POST", body: { variantIds: ["var_1"], expectedAggregateRevision: 1 }, status: 200 },
-    {
-      label: "sort variants",
-      path: "/prod_1/variants/sort-order",
-      method: "POST",
-      body: { colors: [{ value: "red", sortOrder: 1 }], sizes: [], expectedAggregateRevision: 1 },
       status: 200,
     },
   ])("warms the parent product detail page after $label", async ({ path, method, body, status }) => {

@@ -85,12 +85,6 @@ export interface Product {
   excludeFromSitemap: boolean;
   excludeFromProductFeed: boolean;
   productCondition: "new" | "refurbished" | "used" | null;
-  variantOption1Label: string;
-  variantOption2Label: string;
-  variantOption1Schema: "size" | "color" | "material" | "pattern" | "none";
-  variantOption2Schema: "size" | "color" | "material" | "pattern" | "none";
-  variantImagesEnabled: boolean;
-  variantImageAxis: "option1" | "option2";
   aggregateRevision: number;
   createdAt: Date | string | number;
   updatedAt: Date | string | number;
@@ -151,8 +145,9 @@ export interface ProductAttribute {
 export interface ProductVariant {
   id: string;
   productId: string;
-  size: string | null;
-  color: string | null;
+  optionCombinationKey: string | null;
+  imageId: string | null;
+  selectedOptions: SelectedProductOption[];
   weight: number | null;
   sku: string | null;
   price: number | null;
@@ -173,6 +168,26 @@ export interface ProductVariant {
   deletedAt: Date | string | number | null;
 }
 
+export type ProductOptionStandardMapping = "size" | "color" | "material" | "pattern" | "none";
+
+export interface SelectedProductOption {
+  optionDefinitionId: string;
+  optionValueId: string;
+  name: string;
+  value: string;
+  position: number;
+  valuePosition: number;
+  standardMapping: ProductOptionStandardMapping;
+}
+
+export interface ProductOptionDefinition {
+  id: string;
+  name: string;
+  position: number;
+  standardMapping: ProductOptionStandardMapping;
+  values: Array<{ id: string; value: string; position: number }>;
+}
+
 export interface ProductImageDetail {
   id: string;
   productId: string;
@@ -188,16 +203,7 @@ export interface ProductDetail extends Product {
   category: { name: string | null };
   variants: ProductVariant[];
   images: ProductImageDetail[];
-  variantImageMappings: Array<{
-    id: string;
-    productId: string;
-    imageId: string;
-    variantId: string | null;
-    optionAxis: "option1" | "option2" | null;
-    optionValue: string | null;
-    normalizedOptionValue: string | null;
-    sortOrder: number;
-  }>;
+  options: ProductOptionDefinition[];
   attributes: Array<{ attributeId: string; value: string }>;
   additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
 }
@@ -310,8 +316,7 @@ export interface OrderItem {
   price: number;
   productName: string | null;
   productImage: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;

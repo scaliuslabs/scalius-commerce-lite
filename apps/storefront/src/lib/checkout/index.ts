@@ -22,6 +22,7 @@ import { writeCartRepairState } from "../cart/repair-state";
 import { getCheckoutStatusErrorMessage } from "./error-messages";
 import { fetchAuthoritativeTaxQuote } from "./tax-quote-client";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import { cartItemVariantLabel } from "../cart/item-options";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -136,8 +137,7 @@ type CheckoutCartLine = {
   quantity?: unknown;
   price?: unknown;
   name?: unknown;
-  size?: unknown;
-  color?: unknown;
+  options?: unknown;
 };
 
 function readNumber(value: unknown, fallback = 0): number {
@@ -145,10 +145,7 @@ function readNumber(value: unknown, fallback = 0): number {
 }
 
 function variantLabelForCheckoutLine(item: CheckoutCartLine): string | null {
-  const parts = [item.size, item.color]
-    .filter((part): part is string => typeof part === "string" && part.trim() !== "")
-    .map((part) => part.trim());
-  return parts.length > 0 ? parts.join(" / ") : null;
+  return cartItemVariantLabel(item.options);
 }
 
 export function checkoutCartValidationPayload(

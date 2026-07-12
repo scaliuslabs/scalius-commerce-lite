@@ -381,17 +381,9 @@ const legacySubtotal = order
                     <p class="font-medium">
                       {item.productName || "Product Unavailable"}
                     </p>
-                    {(item.variantSize || item.variantColor) && (
+                    {item.variantLabel && (
                       <p class="text-xs text-gray-500 mt-1">
-                        {item.variantSize && (
-                          <span>Size: {item.variantSize}</span>
-                        )}
-                        {item.variantSize && item.variantColor && (
-                          <span> • </span>
-                        )}
-                        {item.variantColor && (
-                          <span>Color: {item.variantColor}</span>
-                        )}
+                        {item.variantLabel}
                       </p>
                     )}
                     <p class="text-sm text-gray-600 mt-1">

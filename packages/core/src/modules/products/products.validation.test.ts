@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { createProductSchema, updateProductSchema } from "./products.validation";
 import {
-    bulkCreateVariantsSchema,
-    bulkDeleteVariantsSchema,
     createVariantSchema,
-    updateSortOrderSchema,
     updateVariantSchema,
-    variantEditPlanSchema,
 } from "./products.types";
 import {
-    DEFAULT_PRODUCT_OPTION_LABELS,
-    DEFAULT_PRODUCT_OPTION_SCHEMA,
+    createProductOptionMatrixSchema,
+    productOptionMatrixSchema,
+} from "./products.option-matrix";
+import {
     MAX_PRODUCT_OPTION_COMBINATIONS,
-} from "@scalius/shared/product-options";
+} from "./products.option-model";
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 
 const productInput = {
@@ -32,13 +30,6 @@ const productInput = {
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
     productCondition: DEFAULT_PRODUCT_CONDITION,
-    variantOption1Label: DEFAULT_PRODUCT_OPTION_LABELS.option1,
-    variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
-    variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
-    variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
-    variantImagesEnabled: false,
-    variantImageAxis: "option2" as const,
-    variantImageMappings: [],
     slug: "main-shoe",
     images: [],
     attributes: [],
@@ -86,10 +77,7 @@ describe("product validation", () => {
         expect(updateProductSchema.safeParse({ ...productInput, id: "prod_1" }).success).toBe(false);
         expect(createVariantSchema.safeParse({}).success).toBe(false);
         expect(updateVariantSchema.safeParse({}).success).toBe(false);
-        expect(bulkCreateVariantsSchema.safeParse({ variants: [] }).success).toBe(false);
-        expect(bulkDeleteVariantsSchema.safeParse({ variantIds: ["var_1"] }).success).toBe(false);
-        expect(variantEditPlanSchema.safeParse({ creates: [], updates: [{ id: "var_1", price: 1 }] }).success).toBe(false);
-        expect(updateSortOrderSchema.safeParse({ colors: [], sizes: [] }).success).toBe(false);
+        expect(productOptionMatrixSchema.safeParse({ options: [], variants: [] }).success).toBe(false);
 
         expect(updateProductSchema.safeParse({
             ...productInput,
@@ -98,19 +86,22 @@ describe("product validation", () => {
         }).success).toBe(true);
     });
 
-    it("requires explicit image configuration and rejects retired metadata markers", () => {
-        const { variantImagesEnabled: _enabled, ...withoutImageAuthority } = productInput;
-        expect(createProductSchema.safeParse(withoutImageAuthority).success).toBe(false);
+    it("rejects retired image metadata markers", () => {
         expect(createProductSchema.safeParse({
             ...productInput,
             metaDescription: "SEO<!--variant_images:option1-->",
         }).success).toBe(false);
     });
 
-    it("enforces the same bounded atomic option-create limit for both bulk paths", () => {
-        const variant = {
-            size: "M",
-            color: null,
+    it("enforces the bounded Cartesian limit for create and update matrices", () => {
+        const values = Array.from(
+            { length: MAX_PRODUCT_OPTION_COMBINATIONS + 1 },
+            (_, index) => ({ id: `value_${index}`, value: `Value ${index}` }),
+        );
+        const variants = values.map((value, index) => ({
+            id: `variant_${index}`,
+            selectedOptionValueIds: [value.id],
+            imageId: null,
             weight: null,
             sku: "SKU-M",
             price: 100,
@@ -121,29 +112,20 @@ describe("product validation", () => {
             discountType: "percentage" as const,
             discountPercentage: null,
             discountAmount: null,
+        }));
+        const matrix = {
+            options: [{
+                id: "option_finish",
+                name: "Finish",
+                standardMapping: "none" as const,
+                values,
+            }],
+            variants: variants.map((variant, index) => ({ ...variant, sku: `SKU-${index}` })),
         };
-        const variants = Array.from(
-            { length: MAX_PRODUCT_OPTION_COMBINATIONS + 1 },
-            (_, index) => ({ ...variant, size: `Size ${index}`, sku: `SKU-${index}` }),
-        );
 
-        expect(bulkCreateVariantsSchema.safeParse({
-            variants,
-            expectedAggregateRevision: 1,
-        }).success).toBe(false);
-        expect(variantEditPlanSchema.safeParse({
-            creates: variants,
-            updates: [],
-            expectedAggregateRevision: 1,
-        }).success).toBe(false);
-
-        const half = Math.ceil(MAX_PRODUCT_OPTION_COMBINATIONS / 2);
-        expect(variantEditPlanSchema.safeParse({
-            creates: variants.slice(0, half),
-            updates: variants.slice(0, MAX_PRODUCT_OPTION_COMBINATIONS - half + 1).map((_, index) => ({
-                id: `var_${index}`,
-                price: index + 1,
-            })),
+        expect(createProductOptionMatrixSchema.safeParse(matrix).success).toBe(false);
+        expect(productOptionMatrixSchema.safeParse({
+            ...matrix,
             expectedAggregateRevision: 1,
         }).success).toBe(false);
     });

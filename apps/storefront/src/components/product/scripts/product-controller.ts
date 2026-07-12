@@ -1,5 +1,3 @@
-// src/components/product/scripts/product-controller.ts
-
 import { addToCart, type CartItemOption } from "@/store/cart";
 import {
   calculateVariantPrice,
@@ -11,880 +9,345 @@ import {
   type DiscountType,
 } from "../lib/pricing-engine";
 import {
-  createVariantIndex,
-  createInitialState,
-  createSelectionState,
-  applyAction,
+  createInitialSelection,
   filterVariantsBySelection,
-  validateSelection,
+  getVariantOptionAvailabilityMap,
+  loadOptionsFromDOM,
   loadVariantsFromDOM,
-  resolveExactAvailableVariantSelection,
+  reconcileSelectionForValue,
   resolveExactVariantSelection,
   shouldShowStartingVariantPrice,
-  type VariantOptionAvailability,
-  type VariantSelectionState,
+  validateSelection,
   type Variant,
-  type VariantIndex,
+  type VariantSelection,
+  type VariantOptionAvailability,
 } from "../lib/variant-state-machine";
-import {
-  validateQuantity,
-  validateAddToCart,
-  clampQuantity,
-} from "../lib/product-validation";
+import { validateQuantity, validateAddToCart, clampQuantity } from "../lib/product-validation";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
-import {
-  trackProductAddToCart,
-  extractProductDataFromDOM,
-  convertVariantToAnalyticsData,
-} from "../lib/product-analytics";
+import { trackProductAddToCart, extractProductDataFromDOM, convertVariantToAnalyticsData } from "../lib/product-analytics";
 import { TOAST_CONFIG } from "../config";
-import { resolveVariantImageId } from "@/lib/variant-image-mapping";
+import type { ProductOptionDefinition } from "@/lib/api";
+
 const state = {
   variants: [] as Variant[],
-  variantIndex: null as VariantIndex | null,
-  selection: null as VariantSelectionState | null,
+  options: [] as ProductOptionDefinition[],
+  selection: {} as VariantSelection,
   productPricing: null as ProductPricing | null,
-  isVariantImagesEnabled: false,
-  variantImageAxis: "option2" as "option1" | "option2",
   currentDisplayedImage: "",
   unavailableRequestedVariant: null as Variant | null,
 };
 
 const cache = {
   container: null as HTMLElement | null,
-  mobileMainImage: null as HTMLImageElement | null,
-  quantityInput: null as HTMLInputElement | null,
-  actionsContainer: null as HTMLElement | null,
-  sizeButtons: [] as HTMLButtonElement[],
-  colorButtons: [] as HTMLButtonElement[],
-  variantAvailabilityStatus: null as HTMLElement | null,
-  unavailableQueryNotice: null as HTMLElement | null,
+  actions: null as HTMLElement | null,
+  quantity: null as HTMLInputElement | null,
+  optionButtons: [] as HTMLButtonElement[],
+  status: null as HTMLElement | null,
+  unavailableNotice: null as HTMLElement | null,
   stockBadge: null as HTMLElement | null,
   stockText: null as HTMLElement | null,
-  addToCartButton: null as HTMLButtonElement | null,
-  buyNowButton: null as HTMLButtonElement | null,
-  addToCartLabel: null as HTMLElement | null,
-  buyNowLabel: null as HTMLElement | null,
+  addButton: null as HTMLButtonElement | null,
+  buyButton: null as HTMLButtonElement | null,
+  addLabel: null as HTMLElement | null,
+  buyLabel: null as HTMLElement | null,
   thumbnails: [] as HTMLElement[],
   priceElements: [] as HTMLElement[],
   originalPriceElements: [] as HTMLElement[],
   discountBadge: null as HTMLElement | null,
-};
-
-type ProductImageChangeDetail = {
-  url?: string;
+  mobileMainImage: null as HTMLImageElement | null,
 };
 
 function parseDiscountType(value?: string): DiscountType {
   return value === "percentage" || value === "flat" ? value : null;
 }
 
-function parseDecimal(value: string | undefined): number {
+function number(value?: string) {
   const parsed = Number.parseFloat(value ?? "");
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function init() {
+export function init() {
   cache.container = document.getElementById("product-container");
   if (!cache.container) return;
-
-  cache.mobileMainImage = document.getElementById(
-    "mobile-main-image",
-  ) as HTMLImageElement;
-  cache.quantityInput = document.getElementById("quantity") as HTMLInputElement;
-  cache.actionsContainer = document.getElementById("product-actions");
-
-  cache.sizeButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(".size-btn"),
-  );
-  cache.colorButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>(".color-btn"),
-  );
-  cache.variantAvailabilityStatus = document.getElementById(
-    "variant-availability-status",
-  );
-  cache.unavailableQueryNotice = document.getElementById(
-    "variant-unavailable-query-notice",
-  );
+  cache.actions = document.getElementById("product-actions");
+  cache.quantity = document.getElementById("quantity") as HTMLInputElement | null;
+  cache.optionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".variant-option-btn"));
+  cache.status = document.getElementById("variant-availability-status");
+  cache.unavailableNotice = document.getElementById("variant-unavailable-query-notice");
   cache.stockBadge = document.getElementById("product-stock-badge");
   cache.stockText = document.getElementById("product-stock-text");
-  cache.addToCartButton = document.querySelector<HTMLButtonElement>(
-    '[data-action="add-to-cart"]',
-  );
-  cache.buyNowButton = document.querySelector<HTMLButtonElement>(
-    '[data-action="buy-now"]',
-  );
-  cache.addToCartLabel = document.querySelector(
-    '[data-action-label="add-to-cart"]',
-  );
-  cache.buyNowLabel = document.querySelector('[data-action-label="buy-now"]');
+  cache.addButton = document.querySelector('[data-action="add-to-cart"]');
+  cache.buyButton = document.querySelector('[data-action="buy-now"]');
+  cache.addLabel = document.querySelector('[data-action-label="add-to-cart"]');
+  cache.buyLabel = document.querySelector('[data-action-label="buy-now"]');
   cache.thumbnails = Array.from(document.querySelectorAll(".thumbnail-btn"));
   cache.priceElements = Array.from(document.querySelectorAll(".product-price"));
-  cache.originalPriceElements = Array.from(
-    document.querySelectorAll(".product-original-price"),
-  );
+  cache.originalPriceElements = Array.from(document.querySelectorAll(".product-original-price"));
   cache.discountBadge = document.querySelector(".discount-badge");
+  cache.mobileMainImage = document.getElementById("mobile-main-image") as HTMLImageElement | null;
 
-  initImageStateSync();
-  initQuantityControls();
-  initVariantSystem();
-  initActionButtons();
+  state.variants = loadVariantsFromDOM();
+  state.options = loadOptionsFromDOM();
+  state.currentDisplayedImage = cache.container.dataset.productImage || "";
+  state.productPricing = {
+    basePrice: number(cache.container.dataset.productOriginalPrice),
+    discountType: parseDiscountType(cache.container.dataset.productDiscountType),
+    discountPercentage: number(cache.container.dataset.productDiscountPercentage) || null,
+    discountAmount: number(cache.container.dataset.productDiscountAmount) || null,
+    currencyDecimalPlaces: Math.min(6, Math.max(0, Number.parseInt(cache.container.dataset.currencyDecimalPlaces || "2", 10) || 2)),
+  };
+
+  const requestedId = new URLSearchParams(window.location.search).get("variant");
+  const requested = requestedId ? resolveExactVariantSelection(state.variants, { variantId: requestedId }) : null;
+  state.unavailableRequestedVariant = requested && !getBuyerStockSummary([requested.variant]).canPurchaseAny ? requested.variant : null;
+  state.selection = state.unavailableRequestedVariant
+    ? {}
+    : requested?.selection ?? createInitialSelection(state.options, state.variants);
+
+  initImageSync();
+  initQuantity();
+  bindOptions();
+  bindActions();
+  refresh();
 }
 
-// Keep controller state in sync with gallery/zoom changes
-function initImageStateSync() {
-  window.addEventListener("product-image-change", ((
-    e: CustomEvent<ProductImageChangeDetail>,
-  ) => {
-    const url = e.detail?.url;
-    if (typeof url === "string" && url) {
-      state.currentDisplayedImage = url;
-    }
+function initImageSync() {
+  window.addEventListener("product-image-change", ((event: CustomEvent<{ url?: string }>) => {
+    if (event.detail?.url) state.currentDisplayedImage = event.detail.url;
   }) as EventListener);
 }
-function switchImage(url: string) {
-  if (state.currentDisplayedImage === url) return;
-  state.currentDisplayedImage = url;
 
-  window.dispatchEvent(
-    new CustomEvent("product-image-change", {
-      detail: { url: url },
-    }),
-  );
-
-  if (cache.mobileMainImage) {
-    requestAnimationFrame(() => {
-      if (cache.mobileMainImage) {
-        cache.mobileMainImage.removeAttribute("srcset");
-        cache.mobileMainImage.removeAttribute("sizes");
-        cache.mobileMainImage.src = url;
-      }
-    });
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("controller-image-update", {
-      detail: { url: url },
-    }),
-  );
-}
-function initQuantityControls() {
+function initQuantity() {
   const minus = document.getElementById("quantity-minus");
   const plus = document.getElementById("quantity-plus");
-  const input = cache.quantityInput;
-
-  if (!minus || !plus || !input) return;
-
+  if (!minus || !plus || !cache.quantity) return;
   const update = (delta: number) => {
-    const current = parseInt(input.value) || 1;
-    input.value = clampQuantity(current + delta).toString();
+    cache.quantity!.value = clampQuantity((Number.parseInt(cache.quantity!.value, 10) || 1) + delta).toString();
   };
-
-  minus.onclick = () => update(-1);
-  plus.onclick = () => update(1);
-  input.onchange = () => {
-    input.value = validateQuantity(input.value).value.toString();
-  };
-}
-function initVariantSystem() {
-  state.variants = loadVariantsFromDOM();
-  state.variantIndex = createVariantIndex(state.variants);
-  state.isVariantImagesEnabled = !!document.querySelector(
-    'meta[name="variant-images-enabled"]',
-  );
-  state.variantImageAxis =
-    document
-      .querySelector('meta[name="variant-images-axis"]')
-      ?.getAttribute("content") === "option1"
-      ? "option1"
-      : "option2";
-  state.currentDisplayedImage = cache.container?.dataset.productImage || "";
-
-  state.productPricing = {
-    basePrice: parseDecimal(cache.container?.dataset.productOriginalPrice),
-    discountType: parseDiscountType(
-      cache.container?.dataset.productDiscountType,
-    ),
-    discountPercentage:
-      parseDecimal(cache.container?.dataset.productDiscountPercentage) || null,
-    discountAmount:
-      parseDecimal(cache.container?.dataset.productDiscountAmount) || null,
-    currencyDecimalPlaces: (() => {
-      const value = Number.parseInt(
-        cache.container?.dataset.currencyDecimalPlaces || "2",
-        10,
-      );
-      return Number.isInteger(value) && value >= 0 && value <= 6 ? value : 2;
-    })(),
-  };
-
-  if (!state.variantIndex) return;
-  const initialSelection = createInitialState(state.variantIndex);
-
-  const params = new URLSearchParams(window.location.search);
-  const urlSize = params.get("size");
-  const urlColor = params.get("color");
-  const requestedQuerySelection = resolveExactVariantSelection(state.variants, {
-    selectedSize: urlSize,
-    selectedColor: urlColor,
+  minus.addEventListener("click", () => update(-1));
+  plus.addEventListener("click", () => update(1));
+  cache.quantity.addEventListener("change", () => {
+    cache.quantity!.value = validateQuantity(cache.quantity!.value).value.toString();
   });
-  const querySelection = resolveExactAvailableVariantSelection(state.variants, {
-    selectedSize: urlSize,
-    selectedColor: urlColor,
+}
+
+function bindOptions() {
+  const order = state.options.map((option) => option.id);
+  cache.optionButtons.forEach((button, _index, buttons) => {
+    const definitionId = button.dataset.optionDefinitionId;
+    const valueId = button.dataset.optionValueId;
+    if (!definitionId || !valueId) return;
+    const choose = () => {
+      state.unavailableRequestedVariant = null;
+      if (state.selection[definitionId] === valueId) delete state.selection[definitionId];
+      else state.selection = reconcileSelectionForValue(state.variants, definitionId, valueId, state.selection, order);
+      if (cache.status) cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
+      refresh();
+      replaceVariantUrl();
+    };
+    button.addEventListener("click", choose);
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        choose();
+        return;
+      }
+      const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+      if (!direction) return;
+      const siblings = buttons.filter((candidate) => candidate.dataset.optionDefinitionId === definitionId);
+      const current = siblings.indexOf(button);
+      for (let offset = 1; offset < siblings.length; offset += 1) {
+        const next = siblings[(current + direction * offset + siblings.length) % siblings.length];
+        if (next && !next.disabled) { event.preventDefault(); next.focus(); break; }
+      }
+    });
   });
-  state.unavailableRequestedVariant =
-    requestedQuerySelection && !querySelection
-      ? requestedQuerySelection.variant
-      : null;
-
-  state.selection = state.unavailableRequestedVariant
-    ? createSelectionState(state.variantIndex, {})
-    : querySelection
-      ? createSelectionState(state.variantIndex, querySelection)
-      : initialSelection;
-
-  if ((urlSize || urlColor) && !querySelection) {
-    replaceVariantUrl(false);
-  }
-
-  bindVariantOptionButtons("size", cache.sizeButtons);
-  bindVariantOptionButtons("color", cache.colorButtons);
-
-  refreshUI();
 }
 
-function handleVariantSelection(
-  type: "size" | "color",
-  value: string,
-  updateHistory = true,
-  mode: "select" | "toggle" = "toggle",
-) {
-  if (!state.selection || !state.variantIndex) return;
-
-  state.unavailableRequestedVariant = null;
-  const previousSelection = state.selection;
-  const availability =
-    type === "size"
-      ? previousSelection.sizeOptionAvailability.get(value)
-      : previousSelection.colorOptionAvailability.get(value);
-  const actionType =
-    type === "size"
-      ? mode === "toggle"
-        ? "TOGGLE_SIZE"
-        : "SELECT_SIZE"
-      : mode === "toggle"
-        ? "TOGGLE_COLOR"
-        : "SELECT_COLOR";
-  state.selection = applyAction(
-    state.selection,
-    { type: actionType, value },
-    state.variantIndex,
-  );
-
-  announceVariantSelectionChange(
-    type,
-    value,
-    previousSelection,
-    state.selection,
-    availability,
-  );
-
-  refreshUI();
-
-  if (updateHistory) replaceVariantUrl(true);
+function bindActions() {
+  cache.actions?.addEventListener("click", (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-action="add-to-cart"]')) add(false);
+    if (target.closest('[data-action="buy-now"]')) add(true);
+  });
 }
 
-function replaceVariantUrl(includeSelection: boolean): void {
-  if (typeof history === "undefined") return;
+function replaceVariantUrl() {
   const url = new URL(window.location.href);
+  const exact = resolveExactVariantSelection(state.variants, state.selection)?.variant;
+  if (exact) url.searchParams.set("variant", exact.id);
+  else url.searchParams.delete("variant");
   url.searchParams.delete("size");
   url.searchParams.delete("color");
-  if (includeSelection && state.selection?.selectedSize) {
-    url.searchParams.set("size", state.selection.selectedSize);
-  }
-  if (includeSelection && state.selection?.selectedColor) {
-    url.searchParams.set("color", state.selection.selectedColor);
-  }
   history.replaceState(null, "", url.toString());
 }
 
-function bindVariantOptionButtons(
-  axis: "size" | "color",
-  buttons: HTMLButtonElement[],
-): void {
-  buttons.forEach((button, index) => {
-    const value = axis === "size" ? button.dataset.size : button.dataset.color;
-    if (!value) return;
-
-    button.addEventListener("click", () => {
-      handleVariantSelection(axis, value);
-    });
-    button.addEventListener("keydown", (event) => {
-      if (event.repeat) return;
-
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handleVariantSelection(axis, value);
-        return;
-      }
-
-      const direction =
-        event.key === "ArrowRight" || event.key === "ArrowDown"
-          ? 1
-          : event.key === "ArrowLeft" || event.key === "ArrowUp"
-            ? -1
-            : 0;
-      if (!direction || buttons.length < 2) return;
-
-      event.preventDefault();
-      for (let offset = 1; offset < buttons.length; offset += 1) {
-        const candidate =
-          buttons[
-            (index + direction * offset + buttons.length) % buttons.length
-          ];
-        if (!candidate || candidate.disabled) continue;
-        const candidateValue =
-          axis === "size" ? candidate.dataset.size : candidate.dataset.color;
-        if (!candidateValue) continue;
-        candidate.focus();
-        handleVariantSelection(axis, candidateValue, true, "select");
-        return;
-      }
-    });
-  });
-}
-
-function announceVariantSelectionChange(
-  axis: "size" | "color",
-  value: string,
-  previous: VariantSelectionState,
-  next: VariantSelectionState,
-  availability: VariantOptionAvailability | undefined,
-): void {
-  const status = cache.variantAvailabilityStatus;
-  if (!status) return;
-
-  const axisLabel = optionName(axis === "size" ? "option1" : "option2");
-  const opposingLabel = optionName(axis === "size" ? "option2" : "option1");
-  const wasSelected =
-    axis === "size"
-      ? previous.selectedSize === value
-      : previous.selectedColor === value;
-  const isSelected =
-    axis === "size"
-      ? next.selectedSize === value
-      : next.selectedColor === value;
-  const opposingWasCleared =
-    axis === "size"
-      ? Boolean(previous.selectedColor && !next.selectedColor)
-      : Boolean(previous.selectedSize && !next.selectedSize);
-
-  if (wasSelected && !isSelected) {
-    status.textContent = `${axisLabel} ${value} cleared.`;
-    return;
-  }
-  if (availability === "incompatible" && opposingWasCleared) {
-    status.textContent = `${axisLabel} ${value} selected. ${opposingLabel} selection cleared because that combination is unavailable.`;
-    return;
-  }
-  status.textContent = `${axisLabel} ${value} selected.`;
-}
-
-function refreshUI() {
+function refresh() {
   requestAnimationFrame(() => {
-    updateVariantButtons();
+    updateOptionButtons();
     updateStockAndActions();
-    updatePriceDisplay();
-
-    if (state.isVariantImagesEnabled) {
-      updateVariantImage();
-    }
+    updatePrice();
+    updateVariantImage();
   });
 }
 
-function updateStockAndActions(): void {
-  const exactVariant =
-    state.unavailableRequestedVariant ??
-    state.selection?.selectedVariant ??
-    null;
-  const hasPartialSelection = Boolean(
-    state.selection?.selectedSize || state.selection?.selectedColor,
-  );
-  const stockVariants = exactVariant
-    ? [exactVariant]
-    : hasPartialSelection && state.selection
-      ? filterVariantsBySelection(state.variants, state.selection)
-      : state.variants;
-  const stockSummary = getBuyerStockSummary(stockVariants);
-  const unavailable = !stockSummary.canPurchaseAny;
-  const exactAddToCartAvailable = Boolean(
-    !state.unavailableRequestedVariant &&
-      state.selection?.selectedVariant &&
-      getBuyerStockSummary([state.selection.selectedVariant]).canPurchaseAny,
-  );
+const OPTION_CLASSES = ["bg-black", "text-white", "border-black", "bg-muted", "border-dashed", "border-muted-foreground", "opacity-50", "line-through", "cursor-not-allowed"];
 
-  cache.unavailableQueryNotice?.classList.toggle(
-    "hidden",
-    !state.unavailableRequestedVariant,
-  );
-
-  if (cache.stockBadge) {
-    cache.stockBadge.classList.remove(
-      "text-primary",
-      "bg-primary/10",
-      "text-destructive",
-      "bg-destructive/10",
-    );
-    cache.stockBadge.classList.add(
-      stockSummary.tone === "available" ? "text-primary" : "text-destructive",
-      stockSummary.tone === "available" ? "bg-primary/10" : "bg-destructive/10",
-    );
-    cache.stockBadge.dataset.stockTone = stockSummary.tone;
+function updateOptionButtons() {
+  for (const option of state.options) {
+    const availability = getVariantOptionAvailabilityMap(state.variants, option.id, option.values.map((value) => value.id), state.selection);
+    for (const button of cache.optionButtons.filter((candidate) => candidate.dataset.optionDefinitionId === option.id)) {
+      const valueId = button.dataset.optionValueId!;
+      const status = availability.get(valueId) ?? "sold_out";
+      const selected = state.selection[option.id] === valueId;
+      button.classList.remove(...OPTION_CLASSES);
+      button.classList.add("bg-background", "text-foreground", "border-input");
+      if (selected && status !== "sold_out") {
+        button.classList.remove("bg-background", "text-foreground", "border-input");
+        button.classList.add("bg-black", "text-white", "border-black");
+      } else if (status === "incompatible") {
+        button.classList.remove("bg-background", "border-input");
+        button.classList.add("bg-muted", "border-dashed", "border-muted-foreground");
+      } else if (status === "sold_out") {
+        button.classList.add("opacity-50", "line-through", "cursor-not-allowed");
+      }
+      button.disabled = status === "sold_out";
+      button.dataset.optionAvailability = status;
+      button.setAttribute("aria-pressed", String(selected));
+      button.setAttribute("aria-label", optionButtonLabel(option.name, button.dataset.optionValue || "", status, selected));
+    }
   }
-  if (cache.stockText) cache.stockText.textContent = stockSummary.text;
-
-  updatePurchaseButton(
-    cache.addToCartButton,
-    cache.addToCartLabel,
-    !exactAddToCartAvailable,
-    "Add to Cart",
-    exactAddToCartAvailable ? addToCartAccessibleName() : "Add to cart",
-  );
-  updatePurchaseButton(
-    cache.buyNowButton,
-    cache.buyNowLabel,
-    unavailable,
-    "Buy Now",
-    "Buy now",
-  );
 }
 
-function addToCartAccessibleName(): string {
-  const productName = cache.container?.dataset.productName?.trim() || "product";
-  return `Add ${productName} to cart`;
+function optionButtonLabel(name: string, value: string, status: VariantOptionAvailability, selected: boolean) {
+  if (status === "sold_out") return `${name}: ${value}. Out of stock.`;
+  if (status === "incompatible") return `${name}: ${value}. Not available with the current selection.`;
+  if (selected) return `${name}: ${value}. Selected; activate again to clear.`;
+  return `${name}: ${value}`;
 }
 
-function updatePurchaseButton(
-  button: HTMLButtonElement | null,
-  label: HTMLElement | null,
-  unavailable: boolean,
-  availableText: string,
-  availableAriaLabel: string,
-): void {
+function exactVariant() {
+  return resolveExactVariantSelection(state.variants, state.selection)?.variant ?? null;
+}
+
+function updateStockAndActions() {
+  const exact = state.unavailableRequestedVariant ?? exactVariant();
+  const candidates = exact ? [exact] : Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants;
+  const summary = getBuyerStockSummary(candidates);
+  const exactAvailable = Boolean(!state.unavailableRequestedVariant && exact && getBuyerStockSummary([exact]).canPurchaseAny);
+  cache.unavailableNotice?.classList.toggle("hidden", !state.unavailableRequestedVariant);
+  if (cache.stockBadge) {
+    cache.stockBadge.classList.remove("text-primary", "bg-primary/10", "text-destructive", "bg-destructive/10");
+    cache.stockBadge.classList.add(summary.tone === "available" ? "text-primary" : "text-destructive", summary.tone === "available" ? "bg-primary/10" : "bg-destructive/10");
+  }
+  if (cache.stockText) cache.stockText.textContent = summary.text;
+  setButton(cache.addButton, cache.addLabel, !exactAvailable, exactAvailable ? "Add to Cart" : "Select Options");
+  setButton(cache.buyButton, cache.buyLabel, !summary.canPurchaseAny, summary.canPurchaseAny ? "Buy Now" : "Unavailable");
+}
+
+function setButton(button: HTMLButtonElement | null, label: HTMLElement | null, disabled: boolean, text: string) {
   if (!button) return;
-  button.disabled = unavailable;
-  button.setAttribute(
-    "aria-label",
-    unavailable ? "Product unavailable" : availableAriaLabel,
-  );
-  if (label) label.textContent = unavailable ? "Unavailable" : availableText;
+  button.disabled = disabled;
+  if (label) label.textContent = text;
 }
 
-function updateVariantButtons() {
-  if (!state.selection) return;
-
-  updateOptionButtonGroup(
-    "size",
-    cache.sizeButtons,
-    state.selection.selectedSize,
-    state.selection.sizeOptionAvailability,
-  );
-  updateOptionButtonGroup(
-    "color",
-    cache.colorButtons,
-    state.selection.selectedColor,
-    state.selection.colorOptionAvailability,
-  );
-}
-
-const OPTION_STATE_CLASSES = [
-  "bg-black",
-  "text-white",
-  "border-black",
-  "bg-muted/50",
-  "bg-muted",
-  "text-muted-foreground",
-  "border-dashed",
-  "border-muted-foreground/40",
-  "border-muted-foreground",
-  "opacity-50",
-  "line-through",
-  "cursor-not-allowed",
-  "pointer-events-none",
-  "bg-white",
-  "text-gray-900",
-] as const;
-
-function updateOptionButtonGroup(
-  axis: "size" | "color",
-  buttons: HTMLButtonElement[],
-  selectedValue: string | undefined,
-  availabilityByValue: Map<string, VariantOptionAvailability>,
-): void {
-  const axisLabel = optionName(axis === "size" ? "option1" : "option2");
-  const opposingLabel = optionName(axis === "size" ? "option2" : "option1");
-  const opposingValue =
-    axis === "size"
-      ? state.selection?.selectedColor
-      : state.selection?.selectedSize;
-
-  for (const button of buttons) {
-    const value = axis === "size" ? button.dataset.size : button.dataset.color;
-    if (!value) continue;
-
-    const isSelected = selectedValue === value;
-    const availability = availabilityByValue.get(value) ?? "sold_out";
-    const isSoldOut = availability === "sold_out";
-    const isIncompatible = availability === "incompatible";
-
-    button.disabled = isSoldOut;
-    button.setAttribute("aria-pressed", String(isSelected));
-    button.dataset.optionAvailability = availability;
-    button.classList.remove(...OPTION_STATE_CLASSES);
-    button.classList.add("bg-background", "text-foreground", "border-input");
-
-    let accessibleStatus = "";
-    if (isSoldOut) {
-      button.classList.add("opacity-50", "line-through", "cursor-not-allowed");
-      accessibleStatus = ". Out of stock.";
-    } else if (isSelected) {
-      button.classList.remove(
-        "bg-background",
-        "text-foreground",
-        "border-input",
-      );
-      button.classList.add("bg-black", "text-white", "border-black");
-      accessibleStatus = ". Selected; activate again to clear.";
-    } else if (isIncompatible) {
-      button.classList.remove(
-        "bg-background",
-        "text-foreground",
-        "border-input",
-      );
-      button.classList.add(
-        "bg-muted",
-        "text-foreground",
-        "border-dashed",
-        "border-muted-foreground",
-      );
-      accessibleStatus = opposingValue
-        ? `. Not available with ${opposingLabel} ${opposingValue}; selecting it clears ${opposingLabel}.`
-        : ". Not available with the current selection.";
-    }
-
-    button.setAttribute(
-      "aria-label",
-      `${axisLabel}: ${value}${accessibleStatus}`,
-    );
-    if (accessibleStatus) {
-      button.title = accessibleStatus.trim();
-    } else {
-      button.removeAttribute("title");
-    }
+function updatePrice() {
+  if (!state.productPricing) return;
+  const exact = state.unavailableRequestedVariant ?? exactVariant();
+  const starting = shouldShowStartingVariantPrice(state.options.length > 0, exact);
+  if (starting) {
+    const candidates = Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants;
+    const price = getBuyerVariantPricePresentation(state.productPricing, candidates).pricing.finalPrice;
+    cache.priceElements.forEach((element) => element.textContent = `From ${formatPrice(price, undefined, state.productPricing!.currencyDecimalPlaces)}`);
+    cache.originalPriceElements.forEach((element) => element.classList.add("hidden"));
+    cache.discountBadge?.classList.add("hidden");
+    return;
+  }
+  const variantPricing: VariantPricing | null = exact ? {
+    price: exact.price,
+    discountType: exact.discountType,
+    discountPercentage: exact.discountPercentage,
+    discountAmount: exact.discountAmount,
+  } : null;
+  const pricing = calculateVariantPrice(state.productPricing, variantPricing);
+  cache.priceElements.forEach((element) => element.textContent = formatPrice(pricing.finalPrice, undefined, state.productPricing!.currencyDecimalPlaces));
+  cache.originalPriceElements.forEach((element) => {
+    element.textContent = formatPrice(pricing.originalPrice, undefined, state.productPricing!.currencyDecimalPlaces);
+    element.classList.toggle("hidden", !pricing.hasDiscount);
+  });
+  const badge = formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount);
+  if (cache.discountBadge) {
+    cache.discountBadge.textContent = badge ?? "";
+    cache.discountBadge.classList.toggle("hidden", !badge);
   }
 }
 
 function updateVariantImage() {
-  const selectedOptionValue =
-    state.variantImageAxis === "option1"
-      ? state.selection?.selectedSize
-      : state.selection?.selectedColor;
-  const thumbnailByImageId = new Map<string, HTMLElement>();
-  cache.thumbnails.forEach((thumbnail) => {
-    const imageId = thumbnail.dataset.imageId;
-    if (imageId && !thumbnailByImageId.has(imageId)) {
-      thumbnailByImageId.set(imageId, thumbnail);
-    }
+  const exact = exactVariant();
+  const targetId = exact?.imageId ?? null;
+  const target = targetId
+    ? cache.thumbnails.find((thumbnail) => thumbnail.dataset.imageId === targetId)
+    : cache.thumbnails.find((thumbnail) => thumbnail.dataset.imagePrimary === "true") ?? cache.thumbnails[0];
+  const url = target?.dataset.imageUrl;
+  if (!url || url === state.currentDisplayedImage) return;
+  state.currentDisplayedImage = url;
+  window.dispatchEvent(new CustomEvent("product-image-change", { detail: { url } }));
+  if (cache.mobileMainImage) {
+    cache.mobileMainImage.removeAttribute("srcset");
+    cache.mobileMainImage.removeAttribute("sizes");
+    cache.mobileMainImage.src = url;
+  }
+  window.dispatchEvent(new CustomEvent("controller-image-update", { detail: { url } }));
+}
+
+function selectedCartOptions(variant: Variant): CartItemOption[] {
+  return variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
+}
+
+function add(redirect: boolean) {
+  if (!cache.container || !state.productPricing) return;
+  if (state.unavailableRequestedVariant) return showToast("The requested option is out of stock. Choose another option.", "error");
+  const validation = validateSelection(state.selection, state.options, state.variants);
+  if (!validation.valid || !validation.variant) return showToast(validation.error || "Please select options", "error");
+  const quantity = Number.parseInt(cache.quantity?.value || "1", 10);
+  const pricing = calculateVariantPrice(state.productPricing, {
+    price: validation.variant.price,
+    discountType: validation.variant.discountType,
+    discountPercentage: validation.variant.discountPercentage,
+    discountAmount: validation.variant.discountAmount,
   });
-  const mappings = Array.from(thumbnailByImageId.entries()).flatMap(
-    ([imageId, thumbnail]) => {
-      const variantId = thumbnail.dataset.variantId || null;
-      const optionAxis: "option1" | "option2" | null = thumbnail.dataset.optionAxis === "option1"
-        || thumbnail.dataset.optionAxis === "option2"
-        ? thumbnail.dataset.optionAxis
-        : null;
-      const optionValue = thumbnail.dataset.optionValue || null;
-      if (!variantId && (!optionAxis || !optionValue)) return [];
-      return [{
-        id: `dom:${imageId}`,
-        productId: cache.container?.dataset.productId || "",
-        imageId,
-        variantId,
-        optionAxis,
-        optionValue,
-        normalizedOptionValue: optionValue?.trim().toLocaleLowerCase("en-US") ?? null,
-        sortOrder: Number.parseInt(thumbnail.dataset.index || "0", 10) || 0,
-      }];
-    },
-  );
-  const imageId = resolveVariantImageId({
-    enabled: state.isVariantImagesEnabled,
-    axis: state.variantImageAxis,
-    mappings,
-    images: Array.from(thumbnailByImageId.entries()).map(([id, thumbnail], index) => ({
-      id,
-      isPrimary: thumbnail.dataset.imagePrimary === "true",
-      sortOrder: Number.parseInt(thumbnail.dataset.index || String(index), 10) || index,
-    })),
-    selectedVariantId: state.selection?.selectedVariant?.id,
-    selectedOptionValue,
-  });
-  const url = imageId
-    ? thumbnailByImageId.get(imageId)?.dataset.imageUrl
-    : undefined;
-  if (url) switchImage(url);
-}
-
-function updatePriceDisplay() {
-  if (!state.productPricing || !state.selection || !state.variantIndex) return;
-
-  const hasCustomerOptions =
-    state.variantIndex.options.hasSize || state.variantIndex.options.hasColor;
-  const exactDisplayVariant =
-    state.unavailableRequestedVariant ?? state.selection.selectedVariant;
-  const showsStartingPrice =
-    state.variants.length > 0 &&
-    shouldShowStartingVariantPrice(hasCustomerOptions, exactDisplayVariant);
-
-  if (showsStartingPrice) {
-    const matchingVariants = filterVariantsBySelection(state.variants, {
-      selectedSize: state.selection.selectedSize,
-      selectedColor: state.selection.selectedColor,
-    });
-    const startingPrice = getBuyerVariantPricePresentation(
-      state.productPricing,
-      matchingVariants,
-    ).pricing.finalPrice;
-    const formattedStartingPrice = `From ${formatPrice(startingPrice)}`;
-
-    cache.priceElements.forEach((el) => {
-      if (el.textContent !== formattedStartingPrice) {
-        el.textContent = formattedStartingPrice;
-      }
-    });
-    cache.originalPriceElements.forEach((el) => el.classList.add("hidden"));
-    cache.discountBadge?.classList.add("hidden");
-    return;
-  }
-
-  let variantPricing: VariantPricing | null = null;
-  if (exactDisplayVariant) {
-    const v = exactDisplayVariant;
-    variantPricing = {
-      price: v.price,
-      discountType: v.discountType,
-      discountPercentage: v.discountPercentage,
-      discountAmount: v.discountAmount,
-    };
-  }
-
-  const res = calculateVariantPrice(state.productPricing, variantPricing);
-  const formattedFinal = formatPrice(res.finalPrice);
-  const formattedOriginal = formatPrice(res.originalPrice);
-
-  cache.priceElements.forEach((el) => {
-    if (el.textContent !== formattedFinal) el.textContent = formattedFinal;
-  });
-
-  cache.originalPriceElements.forEach((el) => {
-    if (el.textContent !== formattedOriginal)
-      el.textContent = formattedOriginal;
-    if (res.hasDiscount) {
-      el.classList.remove("hidden");
-    } else {
-      el.classList.add("hidden");
-    }
-  });
-
-  if (cache.discountBadge) {
-    const text = formatDiscountBadge(
-      res.discountType,
-      res.discountPercentage,
-      res.discountAmount,
-    );
-    if (text) {
-      if (cache.discountBadge.textContent !== text)
-        cache.discountBadge.textContent = text;
-      cache.discountBadge.classList.remove("hidden");
-    } else {
-      cache.discountBadge.classList.add("hidden");
-    }
-  }
-}
-
-function optionName(axis: "option1" | "option2"): string {
-  const fallback = axis === "option1" ? "Option 1" : "Option 2";
-  return (
-    cache.actionsContainer?.dataset[
-      axis === "option1" ? "option1Label" : "option2Label"
-    ]?.trim() || fallback
-  );
-}
-
-function selectedOption(
-  name: string,
-  label?: string | null,
-): CartItemOption | null {
-  const optionLabel = label?.trim();
-  if (!optionLabel) return null;
-  return { name, label: optionLabel };
-}
-
-function buildSelectedCartOptions(variant?: Variant): CartItemOption[] {
-  if (!state.selection) return [];
-
-  return [
-    selectedOption(
-      optionName("option1"),
-      variant?.size ?? state.selection.selectedSize,
-    ),
-    selectedOption(
-      optionName("option2"),
-      variant?.color ?? state.selection.selectedColor,
-    ),
-  ].filter((option): option is CartItemOption => Boolean(option));
-}
-
-function initActionButtons() {
-  const container = cache.actionsContainer;
-  if (!container) return;
-
-  container.addEventListener("click", (e) => {
-    const target = e.target as HTMLElement;
-    const addToCartBtn = target.closest('[data-action="add-to-cart"]');
-    const buyNowBtn = target.closest('[data-action="buy-now"]');
-
-    if (addToCartBtn) handleAddToCart(false);
-    if (buyNowBtn) handleAddToCart(true);
-  });
-}
-
-function handleAddToCart(redirect: boolean) {
-  const container = cache.container;
-  if (
-    !container ||
-    !state.selection ||
-    !state.productPricing ||
-    !state.variantIndex
-  )
-    return;
-
-  if (state.unavailableRequestedVariant) {
-    showToast(
-      "The requested option is out of stock. Choose another option.",
-      "error",
-    );
-    return;
-  }
-
-  if (state.variants.length === 0) {
-    showToast("This product is not available for checkout right now.", "error");
-    return;
-  }
-
-  const validation = validateSelection(state.selection, state.variantIndex);
-  if (!validation.valid) {
-    showToast(validation.error || "Please select options", "error");
-    return;
-  }
-  if (!validation.variant?.id || validation.variant.id === "default") {
-    showToast("This product option is no longer available.", "error");
-    return;
-  }
-
-  const qtyInput = cache.quantityInput;
-  const quantity = parseInt(qtyInput?.value || "1");
-
-  let variantPricing: VariantPricing | null = null;
-  if (validation.variant) {
-    variantPricing = {
-      price: validation.variant.price,
-      discountType: validation.variant.discountType,
-      discountPercentage: validation.variant.discountPercentage,
-      discountAmount: validation.variant.discountAmount,
-    };
-  }
-  const priceRes = calculateVariantPrice(state.productPricing, variantPricing);
-
   const cartData = validateAddToCart({
-    productId: container.dataset.productId,
-    slug: container.dataset.productSlug,
-    name: container.dataset.productName,
-    price: priceRes.finalPrice,
+    productId: cache.container.dataset.productId,
+    slug: cache.container.dataset.productSlug,
+    name: cache.container.dataset.productName,
+    price: pricing.finalPrice,
     quantity,
-    stock: validation.variant?.stock,
-    reservedStock: validation.variant?.reservedStock,
-    trackInventory: validation.variant?.trackInventory,
-    variantId: validation.variant?.id,
-    size: state.selection.selectedSize,
-    color: state.selection.selectedColor,
-    image: state.currentDisplayedImage || container.dataset.productImage,
-    freeDelivery: container.dataset.productFreeDelivery === "true",
+    stock: validation.variant.stock,
+    reservedStock: validation.variant.reservedStock,
+    trackInventory: validation.variant.trackInventory,
+    variantId: validation.variant.id,
+    image: state.currentDisplayedImage || cache.container.dataset.productImage,
+    freeDelivery: cache.container.dataset.productFreeDelivery === "true",
   });
-
-  if (!cartData.valid) {
-    showToast(cartData.errors[0], "error");
-    return;
-  }
-
-  try {
-    if (!cartData.data) {
-      showToast("Unable to add this product to cart", "error");
-      return;
-    }
-
-    const options = buildSelectedCartOptions();
-    const added = addToCart({
-      ...cartData.data,
-      variantId: validation.variant.id,
-      ...(options.length > 0 ? { options } : {}),
-    });
-    if (!added) {
-      showToast(
-        "This product option could not be added. Please refresh and try again.",
-        "error",
-      );
-      return;
-    }
-
-    const pData = extractProductDataFromDOM(container);
-    if (pData) {
-      trackProductAddToCart({
-        product: pData,
-        variant: convertVariantToAnalyticsData(validation.variant),
-        quantity,
-      });
-    }
-
-    showToast("Added to cart", "success");
-
-    if (redirect) {
-      window.location.href = "/cart";
-    } else {
-      if (window.innerWidth < 768) window.scrollTo(0, 0);
-      document.dispatchEvent(new CustomEvent("open-cart"));
-    }
-  } catch (e: unknown) {
-    console.error(e);
-    showToast("Error adding to cart", "error");
+  if (!cartData.valid || !cartData.data) return showToast(cartData.errors[0] || "Unable to add this product", "error");
+  const added = addToCart({ ...cartData.data, variantId: validation.variant.id, options: selectedCartOptions(validation.variant) });
+  if (!added) return showToast("This product option could not be added. Please refresh and try again.", "error");
+  const product = extractProductDataFromDOM(cache.container);
+  if (product) trackProductAddToCart({ product, variant: convertVariantToAnalyticsData(validation.variant), quantity });
+  showToast("Added to cart", "success");
+  if (redirect) window.location.href = "/cart";
+  else {
+    if (window.innerWidth < 768) window.scrollTo(0, 0);
+    document.dispatchEvent(new CustomEvent("open-cart"));
   }
 }
 
-function showToast(msg: string, type: "success" | "error") {
+function showToast(message: string, type: "success" | "error") {
   const config = TOAST_CONFIG.variants[type];
-  const container = cache.actionsContainer;
-  if (!container) {
-    alert(msg);
-    return;
-  }
-
-  const toast = document.createElement("div");
-  toast.className = `${TOAST_CONFIG.container} ${config.bg} ${config.border} ${config.text} text-sm font-medium`;
-  toast.innerHTML = `<span>${config.icon}</span><span class="ml-2">${msg}</span>`;
-
-  container.insertBefore(toast, container.firstChild);
-  setTimeout(() => toast.remove(), 3000);
+  if (!cache.actions) return alert(message);
+  const element = document.createElement("div");
+  element.className = `${TOAST_CONFIG.container} ${config.bg} ${config.border} ${config.text} text-sm font-medium`;
+  element.textContent = message;
+  cache.actions.insertBefore(element, cache.actions.firstChild);
+  setTimeout(() => element.remove(), 3000);
 }
-
-// Export init for deferred dynamic import from [slug].astro
-export { init };

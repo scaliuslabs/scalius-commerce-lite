@@ -68,9 +68,9 @@ function simpleDefaultVariant() {
     id: "var_default_prod_1",
     productId: "prod_1",
     price: 150,
-    size: null,
-    color: null,
     isDefault: true,
+    optionCombinationKey: null,
+    selectedOptions: [],
     deletedAt: null,
   };
 }
@@ -80,8 +80,6 @@ function extractQuickBuyData(html: string) {
   expect(match).not.toBeNull();
   return JSON.parse(JSON.parse(match?.[1] ?? "\"{}\"")) as {
     cartItem?: {
-      size?: string;
-      color?: string;
       options?: Array<{ name: string; label: string }>;
     };
   };
@@ -183,7 +181,14 @@ describe("/buy/[slug]", () => {
         imageUrl: null,
       },
       images: [],
-      variants: [{ id: "var_m", productId: "prod_1", price: 150, size: "M", color: null }],
+      variants: [{
+        id: "var_m",
+        productId: "prod_1",
+        price: 150,
+        isDefault: false,
+        optionCombinationKey: "fit:m",
+        selectedOptions: [{ name: "Fit", value: "M" }],
+      }],
       category: null,
     });
 
@@ -214,8 +219,22 @@ describe("/buy/[slug]", () => {
       },
       images: [],
       variants: [
-        { id: "var_default_prod_1", productId: "prod_1", price: 150, size: null, color: null, isDefault: true },
-        { id: "var_m", productId: "prod_1", price: 150, size: "M", color: null, isDefault: false },
+        {
+          id: "var_default_prod_1",
+          productId: "prod_1",
+          price: 150,
+          isDefault: true,
+          optionCombinationKey: null,
+          selectedOptions: [],
+        },
+        {
+          id: "var_m",
+          productId: "prod_1",
+          price: 150,
+          isDefault: false,
+          optionCombinationKey: "fit:m",
+          selectedOptions: [{ name: "Fit", value: "M" }],
+        },
       ],
       category: null,
     });
@@ -244,17 +263,19 @@ describe("/buy/[slug]", () => {
         freeDelivery: false,
         hasVariants: true,
         imageUrl: null,
-        variantOption1Label: "Weight",
-        variantOption2Label: "Style",
       },
       images: [],
       variants: [{
         id: "var_2kg_gift",
         productId: "prod_1",
         price: 850,
-        size: "2KG",
-        color: "Gift Box",
         isDefault: false,
+        optionCombinationKey: "weight:2kg|style:gift-box|packaging:tin",
+        selectedOptions: [
+          { name: "Weight", value: "2KG" },
+          { name: "Style", value: "Gift Box" },
+          { name: "Packaging", value: "Reusable tin" },
+        ],
         deletedAt: null,
       }],
       category: null,
@@ -278,11 +299,10 @@ describe("/buy/[slug]", () => {
 
     expect(response.status).toBe(200);
     expect(quickBuyData.cartItem).toMatchObject({
-      size: "2KG",
-      color: "Gift Box",
       options: [
         { name: "Weight", label: "2KG" },
         { name: "Style", label: "Gift Box" },
+        { name: "Packaging", label: "Reusable tin" },
       ],
     });
   });

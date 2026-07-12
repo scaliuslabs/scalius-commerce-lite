@@ -99,12 +99,7 @@ export function ItemSelection({
               .filter((variant) => variant.id)
               .map((variant) => {
                 const variantLabel =
-                  [
-                    variant.size && `Size: ${variant.size}`,
-                    variant.color && `Color: ${variant.color}`,
-                  ]
-                    .filter(Boolean)
-                    .join(", ") ||
+                  variant.selectedOptions.map((option) => `${option.name}: ${option.value}`).join(", ") ||
                   (variant.isDefault ? "Product SKU" : null) ||
                   variant.sku ||
                   "SKU";

@@ -152,7 +152,7 @@ function InvoicePage() {
             </thead>
             <tbody>
               {(order.items || []).map((item: OrderItem, index: number) => {
-                const variant = [item.variantSize, item.variantColor].filter(Boolean).join(" / ");
+                const variant = item.variantLabel;
                 const savedLine = resolveSavedOrderLineMoney(item, savedSummary);
                 const unitPrice = savedLine && savedSummary
                   ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedSummary)

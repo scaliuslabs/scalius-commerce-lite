@@ -4,9 +4,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { Plus, Trash2, GripVertical, ChevronDown } from "lucide-react";
 import {
   DndContext,
@@ -23,7 +23,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { cn } from "@scalius/shared/utils";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "~/components/ui/form";
 import { getSortableStyle } from "../shared/sortable-style";
 
 
@@ -166,14 +166,19 @@ export function AdditionalInfoManager({
   initialContent,
   onContentChange,
 }: AdditionalInfoManagerProps) {
-  const [items, setItems] = React.useState<RichContentItem[]>([]);
   const [isClient, setIsClient] = React.useState(false);
   const [expandedItemId, setExpandedItemId] = React.useState<string | null>(null);
+  const items = React.useMemo(
+    () => initialContent.map((item, index) => ({
+      ...item,
+      id: item.id || `legacy-section-${index}`,
+    })),
+    [initialContent],
+  );
 
   React.useEffect(() => {
     setIsClient(true);
-    setItems(initialContent.map(item => ({ ...item, id: item.id || `item-${nanoid()}` })));
-  }, [initialContent]);
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -190,13 +195,10 @@ export function AdditionalInfoManager({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (active.id !== over?.id) {
-      setItems((currentItems) => {
-        const oldIndex = currentItems.findIndex((item) => item.id === active.id);
-        const newIndex = currentItems.findIndex((item) => item.id === over?.id);
-        const newOrderedItems = arrayMove(currentItems, oldIndex, newIndex);
-        triggerChange(newOrderedItems);
-        return newOrderedItems;
-      });
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over?.id);
+      if (oldIndex < 0 || newIndex < 0) return;
+      triggerChange(arrayMove(items, oldIndex, newIndex));
     }
   };
 
@@ -207,29 +209,20 @@ export function AdditionalInfoManager({
       content: "",
     };
     const newItems = [...items, newItem];
-    setItems(newItems);
     setExpandedItemId(newItem.id);
     triggerChange(newItems);
   };
 
   const handleUpdateItem = React.useCallback((id: string, data: Partial<RichContentItem>) => {
-    setItems((currentItems) => {
-      const newItems = currentItems.map((item) =>
-        item.id === id ? { ...item, ...data } : item
-      );
-      triggerChange(newItems);
-      return newItems;
-    });
-  }, [triggerChange]);
+    triggerChange(items.map((item) =>
+      item.id === id ? { ...item, ...data } : item
+    ));
+  }, [items, triggerChange]);
 
   const handleRemoveItem = React.useCallback((id: string) => {
     setExpandedItemId((currentId) => currentId === id ? null : currentId);
-    setItems((currentItems) => {
-      const newItems = currentItems.filter((item) => item.id !== id);
-      triggerChange(newItems);
-      return newItems;
-    });
-  }, [triggerChange]);
+    triggerChange(items.filter((item) => item.id !== id));
+  }, [items, triggerChange]);
 
   if (!isClient) {
     return (

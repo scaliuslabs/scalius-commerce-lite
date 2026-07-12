@@ -5,12 +5,6 @@ import {
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import {
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  DEFAULT_PRODUCT_OPTION_SCHEMA,
-  PRODUCT_OPTION_SCHEMA_VALUES,
-  type ProductOptionSchema,
-} from "@scalius/shared/product-options";
-import {
   DEFAULT_PRODUCT_CONDITION,
   PRODUCT_CONDITION_VALUES,
   type ProductCondition,
@@ -28,32 +22,14 @@ const canonicalPathSchema = z
   );
 
 export {
-  DEFAULT_PRODUCT_OPTION_LABELS,
-  DEFAULT_PRODUCT_OPTION_SCHEMA,
-  PRODUCT_OPTION_SCHEMA_VALUES,
   DEFAULT_PRODUCT_CONDITION,
   PRODUCT_CONDITION_VALUES,
-  type ProductOptionSchema,
   type ProductCondition,
 };
-
-const productOptionLabelSchema = z
-  .string()
-  .trim()
-  .min(1, "Option label is required")
-  .max(40, "Option label must be 40 characters or less");
 
 export interface Category {
   id: string;
   name: string;
-}
-
-export interface ProductVariantImageMappingFormValue {
-  imageId: string;
-  variantId?: string | null;
-  optionAxis?: "option1" | "option2" | null;
-  optionValue?: string | null;
-  sortOrder?: number;
 }
 
 export const productFormSchema = z.object({
@@ -83,28 +59,12 @@ export const productFormSchema = z.object({
     .nullish(),
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable().refine(
-    (value) => !value?.includes("<!--variant_images:"),
-    "Legacy variant-image metadata is not allowed. Use image mapping controls.",
-  ),
+  metaDescription: z.string().nullable(),
   canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES),
-  variantOption1Label: productOptionLabelSchema,
-  variantOption2Label: productOptionLabelSchema,
-  variantOption1Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
-  variantOption2Schema: z.enum(PRODUCT_OPTION_SCHEMA_VALUES),
-  variantImagesEnabled: z.boolean(),
-  variantImageAxis: z.enum(["option1", "option2"]),
-  variantImageMappings: z.array(z.object({
-    imageId: z.string().min(1),
-    variantId: z.string().nullable().optional(),
-    optionAxis: z.enum(["option1", "option2"]).nullable().optional(),
-    optionValue: z.string().nullable().optional(),
-    sortOrder: z.number().int().min(0).optional(),
-  })),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")

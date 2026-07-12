@@ -43,8 +43,6 @@ export const queryKeys = {
     stats: () => ["products", "stats"] as const,
     variants: (productId: string) =>
       ["products", "variants", productId] as const,
-    variantSortOrder: (productId: string) =>
-      ["products", "variant-sort-order", productId] as const,
   },
 
   // ── Categories ───────────────────────────────────────────────────

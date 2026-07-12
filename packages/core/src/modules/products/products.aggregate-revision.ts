@@ -1,6 +1,6 @@
 import { products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
@@ -51,8 +51,8 @@ export function buildProductAggregateRevisionGuard(
     expectedAggregateRevision: number,
     requiredState: ProductAggregateLifecycle = "active",
 ): BatchItem<"sqlite"> {
-    return db.run(sql`
-        SELECT CASE WHEN EXISTS (
+    return buildBatchGuard(db, sql`
+        CASE WHEN EXISTS (
             SELECT 1 FROM ${products}
             WHERE ${products.id} = ${productId}
               AND ${products.aggregateRevision} = ${expectedAggregateRevision}

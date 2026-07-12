@@ -11,8 +11,7 @@ export interface OrderItem {
   price: number;
   productName: string | null;
   productImage: string | null;
-  variantSize: string | null;
-  variantColor: string | null;
+  variantLabel: string | null;
   fulfillmentStatus?: string | null;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;

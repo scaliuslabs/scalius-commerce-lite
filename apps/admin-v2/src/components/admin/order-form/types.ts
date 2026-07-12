@@ -8,8 +8,8 @@ export interface Product {
     variantCount?: number | null;
     variants: {
       id: string;
-      size: string | null;
-      color: string | null;
+      optionCombinationKey: string | null;
+      selectedOptions: Array<{ name: string; value: string }>;
       weight: number | null;
       sku: string;
       price: number;

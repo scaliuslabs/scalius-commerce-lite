@@ -187,14 +187,28 @@ describe("useProductSubmit", () => {
     });
   });
 
+  it("blocks product creation while an option draft needs attention", async () => {
+    renderHarness({ optionMatrixIssue: "Update combinations before saving." });
+
+    await act(async () => {
+      await expect(requireResult(result).handleSubmit(productValues())).resolves.toBe(false);
+    });
+
+    expect(mocks.serverMutation).not.toHaveBeenCalled();
+    expect(requireResult(result).showAlert).toBe(true);
+    expect(requireResult(result).alertMessage).toBe("Update combinations before saving.");
+  });
+
   function renderHarness({
     isEdit = false,
     aggregateRevision,
     revisionConflict = null,
+    optionMatrixIssue = null,
   }: {
     isEdit?: boolean;
     aggregateRevision?: number;
     revisionConflict?: ProductRevisionConflict | null;
+    optionMatrixIssue?: string | null;
   } = {}) {
     act(() => {
       root.render(
@@ -202,6 +216,7 @@ describe("useProductSubmit", () => {
           isEdit={isEdit}
           aggregateRevision={aggregateRevision}
           revisionConflict={revisionConflict}
+          optionMatrixIssue={optionMatrixIssue}
           onResult={(nextResult) => (result = nextResult)}
         />,
       );
@@ -213,11 +228,13 @@ function HookHarness({
   isEdit,
   aggregateRevision,
   revisionConflict,
+  optionMatrixIssue,
   onResult,
 }: {
   isEdit: boolean;
   aggregateRevision?: number;
   revisionConflict: ProductRevisionConflict | null;
+  optionMatrixIssue: string | null;
   onResult: (result: ReturnType<typeof useProductSubmit>) => void;
 }) {
   const form = {
@@ -228,11 +245,9 @@ function HookHarness({
   const hookResult = useProductSubmit({
     isEdit,
     productId: isEdit ? "prod_one" : undefined,
-    enableVariantImages: false,
-    variantImageAxis: "option1",
-    variantImageMappings: [],
     aggregateRevision,
     revisionConflict,
+    optionMatrixIssue,
     onAggregateRevisionChange: mocks.onAggregateRevisionChange,
     onRevisionConflict: mocks.onRevisionConflict,
     onOpenRevisionConflict: mocks.onOpenRevisionConflict,
@@ -268,13 +283,6 @@ function productValues(): ProductFormValues {
     excludeFromSitemap: false,
     excludeFromProductFeed: false,
     productCondition: "new",
-    variantOption1Label: "Size",
-    variantOption2Label: "Color",
-    variantOption1Schema: "size",
-    variantOption2Schema: "color",
-    variantImagesEnabled: false,
-    variantImageAxis: "option2",
-    variantImageMappings: [],
     slug: "green-tea",
     slugEdited: false,
     images: [],

@@ -363,8 +363,8 @@ const layoutData = await getLayoutData();
         <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
         <div class="flex-1 min-w-0">
           <p class="text-sm font-semibold text-foreground truncate">${escapeHtml(item.productName || "Product")}</p>
-          ${(item.variantSize || item.variantColor)
-            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${[item.variantSize && `Size: ${escapeHtml(item.variantSize)}`, item.variantColor && `Color: ${escapeHtml(item.variantColor)}`].filter(Boolean).join(" • ")}</p>`
+          ${item.variantLabel
+            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${escapeHtml(item.variantLabel)}</p>`
             : ""}
         </div>
         <div class="text-right shrink-0">

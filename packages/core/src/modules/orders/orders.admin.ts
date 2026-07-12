@@ -76,6 +76,7 @@ import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
+import { variantOptionLabelSql } from "../products/products.option-model";
 import {
     activePaymentSessionAttemptExistsCondition,
     assertNoActivePaymentSessionAttempt,
@@ -1340,8 +1341,7 @@ export async function getOrderDetails(
                 price: orderItems.price,
                 productName: products.name,
                 productImage: productImages.url,
-                variantSize: productVariants.size,
-                variantColor: productVariants.color,
+                variantLabel: variantOptionLabelSql(productVariants.id),
                 fulfillmentStatus: orderItems.fulfillmentStatus,
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
@@ -1395,8 +1395,7 @@ export async function getOrderDetails(
         price: item.price,
         productName: item.productName || null,
         productImage: item.productImage || null,
-        variantSize: item.variantSize || null,
-        variantColor: item.variantColor || null,
+        variantLabel: item.variantLabel || null,
         fulfillmentStatus: item.fulfillmentStatus,
         unitPriceMinor: item.unitPriceMinor,
         lineSubtotalMinor: item.lineSubtotalMinor,
