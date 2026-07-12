@@ -1270,7 +1270,11 @@ export const postApiV1AdminPagesByIdRestore = <ThrowOnError extends boolean = fa
             type: 'apiKey'
         }],
     url: '/api/v1/admin/pages/{id}/restore',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1283,7 +1287,11 @@ export const deleteApiV1AdminPagesById = <ThrowOnError extends boolean = false>(
             type: 'apiKey'
         }],
     url: '/api/v1/admin/pages/{id}',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -1326,7 +1334,11 @@ export const deleteApiV1AdminPagesByIdPermanent = <ThrowOnError extends boolean 
             type: 'apiKey'
         }],
     url: '/api/v1/admin/pages/{id}/permanent',
-    ...options
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**

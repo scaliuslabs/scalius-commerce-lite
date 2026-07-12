@@ -1429,6 +1429,7 @@ export type GetApiV1PagesResponses = {
                 } | null;
                 publishedAt?: string | number | null;
                 sortOrder: number;
+                revision: number;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -1529,6 +1530,7 @@ export type GetApiV1PagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: string | number | null;
                 sortOrder: number;
+                revision: number;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -1612,6 +1614,7 @@ export type GetApiV1PagesByIdResponses = {
                 } | null;
                 publishedAt?: string | number | null;
                 sortOrder: number;
+                revision: number;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -1968,6 +1971,7 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                 } | null;
                 publishedAt?: string | number | null;
                 sortOrder: number;
+                revision: number;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -10350,6 +10354,7 @@ export type GetApiV1AdminPagesResponses = {
                 } | null;
                 publishedAt?: string | number | null;
                 sortOrder: number;
+                revision: number;
                 createdAt: string | number | null;
                 updatedAt: string | number | null;
                 deletedAt: string | number | null;
@@ -10491,6 +10496,7 @@ export type PostApiV1AdminPagesResponses = {
     201: {
         success: true;
         data: {
+            revision: number;
             id: string;
         };
     };
@@ -10500,7 +10506,10 @@ export type PostApiV1AdminPagesResponse = PostApiV1AdminPagesResponses[keyof Pos
 
 export type PostApiV1AdminPagesBulkDeleteData = {
     body?: {
-        pageIds: Array<string>;
+        pages: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
         permanent?: boolean;
     };
     path?: never;
@@ -10554,6 +10563,17 @@ export type PostApiV1AdminPagesBulkDeleteErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -10590,7 +10610,10 @@ export type PostApiV1AdminPagesBulkDeleteResponse = PostApiV1AdminPagesBulkDelet
 
 export type PostApiV1AdminPagesBulkPublishData = {
     body?: {
-        ids: Array<string>;
+        pages: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
     };
     path?: never;
     query?: never;
@@ -10643,6 +10666,17 @@ export type PostApiV1AdminPagesBulkPublishErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -10679,7 +10713,10 @@ export type PostApiV1AdminPagesBulkPublishResponse = PostApiV1AdminPagesBulkPubl
 
 export type PostApiV1AdminPagesBulkUnpublishData = {
     body?: {
-        ids: Array<string>;
+        pages: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
     };
     path?: never;
     query?: never;
@@ -10732,6 +10769,17 @@ export type PostApiV1AdminPagesBulkUnpublishErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -10768,7 +10816,10 @@ export type PostApiV1AdminPagesBulkUnpublishResponse = PostApiV1AdminPagesBulkUn
 
 export type PostApiV1AdminPagesBulkRestoreData = {
     body?: {
-        ids: Array<string>;
+        pages: Array<{
+            id: string;
+            expectedRevision: number;
+        }>;
     };
     path?: never;
     query?: never;
@@ -10821,6 +10872,17 @@ export type PostApiV1AdminPagesBulkRestoreErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -10856,7 +10918,9 @@ export type PostApiV1AdminPagesBulkRestoreResponses = {
 export type PostApiV1AdminPagesBulkRestoreResponse = PostApiV1AdminPagesBulkRestoreResponses[keyof PostApiV1AdminPagesBulkRestoreResponses];
 
 export type PostApiV1AdminPagesByIdRestoreData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -10910,6 +10974,17 @@ export type PostApiV1AdminPagesByIdRestoreErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -10950,7 +11025,9 @@ export type PostApiV1AdminPagesByIdRestoreResponses = {
 export type PostApiV1AdminPagesByIdRestoreResponse = PostApiV1AdminPagesByIdRestoreResponses[keyof PostApiV1AdminPagesByIdRestoreResponses];
 
 export type DeleteApiV1AdminPagesByIdData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -10996,6 +11073,17 @@ export type DeleteApiV1AdminPagesByIdErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -11154,6 +11242,7 @@ export type GetApiV1AdminPagesByIdResponses = {
             } | null;
             publishedAt?: string | number | null;
             sortOrder: number;
+            revision: number;
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
@@ -11165,6 +11254,7 @@ export type GetApiV1AdminPagesByIdResponse = GetApiV1AdminPagesByIdResponses[key
 
 export type PutApiV1AdminPagesByIdData = {
     body?: {
+        expectedRevision: number;
         title?: string;
         slug?: string;
         content?: string;
@@ -11290,7 +11380,7 @@ export type PutApiV1AdminPagesByIdResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            revision: number;
         };
     };
 };
@@ -11298,7 +11388,9 @@ export type PutApiV1AdminPagesByIdResponses = {
 export type PutApiV1AdminPagesByIdResponse = PutApiV1AdminPagesByIdResponses[keyof PutApiV1AdminPagesByIdResponses];
 
 export type DeleteApiV1AdminPagesByIdPermanentData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -11344,6 +11436,17 @@ export type DeleteApiV1AdminPagesByIdPermanentErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -30785,6 +30888,12 @@ export type PostApiV1AdminProductsBulkDeleteResponses = {
                 aggregateRevision: number;
             }>;
             deletedIds: Array<string>;
+            outcomes: Array<{
+                id: string;
+                status: 'trashed' | 'deleted' | 'blocked' | 'failed';
+                code: string | null;
+                message: string | null;
+            }>;
         };
     };
 };

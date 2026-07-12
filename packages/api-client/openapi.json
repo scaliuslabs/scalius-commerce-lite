@@ -4435,6 +4435,10 @@
                               "sortOrder": {
                                 "type": "number"
                               },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -4484,6 +4488,7 @@
                               "hideFooter",
                               "hideTitle",
                               "sortOrder",
+                              "revision",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -4729,6 +4734,10 @@
                             "sortOrder": {
                               "type": "number"
                             },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -4778,6 +4787,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
+                            "revision",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
@@ -5078,6 +5088,10 @@
                             "sortOrder": {
                               "type": "number"
                             },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -5127,6 +5141,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
+                            "revision",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
@@ -6176,6 +6191,10 @@
                             "sortOrder": {
                               "type": "number"
                             },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
                             "createdAt": {
                               "anyOf": [
                                 {
@@ -6225,6 +6244,7 @@
                             "hideFooter",
                             "hideTitle",
                             "sortOrder",
+                            "revision",
                             "createdAt",
                             "updatedAt",
                             "deletedAt"
@@ -34714,6 +34734,10 @@
                               "sortOrder": {
                                 "type": "number"
                               },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -34763,6 +34787,7 @@
                               "hideFooter",
                               "hideTitle",
                               "sortOrder",
+                              "revision",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -35238,11 +35263,16 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "id": {
                           "type": "string"
                         }
                       },
                       "required": [
+                        "revision",
                         "id"
                       ]
                     }
@@ -35555,11 +35585,28 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "pageIds": {
+                  "pages": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "expectedRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",
@@ -35567,7 +35614,7 @@
                   }
                 },
                 "required": [
-                  "pageIds"
+                  "pages"
                 ]
               }
             }
@@ -35699,6 +35746,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -35837,15 +35924,32 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "ids": {
+                  "pages": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "expectedRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
-                  "ids"
+                  "pages"
                 ]
               }
             }
@@ -35977,6 +36081,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -36115,15 +36259,32 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "ids": {
+                  "pages": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "expectedRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
-                  "ids"
+                  "pages"
                 ]
               }
             }
@@ -36255,6 +36416,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -36393,15 +36594,32 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "ids": {
+                  "pages": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "expectedRevision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "expectedRevision"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
-                  "ids"
+                  "pages"
                 ]
               }
             }
@@ -36533,6 +36751,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -36675,6 +36933,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Page restored",
@@ -36831,6 +37107,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -37112,6 +37428,10 @@
                         "sortOrder": {
                           "type": "number"
                         },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -37161,6 +37481,7 @@
                         "hideFooter",
                         "hideTitle",
                         "sortOrder",
+                        "revision",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -37443,6 +37764,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
                   "title": {
                     "type": "string",
                     "minLength": 3,
@@ -37580,7 +37905,10 @@
                       "nullable": true
                     }
                   }
-                }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
               }
             }
           }
@@ -37601,7 +37929,15 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {}
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ]
                     }
                   },
                   "required": [
@@ -37914,6 +38250,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "No content"
@@ -38040,6 +38394,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -38182,6 +38576,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "No content"
@@ -38308,6 +38720,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -105554,11 +106006,46 @@
                           "items": {
                             "type": "string"
                           }
+                        },
+                        "outcomes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "trashed",
+                                  "deleted",
+                                  "blocked",
+                                  "failed"
+                                ]
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "message": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "status",
+                              "code",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "products",
-                        "deletedIds"
+                        "deletedIds",
+                        "outcomes"
                       ]
                     }
                   },
