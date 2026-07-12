@@ -58,4 +58,38 @@ describe("category validation", () => {
             },
         }).success).toBe(false);
     });
+
+    it("normalizes bounded merchant text at the API boundary", () => {
+        const parsed = createCategorySchema.parse({
+            ...categoryInput,
+            name: "  Summer Shoes  ",
+            metaTitle: "   ",
+            metaDescription: "  A summer edit  ",
+        });
+
+        expect(parsed.name).toBe("Summer Shoes");
+        expect(parsed.metaTitle).toBeNull();
+        expect(parsed.metaDescription).toBe("A summer edit");
+    });
+
+    it("rejects unbounded discovery copy and invalid image metadata", () => {
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            metaTitle: "x".repeat(71),
+        }).success).toBe(false);
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            metaDescription: "x".repeat(201),
+        }).success).toBe(false);
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            image: {
+                id: "image_1",
+                url: "/category.jpg",
+                filename: "category.jpg",
+                size: -1,
+                createdAt: "not-a-date",
+            },
+        }).success).toBe(false);
+    });
 });

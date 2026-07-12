@@ -6,6 +6,11 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { isCatalogDiscoveryImageSource } from "@scalius/shared/catalog-discovery-media";
 
+export const CATEGORY_BATCH_LIMIT = 90;
+
+const nullableText = (max: number) =>
+    z.string().trim().max(max).nullable().transform((value) => value || null);
+
 const canonicalPathSchema = z
     .string()
     .nullable()
@@ -17,29 +22,33 @@ const canonicalPathSchema = z
 
 const imageSchema = z
     .object({
-        id: z.string(),
-        url: z.string().refine(isCatalogDiscoveryImageSource, {
+        id: z.string().trim().min(1).max(180),
+        url: z.string().trim().max(2048).refine(isCatalogDiscoveryImageSource, {
             message: "Category image must be a relative path or an absolute HTTP(S) URL.",
         }),
-        filename: z.string(),
-        size: z.number(),
+        filename: z.string().trim().min(1).max(255),
+        size: z.number().int().min(0).max(100_000_000),
         createdAt: z
             .date()
             .or(z.string())
-            .transform((val) => (val instanceof Date ? val : new Date(val))),
+            .transform((val) => (val instanceof Date ? val : new Date(val)))
+            .refine((value) => Number.isFinite(value.getTime()), {
+                message: "Category image creation date is invalid.",
+            }),
     })
     .nullable();
 
 const categorySchema = z.object({
-    name: z.string().min(3).max(100),
-    description: z.string().nullable(),
+    name: z.string().trim().min(3).max(100),
+    description: nullableText(100_000),
     slug: z
         .string()
+        .trim()
         .min(3)
         .max(100)
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
-    metaTitle: z.string().nullable(),
-    metaDescription: z.string().nullable(),
+    metaTitle: nullableText(70),
+    metaDescription: nullableText(200),
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
