@@ -142,6 +142,11 @@ The matrix replaces the old generator dialog and separate spreadsheet mode.
 - On edit, metadata and matrix writes share `aggregateRevision`. If both are
   dirty, metadata saves first and the matrix immediately saves against the
   returned revision; concurrent writes cannot overlap silently.
+- Every visible save control uses that same coordinator. The matrix card never
+  calls its endpoint directly while product composition is dirty: newly
+  attached `pmed_...` IDs and pending media removals are persisted first, then
+  the matrix saves against the returned aggregate revision. A matrix-only save
+  is available only when the product form is already clean.
 - Inventory stock changes additionally use `stockVersion` and ledger claims.
 - A typed revision conflict preserves all local form/matrix state and opens the
   existing Reload latest / Keep draft dialog. There is no blind overwrite.

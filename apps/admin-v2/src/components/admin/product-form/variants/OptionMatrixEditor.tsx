@@ -67,6 +67,8 @@ type OptionMatrixEditorProps = {
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
+  onSaveRequest: () => void;
+  productSaving: boolean;
 };
 
 export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, OptionMatrixEditorProps>(function OptionMatrixEditor({
@@ -84,6 +86,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   onDirtyChange,
   onSavingChange,
   onRevisionConflict,
+  onSaveRequest,
+  productSaving,
 }, ref) {
   const queryClient = useQueryClient();
   const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
@@ -273,10 +277,10 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             type="button"
             size="sm"
             className="h-8 text-xs"
-            disabled={!dirty || Boolean(matrixIssue) || mutation.isPending}
-            onClick={() => mutation.mutate(undefined)}
+            disabled={!dirty || Boolean(matrixIssue) || mutation.isPending || productSaving}
+            onClick={onSaveRequest}
           >
-            {mutation.isPending ? "Saving…" : "Save options"}
+            {mutation.isPending || productSaving ? "Saving…" : "Save options"}
           </Button>
         ) : (
           <span className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">Saved with product</span>

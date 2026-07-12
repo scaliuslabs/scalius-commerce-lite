@@ -35,6 +35,7 @@ import type { ProductSeoDiagnosticVariant } from "@/lib/product-seo-diagnostics"
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import type { ProductOptionMatrixInput } from "@/lib/api-functions/products";
 import type { ProductSkuImageChoice } from "@/types/api-responses";
+import { getProductEditorSaveStep } from "./product-form/save-orchestration";
 
 interface ProductFormProps {
   categories: Category[];
@@ -53,6 +54,8 @@ interface ProductFormProps {
     skuImages: ProductSkuImageChoice[];
     productName: string;
     productPrice: number;
+    requestSave: () => void;
+    productSaving: boolean;
   }) => React.ReactNode);
   optionMatrixDraft?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision"> | null;
   optionMatrixIssue?: string | null;
@@ -134,8 +137,25 @@ export function ProductForm({
       optionMatrixDraft,
       optionMatrixIssue,
     });
-  const hasUnsavedChanges = form.formState.isDirty || optionMatrixDirty;
+  const productFormDirty = form.formState.isDirty;
+  const hasUnsavedChanges = productFormDirty || optionMatrixDirty;
   const isSaving = isSubmitting || optionMatrixSaving;
+  const requestSave = React.useCallback(() => {
+    const step = getProductEditorSaveStep({
+      isEdit,
+      productFormDirty,
+      hasRevisionConflict: revisionConflict !== null,
+    });
+    if (step === "review-conflict") {
+      onOpenRevisionConflict?.();
+      return;
+    }
+    if (step === "save-product") {
+      void form.handleSubmit(handleSubmit)();
+      return;
+    }
+    onOptionMatrixSave?.();
+  }, [form, handleSubmit, isEdit, onOpenRevisionConflict, onOptionMatrixSave, productFormDirty, revisionConflict]);
 
   // Auto-generate slug from name - ONLY for new products
   React.useEffect(() => {
@@ -258,6 +278,8 @@ export function ProductForm({
                         })),
                       productName: form.watch("name"),
                       productPrice: form.watch("price"),
+                      requestSave,
+                      productSaving: isSubmitting,
                     })
                   : optionManager}
               </div>
@@ -327,13 +349,7 @@ export function ProductForm({
         isSubmitting={isSaving}
         isDirty={hasUnsavedChanges}
         hasRevisionConflict={revisionConflict !== null}
-        onSave={
-          revisionConflict
-            ? onOpenRevisionConflict
-            : form.formState.isDirty || !isEdit
-              ? () => form.handleSubmit(handleSubmit)()
-              : onOptionMatrixSave
-        }
+        onSave={requestSave}
       />
     </>
     </ErrorBoundary>

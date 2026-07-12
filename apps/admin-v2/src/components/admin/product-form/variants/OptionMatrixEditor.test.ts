@@ -274,4 +274,11 @@ describe("option matrix editor density and stock disclosure", () => {
     expect(editorSource).toContain("as the exact SKU image");
     expect(editorSource).toContain("No image change staged");
   });
+
+  it("routes the card save through product composition orchestration", () => {
+    expect(editorSource).toContain("onSaveRequest: () => void");
+    expect(editorSource).toContain("onClick={onSaveRequest}");
+    expect(editorSource).toContain("mutation.isPending || productSaving");
+    expect(editorSource).not.toContain("onClick={() => mutation.mutate(undefined)}");
+  });
 });
