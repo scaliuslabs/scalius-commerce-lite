@@ -24,15 +24,11 @@ export function formatFormValuesForSubmission(
     excludeFromProductFeed: values.excludeFromProductFeed,
     productCondition: values.productCondition,
     slug: values.slug,
-    images: values.images.map((image) => ({
-      id: image.id,
-      url: image.url,
-      filename: image.filename,
-      size: image.size,
-      createdAt:
-        image.createdAt instanceof Date
-          ? image.createdAt.toISOString()
-          : image.createdAt,
+    media: values.media.map((item) => ({
+      id: item.id,
+      mediaId: item.mediaId,
+      altText: item.altText.trim() || null,
+      isPrimary: item.isPrimary,
     })),
     attributes: values.attributes?.map(({ attributeId, value }) => ({
       attributeId,

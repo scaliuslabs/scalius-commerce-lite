@@ -75,18 +75,14 @@ function createProductBody(overrides: Record<string, unknown> = {}) {
     freeDelivery: false,
     metaTitle: null,
     metaDescription: null,
-    variantImagesEnabled: false,
-    variantImageAxis: "option2",
-    variantImageMappings: [],
     slug: "hilsa-fish",
     productCondition: "new",
-    images: [
+    media: [
       {
-        id: "img_1",
-        url: "https://cloud.example.com/hilsa.webp",
-        filename: "hilsa.webp",
-        size: 1234,
-        createdAt: "2026-01-01T00:00:00.000Z",
+        id: "pmed_hilsa_1",
+        mediaId: "med_hilsa_1",
+        altText: "Fresh hilsa",
+        isPrimary: true,
       },
     ],
     expectedAggregateRevision: 1,

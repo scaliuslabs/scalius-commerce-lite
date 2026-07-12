@@ -23,6 +23,8 @@ import {
   Tag,
   Layers,
   ImageIcon,
+  Play,
+  Video,
   DollarSign,
   PercentIcon,
   ExternalLink,
@@ -34,7 +36,7 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
-import type { ProductDetail } from "@/types/api-responses";
+import type { ProductDetail, ProductMediaDetail } from "@/types/api-responses";
 import {
   normalizeProductCondition,
   PRODUCT_CONDITION_LABELS,
@@ -46,8 +48,9 @@ export function ProductView({ product }: ProductViewProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const { formatPrice } = useCurrency();
   const { products: productActions } = useCatalogActionPermissions();
-  const primaryImage = product.images.find((img) => img.isPrimary);
-  const otherImages = product.images.filter((img) => !img.isPrimary);
+  const featuredMedia = product.media.find((item) => item.isPrimary)
+    ?? [...product.media].sort((left, right) => left.sortOrder - right.sortOrder)[0];
+  const otherMedia = product.media.filter((item) => item.id !== featuredMedia?.id);
   const visibleMetaDescription = product.metaDescription?.trim() || null;
   const statusLabel = product.deletedAt
     ? "Trashed"
@@ -219,36 +222,32 @@ export function ProductView({ product }: ProductViewProps) {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
-              {primaryImage ? (
+              {featuredMedia ? (
                 <div className="space-y-2">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Primary</div>
-                  <div className="aspect-square overflow-hidden rounded-md border bg-muted/30">
-                    <img
-                      src={getOptimizedImageUrl(primaryImage.url)}
-                      alt={primaryImage.alt || product.name}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                    />
+                  <div className="flex items-center justify-between gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    <span>Featured {featuredMedia.kind}</span>
+                    {featuredMedia.status === "trashed" ? <Badge variant="outline" className="text-amber-700 dark:text-amber-400">In trash</Badge> : null}
                   </div>
+                  <div className="aspect-square overflow-hidden rounded-md border bg-muted/30">
+                    <ProductMediaPreview item={featuredMedia} productName={product.name} featured />
+                  </div>
+                  {featuredMedia.kind === "video" && !featuredMedia.posterUrl ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">No poster. Image-only surfaces use the next usable image.</p>
+                  ) : null}
                 </div>
               ) : (
                 <div className="aspect-square rounded-md border border-dashed flex items-center justify-center bg-muted/10 text-muted-foreground text-xs">
-                  No primary image
+                  No product media
                 </div>
               )}
 
-              {otherImages.length > 0 && (
+              {otherMedia.length > 0 && (
                 <div className="space-y-2 pt-2 border-t">
                   <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gallery</div>
                   <div className="grid grid-cols-3 gap-2">
-                    {otherImages.map((image) => (
-                      <div key={image.id} className="aspect-square overflow-hidden rounded-md border bg-muted/30">
-                        <img
-                          src={getOptimizedImageUrl(image.url)}
-                          alt={image.alt || product.name}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
+                    {otherMedia.map((item) => (
+                      <div key={item.id} className="relative aspect-square overflow-hidden rounded-md border bg-muted/30">
+                        <ProductMediaPreview item={item} productName={product.name} />
                       </div>
                     ))}
                   </div>
@@ -385,5 +384,49 @@ export function ProductView({ product }: ProductViewProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ProductMediaPreview({ item, productName, featured = false }: {
+  item: ProductMediaDetail;
+  productName: string;
+  featured?: boolean;
+}) {
+  if (item.kind === "image") {
+    return (
+      <img
+        src={getOptimizedImageUrl(item.url)}
+        alt={item.altText || productName}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+  if (featured) {
+    return (
+      <video
+        src={item.url}
+        poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}
+        aria-label={item.altText || `${productName} video`}
+        className="h-full w-full object-contain"
+        controls
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+  return (
+    <>
+      {item.posterUrl ? (
+        <img src={getOptimizedImageUrl(item.posterUrl)} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+      ) : (
+        <div className="flex h-full items-center justify-center"><Video className="h-5 w-5 text-muted-foreground" /></div>
+      )}
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white"><Play className="ml-0.5 h-3 w-3 fill-current" /></span>
+      </span>
+      <span className="sr-only">Video: {item.altText || productName}</span>
+    </>
   );
 }

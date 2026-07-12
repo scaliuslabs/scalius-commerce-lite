@@ -4,7 +4,7 @@ import {
 } from "@scalius/shared/product-options";
 import type { ProductOptionMatrixInput } from "../../../../lib/api-functions/products";
 import type {
-  ProductImageDetail,
+  ProductSkuImageChoice,
   ProductOptionDefinition,
   ProductOptionStandardMapping,
   ProductVariant,
@@ -181,11 +181,12 @@ export function optionTopologySignature(options: readonly DraftOption[]): string
 export function getOptionMatrixIssue(
   options: DraftOption[],
   variants: DraftVariant[],
-  images: ProductImageDetail[],
+  images: ProductSkuImageChoice[],
   combinationsPending: boolean,
   committedByVariantId: ReadonlyMap<string, number> = new Map(),
   requiredStockAllocation = 0,
   blockedCommittedStock = 0,
+  allowSavedImageRemovalConfirmation = false,
 ): string | null {
   if (options.length === 0) {
     return variants.length > 0 || combinationsPending
@@ -229,7 +230,9 @@ export function getOptionMatrixIssue(
     if (!Number.isInteger(variant.stock) || variant.stock < 0) return "Stock must be a whole number of zero or greater.";
     if (variant.stock < (committedByVariantId.get(variant.id) ?? 0)) return "On-hand stock cannot be lower than committed stock.";
     if ((variant.barcode === null) !== (variant.barcodeType === null)) return "Barcode and barcode type must be supplied together.";
-    if (variant.imageId && !imageIds.has(variant.imageId)) return "A SKU image is no longer in this product's media.";
+    if (variant.imageId && !imageIds.has(variant.imageId) && !allowSavedImageRemovalConfirmation) {
+      return "A SKU image is no longer in this product's media.";
+    }
     if (variant.discountType === "percentage" && ((variant.discountPercentage ?? 0) < 0 || (variant.discountPercentage ?? 0) > 100)) return "Percentage discounts must be between 0 and 100.";
     if (variant.discountType === "flat" && ((variant.discountAmount ?? 0) < 0 || (variant.discountAmount ?? 0) > variant.price)) return "A flat SKU discount cannot exceed its price.";
   }

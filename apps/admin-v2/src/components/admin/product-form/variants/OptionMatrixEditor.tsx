@@ -27,7 +27,7 @@ import { saveProductOptionMatrix, type ProductOptionMatrixInput } from "@/lib/ap
 import { getServerFnError } from "@/lib/api-helpers";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
 import type {
-  ProductImageDetail,
+  ProductSkuImageChoice,
   ProductOptionDefinition,
   ProductOptionStandardMapping,
   ProductVariant,
@@ -58,7 +58,7 @@ type OptionMatrixEditorProps = {
   productPrice: number;
   options?: ProductOptionDefinition[];
   variants?: ProductVariant[];
-  images: ProductImageDetail[];
+  images: ProductSkuImageChoice[];
   aggregateRevision?: number;
   onAggregateRevisionChange?: (revision: number) => void;
   onSaved?: () => void;
@@ -122,6 +122,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     committedByVariantId,
     requiredStockAllocation,
     blockedCommittedStock,
+    !dirty,
   );
 
   React.useEffect(() => {
@@ -479,7 +480,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
 function VariantMatrix({ options, variants, images, expandedId, onExpandedChange, onChange, onRemove, missingCombinations, onRestoreCombination, onRestoreAll, committedByVariantId }: {
   options: DraftOption[];
   variants: DraftVariant[];
-  images: ProductImageDetail[];
+  images: ProductSkuImageChoice[];
   expandedId: string | null;
   onExpandedChange: (id: string | null) => void;
   onChange: (id: string, patch: Partial<DraftVariant>) => void;
@@ -814,35 +815,32 @@ function InventoryQuantityInput({ value, committed, onChange }: {
 
 function VariantImagePicker({ value, images, onChange, label = "Choose SKU image", allowNoChange = false }: {
   value: string | null | undefined;
-  images: ProductImageDetail[];
+  images: ProductSkuImageChoice[];
   onChange: (value: string | null | undefined) => void;
   label?: string;
   allowNoChange?: boolean;
 }) {
   const selected = images.find((image) => image.id === value);
-  const primary = images.find((image) => image.isPrimary)
-    ?? [...images].sort((left, right) => left.sortOrder - right.sortOrder)[0];
   const usesPrimaryFallback = value === null;
-  const effectiveImage = selected ?? (usesPrimaryFallback ? primary : undefined);
   const triggerLabel = value === undefined
     ? `${label}. No image change staged`
     : usesPrimaryFallback
-      ? `${label}. Using product primary fallback`
-      : `${label}. Using ${selected?.alt ?? selected?.altText ?? "an exact product image"}`;
+      ? `${label}. Using automatic product image`
+      : `${label}. Using ${selected?.altText ?? "an exact product image"}${selected?.status === "trashed" ? ", in trash" : ""}`;
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button type="button" className="relative flex h-8 w-10 items-center justify-center overflow-hidden rounded border bg-background" aria-label={triggerLabel}>
-          {effectiveImage
-            ? <img src={getOptimizedImageUrl(effectiveImage.url)} alt="" className="h-full w-full object-cover" />
+          {selected
+            ? <img src={getOptimizedImageUrl(selected.url)} alt="" className="h-full w-full object-cover" />
             : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
-          {usesPrimaryFallback && primary ? (
+          {usesPrimaryFallback ? (
             <span
               aria-hidden="true"
-              title="Product primary fallback"
+              title="Automatic product image"
               className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none text-muted-foreground"
             >
-              P
+              F
             </span>
           ) : null}
         </button>
@@ -861,37 +859,44 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
         <button
           type="button"
           onClick={() => onChange(null)}
-          aria-label="Use product primary image fallback"
+          aria-label="Use the automatic product image"
           className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}
         >
           <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded border">
-            {primary
-              ? <img src={getOptimizedImageUrl(primary.url)} alt="" className="h-full w-full object-cover" />
-              : <ImageIcon className="h-4 w-4" />}
-            {primary ? <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none">P</span> : null}
+            <ImageIcon className="h-4 w-4" />
+            <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-tl bg-background/90 px-0.5 text-xs font-semibold leading-none">F</span>
           </span>
           <span>
-            <span className="block">Product primary (fallback)</span>
-            <span className="block text-xs text-muted-foreground">Clears this SKU's exact image</span>
+            <span className="block">Automatic product image</span>
+            <span className="block text-xs text-muted-foreground">Uses the best product image available</span>
           </span>
         </button>
         <div className="grid max-h-56 grid-cols-4 gap-1 overflow-y-auto">
-          {images.map((image, index) => (
-            <button
-              key={image.id}
-              type="button"
-              onClick={() => onChange(image.id)}
-              aria-label={`Use ${image.alt ?? image.altText ?? `product image ${index + 1}`} as the exact SKU image`}
-              className={cn("aspect-square overflow-hidden rounded border-2", value === image.id ? "border-primary" : "border-transparent")}
-              title={image.alt ?? image.altText ?? "Product image"}
-            >
-              <img src={getOptimizedImageUrl(image.url)} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
+          {images.map((image, index) => {
+            const unavailable = image.status === "trashed" && value !== image.id;
+            return (
+              <button
+                key={image.id}
+                type="button"
+                disabled={unavailable}
+                onClick={() => onChange(image.id)}
+                aria-label={`${unavailable ? "Unavailable: " : "Use "}${image.altText || `product image ${index + 1}`} as the exact SKU image${image.status === "trashed" ? ", in trash" : ""}`}
+                className={cn(
+                  "relative aspect-square overflow-hidden rounded border-2",
+                  value === image.id ? "border-primary" : "border-transparent",
+                  unavailable && "cursor-not-allowed opacity-45",
+                )}
+                title={image.status === "trashed" ? "In trash · existing assignments remain" : image.altText || "Product image"}
+              >
+                <img src={getOptimizedImageUrl(image.url)} alt="" className="h-full w-full object-cover" />
+                {image.status === "trashed" ? <span className="absolute inset-x-0 bottom-0 bg-amber-950/80 py-0.5 text-xs text-white">Trash</span> : null}
+              </button>
+            );
+          })}
         </div>
         {images.length === 0 ? (
           <p className="px-1 py-2 text-xs text-muted-foreground">
-            Add product media first. Fallback SKUs will use the primary image once one exists.
+            Add product media first. SKUs without an exact image use the automatic product image.
           </p>
         ) : null}
       </PopoverContent>

@@ -18,8 +18,10 @@ export type ProductSeoDiagnosticTone =
 export type ProductSeoPolicySource = "current" | "default";
 export type ProductSeoVariantState = "loaded" | "loading" | "unavailable";
 
-export interface ProductSeoDiagnosticImage {
+export interface ProductSeoDiagnosticMedia {
+  kind: "image" | "video";
   url?: string | null;
+  posterUrl?: string | null;
   isPrimary?: boolean | null;
   sortOrder?: number | null;
 }
@@ -41,7 +43,7 @@ export interface ProductSeoDiagnosticsInput {
     slug?: string | null;
     canonicalPath?: string | null;
     isActive?: boolean | null;
-    images?: ProductSeoDiagnosticImage[] | null;
+    media?: ProductSeoDiagnosticMedia[] | null;
     noIndex?: boolean | null;
     excludeFromSitemap?: boolean | null;
     excludeFromProductFeed?: boolean | null;
@@ -230,15 +232,19 @@ function buildAvailabilityStatus(
   };
 }
 
-function pickPrimaryImage(
-  images: ProductSeoDiagnosticImage[] | null | undefined,
+function pickProductImageRepresentation(
+  media: ProductSeoDiagnosticMedia[] | null | undefined,
 ): string | null {
-  if (!images || images.length === 0) return null;
-
-  return (
-    images.find((image) => image.isPrimary === true && image.url?.trim())
-      ?.url?.trim() ?? null
+  if (!media || media.length === 0) return null;
+  const ordered = [...media].sort((left, right) =>
+    (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER),
   );
+  const featured = ordered.find((item) => item.isPrimary === true) ?? ordered[0];
+  if (featured?.kind === "image" && featured.url?.trim()) return featured.url.trim();
+  if (featured?.kind === "video" && featured.posterUrl?.trim()) return featured.posterUrl.trim();
+  const image = ordered.find((item) => item.kind === "image" && item.url?.trim());
+  if (image?.url?.trim()) return image.url.trim();
+  return ordered.find((item) => item.kind === "video" && item.posterUrl?.trim())?.posterUrl?.trim() ?? null;
 }
 
 function buildFeedImageStatus({
@@ -714,7 +720,7 @@ export function buildProductSeoDiagnostics({
     absoluteStorefrontUrl,
   });
   const feedImage = buildFeedImageStatus({
-    imageUrl: pickPrimaryImage(product.images),
+    imageUrl: pickProductImageRepresentation(product.media),
     hasCanonicalDraft: !canonical.path,
     absoluteStorefrontUrl,
     isActive,

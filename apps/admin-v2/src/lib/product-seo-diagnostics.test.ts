@@ -7,7 +7,7 @@ const activeProduct = {
   id: "prod_1",
   slug: "green-tea",
   isActive: true,
-  images: [{ url: "https://cdn.example.com/green-tea.jpg", isPrimary: true }],
+  media: [{ kind: "image" as const, url: "https://cdn.example.com/green-tea.jpg", isPrimary: true }],
 };
 
 const availableSimpleSku = [
@@ -50,7 +50,7 @@ describe("buildProductSeoDiagnostics", () => {
 
   it("keeps create-mode products in calm draft states", () => {
     const diagnostics = buildProductSeoDiagnostics({
-      product: { slug: "", isActive: true, images: [] },
+      product: { slug: "", isActive: true, media: [] },
       variantState: "unavailable",
       discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
       storefrontUrl: null,
@@ -106,7 +106,7 @@ describe("buildProductSeoDiagnostics", () => {
 
   it("reports the required feed image skip reason without blocking sitemap", () => {
     const diagnostics = buildProductSeoDiagnostics({
-      product: { ...activeProduct, images: [] },
+      product: { ...activeProduct, media: [] },
       variants: availableSimpleSku,
       variantState: "loaded",
       discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
@@ -126,13 +126,13 @@ describe("buildProductSeoDiagnostics", () => {
     });
   });
 
-  it("requires the actual primary image for feed readiness", () => {
+  it("uses the next ordered image when featured media has no image representation", () => {
     const diagnostics = buildProductSeoDiagnostics({
       product: {
         ...activeProduct,
-        images: [
-          { url: "https://cdn.example.com/secondary.jpg", isPrimary: false },
-          { url: "", isPrimary: true },
+        media: [
+          { kind: "image", url: "https://cdn.example.com/secondary.jpg", isPrimary: false, sortOrder: 1 },
+          { kind: "image", url: "", isPrimary: true, sortOrder: 0 },
         ],
       },
       variants: availableSimpleSku,
@@ -142,22 +142,39 @@ describe("buildProductSeoDiagnostics", () => {
       policySource: "current",
     });
 
-    expect(diagnostics.feedImage).toMatchObject({
-      tone: "warning",
-      title: "Feed image needed",
-      imageUrl: null,
-    });
+    expect(diagnostics.feedImage.imageUrl).toBe("https://cdn.example.com/secondary.jpg");
     expect(diagnostics.feed).toMatchObject({
-      inclusion: "skipped",
-      skippedReason: "Missing or invalid primary image.",
+      inclusion: "included",
+      skippedReason: null,
     });
+  });
+
+  it("uses a featured video's poster and never its video URL as the feed image", () => {
+    const diagnostics = buildProductSeoDiagnostics({
+      product: {
+        ...activeProduct,
+        media: [{
+          kind: "video",
+          url: "https://cdn.example.com/demo.mp4",
+          posterUrl: "https://cdn.example.com/demo-poster.webp",
+          isPrimary: true,
+        }],
+      },
+      variants: availableSimpleSku,
+      variantState: "loaded",
+      discovery: DEFAULT_SEO_DISCOVERY_SETTINGS,
+      storefrontUrl: "https://shop.example.com",
+    });
+
+    expect(diagnostics.feedImage.imageUrl).toBe("https://cdn.example.com/demo-poster.webp");
+    expect(diagnostics.feedImage.imageUrl).not.toContain(".mp4");
   });
 
   it("uses the shared catalog discovery image contract for feed image readiness", () => {
     const diagnostics = buildProductSeoDiagnostics({
       product: {
         ...activeProduct,
-        images: [{ url: "//cdn.example.com/protocol-relative.jpg", isPrimary: true }],
+        media: [{ kind: "image", url: "//cdn.example.com/protocol-relative.jpg", isPrimary: true }],
       },
       variants: availableSimpleSku,
       variantState: "loaded",

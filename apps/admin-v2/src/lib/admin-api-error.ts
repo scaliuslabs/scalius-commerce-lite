@@ -28,6 +28,12 @@ export interface CategoryRevisionConflict {
   currentRevision: number | null;
 }
 
+export interface ProductMediaSkuReferenceConflict {
+  affectedCount: number;
+  affectedAssociationIds: string[];
+  affectedSkus: Array<{ id: string; sku: string; imageId: string }>;
+}
+
 interface AdminApiErrorShape {
   status: number | null;
   code?: string;
@@ -120,6 +126,52 @@ export function readProductRevisionConflict(
   return {
     expectedRevision: details.expectedRevision,
     currentRevision: details.currentRevision,
+  };
+}
+
+export function readProductMediaSkuReferenceConflict(
+  error: unknown,
+): ProductMediaSkuReferenceConflict | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 409 ||
+    parsed.code !== "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT" ||
+    !parsed.details ||
+    typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+  const details = parsed.details as {
+    affectedCount?: unknown;
+    affectedAssociationIds?: unknown;
+    affectedSkus?: unknown;
+  };
+  if (
+    typeof details.affectedCount !== "number" ||
+    !Number.isInteger(details.affectedCount) ||
+    details.affectedCount < 1 ||
+    !Array.isArray(details.affectedAssociationIds) ||
+    details.affectedAssociationIds.length > 20 ||
+    !details.affectedAssociationIds.every((id) => typeof id === "string" && id.length > 0) ||
+    !Array.isArray(details.affectedSkus) ||
+    details.affectedSkus.length > 5
+  ) {
+    return null;
+  }
+  const affectedSkus = details.affectedSkus.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as { id?: unknown; sku?: unknown; imageId?: unknown };
+    return typeof candidate.id === "string"
+      && typeof candidate.sku === "string"
+      && typeof candidate.imageId === "string"
+      ? [{ id: candidate.id, sku: candidate.sku, imageId: candidate.imageId }]
+      : [];
+  });
+  if (affectedSkus.length !== details.affectedSkus.length) return null;
+  return {
+    affectedCount: details.affectedCount,
+    affectedAssociationIds: [...details.affectedAssociationIds],
+    affectedSkus,
   };
 }
 

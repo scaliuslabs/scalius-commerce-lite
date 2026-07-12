@@ -3,6 +3,7 @@ import {
   AdminApiResponseError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
+  readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
 } from "./admin-api-error";
 
@@ -76,5 +77,22 @@ describe("admin API detail-loader errors", () => {
     first.cause = second;
 
     expect(isAdminApiNotFoundError(first)).toBe(false);
+  });
+
+  it("accepts only bounded typed product-media SKU conflicts", () => {
+    const details = {
+      affectedCount: 2,
+      affectedAssociationIds: ["pmed_white"],
+      affectedSkus: [{ id: "var_white", sku: "SHOE-WHITE", imageId: "pmed_white" }],
+    };
+    expect(readProductMediaSkuReferenceConflict(
+      new AdminApiResponseError("Confirm fallback", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", details),
+    )).toEqual(details);
+    expect(readProductMediaSkuReferenceConflict(
+      new AdminApiResponseError("Bad shape", 409, "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT", {
+        ...details,
+        affectedAssociationIds: Array.from({ length: 21 }, (_, index) => `pmed_${index}`),
+      }),
+    )).toBeNull();
   });
 });

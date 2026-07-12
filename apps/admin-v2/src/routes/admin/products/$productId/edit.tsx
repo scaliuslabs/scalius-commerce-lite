@@ -8,7 +8,7 @@ import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { productQueryOptions } from "~/lib/api-query-options/products";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
-import type { ProductDetail, ProductImageDetail } from "~/types/api-responses";
+import type { ProductDetail } from "~/types/api-responses";
 import {
   DEFAULT_PRODUCT_CONDITION,
   type ProductFormValues,
@@ -119,6 +119,11 @@ function ProductEditor({ productId, initialProduct, categories }: {
       price: values.price,
       categoryId: values.categoryId,
       isActive: values.isActive,
+      media: values.media.map(({ effectiveAltText, altText, ...item }) => ({
+        ...item,
+        altText: altText.trim() || effectiveAltText,
+        contextualAltText: altText.trim() || null,
+      })),
       aggregateRevision: revision,
     }));
     setAggregateRevision(revision);
@@ -146,13 +151,13 @@ function ProductEditor({ productId, initialProduct, categories }: {
     discountAmount: formSnapshot.discountAmount || 0,
     freeDelivery: formSnapshot.freeDelivery,
     slugEdited: true,
-    images: (formSnapshot.images || []).map((image: ProductImageDetail) => ({
-      id: image.id,
-      url: image.url,
-      filename: image.alt ?? image.altText ?? image.url.split("/").pop() ?? "",
-      size: 0,
-      createdAt: new Date(image.createdAt),
-    })),
+    media: [...(formSnapshot.media || [])]
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .map((item) => ({
+        ...item,
+        effectiveAltText: item.altText,
+        altText: item.contextualAltText ?? "",
+      })),
     attributes: formSnapshot.attributes || [],
     additionalInfo: (formSnapshot.additionalInfo || []).map((item) => ({ ...item })),
   };
@@ -178,7 +183,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixDirty={matrixDirty}
         optionMatrixSaving={matrixSaving}
         onOptionMatrixSave={() => matrixRef.current?.save()}
-        optionManager={({ images, productName, productPrice }) => (
+        optionManager={({ skuImages, productName, productPrice }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               ref={matrixRef}
@@ -188,7 +193,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
               productPrice={productPrice}
               options={matrixSnapshot.options}
               variants={matrixSnapshot.variants}
-              images={images.filter((image) => !image.id.startsWith("temp_"))}
+              images={skuImages}
               aggregateRevision={aggregateRevision}
               onAggregateRevisionChange={updateRevision}
               onDirtyChange={setMatrixDirty}
