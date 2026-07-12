@@ -696,6 +696,11 @@ function evaluateFeedGenerationCacheHeaders(headers) {
   };
 }
 
+export function shouldRetryFeedGeneration(result) {
+  return result?.ok === false &&
+    /\bBYPASS_GENERATION\b/i.test(result.cacheStatus ?? "");
+}
+
 function evaluatePurgeGetHeaders(headers) {
   const cacheControl = normalizeHeaderValue(headers, "cache-control");
   const allow = normalizeHeaderValue(headers, "allow");
@@ -1845,23 +1850,33 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
     throw new Error(`Storefront /checkout cache headers failed: ${checkout.errors.join("; ")}`);
   }
 
-  const productFeedResponse = await fetchText(
-    buildUrlWithSearch(options.storefrontUrl, "/api/product-feed.xml?limit=5"),
-    {
+  const productFeedUrl = buildUrlWithSearch(
+    options.storefrontUrl,
+    "/api/product-feed.xml?limit=5",
+  );
+  let productFeedResponse;
+  let productFeed;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    productFeedResponse = await fetchText(productFeedUrl, {
       fetchImpl,
       timeoutMs: options.timeoutMs,
       accept: "application/xml, text/xml, */*;q=0.8",
       // This assertion measures the normal generated-cache contract. Sending
       // no-cache deliberately produces BYPASS_GENERATION on a cold edge.
       bypassCache: false,
-    },
-  );
-  requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>
-    status >= 200 && status < 300);
-  const productFeed = evaluateFeedGenerationCacheHeaders(productFeedResponse.headers);
+    });
+    requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>
+      status >= 200 && status < 300);
+    productFeed = evaluateFeedGenerationCacheHeaders(productFeedResponse.headers);
+    if (!shouldRetryFeedGeneration(productFeed)) {
+      break;
+    }
+  }
   if (!productFeed.ok) {
     throw new Error(
-      `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")}`,
+      `Storefront /api/product-feed.xml cache headers failed: ${productFeed.errors.join("; ")} ` +
+      `(X-Cache-Status=${JSON.stringify(productFeed.cacheStatus)}, ` +
+      `generation=${JSON.stringify(productFeed.generationHeader)})`,
     );
   }
 

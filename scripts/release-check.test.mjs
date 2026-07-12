@@ -7,6 +7,7 @@ import {
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   requestHeaders,
+  shouldRetryFeedGeneration,
 } from "./release-check.mjs";
 
 function catalogOnlyUcpProfile() {
@@ -57,6 +58,21 @@ describe("release check arguments", () => {
     expect(requestHeaders("application/xml", { bypassCache: false })).toEqual({
       Accept: "application/xml",
     });
+  });
+
+  it("retries only the cold feed-generation transition state", () => {
+    expect(shouldRetryFeedGeneration({
+      ok: false,
+      cacheStatus: "BYPASS_GENERATION",
+    })).toBe(true);
+    expect(shouldRetryFeedGeneration({
+      ok: false,
+      cacheStatus: "MISS; v=1; build=x",
+    })).toBe(false);
+    expect(shouldRetryFeedGeneration({
+      ok: true,
+      cacheStatus: "HIT; v=1; build=x; gen=0",
+    })).toBe(false);
   });
 
   it("normalizes explicit URLs and operational flags", () => {
