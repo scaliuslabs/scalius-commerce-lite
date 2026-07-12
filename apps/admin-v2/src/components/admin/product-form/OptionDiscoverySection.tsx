@@ -28,33 +28,33 @@ const OPTION_SCHEMA_LABELS: Record<ProductOptionSchema, string> = {
   color: "Color",
   material: "Material",
   pattern: "Pattern",
-  none: "None",
+  none: "No standard mapping",
 };
 
 interface OptionDiscoverySectionProps {
   form: UseFormReturn<ProductFormValues>;
+  embedded?: boolean;
 }
 
 export const OptionDiscoverySection = memo(function OptionDiscoverySection({
   form,
+  embedded = false,
 }: OptionDiscoverySectionProps) {
   const optionOneLabel = form.watch("variantOption1Label")?.trim() || "Option 1";
   const optionTwoLabel = form.watch("variantOption2Label")?.trim() || "Option 2";
 
-  return (
-    <CollapsibleCard
-      title="Option names"
-      description={`${optionOneLabel} · ${optionTwoLabel}`}
-      defaultOpen={false}
-    >
-      <div className="space-y-3">
-        <p className="text-xs leading-5 text-muted-foreground">
-          Name the choice axes used by this product's SKUs. These names appear
-          in the option editor, storefront, feeds, and structured data; catalog
-          type only controls standards mapping.
+  const content = (
+    <div className="space-y-3">
+      <div>
+        <h4 className="text-xs font-semibold">Choice axes</h4>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          Name the choices customers make, such as Size, Color, Shape, Pack,
+          Format, or 2-in-1. Values and sellable combinations are managed in
+          the variant table directly below.
         </p>
+      </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
           <OptionMappingFields
             form={form}
             labelName="variantOption1Label"
@@ -69,8 +69,19 @@ export const OptionDiscoverySection = memo(function OptionDiscoverySection({
             title="Option 2"
             description="Maps existing SKU option 2 values."
           />
-        </div>
       </div>
+    </div>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <CollapsibleCard
+      title="Product options"
+      description={`${optionOneLabel} · ${optionTwoLabel}`}
+      defaultOpen={false}
+    >
+      {content}
     </CollapsibleCard>
   );
 });
@@ -121,7 +132,7 @@ function OptionMappingFields({
           name={schemaName}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">Catalog type</FormLabel>
+              <FormLabel className="text-xs">Standard mapping</FormLabel>
               <Select
                 value={field.value}
                 onValueChange={(value) =>
@@ -133,7 +144,7 @@ function OptionMappingFields({
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent side="bottom" align="start">
                   {PRODUCT_OPTION_SCHEMA_VALUES.map((value) => (
                     <SelectItem key={value} value={value}>
                       {OPTION_SCHEMA_LABELS[value]}
@@ -141,8 +152,8 @@ function OptionMappingFields({
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription className="sr-only">
-                Search schema mapping for {title.toLowerCase()}.
+              <FormDescription className="text-[10px] leading-4">
+                Optional feed/search meaning; it never limits the option name or values.
               </FormDescription>
               <FormMessage />
             </FormItem>

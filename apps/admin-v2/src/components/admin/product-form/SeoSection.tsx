@@ -41,6 +41,7 @@ interface SeoSectionProps {
   variants?: ProductSeoDiagnosticVariant[];
   variantState?: ProductSeoVariantState;
   storefrontUrl?: string | null;
+  defaultOpen?: boolean;
 }
 
 interface CachedSeoSettings {
@@ -113,6 +114,7 @@ export const SeoSection = memo(function SeoSection({
   variants = [],
   variantState = "unavailable",
   storefrontUrl,
+  defaultOpen = false,
 }: SeoSectionProps) {
   const queryClient = useQueryClient();
   const cachedSeoSettings = queryClient.getQueryData<CachedSeoSettings>(
@@ -122,7 +124,10 @@ export const SeoSection = memo(function SeoSection({
     cachedSeoSettings?.discovery ?? DEFAULT_SEO_DISCOVERY_SETTINGS;
   const policySource = cachedSeoSettings?.discovery ? "current" : "default";
   const productId = form.watch("id");
+  const productName = form.watch("name");
   const slug = form.watch("slug");
+  const metaTitle = form.watch("metaTitle");
+  const metaDescription = form.watch("metaDescription");
   const isActive = form.watch("isActive");
   const images = form.watch("images");
   const noIndex = form.watch("noIndex");
@@ -170,7 +175,20 @@ export const SeoSection = memo(function SeoSection({
     <CollapsibleCard
       title="Search and discovery"
       description="Search preview, canonical URL, sitemap, and feeds"
-      defaultOpen={false}
+      defaultOpen={defaultOpen}
+      summary={
+        <div className="rounded-md border bg-muted/15 p-2.5">
+          <p className="truncate text-xs font-medium text-foreground">
+            {metaTitle?.trim() || productName?.trim() || "Add a search title"}
+          </p>
+          <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
+            /products/{slug?.trim() || "product-url"}
+          </p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+            {metaDescription?.trim() || "Add a description to preview how this product can appear in search."}
+          </p>
+        </div>
+      }
     >
       <div className="space-y-3">
         <FormField

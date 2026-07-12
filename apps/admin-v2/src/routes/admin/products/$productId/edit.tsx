@@ -261,6 +261,28 @@ function ProductEditor({
     })),
   };
 
+  const optionManager = isHydrated ? (
+    <Suspense fallback={<LoadingFallback height="h-48" />}>
+      <VariantManager
+        key={`option-editor-${formGeneration}`}
+        productId={editorSnapshot.id}
+        productSlug={editorSnapshot.slug}
+        productName={editorSnapshot.name}
+        variants={editorVariants}
+        onVariantsChange={setEditorVariants}
+        optionLabels={editorOptionLabels}
+        aggregateRevision={currentAggregateRevision}
+        revisionConflict={revisionConflict}
+        onAggregateRevisionChange={handleAggregateRevisionChange}
+        onRevisionConflict={handleRevisionConflict}
+        onOpenRevisionConflict={() => setIsConflictOpen(true)}
+        embedded
+      />
+    </Suspense>
+  ) : (
+    <LoadingFallback height="h-48" />
+  );
+
   return (
     <div className="container max-w-6xl space-y-4 py-4 pb-8">
       <ProductForm
@@ -276,30 +298,8 @@ function ProductEditor({
         onOpenRevisionConflict={() => setIsConflictOpen(true)}
         onProductSaved={handleProductSaved}
         onOptionLabelsChange={setEditorOptionLabels}
+        optionManager={optionManager}
       />
-
-      <div id="variant-section">
-        {isHydrated ? (
-          <Suspense fallback={<LoadingFallback height="h-48" />}>
-            <VariantManager
-              key={`option-editor-${formGeneration}`}
-              productId={editorSnapshot.id}
-              productSlug={editorSnapshot.slug}
-              productName={editorSnapshot.name}
-              variants={editorVariants}
-              onVariantsChange={setEditorVariants}
-              optionLabels={editorOptionLabels}
-              aggregateRevision={currentAggregateRevision}
-              revisionConflict={revisionConflict}
-              onAggregateRevisionChange={handleAggregateRevisionChange}
-              onRevisionConflict={handleRevisionConflict}
-              onOpenRevisionConflict={() => setIsConflictOpen(true)}
-            />
-          </Suspense>
-        ) : (
-          <LoadingFallback height="h-48" />
-        )}
-      </div>
       <ProductRevisionConflictDialog
         open={isConflictOpen}
         conflict={revisionConflict}

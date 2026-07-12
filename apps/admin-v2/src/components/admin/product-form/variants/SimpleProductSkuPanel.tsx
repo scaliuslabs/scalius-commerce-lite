@@ -51,6 +51,7 @@ interface SimpleProductSkuPanelProps {
   productSlug?: string;
   optionLabels?: VariantOptionLabels;
   isSubmitting: boolean;
+  embedded?: boolean;
 }
 
 function formValuesFromVariant(variant: ProductVariant): VariantFormValues {
@@ -83,6 +84,7 @@ export function SimpleProductSkuPanel({
   productSlug,
   optionLabels,
   isSubmitting,
+  embedded = false,
 }: SimpleProductSkuPanelProps) {
   const form = useForm<VariantFormValues>({
     resolver: zodResolver(variantFormSchema),
@@ -161,13 +163,16 @@ export function SimpleProductSkuPanel({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <Card>
+      <Card
+        data-variant-editor
+        className={embedded ? "rounded-none border-0 shadow-none" : undefined}
+      >
       <CardHeader className="px-2 pt-2 pb-2 sm:px-3 sm:pt-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
               <Package className="h-4 w-4 text-muted-foreground" />
-              Product SKU
+              {embedded ? "Default SKU" : "Product SKU"}
               <Badge variant="outline" className="h-5 border-sky-200 bg-sky-50 px-1.5 text-[10px] text-sky-700">
                 No options
               </Badge>
