@@ -145,21 +145,24 @@ describe("admin metadata/access OpenAPI error responses", () => {
     it("documents media not-found and storage-unavailable paths", () => {
         const spec = buildAdminMetadataAccessSpec();
 
-        expectResponses(spec, "/api/v1/admin/media/{id}", "delete", [
+        expectResponses(spec, "/api/v1/admin/media/{id}/permanent", "delete", [
             "204",
+            "400",
             "401",
             "403",
             "404",
+            "409",
             "500",
             "503",
         ]);
-        expectResponses(spec, "/api/v1/admin/media/upload", "post", [
-            "200",
+        expectResponses(spec, "/api/v1/admin/media/uploads", "post", [
             "201",
             "400",
             "401",
             "403",
+            "409",
             "500",
+            "503",
         ]);
         expectResponses(spec, "/api/v1/admin/media/move", "post", [
             "200",
@@ -167,12 +170,15 @@ describe("admin metadata/access OpenAPI error responses", () => {
             "401",
             "403",
             "404",
+            "409",
             "500",
         ]);
         expectResponses(spec, "/api/v1/admin/media/folders/{id}", "delete", [
             "204",
+            "400",
             "401",
             "403",
+            "409",
             "500",
         ]);
     });

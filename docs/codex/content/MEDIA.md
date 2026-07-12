@@ -110,6 +110,19 @@ create corrupt previews and buyer surfaces.
 - Product card/cart/checkout/order/feed/UCP/JSON-LD use a valid image/poster and
   never a video URL. Protected product-page composition remains unchanged.
 
+## Implemented domain milestone (2026-07-12)
+
+Migration 0017 replaces the demo image-only library with first-class
+image/video authority, flat versioned folders, immutable object keys, coherent
+kind/MIME and lifecycle checks, and durable multipart session/part tables. The
+core/API path now claims D1 before creating R2 multipart state, streams exact
+5 MiB parts, verifies part 1 before R2, reconciles R2-complete/D1-incomplete
+retries, derives URLs at response time, provides stable scoped cursors and CAS
+mutations, and makes trash/permanent deletion repairable. The product/gallery,
+admin workspace, and buyer-surface integration remain separate follow-on
+slices and must satisfy the product/storefront contract above before Media is
+release-complete.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)

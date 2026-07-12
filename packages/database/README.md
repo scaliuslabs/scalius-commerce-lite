@@ -106,8 +106,10 @@ the schema declarations are the source of truth.
 | `productAttributes` | Filterable attribute definitions. `name` (unique), `slug` (unique), `options` (JSON array) |
 | `productAttributeValues` | Product-attribute assignments. Unique on `(productId, attributeId)` |
 | `productRichContent` | Product detail sections (tabs). `title`, `content`, `sortOrder` |
-| `mediaFolders` | Media folder hierarchy. Self-referential `parentId` FK |
-| `media` | Uploaded media files. `filename`, `url`, `size`, `mimeType`, `folderId` FK, media metadata |
+| `mediaFolders` | Flat, versioned media folders with case-insensitive active-name uniqueness |
+| `media` | Versioned image/video metadata keyed by immutable R2 `objectKey`; poster, readiness, and trash/delete lifecycle |
+| `mediaUploadSessions` | Durable multipart intent and completion/expiry recovery state |
+| `mediaUploadParts` | Exact-size uploaded-part evidence and first-part signature verification |
 
 Public storefront listing indexes are intentionally measured and narrow:
 `products_public_newest_idx` supports the default `/products` newest path,
