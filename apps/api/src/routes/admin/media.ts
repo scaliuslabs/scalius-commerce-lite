@@ -38,6 +38,7 @@ import {
     MEDIA_SIGNATURE_READ_BYTES,
 } from "@scalius/shared/media-policy";
 import { ValidationError } from "@scalius/core/errors";
+import { invalidateMediaDependentProductCaches } from "../../utils/media-cache-invalidation";
 import { readExactMediaPart } from "./media-upload-body";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -214,7 +215,13 @@ const patchMediaRoute = createRoute({
     request: { params: idParam, body: { content: { "application/json": { schema: updateMediaSchema } } } },
     responses: { 200: { description: "Media updated", content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
 });
-app.openapi(patchMediaRoute, async (c) => ok(c, { file: await updateMediaFile(c.get("db"), c.req.valid("param").id, c.req.valid("json")) }));
+app.openapi(patchMediaRoute, async (c) => {
+    const db = c.get("db");
+    const id = c.req.valid("param").id;
+    const file = await updateMediaFile(db, id, c.req.valid("json"));
+    await invalidateMediaDependentProductCaches(db, id, c);
+    return ok(c, { file });
+});
 
 for (const [path, summary, action] of [
     ["/{id}/trash", "Move media to trash", trashMediaFile],
@@ -228,7 +235,13 @@ for (const [path, summary, action] of [
         request: { params: idParam, body: { content: { "application/json": { schema: mediaVersionCommandSchema } } } },
         responses: { 200: { description: summary, content: { "application/json": { schema: successEnvelope(z.object({ file: mediaSchema })) } } }, ...mediaErrorResponses },
     });
-    app.openapi(route, async (c) => ok(c, { file: await action(c.get("db"), c.req.valid("param").id, c.req.valid("json").expectedVersion) }));
+    app.openapi(route, async (c) => {
+        const db = c.get("db");
+        const id = c.req.valid("param").id;
+        const file = await action(db, id, c.req.valid("json").expectedVersion);
+        await invalidateMediaDependentProductCaches(db, id, c);
+        return ok(c, { file });
+    });
 }
 
 const permanentDeleteRoute = createRoute({
