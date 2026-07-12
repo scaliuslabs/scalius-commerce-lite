@@ -50,7 +50,9 @@ describe("InventoryManager boundaries", () => {
   it("supports server-backed movement search, type filtering, and order navigation", () => {
     expect(source).toContain("movementSearch");
     expect(source).toContain("movementType");
-    expect(source).toContain("Search movements by product, SKU, or order");
+    expect(source).toContain('placeholder="Search product or SKU..."');
+    expect(source).toContain('placeholder="Exact order ID"');
+    expect(source).toContain("movementOrderId: debouncedMovementOrderId.trim()");
     expect(source).toContain("`/admin/orders/${m.orderId}`");
   });
 

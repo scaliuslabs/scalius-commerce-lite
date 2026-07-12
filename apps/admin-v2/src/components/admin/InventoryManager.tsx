@@ -934,7 +934,7 @@ export function InventoryManager() {
                           </TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
                             <div className="truncate">{m.notes || "\u2014"}</div>
-                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground/80">
                               {m.actorType === "system" ? "System" : `By ${m.actorName}`}
                             </div>
                           </TableCell>
