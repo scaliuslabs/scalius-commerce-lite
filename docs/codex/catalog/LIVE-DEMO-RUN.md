@@ -20,6 +20,8 @@ Keep these categories active and published:
 - Home & Living — `cat_mZl8SzAouadS92gJPIr7l`
 - Footwear — `cat_CrF6miTP8nEXe8bal5X0I`
 
+Homepage merchandising uses the active dynamic collection Curated Essentials — `XXEtmfVkKoOW6OHdliihF` — backed only by those two categories. Its featured-grid section was browser-verified with both products, real images, option-aware prices, and the Halo SKU discount.
+
 ## Browser commerce proof
 
 Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome profile.
@@ -39,6 +41,7 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Never permanently delete `prod_KyaDjWL28lOsRaynv9oOu` (inventory movement history) or `prod_ZeaunlIJFh94Bs8NXqesN` (inventory and historical order evidence). Keep both in trash.
 - A permanent-delete request for the other 31 safe trash rows returned an opaque 500 and deleted nothing. Fix and deploy the bulk-delete path before retrying; do not bypass it with raw D1 deletes.
 - A bulk-trash request for the 12 obsolete active categories also returned an opaque 500 and deleted nothing. Keep Home & Living and Footwear active. After the endpoint is fixed, move the 12 legacy categories to trash, permanently delete the safe categories, and retain Shoes while audit-bound products still reference it.
+- The manual collection product picker incorrectly returned category DTOs and would insert a category ID into `productIds`. The demo collection therefore uses the valid dynamic-category source. Fix the picker/query cache boundary before using manual collections.
 
 ## Required continuation checks
 
