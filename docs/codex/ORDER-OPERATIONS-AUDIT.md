@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, and payment-recovery proof handling are materially stronger than the surrounding admin workflows. The largest risk is that generic CRUD and status controls can bypass those stronger workflows.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, and invoice issuance now have explicit authorities. Remaining P0 work is concentrated in stale full-edit/amendment safety, manual-create idempotency, and permanent deletion of commerce evidence.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -33,17 +33,9 @@ The release path should immediately narrow generic mutation authority. Financial
 
 ### P0-1 — Generic order status can bypass workflow-owned facts
 
-**Implemented:** the shared transition map exposes `returned`, `refunded`, and `partially_refunded`, and also allows `shipped -> confirmed` and `shipped -> cancelled`. The detail dropdown uses that map. The full edit form exposes every `OrderStatus`. Both the generic status endpoint and full update service accept these values.
+**Resolved for generic admin controls:** list, detail, and full-edit status controls now use the same narrow admin policy. Financial and return outcomes (`returned`, `refunded`, `partially_refunded`) are excluded, and shipped orders cannot be generically reversed or cancelled. Owning refund, return, COD, shipment, and reconciliation commands retain their internal transition authority. Route and component boundary tests protect the separation.
 
-**Gap:** a merchant can select a financial or return outcome without creating the refund allocation/provider attempt, return request/receipt/disposition, reason, actor evidence, or item-level quantity facts that should make the state true. A post-shipment backward transition can restore or re-reserve inventory despite shipment evidence. The full edit endpoint is protected by `orders.edit`, so it also bypasses the dedicated `orders.change_status` RBAC permission.
-
-**Decision:**
-
-1. Add a generic-admin-status allowlist immediately. At minimum, exclude `returned`, `refunded`, and `partially_refunded`; exclude post-shipment reversal/cancellation from generic controls.
-2. Keep internal service transitions available to return, refund, COD, shipment, and reconciliation commands.
-3. Remove the status field from the generic full-edit contract, or enforce `orders.change_status` separately and use the same restricted command policy.
-4. Model post-shipment correction as an explicit reconciliation command with shipment evidence, item quantities, actor, reason, idempotency key, and inventory outcome.
-5. Longer term, narrow `orders.status` to the commercial/order lifecycle and derive payment, fulfillment, return, and recovery summaries from their owning records. One dropdown must not pretend these dimensions are interchangeable.
+**Longer-term decision:** narrow `orders.status` to the commercial lifecycle and derive payment, fulfillment, return, and recovery summaries from their owning records. One dropdown must not pretend these dimensions are interchangeable.
 
 ### P0-2 — Full edit can overwrite a newer edit and rewrite settled commerce facts
 
@@ -102,11 +94,9 @@ The old invoice GET mutated state while requiring only `orders.view`. Browser pr
 
 ### P0-6 — Returns and COD return-to-sender restore stock before receipt
 
-**Implemented:** the current whole-order return and COD returned commands restore inventory and may initiate a refund.
+**Resolved in the item-level return slice:** requests and approvals do not change inventory. A warehouse receipt explicitly partitions received quantity into restockable and damaged units; only the restock quantity writes a ledger-v2 movement in the same durable command. Receipt commands are idempotent and recoverable, cumulative item entitlement is database-guarded, and return lines/receipts are immutable evidence. COD return-to-sender creates an approved non-restocking return instead of making unreceived stock sellable. The order becomes returned only after every fulfilled unit is physically received.
 
-**Gap:** returned goods are not sellable merely because the customer or courier reports a return. The system has no item/quantity request, approval, in-transit, warehouse-received, inspection, disposition, restock, damaged/write-off, or refund-allocation lifecycle. Generic returned status can bypass even the current reason/refund path.
-
-**Active redesign:** item-level return/inventory work is already owned by the active return slice. Do not create a parallel schema. The accepted invariant is: availability changes only after an idempotent warehouse receipt/disposition command, and only for the approved/restockable quantities. See [Inventory and Orders Competitive Audit](./INVENTORY-ORDERS-COMPETITIVE-AUDIT.md).
+The admin order workspace supports create, approve/reject, receive/disposition, cancel, and reconcile operations with stable command keys. Customer cancellation/return/refund visibility and server eligibility share the merchant policy documented in [Customer request policy](./CUSTOMER-REQUEST-POLICY.md).
 
 ## Workflow audit
 
@@ -200,19 +190,16 @@ The old invoice GET mutated state while requiring only `orders.view`. Browser pr
 
 **Implemented**
 
-- Authenticated print/PDF page, business information, bill-to data, line items, saved minor-unit/tax-aware display when those snapshots exist, and A4 print styles.
+- Read-only unnumbered draft preview; explicit permissioned issuance; authenticated print/PDF actions only after issuance; immutable merchant, buyer, line, money, tax, prefix, footer, and logo-reference snapshot; saved minor-unit display; integrity hash; render version; and A4 print styles.
 
 **Proven**
 
-- No focused invoice allocation, authorization, snapshot, print, or PDF regression tests were found.
+- Focused tests cover read purity, atomic sequence/invoice/command/order CAS, concurrent allocation retry, exact idempotent replay, changed-payload conflict, merchant readiness, immutable snapshot rendering, migration guards, RBAC method separation, stable client operation keys, and recoverable page errors.
 
 **Gaps**
 
-- Allocation and snapshot failures in P0-5.
-- Loader catches every error and redirects to orders, hiding not-found, permission, counter conflict, and service failure.
 - PDF generation failure only logs in development; production users receive no error or retry guidance.
-- Client HTML-to-canvas PDF is useful convenience, not authoritative document generation. Once invoices are finalized, produce a deterministic server-side document or immutable invoice payload with a reproducible render version and content hash.
-- Historical invoice identity must not change after business settings, currency presentation, catalog names, or order lines change.
+- Client HTML-to-canvas PDF remains a convenience renderer. The immutable hashed payload is authoritative, but a deterministic server-generated PDF artifact is still a useful future compliance/export feature.
 
 ### 6. Trash, restore, and permanent delete
 
