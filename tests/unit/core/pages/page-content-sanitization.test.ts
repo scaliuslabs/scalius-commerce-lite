@@ -37,20 +37,24 @@ describe("page content sanitization", () => {
   it("sanitizes page content before create persistence", async () => {
     const db = createMockDb({ selectResult: null });
 
-    await createPage(db as any, {
-      title: "Landing",
-      slug: "landing",
-      content: '<img src="javascript:alert(1)" onerror="x"><p>Copy</p>',
-      metaTitle: null,
-      metaDescription: null,
-      isPublished: true,
-      publishedAt: null,
-      sortOrder: 0,
-      hideHeader: false,
-      hideFooter: false,
-      hideTitle: false,
-      featuredImage: null,
-    });
+    await createPage(
+      db as any,
+      {
+        title: "Landing",
+        slug: "landing",
+        content: '<img src="javascript:alert(1)" onerror="x"><p>Copy</p>',
+        metaTitle: null,
+        metaDescription: null,
+        isPublished: true,
+        publishedAt: null,
+        sortOrder: 0,
+        hideHeader: false,
+        hideFooter: false,
+        hideTitle: false,
+        featuredImage: null,
+      },
+      { canPublish: true },
+    );
 
     const valuesCall = db._calls.find((call) => call.method === "insert.values");
     expect(valuesCall?.args[0]).toMatchObject({
