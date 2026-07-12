@@ -25,13 +25,13 @@ function NewDiscountPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Create New Discount</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Create discount</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {selectedType
-              ? "Fill in the details for your discount"
-              : "Choose a discount type and fill in the details"}
+              ? "Set eligibility, limits, and dates before activation."
+              : "Choose what the customer code will reduce."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -49,7 +49,7 @@ function NewDiscountPage() {
           </Link>
         </div>
       </div>
-      <div className="space-y-8">
+      <div className="space-y-4">
         {!selectedType ? (
           <DiscountTypeSelector onSelect={setSelectedType} />
         ) : (

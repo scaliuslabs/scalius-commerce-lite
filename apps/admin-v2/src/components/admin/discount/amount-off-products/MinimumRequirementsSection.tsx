@@ -25,14 +25,14 @@ interface MinimumRequirementsSectionProps {
 export function MinimumRequirementsSection({ form, symbol }: MinimumRequirementsSectionProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
         <CardTitle>Minimum Requirements</CardTitle>
         <CardDescription>
           Set conditions that must be met for the discount to apply
           (optional).
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 pt-4">
+      <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-5">
         <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
           <FormField
             control={form.control}

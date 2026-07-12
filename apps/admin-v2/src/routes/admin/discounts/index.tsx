@@ -321,15 +321,15 @@ function DiscountsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
           {showTrashed ? "Deleted Discounts" : "Discounts"}
         </h1>
-        <p className="text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {showTrashed
-            ? "View and manage deleted discounts"
-            : "Manage your discounts and promotional codes"}
+            ? "Restore unused codes or permanently remove those without order history."
+            : "Create codes, control eligibility, and monitor redemption."}
         </p>
       </div>
 

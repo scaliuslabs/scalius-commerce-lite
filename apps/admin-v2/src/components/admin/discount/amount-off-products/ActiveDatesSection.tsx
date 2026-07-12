@@ -29,13 +29,13 @@ interface ActiveDatesSectionProps {
 export function ActiveDatesSection({ form }: ActiveDatesSectionProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
         <CardTitle>Active Dates</CardTitle>
         <CardDescription>
           Schedule when the discount is available.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 pt-4">
+      <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-5">
         <div className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
           <FormField
             control={form.control}

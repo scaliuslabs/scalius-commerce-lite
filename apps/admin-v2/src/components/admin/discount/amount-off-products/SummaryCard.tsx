@@ -23,14 +23,14 @@ export function SummaryCard({
   selectedCollections,
 }: SummaryCardProps) {
   return (
-    <Card className="bg-muted/30 border-dashed">
-      <CardHeader className="pb-3">
+    <Card className="border bg-card shadow-none">
+      <CardHeader className="px-4 pb-2 pt-4">
         <CardTitle className="text-base font-medium">
-          Discount Summary
+          Checkout preview
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+      <CardContent className="px-4 pb-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-3 gap-y-2 text-xs">
           <div className="text-muted-foreground">Code</div>
           <div className="font-mono font-semibold tracking-wider">
             {form.watch("code") || "---"}
@@ -44,21 +44,21 @@ export function SummaryCard({
           <div className="text-muted-foreground">Applies to</div>
           <div className="font-medium">
             {selectedProducts.length > 0 || selectedCollections.length > 0
-              ? `${selectedProducts.length} product(s), ${selectedCollections.length} collection(s)`
-              : "No products selected"}
+              ? `${selectedProducts.length} products · ${selectedCollections.length} collections`
+              : "Nothing selected"}
           </div>
           <div className="text-muted-foreground">Min. purchase</div>
           <div className="font-medium">
             {form.watch("minPurchaseAmount")
               ? `${symbol}${form.watch("minPurchaseAmount")}`
-              : "None"}
+              : "No minimum"}
           </div>
           <div className="text-muted-foreground">Usage limit</div>
           <div className="font-medium">
             {form.watch("maxUses")
               ? `${form.watch("maxUses")} total`
               : "Unlimited"}
-            {form.watch("limitOnePerCustomer") ? " (1 per customer)" : ""}
+            {form.watch("limitOnePerCustomer") ? " · once/customer" : ""}
           </div>
           <div className="text-muted-foreground">Period</div>
           <div className="font-medium" suppressHydrationWarning>

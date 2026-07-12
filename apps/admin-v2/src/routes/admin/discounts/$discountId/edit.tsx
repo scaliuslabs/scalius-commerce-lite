@@ -124,10 +124,10 @@ function EditDiscountPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{pageTitle}</h1>
-          <p className="text-muted-foreground">{pageDescription}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{pageDescription}</p>
         </div>
         <Link
           to="/admin/discounts"

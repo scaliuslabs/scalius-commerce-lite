@@ -41,13 +41,13 @@ interface DiscountDetailsSectionProps {
 export function DiscountDetailsSection({ form, symbol }: DiscountDetailsSectionProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
         <CardTitle>Discount Details</CardTitle>
         <CardDescription>
           Define the code, type, and value for this product discount.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 pt-4">
+      <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-5">
         <FormField
           control={form.control}
           name="code"

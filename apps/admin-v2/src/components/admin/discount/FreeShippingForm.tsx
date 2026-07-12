@@ -39,7 +39,7 @@ import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discou
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
-import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
+import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart, normalizeDiscountStartDate, normalizeDiscountEndDate } from "./shared-validation";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
@@ -77,8 +77,8 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       maxUsesPerOrder: 1,
       maxUses: null,
       limitOnePerCustomer: false,
-      combineWithProductDiscounts: true,
-      combineWithOrderDiscounts: true,
+      combineWithProductDiscounts: false,
+      combineWithOrderDiscounts: false,
       startDate: new Date(),
       endDate: null,
       isActive: false,
@@ -115,8 +115,13 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       type: "free_shipping" as const,
       valueType: "free" as const,
       discountValue: 100,
-      startDate: ensuredValues.startDate.toISOString(),
-      endDate: values.endDate ? values.endDate.toISOString() : null,
+      maxUsesPerOrder: 1,
+      combineWithProductDiscounts: false,
+      combineWithOrderDiscounts: false,
+      startDate: normalizeDiscountStartDate(ensuredValues.startDate).toISOString(),
+      endDate: values.endDate
+        ? normalizeDiscountEndDate(values.endDate).toISOString()
+        : null,
     };
 
     try {
@@ -143,17 +148,17 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
         method="post"
         action="/admin/discounts"
         onSubmit={handleSubmit}
-        className="space-y-8"
+        className="space-y-4"
         noValidate
       >
         <Card>
-          <CardHeader>
+          <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
             <CardTitle>Free Shipping</CardTitle>
             <CardDescription>
               Offer free shipping on orders that meet your criteria
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 px-4 pb-4 sm:px-5">
             {/* Discount Code */}
             <FormField
               control={form.control}
@@ -362,33 +367,6 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
-                  name="maxUsesPerOrder"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max Uses Per Order</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(
-                              e.target.value ? parseInt(e.target.value) : null,
-                            )
-                          }
-                          value={field.value === null ? "" : field.value}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        How many times this discount can be applied per order
-                        (usually 1)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="maxUses"
                   render={({ field }) => (
                     <FormItem>
@@ -413,6 +391,9 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                     </FormItem>
                   )}
                 />
+                <div className="rounded-md border border-dashed px-3 py-2 text-xs leading-5 text-muted-foreground">
+                  Checkout accepts one discount code per order. Usage limits are enforced when the order commits.
+                </div>
               </div>
 
               <FormField
@@ -430,56 +411,6 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                       <FormLabel>Limit one per customer</FormLabel>
                       <FormDescription>
                         Each customer can only use this discount once
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <Separator />
-
-            {/* Combinability */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium">Combinability</h3>
-              <FormField
-                control={form.control}
-                name="combineWithProductDiscounts"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Combine with product discounts</FormLabel>
-                      <FormDescription>
-                        Allow this discount to be combined with product-specific
-                        discounts
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="combineWithOrderDiscounts"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Combine with order discounts</FormLabel>
-                      <FormDescription>
-                        Allow this discount to be combined with order-level
-                        discounts
                       </FormDescription>
                     </div>
                   </FormItem>
@@ -517,13 +448,13 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
         </Card>
 
         {/* Live Discount Summary */}
-        <Card className="bg-muted/30 border-dashed">
-          <CardHeader className="pb-3">
+        <Card className="border bg-card shadow-none">
+          <CardHeader className="px-4 pb-2 pt-4">
             <CardTitle className="text-base font-medium">
               Discount Summary
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <span className="text-muted-foreground">Code</span>
               <span className="font-mono font-semibold tracking-wider">
