@@ -147,7 +147,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
 | `inventory-operations.ts`  | Shared idempotent manual/scanner/stocktake command engine; canonical request hashing, exact replay, atomic operation + movement + counter batch |
-| `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
+| `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated current-product variants/alerts plus audit-preserving movement history; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()`, `calculateFinalPrice()` |

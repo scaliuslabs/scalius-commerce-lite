@@ -266,6 +266,10 @@ describe("inventory overview query boundaries", () => {
       'pvov.variant_id = "product_variants"."id"',
     );
     expect(queries[0]).not.toContain("pvov.variant_id = \"id\"");
+    for (const query of queries) {
+      expect(query.toLowerCase()).toContain('inner join "products"');
+      expect(query.toLowerCase()).toContain('"products"."deleted_at" is null');
+    }
   });
 
   it("keeps low-stock alert search and history bounded and paginated", async () => {
@@ -300,6 +304,11 @@ describe("inventory overview query boundaries", () => {
     expect(queries[0]?.toLowerCase()).toContain("count(*)");
     expect(queries[1]?.toLowerCase()).toContain("limit ? offset ?");
     expect(queries[1]).toContain('pvov.variant_id = "product_variants"."id"');
+    for (const query of queries) {
+      expect(query.toLowerCase()).toContain('inner join "products"');
+      expect(query.toLowerCase()).toContain('"products"."deleted_at" is null');
+      expect(query.toLowerCase()).toContain('"product_variants"."deleted_at" is null');
+    }
   });
 
   it.each([

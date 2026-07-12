@@ -264,6 +264,7 @@ export async function getInventoryOverview(db: Database, params: {
     if (section === "variants") {
         const conditions: (SQL | undefined)[] = [
             isNull(productVariants.deletedAt),
+            isNull(products.deletedAt),
             eq(productVariants.trackInventory, true),
             operationalSkuRowPredicate(),
         ];
@@ -307,7 +308,7 @@ export async function getInventoryOverview(db: Database, params: {
                 version: productVariants.version,
             })
             .from(productVariants)
-            .leftJoin(products, eq(products.id, productVariants.productId))
+            .innerJoin(products, eq(products.id, productVariants.productId))
             .where(and(...conditions))
             .orderBy(orderBy, asc(productVariants.id))
             .limit(limit)
@@ -317,7 +318,7 @@ export async function getInventoryOverview(db: Database, params: {
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
             .from(productVariants)
-            .leftJoin(products, eq(products.id, productVariants.productId))
+            .innerJoin(products, eq(products.id, productVariants.productId))
             .where(and(...conditions))
             .get();
 
@@ -331,8 +332,10 @@ export async function getInventoryOverview(db: Database, params: {
                 lowStockCount: sql<number>`SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
             .where(and(
                 isNull(productVariants.deletedAt),
+                isNull(products.deletedAt),
                 eq(productVariants.trackInventory, true),
                 operationalSkuRowPredicate(),
             ))
@@ -374,7 +377,10 @@ export async function getInventoryOverview(db: Database, params: {
 
     if (section === "alerts") {
         const aStatus = alertStatus ?? "active";
-        const alertConditions: SQL[] = [];
+        const alertConditions: SQL[] = [
+            isNull(products.deletedAt),
+            isNull(productVariants.deletedAt),
+        ];
         if (aStatus !== "all") {
             alertConditions.push(eq(productLowStockAlerts.alertStatus, aStatus));
         }
@@ -392,8 +398,8 @@ export async function getInventoryOverview(db: Database, params: {
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
             .from(productLowStockAlerts)
-            .leftJoin(products, eq(products.id, productLowStockAlerts.productId))
-            .leftJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
+            .innerJoin(products, eq(products.id, productLowStockAlerts.productId))
+            .innerJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
             .where(alertWhere)
             .get();
         const alerts = await db
@@ -414,8 +420,8 @@ export async function getInventoryOverview(db: Database, params: {
                 variantLabel: variantOptionLabelSql(productVariants.id),
             })
             .from(productLowStockAlerts)
-            .leftJoin(products, eq(products.id, productLowStockAlerts.productId))
-            .leftJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
+            .innerJoin(products, eq(products.id, productLowStockAlerts.productId))
+            .innerJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
             .where(alertWhere)
             .orderBy(desc(productLowStockAlerts.updatedAt), desc(productLowStockAlerts.id))
             .limit(limit)
