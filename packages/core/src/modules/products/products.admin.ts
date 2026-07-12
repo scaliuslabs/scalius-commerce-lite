@@ -18,7 +18,6 @@ import {
     productVariantOptionValues,
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
-import { alias } from "drizzle-orm/sqlite-core";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -1380,17 +1379,9 @@ function buildPermanentDeleteReferenceGuard(
     productIds: string[],
 ): SQLiteBatchItem {
     const idSet = JSON.stringify(productIds);
-    const guardedMovements = alias(
-        inventoryMovements,
-        "permanent_delete_inventory_movement",
-    );
-    const guardedVariants = alias(
-        productVariants,
-        "permanent_delete_product_variant",
-    );
-    const guardedMovementVariantId = sql`${sql.identifier("permanent_delete_inventory_movement")}.${sql.identifier("variant_id")}`;
-    const guardedVariantId = sql`${sql.identifier("permanent_delete_product_variant")}.${sql.identifier("id")}`;
-    const guardedVariantProductId = sql`${sql.identifier("permanent_delete_product_variant")}.${sql.identifier("product_id")}`;
+    const guardedMovementVariantId = sql`${sql.identifier("inventory_movements")}.${sql.identifier("variant_id")}`;
+    const guardedVariantId = sql`${sql.identifier("product_variants")}.${sql.identifier("id")}`;
+    const guardedVariantProductId = sql`${sql.identifier("product_variants")}.${sql.identifier("product_id")}`;
     return buildBatchGuard(db, sql`
         CASE WHEN NOT EXISTS (
             SELECT 1 FROM ${orderItems}
@@ -1403,8 +1394,8 @@ function buildPermanentDeleteReferenceGuard(
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
             )
         ) AND NOT EXISTS (
-            SELECT 1 FROM ${guardedMovements}
-            INNER JOIN ${guardedVariants}
+            SELECT 1 FROM ${inventoryMovements}
+            INNER JOIN ${productVariants}
                 ON ${guardedMovementVariantId} = ${guardedVariantId}
             WHERE ${guardedVariantProductId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})

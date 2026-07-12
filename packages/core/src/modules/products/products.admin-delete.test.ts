@@ -85,10 +85,10 @@ describe("admin product permanent delete inventory guards", () => {
         }).toSQL().sql;
 
         expect(referenceGuard).toContain(
-            'ON "permanent_delete_inventory_movement"."variant_id" = "permanent_delete_product_variant"."id"',
+            'ON "inventory_movements"."variant_id" = "product_variants"."id"',
         );
         expect(referenceGuard).toContain(
-            'WHERE "permanent_delete_product_variant"."product_id" IN',
+            'WHERE "product_variants"."product_id" IN',
         );
         expect(referenceGuard).not.toContain('ON "variant_id" = "id"');
     });
