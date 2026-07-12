@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { apiGet, apiPost } from "../api.server";
+import { apiGet, apiPatch, apiPost } from "../api.server";
 
 export interface InventoryVariant {
   id: string;
@@ -61,6 +61,8 @@ export interface InventoryAlert {
   alertSentAt: string | number | null;
   acknowledgedAt: string | number | null;
   resolvedAt: string | number | null;
+  createdAt: string | number;
+  updatedAt: string | number;
   productName: string | null;
   variantSku: string | null;
   variantLabel: string | null;
@@ -182,4 +184,10 @@ export const stockSet = createServerFn({ method: "POST" })
   .validator((data: StockSetInput) => data)
   .handler(async ({ data }) => {
     return apiPost<AdjustInventoryResult>("/inventory/stock-set", data);
+  });
+
+export const acknowledgeInventoryAlert = createServerFn({ method: "POST" })
+  .validator((data: { variantId: string }) => data)
+  .handler(async ({ data }) => {
+    return apiPatch<Record<string, never>>("/inventory/alerts", data);
   });

@@ -40,6 +40,13 @@ Last reviewed: 2026-07-12
 - Read access uses `products.view`; adjustments, stocktakes, and alert
   acknowledgement use `products.edit`. UI actions mirror those same current
   capabilities. A separate inventory permission family is not yet modeled.
+- The inventory workspace has three compact operational views: sellable SKUs,
+  low-stock alerts, and movements. The alert inbox is server-searched and
+  paginated, separates needs-review/acknowledged/resolved states, links to the
+  owning product, and lets a merchant jump to the exact SKU before adjusting
+  stock. Acknowledgement is conditional: the API returns not-found when the
+  alert was already acknowledged or resolved instead of claiming a write that
+  did not happen.
 
 ## Catalog settings truth
 
@@ -53,18 +60,15 @@ Last reviewed: 2026-07-12
 
 ## Remaining release gaps
 
-1. Low-stock alerts are durable and acknowledgeable in the API, but the main
-   inventory page still lacks the alert inbox, acknowledgement workflow, and
-   resolved-history pagination.
-2. Audit history still lacks date range, actor resolution, exact order filter,
+1. Audit history still lacks date range, actor resolution, exact order filter,
    cursor pagination, and streaming CSV export. The current joined substring
    search and global ledger-health aggregate will not remain cheap at very
    large movement counts.
-3. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
+2. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
    validate every row first, use stable SKU/barcode identity, require one
    idempotency key per import, chunk lookup sets below D1's parameter ceiling,
    and avoid partial inventory commits.
-4. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
+3. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
    diagnostics may report them, but reconciliation must not invent missing
    counter edges.
 

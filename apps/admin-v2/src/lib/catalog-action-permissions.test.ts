@@ -53,7 +53,7 @@ describe("catalog action permissions", () => {
         canToggleStatus: false,
         canReorder: false,
       },
-      inventory: { canAdjustStock: false },
+      inventory: { canAdjustStock: false, canAcknowledgeAlerts: false },
     });
   });
 
@@ -69,7 +69,7 @@ describe("catalog action permissions", () => {
         canPermanentDelete: false,
         canBulkDelete: false,
       },
-      inventory: { canAdjustStock: true },
+      inventory: { canAdjustStock: true, canAcknowledgeAlerts: true },
     });
 
     expect(

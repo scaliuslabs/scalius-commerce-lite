@@ -85,6 +85,8 @@ const inventoryAlertSchema = z.object({
     alertSentAt: nullableTimestampSchema,
     acknowledgedAt: nullableTimestampSchema,
     resolvedAt: nullableTimestampSchema,
+    createdAt: z.union([z.string(), z.number()]),
+    updatedAt: z.union([z.string(), z.number()]),
     productName: z.string().nullable(),
     variantSku: z.string().nullable(),
     variantLabel: z.string().nullable(),
@@ -246,13 +248,17 @@ const acknowledgeAlertRoute = createRoute({
             description: "Alert acknowledged",
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
+        404: errorResponses[404],
     }
 });
 
 app.openapi(acknowledgeAlertRoute, async (c) => {
     const db = c.get("db");
     const { variantId } = c.req.valid("json");
-    await acknowledgeLowStockAlert(db, variantId);
+    const acknowledged = await acknowledgeLowStockAlert(db, variantId);
+    if (!acknowledged) {
+        throw new NotFoundError("Active low-stock alert not found");
+    }
     return ok(c, {});
 });
 

@@ -28,6 +28,7 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain('aria-label="Increase adjustment by one"');
     expect(source).toContain("aria-busy={variantsQuery.isFetching}");
     expect(source).toContain("aria-busy={movementsQuery.isFetching}");
+    expect(source).toContain("aria-busy={alertsQuery.isFetching}");
   });
 
   it("keeps adjustments exact and exposes an explicit stocktake workflow", () => {
@@ -51,6 +52,16 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain("movementType");
     expect(source).toContain("Search movements by product, SKU, or order");
     expect(source).toContain("`/admin/orders/${m.orderId}`");
+  });
+
+  it("provides a compact searchable alert inbox with status history and acknowledgement", () => {
+    expect(source).toContain('section: "alerts"');
+    expect(source).toContain("alertStatus");
+    expect(source).toContain("acknowledgeInventoryAlert");
+    expect(source).toContain("inventoryActions.canAcknowledgeAlerts");
+    expect(source).toContain("No low-stock alerts need review.");
+    expect(source).toContain("Review SKU");
+    expect(source).toContain("PaginationControls");
   });
 
   it("uses one compact, explainable quantity strip instead of nested statistic cards", () => {

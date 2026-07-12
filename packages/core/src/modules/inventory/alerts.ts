@@ -185,8 +185,8 @@ export async function checkAndAlertLowStock(
 export async function acknowledgeLowStockAlert(
   db: Database,
   variantId: string
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const acknowledged = await db
     .update(productLowStockAlerts)
     .set({
       alertStatus: "acknowledged",
@@ -198,5 +198,7 @@ export async function acknowledgeLowStockAlert(
         eq(productLowStockAlerts.variantId, variantId),
         eq(productLowStockAlerts.alertStatus, "active")
       )
-    );
+    )
+    .returning({ id: productLowStockAlerts.id });
+  return acknowledged.length === 1;
 }
