@@ -85,7 +85,7 @@ export type UpdateCollectionInput = {
 } & Partial<CreateCollectionInput>;
 
 export interface CollectionFormOptionsPayload {
-  categories: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; status: "draft" | "published" | "internal" }>;
   products: Array<{
     id: string;
     name: string;
@@ -95,7 +95,7 @@ export interface CollectionFormOptionsPayload {
 }
 
 export interface CollectionCategoryOptionsPayload {
-  categories: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; status: "draft" | "published" | "internal" }>;
 }
 
 export interface CollectionProductOptionDto {

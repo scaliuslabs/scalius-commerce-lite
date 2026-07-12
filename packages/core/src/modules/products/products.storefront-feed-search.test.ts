@@ -55,6 +55,8 @@ function createCatalogSchema(): void {
             canonical_path TEXT,
             no_index INTEGER NOT NULL DEFAULT 0,
             exclude_from_sitemap INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'draft',
+            revision INTEGER NOT NULL DEFAULT 1,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             deleted_at INTEGER
@@ -160,13 +162,14 @@ function insertCategory(input: {
     name: string;
     slug: string;
     description?: string;
+    status?: "draft" | "published" | "internal";
 }): void {
     const description = input.description ?? "";
     sqlite
         .prepare(
-            "INSERT INTO categories (id, name, slug, description, created_at, updated_at) VALUES (?, ?, ?, ?, 1, 1)",
+            "INSERT INTO categories (id, name, slug, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, 1)",
         )
-        .run(input.id, input.name, input.slug, description);
+        .run(input.id, input.name, input.slug, description, input.status ?? "published");
     const row = sqlite
         .prepare("SELECT rowid FROM categories WHERE id = ?")
         .get(input.id) as { rowid: number };
@@ -446,6 +449,57 @@ describe("storefront feed category search", () => {
             "Oxford Classic",
         ]);
         expect(result.pagination).toEqual({ limit: 10, hasNextPage: false });
+    });
+
+    it("keeps manual products public but suppresses unpublished category authority", async () => {
+        insertCategory({
+            id: "cat_draft",
+            name: "Private Draft",
+            slug: "private-draft",
+            status: "draft",
+        });
+        insertProduct({
+            id: "prod_draft_category",
+            name: "Public Manual Item",
+            slug: "public-manual-item",
+            categoryId: "cat_draft",
+            createdAt: 60,
+        });
+        insertSimpleSku("prod_draft_category");
+
+        const allProducts = await getStorefrontProducts(db, {
+            page: 1,
+            limit: 20,
+        });
+        const product = allProducts.products.find(
+            (item) => item.id === "prod_draft_category",
+        );
+        const categoryFiltered = await getStorefrontProducts(db, {
+            category: "cat_draft",
+            page: 1,
+            limit: 20,
+        });
+        const dynamicCollection = await getStorefrontCollectionProducts(
+            db,
+            { categoryIds: ["cat_draft"] },
+            { page: 1, limit: 20 },
+        );
+        const manualCollection = await getStorefrontCollectionProducts(
+            db,
+            { productIds: ["prod_draft_category"] },
+            { page: 1, limit: 20 },
+        );
+
+        expect(product).toMatchObject({
+            id: "prod_draft_category",
+            categoryId: null,
+            category: null,
+        });
+        expect(categoryFiltered.products).toEqual([]);
+        expect(dynamicCollection.products).toEqual([]);
+        expect(manualCollection.products).toEqual([
+            expect.objectContaining({ id: "prod_draft_category", categoryId: null }),
+        ]);
     });
 
     it("excludes products without usable primary media before feed pagination", async () => {

@@ -2,8 +2,9 @@
 // Public/storefront category queries for use by API routes.
 
 import { categories } from "@scalius/database/schema";
-import { sql, eq, and, isNull } from "drizzle-orm";
+import { sql, eq, and } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
+import { publicCategoryConditions } from "./categories.publication";
 
 /**
  * Returns all active categories for the storefront (navigation, listing).
@@ -26,7 +27,7 @@ export async function getPublicCategories(db: Database) {
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
-        .where(isNull(categories.deletedAt))
+        .where(and(...publicCategoryConditions()))
         .orderBy(categories.name)
         .all();
 
@@ -58,7 +59,7 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
-        .where(and(eq(categories.slug, slug), isNull(categories.deletedAt)))
+        .where(and(eq(categories.slug, slug), ...publicCategoryConditions()))
         .get();
 
     if (!category) return null;
@@ -91,7 +92,7 @@ export async function getPublicCategoryById(db: Database, id: string) {
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
         .from(categories)
-        .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+        .where(and(eq(categories.id, id), ...publicCategoryConditions()))
         .get();
 }
 

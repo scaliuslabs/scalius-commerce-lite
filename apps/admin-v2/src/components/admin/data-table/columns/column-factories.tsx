@@ -84,6 +84,7 @@ export function createDateColumn<T>(
 interface ActionsColumnCallbacks<T> {
   showTrashed: boolean;
   onView?: (row: T) => void;
+  canView?: (row: T) => boolean;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
   onRestore?: (row: T) => void;
@@ -104,7 +105,11 @@ export function createActionsColumn<T>(
       return (
         <DataTableRowActions
           showTrashed={callbacks.showTrashed}
-          onView={callbacks.onView ? () => callbacks.onView!(entity) : undefined}
+          onView={
+            callbacks.onView && (callbacks.canView?.(entity) ?? true)
+              ? () => callbacks.onView!(entity)
+              : undefined
+          }
           onEdit={callbacks.onEdit ? () => callbacks.onEdit!(entity) : undefined}
           onDelete={callbacks.onDelete ? () => callbacks.onDelete!(entity) : undefined}
           onRestore={callbacks.onRestore ? () => callbacks.onRestore!(entity) : undefined}

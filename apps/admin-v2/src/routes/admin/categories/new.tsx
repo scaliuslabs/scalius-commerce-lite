@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CategoryForm } from "~/components/admin/CategoryForm";
 
 const defaultValues = {
+  status: "draft" as const,
   name: "",
   description: null,
   slug: "",

@@ -16,12 +16,25 @@ const editSource = readFileSync(
   fileURLToPath(new URL("./$categoryId/edit.tsx", import.meta.url)),
   "utf8",
 );
+const formSource = readFileSync(
+  fileURLToPath(
+    new URL("../../../components/admin/CategoryForm.tsx", import.meta.url),
+  ),
+  "utf8",
+);
+const apiSource = readFileSync(
+  fileURLToPath(
+    new URL("../../../lib/api-functions/categories.ts", import.meta.url),
+  ),
+  "utf8",
+);
 
 describe("category admin workflow boundaries", () => {
   it("confirms single and bulk destructive operations through one dialog", () => {
     expect(listSource).toContain("setDeleteIntent({");
     expect(listSource).toContain("bulk: true");
-    expect(listSource).toContain("itemCount={deleteIntent?.ids.length ?? 1}");
+    expect(listSource).toContain("itemCount={deleteIntent?.categories.length ?? 1}");
+    expect(listSource).toContain("expectedRevision: category.revision");
   });
 
   it("offers bulk restore and gates trash selection by trash permissions", () => {
@@ -32,5 +45,16 @@ describe("category admin workflow boundaries", () => {
   it("does not expose edit navigation for trashed categories", () => {
     expect(columnsSource).toContain("opts.canEdit && !opts.showTrashed");
     expect(editSource).toContain("if (category.deletedAt != null)");
+  });
+
+  it("makes publication explicit and carries revision claims on every write", () => {
+    expect(listSource).toContain('["name", "status", "createdAt", "updatedAt"]');
+    expect(formSource).toContain('name="status"');
+    expect(formSource).toContain('value="published"');
+    expect(formSource).toContain("publishReadiness.blockers.map");
+    expect(formSource).toContain('form.watch("status") === "published"');
+    expect(apiSource).toContain("expectedRevision: number");
+    expect(apiSource).toContain("apiDelete(`/categories/${data.id}`, {");
+    expect(apiSource).toContain("expectedRevision: data.expectedRevision");
   });
 });

@@ -8,9 +8,12 @@ import {
   deleteCategoryPermanent,
   restoreCategory,
   updateCategory,
+  updateCategoryStatus,
+  type CategoryRevisionClaim,
   type CreateCategoryInput,
   type UpdateCategoryInput,
 } from "../api-functions/categories";
+import type { CategoryStatus } from "@scalius/shared/category-publication";
 import {
   getServerFnError,
   invalidateProductStatsQueries,
@@ -63,8 +66,8 @@ export function useUpdateCategory() {
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteCategory({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: CategoryRevisionClaim) => deleteCategory({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
@@ -73,7 +76,7 @@ export function useDeleteCategory() {
         queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
-      queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.categories.detail(claim.id) });
       toast.success("Category moved to trash");
     },
     onError: (err) =>
@@ -84,8 +87,8 @@ export function useDeleteCategory() {
 export function usePermanentDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deleteCategoryPermanent({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: CategoryRevisionClaim) => deleteCategoryPermanent({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
@@ -94,7 +97,7 @@ export function usePermanentDeleteCategory() {
         queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
-      queryClient.removeQueries({ queryKey: queryKeys.categories.detail(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.categories.detail(claim.id) });
       toast.success("Category permanently deleted");
     },
     onError: (err) =>
@@ -107,8 +110,8 @@ export function usePermanentDeleteCategory() {
 export function useRestoreCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreCategory({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: CategoryRevisionClaim) => restoreCategory({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
@@ -118,7 +121,7 @@ export function useRestoreCategory() {
       });
       invalidateProductStatsQueries(queryClient);
       queryClient.invalidateQueries({
-        queryKey: queryKeys.categories.detail(id),
+        queryKey: queryKeys.categories.detail(claim.id),
       });
       toast.success("Category restored");
     },
@@ -130,7 +133,7 @@ export function useRestoreCategory() {
 export function useBulkDeleteCategories() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { categoryIds: string[]; permanent?: boolean }) =>
+    mutationFn: (data: { categories: CategoryRevisionClaim[]; permanent?: boolean }) =>
       bulkDeleteCategories({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
@@ -143,8 +146,8 @@ export function useBulkDeleteCategories() {
       invalidateProductStatsQueries(queryClient);
       toast.success(
         variables.permanent
-          ? `${variables.categoryIds.length} categories permanently deleted`
-          : `${variables.categoryIds.length} categories moved to trash`,
+          ? `${variables.categories.length} categories permanently deleted`
+          : `${variables.categories.length} categories moved to trash`,
       );
     },
     onError: (err) =>
@@ -155,9 +158,9 @@ export function useBulkDeleteCategories() {
 export function useBulkRestoreCategories() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (categoryIds: string[]) =>
-      bulkRestoreCategories({ data: { categoryIds } }),
-    onSuccess: (_data, categoryIds) => {
+    mutationFn: (categories: CategoryRevisionClaim[]) =>
+      bulkRestoreCategories({ data: { categories } }),
+    onSuccess: (_data, categories) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
         queryKey: queryKeys.categories.formOptions(),
@@ -166,9 +169,38 @@ export function useBulkRestoreCategories() {
         queryKey: queryKeys.collections.categoryOptions(),
       });
       invalidateProductStatsQueries(queryClient);
-      toast.success(`${categoryIds.length} categories restored`);
+      toast.success(`${categories.length} categories restored`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore categories")),
+  });
+}
+
+export function useUpdateCategoryStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CategoryRevisionClaim & { status: CategoryStatus }) =>
+      updateCategoryStatus({ data }),
+    onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.detail(variables.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.categories.formOptions(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.collections.categoryOptions(),
+      });
+      toast.success(
+        result.status === "published"
+          ? "Category published"
+          : result.status === "internal"
+            ? "Category made internal"
+            : "Category moved to draft",
+      );
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to change category status")),
   });
 }

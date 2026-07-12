@@ -37,6 +37,7 @@ import { queryKeys } from "@/lib/query-keys";
 export interface Category {
   id: string;
   name: string;
+  status: "draft" | "published" | "internal";
 }
 
 interface OrganizationCardProps {
@@ -172,9 +173,12 @@ function CategoryCombobox({
       const newCategory: Category = {
         id: data.id,
         name: search.trim(),
+        status: data.status,
       };
 
-      toast.success(`Category "${newCategory.name}" created successfully`);
+      toast.success(`Draft category “${newCategory.name}” created`, {
+        description: "Assign products now, then publish the category from its edit page.",
+      });
       onCategoryCreated(newCategory);
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.list() });
       queryClient.invalidateQueries({
@@ -190,9 +194,10 @@ function CategoryCombobox({
     }
   };
 
-  const selectedCategoryName =
-    availableCategories.find((c) => c.id === selectedCategoryId)?.name ||
-    "Select category...";
+  const selectedCategory = availableCategories.find((c) => c.id === selectedCategoryId);
+  const selectedCategoryName = selectedCategory
+    ? `${selectedCategory.name}${selectedCategory.status === "published" ? "" : ` · ${selectedCategory.status}`}`
+    : "Select category...";
 
   const filteredCategories = availableCategories.filter((cat) =>
     cat.name.toLowerCase().includes(search.toLowerCase())
@@ -244,6 +249,11 @@ function CategoryCombobox({
                       )}
                     />
                     <span className="flex-1">{category.name}</span>
+                    {category.status !== "published" ? (
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {category.status}
+                      </span>
+                    ) : null}
                   </CommandItem>
                 ))}
               </CommandGroup>

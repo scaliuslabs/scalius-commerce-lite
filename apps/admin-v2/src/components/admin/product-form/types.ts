@@ -30,6 +30,7 @@ export {
 export interface Category {
   id: string;
   name: string;
+  status: "draft" | "published" | "internal";
 }
 
 export const productFormSchema = z.object({

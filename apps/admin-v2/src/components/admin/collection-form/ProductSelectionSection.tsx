@@ -58,7 +58,10 @@ export const ProductSelectionSection = React.memo(
     const membershipCount = selectedSource === "manual"
       ? selectedProductIds.length
       : selectedCategoryIds.length;
-    const publishReady = membershipCount > 0;
+    const unpublishedSelectedCategories = selectedSource === "dynamic"
+      ? selectedCategories.filter((category) => category.status !== "published")
+      : [];
+    const publishReady = membershipCount > 0 && unpublishedSelectedCategories.length === 0;
 
     return (
       <Card>
@@ -75,7 +78,9 @@ export const ProductSelectionSection = React.memo(
                 ? `${membershipCount} ${selectedSource === "manual"
                   ? membershipCount === 1 ? "product" : "products"
                   : membershipCount === 1 ? "category" : "categories"}`
-                : `Add a ${selectedSource === "manual" ? "product" : "category"} before publishing`}
+                : unpublishedSelectedCategories.length > 0
+                  ? "Publish selected categories first"
+                  : `Add a ${selectedSource === "manual" ? "product" : "category"} before publishing`}
             </span>
           </div>
           <FormField
@@ -115,7 +120,9 @@ export const ProductSelectionSection = React.memo(
                   <SearchableSelect
                     onValueChange={addCategory}
                     options={categories
-                      .filter((category) => !selectedCategoryIds.includes(category.id))
+                      .filter((category) =>
+                        category.status === "published" &&
+                        !selectedCategoryIds.includes(category.id))
                       .map((category) => ({ value: category.id, label: category.name }))}
                     placeholder="Add a category"
                     searchPlaceholder="Search categories..."
@@ -129,6 +136,11 @@ export const ProductSelectionSection = React.memo(
                       {selectedCategories.map((category) => (
                         <Badge key={category.id} variant="secondary" className="gap-1 pr-1">
                           <span className="max-w-[220px] truncate">{category.name}</span>
+                          {category.status !== "published" ? (
+                            <span className="text-[10px] uppercase text-amber-700 dark:text-amber-300">
+                              {category.status}
+                            </span>
+                          ) : null}
                           <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeCategory(category.id)} aria-label={`Remove ${category.name}`}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
@@ -138,6 +150,11 @@ export const ProductSelectionSection = React.memo(
                   ) : (
                     <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">Select a category to define this collection.</p>
                   )}
+                  {unpublishedSelectedCategories.length > 0 ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      Publish every selected category before activating this collection, or keep the collection inactive.
+                    </p>
+                  ) : null}
                   <FormMessage />
                 </FormItem>
               )}

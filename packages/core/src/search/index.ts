@@ -7,6 +7,7 @@ import {
   buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
 } from "../modules/products/products.buyer-projection";
+import { publicCategoryConditions } from "../modules/categories/categories.publication";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -79,7 +80,14 @@ export async function search(
       if (cond) productConditions.push(cond);
     }
     if (options?.categoryId) {
-      productConditions.push(eq(products.categoryId, options.categoryId));
+      productConditions.push(
+        eq(products.categoryId, options.categoryId),
+        sql`EXISTS (
+          SELECT 1 FROM ${categories}
+          WHERE ${categories.id} = ${options.categoryId}
+            AND ${and(...publicCategoryConditions())}
+        )`,
+      );
     }
     if (
       typeof options?.minPrice === "number" ||
@@ -102,12 +110,15 @@ export async function search(
         availableForSale: buyerPricing.availableForSale,
         hasVariants: buyerPricing.hasCustomerOptions,
         slug: products.slug,
-        categoryId: products.categoryId,
+        categoryId: categories.id,
         categoryName: sql<string>`${categories.name}`.as("categoryName"),
       })
       .from(products)
       .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .leftJoin(categories, and(
+        eq(products.categoryId, categories.id),
+        ...publicCategoryConditions(),
+      ))
       .where(and(...productConditions))
       .limit(limit);
 
@@ -131,7 +142,7 @@ export async function search(
       : db.select({ id: sql`NULL` }).from(pages).where(sql`1 = 0`); // Dummy query
 
     // Build Categories Query
-    const categoryConditions = [sql`${categories.deletedAt} IS NULL`];
+    const categoryConditions = publicCategoryConditions();
     if (hasValidQuery) {
       const catCond = ftsMatch("categories_fts", "categories", query);
       if (catCond) categoryConditions.push(catCond);

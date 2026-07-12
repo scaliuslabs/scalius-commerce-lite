@@ -35,6 +35,15 @@ export function buyerResolvableCategoryProductExists(categoryId: SQLWrapper | st
     )`;
 }
 
+export function publishedCategoryIdExists(categoryId: SQLWrapper | string): SQL {
+    return sql`EXISTS (
+        SELECT 1
+        FROM ${categories}
+        WHERE ${categories.id} = ${categoryId}
+          AND ${and(...publicCategoryConditions())}
+    )`;
+}
+
 export async function getCategoryPublishReadiness(
     db: Database,
     categoryId: string,

@@ -108,6 +108,22 @@ export function CollectionForm({
   const handleSubmit: SubmitHandler<CollectionFormValues> = async (values) => {
     try {
       setIsSubmitting(true);
+      if (
+        values.isActive &&
+        values.config.source === "dynamic" &&
+        categories.some((category) =>
+          values.config.categoryIds.includes(category.id) &&
+          category.status !== "published")
+      ) {
+        form.setError("config.categoryIds", {
+          type: "validate",
+          message: "Publish every selected category before activating this collection.",
+        });
+        toast.error("Collection is not ready to publish", {
+          description: "Publish the selected categories or keep this collection inactive.",
+        });
+        return;
+      }
       const submission = {
         ...values,
         config: {

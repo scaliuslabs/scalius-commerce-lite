@@ -33,11 +33,16 @@ import {
 } from "../../schemas/responses";
 import { collectionSchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
+import { categoryStatusSchema } from "@scalius/shared/category-publication";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const collectionOptionSchema = z.object({
     id: z.string(),
     name: z.string(),
+});
+
+const collectionCategoryOptionSchema = collectionOptionSchema.extend({
+    status: categoryStatusSchema,
 });
 
 const collectionPickerSummarySchema = collectionOptionSchema.extend({
@@ -76,7 +81,7 @@ const formOptionsRoute = createRoute({
         200: {
             description: "Form options",
             content: { "application/json": { schema: successEnvelope(z.object({
-                categories: z.array(z.object({ id: z.string(), name: z.string() })),
+                categories: z.array(collectionCategoryOptionSchema),
                 products: z.array(z.object({
                     id: z.string(),
                     name: z.string(),
@@ -92,7 +97,7 @@ const formOptionsRoute = createRoute({
 app.openapi(formOptionsRoute, async (c) => {
     const db = c.get("db");
     const [allCategories, allProducts] = await Promise.all([
-        db.select({ id: categories.id, name: categories.name })
+        db.select({ id: categories.id, name: categories.name, status: categories.status })
             .from(categories)
             .where(isNull(categories.deletedAt))
             .limit(500),
@@ -122,7 +127,7 @@ const categoryOptionsRoute = createRoute({
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
-                        categories: z.array(collectionOptionSchema),
+                        categories: z.array(collectionCategoryOptionSchema),
                     })),
                 },
             },

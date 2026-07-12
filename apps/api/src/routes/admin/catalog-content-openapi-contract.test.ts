@@ -61,6 +61,21 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
+        expectResponseStatuses(spec, "/api/v1/admin/categories/{id}/status", "patch", [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+        ]);
+        expectResponseStatuses(spec, "/api/v1/admin/categories/{id}/publish-readiness", "get", [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+        ]);
         expectResponseStatuses(spec, "/api/v1/admin/categories/{id}/permanent", "delete", [
             "204",
             "401",

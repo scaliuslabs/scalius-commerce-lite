@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "../api.server";
+import type { CategoryStatus } from "@scalius/shared/category-publication";
 
 type Timestamp = string | number;
 type NullableTimestamp = Timestamp | null;
@@ -33,6 +34,16 @@ export interface CategoryListItemDto {
   updatedAt: NullableTimestamp;
   deletedAt: NullableTimestamp;
   productCount: number;
+  status: CategoryStatus;
+  revision: number;
+  publishReady: boolean;
+}
+
+export interface CategoryPublishReadiness {
+  ready: boolean;
+  eligibleProductCount: number;
+  blockers: Array<{ code: string; message: string }>;
+  warnings: Array<{ code: string; message: string }>;
 }
 
 export interface CategoryDetailDto {
@@ -49,6 +60,9 @@ export interface CategoryDetailDto {
   deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
+  status: CategoryStatus;
+  revision: number;
+  publishReadiness: CategoryPublishReadiness;
 }
 
 export interface PaginationPayload {
@@ -72,6 +86,7 @@ export interface CategoriesQueryInput {
   order?: string;
   showTrashed?: boolean;
   trashed?: boolean;
+  status?: CategoryStatus;
 }
 
 export interface CreateCategoryInput {
@@ -86,9 +101,23 @@ export interface CreateCategoryInput {
   image: CategoryImageInput | null;
 }
 
-export type UpdateCategoryInput = { id: string } & CreateCategoryInput;
+export type UpdateCategoryInput = {
+  id: string;
+  expectedRevision: number;
+  status: CategoryStatus;
+} & CreateCategoryInput;
 
-export interface CategoryIdPayload {
+export interface CategoryRevisionClaim {
+  id: string;
+  expectedRevision: number;
+}
+
+export interface CategoryMutationResult {
+  revision: number;
+  status: CategoryStatus;
+}
+
+export interface CategoryCreateResult extends CategoryMutationResult {
   id: string;
 }
 
@@ -97,7 +126,7 @@ export interface MessagePayload {
 }
 
 export interface CategoryFormOptionsPayload {
-  categories: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; status: CategoryStatus }>;
 }
 
 function toCategoriesParams(input: CategoriesQueryInput): Record<string, string> {
@@ -108,6 +137,7 @@ function toCategoriesParams(input: CategoriesQueryInput): Record<string, string>
   if (input.sort) params.sort = input.sort;
   if (input.order) params.order = input.order;
   if (input.showTrashed || input.trashed) params.trashed = "true";
+  if (input.status) params.status = input.status;
   return params;
 }
 
@@ -131,43 +161,56 @@ export const getCategoryFormOptions = createServerFn({
 
 export const createCategory = createServerFn({ method: "POST" })
   .validator((data: CreateCategoryInput) => data)
-  .handler(async ({ data }): Promise<CategoryIdPayload> => {
-    return apiPost<CategoryIdPayload>("/categories", data);
+  .handler(async ({ data }): Promise<CategoryCreateResult> => {
+    return apiPost<CategoryCreateResult>("/categories", data);
   });
 
 export const updateCategory = createServerFn({ method: "POST" })
   .validator((data: UpdateCategoryInput) => data)
-  .handler(async ({ data }): Promise<Record<string, never>> => {
+  .handler(async ({ data }): Promise<CategoryMutationResult> => {
     const { id, ...body } = data;
-    return apiPut<Record<string, never>>(`/categories/${id}`, body);
+    return apiPut<CategoryMutationResult>(`/categories/${id}`, body);
+  });
+
+export const updateCategoryStatus = createServerFn({ method: "POST" })
+  .validator((data: CategoryRevisionClaim & { status: CategoryStatus }) => data)
+  .handler(async ({ data }): Promise<CategoryMutationResult> => {
+    const { id, ...body } = data;
+    return apiPatch<CategoryMutationResult>(`/categories/${id}/status`, body);
   });
 
 export const deleteCategory = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: CategoryRevisionClaim) => data)
   .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/categories/${data.id}`);
+    return apiDelete(`/categories/${data.id}`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const deleteCategoryPermanent = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: CategoryRevisionClaim) => data)
   .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/categories/${data.id}/permanent`);
+    return apiDelete(`/categories/${data.id}/permanent`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const restoreCategory = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: CategoryRevisionClaim) => data)
   .handler(async ({ data }): Promise<MessagePayload> => {
-    return apiPost<MessagePayload>(`/categories/${data.id}/restore`);
+    return apiPost<MessagePayload>(`/categories/${data.id}/restore`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const bulkDeleteCategories = createServerFn({ method: "POST" })
-  .validator((data: { categoryIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { categories: CategoryRevisionClaim[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/categories/bulk-delete", data);
   });
 
 export const bulkRestoreCategories = createServerFn({ method: "POST" })
-  .validator((data: { categoryIds: string[] }) => data)
+  .validator((data: { categories: CategoryRevisionClaim[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost<void>("/categories/bulk-restore", data);
   });
