@@ -13,6 +13,15 @@ export interface FormActionBarProps {
   newUrl?: string;
   newLabel?: string;
   canCreateNew?: boolean;
+  /**
+   * Whether the current operator may submit this form. Defaults to true so
+   * existing consumers retain their behavior. Permission-aware forms must
+   * pass their create/edit capability explicitly; API authorization remains
+   * the final enforcement boundary.
+   */
+  canSave?: boolean;
+  /** Optional explanation exposed on a disabled save action. */
+  saveDisabledReason?: string;
   saveLabel?: string;
   onSave: () => void;
 }
@@ -30,6 +39,8 @@ export function FormActionBar({
   newUrl,
   newLabel,
   canCreateNew = true,
+  canSave = true,
+  saveDisabledReason,
   saveLabel,
   onSave,
 }: FormActionBarProps) {
@@ -107,8 +118,13 @@ export function FormActionBar({
           <Button
             size="sm"
             type="button"
-            disabled={isSubmitting}
-            onClick={onSave}
+            disabled={isSubmitting || !canSave}
+            title={!canSave
+              ? saveDisabledReason ?? `You do not have permission to save this ${title.replace(/s$/, "").toLowerCase()}.`
+              : undefined}
+            onClick={() => {
+              if (canSave) onSave();
+            }}
             className="h-8 text-xs font-medium"
           >
             {isSubmitting && (

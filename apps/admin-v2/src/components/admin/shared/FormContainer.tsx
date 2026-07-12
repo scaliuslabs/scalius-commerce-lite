@@ -20,6 +20,14 @@ interface FormContainerProps<T extends FieldValues> {
   newLabel?: string;
   /** Whether the edit form may offer a shortcut to create another entity. */
   canCreateNew?: boolean;
+  /**
+   * Fail-closed submit capability for direct form URLs. Defaults to true for
+   * backwards compatibility; permission-aware consumers should pass the
+   * matching create/edit capability explicitly.
+   */
+  canSave?: boolean;
+  /** Optional explanation exposed on the disabled save action. */
+  saveDisabledReason?: string;
   /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
   saveLabel?: string;
   /** The react-hook-form instance — used for isDirty and to provide <Form> context */
@@ -45,6 +53,8 @@ export function FormContainer<T extends FieldValues>({
   newUrl,
   newLabel,
   canCreateNew = true,
+  canSave = true,
+  saveDisabledReason,
   saveLabel,
   form,
   onSubmit,
@@ -64,7 +74,7 @@ export function FormContainer<T extends FieldValues>({
           method="post"
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit();
+            if (canSave) onSubmit();
           }}
           className={formClassName}
           noValidate
@@ -90,6 +100,8 @@ export function FormContainer<T extends FieldValues>({
           newUrl={newUrl}
           newLabel={newLabel}
           canCreateNew={canCreateNew}
+          canSave={canSave}
+          saveDisabledReason={saveDisabledReason}
           saveLabel={saveLabel}
           onSave={onSubmit}
         />
