@@ -249,10 +249,10 @@ function appendUnique(list, values) {
   }
 }
 
-function requestHeaders(accept) {
+export function requestHeaders(accept, { bypassCache = true } = {}) {
   return {
     Accept: accept,
-    "Cache-Control": "no-cache",
+    ...(bypassCache ? { "Cache-Control": "no-cache" } : {}),
   };
 }
 
@@ -301,6 +301,7 @@ async function fetchText(url, {
   timeoutMs,
   accept = "text/plain, text/html, application/xml, text/xml;q=0.9, */*;q=0.8",
   redirect = "follow",
+  bypassCache = true,
 }) {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -309,7 +310,7 @@ async function fetchText(url, {
   try {
     const response = await fetchImpl(url, {
       method: "GET",
-      headers: requestHeaders(accept),
+      headers: requestHeaders(accept, { bypassCache }),
       redirect,
       signal: controller.signal,
     });
@@ -1850,6 +1851,9 @@ async function checkStorefrontCacheHeaders(options, { fetchImpl, logger }) {
       fetchImpl,
       timeoutMs: options.timeoutMs,
       accept: "application/xml, text/xml, */*;q=0.8",
+      // This assertion measures the normal generated-cache contract. Sending
+      // no-cache deliberately produces BYPASS_GENERATION on a cold edge.
+      bypassCache: false,
     },
   );
   requireStatus(productFeedResponse, "Storefront /api/product-feed.xml cache headers", (status) =>

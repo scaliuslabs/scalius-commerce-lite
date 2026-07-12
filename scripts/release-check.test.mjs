@@ -6,6 +6,7 @@ import {
   evaluateUcpProfile,
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
+  requestHeaders,
 } from "./release-check.mjs";
 
 function catalogOnlyUcpProfile() {
@@ -48,6 +49,16 @@ function catalogOnlyUcpProfile() {
 }
 
 describe("release check arguments", () => {
+  it("can inspect normal cache behavior without requesting a bypass", () => {
+    expect(requestHeaders("application/xml")).toEqual({
+      Accept: "application/xml",
+      "Cache-Control": "no-cache",
+    });
+    expect(requestHeaders("application/xml", { bypassCache: false })).toEqual({
+      Accept: "application/xml",
+    });
+  });
+
   it("normalizes explicit URLs and operational flags", () => {
     expect(parseReleaseCheckArgs([
       "--api-base-url", "https://api.example.test/",
