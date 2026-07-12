@@ -88,15 +88,38 @@ describe("serialized storefront media", () => {
     const productData: ProductPageData = {
       product: product({ imageUrl: staleOptimizedImage }),
       category: undefined,
-      images: [
+      media: [
         {
-          id: "image_1",
-          productId: "prod_1",
+          id: "product_media_1",
+          mediaId: "media_1",
+          kind: "image",
           url: staleOptimizedImage,
-          alt: "Fish",
+          posterMediaId: null,
+          posterUrl: null,
+          altText: "Fish",
+          caption: null,
+          width: 1_200,
+          height: 1_200,
+          durationMs: null,
           isPrimary: true,
           sortOrder: 0,
-          createdAt: "2026-01-01T00:00:00.000Z",
+          status: "ready",
+        },
+        {
+          id: "product_media_2",
+          mediaId: "media_2",
+          kind: "video",
+          url: "https://cloud.scalius.com/products/fish.mp4",
+          posterMediaId: "media_1",
+          posterUrl: staleOptimizedImage,
+          altText: "Fish demonstration",
+          caption: null,
+          width: 1_920,
+          height: 1_080,
+          durationMs: 15_000,
+          isPrimary: false,
+          sortOrder: 1,
+          status: "ready",
         },
       ],
       variants: [],
@@ -108,10 +131,14 @@ describe("serialized storefront media", () => {
     const optimized = withOptimizedProductPageImages(productData);
 
     expect(optimized.product.imageUrl).toContain("width=400");
-    expect(optimized.images[0]?.url).toContain("width=600");
+    expect(optimized.media[0]?.url).toContain("width=600");
+    expect(optimized.media[1]?.url).toBe(
+      "https://cloud.scalius.com/products/fish.mp4",
+    );
+    expect(optimized.media[1]?.posterUrl).toContain("width=600");
     expect(optimized.relatedProducts[0]?.imageUrl).toContain("width=400");
     expect(JSON.stringify(optimized)).not.toContain("width=1200");
-    expect(optimized.images[0]?.url.match(/\/cdn-cgi\/image\//g)).toHaveLength(
+    expect(optimized.media[0]?.url.match(/\/cdn-cgi\/image\//g)).toHaveLength(
       1,
     );
   });

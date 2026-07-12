@@ -160,8 +160,8 @@ describe("product detail page SKU boundaries", () => {
   it("resolves exact variant query state for SSR metadata and analytics", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain(
-      "const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants",
+    expect(source).toMatch(
+      /const requestedQueryVariantSelection = resolveExactVariantSelection\(\s*buyerVariants,/,
     );
     expect(source).toContain(
       'variantId: Astro.url.searchParams.get("variant")',
@@ -274,8 +274,8 @@ describe("product detail page SKU boundaries", () => {
   it("uses catalog-discovery image validation for Product JSON-LD and social images", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
-    expect(source).toContain(
-      "resolveCatalogDiscoveryImageUrl(candidate, storefrontUrl",
+    expect(source).toMatch(
+      /resolveCatalogDiscoveryImageUrl\(\s*candidate,\s*storefrontUrl,/,
     );
     expect(source).toContain("getOptimizedImageUrl(imageUrl");
     expect(source).toContain("image: schemaImageUrls");
@@ -299,8 +299,8 @@ describe("product detail page SKU boundaries", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
     expect(source).toContain("getShippingMethods()");
-    expect(source).toContain(
-      "discoverySettings.structuredData.offerShippingDetails",
+    expect(source).toMatch(
+      /discoverySettings\.structuredData\s*\.offerShippingDetails/,
     );
     expect(source).toContain("buildOfferShippingDetails({");
     expect(source).toContain("shippingMethods,");
@@ -316,8 +316,8 @@ describe("product detail page SKU boundaries", () => {
     );
     expect(source).toContain("primarySchemaVariant?.barcode");
     expect(source).not.toContain("priceValidUntil");
-    expect(source).toContain(
-      "normalizeSavedProductCondition(product.productCondition)",
+    expect(source).toMatch(
+      /normalizeSavedProductCondition\(\s*product\.productCondition,?\s*\)/,
     );
     expect(source).toContain("PRODUCT_CONDITION_SCHEMA_URLS[productCondition]");
     expect(source).toContain("itemCondition: productConditionSchemaUrl");
