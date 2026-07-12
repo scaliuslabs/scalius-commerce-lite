@@ -67,7 +67,7 @@ export function getCategoryColumns(
               </div>
             )}
             <div className="flex flex-col min-w-0">
-              {opts.canEdit ? (
+              {opts.canEdit && !opts.showTrashed ? (
                 <Link
                   to={`/admin/categories/${category.id}/edit` as string}
                   className="font-medium text-sm text-foreground hover:text-primary cursor-pointer truncate"
@@ -114,8 +114,9 @@ export function getCategoryColumns(
               <Link
                 to={`/admin/products?category=${row.original.id}` as string}
                 className="text-xs text-primary/80 hover:text-primary hover:underline"
+                aria-label={`View products in ${row.original.name}`}
               >
-                view
+                View
               </Link>
             )}
           </div>
@@ -136,8 +137,8 @@ export function getCategoryColumns(
                     "_blank",
                   )
               : undefined,
-            onEdit: opts.canEdit ? (c) => opts.onEdit(c.id) : undefined,
-            onDelete: opts.canDelete
+            onEdit: opts.canEdit && !opts.showTrashed ? (c) => opts.onEdit(c.id) : undefined,
+            onDelete: opts.canDelete && !opts.showTrashed
               ? (c) => opts.onDelete(c.id)
               : undefined,
             onRestore: opts.canRestore

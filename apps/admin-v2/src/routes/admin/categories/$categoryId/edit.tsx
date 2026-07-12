@@ -14,6 +14,12 @@ export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
       })
       .catch(nullForAdminApiNotFound);
     if (!category) throw redirect({ to: "/admin/categories" });
+    if (category.deletedAt != null) {
+      throw redirect({
+        to: "/admin/categories",
+        search: { trashed: true } as never,
+      });
+    }
   },
   head: () => ({
     meta: [{ title: "Edit Category | Scalius Admin" }],
