@@ -38,6 +38,8 @@ import {
 } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 interface AnalyticsFormProps {
   defaultValues?: Partial<AnalyticsFormValues>;
@@ -183,6 +185,10 @@ export function AnalyticsForm({
   defaultValues,
   isEdit = false,
 }: AnalyticsFormProps) {
+  const { hasPermission } = usePermissions();
+  const canSave = isEdit
+    ? hasPermission(PERMISSIONS.ANALYTICS_EDIT)
+    : hasPermission(PERMISSIONS.ANALYTICS_CREATE);
   const defaultType = defaultValues?.type ?? "custom";
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
@@ -303,6 +309,10 @@ export function AnalyticsForm({
       isEdit={isEdit}
       isSubmitting={isSubmitting}
       backUrl="/admin/analytics"
+      canSave={canSave}
+      saveDisabledReason={isEdit
+        ? "You do not have permission to edit analytics scripts."
+        : "You do not have permission to create analytics scripts."}
       saveLabel={isEdit ? "Update Script" : "Add Script"}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}

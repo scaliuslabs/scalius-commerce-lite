@@ -43,7 +43,7 @@ function expectResponseStatuses(
 }
 
 describe("admin catalog/content mutation OpenAPI responses", () => {
-    it("documents category mutation conflicts, validation errors, and silent restore semantics", () => {
+    it("documents category mutation conflicts, validation errors, and guarded restore semantics", () => {
         const spec = buildAdminCatalogContentSpec();
 
         expectResponseStatuses(spec, "/api/v1/admin/categories", "post", [
@@ -71,6 +71,14 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
             "200",
             "401",
             "403",
+            "409",
+        ]);
+        expectResponseStatuses(spec, "/api/v1/admin/categories/bulk-restore", "post", [
+            "204",
+            "400",
+            "401",
+            "403",
+            "409",
         ]);
     });
 

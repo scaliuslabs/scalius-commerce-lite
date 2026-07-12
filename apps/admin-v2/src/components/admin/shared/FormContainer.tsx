@@ -21,11 +21,10 @@ interface FormContainerProps<T extends FieldValues> {
   /** Whether the edit form may offer a shortcut to create another entity. */
   canCreateNew?: boolean;
   /**
-   * Fail-closed submit capability for direct form URLs. Defaults to true for
-   * backwards compatibility; permission-aware consumers should pass the
-   * matching create/edit capability explicitly.
+   * Fail-closed submit capability for direct form URLs. Required so every
+   * consumer deliberately maps its create/edit API permission.
    */
-  canSave?: boolean;
+  canSave: boolean;
   /** Optional explanation exposed on the disabled save action. */
   saveDisabledReason?: string;
   /** Custom save button label. Defaults to "Save {title}" / "Create {title}" */
@@ -53,7 +52,7 @@ export function FormContainer<T extends FieldValues>({
   newUrl,
   newLabel,
   canCreateNew = true,
-  canSave = true,
+  canSave,
   saveDisabledReason,
   saveLabel,
   form,

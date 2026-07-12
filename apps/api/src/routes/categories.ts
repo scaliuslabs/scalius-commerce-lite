@@ -62,7 +62,7 @@ const categoryProductFilterSchema = z.object({
     .optional()
     .default("newest")
     .openapi({ description: "Sort order" }),
-  search: z.string().optional().openapi({ description: "Search within category" }),
+  search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
@@ -108,6 +108,13 @@ const productFacetSchema = z.object({
   values: z.array(z.object({ value: z.string(), count: z.number().int().min(0) })),
 });
 
+const publicCategorySlugSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(100)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
 // GET /categories — list all categories
 const listCategoriesRoute = createRoute({
   method: "get",
@@ -139,7 +146,7 @@ const getCategoryBySlugRoute = createRoute({
   summary: "Get category by slug",
   request: {
     params: z.object({
-      slug: z.string(),
+      slug: publicCategorySlugSchema,
     }),
   },
   responses: {
@@ -170,7 +177,7 @@ const getCategoryProductsRoute = createRoute({
   summary: "Get products in a category with filtering",
   request: {
     params: z.object({
-      slug: z.string(),
+      slug: publicCategorySlugSchema,
     }),
     query: categoryProductFilterSchema
   },

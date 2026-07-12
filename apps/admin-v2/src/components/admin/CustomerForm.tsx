@@ -32,6 +32,8 @@ import { getAllowedCountries } from "@/lib/api-functions/settings";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -63,6 +65,11 @@ export function CustomerForm({
   defaultValues,
   isEdit = false,
 }: CustomerFormProps) {
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
+  const canSave = isEdit
+    ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT)
+    : canCreate;
   const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
   const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
 
@@ -190,6 +197,11 @@ export function CustomerForm({
       backUrl="/admin/customers"
       newUrl="/admin/customers/new"
       newLabel="New Customer"
+      canCreateNew={canCreate}
+      canSave={canSave}
+      saveDisabledReason={isEdit
+        ? "You do not have permission to edit customers."
+        : "You do not have permission to create customers."}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >

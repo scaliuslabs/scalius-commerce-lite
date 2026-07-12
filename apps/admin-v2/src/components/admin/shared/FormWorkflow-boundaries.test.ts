@@ -21,6 +21,10 @@ const categoryFormSource = readFileSync(
   new URL("../CategoryForm.tsx", import.meta.url),
   "utf8",
 );
+const pageFormSource = readFileSync(new URL("../PageForm.tsx", import.meta.url), "utf8");
+const customerFormSource = readFileSync(new URL("../CustomerForm.tsx", import.meta.url), "utf8");
+const analyticsFormSource = readFileSync(new URL("../AnalyticsForm.tsx", import.meta.url), "utf8");
+const orderFormSource = readFileSync(new URL("../OrderForm.tsx", import.meta.url), "utf8");
 
 describe("admin form workflow boundaries", () => {
   it("replaces navigation links with inert buttons while saving", () => {
@@ -39,14 +43,32 @@ describe("admin form workflow boundaries", () => {
     );
   });
 
-  it("provides a fail-closed save capability without changing existing consumers", () => {
-    expect(actionBarSource).toContain("canSave = true");
+  it("requires a fail-closed save capability from every consumer", () => {
+    expect(actionBarSource).toContain("canSave: boolean;");
+    expect(actionBarSource).not.toContain("canSave = true");
     expect(actionBarSource).toContain("disabled={isSubmitting || !canSave}");
     expect(actionBarSource).toContain("if (canSave) onSave();");
-    expect(formContainerSource).toContain("canSave = true");
+    expect(formContainerSource).toContain("canSave: boolean;");
+    expect(formContainerSource).not.toContain("canSave = true");
     expect(formContainerSource).toContain("if (canSave) onSubmit();");
     expect(formContainerSource).toContain("canSave={canSave}");
     expect(formContainerSource).toContain("saveDisabledReason={saveDisabledReason}");
+  });
+
+  it("maps every shared form consumer to the API's exact create/edit permission", () => {
+    expect(pageFormSource).toContain("PERMISSIONS.PAGES_CREATE");
+    expect(pageFormSource).toContain("PERMISSIONS.PAGES_EDIT");
+    expect(customerFormSource).toContain("PERMISSIONS.CUSTOMERS_CREATE");
+    expect(customerFormSource).toContain("PERMISSIONS.CUSTOMERS_EDIT");
+    expect(analyticsFormSource).toContain("PERMISSIONS.ANALYTICS_CREATE");
+    expect(analyticsFormSource).toContain("PERMISSIONS.ANALYTICS_EDIT");
+    expect(orderFormSource).toContain("orderActions.canCreateOrders");
+    expect(orderFormSource).toContain("orderActions.canEditOrders");
+    expect(orderFormSource).toContain("canSave && !isSubmitting");
+    expect(collectionFormSource).toContain("canSave={canSave}");
+    for (const source of [categoryFormSource, pageFormSource, customerFormSource, analyticsFormSource, orderFormSource, collectionFormSource]) {
+      expect(source).toContain("canSave={canSave}");
+    }
   });
 
   it("maps category create and edit forms to their exact save capabilities", () => {

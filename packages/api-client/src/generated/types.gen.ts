@@ -700,7 +700,9 @@ export type GetApiV1CollectionsResponses = {
                 name: string;
                 presentation: 'grid' | 'carousel';
                 config: {
-                    [key: string]: unknown;
+                    maxProducts: number;
+                    title: string;
+                    subtitle: string;
                 };
                 sortOrder: number;
                 isActive: boolean;
@@ -773,7 +775,9 @@ export type GetApiV1CollectionsByIdResponses = {
                 name: string;
                 presentation: 'grid' | 'carousel';
                 config: {
-                    [key: string]: unknown;
+                    maxProducts: number;
+                    title: string;
+                    subtitle: string;
                 };
                 sortOrder: number;
                 isActive: boolean;
@@ -6657,11 +6661,11 @@ export type GetApiV1AdminCategoriesData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page (max 500 for selector dropdowns)
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -6669,15 +6673,15 @@ export type GetApiV1AdminCategoriesData = {
         /**
          * Show trashed items
          */
-        trashed?: string;
+        trashed?: 'true' | 'false';
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'name' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/categories';
 };
@@ -7093,6 +7097,7 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
+            deletedAt: number | null;
             createdAt: number;
             updatedAt: number;
         };
@@ -7278,6 +7283,17 @@ export type PostApiV1AdminCategoriesBulkDeleteErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -7359,6 +7375,17 @@ export type PostApiV1AdminCategoriesBulkRestoreErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -7548,6 +7575,17 @@ export type PostApiV1AdminCategoriesByIdRestoreErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -7911,11 +7949,11 @@ export type GetApiV1AdminCollectionsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -7931,7 +7969,7 @@ export type GetApiV1AdminCollectionsData = {
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/collections';
 };
@@ -8021,6 +8059,7 @@ export type GetApiV1AdminCollectionsResponses = {
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
+                version: number;
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
@@ -8147,6 +8186,7 @@ export type PostApiV1AdminCollectionsResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            version: number;
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
@@ -8405,6 +8445,17 @@ export type PostApiV1AdminCollectionsBulkActivateErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -8583,6 +8634,17 @@ export type PostApiV1AdminCollectionsBulkRestoreErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -8672,6 +8734,17 @@ export type PostApiV1AdminCollectionsByIdRestoreErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -8716,6 +8789,7 @@ export type PostApiV1AdminCollectionsReorderData = {
         items: Array<{
             id: string;
             sortOrder: number;
+            expectedVersion: number;
         }>;
     };
     path?: never;
@@ -8761,6 +8835,17 @@ export type PostApiV1AdminCollectionsReorderErrors = {
      * Not found
      */
     404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
         success: false;
         error: {
             code: string;
@@ -8935,6 +9020,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            version: number;
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
@@ -8949,6 +9035,7 @@ export type GetApiV1AdminCollectionsByIdResponse = GetApiV1AdminCollectionsByIdR
 
 export type PutApiV1AdminCollectionsByIdData = {
     body?: {
+        expectedVersion: number;
         name?: string;
         presentation?: 'grid' | 'carousel';
         isActive?: boolean;
@@ -9018,6 +9105,17 @@ export type PutApiV1AdminCollectionsByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -9056,6 +9154,7 @@ export type PutApiV1AdminCollectionsByIdResponses = {
             config: string;
             sortOrder: number;
             isActive: boolean;
+            version: number;
             canonicalPath: string | null;
             noIndex: boolean;
             excludeFromSitemap: boolean;
@@ -31899,6 +31998,10 @@ export type GetApiV1AdminAttributesData = {
          * Sort order
          */
         order?: 'asc' | 'desc';
+        /**
+         * Comma-separated attribute IDs (max 90)
+         */
+        ids?: string;
         /**
          * Show trashed items
          */

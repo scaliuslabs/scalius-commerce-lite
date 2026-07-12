@@ -205,7 +205,9 @@ export function CollectionForm({
       <Form {...form}>
         <form
           method="post"
-          onSubmit={form.handleSubmit(handleSubmit)}
+          onSubmit={canSave
+            ? form.handleSubmit(handleSubmit)
+            : (event) => event.preventDefault()}
           className="-mt-4 pb-6"
           noValidate
         >
@@ -276,7 +278,7 @@ export function CollectionForm({
           </fieldset>
         </form>
       </Form>
-      {canSave ? <FormActionBar
+      <FormActionBar
         title="Collections"
         isEdit={isEdit}
         isSubmitting={isSubmitting}
@@ -285,8 +287,12 @@ export function CollectionForm({
         newUrl="/admin/collections/new"
         newLabel="New Collection"
         canCreateNew={collectionActions.canCreate}
+        canSave={canSave}
+        saveDisabledReason={isEdit
+          ? "You do not have permission to edit collections."
+          : "You do not have permission to create collections."}
         onSave={() => form.handleSubmit(handleSubmit)()}
-      /> : null}
+      />
     </>
   );
 }

@@ -440,6 +440,7 @@ export const categoryDetailSchema = z
     canonicalPath: z.string().nullable(),
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
+    deletedAt: z.number().nullable(),
     createdAt: z.number(),
     updatedAt: z.number(),
   })

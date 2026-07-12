@@ -57,12 +57,14 @@ vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({
 vi.mock("~/components/admin/FormStickyHeader", () => ({
   FormActionBar: ({
     isSubmitting,
+    canSave,
     onSave,
   }: {
     isSubmitting: boolean;
+    canSave: boolean;
     onSave: () => void;
   }) => (
-    <button type="button" disabled={isSubmitting} onClick={onSave}>
+    <button type="button" disabled={isSubmitting || !canSave} onClick={onSave}>
       Save Collection
     </button>
   ),
@@ -310,7 +312,8 @@ describe("CollectionForm edit product labels", () => {
     await renderCollectionForm(productLabels);
 
     expect(host.textContent).toContain("Read-only access");
-    expect(host.textContent).not.toContain("Save Collection");
+    expect(host.textContent).toContain("Save Collection");
+    expect(getButton(host, "Save Collection").disabled).toBe(true);
     expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
   });
 });
