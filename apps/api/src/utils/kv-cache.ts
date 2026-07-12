@@ -187,7 +187,7 @@ export async function deleteCache(
 
 /**
  * Delete all cache entries whose key starts with the given prefix pattern.
- * Use `"api:products:*"` to delete all product cache entries, or `"*"` for all.
+ * Use `"api:<namespace>:*"` to delete one cache namespace, or `"*"` for all.
  *
  * Note: KV does not support glob matching. The trailing `*` is stripped and
  * the remainder is used as a KV list prefix.

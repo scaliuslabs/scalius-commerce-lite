@@ -111,7 +111,7 @@ describe("cache control routes", () => {
         { expirationTtl: 86400 * 30 },
       );
       expect(kv.put).toHaveBeenCalledWith(
-        "sc:_api_cache_fence:api%3Aproducts%3A",
+        "sc:_api_cache_fence:api%3Aproducts%3Av2%3A",
         expect.stringContaining(`"updatedAt":${Date.now()}`),
         { expirationTtl: 86400 * 30 },
       );

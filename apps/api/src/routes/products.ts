@@ -25,6 +25,7 @@ import {
   normalizePublicNumberCacheValue,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PRODUCT_FEED_QUERY_KEYS = new Set(["cursor", "limit", "category", "search", "minPrice", "maxPrice", "ids"]);
@@ -82,7 +83,7 @@ app.use(
   "*",
   cacheMiddleware({
     ttl: CACHE_TTLS.STANDARD,
-    keyPrefix: "api:products:",
+    keyPrefix: PRODUCT_API_CACHE_NAMESPACE,
     varyByQuery: true,
     queryDefaults: (c) => {
       const normalizedPath = c.req.path.replace(/\/$/, "");

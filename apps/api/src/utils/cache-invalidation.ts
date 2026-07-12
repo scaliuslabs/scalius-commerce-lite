@@ -19,6 +19,11 @@ import {
   deleteVersionedCacheKeyFamily,
   getApiCacheFenceScopeForPattern,
 } from "./api-cache-fence";
+import {
+  PRODUCT_API_CACHE_NAMESPACE,
+  getProductApiCacheKey,
+  getProductApiQueryCachePattern,
+} from "./product-api-cache";
 
 export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
 export const D1_CACHE_SUBJECT_ID_CHUNK_SIZE = 90;
@@ -137,7 +142,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     description:
       "Product listings, search results, and homepage product sections",
     kvPrefixes: [
-      "api:products:",
+      PRODUCT_API_CACHE_NAMESPACE,
       "api:categories:",
       "api:search:",
       "api:storefront:homepage:",
@@ -1277,15 +1282,15 @@ export function getProductAvailabilityApiCacheKeys(
   if (normalizedSubjects.length === 0) return [];
 
   return [
-    "api:products:/api/v1/products",
-    "api:products:/api/v1/products/feed",
-    "api:products:/api/v1/products/sitemap",
+    getProductApiCacheKey(),
+    getProductApiCacheKey("feed"),
+    getProductApiCacheKey("sitemap"),
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
       )
-      .map((subject) => `api:products:/api/v1/products/${subject.slug}`),
-    "api:products:/api/v1/products/search",
+      .map((subject) => getProductApiCacheKey(subject.slug)),
+    getProductApiCacheKey("search"),
   ];
 }
 
@@ -1296,15 +1301,15 @@ export function getProductAvailabilityApiCachePatterns(
   if (normalizedSubjects.length === 0) return [];
 
   return [
-    "api:products:/api/v1/products?*",
-    "api:products:/api/v1/products/feed?*",
-    "api:products:/api/v1/products/sitemap?*",
+    getProductApiQueryCachePattern(),
+    getProductApiQueryCachePattern("feed"),
+    getProductApiQueryCachePattern("sitemap"),
     ...normalizedSubjects
       .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
         typeof subject.slug === "string" && subject.slug.length > 0,
       )
-      .map((subject) => `api:products:/api/v1/products/${subject.slug}?*`),
-    "api:products:/api/v1/products/search?*",
+      .map((subject) => getProductApiQueryCachePattern(subject.slug)),
+    getProductApiQueryCachePattern("search"),
     "api:search:*",
   ];
 }
