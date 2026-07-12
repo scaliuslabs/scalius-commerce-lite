@@ -4,7 +4,7 @@ Last updated: 2026-07-12
 
 ## Inventory and catalog-settings hardening
 
-Status: implemented and locally verified; not deployed.
+Status: deployed and live-verified on 2026-07-12.
 
 - Relative adjustment and absolute stocktake reject fractional, unsafe, zero,
   negative-result, and contradictory reason/direction input without rounding or
@@ -26,7 +26,7 @@ Status: implemented and locally verified; not deployed.
 
 ## Collections source and workflow hardening
 
-Status: implemented and locally verified; not deployed.
+Status: deployed and live-verified on 2026-07-12.
 
 - Added explicit manual-product versus dynamic-category content source and an
   independent grid/carousel presentation column. Migration 0010 performs the
@@ -50,7 +50,7 @@ Status: deployed and live-verified on 2026-07-12.
 
 ### SKU subset and buyer-validation follow-up
 
-Status: implemented locally; pending deploy and live verification.
+Status: deployed and live-verified on 2026-07-12.
 
 - Active option SKUs may be a non-empty subset of the potential Cartesian
   matrix. Duplicate combinations, unused option values, empty matrices, and
@@ -58,6 +58,10 @@ Status: implemented locally; pending deploy and live verification.
 - The matrix supports single/bulk omission, restore-one/all, direct SKU images,
   explicit discount modes, readable compact typography, and internal barcode
   generation for new SKUs.
+- Saved omissions soft-retire their SKU identity without erasing stock. An exact
+  later restore reactivates that identity under revision/stock/reservation
+  guards, preserving audit history instead of colliding with global SKU
+  uniqueness.
 - Root cause of the reported cart 500 was an unqualified outer SKU `id` in the
   shared option-label SQL helper. D1 reported `ambiguous column name: id`;
   qualification at the helper authority repairs cart validation and every
@@ -87,24 +91,21 @@ Implemented:
   raw `db.run(sql...)` objects, fixing live atomic matrix/category/tax/SKU
   batches under Drizzle 0.45.
 
-Verification green:
+Verification green for the latest catalog follow-up:
 
-- full repository tests: 438 files / 3,234 tests;
+- full repository tests: 450 files / 3,323 tests;
 - repository typecheck, lint, and production build;
-- Worker environment, distribution-secret, admin-performance, migration
-  metadata, and diff checks;
+- Worker environment, migration metadata, database-trigger, and diff checks;
 - generated API client and 267-route OpenAPI contract;
-- `pnpm ops:check --queues` passed with 4/4 readiness samples;
 - `pnpm release:check` passed, including admin auth, storefront, discovery,
-  feeds, UCP, and product schema;
-- remote D1 foreign-key check returned no rows.
+  feeds, UCP, product schema, 4/4 API readiness, and eight queue checks.
 
 Deployed Worker versions:
 
-- API: `1f933970-107a-411a-b835-4396a54607d3`
-- Admin V2: `7b6d96a5-6360-43ee-8230-b9923c268524`
-- Storefront: `2f88f991-3b28-40d7-8446-4eb3c42fe79e`
-- Ops monitor: `37764ca0-3abd-45d8-a8dc-6b7abc1074ef`
+- API: `9e4bc7a7-3cbd-49de-b04f-153fb01873de`
+- Admin V2: `45c629ae-99fa-41fd-b4c5-65ceca6c30af`
+- Storefront: `e7b52512-2bae-473d-a644-0ed1d82c5c4b`
+- Ops monitor: `2ca32a62-ed91-4fb6-a562-7eb391322c86`
 
 Live authenticated evidence:
 
@@ -116,6 +117,17 @@ Live authenticated evidence:
 - the additional section persists its rich text and reloads collapsed;
 - create/edit reloads completed without browser console or page errors after
   the rich-text fix.
+- deployed Nike Shoe Test editor exposed four active generic Color × Weight
+  SKUs, per-row images, explicit discount types, and an omit/restore workflow;
+  the browser verification omitted White / 5KG and restored it locally without
+  persisting the test draft;
+- the exact production White / 5KG cart-validation request that returned 500
+  before deployment now returns 200, `valid: true`, unit price 5000, and 50
+  available; the hydrated storefront cart renders its saved Nike line without
+  a validation error or browser console warning;
+- the product-list category filter now opens a trigger-width searchable listbox
+  with bounded scrolling and keyboard semantics instead of the oversized
+  Radix Select menu.
 
 Known operations warnings outside this catalog release remain visible in the
 passing release check: ops email alerts are logs-only, and legacy worker
