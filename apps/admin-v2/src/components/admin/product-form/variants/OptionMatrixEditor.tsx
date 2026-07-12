@@ -495,6 +495,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
   const [bulkPrice, setBulkPrice] = React.useState("");
   const [bulkStock, setBulkStock] = React.useState("");
+  const [bulkImageId, setBulkImageId] = React.useState<string | null | undefined>(undefined);
   const filteredVariants = variants.filter((variant) => {
     const needle = normalized(query);
     if (!needle) return true;
@@ -525,9 +526,11 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
     selected.forEach((id) => onChange(id, {
       ...(price !== null && Number.isFinite(price) ? { price: Math.max(0, price) } : {}),
       ...(stock !== null && Number.isFinite(stock) ? { stock: Math.max(0, stock) } : {}),
+      ...(bulkImageId !== undefined ? { imageId: bulkImageId } : {}),
     }));
     setBulkPrice("");
     setBulkStock("");
+    setBulkImageId(undefined);
   };
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -583,12 +586,21 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder="Price" aria-label="Bulk price" className="h-7 w-24 bg-background text-xs" />
           <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder="Stock" aria-label="Bulk stock" className="h-7 w-24 bg-background text-xs" />
           <VariantImagePicker
-            value={null}
+            value={bulkImageId}
             images={images}
-            label="Set image for selected SKUs"
-            onChange={(imageId) => selected.forEach((id) => onChange(id, { imageId }))}
+            label="Choose image for selected SKUs"
+            allowNoChange
+            onChange={setBulkImageId}
           />
-          <Button type="button" size="sm" className="h-7 px-2 text-xs" disabled={bulkPrice === "" && bulkStock === ""} onClick={applyBulk}>Apply</Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            disabled={bulkPrice === "" && bulkStock === "" && bulkImageId === undefined}
+            onClick={applyBulk}
+          >
+            Apply
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -643,7 +655,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                         <span className="truncate">{variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}</span>
                       </button>
                     </td>
-                    <td className="p-1.5"><VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId })} /></td>
+                    <td className="p-1.5"><VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} /></td>
                     <td className="p-1.5"><CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></td>
                     <td className="p-1.5"><NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel="Price" /></td>
                     <td className="p-1.5">
@@ -688,7 +700,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           <div key={variant.id} className="space-y-2 p-3">
             <div className="flex items-center gap-2">
               <input type="checkbox" checked={selected.has(variant.id)} onChange={(event) => toggleSelected(variant.id, event.target.checked)} aria-label={`Select ${variant.sku}`} className="h-3.5 w-3.5" />
-              <VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId })} />
+              <VariantImagePicker value={variant.imageId} images={images} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} />
               <strong className="min-w-0 flex-1 truncate text-xs">{variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ")}</strong>
               <button
                 type="button"
@@ -800,28 +812,88 @@ function InventoryQuantityInput({ value, committed, onChange }: {
   );
 }
 
-function VariantImagePicker({ value, images, onChange, label = "Choose SKU image" }: { value: string | null; images: ProductImageDetail[]; onChange: (value: string | null) => void; label?: string }) {
+function VariantImagePicker({ value, images, onChange, label = "Choose SKU image", allowNoChange = false }: {
+  value: string | null | undefined;
+  images: ProductImageDetail[];
+  onChange: (value: string | null | undefined) => void;
+  label?: string;
+  allowNoChange?: boolean;
+}) {
   const selected = images.find((image) => image.id === value);
+  const primary = images.find((image) => image.isPrimary)
+    ?? [...images].sort((left, right) => left.sortOrder - right.sortOrder)[0];
+  const usesPrimaryFallback = value === null;
+  const effectiveImage = selected ?? (usesPrimaryFallback ? primary : undefined);
+  const triggerLabel = value === undefined
+    ? `${label}. No image change staged`
+    : usesPrimaryFallback
+      ? `${label}. Using product primary fallback`
+      : `${label}. Using ${selected?.alt ?? selected?.altText ?? "an exact product image"}`;
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="flex h-8 w-10 items-center justify-center overflow-hidden rounded border bg-background" aria-label={label}>
-          {selected ? <img src={getOptimizedImageUrl(selected.url)} alt="" className="h-full w-full object-cover" /> : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
+        <button type="button" className="relative flex h-8 w-10 items-center justify-center overflow-hidden rounded border bg-background" aria-label={triggerLabel}>
+          {effectiveImage
+            ? <img src={getOptimizedImageUrl(effectiveImage.url)} alt="" className="h-full w-full object-cover" />
+            : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
+          {usesPrimaryFallback && primary ? (
+            <span
+              aria-hidden="true"
+              title="Product primary fallback"
+              className="absolute bottom-0 right-0 rounded-tl bg-background/90 px-1 text-[9px] font-semibold leading-3 text-muted-foreground"
+            >
+              P
+            </span>
+          ) : null}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-2">
-        <button type="button" onClick={() => onChange(null)} className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}>
-          <span className="flex h-9 w-9 items-center justify-center rounded border"><ImageIcon className="h-4 w-4" /></span>
-          Use primary image
+        {allowNoChange ? (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === undefined && "bg-muted")}
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded border"><ImageIcon className="h-4 w-4" /></span>
+            No image change
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          aria-label="Use product primary image fallback"
+          className={cn("mb-1 flex w-full items-center gap-2 rounded p-1.5 text-left text-xs hover:bg-muted", value === null && "bg-muted")}
+        >
+          <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded border">
+            {primary
+              ? <img src={getOptimizedImageUrl(primary.url)} alt="" className="h-full w-full object-cover" />
+              : <ImageIcon className="h-4 w-4" />}
+            {primary ? <span aria-hidden="true" className="absolute bottom-0 right-0 rounded-tl bg-background/90 px-1 text-[9px] font-semibold leading-3">P</span> : null}
+          </span>
+          <span>
+            <span className="block">Product primary (fallback)</span>
+            <span className="block text-[11px] text-muted-foreground">Clears this SKU's exact image</span>
+          </span>
         </button>
         <div className="grid max-h-56 grid-cols-4 gap-1 overflow-y-auto">
-          {images.map((image) => (
-            <button key={image.id} type="button" onClick={() => onChange(image.id)} className={cn("aspect-square overflow-hidden rounded border-2", value === image.id ? "border-primary" : "border-transparent")} title={image.alt ?? "Product image"}>
+          {images.map((image, index) => (
+            <button
+              key={image.id}
+              type="button"
+              onClick={() => onChange(image.id)}
+              aria-label={`Use ${image.alt ?? image.altText ?? `product image ${index + 1}`} as the exact SKU image`}
+              className={cn("aspect-square overflow-hidden rounded border-2", value === image.id ? "border-primary" : "border-transparent")}
+              title={image.alt ?? image.altText ?? "Product image"}
+            >
               <img src={getOptimizedImageUrl(image.url)} alt="" className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
-        {images.length === 0 ? <p className="px-1 py-2 text-xs text-muted-foreground">Add media to the product first, then assign it here.</p> : null}
+        {images.length === 0 ? (
+          <p className="px-1 py-2 text-xs text-muted-foreground">
+            Add product media first. Fallback SKUs will use the primary image once one exists.
+          </p>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
