@@ -1,6 +1,6 @@
 # Ordered Product Media Blueprint
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-12
 
 Status: accepted implementation design; not yet implemented. The first-class
 Media storage/lifecycle authority landed in commit `d6c5961e`. This document
