@@ -18,6 +18,7 @@ import {
     productVariantOptionValues,
 } from "@scalius/database/schema";
 import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -1379,6 +1380,17 @@ function buildPermanentDeleteReferenceGuard(
     productIds: string[],
 ): SQLiteBatchItem {
     const idSet = JSON.stringify(productIds);
+    const guardedMovements = alias(
+        inventoryMovements,
+        "permanent_delete_inventory_movement",
+    );
+    const guardedVariants = alias(
+        productVariants,
+        "permanent_delete_product_variant",
+    );
+    const guardedMovementVariantId = sql`${sql.identifier("permanent_delete_inventory_movement")}.${sql.identifier("variant_id")}`;
+    const guardedVariantId = sql`${sql.identifier("permanent_delete_product_variant")}.${sql.identifier("id")}`;
+    const guardedVariantProductId = sql`${sql.identifier("permanent_delete_product_variant")}.${sql.identifier("product_id")}`;
     return buildBatchGuard(db, sql`
         CASE WHEN NOT EXISTS (
             SELECT 1 FROM ${orderItems}
@@ -1391,10 +1403,10 @@ function buildPermanentDeleteReferenceGuard(
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
             )
         ) AND NOT EXISTS (
-            SELECT 1 FROM ${inventoryMovements}
-            INNER JOIN ${productVariants}
-                ON ${inventoryMovements.variantId} = ${productVariants.id}
-            WHERE ${productVariants.productId} IN (
+            SELECT 1 FROM ${guardedMovements}
+            INNER JOIN ${guardedVariants}
+                ON ${guardedMovementVariantId} = ${guardedVariantId}
+            WHERE ${guardedVariantProductId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${idSet})
             )
         ) AND NOT EXISTS (
@@ -1429,6 +1441,24 @@ function deleteLowStockAlertsForProductBatch(
         `);
 }
 
+export function buildPermanentProductDeleteBatch(
+    db: Database,
+    id: string,
+    expectedAggregateRevision: number,
+    variantIds: string[],
+): SQLiteBatchItem[] {
+    return [
+        buildProductAggregateRevisionGuard(db, id, expectedAggregateRevision, "trashed"),
+        buildPermanentDeleteReferenceGuard(db, [id]),
+        deleteLowStockAlertsForProductBatch(db, [id], variantIds),
+        db.delete(productVariants).where(eq(productVariants.productId, id)),
+        db.delete(productMedia).where(eq(productMedia.productId, id)),
+        db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
+        db.delete(productRichContent).where(eq(productRichContent.productId, id)),
+        db.delete(products).where(eq(products.id, id)),
+    ];
+}
+
 /**
  * Permanently deletes a product and all of its related data (variants, media associations, attributes, rich content).
  * Throws an error if the product is linked to any existing orders or discounts.
@@ -1451,16 +1481,12 @@ export async function permanentlyDeleteProduct(
     );
 
     try {
-        await safeBatch(db, [
-        buildProductAggregateRevisionGuard(db, id, expectedAggregateRevision, "trashed"),
-        buildPermanentDeleteReferenceGuard(db, [id]),
-        deleteLowStockAlertsForProductBatch(db, [id], variantIds),
-        db.delete(productVariants).where(eq(productVariants.productId, id)),
-        db.delete(productMedia).where(eq(productMedia.productId, id)),
-        db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
-        db.delete(productRichContent).where(eq(productRichContent.productId, id)),
-        db.delete(products).where(eq(products.id, id)),
-        ]);
+        await safeBatch(db, buildPermanentProductDeleteBatch(
+            db,
+            id,
+            expectedAggregateRevision,
+            variantIds,
+        ));
     } catch (error) {
         await assertNoPermanentDeleteReferences(db, [id], referenceMessages);
         return rethrowProductAggregateRevisionConflictIfStale(
