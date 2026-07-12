@@ -139,4 +139,12 @@ describe("discount destructive lifecycle", () => {
       .rejects.toThrow(/Move discounts to trash/);
     expect(deleteWhere).not.toHaveBeenCalled();
   });
+
+  it("bounds bulk mutations below the D1 parameter ceiling", async () => {
+    const { db } = createLifecycleDb();
+    await expect(bulkDeleteDiscounts(
+      db,
+      Array.from({ length: 91 }, (_, index) => `disc_${index}`),
+    )).rejects.toThrow(/maximum of 90/);
+  });
 });
