@@ -109,3 +109,16 @@ create corrupt previews and buyer surfaces.
   and keyboard behavior; no image optimizer applied to video.
 - Product card/cart/checkout/order/feed/UCP/JSON-LD use a valid image/poster and
   never a video URL. Protected product-page composition remains unchanged.
+
+## Platform evidence
+
+- [Cloudflare R2 upload guidance](https://developers.cloudflare.com/r2/objects/upload-objects/)
+  identifies multipart upload as the resumable/parallel path for video and
+  requires uniform 5 MiB–5 GiB parts except the final part.
+- [Cloudflare's Workers multipart guide](https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/)
+  confirms `createMultipartUpload`, `uploadPart`, `complete`, and `abort` can
+  support objects beyond one Worker request-body limit.
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+  cap an isolate at 128 MB and explicitly recommend streaming instead of
+  buffering large bodies. Free/Pro request bodies also cap at 100 MB, so a
+  nominal 100 MB video cannot safely use today's `file.arrayBuffer()` path.
