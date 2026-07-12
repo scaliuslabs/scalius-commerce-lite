@@ -37,6 +37,16 @@ describe("product route query boundaries", () => {
     expect(source).toContain("400: errorResponses[400]");
   });
 
+  it("reads product responses only from the versioned cache contract", () => {
+    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
+
+    expect(source).toContain(
+      'import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";',
+    );
+    expect(source).toContain("keyPrefix: PRODUCT_API_CACHE_NAMESPACE");
+    expect(source).not.toContain('keyPrefix: "api:products:"');
+  });
+
   it("keeps feed projection on a dedicated route without expanding normal product list cards", () => {
     const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
     const listSchemaStart = source.indexOf("const storefrontProductSchema = z.object({");

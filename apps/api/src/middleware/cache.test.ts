@@ -16,6 +16,7 @@ vi.mock("../utils/kv-cache", () => ({
 }));
 
 import { cacheMiddleware, canonicalizeCacheQueryString } from "./cache";
+import { PRODUCT_API_CACHE_NAMESPACE } from "../utils/product-api-cache";
 
 function withoutFenceToken(cacheKey: string): string {
   return cacheKey.replace(/#f:[0-9a-f]+$/, "");
@@ -111,6 +112,41 @@ describe("cacheMiddleware", () => {
     expect(withoutFenceToken(writeKey)).toBe("api:products:/products");
     expect(readKey).toMatch(/^api:products:\/products#f:[0-9a-f]+$/);
     expect(writeKey).toBe(readKey);
+  });
+
+  it("cannot read an incompatible response from the retired product namespace", async () => {
+    mocks.getCache.mockImplementation(async (key: string) =>
+      key.startsWith("api:products:/")
+        ? {
+            status: 200,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ source: "retired", images: [] }),
+          }
+        : null,
+    );
+
+    const app = new Hono<{ Bindings: Env }>();
+    app.use(
+      "*",
+      cacheMiddleware({ ttl: 60, keyPrefix: PRODUCT_API_CACHE_NAMESPACE }),
+    );
+    app.get("/products/example", (c) =>
+      c.json({ source: "handler", media: [] }),
+    );
+
+    const response = await app.request("/products/example", {}, {
+      CACHE: { id: "api-cache-kv" },
+    } as unknown as Env);
+
+    expect(response.headers.get("X-Cache")).toBe("MISS");
+    await expect(response.json()).resolves.toEqual({
+      source: "handler",
+      media: [],
+    });
+    expect(mocks.getCache).toHaveBeenCalledTimes(1);
+    expect(mocks.getCache.mock.calls[0]?.[0]).toMatch(
+      /^api:products:v2:\/products\/example#f:[0-9a-f]+$/,
+    );
   });
 
   it("skips a delayed miss write when the captured fence changes", async () => {

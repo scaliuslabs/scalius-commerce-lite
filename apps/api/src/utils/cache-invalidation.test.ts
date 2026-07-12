@@ -31,6 +31,7 @@ import {
   triggerStorefrontPurgeForPrefixes,
   warmStorefrontHtmlPaths,
 } from "./cache-invalidation";
+import { PRODUCT_API_CACHE_NAMESPACE } from "./product-api-cache";
 
 describe("catalog cache groups", () => {
   it("maps catalog admin writes to every storefront cache they can affect", () => {
@@ -890,6 +891,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
       delete: vi.fn(),
+      put: vi.fn(),
     };
 
     await invalidateCatalogCaches("discounts", {
@@ -899,7 +901,15 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
 
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:categories:" });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:products:" });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: `sc:${PRODUCT_API_CACHE_NAMESPACE}`,
+    });
+    expect(kv.list).not.toHaveBeenCalledWith({ prefix: "sc:api:products:" });
+    expect(kv.put).toHaveBeenCalledWith(
+      "sc:_api_cache_fence:api%3Aproducts%3Av2%3A",
+      expect.any(String),
+      { expirationTtl: 86400 * 30 },
+    );
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
   });
 
@@ -974,20 +984,20 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
     expect(collectProductAvailabilityCacheInvalidation(subjects)).toEqual({
       apiKeys: [
-        "api:products:/api/v1/products",
-        "api:products:/api/v1/products/feed",
-        "api:products:/api/v1/products/sitemap",
-        "api:products:/api/v1/products/phone",
-        "api:products:/api/v1/products/phone-case",
-        "api:products:/api/v1/products/search",
+        "api:products:v2:/api/v1/products",
+        "api:products:v2:/api/v1/products/feed",
+        "api:products:v2:/api/v1/products/sitemap",
+        "api:products:v2:/api/v1/products/phone",
+        "api:products:v2:/api/v1/products/phone-case",
+        "api:products:v2:/api/v1/products/search",
       ],
       apiPatterns: [
-        "api:products:/api/v1/products?*",
-        "api:products:/api/v1/products/feed?*",
-        "api:products:/api/v1/products/sitemap?*",
-        "api:products:/api/v1/products/phone?*",
-        "api:products:/api/v1/products/phone-case?*",
-        "api:products:/api/v1/products/search?*",
+        "api:products:v2:/api/v1/products?*",
+        "api:products:v2:/api/v1/products/feed?*",
+        "api:products:v2:/api/v1/products/sitemap?*",
+        "api:products:v2:/api/v1/products/phone?*",
+        "api:products:v2:/api/v1/products/phone-case?*",
+        "api:products:v2:/api/v1/products/search?*",
         "api:search:*",
       ],
       storefrontPrefixes: [
@@ -1004,20 +1014,20 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
 
     expect(getProductAvailabilityApiCacheKeys(subjects)).toEqual([
-      "api:products:/api/v1/products",
-      "api:products:/api/v1/products/feed",
-      "api:products:/api/v1/products/sitemap",
-      "api:products:/api/v1/products/phone",
-      "api:products:/api/v1/products/phone-case",
-      "api:products:/api/v1/products/search",
+      "api:products:v2:/api/v1/products",
+      "api:products:v2:/api/v1/products/feed",
+      "api:products:v2:/api/v1/products/sitemap",
+      "api:products:v2:/api/v1/products/phone",
+      "api:products:v2:/api/v1/products/phone-case",
+      "api:products:v2:/api/v1/products/search",
     ]);
     expect(getProductAvailabilityApiCachePatterns(subjects)).toEqual([
-      "api:products:/api/v1/products?*",
-      "api:products:/api/v1/products/feed?*",
-      "api:products:/api/v1/products/sitemap?*",
-      "api:products:/api/v1/products/phone?*",
-      "api:products:/api/v1/products/phone-case?*",
-      "api:products:/api/v1/products/search?*",
+      "api:products:v2:/api/v1/products?*",
+      "api:products:v2:/api/v1/products/feed?*",
+      "api:products:v2:/api/v1/products/sitemap?*",
+      "api:products:v2:/api/v1/products/phone?*",
+      "api:products:v2:/api/v1/products/phone-case?*",
+      "api:products:v2:/api/v1/products/search?*",
       "api:search:*",
     ]);
     expect(getProductAvailabilityStorefrontPrefixes(subjects)).toEqual([
@@ -1059,9 +1069,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
   it("invalidates product availability exact cache families without deleting sibling slugs", async () => {
     const store = new Set([
-      "sc:api:products:/api/v1/products/phone",
-      "sc:api:products:/api/v1/products/phone#f:old",
-      "sc:api:products:/api/v1/products/phone-case#f:old",
+      "sc:api:products:v2:/api/v1/products/phone",
+      "sc:api:products:v2:/api/v1/products/phone#f:old",
+      "sc:api:products:v2:/api/v1/products/phone-case#f:old",
+      "sc:api:products:/api/v1/products/phone#f:retired",
     ]);
     const kv = {
       put: vi.fn(),
@@ -1081,11 +1092,14 @@ describe("triggerStorefrontPurgeForGroups", () => {
       { env: { CACHE: kv } as unknown as Env },
     );
 
-    expect(store.has("sc:api:products:/api/v1/products/phone")).toBe(false);
-    expect(store.has("sc:api:products:/api/v1/products/phone#f:old")).toBe(false);
-    expect(store.has("sc:api:products:/api/v1/products/phone-case#f:old")).toBe(
+    expect(store.has("sc:api:products:v2:/api/v1/products/phone")).toBe(false);
+    expect(store.has("sc:api:products:v2:/api/v1/products/phone#f:old")).toBe(false);
+    expect(store.has("sc:api:products:v2:/api/v1/products/phone-case#f:old")).toBe(
       true,
     );
+    expect(
+      store.has("sc:api:products:/api/v1/products/phone#f:retired"),
+    ).toBe(true);
   });
 
   it("invalidates targeted product availability API KV before scheduling storefront prefixes", async () => {
@@ -1110,25 +1124,25 @@ describe("triggerStorefrontPurgeForGroups", () => {
       },
     );
 
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/phone");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/feed");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/sitemap");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:/api/v1/products/search");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/phone");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/feed");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/sitemap");
+    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/search");
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:products:/api/v1/products?",
+      prefix: "sc:api:products:v2:/api/v1/products?",
     });
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:products:/api/v1/products/feed?",
+      prefix: "sc:api:products:v2:/api/v1/products/feed?",
     });
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:products:/api/v1/products/sitemap?",
+      prefix: "sc:api:products:v2:/api/v1/products/sitemap?",
     });
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:products:/api/v1/products/phone?",
+      prefix: "sc:api:products:v2:/api/v1/products/phone?",
     });
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:products:/api/v1/products/search?",
+      prefix: "sc:api:products:v2:/api/v1/products/search?",
     });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
     expect(waitUntil).toHaveBeenCalledTimes(1);
