@@ -228,6 +228,10 @@ export const categories = sqliteTable(
         canonicalPath: text("canonical_path"),
         noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
         excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
+        status: text("status", { enum: ["draft", "published", "internal"] })
+            .notNull()
+            .default("draft"),
+        revision: integer("revision").notNull().default(1),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -239,6 +243,9 @@ export const categories = sqliteTable(
     (table) => [
         uniqueIndex("categories_slug_idx").on(table.slug),
         index("categories_deleted_at_idx").on(table.deletedAt),
+        index("categories_public_idx").on(table.status, table.deletedAt),
+        check("categories_status_valid", sql.raw(`"status" IN ('draft', 'published', 'internal')`)),
+        check("categories_revision_positive", sql.raw(`"revision" >= 1`)),
     ],
 );
 
