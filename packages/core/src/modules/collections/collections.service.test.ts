@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import {
     createCollection,
@@ -266,6 +268,36 @@ describe("listCollectionProductOptions", () => {
         expect(statements).toHaveLength(2);
         expect(statements[1]?.limit).toHaveBeenCalledWith(10);
         expect(statements[1]?.offset).toHaveBeenCalledWith(10);
+    });
+
+    it("aliases the joined category name for D1 batch row decoding", async () => {
+        const queries: string[] = [];
+        const d1 = {
+            prepare(query: string) {
+                queries.push(query);
+                const statement = {
+                    bind: () => statement,
+                    all: async () => ({ results: [] }),
+                    raw: async () => [],
+                    first: async () => null,
+                };
+                return statement;
+            },
+            batch: async () => [
+                { results: [{ count: 0 }], success: true },
+                { results: [], success: true },
+            ],
+        };
+        const db = drizzle(d1 as unknown as D1Database, { schema });
+
+        await listCollectionProductOptions(db, { page: 1, limit: 10 });
+
+        const optionQuery = queries.find((query) =>
+            query.includes('left join "categories"')
+        );
+        expect(optionQuery).toContain(
+            '"categories"."name" as "collection_product_category_name"',
+        );
     });
 });
 
