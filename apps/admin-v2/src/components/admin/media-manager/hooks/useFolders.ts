@@ -51,7 +51,7 @@ export function useFolders(autoLoad = false) {
 
   return {
     folders,
-    isLoading,
+    isLoadingFolders: isLoading,
     currentFolderId,
     loadFolders,
     createFolder,
