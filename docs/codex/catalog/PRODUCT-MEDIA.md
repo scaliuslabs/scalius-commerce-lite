@@ -1,18 +1,18 @@
 # Ordered Product Media Blueprint
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
-Status: accepted implementation design; not yet implemented. The first-class
-Media storage/lifecycle authority landed in commit `d6c5961e`. This document
-owns the follow-on product, buyer-surface, discovery, and order integration
-decisions so implementation does not reconstruct them from old image-only code.
-It supersedes the URL-table and silent-image-removal details in
-`VARIANT-IMAGES.md`; that document's core nullable exact-SKU decision remains
-in force.
+Status: implemented and locally verified through the schema/core/API/admin,
+protected storefront gallery, and immutable order snapshot. The first-class
+Media authority landed in `d6c5961e`; ordered product authority in `c39ceaac`;
+order snapshotting in `8dc2b1a3`; Media poster projection in `f07f3ec5`; and the
+admin/storefront integrations in `529dd128` and `760cbf7c`. Migration 0020 is
+the final no-compatibility removal of the copied-URL table. Deployment, demo
+reseed, and live browser/feed/UCP proof remain outstanding.
 
 ## Outcome
 
-Replace the URL-bearing `product_images` subsystem with ordered product
+The URL-bearing legacy product-image subsystem is replaced by ordered product
 associations to the global `media` authority. A product can contain images and
 videos in one ordered gallery, exactly one association is featured, and every
 surface that only accepts an image uses one shared deterministic image
@@ -28,23 +28,24 @@ This is a deliberate no-backward-compatibility cutover:
 - demo catalog/order data may be reset and reseeded after the migration rather
   than preserving invalid legacy associations.
 
-## Verified current boundaries
+## Pre-cutover boundaries and implemented resolution
 
-The current code is internally consistent only for images:
+The left column records the legacy boundary that motivated the cutover; the
+right column is the implemented local authority.
 
-| Boundary | Current authority or behavior | Required change |
+| Boundary | Legacy authority or behavior | Implemented authority |
 |---|---|---|
-| Blob library | `media` owns immutable R2 object keys, verified image/video kind, poster, lifecycle, and CAS version | Keep as the only asset authority |
-| Product gallery | `product_images` copies URL/alt/primary/order | Replace with `product_media -> media` |
-| Product write | client submits media-library-shaped URL records; core regenerates image rows | Submit stable association IDs plus global media IDs |
-| SKU image | `product_variants.image_id -> product_images.id` | Repoint to an exact same-product image association |
-| Storefront detail | `ProductGallery.astro` optimizes and zooms every row as an image | Render image or video inside the same protected stage/rail geometry |
-| Cards/list/search/collections | primary `product_images.url` | Use the shared image-representation resolver |
-| Cart/quick buy | current displayed image URL is copied into client cart state | Resolve exact SKU image, otherwise product image representation |
-| Checkout/order views | receipt/admin order queries dynamically read the product's current primary image | Snapshot the resolved image asset on the order item |
-| Feed/UCP | product primary image plus optional exact SKU image | Resolve only real images/posters; never return a video URL as an image |
-| OG/JSON-LD | product page assumes the first usable image URL | Use the same discovery-image resolver and absolute URL policy |
-| Media delete | permanent delete guards only video-poster use | Also guard product associations and retained order snapshots |
+| Blob library | `media` owns immutable R2 object keys, verified image/video kind, poster, lifecycle, and CAS version | It remains the only asset authority |
+| Product gallery | copied URL/alt/primary/order rows | `product_media -> media` is the only gallery authority |
+| Product write | client submits media-library-shaped URL records; core regenerates image rows | Stable association IDs plus global media IDs are submitted |
+| SKU image | SKU points at the copied product-image row | SKU points at an exact same-product image association |
+| Storefront detail | `ProductGallery.astro` optimizes and zooms every row as an image | Image or video renders inside the same protected stage/rail geometry |
+| Cards/list/search/collections | copied primary URL | Shared image-representation resolver supplies a real image/poster |
+| Cart/quick buy | current displayed image URL is copied into client cart state | Exact SKU image resolves first, then the product representation |
+| Checkout/order views | receipt/admin order queries dynamically read the product's current primary image | Resolved image asset is snapshotted on the order item |
+| Feed/UCP | product primary image plus optional exact SKU image | Only real images/posters resolve; video URLs never occupy image fields |
+| OG/JSON-LD | product page assumes the first usable image URL | Shared discovery-image resolver and absolute URL policy apply |
+| Media delete | permanent delete guards only video-poster use | Product associations and retained order snapshots also block deletion |
 
 Primary code boundaries include:
 
@@ -421,14 +422,14 @@ not casually rebuild them inside the initial product-table migration.
 
 ## Migration and demo seed
 
-### Migration A: product composition
+### Product composition and final cutover
 
 After the committed Media migration 0017 and category migration 0016:
 
 1. create `product_media` with the constraints/indexes above;
 2. rebuild `product_variants` so `image_id` targets `product_media.id`;
 3. set all legacy variant image references to `NULL` rather than guessing;
-4. drop `product_images` and all legacy indexes/triggers;
+4. after every reader is cut over, drop the copied-URL table and its indexes;
 5. create same-product/image-kind triggers using remote-D1-safe `WHEN` guards;
 6. regenerate Drizzle metadata using `pnpm db:generate`—never hand-edit generated
    snapshots/journal.
@@ -437,9 +438,14 @@ Do not copy old `product_images.url` values into `media`; their origin, kind,
 object authority, signature, and lifecycle are unverified. The catalog is demo
 data, so an explicit demo seed will attach ready Media assets cleanly.
 
-### Migration B: order presentation snapshot
+`0018_magenta_scream.sql` implements steps 1–3 and 5. The generated
+`0020_chemical_captain_britain.sql` performs step 4 after the core/API/admin and
+storefront readers have moved to the shared projection. Both generated
+snapshots and journal entries are Drizzle-owned.
 
-Rebuild or safely extend `order_items` under the order-domain test suite to add
+### Order presentation snapshot
+
+Migration `0019_loose_living_mummy.sql` safely extends `order_items` to add
 the nullable image Media reference. Because data is demo-only, old rows may
 remain `NULL`; do not dynamically backfill from the then-current product image
 and pretend it is an historical snapshot.
@@ -511,48 +517,28 @@ migrations.
 - Product JSON-LD and OG match buyer-visible image and selected SKU cache
   isolation remains intact.
 
-## Rollout and commit sequence
+## Implementation evidence and remaining release steps
 
-1. **Schema + pure authority:** product association table, variant FK/triggers,
-   shared resolver/tests, migration, and demo reset tooling.
-2. **Core/API cutover:** admin product read/write, option matrix/SKU guards,
-   storefront/list/feed/UCP/diagnostics, Media dependency checks, strict OpenAPI
-   schemas. Remove `productImages` imports rather than leaving adapters.
-3. Run `pnpm generate:sdk` once API shapes settle; never hand-edit generated SDK.
-4. **Admin product integration:** after the Media-admin agent finishes its
-   picker contract, build ordered mixed-media tiles and image-only SKU picker.
-5. **Protected storefront integration:** gallery element switching, typed event,
-   card/cart/checkout/discovery projections, focused visual/a11y tests.
-6. **Order snapshot:** separately reviewed schema/core/API/storefront integration.
-7. Run focused suites, package typechecks/lint, `pnpm check:env`, full tests/build,
-   `pnpm ops:check`, and `pnpm release:check`.
-8. Apply migrations through the repository deploy scripts, deploy API before
-   admin/storefront clients, run the real demo seed, then live-smoke the 23.56 MB
-   video upload, product edit, SKU selection, cart, checkout, order receipt,
-   feeds, UCP, JSON-LD, cache freshness, and desktop/mobile gallery.
+- `c39ceaac`, `108e0291`, and `c086e98b` establish the normalized schema,
+  resolvers, strict public/admin projections, cache boundaries, and alt-text
+  authority.
+- `8dc2b1a3` makes order-item image presentation an immutable retained Media
+  snapshot; `f07f3ec5` makes off-page video posters reloadable without N+1
+  reads.
+- `529dd128` and `760cbf7c` integrate the compact admin editor and the protected
+  storefront gallery without restoring image-only compatibility shapes.
+- Migration 0020 and its generated snapshot remove the last schema declaration
+  and physical copied-URL table after 0018/0019 have established the replacement
+  foreign keys and order snapshot.
+
+Before release, run `pnpm generate:sdk` once all API changes settle, complete the
+repository-wide gates (`check:env`, tests, builds, ops/release smokes), then apply
+migrations and deploy API before admin/storefront clients. Reset the demo catalog
+through authoritative Media/product commands and live-smoke the 23.56 MB video
+upload, product edit, SKU selection, cart, checkout, order receipt, feeds, UCP,
+JSON-LD, cache freshness, and desktop/mobile gallery.
 
 Do not expose the mixed-media product UI before API, storefront, feed/UCP, and
-order fallbacks are deployed coherently. Until that cutover, the correct user-
-facing statement is that Media storage supports video locally but product and
-storefront video support is not yet deployed end to end.
-
-## Subsequent implementation ownership
-
-Use disjoint slices after current category/media-admin edits are committed:
-
-- **Schema/core authority owner:** database product schema/migration, shared
-  projection helper, product validation/admin/variant/option modules, Media
-  deletion dependency guard.
-- **Public/discovery owner:** storefront product queries, public eligibility,
-  list/feed diagnostics, API public schemas, XML feeds, UCP, SEO/JSON-LD.
-- **Admin owner:** product-form types/submission/media section/gallery and SKU
-  picker; coordinate with the new MediaManager capability contract.
-- **Storefront owner:** ProductGallery/controller/zoom event, product page,
-  cards, quick buy/cart/checkout; no layout redesign.
-- **Order owner:** order-item snapshot migration and all checkout/admin-order/
-  receipt projections under the order/inventory test bar.
-
-`products.storefront.ts` and adjacent public category/collection code are being
-edited by the category-publication workstream at the time of this design. Do not
-start the public/discovery implementation until that work is committed and
-reviewed.
+order fallbacks are deployed coherently. Until that deployment, the correct
+user-facing statement is that image/video product support is implemented and
+verified locally but not yet proven end to end in production.

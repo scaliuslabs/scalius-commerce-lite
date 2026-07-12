@@ -100,8 +100,7 @@ the schema declarations are the source of truth.
 |-------|---------|
 | `products` | Core product. `slug`, `categoryId` FK, `isActive`, `discountPercentage/Type/Amount`, `freeDelivery` |
 | `productMedia` | Ordered product association to global `media`; immutable asset identity, unique dense order, and exactly one featured row for non-empty galleries |
-| `productImages` | Temporary read-only integration bridge for pre-cutover public readers; no product command may write it, and the final cutover drops it |
-| `productVariants` | SKU-level variants. `size`, `color`, `stock`, `reservedStock`, `preorderStock`, `version`, `stockVersion`, `barcode`, `barcodeType` |
+| `productVariants` | SKU-level sellable identities with normalized merchant option assignments, optional exact `productMedia` image association, stock pools, CAS versions, discounts, and barcode identity |
 | `categories` | Product categories. `slug`, `imageUrl`, `metaTitle`, `metaDescription` |
 | `collections` | Homepage product groupings. `type` ("manual"/"dynamic"), `config` (JSON), `sortOrder` |
 | `productAttributes` | Filterable attribute definitions. `name` (unique), `slug` (unique), `options` (JSON array) |
@@ -314,13 +313,15 @@ Drizzle config (`drizzle.config.ts`):
 # Product variant image associations
 
 `product_variants.image_id` is the sole variant-image authority: one optional,
-same-product image reference per exact SKU. `NULL` means the SKU uses the
-product primary image, so only the combinations that genuinely need distinct
-media require a reference. Image deletion uses `ON DELETE SET NULL` and safely
-returns affected SKUs to that primary fallback.
+same-product `product_media.id` image association per exact SKU. `NULL` means
+the SKU uses the product's shared image representation, so only combinations
+that genuinely need distinct media require a reference. Association deletion
+uses `ON DELETE SET NULL` and safely returns affected SKUs to that fallback.
 
 Migration `0007_bored_vulcan.sql` removed the former product-level image-axis
 switches and `product_variant_image_mappings` table during the normalized option
-cutover. Do not restore label/axis inheritance, SEO-marker serialization, or
-positional matching. Bulk assignment is an editor convenience that writes the
-same exact image ID to each selected SKU.
+cutover. Migration `0018_magenta_scream.sql` repointed exact SKU images to
+`product_media`; `0020_chemical_captain_britain.sql` removes the final copied-URL
+table. Do not restore label/axis inheritance, SEO-marker serialization,
+positional matching, or a parallel product image table. Bulk assignment is an
+editor convenience that writes the same exact association ID to selected SKUs.

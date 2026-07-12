@@ -1,5 +1,5 @@
 // src/db/schema/products.ts
-// Product domain tables: products, images, variants, categories, collections,
+// Product domain tables: products, media associations, variants, categories, collections,
 // attributes, attribute values, and rich content.
 
 import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
@@ -96,29 +96,6 @@ export const productMedia = sqliteTable("product_media", {
     index("product_media_primary_lookup_idx")
         .on(table.productId, table.id)
         .where(sql`${table.isPrimary} = 1`),
-]);
-
-/**
- * Transitional read-only declaration for public consumers that are being
- * migrated in the next integration slice. Product commands must not write
- * this table. The final cutover migration removes it after every reader uses
- * productMedia.
- */
-export const productImages = sqliteTable("product_images", {
-    id: text("id").primaryKey(),
-    productId: text("product_id")
-        .notNull()
-        .references(() => products.id, { onDelete: "cascade" }),
-    url: text("url").notNull(),
-    alt: text("alt"),
-    isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
-    sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: integer("created_at", { mode: "timestamp" })
-        .notNull()
-        .default(UNIX_NOW),
-}, (table) => [
-    index("product_images_product_id_idx").on(table.productId),
-    index("product_images_primary_idx").on(table.productId, table.isPrimary),
 ]);
 
 export const productOptionDefinitions = sqliteTable("product_option_definitions", {
@@ -384,8 +361,6 @@ export const productRichContent = sqliteTable("product_rich_content", {
 
 export type Product = InferSelectModel<typeof products>;
 export type ProductMedia = InferSelectModel<typeof productMedia>;
-/** @deprecated Integration bridge only. Do not add new productImages consumers. */
-export type ProductImage = InferSelectModel<typeof productImages>;
 export type ProductOptionDefinition = InferSelectModel<typeof productOptionDefinitions>;
 export type ProductOptionValue = InferSelectModel<typeof productOptionValues>;
 export type ProductVariant = InferSelectModel<typeof productVariants>;

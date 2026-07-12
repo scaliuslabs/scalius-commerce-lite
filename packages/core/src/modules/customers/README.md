@@ -137,7 +137,7 @@ The storefront proxy rewrites cookies (strips `Domain=`, changes `SameSite=None`
 ### Customer Stats
 ```
 Order create/update (orders domain) -> calculateCustomerStats() -> UPDATE customers SET totalOrders, totalSpent, lastOrderAt
-Customer account order history -> getCustomerOrders() -> live aggregate summary over all non-deleted customer orders + keyset-paginated order page + orderItems/product images + latest deliveryShipments/deliveryProviders summary
+Customer account order history -> getCustomerOrders() -> live aggregate summary over all non-deleted customer orders + keyset-paginated order page + immutable order-item media snapshots resolved through retained image assets + latest deliveryShipments/deliveryProviders summary
 Customer account order detail -> getCustomerOwnedOrderForDetail() -> getCustomerOrderDetailForOrder() -> order + items + shipments + payments + paymentPlan/COD + notification receipts + timeline
 Customer account payment recovery preview -> API customer-auth route reuses the customer-owned order header -> shared payment-session policy/gateway readiness helpers
 Customer account payment session creation -> API customer-auth route -> createCustomerAccountPaymentSession() -> shared provider-session policy/gateway readiness/attempt helpers -> gateway

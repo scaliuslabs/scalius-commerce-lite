@@ -54,7 +54,7 @@ Admin UI (ProductView.tsx)
   --> Astro loader: getProductViewData()
     --> apiGet(/products/:id)
       --> getProductDetails()
-        --> D1: product + variants (filtered: deletedAt IS NULL) + images + richContent + attributeValues
+        --> D1: product + variants (filtered: deletedAt IS NULL) + ordered productMedia/media projections + richContent + attributeValues
         --> Returns ProductWithDetails with additionalInfo [{id, title, content, sortOrder}] and attributes [{attributeId, value}]
 
 Storefront ([slug].astro)
@@ -62,7 +62,7 @@ Storefront ([slug].astro)
     --> fetch(/api/storefront/products/:slug)
       --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
         --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
-          --> D1: parallel queries for images, variants, richContent, attributes, category, relatedProducts
+          --> D1: parallel queries for ordered product media, variants, richContent, attributes, category, relatedProducts
         --> apps/storefront/src/lib/product-sellable-variants.ts [buyer-visible SKU resolver]
           --> simple: one active no-option SKU; optioned: customer-option SKUs only; fake "default"/ambiguous rows fail closed
 

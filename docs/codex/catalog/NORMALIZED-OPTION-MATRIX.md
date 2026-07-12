@@ -5,7 +5,7 @@ Last reviewed: 2026-07-12
 ## Authority
 
 - `products`: merchandising aggregate and aggregate revision.
-- `product_images`: ordered product media; first row is primary.
+- `product_media`: ordered associations to retained global image/video assets; exactly one row is featured when the gallery is non-empty.
 - `product_option_definitions`: ordered merchant choice axes, display name, and
   optional standard discovery mapping.
 - `product_option_values`: ordered values belonging to one definition.

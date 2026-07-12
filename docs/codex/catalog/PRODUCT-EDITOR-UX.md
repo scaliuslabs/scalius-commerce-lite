@@ -120,7 +120,7 @@ The matrix replaces the old generator dialog and separate spreadsheet mode.
 
 ## Media ownership
 
-- `product_images` owns the ordered gallery and primary image.
+- `product_media` owns the ordered image/video gallery and featured association; global `media` owns the retained asset and poster lifecycle.
 - `product_variants.image_id` optionally selects one image belonging to the same
   product. Null means use the product primary image.
 - The matrix picker is the only SKU-image assignment surface.
