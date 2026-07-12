@@ -13,6 +13,7 @@ import {
 } from "@scalius/shared/barcode-identity";
 import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
 import { buildStockMovementClaim } from "./stock-movement-claims";
+import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
 const MAX_CAS_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -264,6 +265,7 @@ export async function lookupByBarcodeOrSku(
         productVariantBarcodeIdentityEquals(barcodeIdentity),
         isNull(productVariants.deletedAt),
         isNull(products.deletedAt),
+        operationalSkuRowPredicate(),
       ),
     )
     .get();
@@ -280,6 +282,7 @@ export async function lookupByBarcodeOrSku(
           sql`lower(trim(${productVariants.sku})) = ${barcodeIdentity}`,
           isNull(productVariants.deletedAt),
           isNull(products.deletedAt),
+          operationalSkuRowPredicate(),
         ),
       )
       .get();

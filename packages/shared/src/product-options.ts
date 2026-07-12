@@ -24,6 +24,9 @@ export const PRODUCT_VARIANT_OPTION_AXES = [
   "option1_option2",
 ] as const;
 
+/** Maximum option SKUs accepted by one atomic product edit plan. */
+export const MAX_PRODUCT_OPTION_COMBINATIONS = 150;
+
 export type ProductVariantOptionAxis =
   (typeof PRODUCT_VARIANT_OPTION_AXES)[number];
 

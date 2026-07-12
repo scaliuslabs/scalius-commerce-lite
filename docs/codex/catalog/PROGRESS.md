@@ -87,12 +87,26 @@ This log records implementation state. The finding files remain the source for o
 - Collection membership remains JSON configuration shared with merchandising metadata; a normalized membership/rules model with revisioned ordering is still required for very large catalogs and concurrent editors.
 - Attribute visibility/export/schema roles remain coupled to `filterable`; quick-buy pricing, UCP eligible pagination, and feed cursor pagination retain their documented gaps.
 - The category/collection mobile filter drawer still needs a complete focus trap and automated accessibility coverage.
+- Product creation still persists the product/default SKU before option SKUs. A future `createProductAggregate` contract must make initial product plus option topology atomic rather than hiding follow-up variant requests.
+- Fulfillment type remains implicit. Add an explicit `requiresShipping` authority before exposing digital/service product UI; do not infer it from weight, stock tracking, or category.
+- The current storage model supports two merchant-named option axes. A third axis requires normalized option definition/value/combination tables, not JSON or encoded strings.
 
 ## Next implementation slice
 
 1. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
 2. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
 3. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
+
+## Product editor workflow batch 7 (local verification complete)
+
+- The editor main column now owns Details, Media, Pricing, Option names, Attributes, and Search/discovery; the narrow rail owns Status and Organization. This removes the structural dead region beneath Media without spacer CSS or storefront changes.
+- Option names are buyer/admin/feed/schema labels rather than a hidden feed-only mapping. Unsaved label edits flow into the open SKU editor without replacing the merchant draft.
+- Simple products expose `Generate combinations` and `Add one option` together. Dirty simple-SKU fields save first, and the generator inherits price, tracking, weight, and discount defaults.
+- The generator is a compact Values → Defaults → Review workflow with normalized value deduplication, stable draft identities, explicit identity regeneration, editable SKU/price/stock rows, selectable exclusions, topology/identity conflicts, and inline retry-preserving failures.
+- First simple-to-optioned conversion blocks live reservations and requires exact allocation of the tracked default SKU's on-hand stock. The dormant default SKU is excluded from inventory overview/stats, scanner lookup, barcode lookup, and low-stock projections while active customer options exist.
+- Stock is integer-only at API boundaries. Bulk create and mixed edit plans share a 150-row total-operation ceiling and bounded five-wide low-stock reconciliation. Disabling tracking/thresholds or dormancy resolves stale low-stock alerts.
+- Comparative product-creation findings and the normalized multi-axis, fulfillment, and atomic initial-create targets are preserved in `PRODUCT-EDITOR-UX.md`.
+- Local evidence: 449 test files / 3,334 tests passed; full workspace typecheck, lint, and build passed; SDK generation, Worker env parity, admin performance, distribution-secret scan, and diff checks passed.
 
 ## Reliability batch 5 (deployed and live verified)
 

@@ -2,10 +2,11 @@
 // Low-stock alert creation and management.
 // Called after stock deductions to check if any variant has dropped below threshold.
 
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { isLowStockThresholdEnabled } from "./low-stock-policy";
+import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
 /**
  * Result of a low-stock check, for observability.
@@ -27,6 +28,25 @@ export interface LowStockAlertResult {
   variantId: string;
   /** The product ID (for notification routing) */
   productId: string;
+}
+
+async function resolveInactiveLowStockAlert(
+  db: Database,
+  variantId: string,
+  currentQty?: number,
+): Promise<void> {
+  await db
+    .update(productLowStockAlerts)
+    .set({
+      ...(currentQty === undefined ? {} : { currentQty }),
+      alertStatus: "resolved",
+      resolvedAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(and(
+      eq(productLowStockAlerts.variantId, variantId),
+      ne(productLowStockAlerts.alertStatus, "resolved"),
+    ));
 }
 
 /**
@@ -53,15 +73,26 @@ export async function checkAndAlertLowStock(
       trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
-    .where(eq(productVariants.id, variantId))
+    .where(and(
+      eq(productVariants.id, variantId),
+      operationalSkuRowPredicate(),
+    ))
     .get();
 
+  if (!variant) {
+    await resolveInactiveLowStockAlert(db, variantId);
+    return null;
+  }
+
   if (
-    !variant ||
     !variant.trackInventory ||
     !isLowStockThresholdEnabled(variant.lowStockThreshold)
   ) {
-    // No threshold configured — nothing to do
+    await resolveInactiveLowStockAlert(
+      db,
+      variantId,
+      variant.stock - variant.reservedStock,
+    );
     return null;
   }
 

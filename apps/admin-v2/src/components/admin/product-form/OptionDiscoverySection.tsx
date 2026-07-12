@@ -40,14 +40,15 @@ export const OptionDiscoverySection = memo(function OptionDiscoverySection({
 }: OptionDiscoverySectionProps) {
   return (
     <CollapsibleCard
-      title="Catalog Option Mapping"
-      description="Feed and ProductGroup labels"
-      defaultOpen={false}
+      title="Option names"
+      description="Customer choices and catalog semantics"
+      defaultOpen={true}
     >
       <div className="space-y-3">
         <p className="text-xs leading-5 text-muted-foreground">
-          Controls catalog feeds and ProductGroup JSON-LD only. Buyer-visible
-          option values stay unchanged.
+          Name the choice axes used by this product's SKUs. These names appear
+          in the option editor, storefront, feeds, and structured data; catalog
+          type only controls standards mapping.
         </p>
 
         <div className="grid gap-3">
@@ -98,7 +99,7 @@ function OptionMappingFields({
           name={labelName}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">Feed label</FormLabel>
+              <FormLabel className="text-xs">Option name</FormLabel>
               <FormControl>
                 <Input
                   className="h-9"
@@ -117,7 +118,7 @@ function OptionMappingFields({
           name={schemaName}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">Schema type</FormLabel>
+              <FormLabel className="text-xs">Catalog type</FormLabel>
               <Select
                 value={field.value}
                 onValueChange={(value) =>

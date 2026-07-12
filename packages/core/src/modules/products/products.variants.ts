@@ -23,7 +23,10 @@ import {
     variantEditPlanSchema,
     type VariantEditPlan,
 } from "./products.types";
-import { normalizeDefaultSkuOptions } from "./products.public-eligibility";
+import {
+    normalizeDefaultSkuOptions,
+    operationalSkuRowPredicate,
+} from "./products.public-eligibility";
 import { classifyProductVariantOptionAxes } from "@scalius/shared/product-options";
 import {
     getBarcodeIdentityKey,
@@ -87,6 +90,45 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
 export function assertConsistentVariantOptionAxes(variants: Array<{ size?: string | null; color?: string | null }>) {
     if (classifyProductVariantOptionAxes(variants) === "mixed") {
         throw new ValidationError("Use the same option fields for every SKU on this product: Option 1 only, Option 2 only, or both options on every SKU.");
+    }
+}
+
+type TransitionSku = {
+    isDefault?: boolean;
+    size?: string | null;
+    color?: string | null;
+    stock: number;
+    reservedStock?: number;
+    preorderStock?: number;
+    trackInventory?: boolean;
+};
+
+export function assertSimpleSkuTransitionStockAllocation(
+    currentVariants: TransitionSku[],
+    creates: Array<Pick<TransitionSku, "stock" | "trackInventory">>,
+): void {
+    if (creates.length === 0) return;
+    if (currentVariants.some((variant) => !variant.isDefault && hasCustomerOption(variant))) {
+        return;
+    }
+
+    const defaultSku = currentVariants.find((variant) => variant.isDefault);
+    if (!defaultSku) return;
+    if ((defaultSku.reservedStock ?? 0) > 0 || (defaultSku.preorderStock ?? 0) > 0) {
+        throw new ConflictError(
+            "This product has reserved stock. Finish or release those orders before adding customer options.",
+        );
+    }
+    if (defaultSku.trackInventory === false) return;
+
+    const allocatedStock = creates.reduce(
+        (total, variant) => total + (variant.trackInventory === false ? 0 : variant.stock),
+        0,
+    );
+    if (allocatedStock !== defaultSku.stock) {
+        throw new ValidationError(
+            `Allocate exactly ${defaultSku.stock} on-hand units across the new options before converting this product. Currently allocated: ${allocatedStock}.`,
+        );
     }
 }
 
@@ -310,6 +352,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
                 productVariantBarcodeIdentityEquals(barcodeKey),
                 isNull(productVariants.deletedAt),
                 isNull(products.deletedAt),
+                operationalSkuRowPredicate(),
             ),
         )
         .get();
@@ -398,6 +441,22 @@ export async function createVariant(
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
     const barcodeIdentity = normalizeVariantBarcode(data.barcode, data.barcodeType);
+    const currentVariants = await db
+        .select({
+            isDefault: productVariants.isDefault,
+            size: productVariants.size,
+            color: productVariants.color,
+            stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            preorderStock: productVariants.preorderStock,
+            trackInventory: productVariants.trackInventory,
+        })
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            isNull(productVariants.deletedAt),
+        ));
+    assertSimpleSkuTransitionStockAllocation(currentVariants, [data]);
     await assertProductVariantOptionAxes(db, productId, [{ size, color }]);
     await assertUniqueVariantBarcodes(db, [{ ...barcodeIdentity }]);
 
@@ -809,6 +868,21 @@ export async function deleteVariant(
 
 type PersistedVariant = typeof productVariants.$inferSelect;
 
+const LOW_STOCK_RECONCILIATION_WAVE_SIZE = 5;
+
+export async function reconcileVariantLowStockAlerts(
+    db: DrizzleD1Database<typeof schema>,
+    variantIds: string[],
+): Promise<void> {
+    const uniqueVariantIds = Array.from(new Set(variantIds));
+    for (let index = 0; index < uniqueVariantIds.length; index += LOW_STOCK_RECONCILIATION_WAVE_SIZE) {
+        const wave = uniqueVariantIds.slice(index, index + LOW_STOCK_RECONCILIATION_WAVE_SIZE);
+        await Promise.allSettled(
+            wave.map((variantId) => checkAndAlertLowStock(db, variantId)),
+        );
+    }
+}
+
 function firstValidationMessage(error: z.ZodError): string {
     return error.issues[0]?.message ?? "Variant edit plan is invalid";
 }
@@ -864,6 +938,7 @@ export async function applyVariantEditPlan(
             eq(productVariants.productId, productId),
             isNull(productVariants.deletedAt),
         ));
+    assertSimpleSkuTransitionStockAllocation(currentVariants, plan.creates);
     const currentById = new Map(currentVariants.map((variant) => [variant.id, variant]));
 
     for (const update of plan.updates) {
@@ -1109,7 +1184,8 @@ export async function applyVariantEditPlan(
                     ))
                     .returning(),
             );
-            stockChangedVariantIds.push(variant.id);
+            // New option SKUs cannot configure a low-stock threshold in this
+            // create contract, so there is no alert lifecycle to reconcile.
         } else {
             createResultIndices.push(insertIndex);
         }
@@ -1210,11 +1286,7 @@ export async function applyVariantEditPlan(
 
     // Alert reconciliation is secondary to the authoritative stock transaction.
     // Do not report the edit as failed after its D1 batch has already committed.
-    await Promise.allSettled(
-        Array.from(new Set(stockChangedVariantIds)).map((variantId) =>
-            checkAndAlertLowStock(db, variantId)
-        ),
-    );
+    await reconcileVariantLowStockAlerts(db, stockChangedVariantIds);
 
     return {
         created: created as PersistedVariant[],

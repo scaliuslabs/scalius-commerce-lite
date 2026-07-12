@@ -118,6 +118,12 @@ function ProductEditor({
   const [editorVariants, setEditorVariants] = useState<LocalProductVariant[]>(
     () => formatEditorVariants(initialProduct),
   );
+  const [editorOptionLabels, setEditorOptionLabels] = useState<VariantOptionLabels>(() => ({
+    option1:
+      initialProduct.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+    option2:
+      initialProduct.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+  }));
   const [currentAggregateRevision, setCurrentAggregateRevision] = useState(
     initialProduct.aggregateRevision,
   );
@@ -155,6 +161,12 @@ function ProductEditor({
       }
       setEditorSnapshot(latest);
       setEditorVariants(formatEditorVariants(latest));
+      setEditorOptionLabels({
+        option1:
+          latest.variantOption1Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option1,
+        option2:
+          latest.variantOption2Label ?? DEFAULT_PRODUCT_OPTION_LABELS.option2,
+      });
       setCurrentAggregateRevision(latest.aggregateRevision);
       setFormGeneration((generation) => generation + 1);
       setRevisionConflict(null);
@@ -187,6 +199,10 @@ function ProductEditor({
         aggregateRevision,
       }));
       setCurrentAggregateRevision(aggregateRevision);
+      setEditorOptionLabels({
+        option1: values.variantOption1Label,
+        option2: values.variantOption2Label,
+      });
     },
     [],
   );
@@ -245,11 +261,6 @@ function ProductEditor({
     })),
   };
 
-  const variantOptionLabels: VariantOptionLabels = {
-    option1: defaultValues.variantOption1Label,
-    option2: defaultValues.variantOption2Label,
-  };
-
   return (
     <div className="container max-w-7xl space-y-6 py-4 pb-8">
       <ProductForm
@@ -264,6 +275,7 @@ function ProductEditor({
         onRevisionConflict={handleRevisionConflict}
         onOpenRevisionConflict={() => setIsConflictOpen(true)}
         onProductSaved={handleProductSaved}
+        onOptionLabelsChange={setEditorOptionLabels}
       />
 
       <div className="mt-6" id="variant-section">
@@ -276,7 +288,7 @@ function ProductEditor({
               productName={editorSnapshot.name}
               variants={editorVariants}
               onVariantsChange={setEditorVariants}
-              optionLabels={variantOptionLabels}
+              optionLabels={editorOptionLabels}
               aggregateRevision={currentAggregateRevision}
               revisionConflict={revisionConflict}
               onAggregateRevisionChange={handleAggregateRevisionChange}

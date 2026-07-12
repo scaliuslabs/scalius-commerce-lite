@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   generateVariantCombinations,
+  getBulkVariantDraftKey,
   getAvailableStock,
   getStockStatus,
   getVariantStats,
+  normalizeVariantDraftIdentity,
 } from "./variantHelpers";
 import type { BulkVariantOptions, ProductVariant } from "../types";
 
 const baseOptions: BulkVariantOptions = {
-  sizes: [],
-  colors: [],
+  option1Values: [],
+  option2Values: [],
   basePrice: 100,
   baseStock: 5,
   trackInventory: true,
@@ -29,7 +31,7 @@ describe("variant option helper boundaries", () => {
     const generated = generateVariantCombinations(
       {
         ...baseOptions,
-        sizes: ["M", "L"],
+        option1Values: ["M", "L"],
       },
       "shirt",
     );
@@ -42,7 +44,7 @@ describe("variant option helper boundaries", () => {
     const generated = generateVariantCombinations(
       {
         ...baseOptions,
-        sizes: ["M"],
+        option1Values: ["M"],
         trackInventory: false,
       },
       "shirt",
@@ -52,6 +54,47 @@ describe("variant option helper boundaries", () => {
       stock: 5,
       trackInventory: false,
     });
+  });
+
+  it("keeps generated identifiers stable when merchandising defaults change", () => {
+    const first = generateVariantCombinations(
+      {
+        ...baseOptions,
+        option1Values: ["Small", "Large"],
+        option2Values: ["Matte"],
+        skuTemplate: "{SLUG}-{RANDOM}-{INDEX}",
+        generateBarcodes: true,
+        basePrice: 100,
+        baseStock: 2,
+      },
+      "bottle",
+      "draft-seed",
+    );
+    const afterDefaultsChange = generateVariantCombinations(
+      {
+        ...baseOptions,
+        option1Values: ["Small", "Large"],
+        option2Values: ["Matte"],
+        skuTemplate: "{SLUG}-{RANDOM}-{INDEX}",
+        generateBarcodes: true,
+        basePrice: 250,
+        baseStock: 8,
+      },
+      "bottle",
+      "draft-seed",
+    );
+
+    expect(afterDefaultsChange.map(({ sku, barcode }) => ({ sku, barcode }))).toEqual(
+      first.map(({ sku, barcode }) => ({ sku, barcode })),
+    );
+    expect(afterDefaultsChange[0]).toMatchObject({ price: 250, stock: 8 });
+  });
+
+  it("normalizes option draft identity without losing display values", () => {
+    expect(normalizeVariantDraftIdentity("  RED  ")).toBe("red");
+    expect(getBulkVariantDraftKey("Large", " RED ")).toBe(
+      getBulkVariantDraftKey(" large ", "red"),
+    );
   });
 
   it("treats over-reserved tracked stock as sold out instead of low stock", () => {

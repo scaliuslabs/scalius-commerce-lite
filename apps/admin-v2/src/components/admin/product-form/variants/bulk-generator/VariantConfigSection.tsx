@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Barcode } from "lucide-react";
+import { Barcode, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { SkuTemplateConfig } from "../SkuTemplateConfig";
 
 interface VariantConfigSectionProps {
@@ -20,6 +20,7 @@ interface VariantConfigSectionProps {
   onBaseStockChange: (value: number) => void;
   trackInventory: boolean;
   onTrackInventoryChange: (value: boolean) => void;
+  lockInventoryTracking?: boolean;
   baseWeight: number | null;
   onBaseWeightChange: (value: number | null) => void;
   discountType: "percentage" | "flat";
@@ -42,6 +43,7 @@ export const VariantConfigSection = React.memo(
     onBaseStockChange,
     trackInventory,
     onTrackInventoryChange,
+    lockInventoryTracking = false,
     baseWeight,
     onBaseWeightChange,
     discountType,
@@ -88,24 +90,32 @@ export const VariantConfigSection = React.memo(
                 <Switch
                   checked={trackInventory}
                   onCheckedChange={onTrackInventoryChange}
+                  disabled={lockInventoryTracking}
                   aria-label="Track stock for generated options"
                 />
               </div>
             </div>
             {trackInventory ? (
-              <Input
-                id="stock"
-                type="number"
-                value={baseStock === 0 ? "" : baseStock}
-                onChange={(e) =>
-                  onBaseStockChange(
-                    e.target.value ? parseInt(e.target.value, 10) : 0,
-                  )
-                }
-                min="0"
-                className="h-10"
-                placeholder="0"
-              />
+              <div className="space-y-1">
+                <Input
+                  id="stock"
+                  type="number"
+                  value={baseStock === 0 ? "" : baseStock}
+                  onChange={(e) =>
+                    onBaseStockChange(
+                      e.target.value ? parseInt(e.target.value, 10) : 0,
+                    )
+                  }
+                  min="0"
+                  className="h-10"
+                  placeholder="0"
+                />
+                {lockInventoryTracking ? (
+                  <p className="text-[10px] leading-4 text-muted-foreground">
+                    Tracking stays on while existing stock is allocated.
+                  </p>
+                ) : null}
+              </div>
             ) : (
               <div className="flex h-10 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
                 No stock limit
@@ -114,94 +124,104 @@ export const VariantConfigSection = React.memo(
           </div>
         </div>
 
-        <div className="space-y-2.5">
-          <Label htmlFor="weight" className="text-sm font-medium">
-            Weight (grams, optional)
-          </Label>
-          <Input
-            id="weight"
-            type="number"
-            value={baseWeight ?? ""}
-            onChange={(e) =>
-              onBaseWeightChange(
-                e.target.value ? parseFloat(e.target.value) : null,
-              )
-            }
-            min="0"
-            placeholder="Optional"
-            className="h-10"
-          />
-        </div>
+        <details className="group rounded-lg border bg-muted/10">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+              More defaults
+            </span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2.5">
-            <Label htmlFor="discount-type" className="text-sm font-medium">
-              Discount Type
-            </Label>
-            <Select
-              value={discountType}
-              onValueChange={(v: "percentage" | "flat") =>
-                onDiscountTypeChange(v)
-              }
-            >
-              <SelectTrigger id="discount-type" className="h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="percentage">Percentage (%)</SelectItem>
-                <SelectItem value="flat">Flat Amount ({symbol})</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="space-y-4 border-t px-3 py-3">
+            <div className="space-y-2">
+              <Label htmlFor="weight" className="text-sm font-medium">
+                Weight (grams)
+              </Label>
+              <Input
+                id="weight"
+                type="number"
+                value={baseWeight ?? ""}
+                onChange={(e) =>
+                  onBaseWeightChange(
+                    e.target.value ? parseFloat(e.target.value) : null,
+                  )
+                }
+                min="0"
+                placeholder="Optional"
+                className="h-9"
+              />
+            </div>
 
-          <div className="space-y-2.5">
-            <Label htmlFor="discount-value" className="text-sm font-medium">
-              Discount Value
-            </Label>
-            <Input
-              id="discount-value"
-              type="number"
-              value={discountValue ?? ""}
-              onChange={(e) =>
-                onDiscountValueChange(
-                  e.target.value ? parseFloat(e.target.value) : null,
-                )
-              }
-              min="0"
-              max={discountType === "percentage" ? 100 : undefined}
-              placeholder="Optional"
-              className="h-10"
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="discount-type" className="text-sm font-medium">
+                  Discount type
+                </Label>
+                <Select
+                  value={discountType}
+                  onValueChange={(v: "percentage" | "flat") =>
+                    onDiscountTypeChange(v)
+                  }
+                >
+                  <SelectTrigger id="discount-type" className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="flat">Flat amount ({symbol})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="discount-value" className="text-sm font-medium">
+                  Discount value
+                </Label>
+                <Input
+                  id="discount-value"
+                  type="number"
+                  value={discountValue ?? ""}
+                  onChange={(e) =>
+                    onDiscountValueChange(
+                      e.target.value ? parseFloat(e.target.value) : null,
+                    )
+                  }
+                  min="0"
+                  max={discountType === "percentage" ? 100 : undefined}
+                  placeholder="Optional"
+                  className="h-9"
+                />
+              </div>
+            </div>
+
+            <SkuTemplateConfig
+              value={skuTemplate}
+              onChange={onSkuTemplateChange}
+              productSlug={productSlug}
             />
-          </div>
-        </div>
 
-        <div className="pt-1">
-          <SkuTemplateConfig
-            value={skuTemplate}
-            onChange={onSkuTemplateChange}
-            productSlug={productSlug}
-          />
-        </div>
-
-        <div className="flex items-center gap-3 p-3 bg-muted/20 rounded-lg border">
-          <Checkbox
-            id="generate-barcodes"
-            checked={generateBarcodes}
-            onCheckedChange={(checked) => onGenerateBarcodesChange(!!checked)}
-          />
-          <div>
-            <label
-              htmlFor="generate-barcodes"
-              className="text-sm font-medium cursor-pointer flex items-center gap-2"
-            >
-              <Barcode className="h-4 w-4" />
-              Auto-generate EAN-13 barcodes
-            </label>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Each option gets a unique barcode for scanning and label printing
-            </p>
+            <div className="flex items-start gap-3 rounded-lg border bg-background p-3">
+              <Checkbox
+                id="generate-barcodes"
+                checked={generateBarcodes}
+                onCheckedChange={(checked) => onGenerateBarcodesChange(!!checked)}
+              />
+              <div>
+                <label
+                  htmlFor="generate-barcodes"
+                  className="flex cursor-pointer items-center gap-2 text-sm font-medium"
+                >
+                  <Barcode className="h-4 w-4" />
+                  Generate internal EAN-13 barcodes
+                </label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Stable while this draft stays open; regenerate only by request.
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
+        </details>
       </>
     );
   },

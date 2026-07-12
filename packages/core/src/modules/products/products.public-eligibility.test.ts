@@ -3,6 +3,7 @@ import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
     defaultProductSkuValues,
     normalizeDefaultSkuOptions,
+    operationalSkuRowPredicate,
     publicProductBaseConditions,
     publicProductHasAvailableBuyerSku,
     publicProductHasCustomerOptions,
@@ -77,6 +78,19 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).toContain("> 0");
         expect(query.sql).toContain("count(*)");
         expect(query.sql).not.toContain("buyer_option_sku");
+    });
+
+    it("keeps protected default SKUs operational only for simple products", () => {
+        const dialect = new SQLiteSyncDialect();
+        const query = dialect.sqlToQuery(operationalSkuRowPredicate());
+
+        expect(query.sql).toContain("product_variants.is_default");
+        expect(query.sql).toContain("operational_option_sku");
+        expect(query.sql).toContain("operational_option_sku.product_id = product_variants.product_id");
+        expect(query.sql).toContain("operational_option_sku.is_default = 0");
+        expect(query.sql).toContain("operational_option_sku.deleted_at IS NULL");
+        expect(query.sql).toContain("trim(coalesce(operational_option_sku.size");
+        expect(query.sql).toContain("trim(coalesce(operational_option_sku.color");
     });
 
     it("creates the protected untracked default SKU shape for simple products", () => {

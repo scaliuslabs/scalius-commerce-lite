@@ -12,7 +12,7 @@ type VariantState = {
 };
 
 function createAlertDbMock(
-  variants: VariantState[],
+  variants: Array<VariantState | null>,
   alerts: Array<{ id: string; alertStatus: string } | null>,
 ) {
   const variantQueue = [...variants];
@@ -104,6 +104,36 @@ describe("low-stock alert lifecycle", () => {
         acknowledgedAt: null,
         resolvedAt: null,
       },
+    });
+  });
+
+  it("resolves stale alerts when a SKU is dormant or alerting is disabled", async () => {
+    const { db, updates } = createAlertDbMock(
+      [
+        null,
+        {
+          id: "variant_2",
+          productId: "product_1",
+          stock: 8,
+          reservedStock: 2,
+          lowStockThreshold: null,
+          trackInventory: true,
+        },
+      ],
+      [],
+    );
+
+    await expect(checkAndAlertLowStock(db as never, "dormant_variant")).resolves.toBeNull();
+    await expect(checkAndAlertLowStock(db as never, "variant_2")).resolves.toBeNull();
+
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).toMatchObject({
+      table: productLowStockAlerts,
+      values: { alertStatus: "resolved" },
+    });
+    expect(updates[1]).toMatchObject({
+      table: productLowStockAlerts,
+      values: { alertStatus: "resolved", currentQty: 6 },
     });
   });
 });

@@ -3,6 +3,7 @@ import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { products } from "@scalius/database/schema";
 import {
     assertUniqueChangedVariantOptions,
+    assertSimpleSkuTransitionStockAllocation,
     bulkCreateVariants,
     bulkDeleteVariants,
     createVariant,
@@ -31,6 +32,59 @@ const baseVariant = {
     discountAmount: null,
     expectedAggregateRevision: 1,
 };
+
+describe("simple SKU option transition", () => {
+    const simpleSku = {
+        isDefault: true,
+        size: null,
+        color: null,
+        stock: 12,
+        reservedStock: 0,
+        preorderStock: 0,
+        trackInventory: true,
+    };
+
+    it("requires tracked stock to be allocated exactly once across first options", () => {
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [simpleSku],
+            [
+                { stock: 5, trackInventory: true },
+                { stock: 7, trackInventory: true },
+            ],
+        )).not.toThrow();
+
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [simpleSku],
+            [{ stock: 12, trackInventory: false }],
+        )).toThrow("Allocate exactly 12 on-hand units");
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [simpleSku],
+            [{ stock: 11, trackInventory: true }],
+        )).toThrow("Currently allocated: 11");
+    });
+
+    it("blocks topology changes while the simple SKU has live reservations", () => {
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [{ ...simpleSku, reservedStock: 1 }],
+            [{ stock: 12, trackInventory: true }],
+        )).toThrow(ConflictError);
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [{ ...simpleSku, preorderStock: 1 }],
+            [{ stock: 12, trackInventory: true }],
+        )).toThrow("reserved stock");
+    });
+
+    it("does not reinterpret stock for untracked or already optioned products", () => {
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [{ ...simpleSku, trackInventory: false }],
+            [{ stock: 0, trackInventory: false }],
+        )).not.toThrow();
+        expect(() => assertSimpleSkuTransitionStockAllocation(
+            [simpleSku, { ...simpleSku, isDefault: false, size: "M" }],
+            [{ stock: 99, trackInventory: true }],
+        )).not.toThrow();
+    });
+});
 
 describe("product variant SKU rules", () => {
     it("normalizes case and whitespace when comparing option combinations", () => {

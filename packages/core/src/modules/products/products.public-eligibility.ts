@@ -23,6 +23,29 @@ function availableSkuPredicate(alias: string): SQL {
     )`;
 }
 
+/**
+ * Selects the SKU identity that is operational for a product's current
+ * topology. A protected default SKU is operational only while no active
+ * customer-option SKU exists; once options exist it remains an audit/revert
+ * record and must not appear in inventory, scanner, or alert projections.
+ */
+export function operationalSkuRowPredicate(alias = "product_variants"): SQL {
+    return sql`(
+        ${sql.raw(`${alias}.is_default`)} = 0
+        OR NOT EXISTS (
+            SELECT 1
+            FROM "product_variants" AS operational_option_sku
+            WHERE operational_option_sku.product_id = ${sql.raw(`${alias}.product_id`)}
+              AND operational_option_sku.is_default = 0
+              AND operational_option_sku.deleted_at IS NULL
+              AND (
+                  trim(coalesce(operational_option_sku.size, '')) <> ''
+                  OR trim(coalesce(operational_option_sku.color, '')) <> ''
+              )
+        )
+    )`;
+}
+
 function buyerOptionTopologyPredicate(
     productId: SQL,
     aliasPrefix: "buyer" | "buyer_available",

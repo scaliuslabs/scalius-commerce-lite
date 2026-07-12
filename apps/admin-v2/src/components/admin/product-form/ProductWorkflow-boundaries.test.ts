@@ -9,6 +9,14 @@ const variantManagerSource = readFileSync(
   new URL("./variants/VariantManager.tsx", import.meta.url),
   "utf8",
 );
+const productFormSource = readFileSync(
+  new URL("../ProductForm.tsx", import.meta.url),
+  "utf8",
+);
+const optionNamesSource = readFileSync(
+  new URL("./OptionDiscoverySection.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("product editing workflow boundaries", () => {
   it("does not leave live navigation anchors active during product save", () => {
@@ -36,5 +44,34 @@ describe("product editing workflow boundaries", () => {
     expect(variantManagerSource).toContain(
       "isDirty={hasUnsavedVariantDrafts}",
     );
+  });
+
+  it("keeps product composition in the main flow and the narrow rail operational", () => {
+    const mediaIndex = productFormSource.indexOf("<ProductImagesSection");
+    const pricingIndex = productFormSource.indexOf("<PricingCard");
+    const optionNamesIndex = productFormSource.indexOf("<OptionDiscoverySection");
+    const attributesIndex = productFormSource.indexOf("<AttributesSection");
+    const seoIndex = productFormSource.indexOf("<SeoSection");
+    const railIndex = productFormSource.indexOf("Right Column - Settings & Metadata");
+    const statusIndex = productFormSource.indexOf("<StatusCard");
+    const organizationIndex = productFormSource.indexOf("<OrganizationCard");
+
+    expect(mediaIndex).toBeGreaterThan(-1);
+    expect(mediaIndex).toBeLessThan(pricingIndex);
+    expect(pricingIndex).toBeLessThan(optionNamesIndex);
+    expect(optionNamesIndex).toBeLessThan(attributesIndex);
+    expect(attributesIndex).toBeLessThan(seoIndex);
+    expect(seoIndex).toBeLessThan(railIndex);
+    expect(railIndex).toBeLessThan(statusIndex);
+    expect(statusIndex).toBeLessThan(organizationIndex);
+    expect(productFormSource.slice(railIndex)).not.toContain("<PricingCard");
+    expect(productFormSource.slice(railIndex)).not.toContain("<SeoSection");
+  });
+
+  it("describes option labels as buyer-visible names rather than feed-only metadata", () => {
+    expect(optionNamesSource).toContain('title="Option names"');
+    expect(optionNamesSource).toContain("storefront, feeds, and structured data");
+    expect(optionNamesSource).toContain("Option name");
+    expect(optionNamesSource).not.toContain("feeds and ProductGroup JSON-LD only");
   });
 });
