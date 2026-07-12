@@ -9,7 +9,7 @@ Last reviewed: 2026-07-12
 3. Lock base currency after catalog/order money exists until a real conversion workflow is designed. Never silently reinterpret live values.
 4. Treat inventory quantities as positive finite integers at every mutation boundary; relative stock adjustment is the only signed input and must record the effective delta.
 5. Replace replay-unsafe inventory paths with deterministic claim + counter CAS batches.
-6. Product media owns primary order. Until the image-model review below is resolved, current read authority remains exact SKU mapping, then configured merchant option-axis/value mapping, then product primary image; never add positional or sibling inference.
+6. Product media owns primary order. Variant imagery is one optional exact `product_variants.image_id`; `null` means product-primary fallback. Bulk option/value convenience materializes exact SKU references and never creates an inheritance layer.
 7. Separate catalog collection membership from homepage merchandising layout/config.
 8. Use one buyer-catalog price/availability projection across listing, search, category, collection, related, feed diagnostics, UCP, and cards.
 9. Operational failure is not not-found. Preserve typed 404/403/409/503 semantics through API clients, loaders, and UI.
@@ -26,18 +26,17 @@ Last reviewed: 2026-07-12
 20. Demo data has no compatibility obligation for migration 0007. Remove the legacy model cleanly, then reseed through normalized writers.
 21. Parameterized atomic D1 guards must use `buildBatchGuard()` (a prepared `SELECT` builder). Never put parameterized `db.run(sql...)` raw objects into a Drizzle D1 batch; Drizzle 0.45 cannot bind them.
 
-## Open design review: partial variant imagery
+## Resolved design: partial variant imagery
 
 - Required behavior: only some SKUs may need distinct images. An unmapped SKU is
   valid, remains sellable, and visibly falls back to the product primary image.
-- Preferred simplification to validate before implementation: persist only an
-  optional exact image per SKU. A bulk “apply image” action may materialize the
+- Verified current implementation: migration 0007 already persists only an
+  optional exact image per SKU. A bulk “apply image” action materializes the
   same exact mapping across selected SKUs, giving option-value convenience
   without a hidden inheritance layer.
-- The review must cover option rename/add/remove, topology regeneration, bulk
-  assignment/clear, image deletion/reorder, draft conflicts, storefront
-  selection, feeds/schema, and migration cleanup. Do not change the product
-  option UI or persistence model until these paths have been traced together.
+- Remaining work is UI clarity and regression coverage, not a new persistence
+  model. See `VARIANT-IMAGES.md` for option rename/add/remove, topology,
+  deletion/reorder, conflict, storefront, feed, and schema boundaries.
 
 ## Implementation order
 
