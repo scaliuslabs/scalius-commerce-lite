@@ -75,6 +75,7 @@ export const queryKeys = {
     items: (orderId: string) => ["orders", "items", orderId] as const,
     payments: (orderId: string) => ["orders", "payments", orderId] as const,
     notifications: (orderId: string) => ["orders", "notifications", orderId] as const,
+    returns: (orderId: string) => ["orders", "returns", orderId] as const,
     cod: (orderId: string) => ["orders", "cod", orderId] as const,
     shipments: (orderId: string) => ["orders", "shipments", orderId] as const,
   },

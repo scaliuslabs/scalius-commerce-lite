@@ -121,6 +121,7 @@ export interface OrderSupportRequest {
 
 export interface Order {
   id: string;
+  version: number;
   customerName: string;
   customerPhone: string;
   customerEmail: string | null;
@@ -186,8 +187,3 @@ export interface OrderShipment {
   updatedAt?: OrderTimestamp;
   lastChecked?: OrderTimestamp | null;
 }
-
-export {
-  ORDER_STATUSES,
-  getAvailableOrderStatusTransitions as getAvailableTransitions,
-} from "@scalius/shared/order-state";

@@ -29,18 +29,23 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("../api-functions/orders", () => ({
+  approveOrderReturn: vi.fn(),
   bulkDeleteOrders: vi.fn(),
   bulkShipOrders: vi.fn(),
+  cancelOrderReturn: vi.fn(),
   createFulfillmentShipment: vi.fn(),
   createOrder: vi.fn(),
+  createOrderReturn: vi.fn(),
   createOrderShipment: vi.fn(),
   issueOrderPaymentRecoveryLink: vi.fn(),
   reconcileRefundAttempt: vi.fn(),
+  reconcileOrderReturn: vi.fn(),
+  reconcileShipment: vi.fn(),
+  receiveOrderReturn: vi.fn(),
   refundOrder: vi.fn(),
   resendOrderNotification: vi.fn(),
   retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
-  returnOrder: vi.fn(),
   updateFulfillmentStatus: vi.fn(),
   updateOrder: vi.fn(),
   updateOrderCod: vi.fn(),
@@ -49,12 +54,14 @@ vi.mock("../api-functions/orders", () => ({
 
 import { queryKeys } from "../query-keys";
 import {
+  createOrderReturn,
   bulkShipOrders,
   issueOrderPaymentRecoveryLink,
   resendOrderNotification,
 } from "../api-functions/orders";
 import {
   useBulkShipOrders,
+  useCreateOrderReturn,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
   useResendOrderNotification,
@@ -298,5 +305,49 @@ describe("order payment recovery link mutations", () => {
       queryKey: queryKeys.orders.payments("ord_123"),
     });
     expect(toastMocks.success).not.toHaveBeenCalled();
+  });
+});
+
+describe("item-level return mutations", () => {
+  it("submits the plural return command and refreshes return, order, list, and dashboard reads", () => {
+    const mutation = useCreateOrderReturn() as MutationOptions;
+    const variables = {
+      orderId: "ord_123",
+      commandKey: "return:create:request-1",
+      expectedOrderVersion: 4,
+      reason: "Wrong size",
+      notes: null,
+      lines: [{ orderItemId: "item_1", quantity: 1 }],
+    };
+
+    mutation.mutationFn?.(variables);
+    mutation.onSuccess?.({ status: "requested" }, variables);
+
+    expect(createOrderReturn).toHaveBeenCalledWith({ data: variables });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.returns("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.list(),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.dashboard.all,
+    });
+  });
+
+  it("refreshes authoritative order and return state after a conflict", () => {
+    const mutation = useCreateOrderReturn() as MutationOptions;
+
+    mutation.onError?.(new Error("conflict"), { orderId: "ord_123" });
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.returns("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
   });
 });

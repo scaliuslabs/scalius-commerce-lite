@@ -18,11 +18,11 @@ describe("OrderStatusSelector boundaries", () => {
     expect(selectorSource).toContain("isMenuRequested");
     expect(menuSource).toContain("../../ui/dropdown-menu");
     expect(menuSource).toContain("DropdownMenuContent");
-    expect(menuSource).toContain("getAvailableTransitions");
+    expect(menuSource).toContain("getAdminOrderStatusTransitions");
 
     expect(selectorSource).not.toContain("../../ui/dropdown-menu");
     expect(selectorSource).not.toContain("DropdownMenuContent");
     expect(selectorSource).not.toContain("DropdownMenuRadioGroup");
-    expect(selectorSource).not.toContain("getAvailableTransitions");
+    expect(selectorSource).not.toContain("getAdminOrderStatusTransitions");
   });
 });

@@ -9,7 +9,7 @@ function readRepoFile(path: string) {
 }
 
 describe("order detail permission boundaries", () => {
-  it("keeps admin order status transitions on the shared state machine", () => {
+  it("keeps generic admin status changes on the narrow workflow-safe policy", () => {
     const adminTypesSource = readRepoFile(
       "apps/admin-v2/src/components/admin/orderview/types.ts",
     );
@@ -22,17 +22,18 @@ describe("order detail permission boundaries", () => {
     const listSelectorMenuSource = readRepoFile(
       "apps/admin-v2/src/components/admin/order-list/OrderStatusSelectorMenu.tsx",
     );
-    const coreStateMachineSource = readRepoFile(
-      "packages/core/src/modules/orders/order-state-machine.ts",
+    const adminPolicySource = readRepoFile(
+      "apps/admin-v2/src/lib/admin-order-status-policy.ts",
     );
 
-    expect(adminTypesSource).toContain("@scalius/shared/order-state");
+    expect(adminTypesSource).not.toContain("@scalius/shared/order-state");
     expect(adminTypesSource).not.toContain("ORDER_STATUS_TRANSITIONS");
-    expect(coreStateMachineSource).toContain("@scalius/shared/order-state");
-    expect(statusCardSource).toContain("getAvailableTransitions(order.status)");
+    expect(adminPolicySource).toContain("WORKFLOW_OWNED_ORDER_STATUSES");
+    expect(adminPolicySource).toContain('shipped: ["delivered"]');
+    expect(statusCardSource).toContain("getAdminOrderStatusTransitions(order.status)");
     expect(listSelectorSource).toContain('import("./OrderStatusSelectorMenu")');
     expect(listSelectorSource).not.toContain("getAvailableTransitions(status)");
-    expect(listSelectorMenuSource).toContain("getAvailableTransitions(status)");
+    expect(listSelectorMenuSource).toContain("getAdminOrderStatusTransitions(status)");
   });
 
   it("keeps order detail mutation controls aligned with granular order permissions", () => {
@@ -57,6 +58,12 @@ describe("order detail permission boundaries", () => {
     const supportRequestsSource = readRepoFile(
       "apps/admin-v2/src/components/admin/orderview/OrderSupportRequestsCard.tsx",
     );
+    const returnsSource = readRepoFile(
+      "apps/admin-v2/src/components/admin/orderview/OrderReturnsCard.tsx",
+    );
+    const fullEditSummarySource = readRepoFile(
+      "apps/admin-v2/src/components/admin/order-form/SummarySection.tsx",
+    );
     const orderDetailRouteSource = readRepoFile(
       "apps/admin-v2/src/routes/admin/orders/$orderId/index.tsx",
     );
@@ -66,7 +73,7 @@ describe("order detail permission boundaries", () => {
     expect(headerSource).toContain("orderActions.canEditOrders");
 
     expect(statusSource).toContain("orderActions.canChangeOrderStatus");
-    expect(statusSource).toContain("orderActions.canRefundOrders");
+    expect(statusSource).not.toContain("canRefundOrders");
 
     expect(paymentSource).toContain("orderActions.canUpdateOrderCod");
     expect(paymentSource).toContain("orderActions.canRefundOrders");
@@ -92,5 +99,10 @@ describe("order detail permission boundaries", () => {
     expect(notificationsSource).toContain("Send again");
     expect(supportRequestsSource).toContain("useOrderActionPermissions");
     expect(supportRequestsSource).toContain("orderActions.canResolveOrderSupportRequests");
+    expect(returnsSource).toContain("actions.canChangeOrderStatus");
+    expect(returnsSource).not.toContain("canRefundOrders");
+    expect(returnsSource).not.toContain("useRefundOrder");
+    expect(fullEditSummarySource).toContain("getAdminOrderStatusTransitions");
+    expect(fullEditSummarySource).not.toContain("Object.values(OrderStatus)");
   });
 });

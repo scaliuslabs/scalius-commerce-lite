@@ -6,7 +6,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../../ui/dropdown-menu";
-import { getAvailableTransitions } from "../orderview/types";
+import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
 
 export interface OrderStatusSelectorMenuProps {
   status: string;
@@ -25,7 +25,7 @@ export function OrderStatusSelectorMenu({
   onStatusUpdate,
   trigger,
 }: OrderStatusSelectorMenuProps) {
-  const transitions = getAvailableTransitions(status);
+  const transitions = getAdminOrderStatusTransitions(status);
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -39,13 +39,13 @@ export function OrderStatusSelectorMenu({
             <DropdownMenuRadioItem
               key={s}
               value={s}
-              className="text-xs cursor-pointer hover:bg-[var(--muted)]"
+              className="cursor-pointer text-sm hover:bg-[var(--muted)]"
             >
               {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
             </DropdownMenuRadioItem>
           ))}
           {transitions.length === 0 && (
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">
+            <div className="px-2 py-1.5 text-sm text-muted-foreground">
               No transitions available (terminal state)
             </div>
           )}

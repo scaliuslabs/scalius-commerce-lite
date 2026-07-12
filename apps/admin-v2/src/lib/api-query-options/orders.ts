@@ -7,6 +7,7 @@ import {
   getOrderNotifications,
   getOrders,
   getOrderPayments,
+  getOrderReturns,
   getOrderShipments,
   type OrdersQueryInput,
 } from "../api-functions/orders";
@@ -53,6 +54,13 @@ export const orderNotificationsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.notifications(orderId),
     queryFn: () => getOrderNotifications({ data: { orderId } }),
+    staleTime: 0,
+  });
+
+export const orderReturnsQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryKey: queryKeys.orders.returns(orderId),
+    queryFn: () => getOrderReturns({ data: { orderId } }),
     staleTime: 0,
   });
 

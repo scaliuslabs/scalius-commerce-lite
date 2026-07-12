@@ -11,6 +11,12 @@ import { ShipmentCard } from "./orderview/ShipmentCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { PaymentCard } from "./orderview/PaymentCard";
 
+const LazyOrderReturnsCard = lazy(() =>
+  import("./orderview/OrderReturnsCard").then((module) => ({
+    default: module.OrderReturnsCard,
+  })),
+);
+
 const LazyOrderSupportRequestsCard = lazy(() =>
   import("./orderview/OrderSupportRequestsCard").then((module) => ({
     default: module.OrderSupportRequestsCard,
@@ -53,8 +59,11 @@ export function OrderView({ order }: OrderViewProps) {
           </div>
 
           {/* Right Column for Order Items */}
-          <div className="lg:col-span-8">
+          <div className="space-y-4 lg:col-span-8">
             <OrderItemsCard order={order} />
+            <Suspense fallback={<OrderPanelSkeleton heightClassName="h-40" />}>
+              <LazyOrderReturnsCard order={order} />
+            </Suspense>
           </div>
         </div>
       </div>
