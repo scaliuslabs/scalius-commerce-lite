@@ -9,10 +9,25 @@ const ORDERS_ADMIN_SOURCE = fileURLToPath(
 describe("admin order list boundaries", () => {
   it("guards full item replacement and hard deletion once return evidence exists", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const updateSource = source.slice(
+      source.indexOf("export async function updateOrder"),
+      source.indexOf("async function updateCustomerStatsService"),
+    );
+    const permanentDeleteSource = source.slice(
+      source.indexOf("export async function permanentlyDeleteOrder"),
+      source.indexOf("export async function bulkDeleteOrders"),
+    );
+    const bulkDeleteSource = source.slice(
+      source.indexOf("export async function bulkDeleteOrders"),
+    );
 
-    expect(source).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
-    expect(source).toContain("if (permanent) await assertOrderItemsHaveNoReturnHistory(db, order.id)");
-    expect(source).toContain("else await assertNoActiveReturnReceipt(db, order.id)");
+    expect(updateSource).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
+    expect(updateSource).toContain("await assertOrderHasNoIssuedInvoice(db, id)");
+    expect(permanentDeleteSource).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
+    expect(permanentDeleteSource).toContain("await assertOrderHasNoIssuedInvoice(db, id)");
+    expect(bulkDeleteSource).toMatch(
+      /if \(permanent\) \{[\s\S]*?assertOrderItemsHaveNoReturnHistory\(db, order\.id\);[\s\S]*?assertOrderHasNoIssuedInvoice\(db, order\.id\);[\s\S]*?\}\s*else await assertNoActiveReturnReceipt\(db, order\.id\);/,
+    );
   });
 
   it("returns the order CAS version required by item-return creation", () => {
