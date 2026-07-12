@@ -13,6 +13,7 @@ import {
   usePermanentDeleteCategory,
   useRestoreCategory,
   useBulkDeleteCategories,
+  useBulkRestoreCategories,
 } from "~/lib/api-mutations/categories";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
@@ -74,34 +75,20 @@ function CategoriesPage() {
   const permanentDeleteMutation = usePermanentDeleteCategory();
   const restoreMutation = useRestoreCategory();
   const bulkDeleteMutation = useBulkDeleteCategories();
+  const bulkRestoreMutation = useBulkRestoreCategories();
 
-  // Delete confirmation state
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteIntent, setDeleteIntent] = useState<{
+    ids: string[];
+    permanent: boolean;
+    bulk: boolean;
+  } | null>(null);
 
   const isActionLoading =
-    deleteMutation.isPending || permanentDeleteMutation.isPending;
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    bulkDeleteMutation.isPending;
 
-  const handleConfirmDelete = useCallback(() => {
-    if (!deleteId) return;
-    const id = deleteId;
-    setDeleteId(null);
-    if (showTrashed) {
-      if (!categoryActions.canPermanentDelete) return;
-      permanentDeleteMutation.mutate(id);
-    } else {
-      if (!categoryActions.canDelete) return;
-      deleteMutation.mutate(id);
-    }
-  }, [
-    deleteId,
-    showTrashed,
-    categoryActions.canDelete,
-    categoryActions.canPermanentDelete,
-    deleteMutation,
-    permanentDeleteMutation,
-  ]);
-
-  const isCategoryDeleteDialogOpen = !!deleteId;
+  const isCategoryDeleteDialogOpen = deleteIntent !== null;
 
   // Column definitions
   const columns = useMemo(
@@ -109,7 +96,9 @@ function CategoriesPage() {
       getCategoryColumns({
         showTrashed,
         getStorefrontPath,
-        canSelect: categoryActions.canBulkDelete,
+        canSelect: showTrashed
+          ? categoryActions.canRestore || categoryActions.canPermanentDelete
+          : categoryActions.canBulkDelete,
         canEdit: categoryActions.canEdit,
         canDelete: categoryActions.canDelete,
         canRestore: categoryActions.canRestore,
@@ -122,13 +111,17 @@ function CategoriesPage() {
               })
             : undefined,
         onDelete: (id) => {
-          if (categoryActions.canDelete) setDeleteId(id);
+          if (categoryActions.canDelete) {
+            setDeleteIntent({ ids: [id], permanent: false, bulk: false });
+          }
         },
         onRestore: (id) => {
           if (categoryActions.canRestore) restoreMutation.mutate(id);
         },
         onPermanentDelete: (id) => {
-          if (categoryActions.canPermanentDelete) setDeleteId(id);
+          if (categoryActions.canPermanentDelete) {
+            setDeleteIntent({ ids: [id], permanent: true, bulk: false });
+          }
         },
       }),
     [
@@ -173,6 +166,41 @@ function CategoriesPage() {
       onPaginationChange,
       onSortingChange,
     });
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteIntent) return;
+    const intent = deleteIntent;
+    if (intent.permanent) {
+      if (!categoryActions.canPermanentDelete) return;
+      if (intent.bulk) {
+        bulkDeleteMutation.mutate(
+          { categoryIds: intent.ids, permanent: true },
+          { onSuccess: clearSelection },
+        );
+      } else {
+        permanentDeleteMutation.mutate(intent.ids[0]!);
+      }
+    } else {
+      if (!categoryActions.canDelete) return;
+      if (intent.bulk) {
+        bulkDeleteMutation.mutate(
+          { categoryIds: intent.ids, permanent: false },
+          { onSuccess: clearSelection },
+        );
+      } else {
+        deleteMutation.mutate(intent.ids[0]!);
+      }
+    }
+    setDeleteIntent(null);
+  }, [
+    deleteIntent,
+    categoryActions.canDelete,
+    categoryActions.canPermanentDelete,
+    deleteMutation,
+    permanentDeleteMutation,
+    bulkDeleteMutation,
+    clearSelection,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -236,26 +264,36 @@ function CategoriesPage() {
             }
             searchPlaceholder="Search categories..."
             selectedCount={selectedIds.length}
-            bulkActions={categoryActions.canBulkDelete ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-destructive border-destructive hover:bg-destructive/10"
-                onClick={() => {
-                  if (!categoryActions.canBulkDelete) return;
-                  bulkDeleteMutation.mutate(
-                    {
-                      categoryIds: selectedIds,
+            bulkActions={selectedIds.length > 0 ? (
+              <div className="flex items-center gap-2">
+                {showTrashed && categoryActions.canRestore ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => bulkRestoreMutation.mutate(selectedIds, { onSuccess: clearSelection })}
+                    disabled={Boolean(error) || bulkRestoreMutation.isPending}
+                  >
+                    Restore ({selectedIds.length})
+                  </Button>
+                ) : null}
+                {(!showTrashed && categoryActions.canBulkDelete) ||
+                (showTrashed && categoryActions.canPermanentDelete) ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive border-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteIntent({
+                      ids: selectedIds,
                       permanent: showTrashed,
-                    },
-                    { onSuccess: clearSelection },
-                  );
-                }}
-                disabled={Boolean(error)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})
-              </Button>
+                      bulk: true,
+                    })}
+                    disabled={Boolean(error) || bulkDeleteMutation.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    {showTrashed ? "Delete permanently" : "Move to trash"} ({selectedIds.length})
+                  </Button>
+                ) : null}
+              </div>
             ) : undefined}
           />
         }
@@ -270,7 +308,8 @@ function CategoriesPage() {
             showTrashed={showTrashed}
             isOpen={isCategoryDeleteDialogOpen}
             isActionLoading={isActionLoading}
-            onOpenChange={(open) => !open && setDeleteId(null)}
+            itemCount={deleteIntent?.ids.length ?? 1}
+            onOpenChange={(open) => !open && setDeleteIntent(null)}
             onConfirm={handleConfirmDelete}
           />
         </Suspense>

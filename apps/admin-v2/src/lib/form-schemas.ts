@@ -52,16 +52,17 @@ export const categoryFormSchema = z.object({
   id: z.string().optional(),
   name: z
     .string()
+    .trim()
     .min(3, "Category name must be at least 3 characters")
     .max(100, "Category name must be less than 100 characters"),
-  description: z.string().nullable(),
+  description: z.string().trim().max(100_000, "Description is too long").nullable(),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")
     .max(100, "Slug must be less than 100 characters")
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
-  metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable(),
+  metaTitle: z.string().trim().max(70, "Meta title must be 70 characters or fewer").nullable(),
+  metaDescription: z.string().trim().max(200, "Meta description must be 200 characters or fewer").nullable(),
   canonicalPath: canonicalPathFormSchema(
     "category",
     "/categories/summer-shoes",
@@ -70,6 +71,17 @@ export const categoryFormSchema = z.object({
   excludeFromSitemap: z.boolean(),
   image: mediaFileFormSchema.nullable(),
   slugEdited: z.boolean().optional(),
+}).superRefine((value, context) => {
+  if (
+    value.canonicalPath !== null &&
+    value.canonicalPath !== `/categories/${value.slug}`
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["canonicalPath"],
+      message: "Use this category's current URL until URL aliases are supported.",
+    });
+  }
 });
 
 export type CategoryFormValues = z.infer<typeof categoryFormSchema>;

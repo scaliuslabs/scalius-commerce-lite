@@ -112,6 +112,12 @@ export function CategoryForm({
     ],
     navigateTo: "/admin/categories",
     onError: (_error, message, setFieldError) => {
+      if (message.includes("exists in trash")) {
+        const detail = "A trashed category already uses this URL. Restore it or choose another slug.";
+        setFieldError("slug", detail);
+        toast.error("Slug belongs to a trashed category", { description: detail });
+        return true;
+      }
       if (message.includes("slug already exists")) {
         setFieldError("slug", "This slug is already in use. Please choose a different one.");
         toast.error("Slug already in use", {
@@ -160,7 +166,7 @@ export function CategoryForm({
       newUrl="/admin/categories/new"
       newLabel="New Category"
       canCreateNew={categoryActions.canCreate}
-      saveLabel={isEdit ? "Save Category" : "Create Category"}
+      saveLabel={isEdit ? "Save changes" : "Create category"}
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >
@@ -181,6 +187,7 @@ export function CategoryForm({
                     placeholder="Category name"
                     {...field}
                     className="text-base"
+                    maxLength={100}
                   />
                 </FormControl>
                 <FormMessage />
@@ -252,6 +259,7 @@ export function CategoryForm({
                 name="slug"
                 render={({ field }) => (
                   <FormItem>
+                    <FormLabel className="sr-only">URL handle</FormLabel>
                     <div className="flex items-center space-x-2">
                       <div className="grow flex items-center rounded-md border border-input bg-background px-3 text-sm ring-offset-background">
                         <span className="text-muted-foreground/80 font-medium">
@@ -261,6 +269,7 @@ export function CategoryForm({
                           <input
                             className="grow bg-transparent py-2 outline-none placeholder:text-muted-foreground"
                             placeholder="category-url-slug"
+                            maxLength={100}
                             {...field}
                             onChange={(e) => {
                               field.onChange(e);
@@ -293,6 +302,7 @@ export function CategoryForm({
                       `/categories/${form.watch("slug")}`,
                     )}
                     target="_blank"
+                    rel="noreferrer"
                   >
                     <ExternalLink className="h-4 w-4" />
                     View on Storefront
@@ -319,6 +329,7 @@ export function CategoryForm({
                       placeholder="e.g., Shop Premium Electronics | Your Store Name"
                       {...field}
                       value={field.value || ""}
+                      maxLength={70}
                     />
                   </FormControl>
                   {field.value && (
@@ -346,6 +357,7 @@ export function CategoryForm({
                       {...field}
                       value={field.value || ""}
                       rows={3}
+                      maxLength={200}
                     />
                   </FormControl>
                   {field.value && (

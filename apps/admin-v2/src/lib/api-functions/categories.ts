@@ -46,6 +46,7 @@ export interface CategoryDetailDto {
   canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
+  deletedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }

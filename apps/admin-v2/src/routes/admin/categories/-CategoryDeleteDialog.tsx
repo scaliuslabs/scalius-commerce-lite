@@ -15,6 +15,7 @@ interface CategoryDeleteDialogProps {
   showTrashed: boolean;
   isOpen: boolean;
   isActionLoading: boolean;
+  itemCount?: number;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
 }
@@ -23,6 +24,7 @@ export function CategoryDeleteDialog({
   showTrashed,
   isOpen,
   isActionLoading,
+  itemCount = 1,
   onOpenChange,
   onConfirm,
 }: CategoryDeleteDialogProps) {
@@ -33,8 +35,7 @@ export function CategoryDeleteDialog({
           <AlertDialogTitle className="flex items-center gap-2 text-base">
             {showTrashed ? (
               <>
-                <AlertTriangle className="h-4 w-4 text-red-500" /> Delete
-                Permanently?
+                <AlertTriangle className="h-4 w-4 text-red-500" /> Delete permanently?
               </>
             ) : (
               <>
@@ -44,8 +45,8 @@ export function CategoryDeleteDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="pt-1 text-xs">
             {showTrashed
-              ? "This action cannot be undone. Are you sure you want to permanently delete this category?"
-              : "Are you sure you want to move this category to the trash? It can be restored later."}
+              ? `This permanently deletes ${itemCount === 1 ? "this category" : `${itemCount} categories`} and cannot be undone. Categories still used by products or required by active collections will be blocked.`
+              : `${itemCount === 1 ? "This category" : `${itemCount} categories`} will move to trash and can be restored. Move assigned products first.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -66,7 +67,7 @@ export function CategoryDeleteDialog({
             {isActionLoading ? (
               <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
             ) : null}
-            {showTrashed ? "Delete Permanently" : "Move to Trash"}
+            {showTrashed ? "Delete permanently" : "Move to trash"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
