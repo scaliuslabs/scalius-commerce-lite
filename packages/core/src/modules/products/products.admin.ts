@@ -42,6 +42,7 @@ import {
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
 } from "./products.aggregate-revision";
+import { productVariantBarcodeIdentityEquals } from "./products.variant-identity";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -196,7 +197,7 @@ export async function listProducts(db: Database, options: {
 
             if (barcodeKey) {
                 // Also match by exact barcode value
-                const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND lower(trim(${productVariants.barcode})) = ${barcodeKey} AND ${productVariants.deletedAt} IS NULL)`;
+                const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;
                 whereConditions.push(sql`(${ftsCondition} OR ${barcodeCondition})`);
             } else {
                 whereConditions.push(ftsCondition);
@@ -204,7 +205,7 @@ export async function listProducts(db: Database, options: {
             rankExpression = sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitized}), 0) ASC`;
         } else if (barcodeKey) {
             // FTS sanitized to nothing but it's a barcode — search by barcode only
-            const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND lower(trim(${productVariants.barcode})) = ${barcodeKey} AND ${productVariants.deletedAt} IS NULL)`;
+            const barcodeCondition = sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariantBarcodeIdentityEquals(barcodeKey)} AND ${productVariants.deletedAt} IS NULL)`;
             whereConditions.push(barcodeCondition);
         }
     }
