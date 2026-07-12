@@ -4181,6 +4181,8 @@ export type GetApiV1ProductsResponses = {
                 hasVariants: boolean;
                 availableForSale: boolean;
                 imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -4277,6 +4279,8 @@ export type GetApiV1ProductsSearchResponses = {
                 price: number;
                 slug: string;
                 imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
                 variants: Array<{
                     [key: string]: unknown;
                 }>;
@@ -4390,6 +4394,7 @@ export type GetApiV1ProductsFeedResponses = {
                 hasVariants: boolean;
                 availableForSale: boolean;
                 imageUrl: string | null;
+                imageMediaId: string | null;
                 imageAlt: string | null;
                 category: {
                     id: string;
@@ -4405,6 +4410,7 @@ export type GetApiV1ProductsFeedResponses = {
                     id: string;
                     productId: string;
                     imageId: string | null;
+                    imageMediaId: string | null;
                     imageUrl: string | null;
                     selectedOptions: Array<{
                         optionDefinitionId: string;
@@ -4558,8 +4564,21 @@ export type GetApiV1ProductsBySlugResponses = {
             category: {
                 [key: string]: unknown;
             } | null;
-            images: Array<{
-                [key: string]: unknown;
+            media: Array<{
+                id: string;
+                mediaId: string;
+                kind: 'image' | 'video';
+                url: string;
+                posterMediaId: string | null;
+                posterUrl: string | null;
+                altText: string;
+                caption: string | null;
+                width: number | null;
+                height: number | null;
+                durationMs: number | null;
+                isPrimary: boolean;
+                sortOrder: number;
+                status: 'ready' | 'trashed';
             }>;
             variants: Array<{
                 [key: string]: unknown;
@@ -6304,6 +6323,8 @@ export type PostApiV1OrdersCartValidationResponses = {
                 variantLabel: string | null;
                 freeDelivery: boolean;
                 availableQuantity: number | null;
+                productImageMediaId: string | null;
+                productImage: string | null;
             }>;
             subtotal: number;
             hasFreeDeliveryProduct: boolean;
@@ -12435,6 +12456,7 @@ export type GetApiV1AdminMediaResponses = {
                 height?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
+                posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
@@ -13062,6 +13084,7 @@ export type PostApiV1AdminMediaUploadsByIdCompleteResponses = {
                 height?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
+                posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
@@ -13306,6 +13329,7 @@ export type PatchApiV1AdminMediaByIdResponses = {
                 height?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
+                posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
@@ -13434,6 +13458,7 @@ export type PostApiV1AdminMediaByIdTrashResponses = {
                 height?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
+                posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
@@ -13562,6 +13587,7 @@ export type PostApiV1AdminMediaByIdRestoreResponses = {
                 height?: number | null;
                 durationMs?: number | null;
                 posterMediaId?: string | null;
+                posterUrl: string | null;
                 folderId: string | null;
                 status: 'ready' | 'trashed' | 'deleting' | 'deleted';
                 version: number;
@@ -14615,6 +14641,7 @@ export type GetApiV1AdminInventoryScannerLookupResponses = {
                 price: number;
                 isActive: boolean;
                 imageUrl: string | null;
+                imageMediaId: string | null;
                 [key: string]: unknown;
             };
         };
@@ -30155,6 +30182,21 @@ export type GetApiV1AdminProductsLookupBarcodeErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -30338,7 +30380,7 @@ export type GetApiV1AdminProductsResponses = {
                     name: string;
                 };
                 variantCount: number;
-                imageCount: number;
+                mediaCount: number;
                 primaryImage: string | null;
                 sku?: string;
             }>;
@@ -30373,12 +30415,11 @@ export type PostApiV1AdminProductsData = {
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
         slug: string;
-        images: Array<{
+        media: Array<{
             id: string;
-            url: string;
-            filename: string;
-            size: number;
-            createdAt: string | string;
+            mediaId: string;
+            altText: string | null;
+            isPrimary: boolean;
         }>;
         attributes?: Array<{
             attributeId: string;
@@ -30686,6 +30727,21 @@ export type PostApiV1AdminProductsBulkDeleteErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -30802,6 +30858,21 @@ export type DeleteApiV1AdminProductsByIdErrors = {
             details: {
                 expectedRevision: number;
                 currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
             };
         };
     } | {
@@ -30959,14 +31030,22 @@ export type GetApiV1AdminProductsByIdResponses = {
                 stockVersion?: number;
                 version?: number;
             }>;
-            images: Array<{
+            media: Array<{
                 id: string;
-                productId: string;
+                mediaId: string;
+                kind: 'image' | 'video';
                 url: string;
-                alt: string | null;
+                posterMediaId: string | null;
+                posterUrl: string | null;
+                altText: string;
+                contextualAltText?: string | null;
+                caption: string | null;
+                width: number | null;
+                height: number | null;
+                durationMs: number | null;
                 isPrimary: boolean;
                 sortOrder: number;
-                createdAt: string | number;
+                status: 'ready' | 'trashed';
             }>;
             additionalInfo: Array<{
                 id: string;
@@ -31003,12 +31082,11 @@ export type PutApiV1AdminProductsByIdData = {
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
         slug: string;
-        images: Array<{
+        media: Array<{
             id: string;
-            url: string;
-            filename: string;
-            size: number;
-            createdAt: string | string;
+            mediaId: string;
+            altText: string | null;
+            isPrimary: boolean;
         }>;
         attributes?: Array<{
             attributeId: string;
@@ -31022,6 +31100,7 @@ export type PutApiV1AdminProductsByIdData = {
         }>;
         id: string;
         expectedAggregateRevision: number;
+        acknowledgedSkuImageRemovalIds?: Array<string>;
     };
     path: {
         id: string;
@@ -31086,6 +31165,21 @@ export type PutApiV1AdminProductsByIdErrors = {
             details: {
                 expectedRevision: number;
                 currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
             };
         };
     } | {
@@ -31208,6 +31302,21 @@ export type PostApiV1AdminProductsByIdRestoreErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -31325,6 +31434,21 @@ export type DeleteApiV1AdminProductsByIdPermanentErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -31430,6 +31554,21 @@ export type GetApiV1AdminProductsByIdVariantsErrors = {
             details: {
                 expectedRevision: number;
                 currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
             };
         };
     } | {
@@ -31602,6 +31741,21 @@ export type PostApiV1AdminProductsByIdVariantsErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -31757,6 +31911,21 @@ export type DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors = {
     } | {
         success: false;
         error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
             code: string;
             message: string;
             details?: unknown;
@@ -31882,6 +32051,21 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdErrors = {
             details: {
                 expectedRevision: number;
                 currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
             };
         };
     } | {
@@ -32060,6 +32244,21 @@ export type PutApiV1AdminProductsByIdOptionsMatrixErrors = {
             details: {
                 expectedRevision: number;
                 currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
             };
         };
     } | {
