@@ -26,6 +26,14 @@ describe("attribute delete integrity", () => {
         expect(source).not.toContain(".where(inArray(productAttributeValues.attributeId, attributeIds))");
     });
 
+    it("routes single and bulk restore through one guarded lifecycle primitive", () => {
+        expect(source).toContain("await restoreAttributes(db, [id])");
+        expect(source).toContain("await restoreAttributes(db, ids)");
+        expect(source).toContain("attributeRestoreGuard(db, ids)");
+        expect(source).toContain("ATTRIBUTE_RESTORE_CONFLICT");
+        expect(source).toContain("Cannot restore attributes with duplicate normalized names or slugs together.");
+    });
+
     it("blocks bulk trash when any selected attribute is still assigned", async () => {
         let batchCalled = false;
         const db = {

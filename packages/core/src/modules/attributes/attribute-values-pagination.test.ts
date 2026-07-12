@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
     addAttributeValue,
+    createAttribute,
     listAttributeValues,
     renameAttributeValue,
+    updateAttribute,
 } from "./attributes.service";
 
 let sqlite: DatabaseSync;
@@ -63,12 +65,12 @@ function createSchema(): void {
     `);
 }
 
-function insertAttribute(id: string, options: string[]): void {
+function insertAttribute(id: string, options: string[], deletedAt: number | null = null): void {
     sqlite.prepare(`
         INSERT INTO product_attributes (
             id, name, slug, filterable, options, created_at, updated_at, deleted_at
-        ) VALUES (?, ?, ?, 1, ?, 1, 1000, NULL)
-    `).run(id, `Attribute ${id}`, id, JSON.stringify(options));
+        ) VALUES (?, ?, ?, 1, ?, 1, 1000, ?)
+    `).run(id, `Attribute ${id}`, id, JSON.stringify(options), deletedAt);
 }
 
 function insertValue(
@@ -200,11 +202,38 @@ describe("attribute value pagination", () => {
             'Value "red" already exists for this attribute',
         );
         await expect(
-            renameAttributeValue(db, "swatch", "Green", " RED "),
+            renameAttributeValue(db, "swatch", "Blue", " RED "),
         ).rejects.toThrow('Value "RED" already exists for this attribute');
 
         const result = await listAttributeValues(db, "swatch");
         expect(result.values.map((value) => value.value)).toEqual(["Red", "Blue"]);
         expect(result.totalValues).toBe(2);
+    });
+
+    it("rejects normalized definition conflicts and edits to trashed definitions", async () => {
+        insertAttribute("material", []);
+        insertAttribute("trashed", [], 123);
+
+        await expect(createAttribute(db, {
+            name: "  ATTRIBUTE MATERIAL ",
+            slug: "different-slug",
+            filterable: true,
+        })).rejects.toThrow("already exists");
+        await expect(updateAttribute(db, "material", {
+            slug: " TRASHED ".trim().toLowerCase(),
+        })).rejects.toThrow("already exists");
+        await expect(updateAttribute(db, "trashed", { name: "Updated" }))
+            .rejects.toThrow("Attribute not found");
+        await expect(addAttributeValue(db, "trashed", "New"))
+            .rejects.toThrow("Attribute not found");
+    });
+
+    it("blocks renaming a value onto an existing assigned value", async () => {
+        insertAttribute("finish", []);
+        insertValue("finish", 1, "Matte", 1);
+        insertValue("finish", 2, " Glossy ", 2);
+
+        await expect(renameAttributeValue(db, "finish", "Matte", "glossy"))
+            .rejects.toThrow('Value "glossy" already exists for this attribute');
     });
 });
