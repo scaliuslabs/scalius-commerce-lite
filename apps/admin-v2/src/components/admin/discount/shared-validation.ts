@@ -8,6 +8,7 @@ import { z } from "zod";
 /** Discount code: 3-50 chars, alphanumeric + underscores + hyphens, stored uppercase */
 export const discountCodeSchema = z
   .string()
+  .trim()
   .min(3, { message: "Code must be at least 3 characters long" })
   .max(50, { message: "Code cannot exceed 50 characters" })
   .regex(/^[a-zA-Z0-9_-]+$/, {
@@ -26,6 +27,7 @@ export const sharedDiscountFields = {
     .number({ message: "Max uses per order must be an integer or empty" })
     .int({ message: "Max uses per order must be a whole number" })
     .positive({ message: "Max uses per order must be positive" })
+    .max(1, { message: "Checkout accepts one discount code per order" })
     .nullable()
     .optional(),
   maxUses: z.coerce
@@ -52,8 +54,35 @@ export function refineEndDateAfterStart<T extends { startDate: Date; endDate?: D
       return true;
     },
     {
-      message: "End date cannot be before the start date",
+      message: "End date must be on or after the start date",
       path: ["endDate"],
     },
   );
+}
+
+/** Percentage discounts cannot exceed the complete eligible amount. */
+export function refinePercentageAtMost100<
+  T extends { valueType: "percentage" | "fixed_amount"; discountValue: number },
+>(schema: z.ZodType<T>) {
+  return schema.refine(
+    (data) => data.valueType !== "percentage" || data.discountValue <= 100,
+    {
+      message: "Percentage discount cannot exceed 100%",
+      path: ["discountValue"],
+    },
+  );
+}
+
+/** The current admin editor is date-based: starts are local-day inclusive. */
+export function normalizeDiscountStartDate(value: Date): Date {
+  const normalized = new Date(value);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+/** Date-based end dates remain valid through the selected merchant-local day. */
+export function normalizeDiscountEndDate(value: Date): Date {
+  const normalized = new Date(value);
+  normalized.setHours(23, 59, 59, 999);
+  return normalized;
 }

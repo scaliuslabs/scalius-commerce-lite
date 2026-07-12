@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "../shared-validation";
+import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart, refinePercentageAtMost100 } from "../shared-validation";
 
 export interface Product {
   id: string;
@@ -16,8 +16,8 @@ export interface Collection {
   presentation?: "grid" | "carousel";
 }
 
-export const formSchema = refineEndDateAfterStart(
-  z.object({
+export const formSchema = refinePercentageAtMost100(
+  refineEndDateAfterStart(z.object({
     code: discountCodeSchema,
     valueType: z.enum(["percentage", "fixed_amount"]),
     discountValue: z
@@ -41,7 +41,7 @@ export const formSchema = refineEndDateAfterStart(
     combineWithProductDiscounts: z.boolean(),
     combineWithOrderDiscounts: z.boolean(),
     combineWithShippingDiscounts: z.boolean(),
-  }),
+  })),
 );
 
 export type FormValues = z.infer<typeof formSchema>;

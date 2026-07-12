@@ -30,14 +30,13 @@ import {
 } from "../../ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "../../ui/popover";
 import { Calendar } from "../../ui/calendar";
-import { CalendarIcon, Percent, Loader2, Info, RefreshCw } from "lucide-react";
+import { CalendarIcon, Percent, Loader2, RefreshCw } from "lucide-react";
 import { Checkbox } from "../../ui/checkbox";
 import { cn } from "@scalius/shared/utils";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { Separator } from "../../ui/separator";
 import { toast } from "sonner";
 import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discounts";
-import { Alert, AlertDescription, AlertTitle } from "../../ui/alert";
 import {
   Tooltip,
   TooltipContent,
@@ -48,12 +47,12 @@ import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
-import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
+import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart, refinePercentageAtMost100, normalizeDiscountStartDate, normalizeDiscountEndDate } from "./shared-validation";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
-const formSchema = refineEndDateAfterStart(
-  z.object({
+const formSchema = refinePercentageAtMost100(
+  refineEndDateAfterStart(z.object({
     code: discountCodeSchema,
     valueType: z.enum(["percentage", "fixed_amount"]),
     discountValue: z.coerce
@@ -62,7 +61,7 @@ const formSchema = refineEndDateAfterStart(
     ...sharedDiscountFields,
     combineWithProductDiscounts: z.boolean(),
     combineWithShippingDiscounts: z.boolean(),
-  }),
+  })),
 );
 
 type FormValues = z.infer<typeof formSchema>;
@@ -81,14 +80,14 @@ const FormSection = ({
   description?: string;
   children: React.ReactNode;
 }) => (
-  <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-10 py-6 first:pt-0 last:pb-0">
-    <div className="md:col-span-1">
-      <h3 className="text-lg font-medium text-foreground">{title}</h3>
+  <div className="grid grid-cols-1 gap-3 py-4 first:pt-0 last:pb-0 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-6">
+    <div>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       {description && (
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       )}
     </div>
-    <div className="md:col-span-2 space-y-6">{children}</div>
+    <div className="space-y-4">{children}</div>
   </div>
 );
 
@@ -154,7 +153,7 @@ export function AmountOffOrderForm({
       maxUses: null,
       limitOnePerCustomer: true, // Default to true often makes sense
       combineWithProductDiscounts: false, // Default to false often safer
-      combineWithShippingDiscounts: true, // Typically allowed
+      combineWithShippingDiscounts: false,
       startDate: new Date(new Date().setHours(0, 0, 0, 0)), // Start of today
       endDate: null,
       isActive: false,
@@ -199,10 +198,14 @@ export function AmountOffOrderForm({
       ...values,
       type: "amount_off_order" as const,
       minPurchaseAmount: values.minPurchaseAmount || null,
-      maxUsesPerOrder: values.maxUsesPerOrder || null,
+      maxUsesPerOrder: 1,
       maxUses: values.maxUses || null,
-      startDate: values.startDate.toISOString(),
-      endDate: values.endDate ? values.endDate.toISOString() : null,
+      combineWithProductDiscounts: false,
+      combineWithShippingDiscounts: false,
+      startDate: normalizeDiscountStartDate(values.startDate).toISOString(),
+      endDate: values.endDate
+        ? normalizeDiscountEndDate(values.endDate).toISOString()
+        : null,
     };
 
     try {
@@ -234,12 +237,12 @@ export function AmountOffOrderForm({
         method="post"
         action="/admin/discounts"
         onSubmit={form.handleSubmit(internalHandleSubmit)}
-        className="space-y-8"
+        className="space-y-4"
         noValidate
       >
         {/* Main Card for the form */}
         <Card>
-          <CardHeader>
+          <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
             <CardTitle>
               {defaultValues?.id
                 ? "Edit Discount"
@@ -251,7 +254,7 @@ export function AmountOffOrderForm({
                 : "Apply a percentage or fixed amount discount to the entire order."}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4 sm:px-5">
             {/* Section 1: General Details */}
             <FormSection title="General Details">
               <FormField
@@ -442,40 +445,7 @@ export function AmountOffOrderForm({
                 control={form.control}
                 name="limitOnePerCustomer"
                 label="Limit to one use per customer"
-                description="Track usage by customer email or ID (if logged in)."
-              />
-            </FormSection>
-
-            <Separator className="my-4" />
-
-            <FormSection
-              title="Combinations"
-              description="Specify if this discount can be combined with other types."
-            >
-              <Alert
-                variant="default"
-                className="bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-700"
-              >
-                <Info className="h-4 w-4 text-blue-600! dark:text-blue-400!" />
-                <AlertTitle className="text-blue-800 dark:text-blue-300">
-                  Heads Up!
-                </AlertTitle>
-                <AlertDescription className="text-blue-700 dark:text-blue-300">
-                  Order discounts usually apply *after* product discounts. Check
-                  your calculation logic.
-                </AlertDescription>
-              </Alert>
-              <CheckboxFormItem
-                control={form.control}
-                name="combineWithProductDiscounts"
-                label="Combine with product discounts"
-                description="Allow this order discount alongside item-specific discounts."
-              />
-              <CheckboxFormItem
-                control={form.control}
-                name="combineWithShippingDiscounts"
-                label="Combine with shipping discounts"
-                description="Allow this order discount alongside free or discounted shipping."
+                description="Track the immutable redemption claim by checkout phone number."
               />
             </FormSection>
 
@@ -657,7 +627,7 @@ export function AmountOffOrderForm({
               </div>
             </div>
           </CardContent>
-          <CardFooter className="border-t px-6 py-4">
+          <CardFooter className="border-t px-4 py-3 sm:px-5">
             <div className="flex w-full justify-end gap-3">
               {onCancel && (
                 <Button

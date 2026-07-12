@@ -31,14 +31,14 @@ export function AppliesToSection({
 }: AppliesToSectionProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
         <CardTitle>Applies To</CardTitle>
         <CardDescription>
           Select the specific products or collections this discount will
           apply to.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-5">
         <ProductSelector
           selectedProducts={selectedProducts}
           onChange={onProductsChange}

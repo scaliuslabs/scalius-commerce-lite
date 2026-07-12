@@ -1,4 +1,4 @@
-import React, { useRef, type SVGProps } from "react";
+import React, { type SVGProps } from "react";
 import {
   Card,
   CardContent,
@@ -8,7 +8,6 @@ import {
 } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { Tag, Percent, Truck } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
 
 interface DiscountType {
   id: string;
@@ -22,28 +21,23 @@ interface DiscountTypeSelectorProps {
 }
 
 export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const discountTypes: DiscountType[] = [
     {
       id: "amount_off_products",
       name: "Amount Off Products",
-      description:
-        "Apply a percentage or fixed discount to specific products or collections. Best for targeted promotions.",
+      description: "Reduce selected products or collections.",
       icon: <Tag />,
     },
     {
       id: "amount_off_order",
       name: "Amount Off Order",
-      description:
-        "Apply a percentage or fixed discount to the entire order total. Best for site-wide sales and loyalty rewards.",
+      description: "Reduce the merchandise subtotal.",
       icon: <Percent />,
     },
     {
       id: "free_shipping",
       name: "Free Shipping",
-      description:
-        "Waive shipping fees for qualifying orders. Best for increasing average order value.",
+      description: "Waive the delivery charge for qualifying orders.",
       icon: <Truck />,
     },
   ];
@@ -55,62 +49,41 @@ export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
   };
 
   return (
-    <Card
-      id="discount-type-selector"
-      ref={containerRef}
-      className={cn(
-        "w-full border bg-card shadow-sm",
-        "transition-all duration-300",
-      )}
-    >
-      <CardHeader className="pb-5">
+    <Card id="discount-type-selector" className="w-full border bg-card shadow-none">
+      <CardHeader className="px-4 pb-3 pt-4 sm:px-5">
         <CardTitle className="text-lg font-semibold tracking-tight">
-          Select Discount Type
+          What should this code reduce?
         </CardTitle>
         <CardDescription className="text-sm text-muted-foreground pt-1">
-          Choose the type of discount you want to create. This sets the
-          foundation for your promotion.
+          One code can apply to products, the order subtotal, or delivery.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <CardContent className="px-4 pb-4 sm:px-5">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
           {discountTypes.map((type) => (
             <Button
               key={type.id}
               variant="outline"
-              className={cn(
-                "w-full h-full flex flex-col items-start justify-start p-5 gap-2.5",
-                "border bg-card hover:bg-accent hover:border-primary/50",
-                "rounded-lg shadow-sm hover:shadow-md focus-visible:shadow-md",
-                "transition-all duration-200 ease-out group cursor-pointer text-left",
-                "transform-gpu hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:-translate-y-0.5",
-                "whitespace-normal",
-              )}
+              className="group h-auto min-h-28 w-full flex-col items-start justify-start gap-2 whitespace-normal rounded-md border bg-card p-4 text-left shadow-none hover:border-foreground/20 hover:bg-muted/50"
               onClick={() => handleSelect(type.id)}
             >
               {React.isValidElement(type.icon)
                 ? React.cloneElement(
                     type.icon as React.ReactElement<SVGProps<SVGSVGElement>>,
                     {
-                      className: cn(
-                        "h-6 w-6 text-primary mb-2",
-                        "transition-colors duration-200",
-                      ),
+                      className: "h-5 w-5 text-muted-foreground transition-colors group-hover:text-foreground",
                       "aria-hidden": "true",
                     },
                   )
                 : null}
 
               <div
-                className={cn(
-                  "font-semibold text-md text-foreground group-hover:text-primary",
-                  "transition-colors duration-200 mb-1",
-                )}
+                className="text-sm font-semibold text-foreground"
               >
                 {type.name}
               </div>
 
-              <div className="text-sm text-muted-foreground leading-normal">
+              <div className="text-xs leading-5 text-muted-foreground">
                 {type.description}
               </div>
             </Button>

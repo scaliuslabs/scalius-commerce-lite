@@ -20,13 +20,16 @@ import { DiscountDetailsSection } from "./DiscountDetailsSection";
 import { AppliesToSection } from "./AppliesToSection";
 import { MinimumRequirementsSection } from "./MinimumRequirementsSection";
 import { UsageLimitsSection } from "./UsageLimitsSection";
-import { CombinationsSection } from "./CombinationsSection";
 import { ActiveDatesSection } from "./ActiveDatesSection";
 import { SummaryCard } from "./SummaryCard";
 import { formSchema } from "./types";
 import type { FormValues, Product, Collection } from "./types";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import {
+  normalizeDiscountEndDate,
+  normalizeDiscountStartDate,
+} from "../shared-validation";
 
 interface AmountOffProductsContainerProps {
   defaultValues?: Partial<Omit<FormValues, "appliesTo"> & { id?: string }>;
@@ -174,10 +177,14 @@ export function AmountOffProductsContainer({
     const payload = {
       ...restOfValues,
       type: "amount_off_products" as const,
+      maxUsesPerOrder: 1,
+      combineWithProductDiscounts: false,
+      combineWithOrderDiscounts: false,
+      combineWithShippingDiscounts: false,
       appliesToProducts: selectedProducts.map((p) => p.id),
       appliesToCollections: selectedCollections.map((c) => c.id),
-      startDate: ensuredValues.startDate,
-      endDate: values.endDate,
+      startDate: normalizeDiscountStartDate(ensuredValues.startDate),
+      endDate: values.endDate ? normalizeDiscountEndDate(values.endDate) : null,
     };
 
     try {
@@ -206,37 +213,41 @@ export function AmountOffProductsContainer({
         method="post"
         action="/admin/discounts"
         onSubmit={handleSubmit}
-        className="space-y-8"
+        className="space-y-4"
         noValidate
       >
-        <DiscountDetailsSection form={form} symbol={symbol} />
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="space-y-4">
+            <DiscountDetailsSection form={form} symbol={symbol} />
 
-        <AppliesToSection
-          form={form}
-          selectedProducts={selectedProducts}
-          selectedCollections={selectedCollections}
-          onProductsChange={setSelectedProducts}
-          onCollectionsChange={setSelectedCollections}
-        />
+            <AppliesToSection
+              form={form}
+              selectedProducts={selectedProducts}
+              selectedCollections={selectedCollections}
+              onProductsChange={setSelectedProducts}
+              onCollectionsChange={setSelectedCollections}
+            />
 
-        <MinimumRequirementsSection form={form} symbol={symbol} />
+            <MinimumRequirementsSection form={form} symbol={symbol} />
 
-        <UsageLimitsSection form={form} />
+            <UsageLimitsSection form={form} />
 
-        <CombinationsSection form={form} />
+            <ActiveDatesSection form={form} />
+          </div>
 
-        <ActiveDatesSection form={form} />
-
-        <SummaryCard
-          form={form}
-          symbol={symbol}
-          selectedProducts={selectedProducts}
-          selectedCollections={selectedCollections}
-        />
+          <div className="xl:sticky xl:top-4">
+            <SummaryCard
+              form={form}
+              symbol={symbol}
+              selectedProducts={selectedProducts}
+              selectedCollections={selectedCollections}
+            />
+          </div>
+        </div>
 
         <Separator />
 
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <FormField
             control={form.control}
             name="isActive"

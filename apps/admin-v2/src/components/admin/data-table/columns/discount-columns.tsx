@@ -93,22 +93,10 @@ function buildDiscountSummary(
   if (discount.minQuantity) {
     lines.push(`Min quantity: ${discount.minQuantity}`);
   }
-  if (discount.maxUsesPerOrder) {
-    lines.push(`Max per order: ${discount.maxUsesPerOrder}`);
-  }
   if (discount.limitOnePerCustomer) {
     lines.push("Limit: 1 per customer");
   }
-  if (discount.customerSegment) {
-    lines.push(`Segment: ${discount.customerSegment}`);
-  }
-  const combines: string[] = [];
-  if (discount.combineWithProductDiscounts) combines.push("product");
-  if (discount.combineWithOrderDiscounts) combines.push("order");
-  if (discount.combineWithShippingDiscounts) combines.push("shipping");
-  if (combines.length > 0) {
-    lines.push(`Combines with: ${combines.join(", ")}`);
-  }
+  lines.push("Stacking: one code per order");
   return lines;
 }
 
