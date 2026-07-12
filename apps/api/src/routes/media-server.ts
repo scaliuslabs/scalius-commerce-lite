@@ -19,7 +19,14 @@ type RangedR2ObjectBody = R2ObjectBody & {
  * segment. Production media is served by the configured R2 custom domain.
  */
 app.get("/:key{.+}", async (c) => {
-  const key = validateMediaObjectKey(c.req.param("key"));
+  let key: string;
+  try {
+    key = validateMediaObjectKey(c.req.param("key"));
+  } catch {
+    // This public development route should not expose storage-policy details
+    // or turn an unsupported path into an operational 5xx signal.
+    return c.notFound();
+  }
   const bucket = c.env.BUCKET || c.env.STORAGE || getBucket();
   if (!bucket) {
     return c.text(
