@@ -13970,6 +13970,14 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -14018,6 +14026,8 @@
                               "hasVariants",
                               "availableForSale",
                               "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
                               "category",
                               "createdAt",
                               "updatedAt",
@@ -14294,6 +14304,14 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "variants": {
                                 "type": "array",
                                 "items": {
@@ -14310,6 +14328,8 @@
                               "price",
                               "slug",
                               "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
                               "variants"
                             ],
                             "additionalProperties": {
@@ -14653,6 +14673,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "imageAlt": {
                                 "type": "string",
                                 "nullable": true
@@ -14711,6 +14735,10 @@
                                       "type": "string"
                                     },
                                     "imageId": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "imageMediaId": {
                                       "type": "string",
                                       "nullable": true
                                     },
@@ -14814,6 +14842,7 @@
                                     "id",
                                     "productId",
                                     "imageId",
+                                    "imageMediaId",
                                     "imageUrl",
                                     "selectedOptions",
                                     "weight",
@@ -14856,6 +14885,7 @@
                               "hasVariants",
                               "availableForSale",
                               "imageUrl",
+                              "imageMediaId",
                               "imageAlt",
                               "category",
                               "attributes",
@@ -15224,13 +15254,90 @@
                             "nullable": true
                           }
                         },
-                        "images": {
+                        "media": {
                           "type": "array",
                           "items": {
                             "type": "object",
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "mediaId": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "video"
+                                ]
+                              },
+                              "url": {
+                                "type": "string"
+                              },
+                              "posterMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "posterUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "altText": {
+                                "type": "string"
+                              },
+                              "caption": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "durationMs": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0
+                              },
+                              "isPrimary": {
+                                "type": "boolean"
+                              },
+                              "sortOrder": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ready",
+                                  "trashed"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "mediaId",
+                              "kind",
+                              "url",
+                              "posterMediaId",
+                              "posterUrl",
+                              "altText",
+                              "caption",
+                              "width",
+                              "height",
+                              "durationMs",
+                              "isPrimary",
+                              "sortOrder",
+                              "status"
+                            ]
                           }
                         },
                         "variants": {
@@ -15255,7 +15362,7 @@
                       "required": [
                         "product",
                         "category",
-                        "images",
+                        "media",
                         "variants",
                         "relatedProducts"
                       ]
@@ -21155,6 +21262,15 @@
                               "availableQuantity": {
                                 "type": "number",
                                 "nullable": true
+                              },
+                              "productImageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "productImage": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "uri"
                               }
                             },
                             "required": [
@@ -21166,7 +21282,9 @@
                               "productName",
                               "variantLabel",
                               "freeDelivery",
-                              "availableQuantity"
+                              "availableQuantity",
+                              "productImageMediaId",
+                              "productImage"
                             ]
                           }
                         },
@@ -41776,6 +41894,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "posterUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "folderId": {
                                 "type": "string",
                                 "nullable": true
@@ -41844,6 +41966,7 @@
                               "objectKey",
                               "size",
                               "mimeType",
+                              "posterUrl",
                               "folderId",
                               "status",
                               "version",
@@ -43958,6 +44081,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "posterUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "folderId": {
                               "type": "string",
                               "nullable": true
@@ -44026,6 +44153,7 @@
                             "objectKey",
                             "size",
                             "mimeType",
+                            "posterUrl",
                             "folderId",
                             "status",
                             "version",
@@ -44885,6 +45013,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "posterUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "folderId": {
                               "type": "string",
                               "nullable": true
@@ -44953,6 +45085,7 @@
                             "objectKey",
                             "size",
                             "mimeType",
+                            "posterUrl",
                             "folderId",
                             "status",
                             "version",
@@ -45369,6 +45502,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "posterUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "folderId": {
                               "type": "string",
                               "nullable": true
@@ -45437,6 +45574,7 @@
                             "objectKey",
                             "size",
                             "mimeType",
+                            "posterUrl",
                             "folderId",
                             "status",
                             "version",
@@ -45853,6 +45991,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "posterUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "folderId": {
                               "type": "string",
                               "nullable": true
@@ -45921,6 +46063,7 @@
                             "objectKey",
                             "size",
                             "mimeType",
+                            "posterUrl",
                             "folderId",
                             "status",
                             "version",
@@ -49798,6 +49941,10 @@
                             "imageUrl": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "imageMediaId": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -49806,7 +49953,8 @@
                             "slug",
                             "price",
                             "isActive",
-                            "imageUrl"
+                            "imageUrl",
+                            "imageMediaId"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -103728,6 +103876,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -103937,7 +104164,7 @@
                               "variantCount": {
                                 "type": "number"
                               },
-                              "imageCount": {
+                              "mediaCount": {
                                 "type": "number"
                               },
                               "primaryImage": {
@@ -103964,7 +104191,7 @@
                               "updatedAt",
                               "category",
                               "variantCount",
-                              "imageCount",
+                              "mediaCount",
                               "primaryImage"
                             ]
                           }
@@ -104346,43 +104573,40 @@
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
-                  "images": {
+                  "media": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 80,
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                         },
-                        "url": {
-                          "type": "string"
+                        "mediaId": {
+                          "type": "string",
+                          "minLength": 8,
+                          "maxLength": 160,
+                          "pattern": "^[A-Za-z0-9_-]+$/u"
                         },
-                        "filename": {
-                          "type": "string"
+                        "altText": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 500
                         },
-                        "size": {
-                          "type": "number"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ]
+                        "isPrimary": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "id",
-                        "url",
-                        "filename",
-                        "size",
-                        "createdAt"
+                        "mediaId",
+                        "altText",
+                        "isPrimary"
                       ]
-                    }
+                    },
+                    "maxItems": 250
                   },
                   "attributes": {
                     "type": "array",
@@ -104515,7 +104739,9 @@
                             "imageId": {
                               "type": "string",
                               "nullable": true,
-                              "minLength": 1
+                              "minLength": 10,
+                              "maxLength": 80,
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                             },
                             "sku": {
                               "type": "string",
@@ -104614,7 +104840,7 @@
                   "metaDescription",
                   "productCondition",
                   "slug",
-                  "images"
+                  "media"
                 ]
               }
             }
@@ -105575,6 +105801,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -106087,7 +106392,7 @@
                             ]
                           }
                         },
-                        "images": {
+                        "media": {
                           "type": "array",
                           "items": {
                             "type": "object",
@@ -106095,41 +106400,85 @@
                               "id": {
                                 "type": "string"
                               },
-                              "productId": {
+                              "mediaId": {
                                 "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "video"
+                                ]
                               },
                               "url": {
                                 "type": "string"
                               },
-                              "alt": {
+                              "posterMediaId": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "posterUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "altText": {
+                                "type": "string"
+                              },
+                              "contextualAltText": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "caption": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "width": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "height": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "durationMs": {
+                                "type": "integer",
+                                "nullable": true,
+                                "minimum": 0
                               },
                               "isPrimary": {
                                 "type": "boolean"
                               },
                               "sortOrder": {
-                                "type": "number"
+                                "type": "integer",
+                                "minimum": 0
                               },
-                              "createdAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  }
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "ready",
+                                  "trashed"
                                 ]
                               }
                             },
                             "required": [
                               "id",
-                              "productId",
+                              "mediaId",
+                              "kind",
                               "url",
-                              "alt",
+                              "posterMediaId",
+                              "posterUrl",
+                              "altText",
+                              "caption",
+                              "width",
+                              "height",
+                              "durationMs",
                               "isPrimary",
                               "sortOrder",
-                              "createdAt"
+                              "status"
                             ]
                           }
                         },
@@ -106204,7 +106553,7 @@
                         "deletedAt",
                         "category",
                         "variants",
-                        "images",
+                        "media",
                         "additionalInfo",
                         "attributes"
                       ]
@@ -106367,43 +106716,40 @@
                     "maxLength": 100,
                     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
-                  "images": {
+                  "media": {
                     "type": "array",
                     "items": {
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 10,
+                          "maxLength": 80,
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                         },
-                        "url": {
-                          "type": "string"
+                        "mediaId": {
+                          "type": "string",
+                          "minLength": 8,
+                          "maxLength": 160,
+                          "pattern": "^[A-Za-z0-9_-]+$/u"
                         },
-                        "filename": {
-                          "type": "string"
+                        "altText": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 500
                         },
-                        "size": {
-                          "type": "number"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ]
+                        "isPrimary": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "id",
-                        "url",
-                        "filename",
-                        "size",
-                        "createdAt"
+                        "mediaId",
+                        "altText",
+                        "isPrimary"
                       ]
-                    }
+                    },
+                    "maxItems": 250
                   },
                   "attributes": {
                     "type": "array",
@@ -106460,6 +106806,16 @@
                   "expectedAggregateRevision": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "acknowledgedSkuImageRemovalIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 10,
+                      "maxLength": 80,
+                      "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                    },
+                    "maxItems": 250
                   }
                 },
                 "required": [
@@ -106473,7 +106829,7 @@
                   "metaDescription",
                   "productCondition",
                   "slug",
-                  "images",
+                  "media",
                   "id",
                   "expectedAggregateRevision"
                 ]
@@ -106719,6 +107075,85 @@
                               "required": [
                                 "expectedRevision",
                                 "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
                               ]
                             }
                           },
@@ -107121,6 +107556,85 @@
                               "required": [
                                 "expectedRevision",
                                 "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
                               ]
                             }
                           },
@@ -107553,6 +108067,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -107926,6 +108519,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -108072,7 +108744,9 @@
                   "imageId": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 10,
+                    "maxLength": 80,
+                    "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                   },
                   "weight": {
                     "type": "number",
@@ -108565,6 +109239,85 @@
                               "required": [
                                 "expectedRevision",
                                 "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
                               ]
                             }
                           },
@@ -109170,6 +109923,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -109324,7 +110156,9 @@
                   "imageId": {
                     "type": "string",
                     "nullable": true,
-                    "minLength": 1
+                    "minLength": 10,
+                    "maxLength": 80,
+                    "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                   },
                   "weight": {
                     "type": "number",
@@ -109845,6 +110679,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -110255,6 +111168,85 @@
                           "type": "object",
                           "properties": {
                             "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
                               "type": "string"
                             },
                             "message": {
@@ -110469,7 +111461,9 @@
                         "imageId": {
                           "type": "string",
                           "nullable": true,
-                          "minLength": 1
+                          "minLength": 10,
+                          "maxLength": 80,
+                          "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                         },
                         "sku": {
                           "type": "string",
@@ -110802,6 +111796,85 @@
                               "required": [
                                 "expectedRevision",
                                 "currentRevision"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message",
+                            "details"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "success",
+                        "error"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "affectedCount": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "exclusiveMinimum": true
+                                },
+                                "affectedAssociationIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 20
+                                },
+                                "affectedSkus": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "sku": {
+                                        "type": "string"
+                                      },
+                                      "imageId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "sku",
+                                      "imageId"
+                                    ]
+                                  },
+                                  "maxItems": 5
+                                }
+                              },
+                              "required": [
+                                "affectedCount",
+                                "affectedAssociationIds",
+                                "affectedSkus"
                               ]
                             }
                           },
