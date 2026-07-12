@@ -18,6 +18,7 @@ export interface DiscountLifecycleAuthority {
 }
 
 const DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE = 20;
+const DISCOUNT_BULK_ID_LIMIT = 90;
 
 function chunksOf<T>(values: T[], size: number): T[][] {
     const chunks: T[][] = [];
@@ -25,6 +26,21 @@ function chunksOf<T>(values: T[], size: number): T[][] {
         chunks.push(values.slice(index, index + size));
     }
     return chunks;
+}
+
+function normalizeBulkDiscountIds(discountIds: string[]): string[] {
+    const normalized = Array.from(new Set(
+        discountIds.map((id) => id.trim()).filter(Boolean),
+    ));
+    if (normalized.length === 0) {
+        throw new ValidationError("At least one discount ID is required");
+    }
+    if (normalized.length > DISCOUNT_BULK_ID_LIMIT) {
+        throw new ValidationError(
+            `A maximum of ${DISCOUNT_BULK_ID_LIMIT} discounts can be changed at once`,
+        );
+    }
+    return normalized;
 }
 
 function assertDiscountLifecycleAuthority(
@@ -370,11 +386,12 @@ export async function deleteDiscount(db: Database, id: string) {
 }
 
 export async function bulkDeleteDiscounts(db: Database, discountIds: string[], permanent: boolean = false) {
+    const normalizedIds = normalizeBulkDiscountIds(discountIds);
     if (permanent) {
         const activeRow = await db
             .select({ id: discounts.id })
             .from(discounts)
-            .where(and(inArray(discounts.id, discountIds), isNull(discounts.deletedAt)))
+            .where(and(inArray(discounts.id, normalizedIds), isNull(discounts.deletedAt)))
             .limit(1)
             .get();
         if (activeRow) {
@@ -384,7 +401,7 @@ export async function bulkDeleteDiscounts(db: Database, discountIds: string[], p
         const usageRow = await db
             .select({ id: discountUsage.id })
             .from(discountUsage)
-            .where(inArray(discountUsage.discountId, discountIds))
+            .where(inArray(discountUsage.discountId, normalizedIds))
             .limit(1)
             .get();
         if (usageRow) {
@@ -393,7 +410,7 @@ export async function bulkDeleteDiscounts(db: Database, discountIds: string[], p
 
         await db
             .delete(discounts)
-            .where(and(inArray(discounts.id, discountIds), isNotNull(discounts.deletedAt)));
+            .where(and(inArray(discounts.id, normalizedIds), isNotNull(discounts.deletedAt)));
     } else {
         await db
             .update(discounts)
@@ -402,11 +419,12 @@ export async function bulkDeleteDiscounts(db: Database, discountIds: string[], p
                 deletedAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             })
-            .where(and(inArray(discounts.id, discountIds), isNull(discounts.deletedAt)));
+            .where(and(inArray(discounts.id, normalizedIds), isNull(discounts.deletedAt)));
     }
 }
 
 export async function restoreDiscounts(db: Database, discountIds: string[]) {
+    const normalizedIds = normalizeBulkDiscountIds(discountIds);
     await db
         .update(discounts)
         .set({
@@ -414,7 +432,7 @@ export async function restoreDiscounts(db: Database, discountIds: string[]) {
             deletedAt: null,
             updatedAt: sql`unixepoch()`,
         })
-        .where(and(inArray(discounts.id, discountIds), isNotNull(discounts.deletedAt)));
+        .where(and(inArray(discounts.id, normalizedIds), isNotNull(discounts.deletedAt)));
 }
 
 export async function permanentlyDeleteDiscount(db: Database, id: string) {
