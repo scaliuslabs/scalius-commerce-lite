@@ -8,7 +8,7 @@ import {
 
 describe("RBAC seed cache marker", () => {
   it("uses a compact versioned key derived from the seed definitions", () => {
-    expect(getRbacSeedCacheKey()).toMatch(/^rbac:seed-current:v2:[a-f0-9]{8}$/);
+    expect(getRbacSeedCacheKey()).toMatch(/^rbac:seed-current:v3:[a-f0-9]{8}$/);
   });
 
   it("reads and writes the current marker through KV", async () => {

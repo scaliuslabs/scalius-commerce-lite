@@ -25679,6 +25679,17 @@ export type GetApiV1AdminOrdersIdInvoiceErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -25700,35 +25711,61 @@ export type GetApiV1AdminOrdersIdInvoiceErrors = {
             details?: unknown;
         };
     };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
 };
 
 export type GetApiV1AdminOrdersIdInvoiceError = GetApiV1AdminOrdersIdInvoiceErrors[keyof GetApiV1AdminOrdersIdInvoiceErrors];
 
 export type GetApiV1AdminOrdersIdInvoiceResponses = {
     /**
-     * Invoice data with order details, business info, and invoice number
+     * Immutable issued invoice or live unnumbered draft
      */
     200: {
         success: true;
         data: {
+            status: 'draft' | 'issued';
             order: {
                 id: string;
+                version: number;
                 customerName: string;
                 customerPhone: string;
                 customerEmail: string | null;
-                totalAmount: number;
-                shippingCharge: number;
-                discountAmount: number | null;
-                status: string;
-                paymentStatus: string;
-                paymentMethod: string;
-                shippingAddress: string;
-                city: string;
-                zone: string;
+                customerId: string | null;
+                shippingAddress: string | null;
+                city: string | null;
+                zone: string | null;
                 area: string | null;
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
+                totalAmount: number;
+                shippingCharge: number;
+                discountAmount: number | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotalAmountMinor: number | null;
+                shippingAmountMinor: number | null;
+                discountAmountMinor: number | null;
+                taxAmountMinor: number;
+                totalAmountMinor: number | null;
+                taxLabel: string | null;
+                pricesIncludeTax: boolean;
+                status: string;
+                paymentStatus: string | null;
+                paymentMethod: string | null;
+                fulfillmentStatus: string | null;
+                paidAmount: number | null;
+                balanceDue: number | null;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -25738,14 +25775,17 @@ export type GetApiV1AdminOrdersIdInvoiceResponses = {
                     quantity: number;
                     price: number;
                     productName: string | null;
-                    productImage: string | null;
                     variantLabel: string | null;
-                    [key: string]: unknown;
+                    fulfillmentStatus: string | null;
+                    unitPriceMinor: number | null;
+                    lineSubtotalMinor: number | null;
+                    discountAmountMinor: number | null;
+                    taxableAmountMinor: number | null;
+                    taxAmountMinor: number | null;
                 }>;
-                [key: string]: unknown;
             };
-            invoiceNumber: string;
-            invoiceNum: number;
+            invoiceNumber: string | null;
+            invoiceNum: number | null;
             businessInfo: {
                 companyName: string;
                 legalName: string;
@@ -25762,11 +25802,209 @@ export type GetApiV1AdminOrdersIdInvoiceResponses = {
                 invoiceFooterText: string;
                 invoiceLogoUrl: string;
             };
+            issuedAt: number | null;
+            contentHash: string | null;
+            renderVersion: 'invoice-v1';
+            orderVersion: number;
         };
     };
 };
 
 export type GetApiV1AdminOrdersIdInvoiceResponse = GetApiV1AdminOrdersIdInvoiceResponses[keyof GetApiV1AdminOrdersIdInvoiceResponses];
+
+export type PostApiV1AdminOrdersIdInvoiceData = {
+    body: {
+        operationKey: string;
+        expectedOrderVersion: number;
+    };
+    path: {
+        /**
+         * Order ID
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/:id/invoice';
+};
+
+export type PostApiV1AdminOrdersIdInvoiceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersIdInvoiceError = PostApiV1AdminOrdersIdInvoiceErrors[keyof PostApiV1AdminOrdersIdInvoiceErrors];
+
+export type PostApiV1AdminOrdersIdInvoiceResponses = {
+    /**
+     * Issued invoice or exact idempotent replay
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'draft' | 'issued';
+            order: {
+                id: string;
+                version: number;
+                customerName: string;
+                customerPhone: string;
+                customerEmail: string | null;
+                customerId: string | null;
+                shippingAddress: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                totalAmount: number;
+                shippingCharge: number;
+                discountAmount: number | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotalAmountMinor: number | null;
+                shippingAmountMinor: number | null;
+                discountAmountMinor: number | null;
+                taxAmountMinor: number;
+                totalAmountMinor: number | null;
+                taxLabel: string | null;
+                pricesIncludeTax: boolean;
+                status: string;
+                paymentStatus: string | null;
+                paymentMethod: string | null;
+                fulfillmentStatus: string | null;
+                paidAmount: number | null;
+                balanceDue: number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
+                items: Array<{
+                    id: string;
+                    productId: string;
+                    variantId: string | null;
+                    quantity: number;
+                    price: number;
+                    productName: string | null;
+                    variantLabel: string | null;
+                    fulfillmentStatus: string | null;
+                    unitPriceMinor: number | null;
+                    lineSubtotalMinor: number | null;
+                    discountAmountMinor: number | null;
+                    taxableAmountMinor: number | null;
+                    taxAmountMinor: number | null;
+                }>;
+            };
+            invoiceNumber: string | null;
+            invoiceNum: number | null;
+            businessInfo: {
+                companyName: string;
+                legalName: string;
+                addressLine1: string;
+                addressLine2: string;
+                city: string;
+                stateRegion: string;
+                postalCode: string;
+                country: string;
+                phone: string;
+                email: string;
+                taxId: string;
+                invoicePrefix: string;
+                invoiceFooterText: string;
+                invoiceLogoUrl: string;
+            };
+            issuedAt: number | null;
+            contentHash: string | null;
+            renderVersion: 'invoice-v1';
+            orderVersion: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersIdInvoiceResponse = PostApiV1AdminOrdersIdInvoiceResponses[keyof PostApiV1AdminOrdersIdInvoiceResponses];
 
 export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData = {
     body: {

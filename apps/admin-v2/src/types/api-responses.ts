@@ -784,32 +784,6 @@ export interface DiscountListData {
 }
 
 // ---------------------------------------------------------------------------
-// Invoice domain
-// ---------------------------------------------------------------------------
-
-export interface InvoiceBusinessInfo {
-  companyName: string | null;
-  legalName: string | null;
-  addressLine1: string | null;
-  addressLine2: string | null;
-  city: string | null;
-  stateRegion: string | null;
-  postalCode: string | null;
-  country: string | null;
-  phone: string | null;
-  email: string | null;
-  taxId: string | null;
-  invoiceLogoUrl: string | null;
-  invoiceFooterText: string | null;
-}
-
-export interface InvoiceData {
-  order: OrderDetail;
-  invoiceNumber: string;
-  businessInfo: InvoiceBusinessInfo;
-}
-
-// ---------------------------------------------------------------------------
 // Form option shapes
 // ---------------------------------------------------------------------------
 

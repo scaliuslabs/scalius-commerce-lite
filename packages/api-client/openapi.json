@@ -86146,7 +86146,7 @@
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Get invoice data for an order",
+        "summary": "Read an invoice or unnumbered draft without changing state",
         "parameters": [
           {
             "schema": {
@@ -86161,7 +86161,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Invoice data with order details, business info, and invoice number",
+            "description": "Immutable issued invoice or live unnumbered draft",
             "content": {
               "application/json": {
                 "schema": {
@@ -86176,11 +86176,23 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "issued"
+                          ]
+                        },
                         "order": {
                           "type": "object",
                           "properties": {
                             "id": {
                               "type": "string"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
                             },
                             "customerName": {
                               "type": "string"
@@ -86192,33 +86204,21 @@
                               "type": "string",
                               "nullable": true
                             },
-                            "totalAmount": {
-                              "type": "number"
-                            },
-                            "shippingCharge": {
-                              "type": "number"
-                            },
-                            "discountAmount": {
-                              "type": "number",
+                            "customerId": {
+                              "type": "string",
                               "nullable": true
                             },
-                            "status": {
-                              "type": "string"
-                            },
-                            "paymentStatus": {
-                              "type": "string"
-                            },
-                            "paymentMethod": {
-                              "type": "string"
-                            },
                             "shippingAddress": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "city": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "area": {
                               "type": "string",
@@ -86234,6 +86234,73 @@
                             },
                             "areaName": {
                               "type": "string",
+                              "nullable": true
+                            },
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "currencyCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currencyDecimalPlaces": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "subtotalAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "shippingAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "discountAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "taxAmountMinor": {
+                              "type": "number"
+                            },
+                            "totalAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "taxLabel": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "pricesIncludeTax": {
+                              "type": "boolean"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paymentMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "fulfillmentStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paidAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "balanceDue": {
+                              "type": "number",
                               "nullable": true
                             },
                             "createdAt": {
@@ -86272,7 +86339,9 @@
                                     "nullable": true
                                   },
                                   "quantity": {
-                                    "type": "number"
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
                                   },
                                   "price": {
                                     "type": "number"
@@ -86281,12 +86350,32 @@
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "productImage": {
+                                  "variantLabel": {
                                     "type": "string",
                                     "nullable": true
                                   },
-                                  "variantLabel": {
+                                  "fulfillmentStatus": {
                                     "type": "string",
+                                    "nullable": true
+                                  },
+                                  "unitPriceMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "lineSubtotalMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "discountAmountMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "taxableAmountMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "taxAmountMinor": {
+                                    "type": "number",
                                     "nullable": true
                                   }
                                 },
@@ -86297,26 +86386,24 @@
                                   "quantity",
                                   "price",
                                   "productName",
-                                  "productImage",
-                                  "variantLabel"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "variantLabel",
+                                  "fulfillmentStatus",
+                                  "unitPriceMinor",
+                                  "lineSubtotalMinor",
+                                  "discountAmountMinor",
+                                  "taxableAmountMinor",
+                                  "taxAmountMinor"
+                                ]
                               }
                             }
                           },
                           "required": [
                             "id",
+                            "version",
                             "customerName",
                             "customerPhone",
                             "customerEmail",
-                            "totalAmount",
-                            "shippingCharge",
-                            "discountAmount",
-                            "status",
-                            "paymentStatus",
-                            "paymentMethod",
+                            "customerId",
                             "shippingAddress",
                             "city",
                             "zone",
@@ -86324,19 +86411,38 @@
                             "cityName",
                             "zoneName",
                             "areaName",
+                            "totalAmount",
+                            "shippingCharge",
+                            "discountAmount",
+                            "currencyCode",
+                            "currencyDecimalPlaces",
+                            "subtotalAmountMinor",
+                            "shippingAmountMinor",
+                            "discountAmountMinor",
+                            "taxAmountMinor",
+                            "totalAmountMinor",
+                            "taxLabel",
+                            "pricesIncludeTax",
+                            "status",
+                            "paymentStatus",
+                            "paymentMethod",
+                            "fulfillmentStatus",
+                            "paidAmount",
+                            "balanceDue",
                             "createdAt",
                             "updatedAt",
                             "items"
-                          ],
-                          "additionalProperties": {
-                            "nullable": true
-                          }
+                          ]
                         },
                         "invoiceNumber": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "invoiceNum": {
-                          "type": "number"
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "exclusiveMinimum": true
                         },
                         "businessInfo": {
                           "type": "object",
@@ -86400,13 +86506,39 @@
                             "invoiceFooterText",
                             "invoiceLogoUrl"
                           ]
+                        },
+                        "issuedAt": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 64,
+                          "maxLength": 64
+                        },
+                        "renderVersion": {
+                          "type": "string",
+                          "enum": [
+                            "invoice-v1"
+                          ]
+                        },
+                        "orderVersion": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
                         }
                       },
                       "required": [
+                        "status",
                         "order",
                         "invoiceNumber",
                         "invoiceNum",
-                        "businessInfo"
+                        "businessInfo",
+                        "issuedAt",
+                        "contentHash",
+                        "renderVersion",
+                        "orderVersion"
                       ]
                     }
                   },
@@ -86578,6 +86710,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -86620,6 +86792,806 @@
           },
           "500": {
             "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Issue an immutable invoice with atomic monotonic numbering",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Order ID"
+            },
+            "required": true,
+            "description": "Order ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operationKey": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 200
+                  },
+                  "expectedOrderVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "operationKey",
+                  "expectedOrderVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issued invoice or exact idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "draft",
+                            "issued"
+                          ]
+                        },
+                        "order": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "customerName": {
+                              "type": "string"
+                            },
+                            "customerPhone": {
+                              "type": "string"
+                            },
+                            "customerEmail": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "customerId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "shippingAddress": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "city": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "area": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "cityName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "zoneName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "areaName": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "totalAmount": {
+                              "type": "number"
+                            },
+                            "shippingCharge": {
+                              "type": "number"
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "currencyCode": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "currencyDecimalPlaces": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "subtotalAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "shippingAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "discountAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "taxAmountMinor": {
+                              "type": "number"
+                            },
+                            "totalAmountMinor": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "taxLabel": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "pricesIncludeTax": {
+                              "type": "boolean"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "paymentStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paymentMethod": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "fulfillmentStatus": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "paidAmount": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "balanceDue": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "productId": {
+                                    "type": "string"
+                                  },
+                                  "variantId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "quantity": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "exclusiveMinimum": true
+                                  },
+                                  "price": {
+                                    "type": "number"
+                                  },
+                                  "productName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "variantLabel": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "fulfillmentStatus": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "unitPriceMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "lineSubtotalMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "discountAmountMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "taxableAmountMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "taxAmountMinor": {
+                                    "type": "number",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "productId",
+                                  "variantId",
+                                  "quantity",
+                                  "price",
+                                  "productName",
+                                  "variantLabel",
+                                  "fulfillmentStatus",
+                                  "unitPriceMinor",
+                                  "lineSubtotalMinor",
+                                  "discountAmountMinor",
+                                  "taxableAmountMinor",
+                                  "taxAmountMinor"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "version",
+                            "customerName",
+                            "customerPhone",
+                            "customerEmail",
+                            "customerId",
+                            "shippingAddress",
+                            "city",
+                            "zone",
+                            "area",
+                            "cityName",
+                            "zoneName",
+                            "areaName",
+                            "totalAmount",
+                            "shippingCharge",
+                            "discountAmount",
+                            "currencyCode",
+                            "currencyDecimalPlaces",
+                            "subtotalAmountMinor",
+                            "shippingAmountMinor",
+                            "discountAmountMinor",
+                            "taxAmountMinor",
+                            "totalAmountMinor",
+                            "taxLabel",
+                            "pricesIncludeTax",
+                            "status",
+                            "paymentStatus",
+                            "paymentMethod",
+                            "fulfillmentStatus",
+                            "paidAmount",
+                            "balanceDue",
+                            "createdAt",
+                            "updatedAt",
+                            "items"
+                          ]
+                        },
+                        "invoiceNumber": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "invoiceNum": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "businessInfo": {
+                          "type": "object",
+                          "properties": {
+                            "companyName": {
+                              "type": "string"
+                            },
+                            "legalName": {
+                              "type": "string"
+                            },
+                            "addressLine1": {
+                              "type": "string"
+                            },
+                            "addressLine2": {
+                              "type": "string"
+                            },
+                            "city": {
+                              "type": "string"
+                            },
+                            "stateRegion": {
+                              "type": "string"
+                            },
+                            "postalCode": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "taxId": {
+                              "type": "string"
+                            },
+                            "invoicePrefix": {
+                              "type": "string"
+                            },
+                            "invoiceFooterText": {
+                              "type": "string"
+                            },
+                            "invoiceLogoUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "companyName",
+                            "legalName",
+                            "addressLine1",
+                            "addressLine2",
+                            "city",
+                            "stateRegion",
+                            "postalCode",
+                            "country",
+                            "phone",
+                            "email",
+                            "taxId",
+                            "invoicePrefix",
+                            "invoiceFooterText",
+                            "invoiceLogoUrl"
+                          ]
+                        },
+                        "issuedAt": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "contentHash": {
+                          "type": "string",
+                          "nullable": true,
+                          "minLength": 64,
+                          "maxLength": 64
+                        },
+                        "renderVersion": {
+                          "type": "string",
+                          "enum": [
+                            "invoice-v1"
+                          ]
+                        },
+                        "orderVersion": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "order",
+                        "invoiceNumber",
+                        "invoiceNum",
+                        "businessInfo",
+                        "issuedAt",
+                        "contentHash",
+                        "renderVersion",
+                        "orderVersion"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
             "content": {
               "application/json": {
                 "schema": {

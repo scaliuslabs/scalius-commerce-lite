@@ -248,6 +248,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/orders/*/invoice": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_ISSUE_INVOICE },
   },
   "/api/v1/admin/orders/*/cod": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
