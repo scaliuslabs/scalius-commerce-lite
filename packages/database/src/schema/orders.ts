@@ -207,6 +207,63 @@ export const orderItems = sqliteTable("order_items", {
     index("order_items_variant_id_idx").on(table.variantId),
 ]);
 
+/** Monotonic authority for invoice numbering. Updated only with invoice issuance. */
+export const invoiceSequences = sqliteTable("invoice_sequences", {
+    key: text("key").primaryKey(),
+    currentValue: integer("current_value").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    check("invoice_sequences_value_nonnegative", sql`${table.currentValue} >= 0`),
+]);
+
+/** Immutable issued invoice identity and complete render snapshot. */
+export const orderInvoices = sqliteTable("order_invoices", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    invoiceNumber: integer("invoice_number").notNull(),
+    prefix: text("prefix").notNull(),
+    formattedNumber: text("formatted_number").notNull(),
+    orderVersion: integer("order_version").notNull(),
+    snapshot: text("snapshot").notNull(),
+    contentHash: text("content_hash").notNull(),
+    renderVersion: text("render_version").notNull(),
+    issuedBy: text("issued_by"),
+    issuedAt: integer("issued_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_invoices_order_unique").on(table.orderId),
+    uniqueIndex("order_invoices_number_unique").on(table.invoiceNumber),
+    uniqueIndex("order_invoices_formatted_unique").on(table.formattedNumber),
+    index("order_invoices_issued_at_idx").on(table.issuedAt),
+    check("order_invoices_number_positive", sql`${table.invoiceNumber} > 0`),
+    check("order_invoices_order_version_positive", sql`${table.orderVersion} >= 1`),
+    check("order_invoices_prefix_length", sql`length(trim(${table.prefix})) BETWEEN 1 AND 40`),
+    check("order_invoices_snapshot_bounded", sql`length(${table.snapshot}) BETWEEN 2 AND 200000`),
+    check("order_invoices_content_hash_shape", sql`length(${table.contentHash}) = 64`),
+]);
+
+/** Idempotency evidence for explicit invoice issuance commands. */
+export const invoiceIssueCommands = sqliteTable("invoice_issue_commands", {
+    id: text("id").primaryKey(),
+    operationKey: text("operation_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    invoiceId: text("invoice_id")
+        .notNull()
+        .references(() => orderInvoices.id, { onDelete: "restrict" }),
+    actorId: text("actor_id"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("invoice_issue_commands_operation_key_unique").on(table.operationKey),
+    index("invoice_issue_commands_order_created_idx").on(table.orderId, table.createdAt),
+    check("invoice_issue_commands_key_length", sql`length(trim(${table.operationKey})) BETWEEN 8 AND 200`),
+    check("invoice_issue_commands_request_hash_shape", sql`length(${table.requestHash}) = 64`),
+]);
+
 export const orderReturns = sqliteTable("order_returns", {
     id: text("id").primaryKey(),
     orderId: text("order_id")
@@ -785,6 +842,9 @@ export const abandonedCheckouts = sqliteTable(
 export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
+export type InvoiceSequence = InferSelectModel<typeof invoiceSequences>;
+export type OrderInvoice = InferSelectModel<typeof orderInvoices>;
+export type InvoiceIssueCommand = InferSelectModel<typeof invoiceIssueCommands>;
 export type OrderReturn = InferSelectModel<typeof orderReturns>;
 export type OrderReturnLine = InferSelectModel<typeof orderReturnLines>;
 export type OrderReturnCommand = InferSelectModel<typeof orderReturnCommands>;

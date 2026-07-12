@@ -35,7 +35,7 @@ export const PERMISSIONS = {
   COLLECTIONS_TOGGLE_STATUS: "collections.toggle_status",
 
   // =============================================
-  // Orders (8 permissions)
+  // Orders (9 permissions)
   // =============================================
   ORDERS_VIEW: "orders.view",
   ORDERS_CREATE: "orders.create",
@@ -45,6 +45,7 @@ export const PERMISSIONS = {
   ORDERS_CHANGE_STATUS: "orders.change_status",
   ORDERS_MANAGE_SHIPMENTS: "orders.manage_shipments",
   ORDERS_REFUND: "orders.refund",
+  ORDERS_ISSUE_INVOICE: "orders.issue_invoice",
 
   // =============================================
   // Customers (6 permissions)
@@ -418,6 +419,15 @@ export const PERMISSION_METADATA: Record<
     description: "Issue manual refunds and auto-refunds for returned orders",
     resource: "orders",
     action: "refund",
+    category: "Orders",
+    isSensitive: true,
+  },
+  [PERMISSIONS.ORDERS_ISSUE_INVOICE]: {
+    name: PERMISSIONS.ORDERS_ISSUE_INVOICE,
+    displayName: "Issue Invoices",
+    description: "Finalize immutable invoices and allocate invoice numbers",
+    resource: "orders",
+    action: "issue_invoice",
     category: "Orders",
     isSensitive: true,
   },

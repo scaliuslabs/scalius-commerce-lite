@@ -83,13 +83,22 @@ Bulk permanent delete is worse: the service does not require `deletedAt`, so a d
 
 ### P0-5 — Invoice allocation and historical invoices are not immutable
 
-**Implemented:** an invoice number is lazily assigned on the first invoice GET. A settings counter uses CAS and the numeric value is cached on the order.
+**Resolved in the invoice-authority slice:** invoice GET is read-only and
+returns an unnumbered draft until an authorized explicit POST issues the
+invoice. Issuance uses a stable client operation key, order-version CAS, a
+dedicated permission, and one D1 batch for the monotonic sequence, immutable
+snapshot, command evidence, and version advance. Historical merchant identity,
+prefix, footer/logo reference, order lines, money, and tax facts now render from
+the hashed saved snapshot. Legacy lazy numbers are cleared because they have no
+reproducible evidence. See [Invoice authority](./INVOICE-AUTHORITY.md).
 
-**Gap:** counter increment and order assignment are separate writes. Concurrent requests for the same order can consume multiple numbers and overwrite the order's first assignment; a failure after counter increment creates a gap. First-row insertion has a unique-race path that is not handled by the retry. The order update is not guarded by `invoiceNumber IS NULL`.
+**Previous implementation:** an invoice number was lazily assigned on the first invoice GET. A settings counter used CAS and the numeric value was cached on the order.
 
-The invoice GET mutates state while requiring only `orders.view`. Browser prefetching or a read-only user can therefore issue an invoice number. Only the numeric suffix is stored; formatting uses the current business prefix, so changing the prefix changes how an old invoice is displayed. Business identity, address, logo, and footer are also read live, not snapshotted at finalization.
+**Previous gap:** counter increment and order assignment were separate writes. Concurrent requests for the same order could consume multiple numbers and overwrite the order's first assignment; a failure after counter increment created a gap. First-row insertion had a unique-race path that was not handled by the retry. The order update was not guarded by `invoiceNumber IS NULL`.
 
-**Decision:** make invoice finalization an explicit idempotent command with a dedicated permission. Atomically claim one number and persist the complete immutable invoice identity/snapshot. GET must be read-only. Decide whether preview invoices are unnumbered. Add concurrency, failure-injection, prefix-change, business-info-change, authorization, and repeat-read tests.
+The old invoice GET mutated state while requiring only `orders.view`. Browser prefetching or a read-only user could therefore issue an invoice number. Only the numeric suffix was stored; formatting used the current business prefix, so changing the prefix changed how an old invoice was displayed. Business identity, address, logo, and footer were also read live, not snapshotted at finalization.
+
+**Implemented decision:** invoice finalization is an explicit idempotent command with a dedicated permission. It atomically claims one number and persists the complete immutable invoice identity/snapshot. GET is read-only and preview invoices are unnumbered. Focused allocation-race, replay, prefix/business snapshot, authorization, and repeat-read tests protect the boundary.
 
 ### P0-6 — Returns and COD return-to-sender restore stock before receipt
 

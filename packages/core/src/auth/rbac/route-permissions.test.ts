@@ -94,6 +94,13 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.ORDERS_CHANGE_STATUS });
   });
 
+  it("keeps invoice reads read-only and issuance behind its dedicated permission", () => {
+    expect(getRoutePermission("/api/v1/admin/orders/order_1/invoice", "GET"))
+      .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
+    expect(getRoutePermission("/api/v1/admin/orders/order_1/invoice", "POST"))
+      .toEqual({ permission: PERMISSIONS.ORDERS_ISSUE_INVOICE });
+  });
+
   it("separates tax reads and previews from tax mutations", () => {
     expect(getRoutePermission("/api/v1/admin/taxes", "GET"))
       .toEqual({ permission: PERMISSIONS.TAXES_VIEW });

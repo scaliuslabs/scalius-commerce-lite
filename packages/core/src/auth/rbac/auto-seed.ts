@@ -14,7 +14,7 @@ import { PERMISSIONS, getAllPermissions } from "./permissions";
 // isolates and must expire or be purged after an intentional manual DB reset.
 let seedingChecked = false;
 let seedingPromise: Promise<void> | null = null;
-const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v2";
+const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v3";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 type SystemRoleSeed = {

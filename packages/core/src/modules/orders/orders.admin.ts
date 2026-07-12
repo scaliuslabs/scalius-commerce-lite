@@ -5,6 +5,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import {
     orders,
     orderItems,
+    orderInvoices,
     customers,
     customerHistory,
     products,
@@ -109,6 +110,19 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
+
+async function assertOrderHasNoIssuedInvoice(db: Database, orderId: string): Promise<void> {
+    const invoice = await db
+        .select({ id: orderInvoices.id })
+        .from(orderInvoices)
+        .where(eq(orderInvoices.orderId, orderId))
+        .get();
+    if (invoice) {
+        throw new ConflictError(
+            "Issued invoice facts are immutable. Create an amendment or replacement order instead.",
+        );
+    }
+}
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
 type OrderListPaymentAttemptRow = {
     orderId: string;
@@ -2004,6 +2018,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttempt(db, id);
     await assertOrderItemsHaveNoReturnHistory(db, id);
+    await assertOrderHasNoIssuedInvoice(db, id);
 
     const currency = resolveOrderCurrencySnapshot(existingOrder);
     const money = calculateManualOrderMoney(
@@ -2423,6 +2438,7 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
     await assertOrderItemsHaveNoReturnHistory(db, id);
+    await assertOrderHasNoIssuedInvoice(db, id);
     if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -2452,7 +2468,10 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
     await assertNoActiveRefundAttemptsForOrders(db, affectedOrders.map((order) => order.id));
     await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id));
     for (const order of affectedOrders) {
-        if (permanent) await assertOrderItemsHaveNoReturnHistory(db, order.id);
+        if (permanent) {
+            await assertOrderItemsHaveNoReturnHistory(db, order.id);
+            await assertOrderHasNoIssuedInvoice(db, order.id);
+        }
         else await assertNoActiveReturnReceipt(db, order.id);
     }
 
