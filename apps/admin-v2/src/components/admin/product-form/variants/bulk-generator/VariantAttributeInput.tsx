@@ -12,9 +12,28 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 
+function optionIdentity(value: string): string {
+  return value.trim().toLocaleLowerCase("en-US");
+}
+
+function appendUniqueOptions(current: string[], candidates: readonly string[]): string[] {
+  const seen = new Set(current.map(optionIdentity));
+  const next = [...current];
+
+  for (const candidate of candidates) {
+    const displayValue = candidate.trim();
+    const identity = optionIdentity(displayValue);
+    if (!identity || seen.has(identity)) continue;
+    seen.add(identity);
+    next.push(displayValue);
+  }
+
+  return next;
+}
+
 interface QuickAddOption {
   label: string;
-  value: string;
+  values: readonly string[];
 }
 
 interface VariantAttributeInputProps {
@@ -49,14 +68,7 @@ export const VariantAttributeInput = React.memo(
       e.preventDefault();
       const pasted = e.clipboardData.getData("text");
       if (!pasted) return;
-      const newItems = pasted
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .filter((s) => s !== "" && !items.includes(s));
-
-      if (newItems.length > 0) {
-        onItemsChange([...items, ...newItems]);
-      }
+      onItemsChange(appendUniqueOptions(items, pasted.split(/[\n,;\t]+/)));
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,12 +76,7 @@ export const VariantAttributeInput = React.memo(
       if (val.includes(",")) {
         const parts = val.split(",").map((s) => s.trim());
         const lastPart = parts.pop() || "";
-        const newItems = parts.filter(
-          (p) => p !== "" && !items.includes(p),
-        );
-        if (newItems.length > 0) {
-          onItemsChange([...items, ...newItems]);
-        }
+        onItemsChange(appendUniqueOptions(items, parts));
         onInputValueChange(lastPart);
       } else {
         onInputValueChange(val);
@@ -79,15 +86,15 @@ export const VariantAttributeInput = React.memo(
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter" && inputValue.trim()) {
         e.preventDefault();
-        if (!items.includes(inputValue.trim())) {
-          onItemsChange([...items, inputValue.trim()]);
-        }
+        onItemsChange(appendUniqueOptions(items, [inputValue]));
         onInputValueChange("");
+      } else if (e.key === "Backspace" && !inputValue && items.length > 0) {
+        onItemsChange(items.slice(0, -1));
       }
     };
 
     return (
-      <div className="space-y-3 bg-muted/20 p-4 rounded-lg border">
+      <div className="space-y-2.5 rounded-lg border bg-background p-3">
         <div className="flex items-center justify-between">
           <Label
             htmlFor={id}
@@ -115,18 +122,17 @@ export const VariantAttributeInput = React.memo(
             )}
             {quickAddOptions && (
               <Select
-                onValueChange={(val) => {
-                  const newItems = val.split(",");
-                  const combined = [...new Set([...items, ...newItems])];
-                  onItemsChange(combined);
+                onValueChange={(value) => {
+                  const option = quickAddOptions[Number(value)];
+                  if (option) onItemsChange(appendUniqueOptions(items, option.values));
                 }}
               >
                 <SelectTrigger className="h-7 text-[10px] w-[110px] border-dashed">
                   <SelectValue placeholder="Quick Add..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {quickAddOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                  {quickAddOptions.map((option, index) => (
+                    <SelectItem key={`${option.label}-${index}`} value={String(index)}>
                       {option.label}
                     </SelectItem>
                   ))}
@@ -143,8 +149,14 @@ export const VariantAttributeInput = React.memo(
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="h-10 bg-background"
+          className="h-9 bg-background"
+          aria-describedby={`${id}-help`}
         />
+
+        <p id={`${id}-help`} className="text-[11px] leading-4 text-muted-foreground">
+          Press Enter after each value, or paste rows separated by commas, tabs,
+          semicolons, or new lines.
+        </p>
 
         {items.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 min-h-6">
@@ -158,6 +170,7 @@ export const VariantAttributeInput = React.memo(
                 <button
                   type="button"
                   onClick={() => handleRemove(item)}
+                  aria-label={`Remove ${item}`}
                   className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 hover:bg-destructive hover:text-destructive-foreground transition-colors p-0.5"
                 >
                   <X className="h-3 w-3" />

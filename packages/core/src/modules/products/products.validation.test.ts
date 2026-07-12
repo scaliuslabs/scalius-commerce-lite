@@ -11,6 +11,7 @@ import {
 import {
     DEFAULT_PRODUCT_OPTION_LABELS,
     DEFAULT_PRODUCT_OPTION_SCHEMA,
+    MAX_PRODUCT_OPTION_COMBINATIONS,
 } from "@scalius/shared/product-options";
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 
@@ -103,6 +104,47 @@ describe("product validation", () => {
         expect(createProductSchema.safeParse({
             ...productInput,
             metaDescription: "SEO<!--variant_images:option1-->",
+        }).success).toBe(false);
+    });
+
+    it("enforces the same bounded atomic option-create limit for both bulk paths", () => {
+        const variant = {
+            size: "M",
+            color: null,
+            weight: null,
+            sku: "SKU-M",
+            price: 100,
+            stock: 0,
+            trackInventory: true,
+            barcode: null,
+            barcodeType: null,
+            discountType: "percentage" as const,
+            discountPercentage: null,
+            discountAmount: null,
+        };
+        const variants = Array.from(
+            { length: MAX_PRODUCT_OPTION_COMBINATIONS + 1 },
+            (_, index) => ({ ...variant, size: `Size ${index}`, sku: `SKU-${index}` }),
+        );
+
+        expect(bulkCreateVariantsSchema.safeParse({
+            variants,
+            expectedAggregateRevision: 1,
+        }).success).toBe(false);
+        expect(variantEditPlanSchema.safeParse({
+            creates: variants,
+            updates: [],
+            expectedAggregateRevision: 1,
+        }).success).toBe(false);
+
+        const half = Math.ceil(MAX_PRODUCT_OPTION_COMBINATIONS / 2);
+        expect(variantEditPlanSchema.safeParse({
+            creates: variants.slice(0, half),
+            updates: variants.slice(0, MAX_PRODUCT_OPTION_COMBINATIONS - half + 1).map((_, index) => ({
+                id: `var_${index}`,
+                price: index + 1,
+            })),
+            expectedAggregateRevision: 1,
         }).success).toBe(false);
     });
 });

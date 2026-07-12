@@ -18,6 +18,8 @@ Last reviewed: 2026-07-12
 12. Never preserve persisted exact-duplicate or duplicate bulk-writer APIs. Option duplication creates a local draft; mixed option updates use one atomic edit plan.
 13. SKU deletion always soft-retires the identity. Permanent product deletion is trash-only and transactionally guards order, discount, and inventory history.
 14. An editor owns one stable product/SKU snapshot. Background query refresh may update caches but only explicit Reload latest can replace a merchant draft.
+15. Simple and optioned products are one SKU topology workflow, not separate product types. The protected default SKU becomes dormant when customer-option SKUs exist; first conversion must preserve reservations and allocate tracked stock exactly once.
+16. Bulk option generation uses one shared 150-row atomic-plan ceiling across UI and API. The ceiling covers total creates plus updates and is derived from D1's paid-plan query budget including worst-case stock-ledger and low-stock lifecycle work; larger prepared changes use CSV import.
 
 ## Implementation order
 

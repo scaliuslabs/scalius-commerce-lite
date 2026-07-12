@@ -57,6 +57,7 @@ interface ProductFormProps {
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
+  onOptionLabelsChange?: (labels: VariantOptionLabels) => void;
 }
 
 export function ProductForm({
@@ -70,6 +71,7 @@ export function ProductForm({
   onRevisionConflict,
   onOpenRevisionConflict,
   onProductSaved,
+  onOptionLabelsChange,
 }: ProductFormProps) {
   const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
 
@@ -213,6 +215,10 @@ export function ProductForm({
     [variantOption1Label, variantOption2Label],
   );
 
+  React.useEffect(() => {
+    onOptionLabelsChange?.(variantOptionLabels);
+  }, [onOptionLabelsChange, variantOptionLabels]);
+
   // Set up form submission handler
   const { isSubmitting, showAlert, alertMessage, setShowAlert, handleSubmit } =
     useProductSubmit({
@@ -298,6 +304,22 @@ export function ProductForm({
                 setVariantImageMappings={setVariantImageMappings}
                 activeVariantIds={activeVariantIds}
               />
+
+              {/* Product composition belongs in the main reading flow. */}
+              <PricingCard form={form} />
+
+              <OptionDiscoverySection form={form} />
+
+              <AttributesSection form={form} />
+
+              <SeoSection
+                form={form}
+                variants={variants}
+                variantState={
+                  isEdit ? "loaded" : "unavailable"
+                }
+                storefrontUrl={storefrontUrl}
+              />
             </div>
 
             {/* Right Column - Settings & Metadata (1/3 width on large screens) */}
@@ -319,25 +341,6 @@ export function ProductForm({
                 categories={categories}
                 isEdit={isEdit}
               />
-
-              {/* Pricing */}
-              <PricingCard form={form} />
-
-              {/* SEO */}
-              <SeoSection
-                form={form}
-                variants={variants}
-                variantState={
-                  isEdit ? "loaded" : "unavailable"
-                }
-                storefrontUrl={storefrontUrl}
-              />
-
-              {/* Catalog option mapping */}
-              <OptionDiscoverySection form={form} />
-
-              {/* Attributes */}
-              <AttributesSection form={form} />
             </div>
           </div>
 

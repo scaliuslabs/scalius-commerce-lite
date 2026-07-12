@@ -1,4 +1,9 @@
 import React from "react";
+import { RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -8,70 +13,130 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@scalius/shared/utils";
 import {
   normalizeVariantOptionLabels,
   type BulkGeneratedVariant,
   type VariantOptionLabels,
 } from "../types";
+import { getBulkVariantDraftKey } from "../utils/variantHelpers";
+
+type EditableVariantFields = Pick<BulkGeneratedVariant, "sku" | "price" | "stock">;
 
 interface VariantPreviewTableProps {
   previewVariants: BulkGeneratedVariant[];
-  existingSkus: Set<string>;
-  skuConflicts: BulkGeneratedVariant[];
+  conflictsByDraftKey: ReadonlyMap<string, string[]>;
+  excludedDraftKeys: ReadonlySet<string>;
   generateBarcodes: boolean;
   symbol: string;
   optionLabels?: VariantOptionLabels;
+  hasRowEdits: boolean;
+  onVariantChange: (
+    draftKey: string,
+    changes: Partial<EditableVariantFields>,
+  ) => void;
+  onIncludedChange: (draftKey: string, included: boolean) => void;
+  onResetEdits: () => void;
 }
 
 const VariantPreviewRow = React.memo(function VariantPreviewRow({
   variant,
-  hasConflict,
+  conflicts,
+  excluded,
   generateBarcodes,
   symbol,
+  onVariantChange,
+  onIncludedChange,
 }: {
   variant: BulkGeneratedVariant;
-  hasConflict: boolean;
+  conflicts: string[];
+  excluded: boolean;
   generateBarcodes: boolean;
   symbol: string;
+  onVariantChange: VariantPreviewTableProps["onVariantChange"];
+  onIncludedChange: VariantPreviewTableProps["onIncludedChange"];
 }) {
+  const draftKey = getBulkVariantDraftKey(variant.size, variant.color);
+  const optionSummary = [variant.size, variant.color].filter(Boolean).join(" / ");
+  const hasConflict = !excluded && conflicts.length > 0;
+
   return (
     <TableRow
-      className={
-        hasConflict
-          ? "bg-destructive/10 hover:bg-destructive/15"
-          : "hover:bg-muted/30"
-      }
-    >
-      <TableCell className="font-mono text-sm">
-        {variant.sku}
-        {hasConflict && (
-          <Badge
-            variant="destructive"
-            className="ml-2 text-[10px] px-1.5 py-0"
-          >
-            Exists
-          </Badge>
-        )}
-      </TableCell>
-      {generateBarcodes && (
-        <TableCell className="font-mono text-xs text-muted-foreground">
-          {variant.barcode || "\u2014"}
-        </TableCell>
+      className={cn(
+        hasConflict && "bg-destructive/5 hover:bg-destructive/10",
+        excluded && "opacity-50",
       )}
-      <TableCell className="text-sm">{variant.size || "\u2014"}</TableCell>
-      <TableCell className="text-sm">{variant.color || "\u2014"}</TableCell>
-      <TableCell className="text-right text-sm font-medium">
-        {symbol}
-        {variant.price.toLocaleString()}
+    >
+      <TableCell className="w-12 text-center">
+        <Checkbox
+          checked={!excluded}
+          onCheckedChange={(checked) => onIncludedChange(draftKey, checked === true)}
+          aria-label={`${excluded ? "Include" : "Exclude"} ${optionSummary || "option"}`}
+        />
       </TableCell>
-      <TableCell className="text-right text-sm">
+      <TableCell className="min-w-[190px]">
+        <Input
+          value={variant.sku}
+          onChange={(event) => onVariantChange(draftKey, { sku: event.target.value })}
+          className="h-8 font-mono text-xs"
+          aria-label={`SKU for ${optionSummary || "option"}`}
+          aria-invalid={hasConflict || undefined}
+          disabled={excluded}
+        />
+        {hasConflict ? (
+          <div className="mt-1 flex flex-wrap gap-1" role="alert">
+            {conflicts.map((conflict) => (
+              <Badge key={conflict} variant="destructive" className="h-4 px-1 text-[9px]">
+                {conflict}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+      </TableCell>
+      {generateBarcodes ? (
+        <TableCell className="font-mono text-[11px] text-muted-foreground">
+          {variant.barcode || "—"}
+        </TableCell>
+      ) : null}
+      <TableCell className="text-xs">{variant.size || "—"}</TableCell>
+      <TableCell className="text-xs">{variant.color || "—"}</TableCell>
+      <TableCell className="min-w-[130px]">
+        <div className="relative">
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+            {symbol}
+          </span>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={variant.price}
+            onChange={(event) =>
+              onVariantChange(draftKey, { price: Number(event.target.value || 0) })
+            }
+            className="h-8 pl-7 text-right text-xs"
+            aria-label={`Price for ${optionSummary || "option"}`}
+            disabled={excluded}
+          />
+        </div>
+      </TableCell>
+      <TableCell className="min-w-[110px]">
         {variant.trackInventory === false ? (
-          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+          <Badge variant="outline" className="whitespace-nowrap border-emerald-200 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
             No stock limit
           </Badge>
         ) : (
-          variant.stock
+          <Input
+            type="number"
+            min="0"
+            step="1"
+            value={variant.stock}
+            onChange={(event) =>
+              onVariantChange(draftKey, { stock: Number(event.target.value || 0) })
+            }
+            className="h-8 text-right text-xs"
+            aria-label={`Stock for ${optionSummary || "option"}`}
+            disabled={excluded}
+          />
         )}
       </TableCell>
     </TableRow>
@@ -80,74 +145,91 @@ const VariantPreviewRow = React.memo(function VariantPreviewRow({
 
 export const VariantPreviewTable = React.memo(function VariantPreviewTable({
   previewVariants,
-  existingSkus,
-  skuConflicts,
+  conflictsByDraftKey,
+  excludedDraftKeys,
   generateBarcodes,
   symbol,
   optionLabels,
+  hasRowEdits,
+  onVariantChange,
+  onIncludedChange,
+  onResetEdits,
 }: VariantPreviewTableProps) {
   const normalizedOptionLabels = normalizeVariantOptionLabels(optionLabels);
+  const includedCount = previewVariants.reduce(
+    (count, variant) =>
+      count + (excludedDraftKeys.has(getBulkVariantDraftKey(variant.size, variant.color)) ? 0 : 1),
+    0,
+  );
+  const conflictCount = Array.from(conflictsByDraftKey.entries()).reduce(
+    (count, [draftKey, conflicts]) =>
+      count + (!excludedDraftKeys.has(draftKey) && conflicts.length > 0 ? 1 : 0),
+    0,
+  );
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label className="text-sm font-semibold">
-          Preview ({previewVariants.length} option
-          {previewVariants.length !== 1 ? "s" : ""})
-        </Label>
-        {skuConflicts.length > 0 && (
-          <Badge variant="destructive" className="text-xs px-2 py-0.5">
-            {skuConflicts.length} SKU conflict
-            {skuConflicts.length > 1 ? "s" : ""}
-          </Badge>
-        )}
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <Label className="text-sm font-semibold">Review</Label>
+          <p className="text-[11px] text-muted-foreground">
+            {includedCount} of {previewVariants.length} options selected
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {conflictCount > 0 ? (
+            <Badge variant="destructive" className="text-[10px]">
+              {conflictCount} blocked
+            </Badge>
+          ) : null}
+          {hasRowEdits ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onResetEdits} className="h-7 px-2 text-[11px]">
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Reset row edits
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="border rounded-lg shadow-sm overflow-hidden max-h-[500px] overflow-y-auto">
+
+      <div className="max-h-[480px] overflow-auto rounded-lg border">
         <Table>
-          <TableHeader className="bg-muted/50 sticky top-0">
-            <TableRow className="hover:bg-muted/50">
-              <TableHead className="font-semibold">SKU</TableHead>
-              {generateBarcodes && (
-                <TableHead className="font-semibold">Barcode</TableHead>
-              )}
-              <TableHead className="font-semibold">
-                {normalizedOptionLabels.option1}
-              </TableHead>
-              <TableHead className="font-semibold">
-                {normalizedOptionLabels.option2}
-              </TableHead>
-              <TableHead className="text-right font-semibold">Price</TableHead>
-              <TableHead className="text-right font-semibold">Stock</TableHead>
+          <TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm">
+            <TableRow>
+              <TableHead className="w-12 text-center">Create</TableHead>
+              <TableHead>SKU</TableHead>
+              {generateBarcodes ? <TableHead>Barcode</TableHead> : null}
+              <TableHead>{normalizedOptionLabels.option1}</TableHead>
+              <TableHead>{normalizedOptionLabels.option2}</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="text-right">Stock</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {previewVariants.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={generateBarcodes ? 6 : 5}
-                  className="h-32 text-center"
+                  colSpan={generateBarcodes ? 7 : 6}
+                  className="h-36 text-center text-sm text-muted-foreground"
                 >
-                  <div className="text-muted-foreground">
-                    <p className="text-sm">
-                      Add {normalizedOptionLabels.option1} and/or{" "}
-                      {normalizedOptionLabels.option2} values to preview options
-                    </p>
-                    <p className="text-xs mt-1">
-                      All combinations will be shown here
-                    </p>
-                  </div>
+                  Add values to preview every combination.
                 </TableCell>
               </TableRow>
             ) : (
-              previewVariants.map((variant, index) => (
-                <VariantPreviewRow
-                  key={index}
-                  variant={variant}
-                  hasConflict={existingSkus.has(variant.sku)}
-                  generateBarcodes={generateBarcodes}
-                  symbol={symbol}
-                />
-              ))
+              previewVariants.map((variant) => {
+                const draftKey = getBulkVariantDraftKey(variant.size, variant.color);
+                return (
+                  <VariantPreviewRow
+                    key={draftKey}
+                    variant={variant}
+                    conflicts={conflictsByDraftKey.get(draftKey) ?? []}
+                    excluded={excludedDraftKeys.has(draftKey)}
+                    generateBarcodes={generateBarcodes}
+                    symbol={symbol}
+                    onVariantChange={onVariantChange}
+                    onIncludedChange={onIncludedChange}
+                  />
+                );
+              })
             )}
           </TableBody>
         </Table>

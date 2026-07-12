@@ -6,6 +6,7 @@ import type { SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { buildStockMovementClaim } from "./stock-movement-claims";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
+import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -24,6 +25,7 @@ export async function getInventoryOverview(db: Database, params: {
         const conditions: (SQL | undefined)[] = [
             isNull(productVariants.deletedAt),
             eq(productVariants.trackInventory, true),
+            operationalSkuRowPredicate(),
         ];
 
         if (status === "low") {
@@ -90,7 +92,11 @@ export async function getInventoryOverview(db: Database, params: {
                 lowStockCount: sql<number>`SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)
-            .where(and(isNull(productVariants.deletedAt), eq(productVariants.trackInventory, true)))
+            .where(and(
+                isNull(productVariants.deletedAt),
+                eq(productVariants.trackInventory, true),
+                operationalSkuRowPredicate(),
+            ))
             .get();
 
         return {

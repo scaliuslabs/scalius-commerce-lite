@@ -127,6 +127,7 @@ function SortableImage({
           onRemove(index);
         }}
         className="absolute -top-2 -right-2 z-20 h-6 w-6 rounded-full bg-destructive text-destructive-foreground shadow-sm opacity-0 group-hover:opacity-100 transition-all scale-90 hover:scale-100 flex items-center justify-center ring-2 ring-background"
+        aria-label={`Remove ${image.filename}`}
       >
         <X className="h-3 w-3" />
       </button>

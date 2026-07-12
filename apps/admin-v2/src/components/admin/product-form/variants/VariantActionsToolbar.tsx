@@ -30,6 +30,7 @@ import {
   type SortOrder,
   type VariantOptionLabels,
 } from "./types";
+import type { BulkVariantGeneratorDefaults } from "./bulk-generator/BulkVariantGeneratorDialog";
 
 const BulkVariantGenerator = lazy(() =>
   import("./bulk-generator").then((module) => ({
@@ -249,16 +250,23 @@ interface LazyBulkVariantGeneratorProps {
   onGenerate: (variants: BulkGeneratedVariant[]) => Promise<void>;
   disabled?: boolean;
   optionLabels?: VariantOptionLabels;
+  defaults?: BulkVariantGeneratorDefaults;
+  triggerLabel?: string;
+  beforeOpen?: () => Promise<boolean>;
 }
 
-function LazyBulkVariantGenerator({
+export function LazyBulkVariantGenerator({
   productSlug,
   existingVariants,
   onGenerate,
   disabled,
   optionLabels,
+  defaults,
+  triggerLabel,
+  beforeOpen,
 }: LazyBulkVariantGeneratorProps) {
   const [shouldLoad, setShouldLoad] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false);
 
   if (!shouldLoad) {
     return (
@@ -266,12 +274,24 @@ function LazyBulkVariantGenerator({
         type="button"
         variant="outline"
         size="sm"
-        disabled={disabled}
-        onClick={() => setShouldLoad(true)}
+        disabled={disabled || isPreparing}
+        onClick={async () => {
+          setIsPreparing(true);
+          try {
+            const canOpen = beforeOpen ? await beforeOpen() : true;
+            if (canOpen) setShouldLoad(true);
+          } finally {
+            setIsPreparing(false);
+          }
+        }}
         className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto"
       >
-        <Sparkles className="mr-1 h-3 w-3" />
-        Bulk Generate
+        {isPreparing ? (
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+        ) : (
+          <Sparkles className="mr-1 h-3 w-3" />
+        )}
+        {triggerLabel ?? "Generate combinations"}
       </Button>
     );
   }
@@ -281,7 +301,7 @@ function LazyBulkVariantGenerator({
       fallback={
         <Button type="button" variant="outline" size="sm" disabled className="h-7 w-full justify-center px-2 text-[11px] sm:w-auto">
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-          Bulk Generate
+          {triggerLabel ?? "Generate combinations"}
         </Button>
       }
     >
@@ -291,6 +311,8 @@ function LazyBulkVariantGenerator({
         onGenerate={onGenerate}
         disabled={disabled}
         optionLabels={optionLabels}
+        defaults={defaults}
+        triggerLabel={triggerLabel}
         initialOpen
       />
     </Suspense>

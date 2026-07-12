@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -34,12 +34,22 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import { cn, formatDate } from "@scalius/shared/utils";
 import { generateEAN13 } from "@scalius/shared/barcode-utils";
-import { variantFormSchema, type ProductVariant, type VariantFormValues } from "./types";
+import {
+  variantFormSchema,
+  type BulkGeneratedVariant,
+  type ProductVariant,
+  type VariantFormValues,
+  type VariantOptionLabels,
+} from "./types";
+import { LazyBulkVariantGenerator } from "./VariantActionsToolbar";
 
 interface SimpleProductSkuPanelProps {
   variant: ProductVariant;
   onSave: (variantId: string, values: VariantFormValues) => Promise<boolean>;
   onAddOption: () => void;
+  onGenerateOptions: (variants: BulkGeneratedVariant[]) => Promise<void>;
+  productSlug?: string;
+  optionLabels?: VariantOptionLabels;
   isSubmitting: boolean;
 }
 
@@ -69,6 +79,9 @@ export function SimpleProductSkuPanel({
   variant,
   onSave,
   onAddOption,
+  onGenerateOptions,
+  productSlug,
+  optionLabels,
   isSubmitting,
 }: SimpleProductSkuPanelProps) {
   const form = useForm<VariantFormValues>({
@@ -83,6 +96,32 @@ export function SimpleProductSkuPanel({
   const trackInventory = form.watch("trackInventory") !== false;
   const stock = Number(form.watch("stock") ?? 0);
   const available = Math.max(0, stock - (variant.reservedStock ?? 0));
+  const currentPrice = form.watch("price");
+  const currentWeight = form.watch("weight");
+  const currentDiscountType = form.watch("discountType");
+  const currentDiscountPercentage = form.watch("discountPercentage");
+  const currentDiscountAmount = form.watch("discountAmount");
+  const generatorDefaults = useMemo(() => ({
+    basePrice: currentPrice,
+    baseStock: 0,
+    trackInventory,
+    baseWeight: currentWeight,
+    discountType: currentDiscountType,
+    discountValue:
+      currentDiscountType === "flat"
+        ? currentDiscountAmount
+        : currentDiscountPercentage,
+    generateBarcodes: false,
+    sourceStock: trackInventory ? stock : undefined,
+  }), [
+    currentDiscountAmount,
+    currentDiscountPercentage,
+    currentDiscountType,
+    currentPrice,
+    currentWeight,
+    stock,
+    trackInventory,
+  ]);
 
   const saveSimpleSku = async (values: VariantFormValues): Promise<boolean> => {
     const success = await onSave(variant.id, {
@@ -101,17 +140,19 @@ export function SimpleProductSkuPanel({
     await saveSimpleSku(values);
   };
 
-  const handleSetUpOptions = async () => {
+  const prepareForOptions = async (): Promise<boolean> => {
     if (!form.formState.isDirty) {
-      onAddOption();
-      return;
+      return true;
     }
 
     const isValid = await form.trigger();
-    if (!isValid) return;
+    if (!isValid) return false;
 
-    const success = await saveSimpleSku(form.getValues());
-    if (success) onAddOption();
+    return saveSimpleSku(form.getValues());
+  };
+
+  const handleSetUpOptions = async () => {
+    if (await prepareForOptions()) onAddOption();
   };
 
   return (
@@ -154,6 +195,16 @@ export function SimpleProductSkuPanel({
                 No stock limit
               </Badge>
             )}
+            <LazyBulkVariantGenerator
+              productSlug={productSlug}
+              existingVariants={[variant]}
+              onGenerate={onGenerateOptions}
+              disabled={isSubmitting}
+              optionLabels={optionLabels}
+              beforeOpen={prepareForOptions}
+              triggerLabel="Generate combinations"
+              defaults={generatorDefaults}
+            />
             <Button
               type="button"
               variant="outline"
@@ -163,7 +214,7 @@ export function SimpleProductSkuPanel({
               className="h-8 text-xs"
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Set up options
+              Add one option
             </Button>
           </div>
         </div>

@@ -155,7 +155,7 @@ Storefront category ([slug].astro)
 
 4. **Variant images use explicit stable associations**: Product enable/axis settings live on `products`; `product_variant_image_mappings` links an image ID to either a SKU or normalized option value. Migration 0002 materialized the historical positional configuration once; migration 0006 removes every marker, rejects reintroduction, and deletes all positional readers. Explicit fields and rows are now the only authority.
 
-5. **Simple/optioned transitions need a guided stock workflow**: The backend is SKU-first. Admin edit now presents one protected default no-option SKU as a `Product SKU` panel, hides that SKU from optioned product tables, and rejects non-default/no-option SKUs everywhere new option rows can be created. The remaining workflow gap is deliberate conversion UX: merchants need explicit stock/price copy-or-merge choices when a tracked simple SKU becomes optioned, and an optioned -> simple flow with cached-cart invalidation guidance.
+5. **Optioned -> simple remains an explicit future workflow**: The backend is SKU-first. Admin edit presents one protected default no-option SKU as a `Product SKU` panel, hides that dormant SKU from optioned product tables and operational inventory projections, and rejects non-default/no-option SKUs everywhere option rows can be created. Simple -> optioned now requires an exact allocation of the tracked default SKU's on-hand stock across the first option rows and blocks conversion while reservations exist. The reverse transition still needs a deliberate stock-merge policy and cached-cart invalidation guidance; do not infer it by deleting the final option SKU.
 
 ## Inventory Rules
 

@@ -109,8 +109,8 @@ function firstOptionDefaultsFromSimpleSku(variant: ProductVariant): Partial<Vari
     barcode: null,
     barcodeType: null,
     price: variant.price,
-    stock: variant.stock,
-    trackInventory: true,
+    stock: variant.trackInventory === false ? 0 : variant.stock,
+    trackInventory: variant.trackInventory ?? true,
     discountType: variant.discountType,
     discountPercentage: variant.discountType === "percentage" ? variant.discountPercentage : null,
     discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
@@ -563,6 +563,9 @@ export function VariantManager({
           setIsAdding(true);
           setEditingVariantId(null);
         }}
+        onGenerateOptions={handleBulkGenerate}
+        productSlug={productSlug}
+        optionLabels={normalizedOptionLabels}
         isSubmitting={isSubmitting}
       />
     );

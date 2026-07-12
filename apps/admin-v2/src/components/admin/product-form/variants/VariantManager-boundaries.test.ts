@@ -175,7 +175,8 @@ describe("VariantManager product mode boundaries", () => {
     expect(simpleSource).toContain("Product SKU");
     expect(simpleSource).toContain("One SKU, no option choices.");
     expect(simpleSource).toContain("No stock limit");
-    expect(simpleSource).toContain("Set up options");
+    expect(simpleSource).toContain("Generate combinations");
+    expect(simpleSource).toContain("Add one option");
     expect(simpleSource).toContain("No customer options");
     expect(simpleSource).toContain("Price and discount stay in Pricing.");
     expect(simpleSource).not.toContain('name="price"');
@@ -275,7 +276,8 @@ describe("VariantManager product mode boundaries", () => {
   it("saves dirty simple SKU changes before entering first option setup", () => {
     const simpleSource = readFileSync(SIMPLE_SKU_PANEL_SOURCE, "utf8");
 
-    expect(simpleSource).toContain("const handleSetUpOptions = async () =>");
+    expect(simpleSource).toContain("const prepareForOptions = async (): Promise<boolean> =>");
+    expect(simpleSource).toContain("beforeOpen={prepareForOptions}");
     expect(simpleSource).toContain("form.formState.isDirty");
     expect(simpleSource).toContain("const isValid = await form.trigger()");
     expect(simpleSource).toContain("saveSimpleSku(form.getValues())");
@@ -288,7 +290,8 @@ describe("VariantManager product mode boundaries", () => {
     expect(source).toContain("function firstOptionDefaultsFromSimpleSku");
     expect(source).toContain('sku: ""');
     expect(source).toContain("price: variant.price");
-    expect(source).toContain("trackInventory: true");
+    expect(source).toContain("stock: variant.trackInventory === false ? 0 : variant.stock");
+    expect(source).toContain("trackInventory: variant.trackInventory ?? true");
     expect(source).toContain("(isFirstOptionSetup ? addVariantDefaults : undefined)");
     expect(rowSource).toContain("defaultValues={addVariantDefaults}");
   });
@@ -341,10 +344,15 @@ describe("VariantManager product mode boundaries", () => {
     expect(bulkEditSource).toContain("Track stock");
     expect(bulkEditSource).toContain("No stock limit");
     expect(bulkEditSource).not.toContain("No limit");
-    expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(true)");
+    expect(generatorSource).toContain("const [trackInventory, setTrackInventory] = useState(");
     expect(generatorSource).toContain("trackInventory,");
     expect(generatorSource).toContain("validateSkuTemplate");
     expect(generatorSource).toContain("skuTemplateValidation.valid");
+    expect(generatorSource).toContain("MAX_PRODUCT_OPTION_COMBINATIONS");
+    expect(generatorSource).toContain("conflictsByDraftKey");
+    expect(generatorSource).toContain("excludedDraftKeys");
+    expect(previewSource).toContain("onVariantChange");
+    expect(previewSource).toContain("onIncludedChange");
     expect(configSource).toContain("Track stock for generated options");
     expect(previewSource).toContain("variant.trackInventory === false");
     expect(csvSource).toContain('"Track Stock"');

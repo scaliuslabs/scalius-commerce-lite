@@ -47,13 +47,15 @@ describe("product edit route lazy boundaries", () => {
     const productFormSource = readFileSync(PRODUCT_FORM_SOURCE, "utf8");
 
     expect(routeSource).toContain("VariantOptionLabels");
-    expect(routeSource).toContain("option1: defaultValues.variantOption1Label");
-    expect(routeSource).toContain("option2: defaultValues.variantOption2Label");
-    expect(routeSource).toContain("optionLabels={variantOptionLabels}");
+    expect(routeSource).toContain("const [editorOptionLabels, setEditorOptionLabels]");
+    expect(routeSource).toContain("initialProduct.variantOption1Label");
+    expect(routeSource).toContain("onOptionLabelsChange={setEditorOptionLabels}");
+    expect(routeSource).toContain("optionLabels={editorOptionLabels}");
 
     expect(productFormSource).toContain('form.watch("variantOption1Label")');
     expect(productFormSource).toContain('form.watch("variantOption2Label")');
     expect(productFormSource).toContain("const variantOptionLabels = React.useMemo");
+    expect(productFormSource).toContain("onOptionLabelsChange?.(variantOptionLabels)");
     expect(productFormSource).toContain("optionLabels={variantOptionLabels}");
   });
 

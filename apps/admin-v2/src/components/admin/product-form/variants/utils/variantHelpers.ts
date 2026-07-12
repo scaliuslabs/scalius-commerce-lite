@@ -8,7 +8,10 @@ import type {
   BulkGeneratedVariant,
 } from "../types";
 import { generateSku } from "./skuGenerator";
-import { generateEAN13 } from "@scalius/shared/barcode-utils";
+import {
+  calculateEAN13CheckDigit,
+  generateEAN13,
+} from "@scalius/shared/barcode-utils";
 import { formatDate } from "@scalius/shared/utils";
 export { formatDate };
 
@@ -114,29 +117,44 @@ export function getUniqueColors(variants: ProductVariant[]): string[] {
  */
 export function generateVariantCombinations(
   options: BulkVariantOptions,
-  productSlug?: string
+  productSlug?: string,
+  identitySeed?: string,
 ): BulkGeneratedVariant[] {
   const combinations: BulkGeneratedVariant[] = [];
 
-  if (options.sizes.length === 0 && options.colors.length === 0) {
+  if (options.option1Values.length === 0 && options.option2Values.length === 0) {
     return combinations;
   }
 
   // If only Option 1 values
-  if (options.sizes.length > 0 && options.colors.length === 0) {
-    options.sizes.forEach((size, index) => {
+  if (options.option1Values.length > 0 && options.option2Values.length === 0) {
+    options.option1Values.forEach((size, index) => {
       combinations.push(
-        createVariantFromOptions(options, size, null, index + 1, productSlug)
+        createVariantFromOptions(
+          options,
+          size,
+          null,
+          index + 1,
+          productSlug,
+          identitySeed,
+        )
       );
     });
     return combinations;
   }
 
   // If only Option 2 values
-  if (options.colors.length > 0 && options.sizes.length === 0) {
-    options.colors.forEach((color, index) => {
+  if (options.option2Values.length > 0 && options.option1Values.length === 0) {
+    options.option2Values.forEach((color, index) => {
       combinations.push(
-        createVariantFromOptions(options, null, color, index + 1, productSlug)
+        createVariantFromOptions(
+          options,
+          null,
+          color,
+          index + 1,
+          productSlug,
+          identitySeed,
+        )
       );
     });
     return combinations;
@@ -144,10 +162,17 @@ export function generateVariantCombinations(
 
   // Both option axes - create all combinations
   let index = 1;
-  for (const size of options.sizes) {
-    for (const color of options.colors) {
+  for (const size of options.option1Values) {
+    for (const color of options.option2Values) {
       combinations.push(
-        createVariantFromOptions(options, size, color, index, productSlug)
+        createVariantFromOptions(
+          options,
+          size,
+          color,
+          index,
+          productSlug,
+          identitySeed,
+        )
       );
       index++;
     }
@@ -164,13 +189,18 @@ function createVariantFromOptions(
   size: string | null,
   color: string | null,
   index: number,
-  productSlug?: string
+  productSlug?: string,
+  identitySeed?: string,
 ): BulkGeneratedVariant {
+  const draftKey = getBulkVariantDraftKey(size, color);
   const sku = generateSku(options.skuTemplate, {
     slug: productSlug,
     size,
     color,
     index,
+    random: identitySeed
+      ? stableAlphaNumericToken(`${identitySeed}:sku:${draftKey}`, 4)
+      : undefined,
   });
 
   return {
@@ -185,9 +215,56 @@ function createVariantFromOptions(
     discountPercentage:
       options.discountType === "percentage" ? options.discountValue : null,
     discountAmount: options.discountType === "flat" ? options.discountValue : null,
-    barcode: options.generateBarcodes ? generateEAN13() : null,
+    barcode: options.generateBarcodes
+      ? identitySeed
+        ? stableInternalEan13(`${identitySeed}:barcode:${draftKey}`)
+        : generateEAN13()
+      : null,
     barcodeType: options.generateBarcodes ? "ean13" : null,
   };
+}
+
+export function normalizeVariantDraftIdentity(
+  value: string | null | undefined,
+): string {
+  return (value ?? "").trim().toLocaleLowerCase("en-US");
+}
+
+export function getBulkVariantDraftKey(
+  option1: string | null | undefined,
+  option2: string | null | undefined,
+): string {
+  return `${normalizeVariantDraftIdentity(option1)}\u0000${normalizeVariantDraftIdentity(option2)}`;
+}
+
+function stableHash(input: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function stableAlphaNumericToken(input: string, length: number): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let state = stableHash(input);
+  let token = "";
+  for (let index = 0; index < length; index += 1) {
+    state = Math.imul(state ^ (index + 1), 2246822519) >>> 0;
+    token += alphabet[state % alphabet.length];
+  }
+  return token;
+}
+
+function stableInternalEan13(input: string): string {
+  let digits = "200";
+  let state = stableHash(input);
+  while (digits.length < 12) {
+    state = Math.imul(state ^ digits.length, 3266489917) >>> 0;
+    digits += String(state % 10);
+  }
+  return digits + calculateEAN13CheckDigit(digits);
 }
 
 /**

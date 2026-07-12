@@ -27,8 +27,6 @@ function normalizeSkuSegment(value?: string | null): string {
  * - {SLUG}: Product slug (uppercase)
  * - {OPTION1}: First option value (uppercase), such as size or weight
  * - {OPTION2}: Second option value (uppercase), such as color or style
- * - {SIZE}: Legacy alias for {OPTION1}
- * - {COLOR}: Legacy alias for {OPTION2}
  * - {RANDOM}: Random 4-char string
  * - {INDEX}: Sequential number (001, 002, etc.)
  */
@@ -39,15 +37,16 @@ export function generateSku(
     size?: string | null;
     color?: string | null;
     index?: number;
+    random?: string;
   }
 ): string {
   let sku = template;
 
   // Replace placeholders
   sku = sku.replace(/{SLUG}/g, normalizeSkuSegment(data.slug || "PRODUCT"));
-  sku = sku.replace(/{OPTION1}|{SIZE}/g, normalizeSkuSegment(data.size));
-  sku = sku.replace(/{OPTION2}|{COLOR}/g, normalizeSkuSegment(data.color));
-  sku = sku.replace(/{RANDOM}/g, generateRandomString());
+  sku = sku.replace(/{OPTION1}/g, normalizeSkuSegment(data.size));
+  sku = sku.replace(/{OPTION2}/g, normalizeSkuSegment(data.color));
+  sku = sku.replace(/{RANDOM}/g, data.random || generateRandomString());
 
   if (data.index !== undefined) {
     sku = sku.replace(/{INDEX}/g, String(data.index).padStart(3, "0"));
@@ -105,8 +104,6 @@ export function validateSkuTemplate(template: string): {
     "SLUG",
     "OPTION1",
     "OPTION2",
-    "SIZE",
-    "COLOR",
     "RANDOM",
     "INDEX",
   ]);

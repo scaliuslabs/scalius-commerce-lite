@@ -3,7 +3,10 @@
 import { z } from "zod";
 import type { Product, ProductVariant, ProductImage } from "@scalius/database/schema";
 import type { VariantImageMappingRecord } from "./products.variant-images";
-import type { ProductOptionSchema } from "@scalius/shared/product-options";
+import {
+    MAX_PRODUCT_OPTION_COMBINATIONS,
+    type ProductOptionSchema,
+} from "@scalius/shared/product-options";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 
 // ─────────────────────────────────────────
@@ -28,7 +31,9 @@ const variantMutationSchema = z.object({
     weight: z.number().min(0).nullable(),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: variantPriceSchema,
-    stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    stock: z.number()
+        .int("Stock must be a whole number")
+        .min(0, "Stock must be greater than or equal to 0"),
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
@@ -62,7 +67,9 @@ export const bulkVariantSchema = z.object({
     weight: z.number().min(0).nullable(),
     sku: z.string().min(3, "SKU must be at least 3 characters"),
     price: variantPriceSchema,
-    stock: z.number().min(0, "Stock must be greater than or equal to 0"),
+    stock: z.number()
+        .int("Stock must be a whole number")
+        .min(0, "Stock must be greater than or equal to 0"),
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "custom"]).optional().nullable(),
@@ -74,7 +81,12 @@ export const bulkVariantSchema = z.object({
 });
 
 export const bulkCreateVariantsSchema = z.object({
-    variants: z.array(bulkVariantSchema).min(1, "At least one variant is required"),
+    variants: z.array(bulkVariantSchema)
+        .min(1, "At least one variant is required")
+        .max(
+            MAX_PRODUCT_OPTION_COMBINATIONS,
+            `Create at most ${MAX_PRODUCT_OPTION_COMBINATIONS} options at once`,
+        ),
     expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 });
 
@@ -103,14 +115,27 @@ export const variantEditPlanSchema = z.object({
     creates: z.array(bulkVariantSchema.extend({
         sku: z.string().trim().min(3, "SKU must be at least 3 characters"),
         stock: z.number().int("Stock must be a whole number").min(0),
-    })).default([]),
-    updates: z.array(variantEditPlanUpdateSchema).default([]),
+    })).max(
+        MAX_PRODUCT_OPTION_COMBINATIONS,
+        `Create at most ${MAX_PRODUCT_OPTION_COMBINATIONS} options at once`,
+    ).default([]),
+    updates: z.array(variantEditPlanUpdateSchema).max(
+        MAX_PRODUCT_OPTION_COMBINATIONS,
+        `Update at most ${MAX_PRODUCT_OPTION_COMBINATIONS} options at once`,
+    ).default([]),
     expectedAggregateRevision: expectedProductAggregateRevisionSchema,
 }).superRefine((plan, ctx) => {
     if (plan.creates.length === 0 && plan.updates.length === 0) {
         ctx.addIssue({
             code: "custom",
             message: "Add at least one variant create or update",
+            path: [],
+        });
+    }
+    if (plan.creates.length + plan.updates.length > MAX_PRODUCT_OPTION_COMBINATIONS) {
+        ctx.addIssue({
+            code: "custom",
+            message: `Change at most ${MAX_PRODUCT_OPTION_COMBINATIONS} options in one atomic edit`,
             path: [],
         });
     }

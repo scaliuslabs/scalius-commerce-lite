@@ -20,6 +20,7 @@ describe("variant bulk persistence boundaries", () => {
     );
     const currentVariantRead = variantsSource.indexOf(
       "const currentVariants = await db",
+      duplicateGuard,
     );
 
     expect(duplicateGuard).toBeGreaterThan(-1);

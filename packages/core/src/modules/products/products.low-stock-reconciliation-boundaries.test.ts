@@ -13,9 +13,8 @@ describe("product-editor low-stock reconciliation boundaries", () => {
   });
 
   it("reconciles alerts after every successful bulk stock transition", () => {
-    expect(variantSource).toContain(
-      "Array.from(new Set(stockChangedVariantIds)).map((variantId)",
-    );
+    expect(variantSource).toContain("reconcileVariantLowStockAlerts(db, stockChangedVariantIds)");
+    expect(variantSource).toContain("LOW_STOCK_RECONCILIATION_WAVE_SIZE = 5");
     expect(variantSource).toContain("checkAndAlertLowStock(db, variantId)");
   });
 });

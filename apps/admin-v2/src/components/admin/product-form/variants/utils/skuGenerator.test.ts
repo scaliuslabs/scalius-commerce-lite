@@ -14,15 +14,11 @@ describe("SKU generator option tokens", () => {
     ).toBe("PREMIUM-RICE-2KG-GIFT-BOX-007");
   });
 
-  it("keeps older size and color token aliases generating valid SKUs", () => {
-    expect(
-      generateSku("{SLUG}-{SIZE}-{COLOR}-{INDEX}", {
-        slug: "shirt",
-        size: "XL",
-        color: "red",
-        index: 1,
-      }),
-    ).toBe("SHIRT-XL-RED-001");
+  it("rejects retired size and color aliases instead of preserving ambiguous templates", () => {
+    expect(validateSkuTemplate("{SLUG}-{SIZE}-{COLOR}")).toEqual({
+      valid: false,
+      error: "Unknown SKU variable: SIZE",
+    });
   });
 
   it("previews the new option token vocabulary", () => {

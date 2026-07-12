@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { checkAndAlertLowStock } from "../inventory/alerts";
-import { applyVariantEditPlan, bulkCreateVariants } from "./products.variants";
+import {
+    applyVariantEditPlan,
+    bulkCreateVariants,
+    reconcileVariantLowStockAlerts,
+} from "./products.variants";
 
 vi.mock("../inventory/alerts", () => ({
     checkAndAlertLowStock: vi.fn().mockResolvedValue(null),
@@ -220,8 +224,8 @@ describe("atomic product variant edit plans", () => {
             expect.objectContaining({ id: "var_existing", stock: 9, version: 3, stockVersion: 4 }),
         ]);
         expect(result.aggregateRevision).toBe(2);
-        expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, result.created[0]?.id);
         expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "var_existing");
+        expect(checkAndAlertLowStock).toHaveBeenCalledTimes(1);
     });
 
     it("routes bulk creates through the same initial-stock ledger transaction", async () => {
@@ -263,6 +267,26 @@ describe("atomic product variant edit plans", () => {
 
         expect(batchCalls).toHaveLength(1);
         expect(checkAndAlertLowStock).not.toHaveBeenCalled();
+    });
+
+    it("reconciles large low-stock sets in bounded sequential waves", async () => {
+        let active = 0;
+        let peak = 0;
+        vi.mocked(checkAndAlertLowStock).mockImplementation(async () => {
+            active += 1;
+            peak = Math.max(peak, active);
+            await Promise.resolve();
+            active -= 1;
+            return null;
+        });
+
+        await reconcileVariantLowStockAlerts(
+            {} as never,
+            [...Array.from({ length: 12 }, (_, index) => `var_${index}`), "var_0"],
+        );
+
+        expect(checkAndAlertLowStock).toHaveBeenCalledTimes(12);
+        expect(peak).toBeLessThanOrEqual(5);
     });
 
     it("rejects duplicate normalized option combinations before batching", async () => {

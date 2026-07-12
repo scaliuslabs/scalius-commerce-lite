@@ -167,6 +167,8 @@ export const ProductImagesSection = memo(function ProductImagesSection({
             type="button"
             onClick={() => setIsOpen(!isOpen)}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            aria-expanded={isOpen}
+            aria-controls="product-media-content"
           >
             <ChevronDown
               className={cn(
@@ -190,6 +192,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       <button
                         type="button"
                         className="text-muted-foreground hover:text-foreground"
+                        aria-label="How option image mapping works"
                       >
                         <Info className="h-3.5 w-3.5" />
                       </button>
@@ -263,7 +266,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
         </div>
       </CardHeader>
       {isOpen && (
-        <CardContent className="space-y-2 px-3 pb-3">
+        <CardContent id="product-media-content" className="space-y-2 px-3 pb-3">
           <FormField
             control={form.control}
             name="images"

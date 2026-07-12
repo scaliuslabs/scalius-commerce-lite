@@ -117,8 +117,8 @@ export type VariantFormValues = z.infer<typeof variantFormSchema>;
 // --- Bulk Generation Types ---
 
 export interface BulkVariantOptions {
-  sizes: string[];
-  colors: string[];
+  option1Values: string[];
+  option2Values: string[];
   basePrice: number;
   baseStock: number;
   trackInventory: boolean;

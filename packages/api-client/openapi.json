@@ -98364,7 +98364,7 @@
                     "maximum": 1000000000000
                   },
                   "stock": {
-                    "type": "number",
+                    "type": "integer",
                     "minimum": 0
                   },
                   "trackInventory": {
@@ -99536,7 +99536,7 @@
                     "maximum": 1000000000000
                   },
                   "stock": {
-                    "type": "number",
+                    "type": "integer",
                     "minimum": 0
                   },
                   "trackInventory": {
@@ -100637,6 +100637,7 @@
                         "discountAmount"
                       ]
                     },
+                    "maxItems": 150,
                     "default": []
                   },
                   "updates": {
@@ -100701,6 +100702,7 @@
                         "id"
                       ]
                     },
+                    "maxItems": 150,
                     "default": []
                   },
                   "expectedAggregateRevision": {
@@ -101448,7 +101450,7 @@
                           "maximum": 1000000000000
                         },
                         "stock": {
-                          "type": "number",
+                          "type": "integer",
                           "minimum": 0
                         },
                         "trackInventory": {
@@ -101510,7 +101512,8 @@
                         "discountAmount"
                       ]
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 150
                   },
                   "expectedAggregateRevision": {
                     "type": "integer",

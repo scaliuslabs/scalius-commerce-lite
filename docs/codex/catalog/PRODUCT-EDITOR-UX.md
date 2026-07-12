@@ -25,6 +25,196 @@ Authenticated production inspection at 1440×686 and an emulated 390×844 viewpo
 - The action vocabulary is direct: Edit Product, Save Product, Discard, New Product.
 - Variant media mapping is visible beside the gallery without changing the buyer-facing product layout.
 
+### Comparative creation-flow inspection — 2026-07-12
+
+The authenticated Shopify product-creation page was inspected beside the live
+Scalius editor at the same desktop viewport. This is interaction research, not
+a request to reproduce Shopify's branding or component styling.
+
+Observed Shopify structure:
+
+- The main column owns title/description, media, category, price, inventory,
+  shipping, variants, metafields, and the search listing. The narrow rail owns
+  status, publishing, and product organization.
+- The save surface stays visible while the page scrolls. Cards are compact, but
+  optional fields such as SKU, barcode, cost, unit price, customs data, and
+  search copy use progressive disclosure instead of disappearing from the
+  workflow.
+- A simple product becomes an optioned product from the same Variants section.
+  The merchant enters an arbitrary option name and its values, can add another
+  option, and sees combinations generated from that definition. There is no
+  separate conceptual "advanced product" mode to discover.
+- Physical-versus-non-physical is a fulfillment fact. Turning off physical
+  shipping is independent from whether a product has options.
+- Product defaults supply price, inventory, and shipping data until option SKUs
+  take ownership of those facts.
+
+Authoritative behavior references:
+
+- Shopify documents arbitrary per-product option names, up to three axes, exact
+  combination uniqueness, and generated combinations from option values in
+  [Adding variants](https://help.shopify.com/en/manual/products/variants/add-variants).
+- Shopify documents the shift of price/inventory/shipping authority from the
+  product form to individual variants in
+  [Product details](https://help.shopify.com/en/manual/products/details).
+- Shopify treats `Physical product` as the switch that controls shipping facts,
+  while non-physical products avoid shipping charges; see
+  [Product details page](https://help.shopify.com/en/manual/products/details/product-details-page)
+  and [Selling services or digital products](https://help.shopify.com/en/manual/products/digital-service-product/selling-services-or-digital-products).
+- Figma's design-system guidance makes hierarchy, progressive disclosure,
+  consistency, accessibility, proximity, and alignment explicit interface
+  principles; see
+  [Seven essential UI design principles](https://www.figma.com/resource-library/ui-design-principles/).
+
+### Newly confirmed Scalius defects
+
+1. **The Media gap is architectural.** The main/rail grid waits for a rail that
+   contains Status, Organization, Pricing, SEO, option mapping, and Attributes.
+   The main column ends after Media, producing a large dead region above the
+   action bar. Padding changes cannot fix this.
+2. **The information architecture is inverted.** Pricing, option definition,
+   attributes, and search listing are product-composition work and belong in
+   the main column. Only status/publication and organization belong in the
+   narrow rail.
+3. **The simple-to-optioned transition hides the matrix generator.** `Set up
+   options` enters a one-row editor and intentionally suppresses the toolbar,
+   so the fastest path is unavailable at exactly the moment it is most useful.
+4. **Option naming is separated from option creation.** Merchant-defined labels
+   exist, but they are hidden in a collapsed `Catalog Option Mapping` card whose
+   copy incorrectly says the labels affect feeds only. The storefront, admin,
+   feed, and schema all consume these names.
+5. **The generator is visually large but operationally shallow.** It requires a
+   two-column desktop dialog, starts price and stock at zero, cannot edit the
+   generated rows before submission, and buries common work among discount,
+   weight, barcode, and SKU-template controls.
+6. **Generated identities are unstable.** `{RANDOM}` SKUs and generated EAN-13
+   values are recomputed whenever a dependency such as price or stock changes.
+   A merchant can review one identity and submit another.
+7. **Conflict detection is incomplete in the browser.** Existing SKU checks are
+   exact-case only and do not detect normalized collisions or duplicate SKUs
+   produced inside the preview. Option values are also deduplicated by exact
+   spelling even though storage uniqueness is normalized.
+8. **Initial product creation cannot define option SKUs.** The API always creates
+   the protected default SKU, redirects to edit, and only then permits option
+   creation. This adds an unnecessary save-and-redirect boundary and prevents a
+   truthful single-review create workflow.
+9. **Product fulfillment type is implicit.** Scalius cannot yet express that an
+   item is digital or a service and does not require shipping. Weight alone is
+   not a safe proxy.
+
+## Product editor redesign decisions
+
+These decisions are the implementation contract for later agents. Do not
+replace them with a theme-only redesign.
+
+### Page composition and scrolling
+
+- Keep Scalius's compact two-column desktop shell and persistent bottom action
+  bar. Do not copy another product's chrome.
+- Main column order: Details → Media → Pricing → Product options → Attributes /
+  additional information → Search and discovery. Edit pages place the SKU /
+  option matrix directly after Product options.
+- Narrow rail: Status/readiness and Organization only. It may become sticky when
+  its measured height fits the viewport; never create an independently scrolling
+  form rail.
+- On mobile, preserve one document flow in the same semantic order. The primary
+  action remains visible and no section receives its own hidden scroll region.
+- Remove the dead Media gap by moving composition cards, not by adding a minimum
+  height, spacer, negative margin, or viewport-specific magic number.
+
+### Product type and fulfillment
+
+- A product remains a merchandising container and every sellable identity
+  remains a persisted SKU.
+- `simple` versus `optioned` describes SKU topology only. It must never imply
+  physical, digital, service, subscription, preorder, or made-to-order behavior.
+- Add an explicit fulfillment fact in a focused domain migration before exposing
+  digital/service UI. The preferred minimal authority is `requiresShipping`
+  (default true) on the sellable SKU, with product-level defaults used only when
+  creating SKUs. Do not infer it from weight, stock tracking, category, or the
+  absence of delivery methods.
+- Digital delivery and service booking require their own fulfillment contracts;
+  a `Digital` label alone must not promise downloads or booking behavior that the
+  order system cannot perform.
+
+### Option definition and topology
+
+- The merchant creates `option name + ordered values` together. Size and Color
+  are examples, never fixed meanings. Rename the current mapping surface to
+  `Option names` and make schema/feed mapping secondary progressive disclosure.
+- The editor and storefront must read the same saved option labels. Unsaved label
+  changes must be reflected in the open option editor without remounting it.
+- The current two-axis storage model may be polished now, but a third axis must
+  not be faked in JSON or overloaded into one string. Supporting more axes
+  requires normalized option-definition, option-value, and SKU-combination
+  tables plus a deliberate storefront/API migration.
+- A topology transition keeps the protected default SKU for audit/history and
+  creates only non-default customer-option SKUs. No option row may reuse the
+  default SKU identity.
+
+### Simple → optioned workflow
+
+- Replace `Basic/Advanced` thinking with one `Product options` workflow.
+- From a simple SKU, present two equally clear actions: `Add one option` and
+  `Generate combinations`. Both save any dirty simple-SKU fields first or
+  explicitly preserve them as generator defaults.
+- `Generate combinations` must be available before the first option row exists.
+  The protected simple SKU participates in normalized SKU/barcode conflict checks
+  but never appears as a generated option row.
+- Successful generation moves directly to the option table, announces how many
+  rows were created, and leaves the product-level draft intact.
+
+### Combination generator
+
+- Use a compact three-part flow in one dialog: **Values**, **Defaults**, and
+  **Review**. Values and the review count stay visible; secondary defaults use
+  progressive disclosure.
+- Seed price, track-stock policy, weight, discount, and SKU prefix from the
+  current product/default SKU. Show existing on-hand stock as transition context,
+  but never clone it into every generated combination: matrix rows start at zero
+  and the merchant must allocate exactly the current tracked total before the
+  first option topology can be created. The protected default row becomes a
+  dormant audit/revert identity and must disappear from inventory, scanner, and
+  low-stock projections while customer-option SKUs exist. A one-row transition
+  may prefill the current total because it is an unambiguous allocation.
+- Accept Enter, comma, newline, and pasted spreadsheet columns. Trim and
+  case-fold for duplicate detection while preserving the first display spelling.
+- Show the Cartesian count before materializing rows. Use one core-exported,
+  server-enforced atomic-plan limit; do not invent a UI-only limit. The current
+  ceiling is 150 total creates/updates: a worst-case stock edit consumes three
+  atomic statements and up to three low-stock lifecycle queries per row, which
+  stays below D1's 1,000-query paid-plan invocation limit with preflight
+  headroom. Recalculate this ceiling whenever the mutation or alert plan changes;
+  see [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+- Generated SKU and barcode identities are stable for the lifetime of the draft.
+  Editing price, stock, weight, or discount must not change them. Regeneration is
+  an explicit action.
+- Detect normalized conflicts against existing SKUs/barcodes, within the preview,
+  and against existing normalized option combinations. Explain the exact rows
+  blocking creation.
+- Review rows are editable before submission and can be individually excluded.
+  Provide intentional bulk operations for price, stock policy, stock, weight,
+  discount, barcode generation, and SKU pattern instead of forcing repetitive
+  row edits.
+- Presets describe value sets (`Apparel sizes`, `Pack quantities`, `Finishes`),
+  not hard-coded axis semantics. A preset never renames a merchant's option.
+- Keep CSV import/export as a separate large-catalog path. The generator is for
+  understandable combinations, not an unbounded substitute for import.
+- The final action says exactly what happens: `Create N options`. Errors remain
+  inside the dialog; a failed request never closes it or discards the draft.
+
+### Initial product creation target
+
+- The target create contract is one atomic `createProductAggregate` request that
+  accepts either one protected default SKU or a validated option topology plus
+  its SKU rows, media associations, attributes, and product fields.
+- Do not emulate this with a product create followed by hidden client-side variant
+  requests: a partial failure would leave a product different from the reviewed
+  draft.
+- Until that contract lands, the create page must state the save boundary
+  honestly and make the post-create option action immediate. This remains an
+  open architecture item after the current edit-flow release.
+
 ### P1 workflow defects resolved in batch 5
 
 - Product and SKU-composition writes now use one mandatory aggregate compare-and-swap revision and return its successor.
