@@ -243,9 +243,30 @@ describe("option matrix editor density and stock disclosure", () => {
   });
 
   it("uses exact selected-SKU assignments and an explicit primary fallback", () => {
-    expect(editorSource).toContain("Use primary image");
-    expect(editorSource).toContain("Set image for selected SKUs");
-    expect(editorSource).toContain("selected.forEach((id) => onChange(id, { imageId }))");
+    expect(editorSource).toContain("Product primary (fallback)");
+    expect(editorSource).toContain("Using product primary fallback");
+    expect(editorSource).toContain('title="Product primary fallback"');
+    expect(editorSource).toContain("effectiveImage");
+    expect(editorSource).toContain("selected ?? (usesPrimaryFallback ? primary : undefined)");
+    expect(editorSource).toContain("Clears this SKU's exact image");
     expect(editorSource).not.toContain("variantImageAxis");
+  });
+
+  it("stages bulk image assignment and clear through the shared Apply action", () => {
+    expect(editorSource).toContain("const [bulkImageId, setBulkImageId]");
+    expect(editorSource).toContain("...(bulkImageId !== undefined ? { imageId: bulkImageId } : {})");
+    expect(editorSource).toContain('value={bulkImageId}');
+    expect(editorSource).toContain("allowNoChange");
+    expect(editorSource).toContain("onChange={setBulkImageId}");
+    expect(editorSource).toContain('bulkImageId === undefined');
+    expect(editorSource).toContain("setBulkImageId(undefined)");
+    expect(editorSource).not.toContain("selected.forEach((id) => onChange(id, { imageId }))");
+  });
+
+  it("keeps empty media and image controls explicit and accessible", () => {
+    expect(editorSource).toContain("Add product media first. Fallback SKUs will use the primary image once one exists.");
+    expect(editorSource).toContain('aria-label="Use product primary image fallback"');
+    expect(editorSource).toContain("as the exact SKU image");
+    expect(editorSource).toContain("No image change staged");
   });
 });
