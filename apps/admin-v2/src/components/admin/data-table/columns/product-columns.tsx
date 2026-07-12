@@ -3,6 +3,7 @@ import { Badge } from "~/components/ui/badge";
 import { Image as ImageIcon, Copy } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 
@@ -31,7 +32,7 @@ export interface ProductListItem {
 
 interface ProductColumnOptions {
   showTrashed: boolean;
-  symbol: string;
+  formatPrice: (price: number) => string;
   canSelect: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -42,10 +43,6 @@ interface ProductColumnOptions {
   onDelete: (product: ProductListItem) => void;
   onRestore: (product: ProductListItem) => void;
   onPermanentDelete: (product: ProductListItem) => void;
-}
-
-function formatPrice(price: number, symbol: string): string {
-  return `${symbol}${price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function copyProductShortcode(slug: string) {
@@ -106,12 +103,13 @@ export function getProductColumns(
         const isTrashed = opts.showTrashed;
         return (
           <div>
-            <div
-              className="font-medium text-sm text-foreground hover:underline cursor-pointer"
-              onClick={() => opts.onView(product.id)}
+            <Link
+              to="/admin/products/$productId"
+              params={{ productId: product.id }}
+              className="font-medium text-sm text-foreground hover:underline"
             >
               {product.name || "Unnamed Product"}
-            </div>
+            </Link>
             <div className="text-sm text-muted-foreground">
               SKU: {product.sku || "N/A"}
             </div>
@@ -167,13 +165,13 @@ export function getProductColumns(
         return (
           <div>
             <div className="font-medium text-sm text-foreground">
-              {formatPrice(product.price, opts.symbol)}
+              {opts.formatPrice(product.price)}
             </div>
             {product.discountType === "flat" &&
             product.discountAmount != null &&
             product.discountAmount > 0 ? (
               <div className="text-xs text-green-600 dark:text-green-500">
-                {formatPrice(product.discountAmount, opts.symbol)} off
+                {opts.formatPrice(product.discountAmount)} off
               </div>
             ) : product.discountPercentage != null &&
               product.discountPercentage > 0 ? (

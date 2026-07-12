@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getProductBySlug: vi.fn(),
+  getLayoutData: vi.fn(),
   validateCartItems: vi.fn(),
 }));
 
@@ -10,7 +11,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/api/storefront", () => ({
-  getLayoutData: vi.fn(),
+  getLayoutData: mocks.getLayoutData,
 }));
 
 vi.mock("@/lib/api/runtime-env", () => ({
@@ -88,6 +89,8 @@ function extractQuickBuyData(html: string) {
 describe("/buy/[slug]", () => {
   beforeEach(() => {
     mocks.getProductBySlug.mockReset();
+    mocks.getLayoutData.mockReset();
+    mocks.getLayoutData.mockResolvedValue(undefined);
     mocks.validateCartItems.mockReset();
     mocks.validateCartItems.mockResolvedValue(validCartValidation());
   });
@@ -305,6 +308,49 @@ describe("/buy/[slug]", () => {
         { name: "Packaging", label: "Reusable tin" },
       ],
     });
+  });
+
+  it("uses the shared precision-aware pricing authority for quick buy", async () => {
+    mocks.getLayoutData.mockResolvedValueOnce({
+      currency: { code: "KWD", symbol: "KD", usdExchangeRate: 1, decimalPlaces: 3 },
+    });
+    mocks.getProductBySlug.mockResolvedValueOnce({
+      product: {
+        id: "prod_1",
+        slug: "precision-lamp",
+        name: "Precision Lamp",
+        discountedPrice: 1.005,
+        price: 1.005,
+        discountType: "percentage",
+        discountAmount: null,
+        discountPercentage: 10,
+        freeDelivery: false,
+        hasVariants: true,
+        imageUrl: null,
+      },
+      images: [],
+      variants: [{
+        ...simpleDefaultVariant(),
+        price: 1.005,
+        discountType: null,
+        discountAmount: null,
+        discountPercentage: null,
+      }],
+      category: null,
+    });
+    mocks.validateCartItems.mockResolvedValueOnce(
+      validCartValidation({ unitPrice: 0.905 }),
+    );
+
+    const response = await GET({
+      params: { slug: "precision-lamp" },
+      url: new URL("https://storefront.example.test/buy/precision-lamp"),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(mocks.validateCartItems).toHaveBeenCalledWith([
+      expect.objectContaining({ price: 0.905 }),
+    ]);
   });
 
   it("does not create quick-buy cart data when validation reports out of stock", async () => {

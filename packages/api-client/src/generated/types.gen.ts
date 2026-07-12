@@ -698,7 +698,7 @@ export type GetApiV1CollectionsResponses = {
             collections: Array<{
                 id: string;
                 name: string;
-                type: string;
+                presentation: 'grid' | 'carousel';
                 config: {
                     [key: string]: unknown;
                 };
@@ -771,7 +771,7 @@ export type GetApiV1CollectionsByIdResponses = {
             collection: {
                 id: string;
                 name: string;
-                type: string;
+                presentation: 'grid' | 'carousel';
                 config: {
                     [key: string]: unknown;
                 };
@@ -7923,7 +7923,7 @@ export type GetApiV1AdminCollectionsData = {
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'name' | 'presentation' | 'isActive' | 'updatedAt' | 'sortOrder';
         /**
          * Sort order
          */
@@ -8013,7 +8013,7 @@ export type GetApiV1AdminCollectionsResponses = {
             collections: Array<{
                 id: string;
                 name: string;
-                type: 'manual' | 'dynamic';
+                presentation: 'grid' | 'carousel';
                 config: string;
                 sortOrder: number;
                 isActive: boolean;
@@ -8039,12 +8039,13 @@ export type GetApiV1AdminCollectionsResponse = GetApiV1AdminCollectionsResponses
 export type PostApiV1AdminCollectionsData = {
     body?: {
         name: string;
-        type: 'manual' | 'dynamic';
+        presentation: 'grid' | 'carousel';
         isActive: boolean;
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         config: {
+            source: 'manual' | 'dynamic';
             categoryIds?: Array<string>;
             productIds?: Array<string>;
             featuredProductId?: string;
@@ -8138,7 +8139,7 @@ export type PostApiV1AdminCollectionsResponses = {
         data: {
             id: string;
             name: string;
-            type: 'manual' | 'dynamic';
+            presentation: 'grid' | 'carousel';
             config: string;
             sortOrder: number;
             isActive: boolean;
@@ -8159,7 +8160,7 @@ export type GetApiV1AdminCollectionsByIdsData = {
     path?: never;
     query?: {
         /**
-         * Comma-separated collection IDs. At most 100 IDs are resolved.
+         * Comma-separated collection IDs. At most 90 IDs are resolved.
          */
         ids?: string;
     };
@@ -8247,7 +8248,7 @@ export type GetApiV1AdminCollectionsByIdsResponses = {
             collections: Array<{
                 id: string;
                 name: string;
-                type: 'manual' | 'dynamic';
+                presentation: 'grid' | 'carousel';
             }>;
         };
     };
@@ -8926,7 +8927,7 @@ export type GetApiV1AdminCollectionsByIdResponses = {
         data: {
             id: string;
             name: string;
-            type: 'manual' | 'dynamic';
+            presentation: 'grid' | 'carousel';
             config: string;
             sortOrder: number;
             isActive: boolean;
@@ -8945,12 +8946,13 @@ export type GetApiV1AdminCollectionsByIdResponse = GetApiV1AdminCollectionsByIdR
 export type PutApiV1AdminCollectionsByIdData = {
     body?: {
         name?: string;
-        type?: 'manual' | 'dynamic';
+        presentation?: 'grid' | 'carousel';
         isActive?: boolean;
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
         config?: {
+            source?: 'manual' | 'dynamic';
             categoryIds?: Array<string>;
             productIds?: Array<string>;
             featuredProductId?: string;
@@ -9046,7 +9048,7 @@ export type PutApiV1AdminCollectionsByIdResponses = {
         data: {
             id: string;
             name: string;
-            type: 'manual' | 'dynamic';
+            presentation: 'grid' | 'carousel';
             config: string;
             sortOrder: number;
             isActive: boolean;
@@ -13045,27 +13047,31 @@ export type GetApiV1AdminInventoryData = {
         /**
          * Section type
          */
-        section?: string;
+        section?: 'variants' | 'movements' | 'alerts';
         /**
-         * Search term
+         * Product, SKU, or order search term
          */
         search?: string;
         /**
-         * Status filter
+         * Variant stock status filter
          */
-        status?: string;
+        status?: 'all' | 'low' | 'out' | 'reserved';
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Alert status filter
          */
-        alertStatus?: string;
+        alertStatus?: 'active' | 'acknowledged' | 'resolved' | 'all';
+        /**
+         * Movement type filter
+         */
+        movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted';
         /**
          * Sort field
          */
@@ -13109,6 +13115,18 @@ export type GetApiV1AdminInventoryResponses = {
                 newStock: number;
                 notes: string | null;
                 createdBy: string | null;
+                ledgerVersion: number;
+                pool: string | null;
+                reservationGeneration: number | null;
+                stockVersionBefore: number | null;
+                stockVersionAfter: number | null;
+                stockDelta: number | null;
+                previousReservedStock: number | null;
+                newReservedStock: number | null;
+                reservedStockDelta: number | null;
+                previousPreorderStock: number | null;
+                newPreorderStock: number | null;
+                preorderStockDelta: number | null;
                 createdAt: string | number;
                 variantSku: string | null;
                 productName: string | null;
@@ -13143,6 +13161,12 @@ export type GetApiV1AdminInventoryResponses = {
                 outOfStockCount: number;
                 lowStockCount: number;
             };
+            ledgerHealth?: {
+                legacyRows: number;
+                v2Rows: number;
+                v2Variants: number;
+                invalidV2Rows: number;
+            };
             [key: string]: unknown;
         };
     };
@@ -13157,7 +13181,7 @@ export type GetApiV1AdminInventoryAlertsData = {
         /**
          * Alert status
          */
-        status?: string;
+        status?: 'active' | 'acknowledged' | 'resolved' | 'all';
     };
     url: '/api/v1/admin/inventory/alerts';
 };
@@ -13345,7 +13369,7 @@ export type PostApiV1AdminInventoryStockAdjustData = {
          */
         variantId: string;
         /**
-         * Stock adjustment (positive=add, negative=remove)
+         * Whole-number stock adjustment (positive=add, negative=remove)
          */
         adjustment: number;
         /**
@@ -13409,7 +13433,7 @@ export type PostApiV1AdminInventoryStockSetData = {
          */
         variantId: string;
         /**
-         * New absolute stock value
+         * New absolute whole-number stock value
          */
         newStock: number;
         /**
@@ -27920,7 +27944,7 @@ export type PostApiV1AdminProductsData = {
                 trackInventory: boolean;
                 weight: number | null;
                 barcode: string | null;
-                barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+                barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
                 discountType: 'percentage' | 'flat';
                 discountPercentage: number | null;
                 discountAmount: number | null;
@@ -29038,7 +29062,7 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         stock: number;
         trackInventory?: boolean;
         barcode?: string | null;
-        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
@@ -29322,7 +29346,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         stock: number;
         trackInventory?: boolean;
         barcode?: string | null;
-        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+        barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
         discountAmount?: number | null;
@@ -29500,7 +29524,7 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             trackInventory: boolean;
             weight: number | null;
             barcode: string | null;
-            barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'custom' | null;
+            barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
             discountType: 'percentage' | 'flat';
             discountPercentage: number | null;
             discountAmount: number | null;

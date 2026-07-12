@@ -2,9 +2,66 @@
 
 Last updated: 2026-07-12
 
+## Inventory and catalog-settings hardening
+
+Status: implemented and locally verified; not deployed.
+
+- Relative adjustment and absolute stocktake reject fractional, unsafe, zero,
+  negative-result, and contradictory reason/direction input without rounding or
+  clamping the requested operation.
+- The compact admin dialog separates adjustments from physical counts, previews
+  signed availability deficits, preserves exact audit notes, and exposes named,
+  busy-state-aware controls.
+- Movement history has bounded server search/type filters, stable pagination,
+  order links, an indexed `(type, created_at)` path, and a complete documented
+  ledger-health response contract.
+- Inventory query enums/page sizes and scanner inputs now fail before D1 work;
+  successful writes retain targeted buyer/feed/sitemap/storefront cache
+  invalidation.
+- Currency code lock, atomic save, supported-code validation, order snapshots,
+  and UI lock copy were re-audited with no new mismatch found.
+- Remaining P1/P2 work is recorded in `INVENTORY.md`, especially adjustment
+  idempotency, alert inbox/acknowledgement UI, audit export/filter depth, and a
+  bounded atomic bulk-stocktake design.
+
+## Collections source and workflow hardening
+
+Status: implemented and locally verified; not deployed.
+
+- Added explicit manual-product versus dynamic-category content source and an
+  independent grid/carousel presentation column. Migration 0010 performs the
+  one-time demo-era conversion; runtime legacy inference was removed.
+- Buyer collection detail and homepage resolution now ignore stale selections
+  from the inactive source mode.
+- Manual membership has compact accessible move-up/down ordering, server-paged
+  product search, a 90-ID bound, and dirty-state-safe add/remove/reorder writes.
+- Active collections fail closed when their chosen source is empty. Ordinary
+  updates cannot mutate trash; hard delete is trash-only; bulk ID and reorder
+  payloads are bounded and validated below D1's parameter ceiling.
+- Collection presentation copy now names grid/carousel honestly instead of
+  conflating layout with membership semantics.
+- Deferred cross-slice work is recorded in ADMIN/STOREFRONT: paginated dynamic
+  category lookup, consistent destructive confirmation, and product/category
+  invalidation of collection detail API/HTML caches.
+
 ## Normalized option-matrix release
 
 Status: deployed and live-verified on 2026-07-12.
+
+### SKU subset and buyer-validation follow-up
+
+Status: implemented locally; pending deploy and live verification.
+
+- Active option SKUs may be a non-empty subset of the potential Cartesian
+  matrix. Duplicate combinations, unused option values, empty matrices, and
+  more than 150 potential combinations remain invalid.
+- The matrix supports single/bulk omission, restore-one/all, direct SKU images,
+  explicit discount modes, readable compact typography, and internal barcode
+  generation for new SKUs.
+- Root cause of the reported cart 500 was an unqualified outer SKU `id` in the
+  shared option-label SQL helper. D1 reported `ambiguous column name: id`;
+  qualification at the helper authority repairs cart validation and every
+  order/inventory/tax/customer projection using the same label expression.
 
 Implemented:
 

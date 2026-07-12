@@ -2059,8 +2059,12 @@
                               "name": {
                                 "type": "string"
                               },
-                              "type": {
-                                "type": "string"
+                              "presentation": {
+                                "type": "string",
+                                "enum": [
+                                  "grid",
+                                  "carousel"
+                                ]
                               },
                               "config": {
                                 "type": "object",
@@ -2096,7 +2100,7 @@
                             "required": [
                               "id",
                               "name",
-                              "type",
+                              "presentation",
                               "config",
                               "sortOrder",
                               "isActive",
@@ -2284,8 +2288,12 @@
                             "name": {
                               "type": "string"
                             },
-                            "type": {
-                              "type": "string"
+                            "presentation": {
+                              "type": "string",
+                              "enum": [
+                                "grid",
+                                "carousel"
+                              ]
                             },
                             "config": {
                               "type": "object",
@@ -2321,7 +2329,7 @@
                           "required": [
                             "id",
                             "name",
-                            "type",
+                            "presentation",
                             "config",
                             "sortOrder",
                             "isActive",
@@ -26593,6 +26601,13 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "name",
+                "presentation",
+                "isActive",
+                "updatedAt",
+                "sortOrder"
+              ],
               "default": "sortOrder",
               "description": "Sort field"
             },
@@ -26641,11 +26656,11 @@
                               "name": {
                                 "type": "string"
                               },
-                              "type": {
+                              "presentation": {
                                 "type": "string",
                                 "enum": [
-                                  "manual",
-                                  "dynamic"
+                                  "grid",
+                                  "carousel"
                                 ]
                               },
                               "config": {
@@ -26704,7 +26719,7 @@
                             "required": [
                               "id",
                               "name",
-                              "type",
+                              "presentation",
                               "config",
                               "sortOrder",
                               "isActive",
@@ -27018,11 +27033,11 @@
                     "minLength": 3,
                     "maxLength": 100
                   },
-                  "type": {
+                  "presentation": {
                     "type": "string",
                     "enum": [
-                      "manual",
-                      "dynamic"
+                      "grid",
+                      "carousel"
                     ]
                   },
                   "isActive": {
@@ -27043,10 +27058,19 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "dynamic"
+                        ]
+                      },
                       "categoryIds": {
                         "type": "array",
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
                         },
                         "maxItems": 90,
                         "default": []
@@ -27054,13 +27078,16 @@
                       "productIds": {
                         "type": "array",
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
                         },
                         "maxItems": 90,
                         "default": []
                       },
                       "featuredProductId": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 180
                       },
                       "maxProducts": {
                         "type": "integer",
@@ -27069,17 +27096,22 @@
                         "default": 8
                       },
                       "title": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 120
                       },
                       "subtitle": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 240
                       }
-                    }
+                    },
+                    "required": [
+                      "source"
+                    ]
                   }
                 },
                 "required": [
                   "name",
-                  "type",
+                  "presentation",
                   "isActive",
                   "config"
                 ]
@@ -27110,11 +27142,11 @@
                         "name": {
                           "type": "string"
                         },
-                        "type": {
+                        "presentation": {
                           "type": "string",
                           "enum": [
-                            "manual",
-                            "dynamic"
+                            "grid",
+                            "carousel"
                           ]
                         },
                         "config": {
@@ -27173,7 +27205,7 @@
                       "required": [
                         "id",
                         "name",
-                        "type",
+                        "presentation",
                         "config",
                         "sortOrder",
                         "isActive",
@@ -27453,10 +27485,10 @@
             "schema": {
               "type": "string",
               "default": "",
-              "description": "Comma-separated collection IDs. At most 100 IDs are resolved."
+              "description": "Comma-separated collection IDs. At most 90 IDs are resolved."
             },
             "required": false,
-            "description": "Comma-separated collection IDs. At most 100 IDs are resolved.",
+            "description": "Comma-separated collection IDs. At most 90 IDs are resolved.",
             "name": "ids",
             "in": "query"
           }
@@ -27489,18 +27521,18 @@
                               "name": {
                                 "type": "string"
                               },
-                              "type": {
+                              "presentation": {
                                 "type": "string",
                                 "enum": [
-                                  "manual",
-                                  "dynamic"
+                                  "grid",
+                                  "carousel"
                                 ]
                               }
                             },
                             "required": [
                               "id",
                               "name",
-                              "type"
+                              "presentation"
                             ]
                           }
                         }
@@ -27781,8 +27813,12 @@
                   "collectionIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",
@@ -28063,8 +28099,12 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -28341,8 +28381,12 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -28619,8 +28663,12 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -29198,17 +29246,22 @@
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
                         },
                         "sortOrder": {
-                          "type": "number"
+                          "type": "integer",
+                          "minimum": 0
                         }
                       },
                       "required": [
                         "id",
                         "sortOrder"
                       ]
-                    }
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -29532,11 +29585,11 @@
                         "name": {
                           "type": "string"
                         },
-                        "type": {
+                        "presentation": {
                           "type": "string",
                           "enum": [
-                            "manual",
-                            "dynamic"
+                            "grid",
+                            "carousel"
                           ]
                         },
                         "config": {
@@ -29595,7 +29648,7 @@
                       "required": [
                         "id",
                         "name",
-                        "type",
+                        "presentation",
                         "config",
                         "sortOrder",
                         "isActive",
@@ -29689,11 +29742,11 @@
                     "minLength": 3,
                     "maxLength": 100
                   },
-                  "type": {
+                  "presentation": {
                     "type": "string",
                     "enum": [
-                      "manual",
-                      "dynamic"
+                      "grid",
+                      "carousel"
                     ]
                   },
                   "isActive": {
@@ -29712,36 +29765,47 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "dynamic"
+                        ]
+                      },
                       "categoryIds": {
                         "type": "array",
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
                         },
-                        "maxItems": 90,
-                        "default": []
+                        "maxItems": 90
                       },
                       "productIds": {
                         "type": "array",
                         "items": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
                         },
-                        "maxItems": 90,
-                        "default": []
+                        "maxItems": 90
                       },
                       "featuredProductId": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 180
                       },
                       "maxProducts": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": 24,
-                        "default": 8
+                        "maximum": 24
                       },
                       "title": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 120
                       },
                       "subtitle": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 240
                       }
                     }
                   }
@@ -29773,11 +29837,11 @@
                         "name": {
                           "type": "string"
                         },
-                        "type": {
+                        "presentation": {
                           "type": "string",
                           "enum": [
-                            "manual",
-                            "dynamic"
+                            "grid",
+                            "carousel"
                           ]
                         },
                         "config": {
@@ -29836,7 +29900,7 @@
                       "required": [
                         "id",
                         "name",
-                        "type",
+                        "presentation",
                         "config",
                         "sortOrder",
                         "isActive",
@@ -43786,6 +43850,11 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "variants",
+                "movements",
+                "alerts"
+              ],
               "default": "variants",
               "description": "Section type"
             },
@@ -43797,29 +43866,36 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 120,
               "default": "",
-              "description": "Search term"
+              "description": "Product, SKU, or order search term"
             },
             "required": false,
-            "description": "Search term",
+            "description": "Product, SKU, or order search term",
             "name": "search",
             "in": "query"
           },
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "out",
+                "reserved"
+              ],
               "default": "all",
-              "description": "Status filter"
+              "description": "Variant stock status filter"
             },
             "required": false,
-            "description": "Status filter",
+            "description": "Variant stock status filter",
             "name": "status",
             "in": "query"
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -43830,8 +43906,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 100,
               "default": 50,
               "description": "Items per page"
@@ -43844,11 +43920,38 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "active",
+                "acknowledged",
+                "resolved",
+                "all"
+              ],
               "description": "Alert status filter"
             },
             "required": false,
             "description": "Alert status filter",
             "name": "alertStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "reserved",
+                "deducted",
+                "released",
+                "adjusted",
+                "restored",
+                "preorder_reserved",
+                "preorder_deducted"
+              ],
+              "default": "all",
+              "description": "Movement type filter"
+            },
+            "required": false,
+            "description": "Movement type filter",
+            "name": "movementType",
             "in": "query"
           },
           {
@@ -43995,6 +44098,53 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "ledgerVersion": {
+                                "type": "integer"
+                              },
+                              "pool": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "reservationGeneration": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "stockVersionBefore": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "stockVersionAfter": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "stockDelta": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "previousReservedStock": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "newReservedStock": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "reservedStockDelta": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "previousPreorderStock": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "newPreorderStock": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "preorderStockDelta": {
+                                "type": "integer",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -44024,6 +44174,18 @@
                               "newStock",
                               "notes",
                               "createdBy",
+                              "ledgerVersion",
+                              "pool",
+                              "reservationGeneration",
+                              "stockVersionBefore",
+                              "stockVersionAfter",
+                              "stockDelta",
+                              "previousReservedStock",
+                              "newReservedStock",
+                              "reservedStockDelta",
+                              "previousPreorderStock",
+                              "newPreorderStock",
+                              "preorderStockDelta",
                               "createdAt",
                               "variantSku",
                               "productName"
@@ -44174,6 +44336,33 @@
                             "outOfStockCount",
                             "lowStockCount"
                           ]
+                        },
+                        "ledgerHealth": {
+                          "type": "object",
+                          "properties": {
+                            "legacyRows": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "v2Rows": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "v2Variants": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "invalidV2Rows": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "legacyRows",
+                            "v2Rows",
+                            "v2Variants",
+                            "invalidV2Rows"
+                          ]
                         }
                       },
                       "additionalProperties": {
@@ -44207,6 +44396,12 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "active",
+                "acknowledged",
+                "resolved",
+                "all"
+              ],
               "default": "active",
               "description": "Alert status"
             },
@@ -44423,7 +44618,9 @@
                 "type": "object",
                 "properties": {
                   "delta": {
-                    "type": "number"
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
                   },
                   "reason": {
                     "type": "string",
@@ -44437,7 +44634,8 @@
                     ]
                   },
                   "notes": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 500
                   },
                   "pool": {
                     "type": "string",
@@ -44604,6 +44802,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
+              "maxLength": 256,
               "description": "Barcode or SKU value to search for"
             },
             "required": true,
@@ -44801,11 +45000,14 @@
                     "description": "Variant ID"
                   },
                   "adjustment": {
-                    "type": "number",
-                    "description": "Stock adjustment (positive=add, negative=remove)"
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Whole-number stock adjustment (positive=add, negative=remove)"
                   },
                   "reason": {
                     "type": "string",
+                    "maxLength": 500,
                     "description": "Reason for adjustment"
                   }
                 },
@@ -44971,12 +45173,14 @@
                     "description": "Variant ID"
                   },
                   "newStock": {
-                    "type": "number",
+                    "type": "integer",
                     "minimum": 0,
-                    "description": "New absolute stock value"
+                    "maximum": 9007199254740991,
+                    "description": "New absolute whole-number stock value"
                   },
                   "reason": {
                     "type": "string",
+                    "maxLength": 500,
                     "description": "Reason for stocktake"
                   }
                 },
@@ -94890,6 +95094,7 @@
                                 "upc",
                                 "isbn",
                                 "gtin",
+                                "code128",
                                 "custom",
                                 null
                               ]
@@ -98440,6 +98645,7 @@
                       "upc",
                       "isbn",
                       "gtin",
+                      "code128",
                       "custom",
                       null
                     ]
@@ -99691,6 +99897,7 @@
                       "upc",
                       "isbn",
                       "gtin",
+                      "code128",
                       "custom",
                       null
                     ]
@@ -100836,6 +101043,7 @@
                             "upc",
                             "isbn",
                             "gtin",
+                            "code128",
                             "custom",
                             null
                           ]
@@ -105006,7 +105214,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 2
+                    "minLength": 2,
+                    "maxLength": 100
                   },
                   "slug": {
                     "type": "string",
@@ -105020,7 +105229,9 @@
                   "options": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
                     },
                     "maxItems": 500
                   }
@@ -105441,7 +105652,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 2
+                    "minLength": 2,
+                    "maxLength": 100
                   },
                   "slug": {
                     "type": "string",
@@ -105455,7 +105667,9 @@
                     "type": "array",
                     "nullable": true,
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
                     },
                     "maxItems": 500
                   }
@@ -106437,9 +106651,11 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",
@@ -106720,9 +106936,11 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
+                      "type": "string",
+                      "minLength": 1
                     },
-                    "minItems": 1
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "permanent": {
                     "type": "boolean",

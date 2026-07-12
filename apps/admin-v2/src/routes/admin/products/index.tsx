@@ -42,6 +42,8 @@ import { ProductToolbar } from "~/components/admin/data-table/toolbars/ProductTo
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { StatCard } from "~/components/admin/shared/StatCard";
+import { ProductMobileRow } from "~/components/admin/product-list/ProductMobileRow";
+import type { Row } from "@tanstack/react-table";
 
 const ProductDeleteDialog = lazy(() =>
   import("./-ProductDeleteDialog").then((module) => ({
@@ -127,7 +129,7 @@ interface Category {
 function ProductsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { symbol } = useCurrency();
+  const { formatPrice } = useCurrency();
   const { products: productActions } = useCatalogActionPermissions();
   const showTrashed = search.trashed;
 
@@ -241,7 +243,7 @@ function ProductsPage() {
     () =>
       getProductColumns({
         showTrashed,
-        symbol,
+        formatPrice,
         canSelect: productActions.canBulkDelete,
         canEdit: productActions.canEdit,
         canDelete: productActions.canDelete,
@@ -255,7 +257,7 @@ function ProductsPage() {
       }),
     [
       showTrashed,
-      symbol,
+      formatPrice,
       productActions,
       handleView,
       handleEdit,
@@ -378,6 +380,41 @@ function ProductsPage() {
     />
   );
 
+  const mobileCardRenderer = useCallback(
+    (row: Row<ProductListItem>) => {
+      const product = row.original;
+      return (
+        <ProductMobileRow
+          product={product}
+          selected={row.getIsSelected()}
+          showTrashed={showTrashed}
+          canSelect={productActions.canBulkDelete}
+          canEdit={productActions.canEdit}
+          canDelete={productActions.canDelete}
+          canRestore={productActions.canRestore}
+          canPermanentDelete={productActions.canPermanentDelete}
+          formatPrice={formatPrice}
+          onSelectedChange={(selected) => row.toggleSelected(selected)}
+          onView={() => handleView(product.id)}
+          onEdit={() => handleEdit(product.id)}
+          onDelete={() => handleDelete(product)}
+          onRestore={() => handleRestore(product)}
+          onPermanentDelete={() => handlePermanentDelete(product)}
+        />
+      );
+    },
+    [
+      showTrashed,
+      productActions,
+      formatPrice,
+      handleView,
+      handleEdit,
+      handleDelete,
+      handleRestore,
+      handlePermanentDelete,
+    ],
+  );
+
   // ── Render ────────────────────────────────────────────────────
 
   return (
@@ -431,7 +468,7 @@ function ProductsPage() {
           </div>
 
           {stats && !showTrashed && (
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-1.5 lg:grid-cols-4">
               <StatCard
                 title="Total Products"
                 value={displayStats.totalProducts}
@@ -474,6 +511,7 @@ function ProductsPage() {
             onRetry={() => void refetch()}
             toolbar={toolbar}
             itemLabel="products"
+            mobileCardRenderer={mobileCardRenderer}
             emptyState={{
               icon: Package,
               title: showTrashed

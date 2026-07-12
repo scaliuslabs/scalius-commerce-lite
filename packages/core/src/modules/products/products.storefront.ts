@@ -24,6 +24,7 @@ import type { Database } from "@scalius/database/client";
 import {
     publicProductBaseConditions,
     publicProductHasBuyerResolvableSku,
+    publicProductHasPrimaryDiscoveryImage,
     normalizeDefaultSkuOptions,
 } from "./products.public-eligibility";
 import {
@@ -821,6 +822,7 @@ export async function getStorefrontFeedProducts(
         includeCategorySearchMatches: true,
     }, buyerPricing);
     conditions.push(eq(products.excludeFromProductFeed, false));
+    conditions.push(publicProductHasPrimaryDiscoveryImage());
     const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
     const offset = (page - 1) * limit;
 

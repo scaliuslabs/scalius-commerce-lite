@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isCatalogDiscoveryImageSource,
   normalizeCatalogDiscoveryBaseUrl,
   resolveCatalogDiscoveryImageUrl,
 } from "./catalog-discovery-media";
@@ -55,6 +56,14 @@ describe("catalog discovery media helpers", () => {
       "products/\u0000fish.jpg",
     ]) {
       expect(resolveCatalogDiscoveryImageUrl(value, "https://shop.example.com")).toBeNull();
+      expect(isCatalogDiscoveryImageSource(value)).toBe(false);
     }
+  });
+
+  it("accepts buyer-resolvable persisted image sources", () => {
+    expect(isCatalogDiscoveryImageSource("/products/fish.jpg")).toBe(true);
+    expect(isCatalogDiscoveryImageSource("products/fish.jpg")).toBe(true);
+    expect(isCatalogDiscoveryImageSource("https://cdn.example.com/fish.jpg")).toBe(true);
+    expect(isCatalogDiscoveryImageSource("http://cdn.example.com/fish.jpg")).toBe(true);
   });
 });

@@ -103,6 +103,8 @@ describe("public product SKU eligibility", () => {
             reservedStock: 0,
             isDefault: true,
             trackInventory: false,
+            barcode: "SCALIUS:C128:default_prod_1",
+            barcodeType: "code128",
             deletedAt: null,
         });
     });
