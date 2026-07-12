@@ -18,8 +18,6 @@ import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/err
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     buyerResolvableCategoryProductExists,
-    buildCategoryPublishReadyGuard,
-    CATEGORY_PUBLISH_NOT_READY,
     getCategoryPublishReadiness,
 } from "./categories.publication";
 import {
@@ -28,7 +26,6 @@ import {
     categoryClaimIdsCondition,
     normalizeCategoryRevisionClaims,
     rethrowCategoryRevisionConflict,
-    revisionResult,
 } from "./categories.revision";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -398,74 +395,61 @@ export async function updateCategory(
         throw new ConflictError("A category with this slug already exists, including in trash.");
     }
 
+    const claims = [{ id, expectedRevision: data.expectedRevision }];
+    if (data.status !== "published") {
+        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+    }
+    const lifecycleCondition = data.status === "published"
+        ? buyerResolvableCategoryProductExists(id)
+        : sql`NOT EXISTS (
+            SELECT 1 FROM ${collections}
+            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
+        )`;
+
     try {
-        const claims = [{ id, expectedRevision: data.expectedRevision }];
-        const statements: SQLiteBatchItem[] = [
-            buildCategoryRevisionGuard(db, claims, "active"),
-        ];
-        if (data.status === "published") {
-            statements.push(buildCategoryPublishReadyGuard(db, id));
-        } else {
+        const updated = await db
+            .update(categories)
+            .set({
+                name: data.name,
+                description: data.description,
+                slug: data.slug,
+                imageUrl: data.image?.url || null,
+                metaTitle: data.metaTitle,
+                metaDescription: data.metaDescription,
+                canonicalPath: data.canonicalPath ?? null,
+                noIndex: data.noIndex ?? false,
+                excludeFromSitemap: data.excludeFromSitemap ?? false,
+                status: data.status,
+                revision: sql`${categories.revision} + 1`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(categories.id, id),
+                eq(categories.revision, data.expectedRevision),
+                isNull(categories.deletedAt),
+                lifecycleCondition,
+            ))
+            .returning({ revision: categories.revision })
+            .get();
+        if (!updated) {
+            await rethrowCategoryRevisionConflict(
+                db,
+                claims,
+                new Error(CATEGORY_REVISION_CONFLICT),
+                "active",
+            );
+            if (data.status === "published") {
+                throw new ValidationError(
+                    "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
+                );
+            }
             await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-            statements.push(categoryUnpublishUsageGuard(db, claims));
+            throw new ConflictError("Category could not be updated. Reload and try again.");
         }
-        statements.push(
-            db
-                .update(categories)
-                .set({
-                    name: data.name,
-                    description: data.description,
-                    slug: data.slug,
-                    imageUrl: data.image?.url || null,
-                    metaTitle: data.metaTitle,
-                    metaDescription: data.metaDescription,
-                    canonicalPath: data.canonicalPath ?? null,
-                    noIndex: data.noIndex ?? false,
-                    excludeFromSitemap: data.excludeFromSitemap ?? false,
-                    status: data.status,
-                    revision: sql`${categories.revision} + 1`,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(categories.id, id),
-                    eq(categories.revision, data.expectedRevision),
-                    isNull(categories.deletedAt),
-                ))
-                .returning({ revision: categories.revision }),
-        );
-        const results = await safeBatch(db, statements as never) as unknown[];
-        return {
-            revision: revisionResult(results.at(-1)),
-            status: data.status,
-        };
+        return { revision: updated.revision, status: data.status };
     } catch (error) {
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
-        }
-        try {
-            await rethrowCategoryRevisionConflict(
-                db,
-                [{ id, expectedRevision: data.expectedRevision }],
-                error,
-                "active",
-            );
-        } catch (translated) {
-            if (translated !== error) throw translated;
-        }
-        if (data.status !== "published" && error instanceof Error && /malformed json/i.test(error.message)) {
-            await assertCategoriesNotUsedByActiveDynamicCollections(
-                db,
-                [{ id, expectedRevision: data.expectedRevision }],
-            );
-        }
-        if (
-            data.status === "published" &&
-            error instanceof Error &&
-            new RegExp(`${CATEGORY_PUBLISH_NOT_READY}|malformed json`, "i").test(error.message)
-        ) {
-            throw new ValidationError(
-                "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
-            );
         }
         throw error;
     }
@@ -488,50 +472,46 @@ export async function updateCategoryStatus(
     if (!category) throw new NotFoundError("Category not found");
     if (category.deletedAt) throw new ConflictError("Restore this category before changing its status.");
     const claims = [{ id, expectedRevision: data.expectedRevision }];
-    const statements: SQLiteBatchItem[] = [buildCategoryRevisionGuard(db, claims, "active")];
-    if (data.status === "published") statements.push(buildCategoryPublishReadyGuard(db, id));
-    else {
+    if (data.status !== "published") {
         await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-        statements.push(categoryUnpublishUsageGuard(db, claims));
     }
-    statements.push(
-        db.update(categories)
-            .set({
-                status: data.status,
-                revision: sql`${categories.revision} + 1`,
-                updatedAt: sql`unixepoch()`,
-            })
-            .where(and(
-                eq(categories.id, id),
-                eq(categories.revision, data.expectedRevision),
-                isNull(categories.deletedAt),
-            ))
-            .returning({ revision: categories.revision }),
-    );
+    const lifecycleCondition = data.status === "published"
+        ? buyerResolvableCategoryProductExists(id)
+        : sql`NOT EXISTS (
+            SELECT 1 FROM ${collections}
+            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
+        )`;
 
-    try {
-        const results = await safeBatch(db, statements as never) as unknown[];
-        return { revision: revisionResult(results.at(-1)), status: data.status };
-    } catch (error) {
-        try {
-            await rethrowCategoryRevisionConflict(db, claims, error, "active");
-        } catch (translated) {
-            if (translated !== error) throw translated;
-        }
-        if (data.status !== "published" && error instanceof Error && /malformed json/i.test(error.message)) {
-            await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-        }
-        if (
-            data.status === "published" &&
-            error instanceof Error &&
-            new RegExp(`${CATEGORY_PUBLISH_NOT_READY}|malformed json`, "i").test(error.message)
-        ) {
+    const updated = await db.update(categories)
+        .set({
+            status: data.status,
+            revision: sql`${categories.revision} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(
+            eq(categories.id, id),
+            eq(categories.revision, data.expectedRevision),
+            isNull(categories.deletedAt),
+            lifecycleCondition,
+        ))
+        .returning({ revision: categories.revision })
+        .get();
+    if (!updated) {
+        await rethrowCategoryRevisionConflict(
+            db,
+            claims,
+            new Error(CATEGORY_REVISION_CONFLICT),
+            "active",
+        );
+        if (data.status === "published") {
             throw new ValidationError(
                 "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
             );
         }
-        throw error;
+        await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+        throw new ConflictError("Category status could not be updated. Reload and try again.");
     }
+    return { revision: updated.revision, status: data.status };
 }
 
 /**
