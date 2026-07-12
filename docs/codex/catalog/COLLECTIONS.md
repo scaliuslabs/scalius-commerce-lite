@@ -48,6 +48,8 @@ membership or cache dependency matching.
   that token; stale edits fail with a conflict instead of silently overwriting.
 - Active saves and activation validate the selected membership references;
   every configured lead product is also checked for a real non-trashed row.
+  Bulk activation unions those references into one product read and one category
+  read instead of multiplying validation reads by collection count.
 - Reorder requires the complete non-trashed set, unique contiguous positions,
   matching versions, and no more than 90 rows. Restore appends selected rows in
   request order after the current live tail.
