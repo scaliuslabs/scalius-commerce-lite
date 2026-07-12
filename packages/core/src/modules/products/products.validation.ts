@@ -91,7 +91,10 @@ const productBaseSchema = z.object({
     discountAmount: z.number().min(0).nullish(),
     freeDelivery: z.boolean(),
     metaTitle: z.string().nullable(),
-    metaDescription: z.string().nullable(),
+    metaDescription: z.string().nullable().refine(
+        (value) => !value?.includes("<!--variant_images:"),
+        "Legacy variant-image metadata is not allowed. Use explicit image mappings.",
+    ),
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
@@ -109,9 +112,9 @@ const productBaseSchema = z.object({
     variantOption2Schema: productOptionSchemaSchema
         .optional()
         .default(DEFAULT_PRODUCT_OPTION_SCHEMA.option2),
-    variantImagesEnabled: z.boolean().optional(),
-    variantImageAxis: variantImageAxisSchema.optional(),
-    variantImageMappings: z.array(variantImageMappingSchema).max(250).optional(),
+    variantImagesEnabled: z.boolean(),
+    variantImageAxis: variantImageAxisSchema,
+    variantImageMappings: z.array(variantImageMappingSchema).max(250),
     slug: z
         .string()
         .min(3)

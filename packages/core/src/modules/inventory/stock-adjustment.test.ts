@@ -4,7 +4,6 @@ import {
   productImages,
   productVariants,
 } from "@scalius/database/schema";
-import { ConflictError } from "@scalius/core/errors";
 import {
   adjustStock,
   lookupByBarcodeOrSku,
@@ -127,7 +126,6 @@ function createLookupDbMock(options: {
 }) {
   let selectCount = 0;
   let lookupSelectCount = 0;
-  const barcodeLimits: number[] = [];
 
   const db = {
     select() {
@@ -154,10 +152,7 @@ function createLookupDbMock(options: {
                 where() {
                   if (lookupIndex === 1) {
                     return {
-                      limit: async (limit: number) => {
-                        barcodeLimits.push(limit);
-                        return options.barcodeMatches ?? [];
-                      },
+                      get: async () => options.barcodeMatches?.[0],
                     };
                   }
                   return {
@@ -174,7 +169,6 @@ function createLookupDbMock(options: {
 
   return {
     db,
-    barcodeLimits,
     getSelectCount: () => selectCount,
   };
 }
@@ -235,15 +229,14 @@ describe("stock adjustment ledger", () => {
 });
 
 describe("scanner barcode identity lookup", () => {
-  it("bounds normalized barcode lookup to two rows before returning a match", async () => {
-    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
+  it("returns the database-enforced normalized barcode identity", async () => {
+    const { db, getSelectCount } = createLookupDbMock({
       barcodeMatches: [lookupRow],
       imageUrl: "https://cdn.example.com/main.jpg",
     });
 
     const result = await lookupByBarcodeOrSku(db as never, "  ABC-123  ");
 
-    expect(barcodeLimits).toEqual([2]);
     expect(getSelectCount()).toBe(2);
     expect(result).toEqual({
       variant: {
@@ -270,32 +263,15 @@ describe("scanner barcode identity lookup", () => {
     });
   });
 
-  it("fails closed when legacy data contains two active barcode matches", async () => {
-    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
-      barcodeMatches: [
-        lookupRow,
-        { ...lookupRow, variantId: "variant_2", variantSku: "SKU-2" },
-      ],
-    });
-
-    await expect(
-      lookupByBarcodeOrSku(db as never, "abc-123"),
-    ).rejects.toBeInstanceOf(ConflictError);
-
-    expect(barcodeLimits).toEqual([2]);
-    expect(getSelectCount()).toBe(1);
-  });
-
-  it("falls back to a trimmed exact SKU when no barcode matches", async () => {
-    const { db, barcodeLimits, getSelectCount } = createLookupDbMock({
+  it("falls back to the same trimmed case-insensitive SKU identity", async () => {
+    const { db, getSelectCount } = createLookupDbMock({
       barcodeMatches: [],
       skuMatch: { ...lookupRow, variantBarcode: null, variantBarcodeType: null },
       imageUrl: null,
     });
 
-    const result = await lookupByBarcodeOrSku(db as never, "  SKU-1  ");
+    const result = await lookupByBarcodeOrSku(db as never, "  sku-1  ");
 
-    expect(barcodeLimits).toEqual([2]);
     expect(getSelectCount()).toBe(3);
     expect(result?.variant.sku).toBe("SKU-1");
     expect(result?.product.imageUrl).toBeNull();

@@ -34,7 +34,6 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
-import { cleanMetaDescription } from "./product-form/utils";
 
 interface ProductVariant {
   id: string;
@@ -100,7 +99,7 @@ export function ProductView({ product }: ProductViewProps) {
   const { products: productActions } = useCatalogActionPermissions();
   const primaryImage = product.images.find((img) => img.isPrimary);
   const otherImages = product.images.filter((img) => !img.isPrimary);
-  const visibleMetaDescription = cleanMetaDescription(product.metaDescription);
+  const visibleMetaDescription = product.metaDescription?.trim() || null;
 
   return (
     <div className="container max-w-[1400px] space-y-4 py-4">

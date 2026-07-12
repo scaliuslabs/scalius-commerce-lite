@@ -28,9 +28,6 @@ import {
   useProductSubmit,
   extractUniqueVariantOptionValues,
   productFormSchema,
-  cleanMetaDescription,
-  hasVariantImagesEnabled,
-  getVariantImagesAxis,
   resolveVariantImageAxis,
   reconcileVariantImageMappings,
   generateSlug,
@@ -76,19 +73,13 @@ export function ProductForm({
 }: ProductFormProps) {
   const { storefrontUrl, getStorefrontPath } = useStorefrontUrl();
 
-  // Clean the meta description to avoid showing the marker to users
-  const cleanedDefaultValues = React.useMemo(() => {
+  const resolvedDefaultValues = React.useMemo(() => {
     if (!defaultValues) return undefined;
 
-    const legacyEnabled = hasVariantImagesEnabled(defaultValues.metaDescription);
     return {
       ...defaultValues,
-      metaDescription: cleanMetaDescription(defaultValues.metaDescription),
-      variantImagesEnabled:
-        defaultValues.variantImagesEnabled ?? legacyEnabled,
-      variantImageAxis:
-        defaultValues.variantImageAxis
-        ?? getVariantImagesAxis(defaultValues.metaDescription),
+      variantImagesEnabled: defaultValues.variantImagesEnabled ?? false,
+      variantImageAxis: defaultValues.variantImageAxis ?? "option2",
       variantImageMappings: defaultValues.variantImageMappings ?? [],
     };
   }, [defaultValues]);
@@ -133,7 +124,7 @@ export function ProductForm({
       slugEdited: false,
       attributes: [],
       additionalInfo: [],
-      ...cleanedDefaultValues,
+      ...resolvedDefaultValues,
     },
   });
 

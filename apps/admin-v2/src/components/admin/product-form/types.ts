@@ -83,7 +83,10 @@ export const productFormSchema = z.object({
     .nullish(),
   freeDelivery: z.boolean(),
   metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable(),
+  metaDescription: z.string().nullable().refine(
+    (value) => !value?.includes("<!--variant_images:"),
+    "Legacy variant-image metadata is not allowed. Use image mapping controls.",
+  ),
   canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),

@@ -74,6 +74,9 @@ function createProductBody(overrides: Record<string, unknown> = {}) {
     freeDelivery: false,
     metaTitle: null,
     metaDescription: null,
+    variantImagesEnabled: false,
+    variantImageAxis: "option2",
+    variantImageMappings: [],
     slug: "hilsa-fish",
     productCondition: "new",
     images: [

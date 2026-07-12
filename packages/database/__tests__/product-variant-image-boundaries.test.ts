@@ -16,6 +16,12 @@ const backfillMigration = readFileSync(
   ),
   "utf8",
 );
+const cutoverMigration = readFileSync(
+  fileURLToPath(
+    new URL("../migrations/0006_outgoing_captain_midlands.sql", import.meta.url),
+  ),
+  "utf8",
+);
 
 describe("product variant image schema boundaries", () => {
   it("uses stable image and target foreign keys with one target per image", () => {
@@ -36,7 +42,7 @@ describe("product variant image schema boundaries", () => {
     );
   });
 
-  it("materializes legacy positions while retaining markers for old storefront readers", () => {
+  it("materializes old positions once and then permanently retires metadata markers", () => {
     expect(backfillMigration).toContain("row_number() OVER");
     expect(backfillMigration).toContain(
       "ranked_images.`position` = ranked_options.`position`",
@@ -47,6 +53,8 @@ describe("product variant image schema boundaries", () => {
     expect(backfillMigration).toContain(
       "product_variant_image_mapping_insert_guard",
     );
-    expect(backfillMigration).not.toContain("SET `meta_description` =");
+    expect(cutoverMigration).toContain("product_variants_active_option_identity_uidx");
+    expect(cutoverMigration).toContain("products_variant_image_marker_insert_guard");
+    expect(cutoverMigration).toContain("replace(coalesce(`meta_description`, '')");
   });
 });

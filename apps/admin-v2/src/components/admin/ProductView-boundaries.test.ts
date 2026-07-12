@@ -23,10 +23,10 @@ describe("ProductView catalog truth boundaries", () => {
     expect(source).not.toContain("const available = v.stock - v.reservedStock");
   });
 
-  it("does not expose internal variant-image markers as SEO copy", () => {
+  it("renders only the saved normalized SEO description", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
-    expect(source).toContain("cleanMetaDescription(product.metaDescription)");
+    expect(source).toContain("product.metaDescription?.trim() || null");
     expect(source).toContain("visibleMetaDescription");
     expect(source).not.toContain("{product.metaDescription}</div>");
   });

@@ -32,11 +32,7 @@ import {
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
 import {
-    cleanVariantImageMetaDescription,
     prepareVariantImageMappingsForWrite,
-    readLegacyVariantImageSettings,
-    resolveVariantImageReadModel,
-    synthesizeLegacyVariantImageMappings,
     type VariantImageAxis,
 } from "./products.variant-images";
 import {
@@ -110,29 +106,14 @@ function prepareProductVariantImageWrite(
         createdAt?: Date | string | number | null;
     }>,
 ) {
-    const legacy = readLegacyVariantImageSettings(data.metaDescription);
-    const enabled = data.variantImagesEnabled ?? legacy.enabled;
-    const axis: VariantImageAxis = data.variantImageAxis ?? legacy.axis;
-    const legacyMappings = data.variantImageMappings === undefined && legacy.enabled
-        ? synthesizeLegacyVariantImageMappings({
-            productId,
-            axis,
-            images: images.rows,
-            variants,
-        })
-        : [];
-    const requestedMappings = data.variantImageMappings ?? legacyMappings.map((mapping) => ({
-        imageId: mapping.imageId,
-        variantId: mapping.variantId,
-        optionAxis: mapping.optionAxis,
-        optionValue: mapping.optionValue,
-        sortOrder: mapping.sortOrder,
-    }));
+    const enabled = data.variantImagesEnabled ?? false;
+    const axis: VariantImageAxis = data.variantImageAxis ?? "option2";
+    const requestedMappings = data.variantImageMappings ?? [];
 
     return {
         enabled,
         axis,
-        metaDescription: cleanVariantImageMetaDescription(data.metaDescription),
+        metaDescription: data.metaDescription,
         mappings: prepareVariantImageMappingsForWrite({
             productId,
             enabled,
@@ -563,21 +544,8 @@ export async function getProductDetails(
             }]
             : []
     );
-    const variantImageRead = resolveVariantImageReadModel({
-        productId: id,
-        variantImagesEnabled: result.variantImagesEnabled,
-        variantImageAxis: result.variantImageAxis,
-        metaDescription: result.metaDescription,
-        storedMappings,
-        images,
-        variants,
-    });
-
     return {
         ...result,
-        metaDescription: variantImageRead.metaDescription,
-        variantImagesEnabled: variantImageRead.enabled,
-        variantImageAxis: variantImageRead.axis,
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),
         updatedAt: requireProductTimestamp(result.updatedAt, "updated timestamp"),
         deletedAt: result.deletedAt
@@ -588,7 +556,7 @@ export async function getProductDetails(
             ...img,
             createdAt: requireProductTimestamp(img.createdAt, "image created timestamp"),
         })),
-        variantImageMappings: variantImageRead.mappings,
+        variantImageMappings: storedMappings,
         additionalInfo: richContent.map((item) => ({
             id: item.id,
             title: item.title,

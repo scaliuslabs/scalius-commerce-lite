@@ -15,7 +15,7 @@ The storefront product page’s visual design is owner-protected. Do not redesig
 7. **`filterable` controls attribute existence.** Detail/feed/schema lose truthful non-facet facts such as Brand or Material. Separate filterable, buyer-visible, public/exportable, and schema/feed mappings.
 8. **UCP pagination metadata is false after eligibility filtering.** Paginate the eligible projection or use a bounded cursor and require the exact protocol version.
 9. **Feed pagination scans from page one.** High page numbers cause unbounded work. Move expansion/filtering into a cursor projection with bounded work.
-10. **Resolved in batch 4: variant media uses stable explicit associations.** Product enable/axis settings and image-ID mappings replace positional SEO metadata. Legacy markers are materialized by migration and retained only for rolling-deploy compatibility; new readers prefer explicit rows, and successful new writes remove markers.
+10. **Resolved in batches 4 and 6: variant media uses only stable explicit associations.** Product enable/axis settings and image-ID mappings replace positional SEO metadata. Migration 0006 strips the retired markers, blocks reintroduction, and all API/admin/storefront positional readers are removed.
 
 ## P2 category/search and accessibility
 

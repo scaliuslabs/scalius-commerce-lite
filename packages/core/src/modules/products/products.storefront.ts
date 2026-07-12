@@ -38,7 +38,6 @@ import {
     buyerCatalogHasSkuInPriceRange,
     type BuyerCatalogPricingProjection,
 } from "./products.buyer-projection";
-import { resolveVariantImageReadModel } from "./products.variant-images";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -1273,22 +1272,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
     });
-    const variantImageRead = resolveVariantImageReadModel({
-        productId: product.id,
-        variantImagesEnabled: product.variantImagesEnabled,
-        variantImageAxis: product.variantImageAxis,
-        metaDescription: product.metaDescription,
-        storedMappings: storedVariantImageMappings,
-        images: cleanImages,
-        variants: typedVariants,
-    });
-
     return {
         product: {
             ...product,
-            metaDescription: variantImageRead.metaDescription,
-            variantImagesEnabled: variantImageRead.enabled,
-            variantImageAxis: variantImageRead.axis,
             hasVariants,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
@@ -1328,7 +1314,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             alt: img.alt || product.name,
         })),
         variants: formattedVariants,
-        variantImageMappings: variantImageRead.mappings,
+        variantImageMappings: storedVariantImageMappings,
         relatedProducts,
     };
 }

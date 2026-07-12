@@ -14,16 +14,16 @@ Last reviewed: 2026-07-12
 
 ## P1 product/variant integrity
 
-- Application writes reject duplicate normalized option combinations and inconsistent option-axis shapes. A database unique index remains blocked by the documented legacy duplicate product.
-- Production preflight on 2026-07-12 found one legacy product (`prod_DgYZ43wj5zcNoug7gEdUL`) with four active `s / Red` SKUs. None currently has order or inventory movement history, but choosing the canonical SKU is a merchant data decision. Application writes now reject new normalized duplicates and allow incremental repair; a database unique index remains blocked until that legacy row set is resolved deliberately.
+- Resolved in batch 6: normalized global SKU/barcode identities and active per-product option combinations have database unique indexes. Canonical triggers reject whitespace, empty options, malformed barcode/type pairs, default-SKU option drift, and normal SKUs without customer options.
+- Migration 0006 keeps audited Mojo SKU `var_-Dc_ytYPws_H9TIR5Ljns` and soft-retires the three exact unreferenced copies. Its precondition guard fails closed if the rows, stock, versions, references, or any other normalized collision differ from the audited state; copied stock is deliberately not summed without physical evidence.
 - Resolved in batches 2–3: bulk creates and mixed create/update spreadsheet plans commit in one D1 transaction; duplicate update IDs and normalized conflicts fail before writes.
 - Resolved in batch 5: product composition has mandatory `aggregateRevision` CAS across product, SKU, sort, and tax-classification writes. Category/attribute/tax cascades bump affected products atomically; typed 409 responses carry expected/current revisions.
-- Resolved at the application boundary in batch 5: barcode/type pairs are trimmed and validated, standard formats require valid checksums, normalized global duplicates are rejected, and lookups read at most two rows and fail closed. The normalized database unique index lands with the verified production repair migration.
+- Resolved across batches 5–6: barcode/type pairs are trimmed and checksum-validated at the application boundary; the database enforces canonical shape, pairing, supported types, and globally unique normalized identity. Scanner and admin lookup share the indexed identity.
 - Resolved in batch 5: SKU removal always soft-retires identity. Transactional guards recheck reservations, open orders, final-option topology, lifecycle, and stock version before any affected batch writes.
 - Resolved in batch 5: permanent product deletion is trash-only and rechecks order, discount, and inventory-history absence inside the deletion transaction.
 - Product aggregate image/attribute/rich-content writes and list enrichment can exceed D1’s 100-parameter limit. Bound/chunk at 90 or use per-row batch statements.
 - Catalog money uses SQLite `REAL`; long-term price storage should use currency-aware minor units or a rigorously shared decimal representation.
-- Stable image-ID associations support SKU or normalized option-value targets. The remaining marker fallback and marker rows are scheduled for immediate removal in the production repair release; no permanent compatibility path is accepted.
+- Stable image-ID associations support SKU or normalized option-value targets. Explicit product fields/mapping rows are the only read/write authority; migration 0006 removes marker rows and database/application validation rejects reintroduction.
 
 ## P1 attributes and collections
 
