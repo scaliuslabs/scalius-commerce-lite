@@ -49,6 +49,8 @@ export interface InventoryMovement {
   createdAt: string | number;
   variantSku: string | null;
   productName: string | null;
+  actorName: string;
+  actorType: "system" | "admin" | "former_admin";
 }
 
 export interface InventoryAlert {
@@ -75,6 +77,12 @@ export interface InventoryPagination {
   totalPages: number;
 }
 
+export interface InventoryMovementPageInfo {
+  limit: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface InventoryLedgerHealth {
   legacyRows: number;
   v2Rows: number;
@@ -89,6 +97,7 @@ export interface InventoryOverviewPayload {
   pagination?: InventoryPagination;
   stats?: InventoryStats;
   ledgerHealth?: InventoryLedgerHealth;
+  pageInfo?: InventoryMovementPageInfo;
 }
 
 export interface InventoryQueryInput {
@@ -101,6 +110,11 @@ export interface InventoryQueryInput {
   status?: string;
   alertStatus?: string;
   movementType?: "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
+  movementOrderId?: string;
+  movementStartDate?: string;
+  movementEndDate?: string;
+  movementCursor?: string;
+  movementHealthOnly?: boolean;
   sort?: "productName" | "sku" | "available" | string;
   order?: "asc" | "desc" | string;
 }
@@ -153,6 +167,11 @@ function toQueryParams(data: InventoryQueryInput): Record<string, string> {
   else if (data.lowStock) params.status = "low";
   if (data.alertStatus) params.alertStatus = data.alertStatus;
   if (data.movementType) params.movementType = data.movementType;
+  if (data.movementOrderId) params.movementOrderId = data.movementOrderId;
+  if (data.movementStartDate) params.movementStartDate = data.movementStartDate;
+  if (data.movementEndDate) params.movementEndDate = data.movementEndDate;
+  if (data.movementCursor) params.movementCursor = data.movementCursor;
+  if (data.movementHealthOnly) params.movementHealthOnly = "true";
   if (data.sort) params.sort = data.sort;
   if (data.order) params.order = data.order;
   return params;

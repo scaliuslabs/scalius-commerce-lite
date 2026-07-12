@@ -13152,7 +13152,7 @@ export type GetApiV1AdminInventoryData = {
          */
         section?: 'variants' | 'movements' | 'alerts';
         /**
-         * Product, SKU, or order search term
+         * Product or SKU search term
          */
         search?: string;
         /**
@@ -13175,6 +13175,34 @@ export type GetApiV1AdminInventoryData = {
          * Movement type filter
          */
         movementType?: 'all' | 'reserved' | 'deducted' | 'released' | 'adjusted' | 'restored' | 'preorder_reserved' | 'preorder_deducted';
+        /**
+         * Exact order ID filter for movements
+         */
+        movementOrderId?: string;
+        /**
+         * Movement start date (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        movementStartDate?: string;
+        /**
+         * Movement end date (YYYY-MM-DD, Bangladesh calendar day)
+         */
+        movementEndDate?: string;
+        /**
+         * Opaque cursor for the next movement page
+         */
+        movementCursor?: string;
+        /**
+         * Return only ledger health diagnostics
+         */
+        movementHealthOnly?: 'true';
+        /**
+         * Response format; CSV is supported for movement history
+         */
+        format?: 'json' | 'csv';
+        /**
+         * Maximum CSV rows, hard-capped at 5000
+         */
+        maxRows?: number;
         /**
          * Sort field
          */
@@ -13233,6 +13261,8 @@ export type GetApiV1AdminInventoryResponses = {
                 createdAt: string | number;
                 variantSku: string | null;
                 productName: string | null;
+                actorName: string;
+                actorType: 'system' | 'admin' | 'former_admin';
                 [key: string]: unknown;
             }>;
             alerts?: Array<{
@@ -13271,6 +13301,11 @@ export type GetApiV1AdminInventoryResponses = {
                 v2Rows: number;
                 v2Variants: number;
                 invalidV2Rows: number;
+            };
+            pageInfo?: {
+                limit: number;
+                hasMore: boolean;
+                nextCursor: string | null;
             };
             [key: string]: unknown;
         };

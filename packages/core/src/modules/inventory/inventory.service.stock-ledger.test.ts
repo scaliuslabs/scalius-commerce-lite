@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inventoryMovements, inventoryOperations, productVariants } from "@scalius/database/schema";
 import * as schema from "@scalius/database/schema";
 import { drizzle } from "drizzle-orm/d1";
-import { adjustInventory, getInventoryOverview } from "./inventory.service";
+import {
+  adjustInventory,
+  decodeInventoryMovementCursor,
+  encodeInventoryMovementCursor,
+  getInventoryOverview,
+  listInventoryMovements,
+} from "./inventory.service";
 import { checkAndAlertLowStock } from "./alerts";
 
 vi.mock("./alerts", () => ({
@@ -173,6 +179,59 @@ describe("adjustInventory stock ledger", () => {
 });
 
 describe("inventory overview query boundaries", () => {
+  it("round-trips stable movement cursors and rejects malformed cursors", () => {
+    const cursor = encodeInventoryMovementCursor({ createdAt: 1_720_000_000, id: "move/with spaces" });
+    expect(decodeInventoryMovementCursor(cursor)).toEqual({
+      createdAt: 1_720_000_000,
+      id: "move/with spaces",
+    });
+    expect(() => decodeInventoryMovementCursor("invalid")).toThrow(/cursor/i);
+    expect(() => decodeInventoryMovementCursor(`1|${"x".repeat(257)}`)).toThrow(/cursor/i);
+  });
+
+  it("uses a bounded keyset query for exact-order and Bangladesh date-filtered movement history", async () => {
+    const queries: string[] = [];
+    const bindings: unknown[][] = [];
+    const d1 = {
+      prepare(query: string) {
+        queries.push(query);
+        const statement = {
+          bind: (...values: unknown[]) => {
+            bindings.push(values);
+            return statement;
+          },
+          all: async () => ({ results: [] }),
+          raw: async () => [],
+          first: async () => null,
+        };
+        return statement;
+      },
+    };
+    const db = drizzle(d1 as unknown as D1Database, { schema });
+
+    await expect(listInventoryMovements(db, {
+      search: "SKU-EXACT",
+      movementType: "deducted",
+      orderId: "ord_exact_1",
+      startDate: new Date("2026-07-01T18:00:00.000Z"),
+      endDate: new Date("2026-07-02T17:59:59.999Z"),
+      cursor: encodeInventoryMovementCursor({ createdAt: 1_720_000_000, id: "move_20" }),
+      limit: 20,
+    })).resolves.toMatchObject({
+      movements: [],
+      pageInfo: { limit: 20, hasMore: false, nextCursor: null },
+    });
+
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.toLowerCase()).toContain('left join "user"');
+    expect(queries[0]?.toLowerCase()).toContain("order by");
+    expect(queries[0]?.toLowerCase()).toContain("limit ?");
+    expect(queries[0]?.toLowerCase()).not.toContain("offset");
+    expect(queries[0]).toContain('"inventory_movements"."order_id" = ?');
+    expect(queries[0]).toContain('"inventory_movements"."id" < ?');
+    expect(bindings[0]?.length).toBeLessThanOrEqual(90);
+  });
+
   it("qualifies the correlated variant id in the normalized option-label projection", async () => {
     const queries: string[] = [];
     const d1 = {

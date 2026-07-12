@@ -1,4 +1,4 @@
-import { productVariants, products, inventoryMovements, productLowStockAlerts } from "@scalius/database/schema";
+import { productVariants, products, inventoryMovements, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
@@ -24,6 +24,192 @@ const ALLOWED_MOVEMENT_TYPES: ReadonlySet<string> = new Set([
     "preorder_reserved",
     "preorder_deducted",
 ]);
+const MAX_MOVEMENT_CURSOR_LENGTH = 512;
+
+type InventoryMovementCursor = {
+    createdAt: number;
+    id: string;
+};
+
+export function encodeInventoryMovementCursor(cursor: InventoryMovementCursor): string {
+    return `${cursor.createdAt}|${encodeURIComponent(cursor.id)}`;
+}
+
+export function decodeInventoryMovementCursor(value: string): InventoryMovementCursor {
+    if (!value || value.length > MAX_MOVEMENT_CURSOR_LENGTH) {
+        throw new ValidationError("Invalid inventory movement cursor");
+    }
+    const separator = value.indexOf("|");
+    if (separator < 1) throw new ValidationError("Invalid inventory movement cursor");
+    const createdAt = Number(value.slice(0, separator));
+    let id: string;
+    try {
+        id = decodeURIComponent(value.slice(separator + 1));
+    } catch {
+        throw new ValidationError("Invalid inventory movement cursor");
+    }
+    if (!Number.isSafeInteger(createdAt) || createdAt < 0 || !id || id.length > 256) {
+        throw new ValidationError("Invalid inventory movement cursor");
+    }
+    return { createdAt, id };
+}
+
+function movementTimestampSeconds(value: Date | number | string): number {
+    if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+    if (typeof value === "number") return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+    const parsed = new Date(value).getTime();
+    if (!Number.isFinite(parsed)) throw new ValidationError("Inventory movement timestamp is invalid");
+    return Math.floor(parsed / 1000);
+}
+
+export async function listInventoryMovements(db: Database, params: {
+    search?: string;
+    movementType?: string;
+    orderId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    cursor?: string;
+    limit: number;
+}) {
+    const search = params.search?.trim() ?? "";
+    const orderId = params.orderId?.trim() ?? "";
+    if (search.length > 120) throw new ValidationError("Inventory search must be at most 120 characters");
+    if (orderId.length > 100) throw new ValidationError("Inventory order ID must be at most 100 characters");
+    if (params.movementType && !ALLOWED_MOVEMENT_TYPES.has(params.movementType)) {
+        throw new ValidationError("Invalid movement type parameter");
+    }
+    if (!Number.isSafeInteger(params.limit) || params.limit < 1 || params.limit > 100) {
+        throw new ValidationError("Inventory movement page size must be between 1 and 100");
+    }
+    if (params.startDate && !Number.isFinite(params.startDate.getTime())) {
+        throw new ValidationError("Inventory movement start date is invalid");
+    }
+    if (params.endDate && !Number.isFinite(params.endDate.getTime())) {
+        throw new ValidationError("Inventory movement end date is invalid");
+    }
+    if (params.startDate && params.endDate && params.startDate > params.endDate) {
+        throw new ValidationError("Inventory movement start date must not be after end date");
+    }
+
+    const conditions: SQL[] = [];
+    if (params.movementType && params.movementType !== "all") {
+        conditions.push(eq(inventoryMovements.type, params.movementType));
+    }
+    if (search) {
+        const searchPattern = `%${search}%`;
+        conditions.push(or(
+            like(productVariants.sku, searchPattern),
+            like(products.name, searchPattern),
+        )!);
+    }
+    if (orderId) conditions.push(eq(inventoryMovements.orderId, orderId));
+    if (params.startDate) {
+        conditions.push(sql`CAST(${inventoryMovements.createdAt} AS INTEGER) >= ${Math.floor(params.startDate.getTime() / 1000)}`);
+    }
+    if (params.endDate) {
+        conditions.push(sql`CAST(${inventoryMovements.createdAt} AS INTEGER) <= ${Math.floor(params.endDate.getTime() / 1000)}`);
+    }
+    if (params.cursor) {
+        const cursor = decodeInventoryMovementCursor(params.cursor);
+        conditions.push(sql`(
+            CAST(${inventoryMovements.createdAt} AS INTEGER) < ${cursor.createdAt}
+            OR (
+                CAST(${inventoryMovements.createdAt} AS INTEGER) = ${cursor.createdAt}
+                AND ${inventoryMovements.id} < ${cursor.id}
+            )
+        )`);
+    }
+
+    const rows = await db
+        .select({
+            id: inventoryMovements.id,
+            variantId: inventoryMovements.variantId,
+            orderId: inventoryMovements.orderId,
+            type: inventoryMovements.type,
+            quantity: inventoryMovements.quantity,
+            previousStock: inventoryMovements.previousStock,
+            newStock: inventoryMovements.newStock,
+            notes: inventoryMovements.notes,
+            createdBy: inventoryMovements.createdBy,
+            actorDisplayName: adminUsers.name,
+            ledgerVersion: inventoryMovements.ledgerVersion,
+            pool: inventoryMovements.pool,
+            reservationGeneration: inventoryMovements.reservationGeneration,
+            stockVersionBefore: inventoryMovements.stockVersionBefore,
+            stockVersionAfter: inventoryMovements.stockVersionAfter,
+            stockDelta: inventoryMovements.stockDelta,
+            previousReservedStock: inventoryMovements.previousReservedStock,
+            newReservedStock: inventoryMovements.newReservedStock,
+            reservedStockDelta: inventoryMovements.reservedStockDelta,
+            previousPreorderStock: inventoryMovements.previousPreorderStock,
+            newPreorderStock: inventoryMovements.newPreorderStock,
+            preorderStockDelta: inventoryMovements.preorderStockDelta,
+            createdAt: inventoryMovements.createdAt,
+            variantSku: productVariants.sku,
+            productName: products.name,
+        })
+        .from(inventoryMovements)
+        .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
+        .leftJoin(products, eq(products.id, productVariants.productId))
+        .leftJoin(adminUsers, eq(adminUsers.id, inventoryMovements.createdBy))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.id))
+        .limit(params.limit + 1)
+        .all();
+
+    const hasMore = rows.length > params.limit;
+    const pageRows = rows.slice(0, params.limit);
+    const movements = pageRows.map(({ actorDisplayName, ...row }) => ({
+        ...row,
+        actorName: row.createdBy ? actorDisplayName ?? "Former admin" : "System",
+        actorType: row.createdBy
+            ? actorDisplayName
+                ? "admin" as const
+                : "former_admin" as const
+            : "system" as const,
+    }));
+    const last = pageRows.at(-1);
+
+    return {
+        movements,
+        pageInfo: {
+            limit: params.limit,
+            hasMore,
+            nextCursor: hasMore && last
+                ? encodeInventoryMovementCursor({
+                    createdAt: movementTimestampSeconds(last.createdAt),
+                    id: last.id,
+                })
+                : null,
+        },
+    };
+}
+
+export async function getInventoryLedgerHealth(db: Database) {
+    const result = await db.select({
+        legacyRows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 1 THEN 1 ELSE 0 END), 0)`,
+        v2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN 1 ELSE 0 END), 0)`,
+        v2Variants: sql<number>`COUNT(DISTINCT CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN ${inventoryMovements.variantId} END)`,
+        invalidV2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 AND (
+            ${inventoryMovements.pool} IS NULL
+            OR ${inventoryMovements.pool} NOT IN ('regular', 'preorder', 'backorder')
+            OR ${inventoryMovements.stockVersionBefore} IS NULL
+            OR ${inventoryMovements.stockVersionAfter} <> ${inventoryMovements.stockVersionBefore} + 1
+            OR ${inventoryMovements.stockDelta} IS NULL
+            OR ${inventoryMovements.previousReservedStock} IS NULL
+            OR ${inventoryMovements.newReservedStock} IS NULL
+            OR ${inventoryMovements.reservedStockDelta} IS NULL
+            OR ${inventoryMovements.previousPreorderStock} IS NULL
+            OR ${inventoryMovements.newPreorderStock} IS NULL
+            OR ${inventoryMovements.preorderStockDelta} IS NULL
+            OR ${inventoryMovements.newStock} - ${inventoryMovements.previousStock} <> ${inventoryMovements.stockDelta}
+            OR ${inventoryMovements.newReservedStock} - ${inventoryMovements.previousReservedStock} <> ${inventoryMovements.reservedStockDelta}
+            OR ${inventoryMovements.newPreorderStock} - ${inventoryMovements.previousPreorderStock} <> ${inventoryMovements.preorderStockDelta}
+        ) THEN 1 ELSE 0 END), 0)`,
+    }).from(inventoryMovements).get();
+
+    return result ?? { legacyRows: 0, v2Rows: 0, v2Variants: 0, invalidV2Rows: 0 };
+}
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -33,6 +219,11 @@ export async function getInventoryOverview(db: Database, params: {
     limit: number;
     alertStatus?: string;
     movementType?: string;
+    movementOrderId?: string;
+    movementStartDate?: Date;
+    movementEndDate?: Date;
+    movementCursor?: string;
+    movementHealthOnly?: boolean;
     sort?: string;
     order?: string;
 }) {
@@ -167,102 +358,18 @@ export async function getInventoryOverview(db: Database, params: {
     }
 
     if (section === "movements") {
-        const movementConditions: SQL[] = [];
-        if (movementType && movementType !== "all") {
-            movementConditions.push(eq(inventoryMovements.type, movementType));
+        if (params.movementHealthOnly) {
+            return { ledgerHealth: await getInventoryLedgerHealth(db) };
         }
-        if (search.trim()) {
-            const searchPattern = `%${search.trim()}%`;
-            movementConditions.push(or(
-                like(productVariants.sku, searchPattern),
-                like(products.name, searchPattern),
-                like(inventoryMovements.orderId, searchPattern),
-            )!);
-        }
-        const movementWhere = movementConditions.length > 0
-            ? and(...movementConditions)
-            : undefined;
-
-        const countResult = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(inventoryMovements)
-            .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
-            .leftJoin(products, eq(products.id, productVariants.productId))
-            .where(movementWhere)
-            .get();
-        const ledgerHealth = await db.select({
-            legacyRows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 1 THEN 1 ELSE 0 END), 0)`,
-            v2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN 1 ELSE 0 END), 0)`,
-            v2Variants: sql<number>`COUNT(DISTINCT CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN ${inventoryMovements.variantId} END)`,
-            invalidV2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 AND (
-                ${inventoryMovements.pool} IS NULL
-                OR ${inventoryMovements.pool} NOT IN ('regular', 'preorder', 'backorder')
-                OR ${inventoryMovements.stockVersionBefore} IS NULL
-                OR ${inventoryMovements.stockVersionAfter} <> ${inventoryMovements.stockVersionBefore} + 1
-                OR ${inventoryMovements.stockDelta} IS NULL
-                OR ${inventoryMovements.previousReservedStock} IS NULL
-                OR ${inventoryMovements.newReservedStock} IS NULL
-                OR ${inventoryMovements.reservedStockDelta} IS NULL
-                OR ${inventoryMovements.previousPreorderStock} IS NULL
-                OR ${inventoryMovements.newPreorderStock} IS NULL
-                OR ${inventoryMovements.preorderStockDelta} IS NULL
-                OR ${inventoryMovements.newStock} - ${inventoryMovements.previousStock} <> ${inventoryMovements.stockDelta}
-                OR ${inventoryMovements.newReservedStock} - ${inventoryMovements.previousReservedStock} <> ${inventoryMovements.reservedStockDelta}
-                OR ${inventoryMovements.newPreorderStock} - ${inventoryMovements.previousPreorderStock} <> ${inventoryMovements.preorderStockDelta}
-            ) THEN 1 ELSE 0 END), 0)`,
-        }).from(inventoryMovements).get();
-
-        const movements = await db
-            .select({
-                id: inventoryMovements.id,
-                variantId: inventoryMovements.variantId,
-                orderId: inventoryMovements.orderId,
-                type: inventoryMovements.type,
-                quantity: inventoryMovements.quantity,
-                previousStock: inventoryMovements.previousStock,
-                newStock: inventoryMovements.newStock,
-                notes: inventoryMovements.notes,
-                createdBy: inventoryMovements.createdBy,
-                ledgerVersion: inventoryMovements.ledgerVersion,
-                pool: inventoryMovements.pool,
-                reservationGeneration: inventoryMovements.reservationGeneration,
-                stockVersionBefore: inventoryMovements.stockVersionBefore,
-                stockVersionAfter: inventoryMovements.stockVersionAfter,
-                stockDelta: inventoryMovements.stockDelta,
-                previousReservedStock: inventoryMovements.previousReservedStock,
-                newReservedStock: inventoryMovements.newReservedStock,
-                reservedStockDelta: inventoryMovements.reservedStockDelta,
-                previousPreorderStock: inventoryMovements.previousPreorderStock,
-                newPreorderStock: inventoryMovements.newPreorderStock,
-                preorderStockDelta: inventoryMovements.preorderStockDelta,
-                createdAt: inventoryMovements.createdAt,
-                variantSku: productVariants.sku,
-                productName: products.name,
-            })
-            .from(inventoryMovements)
-            .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
-            .leftJoin(products, eq(products.id, productVariants.productId))
-            .where(movementWhere)
-            .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.id))
-            .limit(limit)
-            .offset(offset)
-            .all();
-
-        return {
-            movements,
-            ledgerHealth: ledgerHealth ?? {
-                legacyRows: 0,
-                v2Rows: 0,
-                v2Variants: 0,
-                invalidV2Rows: 0,
-            },
-            pagination: {
-                page,
-                limit,
-                total: countResult?.count ?? 0,
-                totalPages: Math.ceil((countResult?.count ?? 0) / limit),
-            },
-        };
+        return listInventoryMovements(db, {
+            search,
+            movementType,
+            orderId: params.movementOrderId,
+            startDate: params.movementStartDate,
+            endDate: params.movementEndDate,
+            cursor: params.movementCursor,
+            limit,
+        });
     }
 
     if (section === "alerts") {

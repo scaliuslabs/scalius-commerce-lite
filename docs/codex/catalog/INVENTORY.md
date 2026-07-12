@@ -31,12 +31,21 @@ Last reviewed: 2026-07-12
   from “Set counted stock.” It previews exact on-hand and signed available
   results, warns when a physical count exposes a reservation deficit, preserves
   input after failure, and disables no-op/invalid submissions.
-- Variant search/filter/sort and movement search/type/page are server-backed.
-  Filter changes reset pagination; stable ID tie-breakers prevent rows moving
-  between pages when primary sort values are equal.
+- Variant search/filter/sort and movement product/SKU search, type, exact-order,
+  and Bangladesh-calendar date filters are server-backed. Filter changes reset
+  pagination. Movement history uses a bounded `(created_at, id)` keyset cursor,
+  while variant/alert pages retain stable ID tie-breakers.
 - Movement history shows ledger-v2 counter edges and links order-backed rows to
-  the order. The `(type, created_at)` index supports the new bounded type/time
-  access path. API page size is capped at 100.
+  the order. It resolves the current admin display name in the same query,
+  labels null actors as System, labels deleted accounts as Former admin, and
+  never exposes actor email in the history projection or CSV. The
+  `(type, created_at)` index supports the bounded type/time access path. API
+  page size is capped at 100.
+- Movement CSV is streamed from sequential keyset pages of at most 100 rows,
+  is hard-capped at 5,000 rows per request, inherits `products.view` RBAC, and
+  neutralizes spreadsheet formula prefixes. It does not accumulate the export
+  in Worker memory. Global ledger health is a separate, five-minute-stale admin
+  query rather than an aggregate repeated on every history page/filter.
 - Read access uses `products.view`; adjustments, stocktakes, and alert
   acknowledgement use `products.edit`. UI actions mirror those same current
   capabilities. A separate inventory permission family is not yet modeled.
@@ -60,10 +69,11 @@ Last reviewed: 2026-07-12
 
 ## Remaining release gaps
 
-1. Audit history still lacks date range, actor resolution, exact order filter,
-   cursor pagination, and streaming CSV export. The current joined substring
-   search and global ledger-health aggregate will not remain cheap at very
-   large movement counts.
+1. Actor names are resolved from the current admin account because movement
+   rows do not contain an immutable actor-name snapshot. Renames intentionally
+   show the current name and deleted accounts show Former admin; changing that
+   policy requires an explicit audit schema decision rather than copying PII
+   into read projections.
 2. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
    validate every row first, use stable SKU/barcode identity, require one
    idempotency key per import, chunk lookup sets below D1's parameter ceiling,
@@ -78,7 +88,8 @@ Last reviewed: 2026-07-12
   reason/direction mismatches, overdraw rejection, stocktake behavior,
   exact replay, changed-payload conflict, operation-key races, CAS retries,
   atomic batch composition, cache invalidation, bounded query validation,
-  movement filters, and migration registration.
+  movement cursor/filter bounds, streamed formula-safe CSV, and migration
+  registration.
 - The generated OpenAPI client, repository typecheck, API/admin production
   builds, migration metadata, and focused core/API/admin/database tests pass
   from the clean inventory release commit.

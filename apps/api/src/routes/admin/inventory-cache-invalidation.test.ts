@@ -5,6 +5,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   getInventoryOverview: vi.fn(),
+  listInventoryMovements: vi.fn(),
   adjustInventory: vi.fn(),
   adjustStock: vi.fn(),
   setStock: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("@scalius/core/modules/inventory", async () => {
   const { z } = await import("@hono/zod-openapi");
   return {
     getInventoryOverview: mocks.getInventoryOverview,
+    listInventoryMovements: mocks.listInventoryMovements,
     adjustInventory: mocks.adjustInventory,
     adjustStock: mocks.adjustStock,
     setStock: mocks.setStock,
@@ -80,7 +82,11 @@ function createTestApp() {
   });
   mocks.getInventoryOverview.mockResolvedValue({
     movements: [],
-    pagination: { page: 2, limit: 20, total: 0, totalPages: 0 },
+    pageInfo: { limit: 20, hasMore: false, nextCursor: null },
+  });
+  mocks.listInventoryMovements.mockResolvedValue({
+    movements: [],
+    pageInfo: { limit: 100, hasMore: false, nextCursor: null },
   });
   mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
@@ -202,11 +208,11 @@ describe("admin inventory cache invalidation", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
-  it("forwards bounded movement filters and pagination to the inventory service", async () => {
+  it("forwards bounded movement filters and a stable cursor to the inventory service", async () => {
     const { app, env } = createTestApp();
 
     const response = await app.request(
-      "/api/v1/admin/inventory?section=movements&search=SKU-1&movementType=deducted&page=2&limit=20",
+      "/api/v1/admin/inventory?section=movements&search=SKU-1&movementType=deducted&movementOrderId=ord_exact&movementStartDate=2026-07-01&movementEndDate=2026-07-02&movementCursor=1720000000%7Cmove_20&limit=20",
       undefined,
       env,
     );
@@ -218,10 +224,75 @@ describe("admin inventory cache invalidation", () => {
         section: "movements",
         search: "SKU-1",
         movementType: "deducted",
-        page: 2,
+        movementOrderId: "ord_exact",
+        movementStartDate: new Date("2026-06-30T18:00:00.000Z"),
+        movementEndDate: new Date("2026-07-02T17:59:59.999Z"),
+        movementCursor: "1720000000|move_20",
         limit: 20,
       }),
     );
+  });
+
+  it("streams bounded, formula-safe movement CSV through sequential cursor pages", async () => {
+    const { app, env } = createTestApp();
+    const movement = {
+      id: "move_1",
+      variantId: "var_1",
+      orderId: "ord_1",
+      type: "adjusted",
+      quantity: 2,
+      previousStock: 3,
+      newStock: 5,
+      notes: "+warehouse note",
+      createdBy: "admin_1",
+      actorName: "Admin One",
+      actorType: "admin",
+      ledgerVersion: 2,
+      pool: "regular",
+      reservationGeneration: 1,
+      stockVersionBefore: 4,
+      stockVersionAfter: 5,
+      stockDelta: 2,
+      previousReservedStock: 0,
+      newReservedStock: 0,
+      reservedStockDelta: 0,
+      previousPreorderStock: 0,
+      newPreorderStock: 0,
+      preorderStockDelta: 0,
+      createdAt: 1_720_000_000,
+      variantSku: "=SKU-FORMULA",
+      productName: "Product One",
+    };
+    mocks.listInventoryMovements
+      .mockResolvedValueOnce({
+        movements: [movement],
+        pageInfo: { limit: 1, hasMore: true, nextCursor: "1720000000|move_1" },
+      })
+      .mockResolvedValueOnce({
+        movements: [{ ...movement, id: "move_0", variantSku: "SKU-2" }],
+        pageInfo: { limit: 1, hasMore: false, nextCursor: null },
+      });
+
+    const response = await app.request(
+      "/api/v1/admin/inventory?section=movements&format=csv&maxRows=2&movementOrderId=ord_1",
+      undefined,
+      env,
+    );
+    const csv = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/csv");
+    expect(response.headers.get("content-disposition")).toContain("inventory-movements-");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(csv).toContain('"\'=SKU-FORMULA"');
+    expect(csv).toContain('"\'+warehouse note"');
+    expect(csv).toContain('"Admin One"');
+    expect(mocks.listInventoryMovements).toHaveBeenCalledTimes(2);
+    expect(mocks.listInventoryMovements.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      cursor: "1720000000|move_1",
+      limit: 1,
+      orderId: "ord_1",
+    }));
   });
 
   it("forwards bounded alert filters, search, and pagination to the inventory service", async () => {

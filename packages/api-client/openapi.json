@@ -44335,10 +44335,10 @@
               "type": "string",
               "maxLength": 120,
               "default": "",
-              "description": "Product, SKU, or order search term"
+              "description": "Product or SKU search term"
             },
             "required": false,
-            "description": "Product, SKU, or order search term",
+            "description": "Product or SKU search term",
             "name": "search",
             "in": "query"
           },
@@ -44419,6 +44419,91 @@
             "required": false,
             "description": "Movement type filter",
             "name": "movementType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "description": "Exact order ID filter for movements"
+            },
+            "required": false,
+            "description": "Exact order ID filter for movements",
+            "name": "movementOrderId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Movement start date (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "Movement start date (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "movementStartDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Movement end date (YYYY-MM-DD, Bangladesh calendar day)"
+            },
+            "required": false,
+            "description": "Movement end date (YYYY-MM-DD, Bangladesh calendar day)",
+            "name": "movementEndDate",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "Opaque cursor for the next movement page"
+            },
+            "required": false,
+            "description": "Opaque cursor for the next movement page",
+            "name": "movementCursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Return only ledger health diagnostics"
+            },
+            "required": false,
+            "description": "Return only ledger health diagnostics",
+            "name": "movementHealthOnly",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json",
+              "description": "Response format; CSV is supported for movement history"
+            },
+            "required": false,
+            "description": "Response format; CSV is supported for movement history",
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000,
+              "default": 1000,
+              "description": "Maximum CSV rows, hard-capped at 5000"
+            },
+            "required": false,
+            "description": "Maximum CSV rows, hard-capped at 5000",
+            "name": "maxRows",
             "in": "query"
           },
           {
@@ -44629,6 +44714,17 @@
                               "productName": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "actorName": {
+                                "type": "string"
+                              },
+                              "actorType": {
+                                "type": "string",
+                                "enum": [
+                                  "system",
+                                  "admin",
+                                  "former_admin"
+                                ]
                               }
                             },
                             "required": [
@@ -44655,7 +44751,9 @@
                               "preorderStockDelta",
                               "createdAt",
                               "variantSku",
-                              "productName"
+                              "productName",
+                              "actorName",
+                              "actorType"
                             ],
                             "additionalProperties": {
                               "nullable": true
@@ -44852,6 +44950,28 @@
                             "v2Variants",
                             "invalidV2Rows"
                           ]
+                        },
+                        "pageInfo": {
+                          "type": "object",
+                          "properties": {
+                            "limit": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 100
+                            },
+                            "hasMore": {
+                              "type": "boolean"
+                            },
+                            "nextCursor": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "limit",
+                            "hasMore",
+                            "nextCursor"
+                          ]
                         }
                       },
                       "additionalProperties": {
@@ -44863,6 +44983,11 @@
                     "success",
                     "data"
                   ]
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
