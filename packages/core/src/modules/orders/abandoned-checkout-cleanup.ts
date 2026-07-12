@@ -46,13 +46,29 @@ export function isAbandonedCheckoutEmpty(checkout: {
 
     try {
         const data = JSON.parse(checkout.checkoutData);
-        const items = data.items || [];
-        const customerInfo = data.customerInfo || {};
+        const currentCartItems = data?.cart?.items;
+        const legacyItems = data?.items;
+        const items = Array.isArray(currentCartItems) ? currentCartItems : legacyItems;
+        const customerInfo = data?.customerInfo && typeof data.customerInfo === "object"
+            ? data.customerInfo
+            : {};
 
         const hasItems = Array.isArray(items) && items.length > 0;
-        const hasCustomerInfo = Object.values(customerInfo).some((value) => !!value);
+        const hasCustomerInfo = [
+            ...Object.values(customerInfo),
+            data?.customerName,
+            data?.customerPhone,
+            data?.customerEmail,
+            data?.shippingAddress,
+            data?.notes,
+        ].some((value) => typeof value === "string" && value.trim().length > 0);
 
-        return !hasItems && !hasCustomerInfo;
+        const isHostedPaymentArchive =
+            typeof data?.id === "string"
+            && ["stripe", "sslcommerz", "polar"].includes(data?.paymentMethod)
+            && ["unpaid", "failed"].includes(data?.paymentStatus);
+
+        return !hasItems && !hasCustomerInfo && !isHostedPaymentArchive;
     } catch {
         return true;
     }

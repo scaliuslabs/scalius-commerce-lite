@@ -10,6 +10,7 @@ export interface AbandonedCheckoutCartItem {
   name: string;
   quantity: number;
   price: number;
+  options?: Array<{ name: string; value: string }>;
   [key: string]: unknown;
 }
 
@@ -53,15 +54,36 @@ function asNumber(value: unknown): number | null {
 
 function parseCartItems(value: unknown): AbandonedCheckoutCartItem[] {
   return Array.isArray(value)
-    ? value.filter((item): item is AbandonedCheckoutCartItem => {
+    ? value.flatMap((item): AbandonedCheckoutCartItem[] => {
         const candidate = asObject(item);
-        return Boolean(
-          candidate &&
+        if (!candidate || !(
             typeof candidate.id === "string" &&
             typeof candidate.name === "string" &&
             typeof candidate.quantity === "number" &&
-            typeof candidate.price === "number",
-        );
+            Number.isFinite(candidate.quantity) &&
+            candidate.quantity > 0 &&
+            typeof candidate.price === "number" &&
+            Number.isFinite(candidate.price) &&
+            candidate.price >= 0
+        )) return [];
+
+        const options = Array.isArray(candidate.options)
+          ? candidate.options.flatMap((option) => {
+              const parsed = asObject(option);
+              const name = asString(parsed?.name);
+              const value = asString(parsed?.value);
+              return name && value ? [{ name, value }] : [];
+            })
+          : undefined;
+
+        return [{
+          ...candidate,
+          id: candidate.id,
+          name: candidate.name,
+          quantity: candidate.quantity,
+          price: candidate.price,
+          options,
+        }];
       })
     : [];
 }

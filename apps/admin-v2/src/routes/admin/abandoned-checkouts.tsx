@@ -10,10 +10,10 @@ export const Route = createFileRoute("/admin/abandoned-checkouts")({
 
 function AbandonedCheckoutsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Incomplete Orders</h1>
-        <p className="text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Review active checkout sessions and archived hosted-payment recovery records.
           Completed orders are cleared automatically.
         </p>
