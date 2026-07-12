@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type {
-  Product,
-  ProductImage,
-  ProductVariant,
-  ProductVariantImageMapping,
-} from "./api/types";
+import type { Product, ProductImage, ProductVariantImageMapping } from "./api/types";
 import {
   resolveProductVariantImageConfiguration,
   resolveVariantImageId,
@@ -65,39 +60,19 @@ describe("storefront variant image resolver", () => {
     } as Product;
     expect(resolveProductVariantImageConfiguration({
       product,
-      images,
-      variants: [] as ProductVariant[],
       mappings: [],
     })).toEqual({ enabled: true, axis: "option2", mappings: [] });
   });
 
-  it("keeps a rolling-deploy legacy fallback for APIs without explicit fields", () => {
+  it("does not infer configuration from retired metadata", () => {
     const product = {
       id: "prod_1",
       metaDescription: "<!--variant_images:option1-->",
     } as Product;
-    const variants = [{
-      id: "var_small",
-      productId: "prod_1",
-      size: "Small",
-      color: null,
-      isDefault: false,
-      deletedAt: null,
-      sizeSortOrder: 0,
-      colorSortOrder: 0,
-      createdAt: "2026-01-01",
-    }] as ProductVariant[];
     const result = resolveProductVariantImageConfiguration({
       product,
-      images,
-      variants,
       mappings: [],
     });
-    expect(result.enabled).toBe(true);
-    expect(result.axis).toBe("option1");
-    expect(result.mappings[0]).toMatchObject({
-      imageId: "img_red",
-      optionValue: "Small",
-    });
+    expect(result).toEqual({ enabled: false, axis: "option2", mappings: [] });
   });
 });

@@ -49,6 +49,7 @@ describe("storefront public listing indexes", () => {
             { idx: 3, tag: "0003_aberrant_hex" },
             { idx: 4, tag: "0004_validate_inventory_ledger_v2" },
             { idx: 5, tag: "0005_deep_morg" },
+            { idx: 6, tag: "0006_outgoing_captain_midlands" },
         ]);
         expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
     });

@@ -78,22 +78,21 @@ This log records implementation state. The finding files remain the source for o
 - Product, category, and collection listings now return result-scoped multi-select facets. Values OR within one attribute and attributes AND across axes; counts exclude the facet's own selection, selected zero-count values remain removable, unknown values canonicalize away, and repeated cache keys retain stable identities.
 - Public collection detail is a truthful paginated buyer catalog. Membership is the deduplicated union of explicit products and categories; curated products appear first in saved order, category-derived products follow the requested/default sort, and the response includes totals, dynamic SKU price bounds, facets, categories, and optional featured product.
 
-## Still open after batch 4
+## Still open after batch 6
 
 - The buyer projection is a derived window query. Correctness is unified, but very large catalogs should move it to a transactionally maintained projection table after write-path coverage and benchmark evidence exist.
 - The mobile admin catalog table, route-backed settings architecture, and broader keyboard/accessibility pass remain open.
 - Dedicated RBAC permissions do not yet exist for attribute restore/permanent delete, collection permanent delete, or bulk-permanent operations; the UI intentionally mirrors the current API permission map rather than inventing authority.
-- Minor-unit catalog money and the production normalized barcode/option indexes plus targeted legacy duplicate repair remain open P1 model work.
+- Minor-unit catalog money remains open P1 model work.
 - Collection membership remains JSON configuration shared with merchandising metadata; a normalized membership/rules model with revisioned ordering is still required for very large catalogs and concurrent editors.
 - Attribute visibility/export/schema roles remain coupled to `filterable`; quick-buy pricing, UCP eligible pagination, and feed cursor pagination retain their documented gaps.
 - The category/collection mobile filter drawer still needs a complete focus trap and automated accessibility coverage.
 
 ## Next implementation slice
 
-1. Apply the targeted normalized option/barcode repair/index migration and remove all legacy variant-image marker fallbacks.
-2. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
-3. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
-4. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
+1. Normalize collection membership/rules with revisioned ordering and benchmark/materialize the buyer projection.
+2. Finish mobile catalog rows, route-backed settings, keyboard workflows, and automated accessibility coverage.
+3. Split attribute facet/display/export/schema roles, then harden quick-buy, UCP pagination, and feed cursors.
 
 ## Reliability batch 5 (deployed and live verified)
 
@@ -109,3 +108,12 @@ This log records implementation state. The finding files remain the source for o
 - API version `d31366a7-14b7-4861-9656-2b4bf6f72cf1` and admin version `ab05cbbb-a9f4-4baf-aa4c-fc6cfe1aa5a6` each serve 100% traffic. The storefront was not deployed because this batch has no storefront code or product-page UI change.
 - Authenticated Chrome loaded the live 28-product catalog and Khaki editor from fresh deployed assets. The editor showed the compact action bar, disabled no-op save, authoritative four-option table, image mapping, pricing, discovery, and option workflows without an auth or render failure.
 - Post-deploy `pnpm ops:check --queues` and `pnpm release:check` passed API health, four readiness samples, the 270-path OpenAPI contract, eight queues, dashboard/API auth rejection, storefront pages/cache policy, discovery XML and feeds, UCP search/lookup/product, and Product schema. Existing logs-only alert email and `worker:testdash` producer warnings remain operational follow-up items.
+
+## Reliability batch 6 — locally verified, deployment pending
+
+- Migration 0006 has a fail-closed production-state guard, soft-retires only the three exact unreferenced Mojo copy SKUs, canonicalizes option/SKU/barcode whitespace, strips all historical variant-image markers, and bumps each affected product aggregate exactly once. Copied stock is deliberately not summed without physical inventory evidence.
+- Global normalized SKU and barcode identities plus active per-product Option 1/Option 2 identity are database unique indexes. Canonical triggers reject whitespace, empty identities, default-SKU option drift, optionless normal SKUs, malformed barcode/type pairs, and retired marker reintroduction.
+- SKU create/update/edit-plan and scanner lookup now share trimmed case-insensitive identity. Database race errors map to merchant-safe conflicts instead of generic failures.
+- Product create/update requires explicit variant-image enabled/axis/mapping fields. API, core, admin, shortcode, and storefront detail readers use only persisted product fields and mapping rows; every positional/marker fallback was deleted without changing the protected product-page layout.
+- Production preflight found zero normalized SKU or barcode collisions, one exact four-row Mojo option collision, six trailing-space `Purple ` values, four empty legacy Option 2 strings, and three already-materialized marker products with six stable mapping rows. The three redundant Mojo rows have zero order, movement, alert, reservation, or image-mapping references.
+- Local evidence: all seven migrations apply to an empty SQLite database; production-shaped repair, fail-closed drift, trigger, and normalized-index tests pass; 448 test files / 3,321 tests pass; all workspace typecheck/lint/build gates pass with 290 storefront files and zero diagnostics; SDK generation, migration metadata, Worker env parity, admin performance, distribution secret scan, and diff checks pass.

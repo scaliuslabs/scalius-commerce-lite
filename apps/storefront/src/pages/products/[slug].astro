@@ -147,16 +147,11 @@ const fbViewVariants = selectedBuyerVariant
 
 const variantImageConfiguration = resolveProductVariantImageConfiguration({
   product,
-  images,
-  variants: buyerVariants,
   mappings: variantImageMappings ?? [],
 });
 const isVariantSpecificImagesEnabled = variantImageConfiguration.enabled;
 const variantImageAxis = variantImageConfiguration.axis;
-const cleanMetaDescription =
-  product.metaDescription
-    ?.replace(/<!--variant_images:(?:enabled|option1|option2)-->/g, "")
-    .trim() || "";
+const pageMetaDescription = product.metaDescription?.trim() || "";
 
 const productCategory = category ?? null;
 const productCategoryUrl = productCategory
@@ -188,7 +183,7 @@ const colorOptions = Array.from(colorOrderMap.entries())
   .map((entry) => entry[0]);
 
 const pageTitle = product.metaTitle || product.name;
-const pageDescription = cleanMetaDescription;
+const pageDescription = pageMetaDescription;
 const quickBuyNoticeByError: Record<string, string> = {
   product_unavailable: "This item is not available right now.",
   variant_required: "Please choose an available option before buying.",
@@ -239,7 +234,7 @@ const ogImageUrl = primaryImageUrl && storefrontUrl
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)
 const seoDescription = (
-  cleanMetaDescription ||
+  pageMetaDescription ||
   product.description ||
   product.name
 )

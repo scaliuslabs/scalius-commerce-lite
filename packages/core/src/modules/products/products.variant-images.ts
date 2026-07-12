@@ -21,12 +21,6 @@ export interface VariantImageMappingRecord {
     sortOrder: number;
 }
 
-interface VariantImageSourceImage {
-    id: string;
-    sortOrder?: number | null;
-    createdAt?: Date | string | number | null;
-}
-
 interface VariantImageSourceVariant {
     id: string;
     size?: string | null;
@@ -36,32 +30,6 @@ interface VariantImageSourceVariant {
     isDefault?: boolean | null;
     deletedAt?: Date | string | number | null;
     createdAt?: Date | string | number | null;
-}
-
-const VARIANT_IMAGES_MARKER_REGEX =
-    /<!--variant_images:(?:enabled|option1|option2)-->/g;
-
-export function cleanVariantImageMetaDescription(
-    metaDescription: string | null | undefined,
-): string | null {
-    const cleaned = (metaDescription ?? "")
-        .replace(VARIANT_IMAGES_MARKER_REGEX, "")
-        .trim();
-    return cleaned || null;
-}
-
-export function readLegacyVariantImageSettings(
-    metaDescription: string | null | undefined,
-): { enabled: boolean; axis: VariantImageAxis } {
-    const value = metaDescription ?? "";
-    const enabled = VARIANT_IMAGES_MARKER_REGEX.test(value);
-    VARIANT_IMAGES_MARKER_REGEX.lastIndex = 0;
-    return {
-        enabled,
-        axis: value.includes("<!--variant_images:option1-->")
-            ? "option1"
-            : "option2",
-    };
 }
 
 export function normalizeVariantImageOptionValue(value: string): string {
@@ -109,83 +77,6 @@ export function getOrderedVariantImageOptionValues(
         seen.add(variant.value);
         return [variant.value];
     });
-}
-
-export function synthesizeLegacyVariantImageMappings(params: {
-    productId: string;
-    axis: VariantImageAxis;
-    images: readonly VariantImageSourceImage[];
-    variants: readonly VariantImageSourceVariant[];
-}): VariantImageMappingRecord[] {
-    const images = [...params.images].sort((left, right) =>
-        (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
-        || timestampOrder(left.createdAt) - timestampOrder(right.createdAt)
-        || left.id.localeCompare(right.id)
-    );
-    const optionValues = getOrderedVariantImageOptionValues(
-        params.variants,
-        params.axis,
-    );
-
-    return optionValues.flatMap((optionValue, index) => {
-        const image = images[index];
-        if (!image) return [];
-        return [{
-            id: `legacy:${image.id}`,
-            productId: params.productId,
-            imageId: image.id,
-            variantId: null,
-            optionAxis: params.axis,
-            optionValue,
-            normalizedOptionValue: normalizeVariantImageOptionValue(optionValue),
-            sortOrder: index,
-        }];
-    });
-}
-
-export function resolveVariantImageReadModel(params: {
-    productId: string;
-    variantImagesEnabled?: boolean | null;
-    variantImageAxis?: VariantImageAxis | null;
-    metaDescription?: string | null;
-    storedMappings?: readonly VariantImageMappingRecord[];
-    images: readonly VariantImageSourceImage[];
-    variants: readonly VariantImageSourceVariant[];
-}): {
-    enabled: boolean;
-    axis: VariantImageAxis;
-    mappings: VariantImageMappingRecord[];
-    metaDescription: string | null;
-} {
-    const legacy = readLegacyVariantImageSettings(params.metaDescription);
-    const storedMappings = [...(params.storedMappings ?? [])];
-    const enabled = Boolean(
-        params.variantImagesEnabled
-        || storedMappings.length > 0
-        || legacy.enabled
-    );
-    const axis = storedMappings.find((mapping) => mapping.optionAxis)?.optionAxis
-        ?? (params.variantImagesEnabled ? params.variantImageAxis : null)
-        ?? (legacy.enabled ? legacy.axis : null)
-        ?? params.variantImageAxis
-        ?? "option2";
-    const mappings = storedMappings.length > 0
-        ? storedMappings
-        : legacy.enabled
-            ? synthesizeLegacyVariantImageMappings({
-                productId: params.productId,
-                axis,
-                images: params.images,
-                variants: params.variants,
-            })
-            : [];
-
-    return {
-        enabled,
-        axis,
-        mappings,
-        metaDescription: cleanVariantImageMetaDescription(params.metaDescription),
-    };
 }
 
 export function prepareVariantImageMappingsForWrite(params: {

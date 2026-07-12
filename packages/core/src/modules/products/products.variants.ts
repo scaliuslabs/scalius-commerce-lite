@@ -32,9 +32,36 @@ import {
     type BarcodeType,
 } from "@scalius/shared/barcode-identity";
 import {
-    executeProductAggregateMutationBatch,
+    executeProductAggregateMutationBatch as executeProductAggregateMutationBatchRaw,
     type ProductAggregateRevisionResult,
 } from "./products.aggregate-revision";
+
+export function rethrowProductVariantIdentityConstraint(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("product_variants_sku_identity_uidx")) {
+        throw new ConflictError("A SKU with this identifier already exists.");
+    }
+    if (message.includes("product_variants_barcode_identity_uidx")) {
+        throw new ConflictError("A SKU with this barcode already exists.");
+    }
+    if (message.includes("product_variants_active_option_identity_uidx")) {
+        throw new ConflictError("A SKU with this option combination already exists.");
+    }
+    if (message.includes("INVALID_PRODUCT_VARIANT_IDENTITY")) {
+        throw new ValidationError("SKU, option, or barcode identity is not canonical.");
+    }
+    throw error;
+}
+
+async function executeProductAggregateMutationBatch(
+    ...args: Parameters<typeof executeProductAggregateMutationBatchRaw>
+): ReturnType<typeof executeProductAggregateMutationBatchRaw> {
+    try {
+        return await executeProductAggregateMutationBatchRaw(...args);
+    } catch (error) {
+        return rethrowProductVariantIdentityConstraint(error);
+    }
+}
 
 function normalizeOptionValue(value: string | null | undefined): string | null {
     const normalized = value?.trim();
@@ -256,7 +283,7 @@ function uniqueVariantIds(variantIds: string[]): string[] {
 export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barcode: string) {
     const barcodeKey = getBarcodeIdentityKey(barcode);
     if (!barcodeKey) return null;
-    const matches = await db
+    const variant = await db
         .select({
             variantId: productVariants.id,
             variantSku: productVariants.sku,
@@ -284,14 +311,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
                 isNull(products.deletedAt),
             ),
         )
-        .limit(2);
-
-    if (matches.length > 1) {
-        throw new ConflictError(
-            "Multiple SKUs use this barcode. Repair the catalog before scanning it.",
-        );
-    }
-    const variant = matches[0];
+        .get();
 
     if (!variant) return null;
 
@@ -374,6 +394,8 @@ export async function createVariant(
     assertNormalVariantHasCustomerOption(data);
     const size = normalizeOptionValue(data.size);
     const color = normalizeOptionValue(data.color);
+    const sku = normalizeSku(data.sku);
+    const skuKey = normalizedSkuKey(sku);
     const barcodeIdentity = normalizeVariantBarcode(data.barcode, data.barcodeType);
     await assertProductVariantOptionAxes(db, productId, [{ size, color }]);
     await assertUniqueVariantBarcodes(db, [{ ...barcodeIdentity }]);
@@ -381,7 +403,7 @@ export async function createVariant(
     const existingVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
-        .where(sql`${productVariants.sku} = ${data.sku} AND ${productVariants.deletedAt} IS NULL`)
+        .where(sql`lower(trim(${productVariants.sku})) = ${skuKey}`)
         .get();
 
     if (existingVariant) {
@@ -395,7 +417,7 @@ export async function createVariant(
         size,
         color,
         weight: data.weight,
-        sku: data.sku,
+        sku,
         price: data.price,
         stock: data.stock > 0 ? 0 : data.stock,
         reservedStock: 0,
@@ -514,10 +536,12 @@ export async function updateVariant(
         await assertProductVariantOptionAxes(db, productId, [{ id: variantId, size, color }], [variantId]);
     }
 
+    const sku = normalizeSku(data.sku);
+    const skuKey = normalizedSkuKey(sku);
     const existingSkuVariant = await db
         .select({ id: productVariants.id })
         .from(productVariants)
-        .where(sql`${productVariants.sku} = ${data.sku} AND ${productVariants.id} != ${variantId} AND ${productVariants.deletedAt} IS NULL`)
+        .where(sql`lower(trim(${productVariants.sku})) = ${skuKey} AND ${productVariants.id} != ${variantId}`)
         .get();
 
     if (existingSkuVariant) {
@@ -551,7 +575,7 @@ export async function updateVariant(
         size,
         color,
         weight: data.weight,
-        sku: data.sku,
+        sku,
         price: simpleProductPricing?.price ?? data.price,
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
         barcode: barcodeIdentity.barcode,
@@ -952,13 +976,10 @@ export async function applyVariantEditPlan(
         const matchingSkuRows = await db
             .select({ id: productVariants.id, sku: productVariants.sku })
             .from(productVariants)
-            .where(and(
-                isNull(productVariants.deletedAt),
-                sql`lower(trim(${productVariants.sku})) IN (
-                    SELECT CAST(value AS TEXT)
-                    FROM json_each(${JSON.stringify(candidateSkuKeys)})
-                )`,
-            ));
+            .where(sql`lower(trim(${productVariants.sku})) IN (
+                SELECT CAST(value AS TEXT)
+                FROM json_each(${JSON.stringify(candidateSkuKeys)})
+            )`);
         const collision = matchingSkuRows.find((row) => {
             const currentKey = normalizedSkuKey(row.sku);
             const plannedKey = plannedUpdateSkuById.get(row.id);

@@ -10,6 +10,7 @@ import {
     getVariantSortOrder,
     lookupByBarcode,
     normalizeVariantBarcode,
+    rethrowProductVariantIdentityConstraint,
     updateVariant,
 } from "./products.variants";
 
@@ -48,18 +49,6 @@ describe("product variant SKU rules", () => {
                 [{ size: " m ", color: "BLUE" }],
             ),
         ).toThrow(ConflictError);
-    });
-
-    it("allows one changed SKU to repair a legacy duplicate incrementally", () => {
-        expect(() =>
-            assertUniqueChangedVariantOptions(
-                [{ size: "L", color: "Blue" }],
-                [
-                    { size: "M", color: "Blue" },
-                    { size: "M", color: "Blue" },
-                ],
-            ),
-        ).not.toThrow();
     });
 
     it("rejects merchant-created variants without customer options", async () => {
@@ -784,7 +773,7 @@ describe("product variant SKU rules", () => {
                                 return {
                                     where() {
                                         return {
-                                            limit: async () => [variantRow],
+                                            get: async () => variantRow,
                                         };
                                     },
                                 };
@@ -838,27 +827,19 @@ describe("product variant SKU rules", () => {
         expect(() => normalizeVariantBarcode("123", "ean13")).toThrow(ValidationError);
     });
 
-    it("fails closed when a normalized barcode has multiple SKU matches", async () => {
-        const dbWithDuplicates = {
-            select() {
-                return {
-                    from() {
-                        return {
-                            innerJoin() {
-                                return {
-                                    where() {
-                                        return { limit: async () => [{}, {}] };
-                                    },
-                                };
-                            },
-                        };
-                    },
-                };
-            },
-        };
-        await expect(
-            lookupByBarcode(dbWithDuplicates as never, " ABC "),
-        ).rejects.toBeInstanceOf(ConflictError);
+    it("turns database identity races into merchant-safe conflicts", () => {
+        expect(() => rethrowProductVariantIdentityConstraint(
+            new Error("UNIQUE constraint failed: index 'product_variants_sku_identity_uidx'"),
+        )).toThrowError("A SKU with this identifier already exists.");
+        expect(() => rethrowProductVariantIdentityConstraint(
+            new Error("UNIQUE constraint failed: index 'product_variants_barcode_identity_uidx'"),
+        )).toThrowError("A SKU with this barcode already exists.");
+        expect(() => rethrowProductVariantIdentityConstraint(
+            new Error("UNIQUE constraint failed: index 'product_variants_active_option_identity_uidx'"),
+        )).toThrowError("A SKU with this option combination already exists.");
+        expect(() => rethrowProductVariantIdentityConstraint(
+            new Error("INVALID_PRODUCT_VARIANT_IDENTITY"),
+        )).toThrow(ValidationError);
     });
 
     it("excludes protected default SKU drift from option sort order", async () => {

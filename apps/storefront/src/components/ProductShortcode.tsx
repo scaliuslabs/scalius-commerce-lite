@@ -97,11 +97,9 @@ export default function ProductShortcode({
   const variantImageConfiguration = useMemo(
     () => resolveProductVariantImageConfiguration({
       product,
-      images,
-      variants: buyerVariants,
       mappings: variantImageMappings ?? [],
     }),
-    [buyerVariants, images, product, variantImageMappings],
+    [product, variantImageMappings],
   );
   const isVariantImagesEnabled = variantImageConfiguration.enabled;
   const variantImageAxis = variantImageConfiguration.axis;

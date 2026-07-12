@@ -27875,9 +27875,9 @@ export type PostApiV1AdminProductsData = {
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantImagesEnabled?: boolean;
-        variantImageAxis?: 'option1' | 'option2';
-        variantImageMappings?: Array<{
+        variantImagesEnabled: boolean;
+        variantImageAxis: 'option1' | 'option2';
+        variantImageMappings: Array<{
             imageId: string;
             variantId?: string | null;
             optionAxis?: 'option1' | 'option2' | null;
@@ -28490,9 +28490,9 @@ export type PutApiV1AdminProductsByIdData = {
         variantOption2Label?: string;
         variantOption1Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
         variantOption2Schema?: 'size' | 'color' | 'material' | 'pattern' | 'none';
-        variantImagesEnabled?: boolean;
-        variantImageAxis?: 'option1' | 'option2';
-        variantImageMappings?: Array<{
+        variantImagesEnabled: boolean;
+        variantImageAxis: 'option1' | 'option2';
+        variantImageMappings: Array<{
             imageId: string;
             variantId?: string | null;
             optionAxis?: 'option1' | 'option2' | null;

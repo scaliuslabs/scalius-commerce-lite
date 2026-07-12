@@ -35,6 +35,9 @@ const productInput = {
     variantOption2Label: DEFAULT_PRODUCT_OPTION_LABELS.option2,
     variantOption1Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option1,
     variantOption2Schema: DEFAULT_PRODUCT_OPTION_SCHEMA.option2,
+    variantImagesEnabled: false,
+    variantImageAxis: "option2" as const,
+    variantImageMappings: [],
     slug: "main-shoe",
     images: [],
     attributes: [],
@@ -92,5 +95,14 @@ describe("product validation", () => {
             id: "prod_1",
             expectedAggregateRevision: 3,
         }).success).toBe(true);
+    });
+
+    it("requires explicit image configuration and rejects retired metadata markers", () => {
+        const { variantImagesEnabled: _enabled, ...withoutImageAuthority } = productInput;
+        expect(createProductSchema.safeParse(withoutImageAuthority).success).toBe(false);
+        expect(createProductSchema.safeParse({
+            ...productInput,
+            metaDescription: "SEO<!--variant_images:option1-->",
+        }).success).toBe(false);
     });
 });

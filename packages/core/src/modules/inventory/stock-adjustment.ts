@@ -254,9 +254,7 @@ export async function lookupByBarcodeOrSku(
     productIsActive: products.isActive,
   };
 
-  // Read at most two rows so legacy duplicates fail closed instead of letting
-  // `.get()` choose an arbitrary SKU before the unique index is deployed.
-  const barcodeMatches = await db
+  let variant = await db
     .select(lookupFields)
     .from(productVariants)
     .innerJoin(products, eq(productVariants.productId, products.id))
@@ -267,17 +265,10 @@ export async function lookupByBarcodeOrSku(
         isNull(products.deletedAt),
       ),
     )
-    .limit(2);
+    .get();
 
-  if (barcodeMatches.length > 1) {
-    throw new ConflictError(
-      "Multiple active SKUs share this barcode. Resolve the duplicate before adjusting stock.",
-    );
-  }
-
-  let variant: (typeof barcodeMatches)[number] | null | undefined = barcodeMatches[0];
-
-  // Fall back to a trimmed, case-sensitive SKU match.
+  // Barcode and SKU identities share the same trimmed, case-insensitive
+  // database contract, so scanners behave consistently for either code.
   if (!variant) {
     variant = await db
       .select(lookupFields)
@@ -285,7 +276,7 @@ export async function lookupByBarcodeOrSku(
       .innerJoin(products, eq(productVariants.productId, products.id))
       .where(
         and(
-          eq(productVariants.sku, normalizedCode),
+          sql`lower(trim(${productVariants.sku})) = ${barcodeIdentity}`,
           isNull(productVariants.deletedAt),
           isNull(products.deletedAt),
         ),

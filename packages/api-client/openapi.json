@@ -94808,6 +94808,9 @@
                   "metaTitle",
                   "metaDescription",
                   "productCondition",
+                  "variantImagesEnabled",
+                  "variantImageAxis",
+                  "variantImageMappings",
                   "slug",
                   "images"
                 ]
@@ -96746,6 +96749,9 @@
                   "metaTitle",
                   "metaDescription",
                   "productCondition",
+                  "variantImagesEnabled",
+                  "variantImageAxis",
+                  "variantImageMappings",
                   "slug",
                   "images",
                   "id",

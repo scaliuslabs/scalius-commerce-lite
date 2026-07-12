@@ -7,9 +7,6 @@ import type { CreateProductInput } from "@/lib/api-functions/products";
 
 export type VariantImageAxis = "option1" | "option2";
 
-const VARIANT_IMAGES_MARKER_REGEX =
-  /<!--variant_images:(?:enabled|option1|option2)-->/g;
-
 /**
  * Extract unique option values from variants, sorted by the matching sort order.
  */
@@ -41,39 +38,6 @@ export const extractUniqueVariantOptionValues = (
   return Array.from(optionMap.entries())
     .sort((a, b) => a[1] - b[1])
     .map((entry) => entry[0]);
-};
-
-/**
- * Clean meta description by removing variant images marker
- */
-export const cleanMetaDescription = (
-  metaDescription: string | null | undefined,
-): string | null => {
-  if (!metaDescription) return null;
-
-  const cleaned = metaDescription.replace(VARIANT_IMAGES_MARKER_REGEX, "");
-  return cleaned.trim() || null;
-};
-
-/**
- * Check if variant images are enabled in meta description
- */
-export const hasVariantImagesEnabled = (
-  metaDescription: string | null | undefined,
-): boolean => {
-  return Boolean((metaDescription ?? "").match(VARIANT_IMAGES_MARKER_REGEX));
-};
-
-/**
- * Resolve which option axis drives variant-specific images.
- */
-export const getVariantImagesAxis = (
-  metaDescription: string | null | undefined,
-): VariantImageAxis => {
-  if (metaDescription?.includes("<!--variant_images:option1-->")) {
-    return "option1";
-  }
-  return "option2";
 };
 
 export const resolveVariantImageAxis = (
@@ -198,7 +162,7 @@ export const formatFormValuesForSubmission = (
   variantImageAxis: VariantImageAxis,
   variantImageMappings: readonly ProductVariantImageMappingFormValue[],
 ): CreateProductInput => {
-  const metaDescription = cleanMetaDescription(values.metaDescription);
+  const metaDescription = values.metaDescription?.trim() || null;
 
   // Ensure only ONE discount type is active by clearing the unused field
   const discountPercentage =

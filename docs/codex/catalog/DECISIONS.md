@@ -46,7 +46,7 @@ Last reviewed: 2026-07-12
 
 ### Batch 4 — model corrections
 
-- Resolved: explicit image-ID-to-variant/option-value media associations, legacy marker backfill, and stable reorder behavior.
+- Resolved: explicit image-ID-to-variant/option-value media associations, one-time marker backfill, permanent marker removal, and stable reorder behavior.
 - Normalized option/value identities and unique active combinations.
 - Inventory ledger v2 with pool and before/after physical/reserved/preorder counters.
 - Catalog collection membership/rules separated from merchandising modules.
@@ -56,7 +56,7 @@ Last reviewed: 2026-07-12
 
 - Mandatory product aggregate CAS across product, option, sort, tax classification, and relevant cascade writes.
 - Typed draft-preserving conflict UX and explicit reload/terminal-deletion recovery.
-- Normalized barcode pairing/checksum/duplicate validation and bounded duplicate-safe lookup.
+- Normalized SKU/barcode/option identity at both application and database boundaries.
 - Remove persisted duplicate and redundant bulk-update endpoints; standardize on atomic edit plan.
 - Always-soft SKU retirement and in-transaction lifecycle/reservation/order/history guards.
 

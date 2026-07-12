@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  cleanMetaDescription,
   extractUniqueVariantOptionValues,
   formatFormValuesForSubmission,
-  getVariantImagesAxis,
-  hasVariantImagesEnabled,
   resolveVariantImageAxis,
   reconcileVariantImageMappings,
 } from "./utils";
@@ -42,24 +39,6 @@ const variants = [
 ];
 
 describe("product form variant image metadata", () => {
-  it("removes all variant-image markers from merchant meta description text", () => {
-    expect(cleanMetaDescription("Fresh rice<!--variant_images:enabled-->")).toBe("Fresh rice");
-    expect(cleanMetaDescription("Fresh rice<!--variant_images:option1-->")).toBe("Fresh rice");
-    expect(cleanMetaDescription("Fresh rice<!--variant_images:option2-->")).toBe("Fresh rice");
-  });
-
-  it("detects legacy and axis-specific variant image markers", () => {
-    expect(hasVariantImagesEnabled("<!--variant_images:enabled-->")).toBe(true);
-    expect(hasVariantImagesEnabled("<!--variant_images:option1-->")).toBe(true);
-    expect(hasVariantImagesEnabled("")).toBe(false);
-  });
-
-  it("defaults legacy image mapping to Option 2 and resolves Option 1 explicitly", () => {
-    expect(getVariantImagesAxis("<!--variant_images:enabled-->")).toBe("option2");
-    expect(getVariantImagesAxis("<!--variant_images:option2-->")).toBe("option2");
-    expect(getVariantImagesAxis("<!--variant_images:option1-->")).toBe("option1");
-  });
-
   it("extracts sorted customer option values without default SKU drift", () => {
     expect(extractUniqueVariantOptionValues(variants, "option1")).toEqual(["1KG", "2KG"]);
     expect(extractUniqueVariantOptionValues(variants, "option2")).toEqual(["Red", "Blue"]);

@@ -123,8 +123,18 @@ export const productVariants = sqliteTable("product_variants", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("product_variants_product_id_idx").on(table.productId),
-    uniqueIndex("product_variants_sku_unique_idx").on(table.sku),
-    index("product_variants_barcode_idx").on(table.barcode),
+    uniqueIndex("product_variants_sku_identity_uidx")
+        .on(sql`lower(trim(${table.sku}))`),
+    uniqueIndex("product_variants_barcode_identity_uidx")
+        .on(sql`lower(trim(${table.barcode}))`)
+        .where(sql`${table.barcode} IS NOT NULL AND trim(${table.barcode}) <> ''`),
+    uniqueIndex("product_variants_active_option_identity_uidx")
+        .on(
+            table.productId,
+            sql`lower(trim(coalesce(${table.size}, '')))`,
+            sql`lower(trim(coalesce(${table.color}, '')))`,
+        )
+        .where(sql`${table.deletedAt} IS NULL AND ${table.isDefault} = false`),
     index("product_variants_default_idx").on(table.productId, table.isDefault, table.deletedAt),
     index("product_variants_track_inventory_idx").on(table.trackInventory, table.deletedAt),
     // Manual migration 0055 also creates this partial unique index (not expressible in Drizzle):
