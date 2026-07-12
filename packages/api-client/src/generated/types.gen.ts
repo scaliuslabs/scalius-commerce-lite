@@ -25216,111 +25216,6 @@ export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses = {
 
 export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses];
 
-export type PostApiV1AdminOrdersByIdReturnData = {
-    body?: {
-        reason?: string;
-        autoRefund?: boolean;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/return';
-};
-
-export type PostApiV1AdminOrdersByIdReturnErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Service unavailable
-     */
-    503: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdReturnError = PostApiV1AdminOrdersByIdReturnErrors[keyof PostApiV1AdminOrdersByIdReturnErrors];
-
-export type PostApiV1AdminOrdersByIdReturnResponses = {
-    /**
-     * Return processed
-     */
-    200: {
-        success: true;
-        data: {
-            refundResult?: {
-                success: boolean;
-                gateway: string;
-                refundId?: string;
-                amount: number;
-                isFullRefund: boolean;
-                error?: string;
-                [key: string]: unknown;
-            };
-        };
-    };
-};
-
-export type PostApiV1AdminOrdersByIdReturnResponse = PostApiV1AdminOrdersByIdReturnResponses[keyof PostApiV1AdminOrdersByIdReturnResponses];
-
 export type PostApiV1AdminOrdersByIdRefundData = {
     body?: {
         amount?: number;
@@ -25643,6 +25538,18 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData = {
     body: {
         status: 'under_review' | 'approved' | 'rejected' | 'completed';
         note?: string | null;
+        returnRequest?: {
+            commandKey: string;
+            expectedOrderVersion: number;
+            reason: string;
+            notes?: string | null;
+            lines: Array<{
+                orderItemId: string;
+                quantity: number;
+                reason?: string | null;
+                notes?: string | null;
+            }>;
+        };
     };
     path: {
         id: string;
@@ -25753,6 +25660,7 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
+                returnId: string | null;
                 submittedAt: string | number | null;
                 resolvedAt: string | number | null;
                 createdAt: string | number | null;
@@ -25770,6 +25678,7 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
+                returnId: string | null;
                 submittedAt: string | number | null;
                 resolvedAt: string | number | null;
                 createdAt: string | number | null;
@@ -25780,6 +25689,830 @@ export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses = {
 };
 
 export type PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse = PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses[keyof PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses];
+
+export type GetApiV1AdminOrdersByIdReturnsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns';
+};
+
+export type GetApiV1AdminOrdersByIdReturnsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdReturnsError = GetApiV1AdminOrdersByIdReturnsErrors[keyof GetApiV1AdminOrdersByIdReturnsErrors];
+
+export type GetApiV1AdminOrdersByIdReturnsResponses = {
+    /**
+     * Returns
+     */
+    200: {
+        success: true;
+        data: {
+            returns: Array<{
+                id: string;
+                orderId: string;
+                status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+                reason: string;
+                notes: string | null;
+                actorType: string;
+                actorId: string | null;
+                source: 'admin' | 'support_request' | 'cod_return_to_sender';
+                sourceReferenceId: string | null;
+                version: number;
+                requestedAt: string | null;
+                approvedAt: string | null;
+                receivingStartedAt: string | null;
+                completedAt: string | null;
+                rejectedAt: string | null;
+                cancelledAt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                receiptRecovery: {
+                    required: true;
+                    startedAt: number | null;
+                } | null;
+                receipts: Array<{
+                    id: string;
+                    returnLineId: string;
+                    receivedQuantity: number;
+                    restockQuantity: number;
+                    damagedQuantity: number;
+                    actorType: string;
+                    actorId: string | null;
+                    inventoryMovementId: string | null;
+                    notes: string | null;
+                    createdAt: string | null;
+                }>;
+                lines: Array<{
+                    id: string;
+                    orderItemId: string;
+                    variantId: string | null;
+                    inventoryTracked: boolean;
+                    requestedQuantity: number;
+                    approvedQuantity: number;
+                    receivedQuantity: number;
+                    restockQuantity: number;
+                    damagedQuantity: number;
+                    rejectedQuantity: number;
+                    remainingReturnableQuantity: number;
+                    reason: string | null;
+                    notes: string | null;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdReturnsResponse = GetApiV1AdminOrdersByIdReturnsResponses[keyof GetApiV1AdminOrdersByIdReturnsResponses];
+
+export type PostApiV1AdminOrdersByIdReturnsData = {
+    body: {
+        commandKey: string;
+        expectedOrderVersion: number;
+        reason: string;
+        notes?: string | null;
+        lines: Array<{
+            orderItemId: string;
+            quantity: number;
+            reason?: string | null;
+            notes?: string | null;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns';
+};
+
+export type PostApiV1AdminOrdersByIdReturnsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsError = PostApiV1AdminOrdersByIdReturnsErrors[keyof PostApiV1AdminOrdersByIdReturnsErrors];
+
+export type PostApiV1AdminOrdersByIdReturnsResponses = {
+    /**
+     * Return requested
+     */
+    201: {
+        success: true;
+        data: {
+            orderId: string;
+            returnId: string;
+            status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+            version: number;
+            restockedQuantity: number;
+            wholeOrderReturned: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsResponse = PostApiV1AdminOrdersByIdReturnsResponses[keyof PostApiV1AdminOrdersByIdReturnsResponses];
+
+export type GetApiV1AdminOrdersByIdReturnsByReturnIdData = {
+    body?: never;
+    path: {
+        id: string;
+        returnId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns/{returnId}';
+};
+
+export type GetApiV1AdminOrdersByIdReturnsByReturnIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdReturnsByReturnIdError = GetApiV1AdminOrdersByIdReturnsByReturnIdErrors[keyof GetApiV1AdminOrdersByIdReturnsByReturnIdErrors];
+
+export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponses = {
+    /**
+     * Return
+     */
+    200: {
+        success: true;
+        data: {
+            return: {
+                id: string;
+                orderId: string;
+                status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+                reason: string;
+                notes: string | null;
+                actorType: string;
+                actorId: string | null;
+                source: 'admin' | 'support_request' | 'cod_return_to_sender';
+                sourceReferenceId: string | null;
+                version: number;
+                requestedAt: string | null;
+                approvedAt: string | null;
+                receivingStartedAt: string | null;
+                completedAt: string | null;
+                rejectedAt: string | null;
+                cancelledAt: string | null;
+                createdAt: string | null;
+                updatedAt: string | null;
+                receiptRecovery: {
+                    required: true;
+                    startedAt: number | null;
+                } | null;
+                receipts: Array<{
+                    id: string;
+                    returnLineId: string;
+                    receivedQuantity: number;
+                    restockQuantity: number;
+                    damagedQuantity: number;
+                    actorType: string;
+                    actorId: string | null;
+                    inventoryMovementId: string | null;
+                    notes: string | null;
+                    createdAt: string | null;
+                }>;
+                lines: Array<{
+                    id: string;
+                    orderItemId: string;
+                    variantId: string | null;
+                    inventoryTracked: boolean;
+                    requestedQuantity: number;
+                    approvedQuantity: number;
+                    receivedQuantity: number;
+                    restockQuantity: number;
+                    damagedQuantity: number;
+                    rejectedQuantity: number;
+                    remainingReturnableQuantity: number;
+                    reason: string | null;
+                    notes: string | null;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdReturnsByReturnIdResponse = GetApiV1AdminOrdersByIdReturnsByReturnIdResponses[keyof GetApiV1AdminOrdersByIdReturnsByReturnIdResponses];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData = {
+    body: {
+        commandKey: string;
+        expectedVersion: number;
+        notes?: string | null;
+        lines: Array<{
+            lineId: string;
+            approvedQuantity: number;
+            rejectedQuantity: number;
+            notes?: string | null;
+        }>;
+    };
+    path: {
+        id: string;
+        returnId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns/{returnId}/approve';
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveError = PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponses = {
+    /**
+     * Return updated
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            returnId: string;
+            status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+            version: number;
+            restockedQuantity: number;
+            wholeOrderReturned: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponse = PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponses[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponses];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData = {
+    body: {
+        commandKey: string;
+        expectedVersion: number;
+        notes?: string | null;
+        lines: Array<{
+            lineId: string;
+            receivedQuantity: number;
+            restockQuantity: number;
+            damagedQuantity: number;
+            notes?: string | null;
+        }>;
+    };
+    path: {
+        id: string;
+        returnId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns/{returnId}/receive';
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveError = PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponses = {
+    /**
+     * Return updated
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            returnId: string;
+            status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+            version: number;
+            restockedQuantity: number;
+            wholeOrderReturned: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponse = PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponses[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponses];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelData = {
+    body: {
+        commandKey: string;
+        expectedVersion: number;
+        notes?: string | null;
+    };
+    path: {
+        id: string;
+        returnId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns/{returnId}/cancel';
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelError = PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponses = {
+    /**
+     * Return updated
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            returnId: string;
+            status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+            version: number;
+            restockedQuantity: number;
+            wholeOrderReturned: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponse = PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponses[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponses];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileData = {
+    body?: never;
+    path: {
+        id: string;
+        returnId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/returns/{returnId}/reconcile';
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileError = PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors];
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses = {
+    /**
+     * Receipt reconciled
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            returnId: string;
+            status: 'requested' | 'approved' | 'receiving' | 'completed' | 'rejected' | 'cancelled';
+            version: number;
+            restockedQuantity: number;
+            wholeOrderReturned: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponse = PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses];
 
 export type GetApiV1AdminOrdersData = {
     body?: never;
@@ -26754,6 +27487,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             areaName: string | null;
             paidAmount: number | null;
             balanceDue: number | null;
+            version: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;
@@ -26874,6 +27608,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 actionLabel: string;
                 reason: string;
                 message: string | null;
+                returnId: string | null;
                 submittedAt: string | number | null;
                 resolvedAt: string | number | null;
                 createdAt: string | number | null;

@@ -43,7 +43,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { PartialRefundProcessedError, processRefund, processReturn } from "./refund-service";
+import { PartialRefundProcessedError, processRefund } from "./refund-service";
 
 type PaymentRow = {
   id: string;
@@ -676,28 +676,6 @@ describe("refund allocation", () => {
 
     expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
     expect(db.batch).not.toHaveBeenCalled();
-  });
-
-  it("blocks returns while hosted payment setup is active", async () => {
-    const db = createDbMock({
-      orderOverrides: {
-        status: OrderStatus.DELIVERED,
-        paymentStatus: PaymentStatus.PAID,
-      },
-      payments: [
-        stripePayment({ id: "pay_1", amount: 100, stripeChargeId: "ch_1" }),
-      ],
-      activePaymentSessionAttemptRows: [{ orderId: "order_1" }],
-    });
-
-    await expect(processReturn(db as never, undefined, {
-      orderId: "order_1",
-      reason: "customer_request",
-      autoRefund: false,
-    })).rejects.toThrow("active hosted payment setup");
-
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(db.updateValues).toHaveLength(0);
   });
 
   it("blocks a new refund while a legacy pending refund row exists", async () => {

@@ -253,7 +253,23 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
-  "/api/v1/admin/orders/*/return": {
+  "/api/v1/admin/orders/*/returns": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
+  "/api/v1/admin/orders/*/returns/*": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
+  "/api/v1/admin/orders/*/returns/*/approve": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
+  "/api/v1/admin/orders/*/returns/*/receive": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
+  "/api/v1/admin/orders/*/returns/*/cancel": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
+  "/api/v1/admin/orders/*/returns/*/reconcile": {
     POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
   },
   "/api/v1/admin/orders/*/refund": {

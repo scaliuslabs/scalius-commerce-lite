@@ -61,6 +61,7 @@ export interface OrderSupportRequestView {
   actionLabel: string;
   reason: string;
   message: string | null;
+  returnId: string | null;
   submittedAt: string | null;
   resolvedAt: string | null;
   createdAt: string | null;
@@ -85,6 +86,7 @@ export interface UpdateAdminOrderSupportRequestStatusInput {
   status: AdminOrderSupportRequestStatus;
   note?: string | null;
   actorId?: string | null;
+  returnId?: string | null;
 }
 
 export interface AdminOrderSupportRequestTransition {
@@ -102,6 +104,7 @@ interface SupportRequestRow {
   reason: string;
   message: string | null;
   activeKey: string | null;
+  returnId: string | null;
   submittedAt: number | null;
   resolvedAt: number | null;
   createdAt: number | null;
@@ -154,6 +157,7 @@ const supportRequestSelectFields = {
   reason: orderSupportRequests.reason,
   message: orderSupportRequests.message,
   activeKey: orderSupportRequests.activeKey,
+  returnId: orderSupportRequests.returnId,
   submittedAt: sql<number | null>`CAST(${orderSupportRequests.submittedAt} AS INTEGER)`,
   resolvedAt: sql<number | null>`CAST(${orderSupportRequests.resolvedAt} AS INTEGER)`,
   createdAt: sql<number | null>`CAST(${orderSupportRequests.createdAt} AS INTEGER)`,
@@ -288,6 +292,7 @@ export function formatOrderSupportRequest(row: SupportRequestRow): OrderSupportR
     actionLabel: SUPPORT_REQUEST_COPY[type].actionLabel,
     reason: row.reason,
     message: row.message,
+    returnId: row.returnId,
     submittedAt: timestampToIso(row.submittedAt),
     resolvedAt: timestampToIso(row.resolvedAt),
     createdAt: timestampToIso(row.createdAt),
@@ -428,6 +433,17 @@ export async function updateAdminOrderSupportRequestStatus(
 
   const transition = getAdminOrderSupportRequestTransition(current.status, targetStatus);
   if (!transition.changed) {
+    if (input.returnId && current.returnId !== input.returnId) {
+      const linked = await db.update(orderSupportRequests).set({
+        returnId: input.returnId,
+        updatedAt: sql`unixepoch()`,
+      }).where(and(
+        eq(orderSupportRequests.id, requestId),
+        eq(orderSupportRequests.orderId, orderId),
+        isNull(orderSupportRequests.returnId),
+      )).returning(supportRequestSelectFields);
+      if (linked[0]) current.returnId = linked[0].returnId;
+    }
     return {
       request: formatOrderSupportRequest(current),
       supportRequests: await listOrderSupportRequests(db, orderId),
@@ -444,6 +460,7 @@ export async function updateAdminOrderSupportRequestStatus(
       .update(orderSupportRequests)
       .set({
         status: targetStatus,
+        returnId: input.returnId ?? current.returnId,
         activeKey,
         resolvedAt: transition.terminal ? sql`unixepoch()` : null,
         updatedAt: sql`unixepoch()`,

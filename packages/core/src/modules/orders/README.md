@@ -223,7 +223,12 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | POST | `/:id/shipments/:shipmentId/status` | shared check + sync helper | Check provider status, sync order/inventory/cache/notifications |
 | POST | `/:id/shipments/:shipmentId/refresh` | shared check + sync helper | Refresh provider status, sync order/inventory/cache/notifications |
 | POST | `/:id/shipments/:shipmentId/reconcile` | `reconcileOrderShipment()` | Repair `reconcile_required` shipment/order/inventory state without calling the provider again |
-| POST | `/:id/return` | `processReturn()` | Return with optional auto-refund |
+| GET/POST | `/:id/returns` | `listOrderReturns()` / `createOrderReturn()` | Read or request item-level returns; request does not change stock |
+| GET | `/:id/returns/:returnId` | `getOrderReturn()` | Read item lines, lifecycle, and sanitized recovery state |
+| POST | `/:id/returns/:returnId/approve` | `approveOrderReturn()` | Approve/reject every requested unit without changing stock |
+| POST | `/:id/returns/:returnId/receive` | `receiveOrderReturn()` | Record immutable restock/damaged dispositions and exact ledger movement |
+| POST | `/:id/returns/:returnId/reconcile` | `reconcileOrderReturnReceipt()` | Resume a claimed receipt from server-owned durable input |
+| POST | `/:id/returns/:returnId/cancel` | `cancelOrderReturn()` | Cancel an unreceived request/approval |
 | POST | `/:id/refund` | `processRefund()` | Refund with optional gateway |
 | GET | `/:id/form-data` | direct query | Order + products for edit form |
 

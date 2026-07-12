@@ -66,6 +66,8 @@ export interface ClaimedInventoryEntryBatchInput {
     /** Stable logical-operation key. Replaying the same key and payload is a no-op. */
     claimKey: string;
     pool: InventoryPoolName;
+    /** Operator responsible for this explicit inventory mutation. */
+    createdBy?: string | null;
 }
 
 interface InventoryTransitionResult {
@@ -97,6 +99,7 @@ type InventoryTransitionMovementClaim = {
     type: "deducted" | "preorder_deducted" | "released" | "restored";
     quantity: number;
     notes: string;
+    createdBy: string | null;
 } & InventoryLedgerV2EdgeFields;
 
 /**
@@ -222,7 +225,7 @@ export async function applyInventoryForStatusChange(
 export async function applyClaimedInventoryEntryBatch(
     db: Database,
     input: ClaimedInventoryEntryBatchInput,
-): Promise<void> {
+): Promise<string[]> {
     if (!input.orderId.trim()) {
         throw new ValidationError("Inventory claim requires an order id.");
     }
@@ -232,9 +235,9 @@ export async function applyClaimedInventoryEntryBatch(
     for (const entry of input.entries) validatePositiveQuantity(entry.quantity);
 
     const entries = mergeTransitionEntriesByVariant(input.entries, input.pool);
-    if (entries.length === 0) return;
+    if (entries.length === 0) return [];
 
-    await applyStrictInventoryTransitionMovements(
+    return applyStrictInventoryTransitionMovements(
         db,
         {
             id: input.orderId,
@@ -246,6 +249,7 @@ export async function applyClaimedInventoryEntryBatch(
         input.operation,
         entries,
         input.claimKey,
+        input.createdBy ?? null,
     );
 }
 
@@ -335,10 +339,11 @@ async function applyStrictInventoryTransitionMovements(
     operation: StrictMovementOperation,
     entries: ReservationEntry[],
     claimKey?: string,
-): Promise<void> {
+    createdBy: string | null = null,
+): Promise<string[]> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
-    if (mergedEntries.length === 0) return;
+    if (mergedEntries.length === 0) return [];
 
     for (let attempt = 0; attempt < MAX_TRANSITION_RETRIES; attempt++) {
         const variants = await loadTransitionVariantStates(db, order.id, operation, mergedEntries);
@@ -350,6 +355,7 @@ async function applyStrictInventoryTransitionMovements(
             variants,
             pool,
             claimKey,
+            createdBy,
         );
         const movementQueries = movementClaims.map((claim, index) =>
             buildTransitionMovementInsert(
@@ -379,7 +385,7 @@ async function applyStrictInventoryTransitionMovements(
             );
             if (duplicateResolved) {
                 await checkLowStockForTransitionEntries(db, mergedEntries);
-                return;
+                return movementClaims.map((claim) => claim.id);
             }
 
             console.error(`[inventory/transition] ${operation} batch execution failed for order ${order.id}:`, err);
@@ -501,8 +507,12 @@ async function applyStrictInventoryTransitionMovements(
         }
 
         await checkLowStockForTransitionEntries(db, mergedEntries);
-        return;
+        return movementClaims.map((claim) => claim.id);
     }
+
+    throw new ValidationError(
+        `Inventory ${operation} exhausted its bounded retries for order ${order.id}`,
+    );
 }
 
 async function buildTransitionReservationBatchItems(
@@ -595,6 +605,7 @@ async function buildTransitionMovementClaims(
     variants: Map<string, InventoryVariantState>,
     pool: InventoryPoolName,
     claimKey?: string,
+    createdBy: string | null = null,
 ): Promise<InventoryTransitionMovementClaim[]> {
     const claims: InventoryTransitionMovementClaim[] = [];
     for (const entry of entries) {
@@ -631,6 +642,7 @@ async function buildTransitionMovementClaims(
             type: getTransitionMovementType(operation, pool),
             quantity: operation === "release" ? -entry.quantity : entry.quantity,
             notes: getTransitionMovementNotes(order.id, operation, entry.quantity),
+            createdBy,
             ...edge,
         });
     }
@@ -661,7 +673,7 @@ function buildTransitionMovementInsert(
                 ${claim.previousStock},
                 ${claim.newStock},
                 ${claim.notes},
-                NULL,
+                ${claim.createdBy},
                 ${claim.ledgerVersion},
                 ${claim.pool},
                 ${claim.reservationGeneration},
@@ -1004,7 +1016,11 @@ async function createTransitionMovementId(input: {
         input.variantId,
         input.operation,
         input.pool,
-        String(input.generation),
+        // Explicit claims are already uniquely namespaced by their stable key.
+        // Omitting the observed movement count keeps them replay-stable after
+        // the first successful write. Status-driven transitions still need a
+        // generation so a later legitimate lifecycle cycle gets a new edge.
+        ...(input.claimKey ? [] : [String(input.generation)]),
     ].join("\0");
     const digest = await crypto.subtle.digest(
         "SHA-256",

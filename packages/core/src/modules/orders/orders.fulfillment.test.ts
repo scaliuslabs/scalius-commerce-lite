@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => ({
   recordCODCollection: vi.fn(),
   recordCODFailure: vi.fn(),
   validateCODCollectionDetails: vi.fn(),
+  listOrderReturns: vi.fn(),
+  createOrderReturn: vi.fn(),
+  getOrderReturn: vi.fn(),
+  approveOrderReturn: vi.fn(),
 }));
 
 vi.mock("../inventory/inventory-transitions", () => ({
@@ -38,6 +42,13 @@ vi.mock("../payments/cod", () => ({
   recordCODCollection: mocks.recordCODCollection,
   recordCODFailure: mocks.recordCODFailure,
   validateCODCollectionDetails: mocks.validateCODCollectionDetails,
+}));
+
+vi.mock("./order-returns", () => ({
+  listOrderReturns: mocks.listOrderReturns,
+  createOrderReturn: mocks.createOrderReturn,
+  getOrderReturn: mocks.getOrderReturn,
+  approveOrderReturn: mocks.approveOrderReturn,
 }));
 
 import { bulkShipOrders, createFulfillmentShipment, processCodAction, updateOrderStatus } from "./orders.fulfillment";
@@ -153,6 +164,15 @@ describe("orders fulfillment side-effect ordering", () => {
       newPaidAmount: 100,
       newBalanceDue: 0,
     });
+    mocks.listOrderReturns.mockResolvedValue([]);
+    mocks.createOrderReturn.mockResolvedValue({ returnId: "ret_1" });
+    mocks.getOrderReturn.mockResolvedValue({
+      id: "ret_1",
+      status: "requested",
+      version: 1,
+      lines: [{ id: "rtl_1", requestedQuantity: 1 }],
+    });
+    mocks.approveOrderReturn.mockResolvedValue({ returnId: "ret_1", status: "approved" });
   });
 
   it("does not call the delivery provider when a bulk ship order claim loses CAS", async () => {
@@ -752,8 +772,8 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalled();
   });
 
-  it("does not mark COD returned or apply inventory when the return CAS fails", async () => {
-    const { db } = createDbMock({
+  it("records COD return-to-sender as an approved non-restocking item return", async () => {
+    const { db, updates } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 4,
@@ -762,82 +782,27 @@ describe("orders fulfillment side-effect ordering", () => {
         balanceDue: 100,
         inventoryAction: "deducted",
       },
-      updateResults: [[]],
-    });
-
-    await expect(
-      processCodAction(db as never, "order_1", { action: "returned" }),
-    ).rejects.toThrow("Order was modified by another request");
-
-    expect(mocks.markCODReturned).not.toHaveBeenCalled();
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("rolls back the returned claim when COD return marking fails", async () => {
-    mocks.markCODReturned.mockResolvedValueOnce({ success: false, error: "return marker failed" });
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.DELIVERED,
-        version: 4,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
-        inventoryAction: "deducted",
-      },
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      processCodAction(db as never, "order_1", { action: "returned" }),
-    ).rejects.toThrow("return marker failed");
-
-    expect(updates[0]).toMatchObject({ status: OrderStatus.RETURNED, version: 5 });
-    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED });
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("rolls back the returned claim when COD return inventory reconciliation fails", async () => {
-    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory restore failed"));
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.DELIVERED,
-        version: 4,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
-        inventoryAction: "deducted",
-      },
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      processCodAction(db as never, "order_1", { action: "returned" }),
-    ).rejects.toThrow("inventory restore failed");
-
-    expect(mocks.markCODReturned).toHaveBeenCalledWith(db, "order_1");
-    expect(updates[0]).toMatchObject({ status: OrderStatus.RETURNED, version: 5 });
-    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED });
-  });
-
-  it("retries COD return inventory reconciliation when the order is already returned", async () => {
-    mocks.applyInventoryForStatusChange.mockResolvedValueOnce("restored");
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.RETURNED,
-        version: 5,
-        totalAmount: 100,
-        paidAmount: 100,
-        balanceDue: 0,
-        inventoryAction: "deducted",
-      },
+      selectedRows: [{ id: "item_1", quantity: 1 }],
       updateResults: [],
     });
 
-    await processCodAction(db as never, "order_1", { action: "returned" });
+    const result = await processCodAction(db as never, "order_1", { action: "returned" });
 
+    expect(result).toMatchObject({ returnId: "ret_1" });
+    expect(mocks.createOrderReturn).toHaveBeenCalledWith(
+      db,
+      "order_1",
+      expect.objectContaining({
+        expectedOrderVersion: 4,
+        lines: [{ orderItemId: "item_1", quantity: 1, reason: "return_to_sender" }],
+      }),
+      { type: "system", id: "cod" },
+      { source: "cod_return_to_sender", sourceReferenceId: "cod-rts:order_1" },
+    );
+    expect(mocks.approveOrderReturn).toHaveBeenCalled();
     expect(mocks.markCODReturned).toHaveBeenCalledWith(db, "order_1");
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.RETURNED);
-    expect(updates[0]).toMatchObject({ inventoryAction: "restored" });
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(updates).not.toContainEqual(expect.objectContaining({ status: OrderStatus.RETURNED }));
   });
 
   it("does not apply inventory or write shipment rows when manual fulfillment claim fails", async () => {

@@ -112,6 +112,8 @@ export interface OrderListItem {
 }
 
 export interface OrderDetails extends OrderListItem {
+    /** CAS token required by item-return creation and full order edits. */
+    version: number;
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;

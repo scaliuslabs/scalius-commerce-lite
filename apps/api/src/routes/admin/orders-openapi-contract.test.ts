@@ -86,7 +86,25 @@ describe("admin order mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
-        expectResponses(spec, "/api/v1/admin/orders/{id}/return", "post", [
+        expectResponses(spec, "/api/v1/admin/orders/{id}/returns", "post", [
+            "201",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+            "503",
+        ]);
+        expectResponses(spec, "/api/v1/admin/orders/{id}/returns/{returnId}/receive", "post", [
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+            "503",
+        ]);
+        expectResponses(spec, "/api/v1/admin/orders/{id}/returns/{returnId}/reconcile", "post", [
             "200",
             "400",
             "401",

@@ -7,6 +7,23 @@ const ORDERS_ADMIN_SOURCE = fileURLToPath(
 );
 
 describe("admin order list boundaries", () => {
+  it("guards full item replacement and hard deletion once return evidence exists", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+
+    expect(source).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
+    expect(source).toContain("if (permanent) await assertOrderItemsHaveNoReturnHistory(db, order.id)");
+    expect(source).toContain("else await assertNoActiveReturnReceipt(db, order.id)");
+  });
+
+  it("returns the order CAS version required by item-return creation", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const detailStart = source.indexOf("export async function getOrderDetails");
+    const detailEnd = source.indexOf("export async function createOrder", detailStart);
+    const detailSource = source.slice(detailStart, detailEnd);
+
+    expect(detailSource).toContain("version: orders.version");
+  });
+
   it("clamps direct API page and limit inputs before building offsets", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 

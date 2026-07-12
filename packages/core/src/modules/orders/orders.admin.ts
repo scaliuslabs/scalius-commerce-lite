@@ -86,6 +86,11 @@ import {
 import { resolveActiveDeliveryLocationNames } from "./delivery-location-validation";
 import { listOrderSupportRequests } from "./order-support-requests";
 import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
+import {
+    assertNoActiveReturnReceipt,
+    assertOrderItemsHaveNoReturnHistory,
+} from "./order-returns";
+import { assertGenericAdminOrderStatusTransition } from "./admin-status-policy";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -1314,6 +1319,7 @@ export async function getOrderDetails(
             areaName: orders.areaName,
             paidAmount: orders.paidAmount,
             balanceDue: orders.balanceDue,
+            version: orders.version,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
@@ -1997,6 +2003,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttempt(db, id);
+    await assertOrderItemsHaveNoReturnHistory(db, id);
 
     const currency = resolveOrderCurrencySnapshot(existingOrder);
     const money = calculateManualOrderMoney(
@@ -2008,6 +2015,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 
     // Validate status transition if status is changing
     if (nextStatus !== currentStatus) {
+        assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
         validateTransition("order", currentStatus, nextStatus);
     }
 
@@ -2300,6 +2308,7 @@ export async function deleteOrder(db: Database, id: string) {
     assertNoActiveShipmentClaim(orderToDelete);
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
+    await assertNoActiveReturnReceipt(db, id);
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
     }
@@ -2413,6 +2422,7 @@ export async function permanentlyDeleteOrder(db: Database, id: string) {
     assertNoActiveShipmentClaim(orderToDelete);
     await assertNoActiveRefundAttempt(db, id);
     await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
+    await assertOrderItemsHaveNoReturnHistory(db, id);
     if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
     if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
         await applyInventoryForStatusChange(db, id, "cancelled");
@@ -2441,6 +2451,10 @@ export async function bulkDeleteOrders(db: Database, orderIds: string[], permane
     }
     await assertNoActiveRefundAttemptsForOrders(db, affectedOrders.map((order) => order.id));
     await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id));
+    for (const order of affectedOrders) {
+        if (permanent) await assertOrderItemsHaveNoReturnHistory(db, order.id);
+        else await assertNoActiveReturnReceipt(db, order.id);
+    }
 
     // Apply inventory transitions for orders that need it
     // (applyInventoryForStatusChange reads order items internally and uses CAS operations)

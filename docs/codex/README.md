@@ -10,6 +10,7 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `catalog/README.md` - current catalog hardening audit, evidence, decisions, and implementation order.
 - `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
 - `ORDER-OPERATIONS-AUDIT.md` - code-backed order-admin workflow, domain, RBAC, failure-state, and implementation audit.
+- `ITEM-LEVEL-RETURNS.md` - durable return lifecycle, inventory disposition, recovery, and deletion/status boundaries.
 
 ## Toolchain Rules
 
