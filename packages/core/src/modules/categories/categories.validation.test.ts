@@ -38,4 +38,24 @@ describe("category validation", () => {
             ).toBe(false);
         }
     });
+
+    it("rejects another category's canonical handle until alias routing exists", () => {
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            canonicalPath: "/categories/different-category",
+        }).success).toBe(false);
+    });
+
+    it("rejects unsafe category image sources", () => {
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            image: {
+                id: "image_1",
+                url: "javascript:alert(1)",
+                filename: "image.jpg",
+                size: 100,
+                createdAt: new Date(),
+            },
+        }).success).toBe(false);
+    });
 });

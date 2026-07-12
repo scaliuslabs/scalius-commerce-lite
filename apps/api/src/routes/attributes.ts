@@ -2,14 +2,14 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
 import {
-  productAttributes,
-  productAttributeValues,
-  products,
   categories
 } from "@scalius/database/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
-import { ftsMatch } from "@scalius/core/search";
-import { getPublicFilterableAttributes, getPublicAttributesByCategory } from "@scalius/core/modules/attributes/attributes.public";
+import { eq, and, isNull } from "drizzle-orm";
+import {
+  getPublicFilterableAttributes,
+  getPublicAttributesByCategory,
+  getPublicAttributesForSearch,
+} from "@scalius/core/modules/attributes/attributes.public";
 import { cacheMiddleware } from "../middleware/cache";
 import { NotFoundError } from "../utils/api-error";
 
@@ -178,94 +178,7 @@ app.openapi(searchFiltersRoute, async (c) => {
     return ok(c, { filters: [] });
   }
 
-  const searchConditions = [
-    eq(products.isActive, true),
-    isNull(products.deletedAt),
-  ];
-
-  const ftsCond = ftsMatch("products_fts", "products", query);
-  if (ftsCond) searchConditions.push(ftsCond);
-
-  // If categoryId is provided, add it to conditions
-  if (categoryId) {
-    searchConditions.push(eq(products.categoryId, categoryId));
-  }
-
-  const matchingCategories = await db
-    .selectDistinct({ categoryId: products.categoryId })
-    .from(products)
-    .where(and(...searchConditions));
-
-  if (matchingCategories.length === 0) {
-    return ok(c, { filters: [] });
-  }
-
-  const categoryIds = [
-    ...new Set(
-      matchingCategories
-        .map((product) => product.categoryId)
-        .filter((id): id is string => id != null),
-    ),
-  ];
-
-  if (categoryIds.length === 0) {
-    return ok(c, { filters: [] });
-  }
-
-  const searchAttributes = await db
-    .selectDistinct({
-      attributeId: productAttributeValues.attributeId,
-      attributeName: productAttributes.name,
-      attributeSlug: productAttributes.slug,
-      value: productAttributeValues.value
-    })
-    .from(productAttributeValues)
-    .innerJoin(
-      productAttributes,
-      and(
-        eq(productAttributeValues.attributeId, productAttributes.id),
-        eq(productAttributes.filterable, true),
-        isNull(productAttributes.deletedAt),
-      ),
-    )
-    .innerJoin(
-      products,
-      and(
-        eq(productAttributeValues.productId, products.id),
-        inArray(products.categoryId, categoryIds),
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
-      ),
-    );
-
-  // 4. Group by attribute and collect values
-  const attributeMap = new Map<
-    string,
-    { id: string; name: string; slug: string; values: Set<string> }
-  >();
-  searchAttributes.forEach((item) => {
-    let attribute = attributeMap.get(item.attributeId);
-    if (!attribute) {
-      attribute = {
-        id: item.attributeId,
-        name: item.attributeName,
-        slug: item.attributeSlug,
-        values: new Set()
-      };
-      attributeMap.set(item.attributeId, attribute);
-    }
-    attribute.values.add(item.value);
-  });
-
-  // 5. Convert to final format
-  const filters = Array.from(attributeMap.values()).map((attr) => ({
-    id: attr.id,
-    name: attr.name,
-    slug: attr.slug,
-    values: Array.from(attr.values).sort()
-  }));
-
-  return ok(c, { filters });
+  return ok(c, await getPublicAttributesForSearch(db, query, categoryId));
 });
 
 export { app as attributeRoutes };

@@ -22,6 +22,7 @@ import {
 } from "~/components/admin/data-table/columns/attribute-columns";
 import {
   AttributeCreateDialog,
+  AttributeDeleteDialog,
   AttributeValuesViewer,
   AttributeValueEditor,
 } from "~/components/admin/attributes-manager/components";
@@ -92,6 +93,10 @@ function AttributesPage() {
     id: string;
     name: string;
   } | null>(null);
+  const [deleteRequest, setDeleteRequest] = useState<{
+    ids: string[];
+    permanent: boolean;
+  } | null>(null);
 
   // We need a dummy setAttributes/fetchAttributes for the create dialog hook
   // (The create action uses the old hook; all other actions use centralized mutations)
@@ -155,9 +160,9 @@ function AttributesPage() {
   const handleDelete = useCallback(
     (id: string) => {
       if (!attributeActions.canDelete) return;
-      deleteMutation.mutate(id);
+      setDeleteRequest({ ids: [id], permanent: false });
     },
-    [attributeActions.canDelete, deleteMutation],
+    [attributeActions.canDelete],
   );
 
   const handleRestore = useCallback(
@@ -171,9 +176,9 @@ function AttributesPage() {
   const handlePermanentDelete = useCallback(
     (id: string) => {
       if (!attributeActions.canPermanentDelete) return;
-      permanentDeleteMutation.mutate(id);
+      setDeleteRequest({ ids: [id], permanent: true });
     },
-    [attributeActions.canPermanentDelete, permanentDeleteMutation],
+    [attributeActions.canPermanentDelete],
   );
 
   // Create attribute handlers
@@ -292,17 +297,39 @@ function AttributesPage() {
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
     if (!attributeActions.canBulkDelete || selectedIds.length === 0) return;
-    bulkDeleteMutation.mutate(
-      { ids: selectedIds, permanent: showTrashed },
-      { onSuccess: clearSelection },
-    );
+    setDeleteRequest({ ids: [...selectedIds], permanent: showTrashed });
   }, [
     attributeActions.canBulkDelete,
     selectedIds,
     showTrashed,
+  ]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!deleteRequest) return;
+    const onSuccess = () => {
+      if (deleteRequest.ids.length > 1) clearSelection();
+      setDeleteRequest(null);
+    };
+
+    if (deleteRequest.ids.length > 1) {
+      bulkDeleteMutation.mutate(deleteRequest, { onSuccess });
+    } else if (deleteRequest.permanent) {
+      permanentDeleteMutation.mutate(deleteRequest.ids[0]!, { onSuccess });
+    } else {
+      deleteMutation.mutate(deleteRequest.ids[0]!, { onSuccess });
+    }
+  }, [
     bulkDeleteMutation,
     clearSelection,
+    deleteMutation,
+    deleteRequest,
+    permanentDeleteMutation,
   ]);
+
+  const deletePending =
+    deleteMutation.isPending ||
+    permanentDeleteMutation.isPending ||
+    bulkDeleteMutation.isPending;
 
   // Toolbar
   const toolbar = (
@@ -423,6 +450,17 @@ function AttributesPage() {
           onCreate={handleCreateAttribute}
         />
       )}
+
+      <AttributeDeleteDialog
+        count={deleteRequest?.ids.length ?? 0}
+        permanent={deleteRequest?.permanent ?? false}
+        open={deleteRequest !== null}
+        pending={deletePending}
+        onOpenChange={(open) => {
+          if (!open && !deletePending) setDeleteRequest(null);
+        }}
+        onConfirm={handleConfirmDelete}
+      />
 
       {/* Attribute Values Viewer */}
       <AttributeValuesViewer

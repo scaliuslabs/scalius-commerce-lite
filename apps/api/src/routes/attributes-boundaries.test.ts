@@ -6,21 +6,20 @@ const ROUTES_DIR = fileURLToPath(new URL(".", import.meta.url));
 const UTILS_DIR = fileURLToPath(new URL("../utils/", import.meta.url));
 
 describe("attribute route query boundaries", () => {
-  it("keeps search filters cached and uncapped by arbitrary product row limits", () => {
+  it("derives search filters from the exact buyer-visible search hit set", () => {
     const source = readFileSync(`${ROUTES_DIR}/attributes.ts`, "utf8");
 
     const cacheIndex = source.indexOf('keyPrefix: "api:attributes:search-filters"');
     const routeIndex = source.indexOf("const searchFiltersRoute = createRoute");
-    const distinctCategoryIndex = source.indexOf(
-      ".selectDistinct({ categoryId: products.categoryId })",
-      routeIndex,
-    );
+    const helperCallIndex = source.indexOf("getPublicAttributesForSearch(db, query, categoryId)", routeIndex);
 
     expect(cacheIndex).toBeGreaterThan(-1);
     expect(cacheIndex).toBeLessThan(routeIndex);
-    expect(distinctCategoryIndex).toBeGreaterThan(routeIndex);
+    expect(helperCallIndex).toBeGreaterThan(routeIndex);
     expect(source).toContain("queryNormalizers: { q: normalizePublicFtsSearchCacheValue }");
     expect(source).toContain("const query = normalizePublicFtsSearchQuery(q);");
+    expect(source).not.toContain("matchingCategories");
+    expect(source).not.toContain("inArray(products.categoryId");
     expect(source).not.toContain(".limit(100)");
   });
 

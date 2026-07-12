@@ -293,28 +293,7 @@ export async function updateCategory(
  * Soft-deletes a category. Throws if products are still assigned to it.
  */
 export async function deleteCategory(db: Database, id: string): Promise<void> {
-    const referencedProducts = await db
-        .select({ id: products.id, name: products.name })
-        .from(products)
-        .where(and(eq(products.categoryId, id), isNull(products.deletedAt)))
-        .limit(5)
-        .all();
-
-    if (referencedProducts.length > 0) {
-        const count = referencedProducts.length;
-        throw new ValidationError(
-            `Cannot delete category because ${count} product${count === 1 ? "" : "s"} ${count === 1 ? "is" : "are"} still assigned to it.`,
-            {
-                suggestion: "Please delete the products permanently or move them to another category first.",
-                affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
-            },
-        );
-    }
-
-    await db
-        .update(categories)
-        .set({ deletedAt: sql`unixepoch()` })
-        .where(eq(categories.id, id));
+    await bulkDeleteCategories(db, [id], false);
 }
 
 /**
@@ -408,10 +387,29 @@ export async function bulkDeleteCategories(
             throw error;
         }
     } else {
-        await db
-            .update(categories)
-            .set({ deletedAt: sql`unixepoch()` })
-            .where(inArray(categories.id, uniqueCategoryIds));
+        try {
+            await safeBatch(db, [
+                categoryDeleteUsageGuard(db, uniqueCategoryIds),
+                db
+                    .update(categories)
+                    .set({ deletedAt: sql`unixepoch()` })
+                    .where(inArray(categories.id, uniqueCategoryIds)),
+            ] as never);
+        } catch (error) {
+            if (
+                error instanceof Error &&
+                /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
+            ) {
+                throw new ValidationError(
+                    "Cannot delete categories while active products are still assigned to them.",
+                    {
+                        suggestion:
+                            "Move the products to another category or permanently delete them first.",
+                    },
+                );
+            }
+            throw error;
+        }
     }
 }
 

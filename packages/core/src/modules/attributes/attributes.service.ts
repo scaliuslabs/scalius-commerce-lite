@@ -4,10 +4,14 @@
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
 import { sql, eq, and, or, like, asc, desc, count, inArray, isNull, lte, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import type { BatchItem } from "drizzle-orm/batch";
 
 import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.validation";
+
+type SQLiteBatchItem = BatchItem<"sqlite">;
+const MAX_ATTRIBUTE_BULK_IDS = 90;
 
 function productRevisionBumpForAttributeValues(
     db: Database,
@@ -95,6 +99,7 @@ export async function listAttributes(
         .offset(offset);
 
     const attributeIds = attributes.map((attr) => attr.id);
+    const attributeIdsJson = JSON.stringify(attributeIds);
     const valueCounts =
         attributeIds.length > 0
             ? await db
@@ -103,7 +108,9 @@ export async function listAttributes(
                     valueCount: count(sql`DISTINCT ${productAttributeValues.value}`)
                 })
                 .from(productAttributeValues)
-                .where(inArray(productAttributeValues.attributeId, attributeIds))
+                .where(sql`${productAttributeValues.attributeId} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${attributeIdsJson})
+                )`)
                 .groupBy(productAttributeValues.attributeId)
                 .all()
             : [];
@@ -207,7 +214,35 @@ export async function updateAttribute(
     return { attribute: updatedAttribute };
 }
 
-export async function deleteAttribute(db: Database, id: string) {
+function normalizeAttributeIds(ids: string[]): string[] {
+    const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
+    if (uniqueIds.length > MAX_ATTRIBUTE_BULK_IDS) {
+        throw new ValidationError(`Delete at most ${MAX_ATTRIBUTE_BULK_IDS} attributes at a time.`);
+    }
+    return uniqueIds;
+}
+
+async function assertAttributesDeletable(
+    db: Database,
+    ids: string[],
+    permanent: boolean,
+): Promise<void> {
+    const existing = await db
+        .select({ id: productAttributes.id, deletedAt: productAttributes.deletedAt })
+        .from(productAttributes)
+        .where(inArray(productAttributes.id, ids));
+
+    if (existing.length !== ids.length) {
+        throw new NotFoundError("One or more attributes no longer exist. Refresh and try again.");
+    }
+    if (permanent && existing.some((attribute) => attribute.deletedAt === null)) {
+        throw new ConflictError("Move attributes to trash before permanently deleting them.");
+    }
+    if (!permanent && existing.some((attribute) => attribute.deletedAt !== null)) {
+        throw new ConflictError("One or more attributes are already in trash. Refresh and try again.");
+    }
+
     const usage = await db
         .select({
             productName: products.name,
@@ -215,19 +250,81 @@ export async function deleteAttribute(db: Database, id: string) {
         })
         .from(productAttributeValues)
         .leftJoin(products, eq(productAttributeValues.productId, products.id))
-        .where(eq(productAttributeValues.attributeId, id))
+        .where(inArray(productAttributeValues.attributeId, ids))
         .limit(5);
 
     if (usage.length > 0) {
-        const productNames = usage.map((p) => p.productName).join(", ");
-        const errorMessage = `Cannot delete. Attribute is used by ${usage.length}${usage.length < 5 ? "" : "+"} product(s), including: ${productNames}.`;
-        throw new ConflictError(errorMessage);
+        const productNames = usage
+            .map((item) => item.productName)
+            .filter((name): name is string => Boolean(name))
+            .join(", ");
+        const action = permanent ? "permanently delete" : "trash";
+        throw new ConflictError(
+            `Cannot ${action} ${ids.length === 1 ? "this attribute" : "these attributes"} while product values still use ${ids.length === 1 ? "it" : "them"}.${productNames ? ` Referenced products include: ${productNames}.` : ""}`,
+        );
     }
+}
 
-    await db
-        .update(productAttributes)
-        .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
-        .where(eq(productAttributes.id, id));
+function attributeDeleteGuard(
+    db: Database,
+    ids: string[],
+    permanent: boolean,
+): SQLiteBatchItem {
+    const idSet = JSON.stringify(ids);
+    const lifecycleCondition = permanent
+        ? sql`${productAttributes.deletedAt} IS NOT NULL`
+        : sql`${productAttributes.deletedAt} IS NULL`;
+
+    return buildBatchGuard(db, sql`
+        CASE WHEN
+            (SELECT count(*) FROM ${productAttributes}
+             WHERE ${productAttributes.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+             ) AND ${lifecycleCondition}) = ${ids.length}
+            AND NOT EXISTS (
+                SELECT 1 FROM ${productAttributeValues}
+                WHERE ${productAttributeValues.attributeId} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${idSet})
+                )
+            )
+        THEN 1 ELSE json_extract('ATTRIBUTE_DELETE_CONFLICT', '$') END
+    `);
+}
+
+async function deleteAttributes(
+    db: Database,
+    rawIds: string[],
+    permanent: boolean,
+): Promise<void> {
+    const ids = normalizeAttributeIds(rawIds);
+    if (ids.length === 0) return;
+
+    await assertAttributesDeletable(db, ids, permanent);
+
+    const write = permanent
+        ? db.delete(productAttributes).where(inArray(productAttributes.id, ids))
+        : db
+            .update(productAttributes)
+            .set({ deletedAt: sql`unixepoch()` })
+            .where(inArray(productAttributes.id, ids));
+
+    try {
+        await safeBatch(db, [attributeDeleteGuard(db, ids, permanent), write] as never);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            /ATTRIBUTE_DELETE_CONFLICT|malformed json/i.test(error.message)
+        ) {
+            throw new ConflictError(
+                "Attributes changed while the delete was being processed. Refresh and try again.",
+            );
+        }
+        throw error;
+    }
+}
+
+export async function deleteAttribute(db: Database, id: string) {
+    await deleteAttributes(db, [id], false);
 }
 
 export async function permanentlyDeleteAttribute(db: Database, id: string) {
@@ -235,18 +332,7 @@ export async function permanentlyDeleteAttribute(db: Database, id: string) {
 }
 
 async function permanentlyDeleteAttributes(db: Database, ids: string[]): Promise<void> {
-    const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.length === 0) return;
-    if (uniqueIds.length > 90) {
-        throw new ValidationError("Delete at most 90 attributes at a time.");
-    }
-    await safeBatch(db, [
-        productRevisionBumpForAttributeValues(
-            db,
-            inArray(productAttributeValues.attributeId, uniqueIds),
-        ),
-        db.delete(productAttributes).where(inArray(productAttributes.id, uniqueIds)),
-    ] as never);
+    await deleteAttributes(db, ids, true);
 }
 
 export async function restoreAttribute(db: Database, id: string) {
@@ -284,16 +370,7 @@ export async function restoreAttribute(db: Database, id: string) {
 }
 
 export async function bulkDeleteAttributes(db: Database, ids: string[], permanent = false) {
-    if (ids.length === 0) return;
-
-    if (permanent) {
-        await permanentlyDeleteAttributes(db, ids);
-    } else {
-        await db
-            .update(productAttributes)
-            .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
-            .where(inArray(productAttributes.id, ids));
-    }
+    await deleteAttributes(db, ids, permanent);
 }
 
 export async function bulkRestoreAttributes(db: Database, ids: string[]) {
