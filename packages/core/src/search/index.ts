@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
-import { products, productImages, categories, pages } from "@scalius/database/schema";
-import { eq, sql, and, inArray, type SQL } from "drizzle-orm";
+import { products, categories, pages } from "@scalius/database/schema";
+import { eq, sql, and, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "./fts5";
 import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
 import {
@@ -8,6 +8,10 @@ import {
   buyerCatalogHasSkuInPriceRange,
 } from "../modules/products/products.buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
+import {
+  loadProductMediaProjections,
+  resolveProductImageRepresentation,
+} from "../modules/products/products.media";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -22,6 +26,7 @@ export type ProductSearchResult = {
   hasVariants: boolean;
   slug: string;
   imageUrl?: string | null;
+  imageMediaId?: string | null;
   categoryId: string | null;
   categoryName?: string | null;
   type: "product";
@@ -167,43 +172,29 @@ export async function search(
       categoryQuery,
     ]);
 
-    // N+1 fix for images: we fetch them after just for the returned rows
+    // Resolve one image representation in a bounded media join after the page query.
     let formattedProducts: ProductSearchResult[] = [];
     if (productsResult.length > 0) {
       const productIds = productsResult.map(p => p.id);
-      const primaryImages = await db
-        .select({
-          productId: productImages.productId,
-          url: productImages.url,
-        })
-        .from(productImages)
-        .where(
-          and(
-            inArray(productImages.productId, productIds),
-            eq(productImages.isPrimary, true),
-          ),
-        );
-
-      const imageUrlMap = new Map<string, string>();
-      for (const img of primaryImages) {
-        if (img.productId && img.url) {
-          imageUrlMap.set(img.productId, img.url);
-        }
-      }
+      const mediaMap = await loadProductMediaProjections(db, productIds);
 
       formattedProducts = productsResult.map(({
         maxBuyerPrice,
         availableForSale,
         hasVariants,
         ...product
-      }) => ({
-        ...product,
-        availableForSale: Boolean(availableForSale),
-        hasVariants: Boolean(hasVariants),
-        priceVaries: maxBuyerPrice > product.discountedPrice,
-        imageUrl: imageUrlMap.get(product.id) || null,
-        type: "product" as const,
-      }));
+      }) => {
+        const image = resolveProductImageRepresentation(mediaMap.get(product.id) ?? []);
+        return {
+          ...product,
+          availableForSale: Boolean(availableForSale),
+          hasVariants: Boolean(hasVariants),
+          priceVaries: maxBuyerPrice > product.discountedPrice,
+          imageUrl: image?.url ?? null,
+          imageMediaId: image?.mediaId ?? null,
+          type: "product" as const,
+        };
+      });
     }
 
     // Format pages

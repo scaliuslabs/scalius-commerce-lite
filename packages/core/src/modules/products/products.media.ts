@@ -15,6 +15,8 @@ export type ProductMediaProjection = {
     url: string;
     posterMediaId: string | null;
     posterUrl: string | null;
+    /** Product-context override only; null keeps Media alt/product-name fallback live. */
+    contextualAltText?: string | null;
     altText: string;
     caption: string | null;
     width: number | null;
@@ -186,6 +188,7 @@ export async function loadProductMediaProjections(
                 posterUrl: posterIsUsable
                     ? getCurrentPublicMediaUrl(row.posterObjectKey!)
                     : null,
+                contextualAltText: row.contextualAltText,
                 altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
                 caption: row.caption,
                 width: row.width,

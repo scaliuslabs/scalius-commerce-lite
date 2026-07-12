@@ -31,10 +31,24 @@ function createSchema(sqlite: DatabaseSync): void {
             updated_at INTEGER NOT NULL,
             created_at INTEGER NOT NULL
         );
-        CREATE TABLE product_images (
+        CREATE TABLE media (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            object_key TEXT NOT NULL,
+            poster_media_id TEXT,
+            alt_text TEXT,
+            caption TEXT,
+            width INTEGER,
+            height INTEGER,
+            duration_ms INTEGER,
+            status TEXT NOT NULL
+        );
+        CREATE TABLE product_media (
             id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,
-            url TEXT NOT NULL,
+            media_id TEXT NOT NULL,
+            alt_text TEXT,
+            sort_order INTEGER NOT NULL,
             is_primary INTEGER NOT NULL
         );
         CREATE TABLE product_variants (
@@ -62,9 +76,13 @@ function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
             deleted_at, updated_at, created_at
         ) VALUES (?, ?, ?, 1, 0, 1200, NULL, NULL, NULL, NULL, ?, ?)
     `);
-    const insertImage = sqlite.prepare(`
-        INSERT INTO product_images (id, product_id, url, is_primary)
-        VALUES (?, ?, ?, 1)
+    const insertMedia = sqlite.prepare(`
+        INSERT INTO media (id, kind, object_key, alt_text, status)
+        VALUES (?, 'image', ?, ?, 'ready')
+    `);
+    const insertProductMedia = sqlite.prepare(`
+        INSERT INTO product_media (id, product_id, media_id, alt_text, sort_order, is_primary)
+        VALUES (?, ?, ?, ?, 0, 1)
     `);
     const insertVariant = sqlite.prepare(`
         INSERT INTO product_variants (
@@ -83,11 +101,9 @@ function seedSimpleProducts(sqlite: DatabaseSync, count: number): void {
             index,
             index,
         );
-        insertImage.run(
-            `image_${index}`,
-            productId,
-            `/images/product-${index}.jpg`,
-        );
+        const mediaId = `media_${index}`;
+        insertMedia.run(mediaId, `products/product-${index}.jpg`, `Product ${index}`);
+        insertProductMedia.run(`pmed_${index}`, productId, mediaId, `Product ${index}`);
         insertVariant.run(`var_default_${index}`, productId);
     }
 }
@@ -155,6 +171,6 @@ describe("product feed diagnostic D1 query limits", () => {
             boundParameterCounts
                 .filter((count) => count >= 20)
                 .sort((left, right) => left - right),
-        ).toEqual([20, 21, 90, 90, 91, 91]);
+        ).toEqual([20, 22, 90, 90, 92, 92]);
     });
 });

@@ -139,21 +139,33 @@ export function publicProductHasAvailableBuyerSku(productId: SQL = sql`${product
     )`;
 }
 
-/** Feed/UCP pagination counts only products with usable primary media. */
+/**
+ * Feed/UCP pagination counts only products with a usable image representation.
+ *
+ * The featured gallery item may be a video, so this deliberately accepts any
+ * retained image association or retained video poster. The pure product-media
+ * resolver applies the exact featured/ordered precedence after the bounded
+ * product page has been selected.
+ */
 export function publicProductHasPrimaryDiscoveryImage(
     productId: SQL = sql`${products.id}`,
 ): SQL<boolean> {
     return sql`EXISTS (
         SELECT 1
-        FROM "product_images" AS discovery_primary_image
-        WHERE discovery_primary_image.product_id = ${productId}
-          AND discovery_primary_image.is_primary = 1
-          AND trim(discovery_primary_image.url) <> ''
-          AND discovery_primary_image.url NOT LIKE '//%'
+        FROM "product_media" AS discovery_product_media
+        INNER JOIN "media" AS discovery_media
+          ON discovery_media.id = discovery_product_media.media_id
+        LEFT JOIN "media" AS discovery_poster
+          ON discovery_poster.id = discovery_media.poster_media_id
+        WHERE discovery_product_media.product_id = ${productId}
+          AND discovery_media.status IN ('ready', 'trashed')
           AND (
-            instr(discovery_primary_image.url, ':') = 0
-            OR lower(discovery_primary_image.url) LIKE 'http://%'
-            OR lower(discovery_primary_image.url) LIKE 'https://%'
+            discovery_media.kind = 'image'
+            OR (
+              discovery_media.kind = 'video'
+              AND discovery_poster.kind = 'image'
+              AND discovery_poster.status IN ('ready', 'trashed')
+            )
           )
     )`;
 }

@@ -1,4 +1,4 @@
-import { productImages, products, productVariants } from "@scalius/database/schema";
+import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
@@ -9,7 +9,11 @@ import {
     normalizeCatalogDiscoveryBaseUrl,
     resolveCatalogDiscoveryImageUrl,
 } from "@scalius/shared/catalog-discovery-media";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, inArray, isNull, sql } from "drizzle-orm";
+import {
+    loadProductMediaProjections,
+    resolveProductImageRepresentation,
+} from "./products.media";
 
 export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT = 500;
@@ -479,56 +483,38 @@ export async function getProductFeedDiagnostics(
         });
     }
 
-    const enrichmentChunks: Array<{
-        imageRows: Array<{ productId: string; url: string }>;
-        variantRows: Array<ProductFeedDiagnosticScanVariant & { productId: string }>;
-    }> = [];
+    const mediaMap = await loadProductMediaProjections(db, productIds);
+    const variantRows: Array<ProductFeedDiagnosticScanVariant & { productId: string }> = [];
     for (const productIdChunk of chunkProductIds(productIds)) {
-        const [imageRows, variantRows] = await Promise.all([
-                db
-                    .select({
-                        productId: productImages.productId,
-                        url: productImages.url,
-                    })
-                    .from(productImages)
-                    .where(and(
-                        eq(productImages.isPrimary, true),
-                        inArray(productImages.productId, productIdChunk),
-                    ))
-                    .orderBy(productImages.productId)
-                    .all(),
-                db
-                    .select({
-                        id: productVariants.id,
-                        productId: productVariants.productId,
-                        optionCombinationKey: productVariants.optionCombinationKey,
-                        stock: productVariants.stock,
-                        reservedStock: productVariants.reservedStock,
-                        isDefault: productVariants.isDefault,
-                        trackInventory: productVariants.trackInventory,
-                        price: productVariants.price,
-                        discountType: productVariants.discountType,
-                        discountPercentage: productVariants.discountPercentage,
-                        discountAmount: productVariants.discountAmount,
-                    })
-                    .from(productVariants)
-                    .where(and(
-                        inArray(productVariants.productId, productIdChunk),
-                        isNull(productVariants.deletedAt),
-                    ))
-                    .orderBy(productVariants.productId)
-                    .all(),
-        ]);
-        enrichmentChunks.push({ imageRows, variantRows });
+        variantRows.push(...await db
+            .select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                optionCombinationKey: productVariants.optionCombinationKey,
+                stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
+                isDefault: productVariants.isDefault,
+                trackInventory: productVariants.trackInventory,
+                price: productVariants.price,
+                discountType: productVariants.discountType,
+                discountPercentage: productVariants.discountPercentage,
+                discountAmount: productVariants.discountAmount,
+            })
+            .from(productVariants)
+            .where(and(
+                inArray(productVariants.productId, productIdChunk),
+                isNull(productVariants.deletedAt),
+            ))
+            .orderBy(productVariants.productId)
+            .all());
     }
-    const imageRows = enrichmentChunks.flatMap((chunk) => chunk.imageRows);
-    const variantRows = enrichmentChunks.flatMap((chunk) => chunk.variantRows);
 
     const primaryImageUrls = new Map<string, string | null>();
-    for (const row of imageRows) {
-        if (!primaryImageUrls.has(row.productId)) {
-            primaryImageUrls.set(row.productId, row.url);
-        }
+    for (const productId of productIds) {
+        primaryImageUrls.set(
+            productId,
+            resolveProductImageRepresentation(mediaMap.get(productId) ?? [])?.url ?? null,
+        );
     }
 
     const variantMap = new Map<string, ProductFeedDiagnosticScanVariant[]>();

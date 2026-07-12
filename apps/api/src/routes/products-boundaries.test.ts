@@ -118,6 +118,7 @@ describe("product route query boundaries", () => {
     expect(variantSchema).toContain("id: z.string()");
     expect(variantSchema).toContain("productId: z.string()");
     expect(variantSchema).toContain("imageId: z.string().nullable()");
+    expect(variantSchema).toContain("imageMediaId: z.string().nullable()");
     expect(variantSchema).toContain("imageUrl: z.string().nullable()");
     expect(variantSchema).toContain("selectedOptions: z.array(z.object({");
     expect(variantSchema).toContain("optionDefinitionId: z.string()");
@@ -139,6 +140,19 @@ describe("product route query boundaries", () => {
     expect(variantSchema).not.toContain("optionCombinationKey");
     expect(variantSchema).not.toContain("createdAt");
     expect(variantSchema).not.toContain("updatedAt");
+  });
+
+  it("publishes one ordered mixed-media detail shape without the retired image array", () => {
+    const source = readFileSync(`${ROUTES_DIR}/products.ts`, "utf8");
+    const detailSchemaStart = source.indexOf("const productMediaSchema = z.object({");
+    const detailSchemaEnd = source.indexOf("type ProductDetailData", detailSchemaStart);
+    const detailSchema = source.slice(detailSchemaStart, detailSchemaEnd);
+
+    expect(detailSchema).toContain('kind: z.enum(["image", "video"])');
+    expect(detailSchema).toContain("posterMediaId: z.string().nullable()");
+    expect(detailSchema).toContain("posterUrl: z.string().nullable()");
+    expect(detailSchema).toContain("media: z.array(productMediaSchema)");
+    expect(detailSchema).not.toContain("images: z.array");
   });
 
   it("normalizes product lookup search before variant-aware storefront search", () => {

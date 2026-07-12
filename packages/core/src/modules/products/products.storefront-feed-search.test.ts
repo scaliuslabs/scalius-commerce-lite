@@ -132,14 +132,27 @@ function createCatalogSchema(): void {
             option_value_id TEXT NOT NULL
         );
 
-        CREATE TABLE product_images (
+        CREATE TABLE media (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            object_key TEXT NOT NULL,
+            poster_media_id TEXT,
+            alt_text TEXT,
+            caption TEXT,
+            width INTEGER,
+            height INTEGER,
+            duration_ms INTEGER,
+            status TEXT NOT NULL
+        );
+        CREATE TABLE product_media (
             id TEXT PRIMARY KEY,
             product_id TEXT NOT NULL,
-            url TEXT NOT NULL,
-            alt TEXT,
+            media_id TEXT NOT NULL,
+            alt_text TEXT,
             is_primary INTEGER NOT NULL DEFAULT 0
+            ,sort_order INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX product_images_product_id_idx ON product_images(product_id);
+        CREATE INDEX product_media_product_id_idx ON product_media(product_id);
 
         CREATE TABLE product_attributes (
             id TEXT PRIMARY KEY,
@@ -210,16 +223,15 @@ function insertProduct(input: {
             "INSERT INTO products_fts (rowid, name, description) VALUES (?, ?, '')",
         )
         .run(row.rowid, input.name);
-    sqlite
-        .prepare(
-            "INSERT INTO product_images (id, product_id, url, alt, is_primary) VALUES (?, ?, ?, ?, 1)",
-        )
-        .run(
-            `image_${input.id}`,
-            input.id,
-            `https://cdn.example.test/${input.slug}.jpg`,
-            input.name,
-        );
+    const mediaId = `media_${input.id}`;
+    sqlite.prepare(
+        `INSERT INTO media (id, kind, object_key, alt_text, status)
+         VALUES (?, 'image', ?, ?, 'ready')`,
+    ).run(mediaId, `products/${input.slug}.jpg`, input.name);
+    sqlite.prepare(
+        `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
+         VALUES (?, ?, ?, ?, 1, 0)`,
+    ).run(`pmed_${input.id}`, input.id, mediaId, input.name);
 }
 
 function insertSimpleSku(productId: string): void {
@@ -502,11 +514,55 @@ describe("storefront feed category search", () => {
         ]);
     });
 
+    it("uses a featured video poster for image-only feed fields and exact SKU images when assigned", async () => {
+        sqlite.prepare("UPDATE product_media SET is_primary = 0 WHERE product_id = ?")
+            .run("prod_runner");
+        sqlite.prepare(
+            `INSERT INTO media (id, kind, object_key, alt_text, status)
+             VALUES ('media_runner_poster', 'image', 'products/runner-poster.jpg', 'Runner video poster', 'ready')`,
+        ).run();
+        sqlite.prepare(
+            `INSERT INTO media (id, kind, object_key, poster_media_id, alt_text, status)
+             VALUES ('media_runner_video', 'video', 'products/runner-demo.mp4', 'media_runner_poster', 'Runner demo', 'ready')`,
+        ).run();
+        sqlite.prepare(
+            `INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
+             VALUES ('pmed_runner_video', 'prod_runner', 'media_runner_video', 'Runner demonstration', 1, 0)`,
+        ).run();
+
+        const fallbackResult = await getStorefrontFeedProducts(db, {
+            ids: "prod_runner",
+            limit: 10,
+        });
+        const fallbackProduct = fallbackResult.products[0]!;
+
+        expect(fallbackProduct.imageUrl).toContain("runner-poster.jpg");
+        expect(fallbackProduct.imageUrl).not.toContain(".mp4");
+        expect(fallbackProduct.imageMediaId).toBe("media_runner_poster");
+        expect(fallbackProduct.variants[0]).toMatchObject({
+            imageMediaId: "media_runner_poster",
+        });
+        expect(fallbackProduct.variants[0]?.imageUrl).not.toContain(".mp4");
+
+        sqlite.prepare("UPDATE product_variants SET image_id = ? WHERE product_id = ?")
+            .run("pmed_prod_runner", "prod_runner");
+        const exactResult = await getStorefrontFeedProducts(db, {
+            ids: "prod_runner",
+            limit: 10,
+        });
+
+        expect(exactResult.products[0]?.variants[0]).toMatchObject({
+            imageId: "pmed_prod_runner",
+            imageMediaId: "media_prod_runner",
+        });
+        expect(exactResult.products[0]?.variants[0]?.imageUrl).toContain("classic-runner.jpg");
+    });
+
     it("excludes products without usable primary media before feed pagination", async () => {
-        sqlite.prepare("DELETE FROM product_images WHERE product_id = ?")
+        sqlite.prepare("DELETE FROM product_media WHERE product_id = ?")
             .run("prod_slip_on");
-        sqlite.prepare("UPDATE product_images SET url = '//unsafe.example/image.jpg' WHERE product_id = ?")
-            .run("prod_loafer");
+        sqlite.prepare("UPDATE media SET status = 'deleted' WHERE id = ?")
+            .run("media_prod_loafer");
 
         const result = await getStorefrontFeedProducts(db, {
             search: "shoes",

@@ -10,6 +10,11 @@ import {
     updateCollection,
 } from "./collections.service";
 
+vi.mock("../products/products.media", () => ({
+    loadProductMediaProjections: vi.fn(async () => new Map()),
+    resolveProductImageRepresentation: vi.fn(() => null),
+}));
+
 type QueryChain = {
     selection: Record<string, unknown>;
     from: ReturnType<typeof vi.fn>;

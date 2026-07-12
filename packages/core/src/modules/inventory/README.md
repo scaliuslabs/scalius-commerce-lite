@@ -267,7 +267,7 @@ Production order workflows use either the claimed order transition engine or `re
 
 ## Dependencies
 
-- `@scalius/database` -- `productVariants`, `products`, `productImages`, `inventoryMovements`, `productLowStockAlerts`, `orders`, `orderItems`, `InventoryPool`
+- `@scalius/database` -- `productVariants`, `products`, `productMedia`, `media`, `inventoryMovements`, `productLowStockAlerts`, `orders`, `orderItems`, `InventoryPool`
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ConflictError`
 - `@scalius/shared/price-utils` -- `roundPrice()` (used in `calculateFinalPrice`)
 

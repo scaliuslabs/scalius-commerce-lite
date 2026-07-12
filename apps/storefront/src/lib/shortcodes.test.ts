@@ -36,7 +36,7 @@ function productFixture(slug: string): ProductPageData {
       hasVariants: false,
     },
     category: undefined,
-    images: [],
+    media: [],
     variants: [],
     relatedProducts: [],
   };

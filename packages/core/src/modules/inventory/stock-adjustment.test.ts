@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   inventoryMovements,
   inventoryOperations,
-  productImages,
   productVariants,
 } from "@scalius/database/schema";
 import {
@@ -11,10 +10,24 @@ import {
   setStock,
 } from "./stock-adjustment";
 import { checkAndAlertLowStock } from "./alerts";
+import type {
+  ProductMediaProjection,
+  SkuImageRepresentation,
+} from "../products/products.media";
 
 vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
 }));
+
+const mediaMocks = vi.hoisted(() => ({
+  loadProductMediaProjections: vi.fn(async () => new Map()),
+  resolveSkuImageRepresentation: vi.fn<(
+    items: readonly ProductMediaProjection[],
+    imageId: string | null,
+  ) => SkuImageRepresentation>(() => null),
+}));
+
+vi.mock("../products/products.media", () => mediaMocks);
 
 type MockStatement = {
   kind: "insert" | "update";
@@ -90,6 +103,7 @@ function createStockDbMock(variant: {
 
 type LookupRow = {
   variantId: string;
+  variantImageId: string | null;
   variantSku: string;
   variantLabel: string | null;
   variantPrice: number;
@@ -107,6 +121,7 @@ type LookupRow = {
 
 const lookupRow: LookupRow = {
   variantId: "variant_1",
+  variantImageId: null,
   variantSku: "SKU-1",
   variantLabel: "Size: M / Color: Red",
   variantPrice: 120,
@@ -125,7 +140,6 @@ const lookupRow: LookupRow = {
 function createLookupDbMock(options: {
   barcodeMatches?: LookupRow[];
   skuMatch?: LookupRow;
-  imageUrl?: string | null;
 }) {
   let selectCount = 0;
   let lookupSelectCount = 0;
@@ -134,20 +148,7 @@ function createLookupDbMock(options: {
     select() {
       selectCount++;
       return {
-        from(table: unknown) {
-          if (table === productImages) {
-            return {
-              where() {
-                return {
-                  get: async () =>
-                    options.imageUrl === undefined
-                      ? undefined
-                      : { url: options.imageUrl },
-                };
-              },
-            };
-          }
-
+        from(_table: unknown) {
           const lookupIndex = ++lookupSelectCount;
           return {
             innerJoin() {
@@ -267,14 +268,22 @@ describe("stock adjustment ledger", () => {
 
 describe("scanner barcode identity lookup", () => {
   it("returns the database-enforced normalized barcode identity", async () => {
+    mediaMocks.resolveSkuImageRepresentation.mockReturnValueOnce({
+      productMediaId: "pmed_main",
+      mediaId: "media_main",
+      url: "https://cdn.example.com/main.jpg",
+      altText: "Main Product",
+      source: "featured-image",
+    });
     const { db, getSelectCount } = createLookupDbMock({
       barcodeMatches: [lookupRow],
-      imageUrl: "https://cdn.example.com/main.jpg",
     });
 
     const result = await lookupByBarcodeOrSku(db as never, "  ABC-123  ");
 
-    expect(getSelectCount()).toBe(2);
+    expect(getSelectCount()).toBe(1);
+    expect(mediaMocks.loadProductMediaProjections).toHaveBeenCalledWith(db, ["product_1"]);
+    expect(mediaMocks.resolveSkuImageRepresentation).toHaveBeenCalledWith([], null);
     expect(result).toEqual({
       variant: {
         id: "variant_1",
@@ -295,6 +304,7 @@ describe("scanner barcode identity lookup", () => {
         price: 100,
         isActive: true,
         imageUrl: "https://cdn.example.com/main.jpg",
+        imageMediaId: "media_main",
       },
     });
   });
@@ -303,14 +313,14 @@ describe("scanner barcode identity lookup", () => {
     const { db, getSelectCount } = createLookupDbMock({
       barcodeMatches: [],
       skuMatch: { ...lookupRow, variantBarcode: null, variantBarcodeType: null },
-      imageUrl: null,
     });
 
     const result = await lookupByBarcodeOrSku(db as never, "  sku-1  ");
 
-    expect(getSelectCount()).toBe(3);
+    expect(getSelectCount()).toBe(2);
     expect(result?.variant.sku).toBe("SKU-1");
     expect(result?.product.imageUrl).toBeNull();
+    expect(result?.product.imageMediaId).toBeNull();
   });
 
   it("does no database work for a blank scanner value", async () => {

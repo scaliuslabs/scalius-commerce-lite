@@ -112,7 +112,7 @@ dynamic collections require a category.
 
 ## Dependencies
 
-- `@scalius/database` -- `collections`, `products`, `categories`, `productImages`, `productVariants` (the latter two via correlated subqueries)
+- `@scalius/database` -- `collections`, `products`, `categories`, `productVariants`, `productMedia`, and `media`; image-only collection surfaces use the shared product image representation resolver
 - `@scalius/core/errors` -- `NotFoundError`
 - `@scalius/shared/price-utils` -- `calculateDiscountedPrice()`
 - `nanoid` -- ID generation (no prefix)

@@ -28,6 +28,11 @@ import {
     publicCategoryConditions,
     publishedCategoryIdExists,
 } from "../categories/categories.publication";
+import {
+    loadProductMediaProjections,
+    resolveProductImageRepresentation,
+    type ProductImageRepresentation,
+} from "../products/products.media";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -666,6 +671,7 @@ export async function getPublicCollectionCatalog(
         catalogPromise,
     ]);
     const categoryById = new Map(categoryRows.map((category) => [category.id, category]));
+    const featuredProducts = await enrichProductsWithMedia(db, featuredRows);
 
     return {
         collection: { ...collection, config },
@@ -675,7 +681,9 @@ export async function getPublicCollectionCatalog(
                 category !== undefined
             )),
         ...catalog,
-        featuredProduct: featuredRows[0] ? enrichProduct(featuredRows[0]) : null,
+        featuredProduct: featuredRows[0]
+            ? featuredProducts.get(featuredRows[0].id) ?? null
+            : null,
     };
 }
 
@@ -693,22 +701,6 @@ const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjectio
     availableForSale: buyerPricing.availableForSale,
     freeDelivery: products.freeDelivery,
     categoryId: products.categoryId,
-    imageUrl: sql<string | null>`(
-        SELECT "product_images"."url"
-        FROM "product_images"
-        WHERE "product_images"."product_id" = "products"."id"
-          AND "product_images"."is_primary" = 1
-        ORDER BY "product_images"."sort_order" ASC
-        LIMIT 1
-    )`.as("imageUrl"),
-    imageAlt: sql<string | null>`(
-        SELECT "product_images"."alt"
-        FROM "product_images"
-        WHERE "product_images"."product_id" = "products"."id"
-          AND "product_images"."is_primary" = 1
-        ORDER BY "product_images"."sort_order" ASC
-        LIMIT 1
-    )`.as("imageAlt"),
     hasVariants: buyerPricing.hasCustomerOptions,
 });
 
@@ -725,8 +717,6 @@ type RawProduct = {
     availableForSale: number;
     freeDelivery: boolean;
     categoryId: string | null;
-    imageUrl: string | null;
-    imageAlt: string | null;
     hasVariants: number;
 };
 
@@ -734,16 +724,39 @@ export type ResolvedProduct = Omit<RawProduct, "hasVariants" | "availableForSale
     hasVariants: boolean;
     availableForSale: boolean;
     priceVaries: boolean;
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
 };
 
-function enrichProduct(p: RawProduct): ResolvedProduct {
+function enrichProduct(
+    p: RawProduct,
+    image: ProductImageRepresentation,
+): ResolvedProduct {
     const { hasVariants, availableForSale, maxBuyerPrice, ...product } = p;
     return {
         ...product,
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
         priceVaries: maxBuyerPrice > p.discountedPrice,
+        imageUrl: image?.url ?? null,
+        imageMediaId: image?.mediaId ?? null,
+        imageAlt: image?.altText ?? null,
     };
+}
+
+async function enrichProductsWithMedia(
+    db: Database,
+    rows: readonly RawProduct[],
+): Promise<Map<string, ResolvedProduct>> {
+    const mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    return new Map(rows.map((row) => [
+        row.id,
+        enrichProduct(
+            row,
+            resolveProductImageRepresentation(mediaMap.get(row.id) ?? []),
+        ),
+    ]));
 }
 
 export interface CollectionProductResult {
@@ -799,8 +812,9 @@ export async function resolveCollectionProducts(
 
         const productsData = batchResults[0] as RawProduct[];
         const featuredData = hasFeaturedProduct ? (batchResults[1] as RawProduct[])[0] ?? null : null;
-        const productsById = new Map(
-            productsData.map((product) => [product.id, enrichProduct(product)]),
+        const productsById = await enrichProductsWithMedia(
+            db,
+            featuredData ? [...productsData, featuredData] : productsData,
         );
 
         return {
@@ -809,7 +823,7 @@ export async function resolveCollectionProducts(
                 .filter((product): product is ResolvedProduct => product != null)
                 .slice(0, maxProducts),
             categories: [],
-            featuredProduct: featuredData ? enrichProduct(featuredData) : null,
+            featuredProduct: featuredData ? productsById.get(featuredData.id) ?? null : null,
         };
     }
 
@@ -844,13 +858,22 @@ export async function resolveCollectionProducts(
         const productsData = batchResults[1] as RawProduct[];
         const featuredData = hasFeaturedProduct ? (batchResults[2] as RawProduct[])[0] ?? null : null;
         const categoriesById = new Map(categoriesData.map((category) => [category.id, category]));
+        const resolvedProductsById = await enrichProductsWithMedia(
+            db,
+            featuredData ? [...productsData, featuredData] : productsData,
+        );
 
         return {
-            products: productsData.map(enrichProduct),
+            products: productsData.flatMap((product) => {
+                const resolved = resolvedProductsById.get(product.id);
+                return resolved ? [resolved] : [];
+            }),
             categories: specificCategoryIds
                 .map((id) => categoriesById.get(id))
                 .filter((category): category is { id: string; name: string; slug: string } => category != null),
-            featuredProduct: featuredData ? enrichProduct(featuredData) : null,
+            featuredProduct: featuredData
+                ? resolvedProductsById.get(featuredData.id) ?? null
+                : null,
         };
     }
 
@@ -861,11 +884,14 @@ export async function resolveCollectionProducts(
             .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
             .where(and(...publicCollectionProductConditions(eq(products.id, config.featuredProductId!))))
             .get() as RawProduct | undefined;
+        const resolvedFeatured = featuredData
+            ? (await enrichProductsWithMedia(db, [featuredData])).get(featuredData.id) ?? null
+            : null;
 
         return {
             products: [],
             categories: [],
-            featuredProduct: featuredData ? enrichProduct(featuredData) : null,
+            featuredProduct: resolvedFeatured,
         };
     }
 
@@ -955,11 +981,20 @@ export async function resolveCollectionProductsBatch(
     const categoryProductsStartIndex = 1;
     const categoryMetadataIndex = categoryProductsStartIndex + categoryProductLimits.length;
     const featuredProductsIndex = categoryMetadataIndex + 1;
+    const allRawProducts = [
+        ...(batchResults[0] as RawProduct[]),
+        ...categoryProductLimits.flatMap((_, index) =>
+            batchResults[categoryProductsStartIndex + index] as RawProduct[]
+        ),
+        ...(batchResults[featuredProductsIndex] as RawProduct[]),
+    ];
+    const resolvedProductsById = await enrichProductsWithMedia(db, allRawProducts);
 
     // Build lookup maps
     const specificProductsById = new Map<string, ResolvedProduct>();
     for (const prod of batchResults[0] as RawProduct[]) {
-        if (prod.id) specificProductsById.set(prod.id, enrichProduct(prod));
+        const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
+        if (resolved) specificProductsById.set(prod.id, resolved);
     }
 
     const categoryProductsByCategoryId = new Map<string, ResolvedProduct[]>();
@@ -967,7 +1002,10 @@ export async function resolveCollectionProductsBatch(
         const productsData = batchResults[categoryProductsStartIndex + index] as RawProduct[];
         const resolvedProducts = productsData
             .filter((prod) => prod.id && prod.categoryId === categoryId)
-            .map(enrichProduct);
+            .flatMap((prod) => {
+                const resolved = resolvedProductsById.get(prod.id);
+                return resolved ? [resolved] : [];
+            });
         if (resolvedProducts.length > 0) {
             categoryProductsByCategoryId.set(categoryId, resolvedProducts);
         }
@@ -980,7 +1018,8 @@ export async function resolveCollectionProductsBatch(
 
     const featuredProductsById = new Map<string, ResolvedProduct>();
     for (const prod of batchResults[featuredProductsIndex] as RawProduct[]) {
-        if (prod.id) featuredProductsById.set(prod.id, enrichProduct(prod));
+        const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
+        if (resolved) featuredProductsById.set(prod.id, resolved);
     }
 
     // Resolve per-collection

@@ -6,7 +6,7 @@ import type {
   CategoryProductsResponse,
   Product,
   ProductVariant,
-  ProductImage,
+  ProductMedia,
   PaginatedResponse,
   BuyerPriceRange,
   ProductFacet,
@@ -25,12 +25,12 @@ import { normalizeSearchQuery } from "@/lib/search-query";
 
 /**
  * A comprehensive data structure for a single product page,
- * including the main product, its category, images, variants, and related items.
+ * including the main product, its category, ordered media, variants, and related items.
  */
 export interface ProductPageData {
   product: Product;
   category: Product["category"];
-  images: ProductImage[];
+  media: ProductMedia[];
   variants: ProductVariant[];
   relatedProducts: Product[];
 }
@@ -47,7 +47,7 @@ function normalizeProductPageData(payload: unknown): ProductPageData | null {
     typeof candidate !== "object" ||
     !candidate.product ||
     typeof candidate.product !== "object" ||
-    !Array.isArray(candidate.images) ||
+    !Array.isArray(candidate.media) ||
     !Array.isArray(candidate.variants) ||
     !Array.isArray(candidate.relatedProducts)
   ) {

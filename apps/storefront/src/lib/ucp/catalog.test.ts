@@ -457,7 +457,7 @@ describe("UCP catalog mapping", () => {
     mocks.getProductBySlug.mockResolvedValueOnce({
       product: { ...product, excludeFromProductFeed: true },
       category: product.category,
-      images: [],
+      media: [],
       variants: product.variants,
       relatedProducts: [],
     });
@@ -609,7 +609,7 @@ describe("UCP catalog mapping", () => {
     mocks.getProductBySlug.mockResolvedValueOnce({
       product: { ...product, excludeFromProductFeed: true },
       category: product.category,
-      images: [],
+      media: [],
       variants: product.variants,
       relatedProducts: [],
     });

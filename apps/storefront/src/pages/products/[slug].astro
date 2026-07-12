@@ -74,10 +74,26 @@ const productData = productResult.data;
 const {
   product,
   category,
-  images,
+  media,
   variants,
   relatedProducts,
 } = productData;
+// The protected gallery is migrated in the dedicated mixed-media UI slice.
+// Until then it receives image representations only; video URLs never enter an
+// <img>, and a featured video's poster remains a safe visual fallback.
+const images = media.flatMap((item) => {
+  const url = item.kind === "image" ? item.url : item.posterUrl;
+  if (!url) return [];
+  return [{
+    id: item.id,
+    productId: product.id,
+    url,
+    alt: item.altText,
+    isPrimary: item.isPrimary,
+    sortOrder: item.sortOrder,
+    createdAt: product.updatedAt,
+  }];
+});
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
@@ -174,10 +190,14 @@ const discoverySettings = normalizeSeoDiscoverySettings(
   layoutData?.seo?.discovery,
 );
 
-// OG image: 1200x630 for social sharing (per OG-05)
-const primaryImageUrl =
-  images.find((image) => hasProductImage(image.url))?.url ||
-  (hasProductImage(product.imageUrl) ? product.imageUrl : null);
+// Shared product-image representation is first; remaining image associations
+// and video posters are included in structured data without ever treating a
+// video content URL as an image.
+const productImageCandidates = [
+  product.imageUrl,
+  ...media.map((item) => item.kind === "image" ? item.url : item.posterUrl),
+].filter((url): url is string => hasProductImage(url));
+const primaryImageUrl = productImageCandidates[0] ?? null;
 const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   width: 600,
   height: 600,
@@ -185,18 +205,22 @@ const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   format: "auto",
   fit: "contain",
 });
-const ogImageUrl = primaryImageUrl && storefrontUrl
-  ? resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl, {
-      transformImageUrl: (imageUrl) =>
-        getOptimizedImageUrl(imageUrl, {
-          width: 1200,
-          height: 630,
-          quality: 85,
-          format: "auto",
-          fit: "cover",
-        }),
-    })
-  : null;
+const schemaImageUrls = storefrontUrl
+  ? Array.from(new Set(productImageCandidates.flatMap((candidate) => {
+      const resolved = resolveCatalogDiscoveryImageUrl(candidate, storefrontUrl, {
+        transformImageUrl: (imageUrl) =>
+          getOptimizedImageUrl(imageUrl, {
+            width: 1200,
+            height: 630,
+            quality: 85,
+            format: "auto",
+            fit: "cover",
+          }),
+      });
+      return resolved ? [resolved] : [];
+    })))
+  : [];
+const ogImageUrl = schemaImageUrls[0] ?? null;
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)
 const seoDescription = (
@@ -275,6 +299,23 @@ function getVariantSchemaPrice(variant: typeof buyerVariants[number]): number {
   );
 }
 
+function getVariantSchemaImages(variant: typeof buyerVariants[number]): string[] {
+  if (!storefrontUrl || !variant.imageUrl) return schemaImageUrls;
+  const resolved = resolveCatalogDiscoveryImageUrl(variant.imageUrl, storefrontUrl, {
+    transformImageUrl: (imageUrl) =>
+      getOptimizedImageUrl(imageUrl, {
+        width: 1200,
+        height: 630,
+        quality: 85,
+        format: "auto",
+        fit: "cover",
+      }),
+  });
+  return resolved
+    ? Array.from(new Set([resolved, ...schemaImageUrls]))
+    : schemaImageUrls;
+}
+
 const productGroupVariesBy = productOptions
   .flatMap((option) => option.standardMapping === "none" ? [] : [PRODUCT_OPTION_SCHEMA_URLS[option.standardMapping]])
   .filter((value, index, values) => values.indexOf(value) === index);
@@ -334,18 +375,19 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
             name: product.name,
             url: canonicalUrl,
             description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-            ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
+            ...(schemaImageUrls.length > 0 ? { image: schemaImageUrls } : {}),
             productGroupID: product.id,
             ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
             ...(productGroupVariesBy.length > 0 ? { variesBy: productGroupVariesBy } : {}),
             hasVariant: buyerVariants.map((variant) => {
               const variantPrice = getVariantSchemaPrice(variant);
+              const variantSchemaImages = getVariantSchemaImages(variant);
               return {
                 "@type": "Product",
                 name: getVariantSchemaName(variant),
                 url: buildVariantProductUrl(variant) ?? canonicalUrl,
                 description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-                ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
+                ...(variantSchemaImages.length > 0 ? { image: variantSchemaImages } : {}),
                 sku: normalizedVariantOption(variant.sku) || variant.id,
                 ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
                 ...mappedVariantSchemaProps(variant),
@@ -369,7 +411,13 @@ const productJsonLd = discoverySettings.structuredData.products && !product.noIn
             name: primarySchemaName,
             url: primarySchemaUrl,
             description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-            ...(ogImageUrl ? { image: [ogImageUrl] } : {}),
+            ...((selectedBuyerVariant
+              ? getVariantSchemaImages(selectedBuyerVariant)
+              : schemaImageUrls).length > 0
+                ? { image: selectedBuyerVariant
+                    ? getVariantSchemaImages(selectedBuyerVariant)
+                    : schemaImageUrls }
+                : {}),
             sku: primarySku,
             ...gtinJsonLdForVariant(
               primarySchemaVariant?.barcode,

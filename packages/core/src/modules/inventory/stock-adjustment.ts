@@ -1,7 +1,7 @@
 // packages/core/src/modules/inventory/stock-adjustment.ts
 // Dedicated stock adjustment operations for barcode scanner and stocktake workflows.
 
-import { productVariants, products, productImages } from "@scalius/database/schema";
+import { productVariants, products } from "@scalius/database/schema";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
@@ -12,6 +12,10 @@ import { productVariantBarcodeIdentityEquals } from "../products/products.varian
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import { executeInventoryOperation } from "./inventory-operations";
+import {
+  loadProductMediaProjections,
+  resolveSkuImageRepresentation,
+} from "../products/products.media";
 
 export interface StockAdjustResult {
   variantId: string;
@@ -87,6 +91,7 @@ export async function lookupByBarcodeOrSku(
   const barcodeIdentity = getBarcodeIdentityKey(normalizedCode)!;
   const lookupFields = {
     variantId: productVariants.id,
+    variantImageId: productVariants.imageId,
     variantSku: productVariants.sku,
     variantLabel: variantOptionLabelSql(productVariants.id),
     variantPrice: productVariants.price,
@@ -136,17 +141,11 @@ export async function lookupByBarcodeOrSku(
 
   if (!variant) return null;
 
-  // Fetch primary image
-  const image = await db
-    .select({ url: productImages.url })
-    .from(productImages)
-    .where(
-      and(
-        eq(productImages.productId, variant.productId),
-        eq(productImages.isPrimary, true),
-      ),
-    )
-    .get();
+  const mediaMap = await loadProductMediaProjections(db, [variant.productId]);
+  const image = resolveSkuImageRepresentation(
+    mediaMap.get(variant.productId) ?? [],
+    variant.variantImageId,
+  );
 
   return {
     variant: {
@@ -168,6 +167,7 @@ export async function lookupByBarcodeOrSku(
       price: variant.productPrice,
       isActive: variant.productIsActive,
       imageUrl: image?.url ?? null,
+      imageMediaId: image?.mediaId ?? null,
     },
   };
 }

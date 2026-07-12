@@ -200,6 +200,8 @@ const storefrontProductSchema = z.object({
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
   imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
+  imageAlt: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -223,6 +225,7 @@ const storefrontFeedVariantSchema = z.object({
   id: z.string(),
   productId: z.string(),
   imageId: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
   imageUrl: z.string().nullable(),
   selectedOptions: z.array(z.object({
     optionDefinitionId: z.string(),
@@ -278,6 +281,7 @@ const storefrontFeedProductSchema = z.object({
   hasVariants: z.boolean(),
   availableForSale: z.boolean(),
   imageUrl: z.string().nullable(),
+  imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   attributes: z.array(storefrontFeedAttributeSchema),
@@ -291,11 +295,27 @@ const storefrontSitemapProductSchema = z.object({
   updatedAt: z.string().nullable(),
 });
 
+const productMediaSchema = z.object({
+  id: z.string(),
+  mediaId: z.string(),
+  kind: z.enum(["image", "video"]),
+  url: z.string(),
+  posterMediaId: z.string().nullable(),
+  posterUrl: z.string().nullable(),
+  altText: z.string(),
+  caption: z.string().nullable(),
+  width: z.number().int().positive().nullable(),
+  height: z.number().int().positive().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  isPrimary: z.boolean(),
+  sortOrder: z.number().int().nonnegative(),
+  status: z.enum(["ready", "trashed"]),
+});
 const productDetailRecordSchema = z.record(z.string(), z.any());
 const productDetailDataSchema = z.object({
   product: productDetailRecordSchema,
   category: productDetailRecordSchema.nullable(),
-  images: z.array(productDetailRecordSchema),
+  media: z.array(productMediaSchema),
   variants: z.array(productDetailRecordSchema),
   relatedProducts: z.array(productDetailRecordSchema),
 });
@@ -360,6 +380,8 @@ const searchProductsRoute = createRoute({
           price: z.number(),
           slug: z.string(),
           imageUrl: z.string().nullable(),
+          imageMediaId: z.string().nullable(),
+          imageAlt: z.string().nullable(),
           variants: z.array(z.record(z.string(), z.unknown())),
         }).passthrough()),
         pagination: paginationSchema.extend({ hasNextPage: z.boolean(), hasPrevPage: z.boolean() }),
