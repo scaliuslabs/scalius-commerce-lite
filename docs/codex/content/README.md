@@ -13,9 +13,12 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   discovery, storefront rendering, permissions, and editor workflow.
 - [MEDIA.md](MEDIA.md) — R2 media authority, upload safety, references,
   folders, image/video behavior, product integration, and gallery rules.
-- Navigation, Analytics, Theme, and Tax audits will be added beside these as
-  their implementation slices begin. Do not leave decisions only in the task
-  transcript.
+- [NAVIGATION.md](NAVIGATION.md) — versioned menus, header/footer placements,
+  typed resource links, WordPress-like builder direction, and storefront truth.
+- [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,
+  scalable list/edit workflows, activation, and public injection.
+- Theme and Tax audits will be added beside these as their implementation
+  slices begin. Do not leave decisions only in the task transcript.
 
 ## Shared product principles
 
