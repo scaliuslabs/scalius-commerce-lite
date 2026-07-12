@@ -1752,10 +1752,12 @@ describe("create order commit/KV ordering", () => {
 
     expect(response.status).toBe(500);
     const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
-    expect(calls).toEqual([
-      "commit",
-      `kv:${statusKey}`,
-    ]);
+    await vi.waitFor(() => {
+      expect(calls).toEqual([
+        "commit",
+        `kv:${statusKey}`,
+      ]);
+    });
     expect(statusKey).not.toContain("chk_order_2");
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
