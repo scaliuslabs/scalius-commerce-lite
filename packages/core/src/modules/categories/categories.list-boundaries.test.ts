@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { categoryAssignedProductCountProjection } from "./categories.service";
 
 const source = readFileSync(
   fileURLToPath(new URL("./categories.service.ts", import.meta.url)),
@@ -9,13 +11,16 @@ const source = readFileSync(
 
 describe("category list projection", () => {
   it("counts assigned non-trashed products per visible row", () => {
-    expect(source).toContain('const assignedProducts = alias(products, "category_assigned_product")');
-    expect(source).toContain(
-      'WHERE ${sql.raw(\'"category_assigned_product"."category_id"\')} = ${sql.raw(\'"categories"."id"\')}',
+    const compiled = new SQLiteSyncDialect().sqlToQuery(
+      categoryAssignedProductCountProjection(),
+    ).sql;
+
+    expect(compiled).toContain('FROM "products"');
+    expect(compiled).toContain(
+      'WHERE "products"."category_id" = "categories"."id"',
     );
-    expect(source).toContain(
-      'AND ${sql.raw(\'"category_assigned_product"."deleted_at"\')} IS NULL',
-    );
+    expect(compiled).toContain('AND "products"."deleted_at" IS NULL');
+    expect(compiled).not.toContain('FROM "category_assigned_product"');
     expect(source).not.toContain("eq(products.isActive, true)");
   });
 

@@ -28,7 +28,9 @@ describe("category list product counts", () => {
 
     expect(queries).toHaveLength(3);
     expect(queries[2]).toContain(
-      '"category_assigned_product"."category_id" = "categories"."id"',
+      '"products"."category_id" = "categories"."id"',
     );
+    expect(queries[2]).toContain('FROM "products"');
+    expect(queries[2]).not.toContain('FROM "category_assigned_product"');
   });
 });
