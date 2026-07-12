@@ -37,6 +37,14 @@ The storefront product page’s visual design is owner-protected. Do not redesig
 - Correct primary-image selection to honor `isPrimary`.
 - Add missing ARIA relationships, focus containment, labelled controls, and reduced-motion support without changing layout.
 - Keep purchase buttons behaviorally safe when no exact SKU is selected, but do not redesign their visual treatment.
+- Owner-approved 2026-07-12: make the existing Description/Review tab rail sticky
+  beneath the responsive storefront header after it reaches that position. Keep
+  its current visual language, anchors, and section order; provide an opaque
+  background, correct focus/active state, and reduced-motion-safe scrolling.
+- Owner-approved 2026-07-12: tighten avoidable mobile vertical space in the
+  existing header, breadcrumb, gallery, product controls, and tab boundary while
+  retaining readable type, safe-area handling, and at least 44px interactive
+  targets. This is a density pass, not permission to recompose the page.
 
 ## Product-page changes not allowed without owner approval
 
