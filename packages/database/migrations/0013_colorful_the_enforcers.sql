@@ -151,31 +151,36 @@ CREATE INDEX `order_support_requests_return_id_idx` ON `order_support_requests` 
 --> statement-breakpoint
 CREATE TRIGGER `order_return_lines_validate_insert`
 BEFORE INSERT ON `order_return_lines`
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM `order_items` oi
+    JOIN `order_returns` r ON r.id = NEW.return_id
+    WHERE oi.id = NEW.order_item_id
+      AND oi.order_id = NEW.order_id
+      AND r.order_id = NEW.order_id
+      AND oi.fulfillment_status IN ('shipped', 'delivered')
+      AND (NEW.inventory_tracked = 0 OR (NEW.variant_id IS NOT NULL AND NEW.variant_id = oi.variant_id))
+)
 BEGIN
-    SELECT CASE WHEN NOT EXISTS (
-        SELECT 1
-        FROM `order_items` oi
-        JOIN `order_returns` r ON r.id = NEW.return_id
-        WHERE oi.id = NEW.order_item_id
-          AND oi.order_id = NEW.order_id
-          AND r.order_id = NEW.order_id
-          AND oi.fulfillment_status IN ('shipped', 'delivered')
-          AND (NEW.inventory_tracked = 0 OR (NEW.variant_id IS NOT NULL AND NEW.variant_id = oi.variant_id))
-    ) THEN RAISE(ABORT, 'return line must reference a shipped item in the same order') END;
-
-    SELECT CASE WHEN (
-        COALESCE((
-            SELECT SUM(CASE
-                WHEN r.status = 'requested' THEN rl.requested_quantity
-                WHEN r.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
-                ELSE 0
-            END)
-            FROM `order_return_lines` rl
-            JOIN `order_returns` r ON r.id = rl.return_id
-            WHERE rl.order_item_id = NEW.order_item_id
-        ), 0) + NEW.requested_quantity
-    ) > (SELECT quantity FROM `order_items` WHERE id = NEW.order_item_id)
-    THEN RAISE(ABORT, 'cumulative return quantity exceeds fulfilled item quantity') END;
+    SELECT RAISE(ABORT, 'return line must reference a shipped item in the same order');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_return_lines_entitlement_insert`
+BEFORE INSERT ON `order_return_lines`
+WHEN (
+    COALESCE((
+        SELECT SUM(CASE
+            WHEN r.status = 'requested' THEN rl.requested_quantity
+            WHEN r.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
+            ELSE 0
+        END)
+        FROM `order_return_lines` rl
+        JOIN `order_returns` r ON r.id = rl.return_id
+        WHERE rl.order_item_id = NEW.order_item_id
+    ), 0) + NEW.requested_quantity
+) > (SELECT quantity FROM `order_items` WHERE id = NEW.order_item_id)
+BEGIN
+    SELECT RAISE(ABORT, 'cumulative return quantity exceeds fulfilled item quantity');
 END;
 --> statement-breakpoint
 CREATE TRIGGER `order_return_lines_identity_immutable`
@@ -193,39 +198,50 @@ END;
 --> statement-breakpoint
 CREATE TRIGGER `order_returns_validate_status_update`
 BEFORE UPDATE OF status ON `order_returns`
+WHEN NOT (
+    OLD.status = NEW.status
+    OR (OLD.status = 'requested' AND NEW.status IN ('approved', 'rejected', 'cancelled'))
+    OR (OLD.status = 'approved' AND NEW.status IN ('receiving', 'completed', 'cancelled'))
+    OR (OLD.status = 'receiving' AND NEW.status IN ('receiving', 'completed'))
+)
 BEGIN
-    SELECT CASE WHEN NOT (
-        OLD.status = NEW.status
-        OR (OLD.status = 'requested' AND NEW.status IN ('approved', 'rejected', 'cancelled'))
-        OR (OLD.status = 'approved' AND NEW.status IN ('receiving', 'completed', 'cancelled'))
-        OR (OLD.status = 'receiving' AND NEW.status IN ('receiving', 'completed'))
-    ) THEN RAISE(ABORT, 'invalid return lifecycle transition') END;
-
-    SELECT CASE WHEN NEW.status = 'cancelled' AND EXISTS (
-        SELECT 1 FROM `order_return_lines`
-        WHERE return_id = NEW.id AND received_quantity > 0
-    ) THEN RAISE(ABORT, 'received return cannot be cancelled') END;
-
-    SELECT CASE WHEN EXISTS (
-        SELECT 1
-        FROM `order_items` oi
-        WHERE oi.order_id = NEW.order_id
-          AND COALESCE((
-              SELECT SUM(CASE
-                  WHEN r.id = NEW.id THEN CASE
-                      WHEN NEW.status = 'requested' THEN rl.requested_quantity
-                      WHEN NEW.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
-                      ELSE 0
-                  END
-                  WHEN r.status = 'requested' THEN rl.requested_quantity
-                  WHEN r.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
+    SELECT RAISE(ABORT, 'invalid return lifecycle transition');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_returns_cancel_after_receipt_blocked`
+BEFORE UPDATE OF status ON `order_returns`
+WHEN NEW.status = 'cancelled' AND EXISTS (
+    SELECT 1 FROM `order_return_lines`
+    WHERE return_id = NEW.id AND received_quantity > 0
+)
+BEGIN
+    SELECT RAISE(ABORT, 'received return cannot be cancelled');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_returns_entitlement_status_update`
+BEFORE UPDATE OF status ON `order_returns`
+WHEN EXISTS (
+    SELECT 1
+    FROM `order_items` oi
+    WHERE oi.order_id = NEW.order_id
+      AND COALESCE((
+          SELECT SUM(CASE
+              WHEN r.id = NEW.id THEN CASE
+                  WHEN NEW.status = 'requested' THEN rl.requested_quantity
+                  WHEN NEW.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
                   ELSE 0
-              END)
-              FROM `order_return_lines` rl
-              JOIN `order_returns` r ON r.id = rl.return_id
-              WHERE rl.order_item_id = oi.id
-          ), 0) > oi.quantity
-    ) THEN RAISE(ABORT, 'cumulative return quantity exceeds fulfilled item quantity') END;
+              END
+              WHEN r.status = 'requested' THEN rl.requested_quantity
+              WHEN r.status IN ('approved', 'receiving', 'completed') THEN rl.approved_quantity
+              ELSE 0
+          END)
+          FROM `order_return_lines` rl
+          JOIN `order_returns` r ON r.id = rl.return_id
+          WHERE rl.order_item_id = oi.id
+      ), 0) > oi.quantity
+)
+BEGIN
+    SELECT RAISE(ABORT, 'cumulative return quantity exceeds fulfilled item quantity');
 END;
 --> statement-breakpoint
 CREATE TRIGGER `order_returns_delete_blocked`
@@ -236,39 +252,45 @@ END;
 --> statement-breakpoint
 CREATE TRIGGER `order_return_receipt_lines_validate_insert`
 BEFORE INSERT ON `order_return_receipt_lines`
+WHEN NOT EXISTS (
+    SELECT 1
+    FROM `order_return_lines` rl
+    JOIN `order_returns` r ON r.id = rl.return_id
+    JOIN `order_return_commands` c ON c.id = NEW.command_id
+    WHERE rl.id = NEW.return_line_id
+      AND rl.return_id = NEW.return_id
+      AND rl.order_id = NEW.order_id
+      AND r.id = NEW.return_id
+      AND r.order_id = NEW.order_id
+      AND r.active_command_key = c.command_key
+      AND r.active_command_hash = c.request_hash
+      AND c.return_id = NEW.return_id
+      AND c.order_id = NEW.order_id
+      AND c.command_type = 'receive'
+      AND c.status = 'processing'
+      AND NEW.received_quantity <= rl.approved_quantity - rl.received_quantity
+      AND (NEW.variant_id IS rl.variant_id)
+)
 BEGIN
-    SELECT CASE WHEN NOT EXISTS (
-        SELECT 1
-        FROM `order_return_lines` rl
-        JOIN `order_returns` r ON r.id = rl.return_id
-        JOIN `order_return_commands` c ON c.id = NEW.command_id
-        WHERE rl.id = NEW.return_line_id
-          AND rl.return_id = NEW.return_id
-          AND rl.order_id = NEW.order_id
-          AND r.id = NEW.return_id
-          AND r.order_id = NEW.order_id
-          AND r.active_command_key = c.command_key
-          AND r.active_command_hash = c.request_hash
-          AND c.return_id = NEW.return_id
-          AND c.order_id = NEW.order_id
-          AND c.command_type = 'receive'
-          AND c.status = 'processing'
-          AND NEW.received_quantity <= rl.approved_quantity - rl.received_quantity
-          AND (NEW.variant_id IS rl.variant_id)
-    ) THEN RAISE(ABORT, 'return receipt does not match its active approved claim') END;
-
-    SELECT CASE WHEN NEW.restock_quantity > 0 AND NOT EXISTS (
-        SELECT 1
-        FROM `inventory_movements` im
-        JOIN `orders` o ON o.id = NEW.order_id
-        WHERE im.id = NEW.inventory_movement_id
-          AND im.order_id = NEW.order_id
-          AND im.variant_id = NEW.variant_id
-          AND im.type = 'restored'
-          AND im.quantity = NEW.restock_quantity
-          AND im.pool = o.inventory_pool
-          AND (im.created_by IS NEW.actor_id)
-    ) THEN RAISE(ABORT, 'return restock disposition lacks matching inventory movement evidence') END;
+    SELECT RAISE(ABORT, 'return receipt does not match its active approved claim');
+END;
+--> statement-breakpoint
+CREATE TRIGGER `order_return_receipt_lines_restock_evidence_insert`
+BEFORE INSERT ON `order_return_receipt_lines`
+WHEN NEW.restock_quantity > 0 AND NOT EXISTS (
+    SELECT 1
+    FROM `inventory_movements` im
+    JOIN `orders` o ON o.id = NEW.order_id
+    WHERE im.id = NEW.inventory_movement_id
+      AND im.order_id = NEW.order_id
+      AND im.variant_id = NEW.variant_id
+      AND im.type = 'restored'
+      AND im.quantity = NEW.restock_quantity
+      AND im.pool = o.inventory_pool
+      AND (im.created_by IS NEW.actor_id)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'return restock disposition lacks matching inventory movement evidence');
 END;
 --> statement-breakpoint
 CREATE TRIGGER `order_return_receipt_lines_project_after_insert`

@@ -107,6 +107,13 @@ Deploy through the repo script from the root:
 pnpm run deploy:api
 ```
 
+D1 migration triggers must keep complex guard expressions in the trigger `WHEN`
+clause and use a single-statement body. Cloudflare's remote migration query path
+returns `incomplete input` for `SELECT CASE WHEN` trigger bodies even when local
+SQLite and D1 file import accept the SQL. Do not bypass migration tracking or
+weaken the invariant; rewrite the trigger shape, prove the full migration chain
+against a disposable remote D1 database, then rerun the normal deploy command.
+
 The deploy script already proves the latest API Worker deployment serves one version at `100%`, checks `/api/v1/health`, and samples `/api/v1/readyz` four times. A persistent degraded window fails the deploy; a transient recovered window prints a warning and should be copied into the tracker or incident notes.
 
 Use repo-owned deployment evidence before rollback decisions:
