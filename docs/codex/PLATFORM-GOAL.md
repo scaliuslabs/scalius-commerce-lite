@@ -35,6 +35,25 @@ A stable release is credible only when:
 - Cache invalidation and rewarming are scoped to affected content and prove freshness without turning every write into a global purge.
 - Documentation and tracker entries name what was verified, what remains risky, and which commit/deployment proved the behavior.
 
+## Stable-release work program
+
+- The current catalog program covers Products, Categories, Attributes,
+  Collections, Inventory, catalog settings, their APIs/database/cache paths,
+  and every related storefront projection. Catalog completion is a release gate,
+  not completion of the platform goal.
+- Immediately after the catalog gate passes, audit and harden Pages, Media,
+  Orders, Abandoned checkouts, Customers, Discounts, Analytics, Content,
+  remaining Settings, and their storefront/buyer surfaces to the same bar.
+- For every domain, cover authority and invariants, calculations, lifecycle and
+  destructive edge cases, permissions, idempotency/conflicts, cache freshness,
+  scale bounds, compact desktop/mobile UI, keyboard/accessibility, failure and
+  recovery states, focused tests, durable decisions, deployment, and live smoke
+  evidence. A cosmetic pass alone never completes a domain.
+- Use the product editor's successful principles consistently: dense but
+  readable work surfaces, progressive disclosure, arbitrary merchant data
+  rather than hard-coded retail assumptions, explicit save/dirty/conflict
+  state, direct manipulation where safe, and minimal duplicate modes or APIs.
+
 ## Engineering Operating Style
 
 - Treat the lead thread as tech lead and product manager for goal-mode work: assign implementation work when practical, keep ownership clear, review patches, resolve conflicts, verify behavior, update docs, deploy when needed, and commit only meaningful achievements.
