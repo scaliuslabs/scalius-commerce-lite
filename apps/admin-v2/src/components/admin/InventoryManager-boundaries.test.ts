@@ -52,4 +52,16 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain("Search movements by product, SKU, or order");
     expect(source).toContain("`/admin/orders/${m.orderId}`");
   });
+
+  it("uses one compact, explainable quantity strip instead of nested statistic cards", () => {
+    expect(source).toContain("function InventorySummaryStrip");
+    expect(source).toContain("On hand minus committed units");
+    expect(source).toContain("Units reserved by open orders");
+    expect(source).toContain("focus-visible:ring-inset");
+    expect(source).not.toContain("<StatCard");
+  });
+
+  it("does not use sub-12px operational copy", () => {
+    expect(source).not.toMatch(/text-\[(?:10|11)px\]/);
+  });
 });
