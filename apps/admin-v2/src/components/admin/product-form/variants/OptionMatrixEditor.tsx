@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   ImageIcon,
+  Info,
   Plus,
   Search,
   Trash2,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@scalius/shared/utils";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
@@ -280,31 +282,35 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         )}
       </div>
 
-      <div className="rounded-lg border bg-muted/15 p-2.5">
-        <div className="space-y-2">
-          {options.map((option, optionIndex) => (
-            <OptionRow
-              key={option.id}
-              option={option}
-              index={optionIndex}
-              canMoveUp={optionIndex > 0}
-              canMoveDown={optionIndex < options.length - 1}
-              onMove={(direction) => {
-                const next = [...options];
-                const target = optionIndex + direction;
-                [next[optionIndex], next[target]] = [next[target]!, next[optionIndex]!];
-                stageOptions(next);
-              }}
-              onChange={(next) => stageOptions(options.map((item) => item.id === option.id ? next : item))}
-              onRemove={() => stageOptions(options.filter((item) => item.id !== option.id))}
-            />
-          ))}
+      <div className="rounded-lg border bg-muted/10 p-1.5">
+        {options.length ? (
+          <div className="divide-y overflow-hidden rounded-md border bg-background">
+            {options.map((option, optionIndex) => (
+              <OptionRow
+                key={option.id}
+                option={option}
+                index={optionIndex}
+                canMoveUp={optionIndex > 0}
+                canMoveDown={optionIndex < options.length - 1}
+                onMove={(direction) => {
+                  const next = [...options];
+                  const target = optionIndex + direction;
+                  [next[optionIndex], next[target]] = [next[target]!, next[optionIndex]!];
+                  stageOptions(next);
+                }}
+                onChange={(next) => stageOptions(options.map((item) => item.id === option.id ? next : item))}
+                onRemove={() => stageOptions(options.filter((item) => item.id !== option.id))}
+              />
+            ))}
+          </div>
+        ) : null}
+        <div className="flex min-h-9 flex-wrap items-center gap-x-2 gap-y-1 px-1 pt-1.5 text-xs">
           {options.length < MAX_AXES ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground"
+              className="h-7 px-1.5 text-sm text-muted-foreground"
               onClick={() => stageOptions([...options, {
                 id: draftId("option"),
                 name: "",
@@ -315,16 +321,16 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               <Plus className="mr-1 h-3.5 w-3.5" /> Add option
             </Button>
           ) : null}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2 text-xs">
+          {options.length ? <span aria-hidden="true" className="h-4 w-px bg-border" /> : null}
           {options.length ? options.map((option, index) => (
             <React.Fragment key={option.id}>
               {index ? <span className="text-muted-foreground">×</span> : null}
-              <Badge variant="secondary" className="h-5 rounded px-1.5 font-normal">
-                {option.values.length} {option.name.trim() || `Option ${index + 1}`}
-              </Badge>
+              <span className="whitespace-nowrap text-muted-foreground">
+                <span className="font-medium text-foreground">{option.values.length}</span>{" "}
+                {option.name.trim() || `Option ${index + 1}`}
+              </span>
             </React.Fragment>
-          )) : <span className="text-muted-foreground">Add an option such as Size, Color, Format, Shape, or Pack.</span>}
+          )) : <span className="text-muted-foreground">Try Size, Color, Format, Shape, or Pack.</span>}
           {options.length ? (
             <>
               <span className="text-muted-foreground">=</span>
@@ -334,7 +340,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
               {!combinationsPending && missingCombinations.length > 0 ? (
                 <span className="text-muted-foreground">· {variants.length} active</span>
               ) : null}
-              <span className="text-muted-foreground">· limit {MAX_COMBINATIONS}</span>
+              <span className="text-muted-foreground">/ {MAX_COMBINATIONS} max</span>
               {combinationsPending ? <Badge variant="outline" className="h-5 border-amber-300 bg-amber-50 px-1.5 text-xs text-amber-800">Changes pending</Badge> : null}
             </>
           ) : null}
@@ -401,8 +407,8 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
   };
 
   return (
-    <div className="grid gap-2 rounded-md border bg-background p-2 sm:grid-cols-[150px_1fr_82px]">
-      <div className="space-y-1">
+    <div className="grid gap-1.5 p-1.5 sm:grid-cols-[260px_minmax(0,1fr)_82px] sm:items-center">
+      <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-1">
         <Input
           value={option.name}
           onChange={(event) => onChange({ ...option, name: event.target.value })}
@@ -414,7 +420,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           value={option.standardMapping}
           onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
         >
-          <SelectTrigger aria-label={`Catalog mapping for ${option.name || `option ${index + 1}`}`} className="h-7 border-0 px-1.5 text-xs text-muted-foreground shadow-none">
+          <SelectTrigger aria-label={`Catalog mapping for ${option.name || `option ${index + 1}`}`} className="h-8 px-2 text-xs text-muted-foreground">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -426,7 +432,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           </SelectContent>
         </Select>
       </div>
-      <div className="flex min-w-0 flex-wrap content-start gap-1 rounded-md border px-1.5 py-1">
+      <div className="flex min-h-8 min-w-0 flex-wrap content-center gap-1 rounded-md border px-1.5 py-0.5">
         {option.values.map((value) => (
           <span key={value.id} className="inline-flex h-6 items-center gap-1 rounded bg-muted px-1.5 text-xs">
             {value.value}
@@ -455,7 +461,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           aria-label={`Add ${option.name || `option ${index + 1}`} value`}
         />
       </div>
-      <div className="flex justify-end gap-0.5">
+      <div className="flex items-center justify-end gap-0.5">
         <Button type="button" variant="ghost" size="icon" className="h-8 w-6 text-muted-foreground" disabled={!canMoveUp} onClick={() => onMove(-1)}>
           <ArrowUp className="h-3.5 w-3.5" /><span className="sr-only">Move option up</span>
         </Button>
@@ -641,8 +647,11 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     <td className="p-1.5"><CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></td>
                     <td className="p-1.5"><NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel="Price" /></td>
                     <td className="p-1.5">
-                      <NumberInput value={variant.stock} integer onChange={(stock) => onChange(variant.id, { stock })} ariaLabel="On-hand stock" />
-                      {(committedByVariantId.get(variant.id) ?? 0) > 0 ? <span className="mt-0.5 block text-xs text-muted-foreground">{committedByVariantId.get(variant.id)} committed · {Math.max(0, variant.stock - (committedByVariantId.get(variant.id) ?? 0))} available</span> : null}
+                      <InventoryQuantityInput
+                        value={variant.stock}
+                        committed={committedByVariantId.get(variant.id) ?? 0}
+                        onChange={(stock) => onChange(variant.id, { stock })}
+                      />
                     </td>
                     <td className="p-1.5"><DiscountInput variant={variant} onChange={(patch) => onChange(variant.id, patch)} /></td>
                     <td className="p-1.5 text-center">
@@ -705,7 +714,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
             <div className="grid grid-cols-2 gap-1.5">
               <label className="space-y-1 text-xs text-muted-foreground">SKU<CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></label>
               <label className="space-y-1 text-xs text-muted-foreground">Price<NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel="Price" /></label>
-              <label className="space-y-1 text-xs text-muted-foreground">On hand<NumberInput value={variant.stock} integer onChange={(stock) => onChange(variant.id, { stock })} ariaLabel="On-hand stock" /></label>
+              <label className="space-y-1 text-xs text-muted-foreground">On hand<InventoryQuantityInput value={variant.stock} committed={committedByVariantId.get(variant.id) ?? 0} onChange={(stock) => onChange(variant.id, { stock })} /></label>
               <label className="space-y-1 text-xs text-muted-foreground">Discount<DiscountInput variant={variant} onChange={(patch) => onChange(variant.id, patch)} /></label>
             </div>
             {expandedId === variant.id ? <AdvancedSkuFields variant={variant} onChange={(patch) => onChange(variant.id, patch)} /> : null}
@@ -739,7 +748,7 @@ function CompactInput({ value, onChange, ariaLabel }: { value: string; onChange:
   return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} className="h-8 px-2 text-sm" />;
 }
 
-function NumberInput({ value, onChange, ariaLabel, integer = false }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean }) {
+function NumberInput({ value, onChange, ariaLabel, integer = false, className }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean; className?: string }) {
   const [draft, setDraft] = React.useState(String(value));
   React.useEffect(() => setDraft(String(value)), [value]);
   const commit = () => {
@@ -752,7 +761,43 @@ function NumberInput({ value, onChange, ariaLabel, integer = false }: { value: n
     setDraft(String(next));
     onChange(next);
   };
-  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className="h-8 px-2 text-sm" />;
+  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} className={cn("h-8 px-2 text-sm", className)} />;
+}
+
+function InventoryQuantityInput({ value, committed, onChange }: {
+  value: number;
+  committed: number;
+  onChange: (value: number) => void;
+}) {
+  const available = Math.max(0, value - committed);
+  return (
+    <div className="relative">
+      <NumberInput
+        value={value}
+        integer
+        onChange={onChange}
+        ariaLabel="On-hand stock"
+        className={committed > 0 ? "pr-8" : undefined}
+      />
+      {committed > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`${available} available to sell; ${committed} committed from ${value} on hand`}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-64">
+            <p className="font-medium">{available} available to sell</p>
+            <p className="opacity-80">{value} on hand − {committed} committed to open orders</p>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
 }
 
 function VariantImagePicker({ value, images, onChange, label = "Choose SKU image" }: { value: string | null; images: ProductImageDetail[]; onChange: (value: string | null) => void; label?: string }) {

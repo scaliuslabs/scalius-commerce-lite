@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   combinationKey,
@@ -9,6 +11,11 @@ import {
   type DraftOption,
   type DraftVariant,
 } from "./option-matrix-editor-model";
+
+const editorSource = readFileSync(
+  fileURLToPath(new URL("./OptionMatrixEditor.tsx", import.meta.url)),
+  "utf8",
+);
 
 const option = (
   id: string,
@@ -191,5 +198,26 @@ describe("option matrix editor model", () => {
     const rows = [variant("one", ["print"], 4)];
     expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 7, 0)).toContain("Allocate exactly 7");
     expect(getOptionMatrixIssue(options, rows, [], false, new Map([["one", 5]]), 0, 0)).toContain("lower than committed");
+  });
+});
+
+describe("option matrix editor density and stock disclosure", () => {
+  it("keeps option axes in compact single-line rows", () => {
+    expect(editorSource).toContain(
+      "sm:grid-cols-[260px_minmax(0,1fr)_82px] sm:items-center",
+    );
+    expect(editorSource).toContain(
+      "grid grid-cols-[minmax(0,1fr)_112px] gap-1",
+    );
+    expect(editorSource).not.toContain(
+      'className="space-y-1">\n        <Input\n          value={option.name}',
+    );
+  });
+
+  it("moves committed and available quantities into an accessible tooltip", () => {
+    expect(editorSource).toContain("function InventoryQuantityInput");
+    expect(editorSource).toContain("available to sell; ${committed} committed from ${value} on hand");
+    expect(editorSource).toContain("committed to open orders");
+    expect(editorSource).not.toContain("committed ·");
   });
 });
