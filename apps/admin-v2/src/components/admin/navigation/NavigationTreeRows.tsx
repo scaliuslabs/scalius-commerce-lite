@@ -25,6 +25,7 @@ import {
   Type,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import type { NavigationItem } from "./types";
 import { MAX_NAV_DEPTH, getDepthColor } from "./types";
 
@@ -117,6 +118,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
   const hasLinkAndSubmenu = item.href && hasSubMenu;
   const canAddChildren = depth < maxDepth;
   const indentPadding = depth * 20;
+  const hrefResult = parseNavigationHref(item.href);
 
   return (
     <>
@@ -222,17 +224,21 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                   href: e.target.value || undefined,
                 })
               }
-              className="h-8 text-sm"
+              className={cn(
+                "h-8 text-sm",
+                !hrefResult.ok && "border-destructive focus-visible:ring-destructive",
+              )}
               placeholder="URL (empty = label only)"
+              aria-invalid={!hrefResult.ok}
             />
-            {item.href && (
+            {item.href && hrefResult.ok && hrefResult.href && (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => {
-                  let url = item.href!;
+                  let url = hrefResult.href!;
                   if (!url.startsWith("http")) {
                     if (!url.startsWith("/")) url = `/${url}`;
                     url = getStorefrontPath(url);

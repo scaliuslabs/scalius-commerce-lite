@@ -195,13 +195,9 @@ const getGeneralRoute = createRoute({
 });
 
 app.openapi(getGeneralRoute, async (c) => {
-  try {
-    const db = c.get("db");
-    const result = await getGeneralSettings(db);
-    return ok(c, result);
-  } catch {
-    return ok(c, { headerConfig: {}, footerConfig: {} });
-  }
+  const db = c.get("db");
+  const result = await getGeneralSettings(db);
+  return ok(c, result);
 });
 
 // ─────────────────────────────────────────

@@ -6,6 +6,17 @@
 // and delete the local `navigationItemSchema` + `NavigationItem` type (lines 101-115).
 
 import { z } from "zod";
+import { parseNavigationHref } from "@scalius/shared/navigation-href";
+import { ValidationError } from "@scalius/core/errors";
+
+const navigationHrefSchema = z.string().optional().transform((value, context) => {
+    const result = parseNavigationHref(value);
+    if (!result.ok) {
+        context.addIssue({ code: "custom", message: result.reason });
+        return z.NEVER;
+    }
+    return result.href;
+});
 
 /** Recursive schema for a navigation item (supports nested subMenus) */
 export const navigationItemSchema: z.ZodType<{
@@ -17,7 +28,7 @@ export const navigationItemSchema: z.ZodType<{
     z.object({
         id: z.string(),
         title: z.string(),
-        href: z.string().optional(),
+        href: navigationHrefSchema,
         subMenu: z.array(navigationItemSchema).optional(),
     })
 );
@@ -75,5 +86,20 @@ export const saveNavigationConfigSchema = z.object({
     type: z.enum(["header", "footer"]),
     config: z.union([headerConfigSchema, footerConfigSchema]),
 });
+
+export function parseNavigationConfig(
+    type: "header" | "footer",
+    config: unknown,
+): Record<string, unknown> {
+    const result = (type === "header" ? headerConfigSchema : footerConfigSchema)
+        .safeParse(config);
+    if (!result.success) {
+        throw new ValidationError(
+            result.error.issues[0]?.message ?? "Invalid navigation configuration.",
+            result.error.issues,
+        );
+    }
+    return result.data as Record<string, unknown>;
+}
 
 export type SaveNavigationConfigInput = z.infer<typeof saveNavigationConfigSchema>;

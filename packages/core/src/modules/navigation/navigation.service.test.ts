@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError } from "@scalius/core/errors";
+import {
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+} from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
     getPublicCategoryById: vi.fn(),
@@ -17,8 +21,25 @@ vi.mock("../products/products.storefront", () => ({
 
 import {
     filterNavigationByPublishedCategories,
+    getNavigationMenus,
     getNavigationPreviewProductCount,
+    saveNavigationConfig,
 } from "./navigation.service";
+
+function createNavigationMenusDb(headerConfig: string, footerConfig = "{}") {
+    return {
+        batch: vi.fn(async () => [
+            [{ headerConfig, footerConfig }],
+            [{ slug: "shoes" }],
+        ]),
+        select: vi.fn(() => ({
+            from: vi.fn(() => ({
+                limit: vi.fn(() => ({})),
+                where: vi.fn(() => ({})),
+            })),
+        })),
+    };
+}
 
 describe("navigation preview product count", () => {
     const db = {} as Database;
@@ -90,5 +111,45 @@ describe("published category navigation filtering", () => {
             ],
             nested: { items: [] },
         });
+    });
+});
+
+describe("stored navigation authority", () => {
+    it("returns normalized safe page links from persisted settings", async () => {
+        const db = createNavigationMenusDb(JSON.stringify({
+            navigation: [{
+                id: "returns",
+                title: "Returns",
+                href: "/pages/returns",
+            }],
+        }));
+
+        await expect(getNavigationMenus(db as never)).resolves.toMatchObject({
+            headerConfig: {
+                navigation: [{ href: "/returns" }],
+            },
+        });
+    });
+
+    it("fails explicitly instead of returning empty menus for invalid settings", async () => {
+        const db = createNavigationMenusDb("{not-json");
+
+        await expect(getNavigationMenus(db as never))
+            .rejects.toBeInstanceOf(ServiceUnavailableError);
+    });
+
+    it("rejects unsafe links before any settings write", async () => {
+        const db = { select: vi.fn(), insert: vi.fn(), update: vi.fn() };
+
+        await expect(saveNavigationConfig(db as never, "header", {
+            navigation: [{
+                id: "unsafe",
+                title: "Unsafe",
+                href: "data:text/html,boom",
+            }],
+        })).rejects.toBeInstanceOf(ValidationError);
+        expect(db.select).not.toHaveBeenCalled();
+        expect(db.insert).not.toHaveBeenCalled();
+        expect(db.update).not.toHaveBeenCalled();
     });
 });

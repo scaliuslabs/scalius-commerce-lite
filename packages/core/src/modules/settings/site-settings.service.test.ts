@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ConflictError, ValidationError } from "@scalius/core/errors";
+import {
+  ConflictError,
+  ServiceUnavailableError,
+  ValidationError,
+} from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
   upsertSetting: vi.fn(),
@@ -11,10 +15,67 @@ vi.mock("../payments/gateway-settings", () => ({
 
 import {
   getCurrencySettings,
+  getGeneralSettings,
   getSeoSettings,
+  saveHeaderConfig,
   saveCurrencySettings,
   saveSeoSettings,
 } from "./site-settings.service";
+
+describe("general site settings", () => {
+  it("normalizes legacy CMS page links on read", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          limit: vi.fn(async () => [{
+            headerConfig: JSON.stringify({
+              navigation: [{
+                id: "returns",
+                title: "Returns",
+                href: "/pages/returns",
+              }],
+            }),
+            footerConfig: "{}",
+          }]),
+        })),
+      })),
+    };
+
+    await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
+      headerConfig: { navigation: [{ href: "/returns" }] },
+      footerConfig: {},
+    });
+  });
+
+  it("fails explicitly when persisted site settings are malformed", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          limit: vi.fn(async () => [{
+            headerConfig: "{not-json",
+            footerConfig: "{}",
+          }]),
+        })),
+      })),
+    };
+
+    await expect(getGeneralSettings(db as never))
+      .rejects.toBeInstanceOf(ServiceUnavailableError);
+  });
+
+  it("rejects unsafe navigation targets before writing header settings", async () => {
+    const db = { insert: vi.fn() };
+
+    await expect(saveHeaderConfig(db as never, {
+      navigation: [{
+        id: "unsafe",
+        title: "Unsafe",
+        href: "javascript:alert(1)",
+      }],
+    })).rejects.toBeInstanceOf(ValidationError);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+});
 
 function createCurrencyReadDb(values: Record<string, string>) {
   return {

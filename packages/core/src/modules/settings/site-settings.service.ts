@@ -7,7 +7,11 @@ import { orders, products, siteSettings, settings } from "@scalius/database/sche
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, ValidationError } from "@scalius/core/errors";
+import {
+  ConflictError,
+  ServiceUnavailableError,
+  ValidationError,
+} from "@scalius/core/errors";
 import { upsertSetting } from "../payments/gateway-settings";
 import {
   normalizeSupportedCurrencyCode,
@@ -24,6 +28,7 @@ import {
   parseSeoReturnPolicySettings,
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
+import { parseNavigationConfig } from "../navigation/navigation.validation";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -232,17 +237,22 @@ export async function saveCurrencySettings(
 
 export async function getGeneralSettings(db: Database) {
   const [row] = await db.select().from(siteSettings).limit(1);
-  const safeParseJSON = (val: string | null | undefined) => {
+  const parsePersistedConfig = (
+    type: "header" | "footer",
+    val: string | null | undefined,
+  ) => {
     if (!val) return {};
     try {
-      return JSON.parse(val);
+      return parseNavigationConfig(type, JSON.parse(val));
     } catch {
-      return {};
+      throw new ServiceUnavailableError(
+        `Stored ${type} configuration is invalid. Re-save it in Settings.`,
+      );
     }
   };
   return {
-    headerConfig: safeParseJSON(row?.headerConfig),
-    footerConfig: safeParseJSON(row?.footerConfig),
+    headerConfig: parsePersistedConfig("header", row?.headerConfig),
+    footerConfig: parsePersistedConfig("footer", row?.footerConfig),
   };
 }
 
@@ -250,13 +260,14 @@ export async function saveHeaderConfig(
   db: Database,
   config: Record<string, unknown>,
 ) {
+  const normalizedConfig = parseNavigationConfig("header", config);
   await db
     .insert(siteSettings)
     .values({
       id: "settings_" + nanoid(),
       siteName: "My Store",
       siteDescription: "",
-      headerConfig: JSON.stringify(config),
+      headerConfig: JSON.stringify(normalizedConfig),
       footerConfig: JSON.stringify({}),
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
@@ -264,7 +275,7 @@ export async function saveHeaderConfig(
     .onConflictDoUpdate({
       target: siteSettings.singletonKey,
       set: {
-        headerConfig: JSON.stringify(config),
+        headerConfig: JSON.stringify(normalizedConfig),
         updatedAt: sql`unixepoch()`,
       },
     });
@@ -274,6 +285,7 @@ export async function saveFooterConfig(
   db: Database,
   config: Record<string, unknown>,
 ) {
+  const normalizedConfig = parseNavigationConfig("footer", config);
   await db
     .insert(siteSettings)
     .values({
@@ -281,14 +293,14 @@ export async function saveFooterConfig(
       siteName: "My Store",
       siteDescription: "",
       headerConfig: JSON.stringify({}),
-      footerConfig: JSON.stringify(config),
+      footerConfig: JSON.stringify(normalizedConfig),
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     })
     .onConflictDoUpdate({
       target: siteSettings.singletonKey,
       set: {
-        footerConfig: JSON.stringify(config),
+        footerConfig: JSON.stringify(normalizedConfig),
         updatedAt: sql`unixepoch()`,
       },
     });

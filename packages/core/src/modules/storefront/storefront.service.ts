@@ -38,6 +38,8 @@ import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { filterNavigationByPublishedCategories } from "../navigation/navigation.service";
+import { parseNavigationConfig } from "../navigation/navigation.validation";
+import { ServiceUnavailableError } from "@scalius/core/errors";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
@@ -51,6 +53,19 @@ function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
       e instanceof Error ? e.message : e,
     );
     return fallback;
+  }
+}
+
+function parsePersistedNavigationConfig(
+  type: "header" | "footer",
+  json: string,
+): Record<string, unknown> {
+  try {
+    return parseNavigationConfig(type, JSON.parse(json));
+  } catch {
+    throw new ServiceUnavailableError(
+      `Stored ${type} configuration is invalid. Re-save it in Settings.`,
+    );
   }
 }
 
@@ -389,7 +404,7 @@ export async function getLayoutData(
 
   if (siteSettingsData?.headerConfig) {
     const headerConfig = filterNavigationByPublishedCategories(
-      safeJsonParse<Record<string, unknown>>(siteSettingsData.headerConfig, {}),
+      parsePersistedNavigationConfig("header", siteSettingsData.headerConfig),
       publishedCategorySlugs,
     ) as Record<string, unknown>;
     const topBarConfig = asRecord(headerConfig.topBar);
@@ -443,7 +458,6 @@ export async function getLayoutData(
         navigationData.push({
           id: "categories",
           title: "Categories",
-          href: "#",
           subMenu: (
             categoriesData as { id: string; name: string; slug: string }[]
           ).map((cat) => ({
@@ -477,7 +491,7 @@ export async function getLayoutData(
   let footerData: Record<string, unknown>;
   if (siteSettingsData?.footerConfig) {
     const footerConfig = filterNavigationByPublishedCategories(
-      safeJsonParse<Record<string, unknown>>(siteSettingsData.footerConfig, {}),
+      parsePersistedNavigationConfig("footer", siteSettingsData.footerConfig),
       publishedCategorySlugs,
     ) as Record<string, unknown>;
     const footerLogoConfig = asRecord(footerConfig.logo);

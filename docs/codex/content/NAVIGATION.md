@@ -10,6 +10,14 @@ Last reviewed: 2026-07-12
   saves invalidate layout/settings caches.
 - Admin pickers can reference Pages and Categories and can preview a filtered
   category link against buyer-resolvable product truth.
+- Page picker links use the actual public `/{slug}` route. Navigation targets
+  share one authority that normalizes safe relative paths, root paths,
+  fragments/queries, legacy `/pages/{slug}` values, and credential-free HTTPS
+  URLs while rejecting unsafe schemes, protocol-relative URLs, traversal,
+  whitespace/control characters, and backslashes.
+- Stored header/footer JSON is validated on read and write. Malformed persisted
+  settings fail explicitly instead of becoming an empty-success response, and
+  label-only menu nodes render without fake `#` anchors.
 
 ## P1 architecture defects
 
@@ -32,9 +40,8 @@ Last reviewed: 2026-07-12
    NavigationSection, footer menu editor, separate header/footer route shapes,
    and inline default builders. One canonical menu model/validator/resolver is
    required.
-7. Custom URLs need explicit internal-route versus absolute HTTPS semantics.
-   Reject script/data/protocol-relative URLs, credentials, unsafe characters,
-   and silent off-store links; external links need explicit new-tab behavior.
+7. External-link presentation still needs an explicit merchant new-tab choice;
+   safe target validation and scheme blocking are now enforced.
 
 ## Merchant workflow direction
 
