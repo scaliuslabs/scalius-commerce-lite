@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import CategoryFilters from "./CategoryFilters";
 
 const source = readFileSync(
   fileURLToPath(new URL("./CategoryFilters.tsx", import.meta.url)),
@@ -8,6 +11,19 @@ const source = readFileSync(
 );
 
 describe("buyer catalog facet controls", () => {
+  it("hydrates an unfiltered category from its authoritative API price range", () => {
+    const html = renderToStaticMarkup(createElement(CategoryFilters, {
+      facets: [],
+      currentFilters: {},
+      priceRange: { min: 50, max: 7_055 },
+    }));
+    const minInput = html.match(/<input[^>]+id="catalog-min-price"[^>]*>/)?.[0];
+    const maxInput = html.match(/<input[^>]+id="catalog-max-price"[^>]*>/)?.[0];
+
+    expect(minInput).toContain('value="50"');
+    expect(maxInput).toContain('value="7055"');
+  });
+
   it("supports multi-select values and preserves repeated URL parameters", () => {
     expect(source).toContain("selected.includes(value)");
     expect(source).toContain("finalParams.append(key, selectedValue)");
