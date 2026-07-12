@@ -134,6 +134,7 @@ export interface StorefrontFeedProductVariant {
     id: string;
     productId: string;
     imageId: string | null;
+    imageMediaId: string | null;
     imageUrl: string | null;
     selectedOptions: SelectedProductOption[];
     weight: number | null;
@@ -175,6 +176,7 @@ export interface StorefrontFeedProduct {
     hasVariants: boolean;
     availableForSale: boolean;
     imageUrl: string | null;
+    imageMediaId: string | null;
     imageAlt: string | null;
     category: { id: string; name: string; slug: string } | null;
     attributes: StorefrontFeedProductAttribute[];

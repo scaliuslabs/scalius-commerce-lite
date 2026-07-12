@@ -48,7 +48,7 @@ function productPagePayload() {
       name: "Fresh Hilsa",
     },
     category: null,
-    images: [],
+    media: [],
     variants: [],
     variantImageMappings: [],
     relatedProducts: [],

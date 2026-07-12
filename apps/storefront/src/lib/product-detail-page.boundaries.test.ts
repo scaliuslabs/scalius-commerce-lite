@@ -275,10 +275,12 @@ describe("product detail page SKU boundaries", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 
     expect(source).toContain(
-      "resolveCatalogDiscoveryImageUrl(primaryImageUrl, storefrontUrl",
+      "resolveCatalogDiscoveryImageUrl(candidate, storefrontUrl",
     );
     expect(source).toContain("getOptimizedImageUrl(imageUrl");
-    expect(source).toContain("image: [ogImageUrl]");
+    expect(source).toContain("image: schemaImageUrls");
+    expect(source).toContain("getVariantSchemaImages(variant)");
+    expect(source).toContain('item.kind === "image" ? item.url : item.posterUrl');
     expect(source).not.toContain("toAbsoluteStorefrontSeoUrl");
   });
 

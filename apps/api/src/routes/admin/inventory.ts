@@ -187,6 +187,7 @@ const scannerLookupSchema = z.object({
         price: z.number(),
         isActive: z.boolean(),
         imageUrl: z.string().nullable(),
+        imageMediaId: z.string().nullable(),
     }).passthrough(),
 });
 

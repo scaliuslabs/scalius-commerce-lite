@@ -227,7 +227,7 @@ describe("storefront product query boundaries", () => {
             "const productIds = productsList.map((product) => product.id);",
         );
         const enrichmentWaveIndex = feedBody.indexOf(
-            "const [imageMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([",
+            "const [mediaMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([",
         );
 
         expect(readWaveIndex).toBeGreaterThan(-1);
@@ -240,9 +240,9 @@ describe("storefront product query boundaries", () => {
         expect(feedBody).toContain("encodeFeedCursor(productsList[productsList.length - 1]!)");
         expect(productIdsIndex).toBeGreaterThan(readWaveIndex);
         expect(enrichmentWaveIndex).toBeGreaterThan(productIdsIndex);
-        expect(feedBody.indexOf("readPrimaryProductImageMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+        expect(feedBody.indexOf("mediaMapPromise", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
         expect(feedBody.indexOf("readStorefrontFeedAttributeMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
-        expect(feedBody.indexOf("readStorefrontFeedVariantMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
+        expect(feedBody.indexOf("readStorefrontFeedVariantMap(db, productIds, mediaMapPromise)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);
     });
 
     it("keeps feed variants buyer-safe, normalized, and page-wide instead of N+1", () => {
@@ -260,7 +260,8 @@ describe("storefront product query boundaries", () => {
         expect(variantHelper).toContain("productId: productVariants.productId");
         expect(variantHelper).toContain("optionCombinationKey: productVariants.optionCombinationKey");
         expect(variantHelper).toContain("imageId: productVariants.imageId");
-        expect(variantHelper).toContain("imageUrl: productImages.url");
+        expect(variantHelper).toContain("resolveSkuImageRepresentation(");
+        expect(variantHelper).toContain("imageUrl: resolvedImage?.url ?? null");
         expect(variantHelper).toContain("weight: productVariants.weight");
         expect(variantHelper).toContain("sku: productVariants.sku");
         expect(variantHelper).toContain("barcode: productVariants.barcode");

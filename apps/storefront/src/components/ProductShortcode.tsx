@@ -24,7 +24,15 @@ import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
 export default function ProductShortcode({ productData }: { productData: ProductPageData }) {
-  const { product, images, variants } = productData;
+  const { product, media, variants } = productData;
+  const images = useMemo(() => media.flatMap((item) => {
+    if (item.kind === "image") {
+      return [{ id: item.id, mediaId: item.mediaId, url: item.url, alt: item.altText, isPrimary: item.isPrimary }];
+    }
+    return item.posterMediaId && item.posterUrl
+      ? [{ id: item.id, mediaId: item.posterMediaId, url: item.posterUrl, alt: item.altText, isPrimary: item.isPrimary }]
+      : [];
+  }), [media]);
   const options = product.options ?? [];
   const buyerVariants = useMemo(() => resolveBuyerVariants(variants).variants, [variants]);
   const isUnavailable = !buyerVariants.some(isVariantAvailable);
@@ -34,13 +42,16 @@ export default function ProductShortcode({ productData }: { productData: Product
     ? window.__CURRENCY_DECIMAL_PLACES__!
     : getDecimalPlaces(currencyCode);
   const formatBuyerPrice = (price: number) => formatPrice(price, { symbol: currencySymbol, code: currencyCode, precision: decimals });
-  const primaryImage = images.find((image) => image.isPrimary && hasProductImage(image.url))?.url
+  const primaryImage = product.imageUrl
+    ?? images.find((image) => image.isPrimary && hasProductImage(image.url))?.url
     ?? images.find((image) => hasProductImage(image.url))?.url
-    ?? product.imageUrl
     ?? PRODUCT_IMAGE_FALLBACK;
+  const primaryImageMediaId = product.imageMediaId
+    ?? images.find((image) => image.url === primaryImage)?.mediaId;
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<VariantSelection>(() => createInitialSelection(options, buyerVariants));
   const [currentImage, setCurrentImage] = useState(primaryImage);
+  const [currentImageMediaId, setCurrentImageMediaId] = useState(primaryImageMediaId);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const matchingVariant = resolveExactVariantSelection(buyerVariants, selection)?.variant;
   const compatibleVariants = filterVariantsBySelection(buyerVariants, selection);
@@ -60,7 +71,8 @@ export default function ProductShortcode({ productData }: { productData: Product
   useEffect(() => {
     const selected = images.find((image) => image.id === matchingVariant?.imageId);
     setCurrentImage(selected?.url && hasProductImage(selected.url) ? selected.url : primaryImage);
-  }, [images, matchingVariant?.imageId, primaryImage]);
+    setCurrentImageMediaId(selected?.mediaId ?? primaryImageMediaId);
+  }, [images, matchingVariant?.imageId, primaryImage, primaryImageMediaId]);
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
@@ -78,6 +90,7 @@ export default function ProductShortcode({ productData }: { productData: Product
       name: product.name,
       price: finalPrice,
       image: currentImage,
+      ...(currentImageMediaId ? { imageMediaId: currentImageMediaId } : {}),
       quantity,
       variantId: matchingVariant.id,
       options: matchingVariant.selectedOptions.map(({ name, value }) => ({ name, label: value })),
@@ -104,7 +117,10 @@ export default function ProductShortcode({ productData }: { productData: Product
           {images.filter((image) => hasProductImage(image.url)).length > 1 ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
               {images.filter((image) => hasProductImage(image.url)).map((image) => (
-                <button key={image.id} onClick={() => setCurrentImage(image.url)} className={cn("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 sm:h-20 sm:w-20", currentImage === image.url ? "border-primary" : "border-gray-200")}>
+                <button key={image.id} onClick={() => {
+                  setCurrentImage(image.url);
+                  setCurrentImageMediaId(image.mediaId);
+                }} className={cn("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 sm:h-20 sm:w-20", currentImage === image.url ? "border-primary" : "border-gray-200")}>
                   <img src={getProductImageUrl(image.url, { width: 120, height: 120, quality: 75, format: "auto", fit: "cover" })} alt={image.alt || product.name} className="h-full w-full object-cover" />
                 </button>
               ))}

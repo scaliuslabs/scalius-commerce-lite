@@ -247,9 +247,7 @@ describe("UCP storefront routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
-      sort: "newest",
       search: "khaki",
     });
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
@@ -310,7 +308,7 @@ describe("UCP storefront routes", () => {
     mocks.getProductBySlug.mockResolvedValueOnce({
       product: catalogProduct({ excludeFromProductFeed: true }),
       category: null,
-      images: [],
+      media: [],
       variants: [],
       relatedProducts: [],
     });
@@ -326,10 +324,8 @@ describe("UCP storefront routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
       ids: "khaki-shoes",
-      sort: "newest",
     });
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
     expect(body.products).toEqual([]);

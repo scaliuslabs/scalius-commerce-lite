@@ -74,11 +74,14 @@ export function withOptimizedProductPageImages(
   return {
     ...productData,
     product: withOptimizedProductCardImage(productData.product),
-    images: productData.images.map((image) => ({
-      ...image,
-      url:
-        optimizeRasterUrl(image.url, PRODUCT_DETAIL_IMAGE_OPTIONS) ||
-        image.url,
+    media: productData.media.map((media) => ({
+      ...media,
+      url: media.kind === "image"
+        ? optimizeRasterUrl(media.url, PRODUCT_DETAIL_IMAGE_OPTIONS) || media.url
+        : media.url,
+      posterUrl: media.posterUrl
+        ? optimizeRasterUrl(media.posterUrl, PRODUCT_DETAIL_IMAGE_OPTIONS) || media.posterUrl
+        : null,
     })),
     relatedProducts: productData.relatedProducts.map(
       withOptimizedProductCardImage,

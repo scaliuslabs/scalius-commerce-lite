@@ -159,11 +159,12 @@ export interface Product {
   features?: string[];
   additionalInfo?: ProductRichContent[];
   attributes?: Array<{ name: string; value: string; slug: string }>;
-  categoryId: string;
+  categoryId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
   imageUrl?: string | null;
+  imageMediaId?: string | null;
   imageAlt?: string | null;
   category?: CategorySummary;
   hasVariants: boolean;
@@ -176,6 +177,7 @@ export interface ProductVariant {
   productId: string;
   optionCombinationKey: string | null;
   imageId: string | null;
+  imageMediaId?: string | null;
   imageUrl?: string | null;
   selectedOptions: SelectedProductOption[];
   weight: number | null;
@@ -195,6 +197,24 @@ export interface ProductVariant {
   deletedAt: string | null;
 }
 
+export interface ProductMedia {
+  id: string;
+  mediaId: string;
+  kind: "image" | "video";
+  url: string;
+  posterMediaId: string | null;
+  posterUrl: string | null;
+  altText: string;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  isPrimary: boolean;
+  sortOrder: number;
+  status: "ready" | "trashed";
+}
+
+/** Presentational image shape retained only until ProductGallery is mixed-media native. */
 export interface ProductImage {
   id: string;
   productId: string;

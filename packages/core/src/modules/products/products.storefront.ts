@@ -4,7 +4,6 @@ import {
     products,
     categories,
     productVariants,
-    productImages,
     productRichContent,
     productAttributeValues,
     productAttributes,
@@ -43,6 +42,12 @@ import {
     publicCategoryConditions,
     publishedCategoryIdExists,
 } from "../categories/categories.publication";
+import {
+    loadProductMediaProjections,
+    resolveProductImageRepresentation,
+    resolveSkuImageRepresentation,
+    type ProductMediaProjection,
+} from "./products.media";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -137,7 +142,10 @@ type StorefrontSitemapProductRow = {
     updatedAt: number;
 };
 
-type StorefrontFeedVariantRow = Omit<StorefrontFeedProductVariant, "deletedAt" | "selectedOptions"> & {
+type StorefrontFeedVariantRow = Omit<
+    StorefrontFeedProductVariant,
+    "deletedAt" | "selectedOptions" | "imageUrl" | "imageMediaId"
+> & {
     optionCombinationKey: string | null;
     deletedAt: number | null;
 };
@@ -511,40 +519,24 @@ function getPagination(page: number, limit: number, total: number) {
 async function readPrimaryProductImageMap(
     db: Database,
     productIds: string[],
-): Promise<Map<string, { url: string; alt: string | null }>> {
-    if (productIds.length === 0) {
-        return new Map();
-    }
+): Promise<Map<string, { mediaId: string; url: string; alt: string | null }>> {
+    const mediaMap = await loadProductMediaProjections(db, productIds);
+    return productImageMapFromMedia(mediaMap);
+}
 
-    const images: Array<{
-        productId: string;
-        url: string;
-        alt: string | null;
-    }> = [];
-    for (
-        let offset = 0;
-        offset < productIds.length;
-        offset += STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE
-    ) {
-        const productIdChunk = productIds.slice(
-            offset,
-            offset + STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
-        );
-        images.push(...await db
-            .select({
-                productId: productImages.productId,
-                url: productImages.url,
-                alt: productImages.alt,
-            })
-            .from(productImages)
-            .where(and(
-                eq(productImages.isPrimary, true),
-                inArray(productImages.productId, productIdChunk),
-            ))
-            .all());
+function productImageMapFromMedia(
+    mediaMap: Map<string, ProductMediaProjection[]>,
+): Map<string, { mediaId: string; url: string; alt: string | null }> {
+    const result = new Map<string, { mediaId: string; url: string; alt: string | null }>();
+    for (const [productId, mediaItems] of mediaMap) {
+        const image = resolveProductImageRepresentation(mediaItems);
+        if (image) result.set(productId, {
+            mediaId: image.mediaId,
+            url: image.url,
+            alt: image.altText,
+        });
     }
-
-    return new Map(images.map((img) => [img.productId, { url: img.url, alt: img.alt }]));
+    return result;
 }
 
 async function readStorefrontFeedAttributeMap(
@@ -602,6 +594,8 @@ async function readStorefrontFeedAttributeMap(
 async function readStorefrontFeedVariantMap(
     db: Database,
     productIds: string[],
+    mediaMapPromise: Promise<Map<string, ProductMediaProjection[]>> =
+        loadProductMediaProjections(db, productIds),
 ): Promise<Map<string, StorefrontFeedProductVariant[]>> {
     if (productIds.length === 0) {
         return new Map();
@@ -623,7 +617,6 @@ async function readStorefrontFeedVariantMap(
                 productId: productVariants.productId,
                 optionCombinationKey: productVariants.optionCombinationKey,
                 imageId: productVariants.imageId,
-                imageUrl: productImages.url,
                 weight: productVariants.weight,
                 sku: productVariants.sku,
                 barcode: productVariants.barcode,
@@ -639,7 +632,6 @@ async function readStorefrontFeedVariantMap(
                 deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
             })
             .from(productVariants)
-            .leftJoin(productImages, eq(productVariants.imageId, productImages.id))
             .where(and(
                 inArray(productVariants.productId, productIdChunk),
                 isNull(productVariants.deletedAt),
@@ -648,11 +640,20 @@ async function readStorefrontFeedVariantMap(
             .all() as StorefrontFeedVariantRow[]);
     }
 
-    const selectedOptionMap = await loadVariantSelectedOptions(db, rows.map((row) => row.id));
+    const [selectedOptionMap, mediaMap] = await Promise.all([
+        loadVariantSelectedOptions(db, rows.map((row) => row.id)),
+        mediaMapPromise,
+    ]);
     const variantMap = new Map<string, StorefrontFeedProductVariant[]>();
     for (const row of rows) {
+        const resolvedImage = resolveSkuImageRepresentation(
+            mediaMap.get(row.productId) ?? [],
+            row.imageId,
+        );
         const variant = normalizeDefaultSkuOptions({
             ...row,
+            imageMediaId: resolvedImage?.mediaId ?? null,
+            imageUrl: resolvedImage?.url ?? null,
             selectedOptions: selectedOptionMap.get(row.id) ?? [],
             deletedAt: row.deletedAt ? unixToDate(row.deletedAt)?.toISOString() ?? null : null,
         });
@@ -815,6 +816,7 @@ async function readStorefrontCatalogPage(
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
             imageUrl: image?.url ?? null,
+            imageMediaId: image?.mediaId ?? null,
             imageAlt: image?.alt ?? null,
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
@@ -912,9 +914,10 @@ export async function getStorefrontFeedProducts(
     const productsList = scannedProducts.slice(0, limit);
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
+    const mediaMapPromise = loadProductMediaProjections(db, productIds);
 
-    const [imageMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([
-        readPrimaryProductImageMap(db, productIds),
+    const [mediaMap, categoriesData, attributeMap, variantMap, optionMap] = await Promise.all([
+        mediaMapPromise,
         categoryIds.length > 0
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
@@ -926,9 +929,10 @@ export async function getStorefrontFeedProducts(
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         readStorefrontFeedAttributeMap(db, productIds),
-        readStorefrontFeedVariantMap(db, productIds),
+        readStorefrontFeedVariantMap(db, productIds, mediaMapPromise),
         loadProductOptions(db, productIds),
     ]);
+    const imageMap = productImageMapFromMedia(mediaMap);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
     const feedProducts: StorefrontFeedProduct[] = productsList.map((product: StorefrontFeedProductListRow) => {
@@ -958,6 +962,7 @@ export async function getStorefrontFeedProducts(
             hasVariants: Boolean(product.hasCustomerOptions),
             availableForSale: Boolean(product.availableForSale),
             imageUrl: imgData?.url || null,
+            imageMediaId: imgData?.mediaId ?? null,
             imageAlt: imgData?.alt || null,
             category,
             attributes: attributeMap.get(product.id) ?? [],
@@ -1121,26 +1126,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
     if (!product) return null;
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const promises: Promise<{ type: string; data: unknown }>[] = [
-        db.select({
-            id: productImages.id,
-            productId: productImages.productId,
-            url: productImages.url,
-            alt: productImages.alt,
-            isPrimary: productImages.isPrimary,
-            sortOrder: productImages.sortOrder,
-            createdAt: sql<number>`CAST(${productImages.createdAt} AS INTEGER)`,
-        }).from(productImages)
-            .where(eq(productImages.productId, product.id)).orderBy(productImages.sortOrder).all()
-            .then((res) => ({ type: "images", data: res })),
+        mediaMapPromise.then((mediaMap) => ({
+            type: "media",
+            data: mediaMap.get(product.id) ?? [],
+        })),
 
         db.select({
             id: productVariants.id,
             productId: productVariants.productId,
             optionCombinationKey: productVariants.optionCombinationKey,
             imageId: productVariants.imageId,
-            imageUrl: productImages.url,
             weight: productVariants.weight,
             sku: productVariants.sku,
             price: productVariants.price,
@@ -1157,7 +1155,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
             deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
         }).from(productVariants)
-            .leftJoin(productImages, eq(productVariants.imageId, productImages.id))
             .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
             .orderBy(productVariants.createdAt, productVariants.id)
             .all().then((res) => ({ type: "variants", data: res })),
@@ -1222,13 +1219,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 if (relatedProds.length === 0) return { type: "relatedProducts", data: [] };
 
                 const relatedIds = relatedProds.map((p) => p.id);
-                const relatedImages: Array<{ productId: string; url: string; alt: string | null }> = await db
-                    .select({ productId: productImages.productId, url: productImages.url, alt: productImages.alt })
-                    .from(productImages)
-                    .where(and(inArray(productImages.productId, relatedIds), eq(productImages.isPrimary, true)))
-                    .all();
-
-                const relatedImageMap = new Map(relatedImages.map((img: { productId: string; url: string; alt: string | null }) => [img.productId, { url: img.url, alt: img.alt }]));
+                const relatedImageMap = await readPrimaryProductImageMap(db, relatedIds);
 
                 return {
                     type: "relatedProducts",
@@ -1240,6 +1231,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                             availableForSale: Boolean(rp.availableForSale),
                             priceVaries: maxBuyerPrice > rp.discountedPrice,
                             imageUrl: imgData?.url || null,
+                            imageMediaId: imgData?.mediaId ?? null,
                             imageAlt: imgData?.alt || null,
                         };
                     }),
@@ -1250,26 +1242,16 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
     const results = await Promise.all(promises);
 
-    const images = (results.find((r) => r.type === "images")?.data as unknown[]) || [];
+    const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
     const category = (results.find((r) => r.type === "category")?.data as unknown) || null;
     const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; imageUrl: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
-    interface ImageResult { id: string; productId: string; url: string; alt: string | null; isPrimary: boolean; sortOrder: number; createdAt: number; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
-    const typedImages = images as ImageResult[];
-    const cleanImages = typedImages.map((image) => ({
-        id: image.id,
-        productId: image.productId,
-        url: image.url,
-        alt: image.alt,
-        isPrimary: image.isPrimary,
-        sortOrder: image.sortOrder,
-        createdAt: image.createdAt,
-    }));
+    const productImage = resolveProductImageRepresentation(mediaItems);
     const hasVariants = typedVariants.some((variant) =>
         variant.isDefault !== true && Boolean(variant.optionCombinationKey?.trim()),
     );
@@ -1280,8 +1262,11 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     ]);
     const formattedVariants = typedVariants.map((variant) => {
         const v = normalizeDefaultSkuOptions(variant);
+        const variantImage = resolveSkuImageRepresentation(mediaItems, v.imageId);
         return {
             ...v,
+            imageUrl: variantImage?.url ?? null,
+            imageMediaId: variantImage?.mediaId ?? null,
             selectedOptions: selectedOptionMap.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(v.updatedAt)?.toISOString() || null,
@@ -1293,6 +1278,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             ...product,
             categoryId: category ? product.categoryId : null,
             hasVariants,
+            imageUrl: productImage?.url ?? null,
+            imageMediaId: productImage?.mediaId ?? null,
+            imageAlt: productImage?.altText ?? null,
             createdAt: unixToDate(product.createdAt)?.toISOString() || null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() || null,
             deletedAt: product.deletedAt ? unixToDate(product.deletedAt)?.toISOString() : null,
@@ -1310,11 +1298,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             additionalInfo,
         },
         category,
-        images: cleanImages.map((img) => ({
-            ...img,
-            createdAt: unixToDate(img.createdAt)?.toISOString() || null,
-            alt: img.alt || product.name,
-        })),
+        media: mediaItems,
         variants: formattedVariants,
         relatedProducts,
     };
@@ -1450,6 +1434,7 @@ export async function searchStorefrontProducts(
             return {
                 ...product,
                 imageUrl: imgData?.url || null,
+                imageMediaId: imgData?.mediaId ?? null,
                 imageAlt: imgData?.alt || null,
                 variants: variantMap.get(product.id) ?? [],
             };
