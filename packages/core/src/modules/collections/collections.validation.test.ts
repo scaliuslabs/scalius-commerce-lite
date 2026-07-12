@@ -3,31 +3,33 @@ import { createCollectionSchema, updateCollectionSchema } from "./collections.va
 
 describe("collection validation", () => {
     it("does not clear canonical path on unrelated partial updates", () => {
-        const parsed = updateCollectionSchema.parse({ isActive: false });
+        const parsed = updateCollectionSchema.parse({ expectedVersion: 3, isActive: false });
 
-        expect(parsed).toEqual({ isActive: false });
+        expect(parsed).toEqual({ expectedVersion: 3, isActive: false });
     });
 
     it("keeps collection config updates partial instead of defaulting membership", () => {
         const parsed = updateCollectionSchema.parse({
+            expectedVersion: 3,
             config: { title: "New heading" },
         });
 
-        expect(parsed).toEqual({ config: { title: "New heading" } });
+        expect(parsed).toEqual({ expectedVersion: 3, config: { title: "New heading" } });
     });
 
     it("normalizes blank canonical path updates to null", () => {
-        const parsed = updateCollectionSchema.parse({ canonicalPath: "   " });
+        const parsed = updateCollectionSchema.parse({ expectedVersion: 3, canonicalPath: "   " });
 
-        expect(parsed).toEqual({ canonicalPath: null });
+        expect(parsed).toEqual({ expectedVersion: 3, canonicalPath: null });
     });
 
     it("accepts collection-shaped canonical overrides", () => {
         const parsed = updateCollectionSchema.parse({
+            expectedVersion: 3,
             canonicalPath: " /collections/col_1 ",
         });
 
-        expect(parsed).toEqual({ canonicalPath: "/collections/col_1" });
+        expect(parsed).toEqual({ expectedVersion: 3, canonicalPath: "/collections/col_1" });
     });
 
     it("rejects canonical overrides that are not collection routes", () => {
@@ -38,10 +40,16 @@ describe("collection validation", () => {
             "/categories/summer-edit",
         ]) {
             expect(
-                updateCollectionSchema.safeParse({ canonicalPath }).success,
+                updateCollectionSchema.safeParse({ expectedVersion: 3, canonicalPath }).success,
                 canonicalPath,
             ).toBe(false);
         }
+    });
+
+    it("requires a positive optimistic concurrency token for every edit", () => {
+        expect(updateCollectionSchema.safeParse({ name: "Updated" }).success).toBe(false);
+        expect(updateCollectionSchema.safeParse({ expectedVersion: 0, name: "Updated" }).success).toBe(false);
+        expect(updateCollectionSchema.safeParse({ expectedVersion: 1, name: "Updated" }).success).toBe(true);
     });
 
     it("requires the selected membership source before publication", () => {
