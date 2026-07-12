@@ -27,6 +27,7 @@ This is the durable working record for the Products, Categories, Attributes, Col
 - [COLLECTIONS.md](COLLECTIONS.md) — collection membership, ordering, publication, admin UX, storefront, discovery, cache, and scale decisions.
 - [DECISIONS.md](DECISIONS.md) — accepted decisions, implementation order, verification requirements, and deferred model work.
 - [PROGRESS.md](PROGRESS.md) — landed fixes, regression evidence, known remaining gaps, and the next implementation slice.
+- [LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) — disposable production demo dataset, browser checkout/order/inventory proof, retained audit rows, and cleanup state.
 
 ## Competitive principles adopted
 
