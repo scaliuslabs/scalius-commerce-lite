@@ -5,7 +5,7 @@ import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { bulkDeleteCategories, restoreCategories } from "./categories.service";
 
 describe("category permanent delete integrity", () => {
-  it("batches collection cleanup with the category delete", async () => {
+  it("preserves non-target membership while batching collection cleanup with delete", async () => {
     const batchCalls: unknown[][] = [];
     const db = {
       select() {
@@ -30,7 +30,7 @@ describe("category permanent delete integrity", () => {
                   return { limit: () => ({ all: async () => [] }) };
                 }
                 if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
                 }
                 if (table === collections) {
                   return { all: async () => [{
@@ -83,16 +83,16 @@ describe("category permanent delete integrity", () => {
       },
     };
 
-    await bulkDeleteCategories(db as never, ["cat_delete"], true);
+    await bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true);
 
     expect(batchCalls).toHaveLength(1);
-    expect(batchCalls[0]).toHaveLength(4);
+    expect(batchCalls[0]).toHaveLength(5);
     expect(batchCalls[0]?.[0]).toMatchObject({ kind: "guard" });
-    expect(batchCalls[0]?.[1]).toMatchObject({
+    expect(batchCalls[0]?.[2]).toMatchObject({
       kind: "update",
       table: products,
     });
-    expect(batchCalls[0]?.[2]).toMatchObject({
+    expect(batchCalls[0]?.[3]).toMatchObject({
       kind: "update",
       table: collections,
       values: {
@@ -102,7 +102,7 @@ describe("category permanent delete integrity", () => {
         }),
       },
     });
-    expect(batchCalls[0]?.[3]).toMatchObject({ kind: "delete" });
+    expect(batchCalls[0]?.[4]).toMatchObject({ kind: "delete" });
   });
 
   it("routes single permanent delete through the bulk cleanup primitive", () => {
@@ -110,7 +110,7 @@ describe("category permanent delete integrity", () => {
       new URL("./categories.service.ts", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("await bulkDeleteCategories(db, [id], true)");
+    expect(source).toContain("await bulkDeleteCategories(db, [{ id, expectedRevision }], true)");
   });
 
   it("routes single soft delete through the same atomic bulk guard", () => {
@@ -118,8 +118,8 @@ describe("category permanent delete integrity", () => {
       new URL("./categories.service.ts", import.meta.url),
       "utf8",
     );
-    expect(source).toContain("await bulkDeleteCategories(db, [id], false)");
-    expect(source).toContain("categoryDeleteUsageGuard(db, uniqueCategoryIds)");
+    expect(source).toContain("await bulkDeleteCategories(db, [{ id, expectedRevision }], false)");
+    expect(source).toContain("categoryDeleteUsageGuard(db, claims)");
   });
 
   it("fails closed when a product is assigned after the initial usage read", async () => {
@@ -135,7 +135,7 @@ describe("category permanent delete integrity", () => {
                   return { limit: () => ({ all: async () => [] }) };
                 }
                 if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
                 }
                 return { all: async () => [] };
               },
@@ -158,7 +158,7 @@ describe("category permanent delete integrity", () => {
     };
 
     await expect(
-      bulkDeleteCategories(db as never, ["cat_delete"], true),
+      bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true),
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
@@ -187,7 +187,7 @@ describe("category permanent delete integrity", () => {
     };
 
     await expect(
-      bulkDeleteCategories(db as never, ["cat_active"], true),
+      bulkDeleteCategories(db as never, [{ id: "cat_active", expectedRevision: 1 }], true),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
@@ -202,7 +202,7 @@ describe("category permanent delete integrity", () => {
                   return { limit: () => ({ all: async () => [] }) };
                 }
                 if (table === categories) {
-                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date(), revision: 1 }] };
                 }
                 if (table === collections) {
                   return { all: async () => [{
@@ -235,13 +235,16 @@ describe("category permanent delete integrity", () => {
     };
 
     await expect(
-      bulkDeleteCategories(db as never, ["cat_delete"], true),
+      bulkDeleteCategories(db as never, [{ id: "cat_delete", expectedRevision: 1 }], true),
     ).rejects.toThrow("without a source");
   });
 
   it("caps restore sets before constructing a D1 query", async () => {
-    const categoryIds = Array.from({ length: 91 }, (_, index) => `cat_${index}`);
-    await expect(restoreCategories({} as never, categoryIds))
+    const claims = Array.from({ length: 91 }, (_, index) => ({
+      id: `cat_${index}`,
+      expectedRevision: 1,
+    }));
+    await expect(restoreCategories({} as never, claims))
       .rejects.toBeInstanceOf(ValidationError);
   });
 });

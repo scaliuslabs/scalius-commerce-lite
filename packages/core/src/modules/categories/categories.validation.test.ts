@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createCategorySchema } from "./categories.validation";
+import {
+    createCategorySchema,
+    updateCategorySchema,
+    updateCategoryStatusSchema,
+} from "./categories.validation";
 
 const categoryInput = {
     name: "Summer Shoes",
@@ -90,6 +94,22 @@ describe("category validation", () => {
                 size: -1,
                 createdAt: "not-a-date",
             },
+        }).success).toBe(false);
+    });
+
+    it("requires one canonical status and a positive revision for edits", () => {
+        expect(updateCategorySchema.parse({
+            ...categoryInput,
+            status: "internal",
+            expectedRevision: 4,
+        })).toMatchObject({ status: "internal", expectedRevision: 4 });
+        expect(updateCategoryStatusSchema.safeParse({
+            status: "private",
+            expectedRevision: 4,
+        }).success).toBe(false);
+        expect(updateCategoryStatusSchema.safeParse({
+            status: "published",
+            expectedRevision: 0,
         }).success).toBe(false);
     });
 });

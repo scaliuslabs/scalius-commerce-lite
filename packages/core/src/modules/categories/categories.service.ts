@@ -3,84 +3,78 @@
 // Used by both admin Hono routes and storefront Hono routes.
 
 import { categories, products, collections } from "@scalius/database/schema";
-import { sql, and, isNull, isNotNull, eq, ne, desc, asc, inArray, type SQL } from "drizzle-orm";
+import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import {
     CATEGORY_BATCH_LIMIT,
     type CreateCategoryInput,
+    type CategoryRevisionClaim,
     type UpdateCategoryInput,
+    type UpdateCategoryStatusInput,
 } from "./categories.validation";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
+import {
+    buyerResolvableCategoryProductExists,
+    buildCategoryPublishReadyGuard,
+    CATEGORY_PUBLISH_NOT_READY,
+    getCategoryPublishReadiness,
+} from "./categories.publication";
+import {
+    buildCategoryRevisionGuard,
+    CATEGORY_REVISION_CONFLICT,
+    categoryClaimIdsCondition,
+    normalizeCategoryRevisionClaims,
+    rethrowCategoryRevisionConflict,
+    revisionResult,
+} from "./categories.revision";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 function categoryProductRevisionBump(
     db: Database,
-    categoryIds: string[],
+    claims: readonly CategoryRevisionClaim[],
 ): SQLiteBatchItem {
     return db.update(products)
         .set({
             aggregateRevision: sql`${products.aggregateRevision} + 1`,
             updatedAt: sql`unixepoch()`,
         })
-        .where(inArray(products.categoryId, categoryIds));
+        .where(sql`${products.categoryId} IN (
+            SELECT CAST(json_extract(value, '$.id') AS TEXT)
+            FROM json_each(${JSON.stringify(claims)})
+        )`);
 }
 
 function categoryDeleteUsageGuard(
     db: Database,
-    categoryIds: string[],
+    claims: readonly CategoryRevisionClaim[],
 ): SQLiteBatchItem {
     return buildBatchGuard(db, sql`
         CASE WHEN NOT EXISTS (
             SELECT 1 FROM ${products}
-            WHERE ${inArray(products.categoryId, categoryIds)}
+            WHERE ${products.categoryId} IN (
+                SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                FROM json_each(${JSON.stringify(claims)})
+            )
               AND ${products.deletedAt} IS NULL
         ) THEN 1 ELSE json_extract('CATEGORY_DELETE_IN_USE', '$') END
     `);
 }
 
 function allCategoriesTrashedCondition(
-    categoryIds: string[],
+    claims: readonly CategoryRevisionClaim[],
 ): SQL {
     return sql`(
         SELECT count(*) FROM ${categories}
         WHERE ${categories.id} IN (
-            SELECT CAST(value AS TEXT)
-            FROM json_each(${JSON.stringify(categoryIds)})
+            SELECT CAST(json_extract(value, '$.id') AS TEXT)
+            FROM json_each(${JSON.stringify(claims)})
         )
           AND ${categories.deletedAt} IS NOT NULL
-    ) = ${categoryIds.length}`;
-}
-
-function categoryActiveStateGuard(
-    db: Database,
-    categoryIds: string[],
-): SQLiteBatchItem {
-    return buildBatchGuard(db, sql`
-        CASE WHEN (
-            SELECT count(*) FROM ${categories}
-            WHERE ${inArray(categories.id, categoryIds)}
-              AND ${categories.deletedAt} IS NULL
-        ) = ${categoryIds.length}
-        THEN 1 ELSE json_extract('CATEGORY_ACTIVE_STATE_REQUIRED', '$') END
-    `);
-}
-
-function categoryTrashedStateGuard(
-    db: Database,
-    categoryIds: string[],
-): SQLiteBatchItem {
-    return buildBatchGuard(db, sql`
-        CASE WHEN (
-            SELECT count(*) FROM ${categories}
-            WHERE ${inArray(categories.id, categoryIds)}
-              AND ${categories.deletedAt} IS NOT NULL
-        ) = ${categoryIds.length}
-        THEN 1 ELSE json_extract('CATEGORY_TRASHED_STATE_REQUIRED', '$') END
-    `);
+    ) = ${claims.length}`;
 }
 
 function isCategorySlugConstraintError(error: unknown): boolean {
@@ -161,6 +155,8 @@ export async function listCategories(
             canonicalPath: categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
+            status: categories.status,
+            revision: categories.revision,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
@@ -170,6 +166,10 @@ export async function listCategories(
                 WHERE ${products.categoryId} = ${categories.id}
                   AND ${products.deletedAt} IS NULL
             )`,
+            publishReady: sql<number>`CASE
+                WHEN ${buyerResolvableCategoryProductExists(categories.id)} THEN 1
+                ELSE 0
+            END`,
         })
         .from(categories)
         .where(whereClause)
@@ -189,6 +189,7 @@ export async function listCategories(
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
         deletedAt: category.deletedAt ? new Date(category.deletedAt * 1000).toISOString() : null,
         productCount: Number(category.productCount ?? 0),
+        publishReady: Boolean(category.publishReady),
     }));
 
     return {
@@ -229,7 +230,7 @@ export async function getCategoryBySlug(db: Database, slug: string) {
  * Returns a single category by ID.
  */
 export async function getCategoryById(db: Database, id: string) {
-    return db
+    const category = await db
         .select({
             id: categories.id,
             name: categories.name,
@@ -241,6 +242,8 @@ export async function getCategoryById(db: Database, id: string) {
             canonicalPath: categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
+            status: categories.status,
+            revision: categories.revision,
             deletedAt: sql<number | null>`CAST(${categories.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
@@ -248,6 +251,11 @@ export async function getCategoryById(db: Database, id: string) {
         .from(categories)
         .where(eq(categories.id, id))
         .get();
+    if (!category) return undefined;
+    return {
+        ...category,
+        publishReadiness: await getCategoryPublishReadiness(db, id),
+    };
 }
 
 // ─────────────────────────────────────────
@@ -260,7 +268,7 @@ export async function getCategoryById(db: Database, id: string) {
 export async function createCategory(
     db: Database,
     data: CreateCategoryInput,
-): Promise<{ id: string }> {
+): Promise<{ id: string; revision: number; status: "draft" }> {
     const existing = await db
         .select({ id: categories.id, deletedAt: categories.deletedAt })
         .from(categories)
@@ -289,6 +297,8 @@ export async function createCategory(
             canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
+            status: "draft",
+            revision: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
             deletedAt: null,
@@ -300,7 +310,7 @@ export async function createCategory(
         throw error;
     }
 
-    return { id: categoryId };
+    return { id: categoryId, revision: 1, status: "draft" };
 }
 
 /**
@@ -310,9 +320,13 @@ export async function updateCategory(
     db: Database,
     id: string,
     data: UpdateCategoryInput,
-): Promise<void> {
+): Promise<{ revision: number; status: UpdateCategoryInput["status"] }> {
     const existing = await db
-        .select({ id: categories.id, deletedAt: categories.deletedAt })
+        .select({
+            id: categories.id,
+            deletedAt: categories.deletedAt,
+            revision: categories.revision,
+        })
         .from(categories)
         .where(eq(categories.id, id))
         .get();
@@ -320,6 +334,14 @@ export async function updateCategory(
     if (!existing) throw new NotFoundError("Category not found");
     if (existing.deletedAt) {
         throw new ConflictError("Restore this category before editing it.");
+    }
+    if (existing.revision !== data.expectedRevision) {
+        await rethrowCategoryRevisionConflict(
+            db,
+            [{ id, expectedRevision: data.expectedRevision }],
+            new Error(CATEGORY_REVISION_CONFLICT),
+            "active",
+        );
     }
 
     const slugConflict = await db
@@ -333,8 +355,14 @@ export async function updateCategory(
     }
 
     try {
-        await safeBatch(db, [
-            categoryActiveStateGuard(db, [id]),
+        const claims = [{ id, expectedRevision: data.expectedRevision }];
+        const statements: SQLiteBatchItem[] = [
+            buildCategoryRevisionGuard(db, claims, "active"),
+        ];
+        if (data.status === "published") {
+            statements.push(buildCategoryPublishReadyGuard(db, id));
+        }
+        statements.push(
             db
                 .update(categories)
                 .set({
@@ -347,17 +375,115 @@ export async function updateCategory(
                     canonicalPath: data.canonicalPath ?? null,
                     noIndex: data.noIndex ?? false,
                     excludeFromSitemap: data.excludeFromSitemap ?? false,
+                    status: data.status,
+                    revision: sql`${categories.revision} + 1`,
                     updatedAt: sql`unixepoch()`,
                 })
-                .where(and(eq(categories.id, id), isNull(categories.deletedAt))),
-            categoryProductRevisionBump(db, [id]),
-        ] as never);
+                .where(and(
+                    eq(categories.id, id),
+                    eq(categories.revision, data.expectedRevision),
+                    isNull(categories.deletedAt),
+                ))
+                .returning({ revision: categories.revision }),
+            categoryProductRevisionBump(db, claims),
+        );
+        const results = await safeBatch(db, statements as never) as unknown[];
+        return {
+            revision: revisionResult(results.at(-2)),
+            status: data.status,
+        };
     } catch (error) {
         if (isCategorySlugConstraintError(error)) {
             throw new ConflictError("A category with this slug already exists.");
         }
-        if (error instanceof Error && /CATEGORY_ACTIVE_STATE_REQUIRED|malformed json/i.test(error.message)) {
-            throw new ConflictError("Restore this category before editing it.");
+        try {
+            await rethrowCategoryRevisionConflict(
+                db,
+                [{ id, expectedRevision: data.expectedRevision }],
+                error,
+                "active",
+            );
+        } catch (translated) {
+            if (translated !== error) throw translated;
+        }
+        if (
+            data.status === "published" &&
+            error instanceof Error &&
+            new RegExp(`${CATEGORY_PUBLISH_NOT_READY}|malformed json`, "i").test(error.message)
+        ) {
+            throw new ValidationError(
+                "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
+            );
+        }
+        throw error;
+    }
+}
+
+export async function updateCategoryStatus(
+    db: Database,
+    id: string,
+    data: UpdateCategoryStatusInput,
+): Promise<{ revision: number; status: UpdateCategoryStatusInput["status"] }> {
+    const category = await db
+        .select({
+            id: categories.id,
+            status: categories.status,
+            revision: categories.revision,
+            deletedAt: categories.deletedAt,
+        })
+        .from(categories)
+        .where(eq(categories.id, id))
+        .get();
+    if (!category) throw new NotFoundError("Category not found");
+    if (category.deletedAt) throw new ConflictError("Restore this category before changing its status.");
+    if (category.status === data.status) {
+        if (category.revision !== data.expectedRevision) {
+            await rethrowCategoryRevisionConflict(
+                db,
+                [{ id, expectedRevision: data.expectedRevision }],
+                new Error(CATEGORY_REVISION_CONFLICT),
+                "active",
+            );
+        }
+        return { revision: category.revision, status: category.status };
+    }
+
+    const claims = [{ id, expectedRevision: data.expectedRevision }];
+    const statements: SQLiteBatchItem[] = [buildCategoryRevisionGuard(db, claims, "active")];
+    if (data.status === "published") statements.push(buildCategoryPublishReadyGuard(db, id));
+    statements.push(
+        db.update(categories)
+            .set({
+                status: data.status,
+                revision: sql`${categories.revision} + 1`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(categories.id, id),
+                eq(categories.revision, data.expectedRevision),
+                isNull(categories.deletedAt),
+            ))
+            .returning({ revision: categories.revision }),
+        categoryProductRevisionBump(db, claims),
+    );
+
+    try {
+        const results = await safeBatch(db, statements as never) as unknown[];
+        return { revision: revisionResult(results.at(-2)), status: data.status };
+    } catch (error) {
+        try {
+            await rethrowCategoryRevisionConflict(db, claims, error, "active");
+        } catch (translated) {
+            if (translated !== error) throw translated;
+        }
+        if (
+            data.status === "published" &&
+            error instanceof Error &&
+            new RegExp(`${CATEGORY_PUBLISH_NOT_READY}|malformed json`, "i").test(error.message)
+        ) {
+            throw new ValidationError(
+                "Add at least one active product with a buyer-resolvable SKU before publishing this category.",
+            );
         }
         throw error;
     }
@@ -366,8 +492,12 @@ export async function updateCategory(
 /**
  * Soft-deletes a category. Throws if products are still assigned to it.
  */
-export async function deleteCategory(db: Database, id: string): Promise<void> {
-    await bulkDeleteCategories(db, [id], false);
+export async function deleteCategory(
+    db: Database,
+    id: string,
+    expectedRevision: number,
+): Promise<void> {
+    await bulkDeleteCategories(db, [{ id, expectedRevision }], false);
 }
 
 /**
@@ -376,25 +506,42 @@ export async function deleteCategory(db: Database, id: string): Promise<void> {
  */
 export async function bulkDeleteCategories(
     db: Database,
-    categoryIds: string[],
+    revisionClaims: CategoryRevisionClaim[],
     permanent = false,
 ): Promise<void> {
-    if (categoryIds.length === 0) return;
-    const uniqueCategoryIds = [...new Set(categoryIds)];
-    if (uniqueCategoryIds.length > CATEGORY_BATCH_LIMIT) {
-        throw new ValidationError(`Delete at most ${CATEGORY_BATCH_LIMIT} categories at a time.`);
-    }
+    const claims = normalizeCategoryRevisionClaims(revisionClaims, CATEGORY_BATCH_LIMIT);
+    const targetCategoryIds = new Set(claims.map((claim) => claim.id));
 
     const referencedProducts = await db
-        .select({ id: products.id, name: products.name, categoryId: products.categoryId })
+        .select({
+            id: products.id,
+            name: products.name,
+            categoryId: products.categoryId,
+            productCount: sql<number>`count(*) OVER ()`,
+            categoryCount: sql<number>`(
+                SELECT count(DISTINCT assigned.category_id)
+                FROM products AS assigned
+                WHERE assigned.category_id IN (
+                    SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                    FROM json_each(${JSON.stringify(claims)})
+                )
+                  AND assigned.deleted_at IS NULL
+            )`,
+        })
         .from(products)
-        .where(and(inArray(products.categoryId, uniqueCategoryIds), isNull(products.deletedAt)))
+        .where(and(
+            sql`${products.categoryId} IN (
+                SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                FROM json_each(${JSON.stringify(claims)})
+            )`,
+            isNull(products.deletedAt),
+        ))
         .limit(5)
         .all();
 
     if (referencedProducts.length > 0) {
-        const categoryCount = new Set(referencedProducts.map((p) => p.categoryId)).size;
-        const productCount = referencedProducts.length;
+        const categoryCount = Number(referencedProducts[0]?.categoryCount ?? 0);
+        const productCount = Number(referencedProducts[0]?.productCount ?? 0);
         throw new ValidationError(
             `Cannot delete ${categoryCount === 1 ? "category" : "categories"} because ${productCount} product${productCount === 1 ? "" : "s"} ${productCount === 1 ? "is" : "are"} still assigned to ${categoryCount === 1 ? "it" : "them"}.`,
             {
@@ -408,10 +555,10 @@ export async function bulkDeleteCategories(
         const categoryStates = await db
             .select({ id: categories.id, deletedAt: categories.deletedAt })
             .from(categories)
-            .where(inArray(categories.id, uniqueCategoryIds))
+            .where(categoryClaimIdsCondition(claims))
             .all();
         if (
-            categoryStates.length !== uniqueCategoryIds.length ||
+            categoryStates.length !== claims.length ||
             categoryStates.some((category) => !category.deletedAt)
         ) {
             throw new ConflictError(
@@ -437,23 +584,27 @@ export async function bulkDeleteCategories(
                     ELSE EXISTS (
                         SELECT 1
                         FROM json_each(${collections.config}, '$.categoryIds') AS membership
-                        INNER JOIN json_each(${JSON.stringify(uniqueCategoryIds)}) AS target
-                            ON CAST(membership.value AS TEXT) = CAST(target.value AS TEXT)
+                        INNER JOIN json_each(${JSON.stringify(claims)}) AS target
+                            ON CAST(membership.value AS TEXT) = CAST(json_extract(target.value, '$.id') AS TEXT)
                     )
                 END = 1
             `)
             .all();
 
         const statements: SQLiteBatchItem[] = [
-            categoryDeleteUsageGuard(db, uniqueCategoryIds),
+            buildCategoryRevisionGuard(db, claims, "trashed"),
+            categoryDeleteUsageGuard(db, claims),
             db.update(products)
                 .set({
                     aggregateRevision: sql`${products.aggregateRevision} + 1`,
                     updatedAt: sql`unixepoch()`,
                 })
                 .where(and(
-                    inArray(products.categoryId, uniqueCategoryIds),
-                    allCategoriesTrashedCondition(uniqueCategoryIds),
+                    sql`${products.categoryId} IN (
+                        SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                        FROM json_each(${JSON.stringify(claims)})
+                    )`,
+                    allCategoriesTrashedCondition(claims),
                 )),
         ];
         for (const collection of affectedCollections) {
@@ -481,13 +632,13 @@ export async function bulkDeleteCategories(
                 );
             }
 
-            const categoryIds = config.categoryIds.filter(
+            const membershipCategoryIds = config.categoryIds.filter(
                 (categoryId): categoryId is string => typeof categoryId === "string",
             );
-            const updated = categoryIds.filter(
-                (categoryId) => !uniqueCategoryIds.includes(categoryId),
+            const updated = membershipCategoryIds.filter(
+                (categoryId) => !targetCategoryIds.has(categoryId),
             );
-            if (updated.length === categoryIds.length) continue;
+            if (updated.length === membershipCategoryIds.length) continue;
             if (
                 collection.deletedAt == null &&
                 collection.isActive &&
@@ -508,11 +659,12 @@ export async function bulkDeleteCategories(
                     .update(collections)
                     .set({
                         config: JSON.stringify(config),
+                        version: sql`${collections.version} + 1`,
                         updatedAt: sql`unixepoch()`,
                     })
                     .where(and(
                         eq(collections.id, collection.id),
-                        allCategoriesTrashedCondition(uniqueCategoryIds),
+                        allCategoriesTrashedCondition(claims),
                     )),
             );
         }
@@ -520,21 +672,26 @@ export async function bulkDeleteCategories(
         statements.push(
             db.delete(categories)
                 .where(and(
-                    inArray(categories.id, uniqueCategoryIds),
+                    categoryClaimIdsCondition(claims),
                     isNotNull(categories.deletedAt),
-                    allCategoriesTrashedCondition(uniqueCategoryIds),
+                    allCategoriesTrashedCondition(claims),
                 ))
                 .returning({ id: categories.id }),
         );
         try {
             const results = await safeBatch(db, statements as never) as unknown[][];
             const deletedRows = results.at(-1) ?? [];
-            if (deletedRows.length !== uniqueCategoryIds.length) {
+            if (deletedRows.length !== claims.length) {
                 throw new ConflictError(
                     "Only categories already in trash can be permanently deleted.",
                 );
             }
         } catch (error) {
+            try {
+                await rethrowCategoryRevisionConflict(db, claims, error, "trashed");
+            } catch (translated) {
+                if (translated !== error) throw translated;
+            }
             if (
                 error instanceof Error &&
                 /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
@@ -552,17 +709,28 @@ export async function bulkDeleteCategories(
     } else {
         try {
             await safeBatch(db, [
-                categoryDeleteUsageGuard(db, uniqueCategoryIds),
+                buildCategoryRevisionGuard(db, claims, "active"),
+                categoryDeleteUsageGuard(db, claims),
                 db
                     .update(categories)
-                    .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                    .set({
+                        status: "draft",
+                        revision: sql`${categories.revision} + 1`,
+                        deletedAt: sql`unixepoch()`,
+                        updatedAt: sql`unixepoch()`,
+                    })
                     .where(and(
-                        inArray(categories.id, uniqueCategoryIds),
+                        categoryClaimIdsCondition(claims),
                         isNull(categories.deletedAt),
                     )),
-                categoryProductRevisionBump(db, uniqueCategoryIds),
+                categoryProductRevisionBump(db, claims),
             ] as never);
         } catch (error) {
+            try {
+                await rethrowCategoryRevisionConflict(db, claims, error, "active");
+            } catch (translated) {
+                if (translated !== error) throw translated;
+            }
             if (
                 error instanceof Error &&
                 /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
@@ -583,29 +751,34 @@ export async function bulkDeleteCategories(
 /**
  * Restores soft-deleted categories.
  */
-export async function restoreCategories(db: Database, categoryIds: string[]): Promise<void> {
-    if (categoryIds.length === 0) return;
-
-    const uniqueCategoryIds = [...new Set(categoryIds)];
-    if (uniqueCategoryIds.length > CATEGORY_BATCH_LIMIT) {
-        throw new ValidationError(`Restore at most ${CATEGORY_BATCH_LIMIT} categories at a time.`);
-    }
+export async function restoreCategories(
+    db: Database,
+    revisionClaims: CategoryRevisionClaim[],
+): Promise<void> {
+    const claims = normalizeCategoryRevisionClaims(revisionClaims, CATEGORY_BATCH_LIMIT);
 
     try {
         await safeBatch(db, [
-            categoryTrashedStateGuard(db, uniqueCategoryIds),
+            buildCategoryRevisionGuard(db, claims, "trashed"),
             db
                 .update(categories)
-                .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+                .set({
+                    status: "draft",
+                    revision: sql`${categories.revision} + 1`,
+                    deletedAt: null,
+                    updatedAt: sql`unixepoch()`,
+                })
                 .where(and(
-                    inArray(categories.id, uniqueCategoryIds),
+                    categoryClaimIdsCondition(claims),
                     isNotNull(categories.deletedAt),
                 )),
-            categoryProductRevisionBump(db, uniqueCategoryIds),
+            categoryProductRevisionBump(db, claims),
         ] as never);
     } catch (error) {
-        if (error instanceof Error && /CATEGORY_TRASHED_STATE_REQUIRED|malformed json/i.test(error.message)) {
-            throw new ConflictError("Only categories currently in trash can be restored.");
+        try {
+            await rethrowCategoryRevisionConflict(db, claims, error, "trashed");
+        } catch (translated) {
+            if (translated !== error) throw translated;
         }
         throw error;
     }
@@ -615,6 +788,10 @@ export async function restoreCategories(db: Database, categoryIds: string[]): Pr
  * Permanently deletes a single category.
  * Throws ConflictError if products still reference this category.
  */
-export async function permanentlyDeleteCategory(db: Database, id: string): Promise<void> {
-    await bulkDeleteCategories(db, [id], true);
+export async function permanentlyDeleteCategory(
+    db: Database,
+    id: string,
+    expectedRevision: number,
+): Promise<void> {
+    await bulkDeleteCategories(db, [{ id, expectedRevision }], true);
 }
