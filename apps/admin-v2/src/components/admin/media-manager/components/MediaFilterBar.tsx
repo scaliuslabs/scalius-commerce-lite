@@ -1,304 +1,94 @@
-// Media filter and search bar component
-
-import { useState } from "react";
-import { Input } from "~/components/ui/input";
+import { useRef, useState } from "react";
+import { FolderInput, RotateCcw, Search, Trash2, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import {
-  Search,
-  Trash2,
-  FolderInput,
-  CheckSquare,
-  Square,
-  Upload as UploadIcon,
-  ArrowUpDown,
-  Filter,
-} from "lucide-react";
-import type { MediaFilterOptions, MediaFolder } from "../types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { Input } from "~/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { capabilityAccept, type MediaCapability, type MediaFilterOptions, type MediaFolder, type MediaLibraryView } from "../types";
 
-/** Sort presets map to sortBy + sortOrder params */
-const SORT_OPTIONS = [
-  { label: "Newest", value: "newest", sortBy: "createdAt" as const, sortOrder: "desc" as const },
-  { label: "Oldest", value: "oldest", sortBy: "createdAt" as const, sortOrder: "asc" as const },
-  { label: "Largest", value: "largest", sortBy: "size" as const, sortOrder: "desc" as const },
-  { label: "Smallest", value: "smallest", sortBy: "size" as const, sortOrder: "asc" as const },
-  { label: "Name A-Z", value: "name-asc", sortBy: "filename" as const, sortOrder: "asc" as const },
-  { label: "Name Z-A", value: "name-desc", sortBy: "filename" as const, sortOrder: "desc" as const },
-] as const;
-
-const TYPE_OPTIONS = [
-  { label: "All Files", value: "all", mimeType: undefined },
-  { label: "Images", value: "images", mimeType: "image" },
-  { label: "Videos", value: "videos", mimeType: "video" },
-  { label: "Documents", value: "documents", mimeType: "application" },
-] as const;
+const SORTS = {
+  newest: ["createdAt", "desc"],
+  oldest: ["createdAt", "asc"],
+  largest: ["size", "desc"],
+  smallest: ["size", "asc"],
+  "name-asc": ["filename", "asc"],
+  "name-desc": ["filename", "desc"],
+} as const satisfies Record<string, readonly [MediaFilterOptions["sortBy"], MediaFilterOptions["sortOrder"]]>;
 
 interface MediaFilterBarProps {
-  filters: Partial<MediaFilterOptions>;
-  onFiltersChange: (filters: Partial<MediaFilterOptions>) => void;
-  selectionMode: boolean;
+  capability: MediaCapability;
+  filters: MediaFilterOptions;
+  view: MediaLibraryView;
   selectedCount: number;
-  totalCount: number;
-  onToggleSelectionMode: () => void;
-  onSelectAll?: () => void;
-  onClearSelection?: () => void;
-  onBulkDelete?: () => void;
+  visibleCount: number;
+  folders: MediaFolder[];
+  isMutating: boolean;
+  allowSelection?: boolean;
+  onSearch: (value: string) => void;
+  onFiltersChange: (updates: Partial<MediaFilterOptions>) => void;
+  onUpload: (files: FileList | null) => Promise<void>;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onMove: (folderId: string | null) => void;
+  onLifecycle: (action: "trash" | "restore" | "permanent") => void;
   onAddSelected?: () => void;
-  canAddSelected?: boolean;
-  folders?: MediaFolder[];
-  onMoveToFolder?: (folderId: string | null) => void;
-  onUpload?: (files: FileList | null) => Promise<void>;
-  isUploading?: boolean;
 }
 
-/** Derive the sort preset value from current filters */
-function getSortValue(filters: Partial<MediaFilterOptions>): string {
-  const match = SORT_OPTIONS.find(
-    (o) => o.sortBy === filters.sortBy && o.sortOrder === filters.sortOrder,
-  );
-  return match?.value ?? "newest";
-}
-
-/** Derive the type filter value from current filters */
-function getTypeValue(filters: Partial<MediaFilterOptions>): string {
-  const match = TYPE_OPTIONS.find((o) => o.mimeType === filters.mimeType);
-  return match?.value ?? "all";
-}
-
-export function MediaFilterBar({
-  filters,
-  onFiltersChange,
-  selectionMode,
-  selectedCount,
-  totalCount,
-  onToggleSelectionMode,
-  onSelectAll,
-  onBulkDelete,
-  onAddSelected,
-  canAddSelected = false,
-  folders = [],
-  onMoveToFolder,
-  onUpload,
-  isUploading = false,
-}: MediaFilterBarProps) {
-  const [moveToFolderId, setMoveToFolderId] = useState<string>("");
-  const [searchExpanded, setSearchExpanded] = useState(false);
-
-  const handleMoveToFolder = () => {
-    if (onMoveToFolder) {
-      onMoveToFolder(moveToFolderId === "root" ? null : moveToFolderId);
-      setMoveToFolderId("");
-    }
-  };
-
-  const handleUploadClick = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.accept = "image/*";
-    input.onchange = async (e) => {
-      const target = e.target as HTMLInputElement;
-      if (target.files && target.files.length > 0 && onUpload) {
-        await onUpload(target.files);
-      }
-    };
-    input.click();
-  };
-
+export function MediaFilterBar(props: MediaFilterBarProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState(props.filters.search);
+  const [targetFolder, setTargetFolder] = useState("");
+  const sortValue = Object.entries(SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
   return (
-    <div className="min-w-0 space-y-2">
-      {/* Top bar with actions */}
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {/* Upload Button */}
-          {onUpload && (
-            <Button type="button"
-              variant="default"
-              size="sm"
-              onClick={handleUploadClick}
-              disabled={isUploading}
-              className="h-8 shrink-0"
-              title="Upload files (Max 20 files, 10MB each)"
-            >
-              <UploadIcon className="h-3.5 w-3.5 mr-1.5" />
-              Upload
-            </Button>
-          )}
-
-          {/* Search Toggle */}
-          <Button type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSearchExpanded(!searchExpanded)}
-            className="h-8 shrink-0"
-          >
-            <Search className="h-3.5 w-3.5" />
-          </Button>
-
-          {/* Sort Dropdown */}
-          <Select
-            value={getSortValue(filters)}
-            onValueChange={(value) => {
-              const opt = SORT_OPTIONS.find((o) => o.value === value);
-              if (opt) {
-                onFiltersChange({ ...filters, sortBy: opt.sortBy, sortOrder: opt.sortOrder });
-              }
-            }}
-          >
-            <SelectTrigger className="h-8 min-w-[112px] flex-1 text-xs sm:w-[120px] sm:flex-none">
-              <ArrowUpDown className="h-3 w-3 mr-1 shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
+    <div className="border-b bg-background px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {props.view === "ready" && (
+          <>
+            <input ref={inputRef} className="sr-only" type="file" multiple accept={capabilityAccept(props.capability)} onChange={(event) => { void props.onUpload(event.target.files); event.currentTarget.value = ""; }} />
+            <Button type="button" size="sm" className="h-8" onClick={() => inputRef.current?.click()}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
+          </>
+        )}
+        <div className="relative min-w-44 flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input className="h-8 pl-8 text-[13px]" value={search} placeholder="Search assets" onChange={(event) => { setSearch(event.target.value); props.onSearch(event.target.value); }} />
+        </div>
+        {props.capability === "both" && (
+          <Select value={props.filters.kind ?? "all"} onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : value as "image" | "video" })}>
+            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="image">Images</SelectItem><SelectItem value="video">Videos</SelectItem></SelectContent>
           </Select>
+        )}
+        <Select value={sortValue} onValueChange={(value) => { const sort = SORTS[value as keyof typeof SORTS]; props.onFiltersChange({ sortBy: sort[0], sortOrder: sort[1] }); }}>
+          <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="largest">Largest</SelectItem><SelectItem value="smallest">Smallest</SelectItem><SelectItem value="name-asc">Name A–Z</SelectItem><SelectItem value="name-desc">Name Z–A</SelectItem></SelectContent>
+        </Select>
 
-          {/* Type Filter */}
-          <Select
-            value={getTypeValue(filters)}
-            onValueChange={(value) => {
-              const opt = TYPE_OPTIONS.find((o) => o.value === value);
-              onFiltersChange({ ...filters, mimeType: opt?.mimeType });
-            }}
-          >
-            <SelectTrigger className="h-8 min-w-[112px] flex-1 text-xs sm:w-[120px] sm:flex-none">
-              <Filter className="h-3 w-3 mr-1 shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TYPE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Selection Mode Toggle - NO NESTED BUTTONS */}
-          <Button type="button"
-            variant={selectionMode ? "default" : "outline"}
-            size="sm"
-            onClick={onToggleSelectionMode}
-            className="h-8 shrink-0 items-center gap-1.5"
-          >
-            {selectionMode ? (
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.selectedCount ? `${props.selectedCount} selected` : `${props.visibleCount} shown`}</span>
+        {props.allowSelection !== false && (props.selectedCount > 0 ? (
+          <>
+            {props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onSelectAll}>Select page</Button>}
+            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onClearSelection}>Clear</Button>
+            {props.view === "ready" && (
               <>
-                <CheckSquare className="h-3.5 w-3.5" />
-                <span className="text-xs">Exit</span>
-              </>
-            ) : (
-              <>
-                <Square className="h-3.5 w-3.5" />
-                <span className="text-xs">Select</span>
+                <Select value={targetFolder} onValueChange={setTargetFolder}>
+                  <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Move to folder" /></SelectTrigger>
+                  <SelectContent><SelectItem value="root">Unfiled</SelectItem>{props.folders.map((folder) => <SelectItem value={folder.id} key={folder.id}>{folder.name}</SelectItem>)}</SelectContent>
+                </Select>
+                <Button type="button" variant="outline" size="icon" className="h-8 w-8" disabled={!targetFolder || props.isMutating} onClick={() => props.onMove(targetFolder === "root" ? null : targetFolder)} aria-label="Move selected assets"><FolderInput className="h-3.5 w-3.5" /></Button>
+                <Button type="button" variant="outline" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button>
               </>
             )}
-          </Button>
-
-          {selectionMode && (
-            <>
-              <span className="text-xs text-muted-foreground">
-                {selectedCount > 0
-                  ? `${selectedCount} selected`
-                  : "None selected"}
-              </span>
-              {onSelectAll && selectedCount < totalCount && (
-                <Button type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={onSelectAll}
-                  className="h-8 text-xs"
-                >
-                  Select All
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          {selectionMode && selectedCount > 0 && (
-            <>
-              {onMoveToFolder && folders.length > 0 && (
-                <div className="flex min-w-0 flex-wrap items-center gap-1">
-                  <Select
-                    value={moveToFolderId}
-                    onValueChange={setMoveToFolderId}
-                  >
-                    <SelectTrigger className="h-8 min-w-[132px] flex-1 text-xs sm:w-[140px] sm:flex-none">
-                      <SelectValue placeholder="Move to..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="root">📁 Uncategorized</SelectItem>
-                      {folders.map((folder) => (
-                        <SelectItem key={folder.id} value={folder.id}>
-                          📂 {folder.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleMoveToFolder}
-                    disabled={!moveToFolderId}
-                    className="h-8 shrink-0"
-                  >
-                    <FolderInput className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              )}
-              {canAddSelected && onAddSelected && (
-                <Button type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={onAddSelected}
-                  className="h-8 shrink-0 text-xs"
-                >
-                  Add ({selectedCount})
-                </Button>
-              )}
-              {onBulkDelete && (
-                <Button type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={onBulkDelete}
-                  className="h-8 shrink-0"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </>
-          )}
-        </div>
+            {props.view === "trash" && (
+              <>
+                <Button type="button" variant="outline" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Restore</Button>
+                <Button type="button" variant="destructive" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete</Button>
+              </>
+            )}
+            {props.onAddSelected && <Button type="button" size="sm" className="h-8" onClick={props.onAddSelected}>Add {props.selectedCount}</Button>}
+          </>
+        ) : (
+          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onSelectAll}>Select</Button>
+        ))}
       </div>
-
-      {/* Expandable Search */}
-      {searchExpanded && (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            type="text"
-            placeholder="Search files..."
-            value={filters.search || ""}
-            onChange={(e) =>
-              onFiltersChange({ ...filters, search: e.target.value })
-            }
-            className="pl-9 h-8 text-sm"
-            autoFocus
-          />
-        </div>
-      )}
     </div>
   );
 }

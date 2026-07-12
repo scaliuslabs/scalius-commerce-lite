@@ -91,6 +91,7 @@ export function FormImageUploadField({
         </div>
       )}
       <MediaManager
+        capability="image"
         selectedFiles={value ? [value] : []}
         onSelect={(file) => onChange(file)}
         triggerLabel={value ? changeTriggerLabel : triggerLabel}

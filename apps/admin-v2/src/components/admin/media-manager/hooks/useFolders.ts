@@ -1,77 +1,53 @@
-// Hook for managing folders
-
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import type { MediaFolder } from "../types";
-import { toast } from "sonner";
 
-export function useFolders(autoLoad: boolean = false) {
+export function useFolders(autoLoad = false) {
   const [folders, setFolders] = useState<MediaFolder[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>("all"); // "all" shows all files from all folders
+  const [isLoading, setIsLoading] = useState(autoLoad);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null | "all">("all");
 
   const loadFolders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const loadedFolders = await MediaApiClient.fetchFolders();
-      setFolders(loadedFolders);
-    } catch (error: unknown) {
-      console.error("Error loading folders:", error);
-      toast.error("Error Loading Folders", { description: "Could not load folders. Please try again." });
+      setFolders(await MediaApiClient.fetchFolders());
+    } catch (error) {
+      toast.error("Folders could not be loaded", { description: error instanceof Error ? error.message : "Try again." });
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const createFolder = useCallback(
-    async (name: string, parentId?: string | null) => {
-      try {
-        const newFolder = await MediaApiClient.createFolder(name, parentId);
-        setFolders((prev) => [...prev, newFolder]);
-
-        toast.success("Folder Created", { description: `Successfully created folder "${name}".` });
-
-        return newFolder;
-      } catch (error: unknown) {
-        console.error("Error creating folder:", error);
-        toast.error("Folder Creation Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not create folder. Please try again." });
-        throw error;
-      }
-    },
-    [],
-  );
-
-  const deleteFolder = useCallback(
-    async (folderId: string) => {
-      try {
-        await MediaApiClient.deleteFolder(folderId);
-        setFolders((prev) => prev.filter((f) => f.id !== folderId));
-
-        // If we deleted the current folder, reset to root
-        if (currentFolderId === folderId) {
-          setCurrentFolderId(null);
-        }
-
-        toast.success("Folder Deleted", { description: "The folder has been successfully deleted." });
-      } catch (error: unknown) {
-        console.error("Error deleting folder:", error);
-        toast.error("Deletion Failed", { description: (error instanceof Error ? error.message : String(error)) || "Could not delete folder. Please try again." });
-        throw error;
-      }
-    },
-    [currentFolderId],
-  );
-
-  const moveToFolder = useCallback((folderId: string | null) => {
-    setCurrentFolderId(folderId);
+  const createFolder = useCallback(async (name: string) => {
+    const folder = await MediaApiClient.createFolder(name);
+    setFolders((current) => [...current, folder].sort((a, b) => a.name.localeCompare(b.name)));
+    toast.success("Folder created");
+    return folder;
   }, []);
 
-  // Auto-load on mount if enabled
-  useEffect(() => {
-    if (autoLoad) {
-      loadFolders();
+  const renameFolder = useCallback(async (folder: MediaFolder, name: string) => {
+    try {
+      const updated = await MediaApiClient.renameFolder(folder, name);
+      setFolders((current) => current.map((item) => item.id === updated.id ? updated : item).sort((a, b) => a.name.localeCompare(b.name)));
+      toast.success("Folder renamed");
+    } catch (error) {
+      toast.error("Folder was not renamed", { description: error instanceof Error ? error.message : "Refresh and try again." });
     }
-  }, [autoLoad, loadFolders]);
+  }, []);
+
+  const deleteFolder = useCallback(async (folder: MediaFolder) => {
+    try {
+      await MediaApiClient.deleteFolder(folder);
+      setFolders((current) => current.filter((item) => item.id !== folder.id));
+      setCurrentFolderId((current) => current === folder.id ? "all" : current);
+      toast.success("Folder deleted");
+    } catch (error) {
+      toast.error("Folder was not deleted", { description: error instanceof Error ? error.message : "Move its assets, refresh, and try again." });
+    }
+  }, []);
+
+  useEffect(() => { if (autoLoad) void loadFolders(); }, [autoLoad, loadFolders]);
 
   return {
     folders,
@@ -79,7 +55,8 @@ export function useFolders(autoLoad: boolean = false) {
     currentFolderId,
     loadFolders,
     createFolder,
+    renameFolder,
     deleteFolder,
-    moveToFolder,
+    moveToFolder: setCurrentFolderId,
   };
 }

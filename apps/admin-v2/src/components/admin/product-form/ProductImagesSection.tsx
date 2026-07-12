@@ -77,6 +77,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     </Suspense>
                   ) : null}
                   <MediaManager
+                    capability="image"
                     selectedFiles={field.value}
                     trigger={(
                       <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-xs">

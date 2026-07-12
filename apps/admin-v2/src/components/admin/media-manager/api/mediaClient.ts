@@ -1,270 +1,224 @@
-// Media API Client
-
-import type {
-  MediaFile,
-  MediaFolder,
-  MediaApiResponse,
-  MediaFilterOptions,
-} from "../types";
 import { unixToDate } from "@scalius/shared/timestamps";
-import { extractApiError, extractApiErrorDetails, unwrapEnvelope } from "~/lib/api-helpers";
 import {
-  getMediaList as getMediaFiles,
-  deleteMedia,
-  updateMedia,
+  createMediaFolder,
+  deleteMediaFolder,
   getMediaFolders,
-  createMediaFolder as createMediaFolderFn,
-  deleteMediaFolder as deleteMediaFolderFn,
-  moveMediaFiles as moveMediaFilesFn,
+  getMediaList,
+  moveMediaFiles,
+  permanentlyDeleteMedia,
+  renameMediaFolder,
+  restoreMedia,
+  trashMedia,
+  updateMedia,
   type MediaFileDto,
   type MediaFolderDto,
 } from "~/lib/api-functions/media";
+import type {
+  CursorPagination,
+  MediaApiResponse,
+  LibraryMediaFile,
+  MediaFilterOptions,
+  MediaFolder,
+} from "../types";
 
-/** Shape of the upload response JSON — varies between success, partial, and error */
-interface UploadResponseData {
-  files?: MediaFileDto[];
-  warnings?: Array<{ filename: string; error: string }>;
-  summary?: string;
-  error?: string;
-  details?: Array<{ filename: string; error: string }> | string;
+const MEDIA_API = "/api/v1/admin/media";
+
+interface ApiEnvelope<T> {
+  success?: boolean;
+  data?: T;
+  error?: string | { message?: string };
 }
 
-function toDate(value: string | number | Date | null | undefined): Date {
+export interface MediaUploadSession {
+  id: string;
+  mediaId: string;
+  filename: string;
+  kind: "image" | "video";
+  mimeType: string;
+  size: number;
+  expectedParts: number;
+  partSize: number;
+  state: string;
+  version: number;
+  expiresAt: string | number;
+  uploadedParts?: Array<{ partNumber: number; size: number }>;
+}
+
+function date(value: string | number | Date | null | undefined): Date {
   return unixToDate(value) ?? new Date(0);
 }
 
-function toOptionalDate(
-  value: string | number | Date | null | undefined,
-): Date | undefined {
-  return unixToDate(value) ?? undefined;
-}
-
-function toMediaFile(file: MediaFileDto): MediaFile {
+export function toMediaFile(file: MediaFileDto): LibraryMediaFile {
   return {
     id: file.id,
     url: file.url,
     filename: file.filename,
+    objectKey: file.objectKey,
+    kind: file.kind,
     size: file.size,
     mimeType: file.mimeType,
     altText: file.altText ?? null,
+    caption: file.caption ?? null,
     width: file.width ?? null,
     height: file.height ?? null,
-    folderId: file.folderId ?? null,
-    createdAt: toDate(file.createdAt),
-    updatedAt: toOptionalDate(file.updatedAt),
+    durationMs: file.durationMs ?? null,
+    posterMediaId: file.posterMediaId ?? null,
+    folderId: file.folderId,
+    status: file.status,
+    version: file.version,
+    createdAt: date(file.createdAt),
+    updatedAt: date(file.updatedAt),
+    trashedAt: file.trashedAt == null ? null : date(file.trashedAt),
+    deletedAt: file.deletedAt == null ? null : date(file.deletedAt),
   };
 }
 
-function toMediaFolder(folder: MediaFolderDto): MediaFolder {
+function toFolder(folder: MediaFolderDto): MediaFolder {
   return {
     id: folder.id,
     name: folder.name,
-    parentId: folder.parentId ?? null,
-    createdAt: toDate(folder.createdAt),
-    updatedAt: toOptionalDate(folder.updatedAt),
+    version: folder.version,
+    createdAt: date(folder.createdAt),
+    updatedAt: date(folder.updatedAt),
+    deletedAt: folder.deletedAt == null ? null : date(folder.deletedAt),
   };
 }
 
+async function parseDirectResponse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  let body: ApiEnvelope<T>;
+  try {
+    body = (await response.json()) as ApiEnvelope<T>;
+  } catch {
+    throw new Error(`Media request failed (${response.status}).`);
+  }
+  if (!response.ok || body.success === false) {
+    const message = typeof body.error === "string" ? body.error : body.error?.message;
+    throw new Error(message || `Media request failed (${response.status}).`);
+  }
+  if (body.data === undefined) throw new Error("Media service returned an incomplete response.");
+  return body.data;
+}
+
 export class MediaApiClient {
-  /**
-   * Fetch media files with pagination and filtering
-   */
   static async fetchFiles(
-    page: number = 1,
-    limit: number = 20,
-    filters: Partial<MediaFilterOptions> = {},
+    cursor: string | undefined,
+    limit: number,
+    filters: Partial<MediaFilterOptions>,
   ): Promise<MediaApiResponse> {
-    const data = await getMediaFiles({
-      data: {
-        page,
-        limit,
-        search: filters.search,
-        folderId:
-          filters.folderId === undefined ? undefined : filters.folderId,
-        sortBy: filters.sortBy,
-        sortOrder: filters.sortOrder,
-        mimeType: filters.mimeType ?? undefined,
-      },
-    });
-    return {
-      files: data.files.map(toMediaFile),
-      pagination: data.pagination,
-    };
+    const data = await getMediaList({ data: {
+      cursor,
+      limit,
+      search: filters.search,
+      folderId: filters.folderId,
+      sortBy: filters.sortBy,
+      sortOrder: filters.sortOrder,
+      kind: filters.kind,
+      view: filters.view,
+    } });
+    return { files: data.files.map(toMediaFile), pagination: data.pagination };
   }
 
-  /**
-   * Upload files to the media library with improved error handling
-   */
-  static async uploadFiles(
-    files: FileList | File[],
-    folderId?: string | null,
-  ): Promise<
-    | MediaFile[]
-    | {
-      files: MediaFile[];
-      warnings?: Array<{ filename: string; error: string }>;
-      summary?: string;
-    }
-  > {
-    try {
-      const formData = new FormData();
-
-      Array.from(files).forEach((file) => {
-        formData.append("files", file);
-      });
-
-      if (folderId) {
-        formData.append("folderId", folderId);
-      }
-
-      const response = await fetch("/api/v1/admin/media/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      // Parse response JSON
-      let rawData: Record<string, unknown>;
-      try {
-        rawData = await response.json();
-      } catch (parseError) {
-        if (import.meta.env.DEV) console.error("Failed to parse upload response:", parseError);
-        throw new Error(
-          "Upload failed: Server returned an invalid response. Please try again."
-        );
-      }
-
-      // Handle errors (4xx, 5xx)
-      if (!response.ok) {
-        const errorMessage = extractApiError(rawData, "Upload failed for unknown reason");
-        const error: Error & { details?: Array<{ filename: string; error: string }>; summary?: string } = new Error(errorMessage);
-
-        // Attach details array if available
-        const details = extractApiErrorDetails(rawData);
-        if (details) {
-          error.details = details as Array<{ filename: string; error: string }>;
-        }
-
-        throw error;
-      }
-
-      // Unwrap envelope for success responses
-      const data = unwrapEnvelope<UploadResponseData>(rawData);
-
-      const uploadedFiles = (data.files || []).map(toMediaFile);
-
-      if (data.warnings || data.summary) {
-        return {
-          files: uploadedFiles,
-          warnings: data.warnings,
-          summary: data.summary,
-        };
-      }
-
-      return uploadedFiles;
-    } catch (error: unknown) {
-      // Re-throw with better context if it's a network error
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error(
-          "Network error: Unable to reach the server. Please check your connection."
-        );
-      }
-
-      // Re-throw the error as-is if it already has a message
-      throw error;
-    }
-  }
-
-  /**
-   * Delete a single media file
-   */
-  static async deleteFile(fileId: string): Promise<void> {
-    await deleteMedia({ data: { fileId } });
-  }
-
-  /**
-   * Delete multiple files
-   */
-  static async deleteFiles(fileIds: string[]): Promise<{
-    success: number;
-    failed: number;
-  }> {
-    let success = 0;
-    let failed = 0;
-
-    for (const fileId of fileIds) {
-      try {
-        await this.deleteFile(fileId);
-        success++;
-      } catch (error: unknown) {
-        failed++;
-        if (import.meta.env.DEV) console.error(`Failed to delete file ${fileId}:`, error);
-      }
-    }
-
-    return { success, failed };
-  }
-
-  /**
-   * Fetch all folders
-   */
   static async fetchFolders(): Promise<MediaFolder[]> {
-    const data = await getMediaFolders();
-    return (data.folders ?? []).map(toMediaFolder);
+    const folders: MediaFolder[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const data = await getMediaFolders({ data: { cursor, limit: 100 } });
+      folders.push(...data.folders.map(toFolder));
+      if (!data.pagination.hasMore || !data.pagination.nextCursor) break;
+      if (page === 19) {
+        throw new Error("This library has more than 2,000 folders. Consolidate folders before managing them here.");
+      }
+      cursor = data.pagination.nextCursor;
+    }
+    return folders;
   }
 
-  /**
-   * Create a new folder
-   */
-  static async createFolder(
-    name: string,
-    parentId?: string | null,
-  ): Promise<MediaFolder> {
-    const data = await createMediaFolderFn({
-      data: { name, parentId: parentId || undefined },
-    });
-    return toMediaFolder(data.folder);
+  static async createFolder(name: string): Promise<MediaFolder> {
+    const data = await createMediaFolder({ data: { name } });
+    return toFolder(data.folder);
   }
 
-  /**
-   * Delete a folder
-   */
-  static async deleteFolder(folderId: string): Promise<void> {
-    await deleteMediaFolderFn({ data: { folderId } });
+  static async renameFolder(folder: MediaFolder, name: string): Promise<MediaFolder> {
+    const data = await renameMediaFolder({ data: { folderId: folder.id, name, expectedVersion: folder.version } });
+    return toFolder(data.folder);
   }
 
-  /**
-   * Move files to a folder
-   */
-  static async moveFilesToFolder(
-    fileIds: string[],
-    folderId: string | null,
-  ): Promise<void> {
-    await moveMediaFilesFn({ data: { fileIds, folderId } });
+  static async deleteFolder(folder: MediaFolder): Promise<void> {
+    await deleteMediaFolder({ data: { folderId: folder.id, expectedVersion: folder.version } });
   }
 
-  /**
-   * Update file metadata
-   */
-  static async updateFileMetadata(
-    fileId: string,
-    updates: { filename?: string; folderId?: string | null },
-  ): Promise<MediaFile> {
-    const data = await updateMedia({
-      data: { fileId, update: updates },
-    });
+  static async updateFile(file: LibraryMediaFile, updates: { filename?: string; altText?: string | null; caption?: string | null; width?: number | null; height?: number | null; durationMs?: number | null; posterMediaId?: string | null; folderId?: string | null }): Promise<LibraryMediaFile> {
+    const data = await updateMedia({ data: { fileId: file.id, update: { expectedVersion: file.version, ...updates } } });
     return toMediaFile(data.file);
   }
 
-  /**
-   * Update file alt text
-   */
-  static async updateAltText(
-    fileId: string,
-    altText: string,
-  ): Promise<MediaFile> {
-    const data = await updateMedia({
-      data: { fileId, update: { altText } },
-    });
+  static async trashFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
+    const data = await trashMedia({ data: { fileId: file.id, expectedVersion: file.version } });
     return toMediaFile(data.file);
+  }
+
+  static async restoreFile(file: LibraryMediaFile): Promise<LibraryMediaFile> {
+    const data = await restoreMedia({ data: { fileId: file.id, expectedVersion: file.version } });
+    return toMediaFile(data.file);
+  }
+
+  static async permanentlyDeleteFile(file: LibraryMediaFile): Promise<void> {
+    await permanentlyDeleteMedia({ data: { fileId: file.id, expectedVersion: file.version } });
+  }
+
+  static async moveFiles(files: LibraryMediaFile[], folderId: string | null): Promise<number> {
+    const data = await moveMediaFiles({ data: {
+      items: files.map((file) => ({ id: file.id, expectedVersion: file.version })),
+      folderId,
+    } });
+    return data.movedCount;
+  }
+
+  static async initiateUpload(input: { filename: string; mimeType: string; size: number; folderId: string | null }): Promise<MediaUploadSession> {
+    const response = await fetch(`${MEDIA_API}/uploads`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return (await parseDirectResponse<{ session: MediaUploadSession }>(response)).session;
+  }
+
+  static async getUpload(sessionId: string): Promise<MediaUploadSession> {
+    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}`, {
+      credentials: "same-origin",
+    });
+    return (await parseDirectResponse<{ session: MediaUploadSession }>(response)).session;
+  }
+
+  static async uploadPart(sessionId: string, partNumber: number, blob: Blob, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}/parts/${partNumber}`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "content-type": "application/octet-stream" },
+      body: blob,
+      signal,
+    });
+    await parseDirectResponse(response);
+  }
+
+  static async completeUpload(sessionId: string): Promise<LibraryMediaFile> {
+    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}/complete`, {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    const data = await parseDirectResponse<{ file: MediaFileDto }>(response);
+    return toMediaFile(data.file);
+  }
+
+  static async abortUpload(sessionId: string): Promise<void> {
+    const response = await fetch(`${MEDIA_API}/uploads/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    await parseDirectResponse(response);
   }
 }
+
+export type { CursorPagination };

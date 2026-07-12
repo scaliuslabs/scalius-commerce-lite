@@ -222,9 +222,9 @@ export const TiptapMenuBar = ({
         </Popover>
 
         <MediaManager
+          capability="image"
           onSelect={handleMediaSelect}
           triggerLabel="Media Library"
-          acceptedFileTypes="image/*"
           dialogClassName={isFullscreen ? "z-[10001] !important" : undefined}
           trigger={
             <ToolbarButton

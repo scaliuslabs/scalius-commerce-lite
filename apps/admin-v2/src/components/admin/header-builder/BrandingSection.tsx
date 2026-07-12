@@ -84,6 +84,7 @@ export function BrandingSection({
             </div>
             <div className="md:col-span-2 space-y-4">
               <MediaManager
+                capability="image"
                 onSelect={handleLogoSelect}
                 triggerLabel={logo.src ? "Change Logo" : "Select Logo Image"}
               />
@@ -148,6 +149,7 @@ export function BrandingSection({
             </div>
             <div className="md:col-span-2 space-y-4">
               <MediaManager
+                capability="image"
                 onSelect={handleFaviconSelect}
                 triggerLabel={
                   favicon.src ? "Change Favicon" : "Select Favicon Image"
