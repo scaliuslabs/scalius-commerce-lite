@@ -45,14 +45,12 @@ const FEED_ENDPOINTS = [
     endpoint: "/api/product-feed.xml?limit=5",
     resultKey: "feed",
     label: "canonical product feed",
-    page2Endpoint: "/api/product-feed.xml?page=2&limit=5",
     availabilityValues: ["in_stock", "out_of_stock"],
   },
   {
     endpoint: "/api/facebook-feed.xml?limit=5",
     resultKey: "compatibilityFeed",
     label: "compatibility Facebook feed",
-    page2Endpoint: "/api/facebook-feed.xml?page=2&limit=5",
     availabilityValues: ["in stock", "out of stock"],
   },
 ];
@@ -1049,6 +1047,95 @@ export function evaluateProductFeedXml(
 }
 
 export const evaluateFacebookFeedXml = evaluateProductFeedXml;
+
+const FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
+
+/**
+ * Validate the feed-owned continuation rather than synthesizing offset pages.
+ * An absent Link header truthfully means there is no next window to inspect.
+ */
+export function evaluateFeedContinuationLink(
+  linkHeader,
+  { initialUrl, storefrontOrigin } = {},
+) {
+  const errors = [];
+  const header = String(linkHeader ?? "").trim();
+  if (!header) {
+    return { ok: true, errors, continuationUrl: null };
+  }
+
+  const nextTargets = [];
+  const linkPattern = /<([^<>]+)>([^<]*?)(?=,\s*<|$)/g;
+  let match;
+  while ((match = linkPattern.exec(header)) !== null) {
+    const parameters = match[2] ?? "";
+    const relation = parameters.match(
+      /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|'([^']*)'|([^;,\s]+))/i,
+    );
+    const relationTokens = (relation?.[1] ?? relation?.[2] ?? relation?.[3] ?? "")
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (relationTokens.includes("next")) {
+      nextTargets.push(match[1]);
+    }
+  }
+
+  if (nextTargets.length === 0) {
+    if (/\brel\s*=\s*(?:["'][^"']*\bnext\b|next\b)/i.test(header)) {
+      errors.push("feed Link header contains an invalid rel=next continuation.");
+    }
+    return { ok: errors.length === 0, errors, continuationUrl: null };
+  }
+  if (nextTargets.length > 1) {
+    errors.push("feed Link header must include at most one rel=next continuation.");
+    return { ok: false, errors, continuationUrl: null };
+  }
+
+  const target = nextTargets[0];
+  if (!isHttpUrl(target)) {
+    errors.push(`feed continuation URL is not absolute http(s): ${target}`);
+    return { ok: false, errors, continuationUrl: null };
+  }
+
+  const continuation = new URL(target);
+  const initial = initialUrl && isHttpUrl(initialUrl) ? new URL(initialUrl) : null;
+  if (storefrontOrigin && !isSameOrigin(target, storefrontOrigin)) {
+    errors.push(`feed continuation URL is not on storefront origin: ${target}`);
+  }
+  if (initial && continuation.pathname !== initial.pathname) {
+    errors.push(
+      `feed continuation URL must keep the feed path ${initial.pathname}: ${continuation.pathname}`,
+    );
+  }
+  if (continuation.searchParams.has("page")) {
+    errors.push("feed continuation URL must not restore retired page pagination.");
+  }
+
+  const cursorValues = continuation.searchParams.getAll("cursor");
+  if (cursorValues.length !== 1 || !FEED_CURSOR_PATTERN.test(cursorValues[0] ?? "")) {
+    errors.push("feed continuation URL must include exactly one opaque feed-v1 cursor.");
+  }
+  if (initial) {
+    const expectedLimit = initial.searchParams.get("limit");
+    const continuationLimits = continuation.searchParams.getAll("limit");
+    if (
+      expectedLimit !== null &&
+      (continuationLimits.length !== 1 || continuationLimits[0] !== expectedLimit)
+    ) {
+      errors.push(`feed continuation URL must preserve limit=${expectedLimit}.`);
+    }
+    if (continuation.toString() === initial.toString()) {
+      errors.push("feed continuation URL must advance beyond the current request.");
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    continuationUrl: errors.length === 0 ? continuation.toString() : null,
+  };
+}
 
 function asArray(value) {
   return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
@@ -2054,25 +2141,24 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
 
   responses.feeds = {};
   if (!policy.feeds.productCatalogEnabled) {
-    for (const { endpoint, resultKey, page2Endpoint } of FEED_ENDPOINTS) {
+    for (const { endpoint, resultKey } of FEED_ENDPOINTS) {
       const skipped = {
         status: "skipped",
         reason: "Product catalog feed disabled by public SEO policy.",
       };
       responses[resultKey] = skipped;
       responses.feeds[endpoint] = skipped;
-      if (page2Endpoint) responses.feeds[page2Endpoint] = skipped;
     }
   } else {
     for (const {
       endpoint,
       resultKey,
       label,
-      page2Endpoint,
       availabilityValues,
     } of FEED_ENDPOINTS) {
+      const feedUrl = buildUrlWithSearch(options.storefrontUrl, endpoint);
       const responseLabel = `Storefront ${label} (${endpoint})`;
-      const response = await fetchText(buildUrlWithSearch(options.storefrontUrl, endpoint), {
+      const response = await fetchText(feedUrl, {
         fetchImpl,
         timeoutMs: options.timeoutMs,
         accept: "application/xml, text/xml, */*;q=0.8",
@@ -2103,59 +2189,54 @@ async function checkDiscovery(options, { fetchImpl, logger }) {
       responses[resultKey] = feedResult;
       responses.feeds[endpoint] = feedResult;
 
-      if (page2Endpoint) {
-        const page2Response = await fetchText(
-          buildUrlWithSearch(options.storefrontUrl, page2Endpoint),
-          {
-            fetchImpl,
-            timeoutMs: options.timeoutMs,
-            accept: "application/xml, text/xml, */*;q=0.8",
-          },
-        );
+      const continuation = evaluateFeedContinuationLink(response.headers.get("Link"), {
+        initialUrl: feedUrl,
+        storefrontOrigin,
+      });
+      if (!continuation.ok) {
+        throw new Error(`${endpoint} continuation failed: ${continuation.errors.join("; ")}`);
+      }
+      if (continuation.continuationUrl) {
+        const continuationUrl = new URL(continuation.continuationUrl);
+        const continuationEndpoint = `${continuationUrl.pathname}${continuationUrl.search}`;
+        const continuationResponse = await fetchText(continuation.continuationUrl, {
+          fetchImpl,
+          timeoutMs: options.timeoutMs,
+          accept: "application/xml, text/xml, */*;q=0.8",
+        });
         requireStatus(
-          page2Response,
-          `Storefront ${label} page 2 (${page2Endpoint})`,
-          (status) => (status >= 200 && status < 300) || status === 404,
+          continuationResponse,
+          `Storefront ${label} continuation (${continuationEndpoint})`,
+          (status) => status >= 200 && status < 300,
         );
-        if (page2Response.statusCode >= 200 && page2Response.statusCode < 300) {
-          const page2CacheEvaluation = evaluateDiscoveryCacheHeaders(
-            page2Response.headers,
-            { label: page2Endpoint },
+        const continuationCache = evaluateDiscoveryCacheHeaders(
+          continuationResponse.headers,
+          { label: continuationEndpoint },
+        );
+        if (!continuationCache.ok) {
+          throw new Error(
+            `${continuationEndpoint} cache headers failed: ${continuationCache.errors.join("; ")}`,
           );
-          if (!page2CacheEvaluation.ok) {
-            throw new Error(
-              `${page2Endpoint} cache headers failed: ${page2CacheEvaluation.errors.join("; ")}`,
-            );
-          }
-          const page2Evaluation = evaluateProductFeedXml(page2Response.body, {
-            availabilityValues,
-            storefrontOrigin,
-          });
-          if (!page2Evaluation.ok) {
-            throw new Error(`${page2Endpoint} failed: ${page2Evaluation.errors.join("; ")}`);
-          }
-          responses.feeds[page2Endpoint] = {
-            statusCode: page2Response.statusCode,
-            durationMs: page2Response.durationMs,
-            cacheControl: page2CacheEvaluation.cacheControl,
-            itemCount: page2Evaluation.itemCount,
-            linkCount: page2Evaluation.linkCount,
-            imageLinkCount: page2Evaluation.imageLinkCount,
-            availabilityCount: page2Evaluation.availabilityCount,
-            firstStorefrontItemUrl: page2Evaluation.firstStorefrontItemUrl,
-          };
-        } else {
-          responses.feeds[page2Endpoint] = {
-            statusCode: page2Response.statusCode,
-            durationMs: page2Response.durationMs,
-            cacheControl: page2Response.headers.get("Cache-Control") ?? "",
-            itemCount: 0,
-            linkCount: 0,
-            imageLinkCount: 0,
-            availabilityCount: 0,
-            firstStorefrontItemUrl: null,
-          };
         }
+        const continuationEvaluation = evaluateProductFeedXml(continuationResponse.body, {
+          availabilityValues,
+          storefrontOrigin,
+        });
+        if (!continuationEvaluation.ok) {
+          throw new Error(
+            `${continuationEndpoint} failed: ${continuationEvaluation.errors.join("; ")}`,
+          );
+        }
+        responses.feeds[continuationEndpoint] = {
+          statusCode: continuationResponse.statusCode,
+          durationMs: continuationResponse.durationMs,
+          cacheControl: continuationCache.cacheControl,
+          itemCount: continuationEvaluation.itemCount,
+          linkCount: continuationEvaluation.linkCount,
+          imageLinkCount: continuationEvaluation.imageLinkCount,
+          availabilityCount: continuationEvaluation.availabilityCount,
+          firstStorefrontItemUrl: continuationEvaluation.firstStorefrontItemUrl,
+        };
       }
     }
   }
