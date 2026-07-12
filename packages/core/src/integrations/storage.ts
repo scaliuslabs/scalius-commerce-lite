@@ -283,7 +283,7 @@ export async function uploadFile(
   const baseUrl = (publicUrl ?? _publicUrl) || "";
   const key = validatedObjectKey(
     metadata?.objectKey,
-    `${nanoid()}.${media.extension}`,
+    `media/${nanoid()}.${media.extension}`,
     media.mimeType,
   );
 
