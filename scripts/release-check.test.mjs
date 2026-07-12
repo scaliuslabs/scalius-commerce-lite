@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkUcpDiscovery,
   evaluateDiscoveryCacheHeaders,
   evaluateFeedContinuationLink,
   evaluateRequiredDocs,
   evaluateUcpProfile,
+  firstUcpSearchCandidate,
   normalizeHttpBaseUrl,
   parseReleaseCheckArgs,
   requestHeaders,
@@ -220,5 +222,110 @@ describe("release feed continuation", () => {
       initialUrl,
       storefrontOrigin: "https://storefront.example.test",
     })).toMatchObject({ ok: false, continuationUrl: null });
+  });
+});
+
+describe("release UCP catalog candidate", () => {
+  it("uses only a candidate actually returned by catalog search", () => {
+    expect(firstUcpSearchCandidate({ products: [] })).toBeNull();
+    expect(firstUcpSearchCandidate({
+      products: [{
+        id: "ucp-product-1",
+        url: "https://storefront.example.test/products/example",
+        variants: [{ id: "ucp-variant-1" }],
+      }],
+    })).toEqual({
+      id: "ucp-variant-1",
+      productId: "ucp-product-1",
+      variantId: "ucp-variant-1",
+    });
+  });
+
+  function jsonResponse(payload) {
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, max-age=60",
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
+  const options = {
+    storefrontUrl: "https://storefront.example.test",
+    timeoutMs: 1_000,
+  };
+
+  it("skips lookup and product reads when search has no eligible candidate", async () => {
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
+      if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
+      if (url.endsWith("/catalog/search")) return jsonResponse({ products: [] });
+      throw new Error(`Unexpected UCP request: ${url}`);
+    };
+
+    const result = await checkUcpDiscovery(options, {
+      fetchImpl,
+      productUrl: "https://storefront.example.test/products/example-product",
+      logger: null,
+    });
+
+    expect(urls).toEqual([
+      "https://storefront.example.test/.well-known/ucp",
+      "https://storefront.example.test/ucp/catalog/search",
+    ]);
+    expect(result.catalog).toMatchObject({
+      search: { productCount: 0 },
+      lookup: { status: "skipped" },
+      product: { status: "skipped" },
+    });
+  });
+
+  it("keeps lookup correlation and product validation for a real search candidate", async () => {
+    const variantId = "gid://scalius/ProductVariant/variant-1";
+    const urls = [];
+    const fetchImpl = async (url) => {
+      urls.push(url);
+      if (url.endsWith("/.well-known/ucp")) return jsonResponse(catalogOnlyUcpProfile());
+      if (url.endsWith("/catalog/search")) {
+        return jsonResponse({
+          products: [{ id: "gid://scalius/Product/product-1", variants: [{ id: variantId }] }],
+        });
+      }
+      if (url.endsWith("/catalog/lookup")) {
+        return jsonResponse({
+          products: [{ variants: [{ inputs: [{ id: variantId }] }] }],
+        });
+      }
+      if (url.endsWith("/catalog/product")) {
+        return jsonResponse({
+          ucp: { status: "success" },
+          product: {
+            id: "gid://scalius/Product/product-1",
+            variants: [{ id: variantId }],
+          },
+        });
+      }
+      throw new Error(`Unexpected UCP request: ${url}`);
+    };
+
+    const result = await checkUcpDiscovery(options, {
+      fetchImpl,
+      productUrl: "https://storefront.example.test/products/example-product",
+      logger: null,
+    });
+
+    expect(urls).toEqual([
+      "https://storefront.example.test/.well-known/ucp",
+      "https://storefront.example.test/ucp/catalog/search",
+      "https://storefront.example.test/ucp/catalog/lookup",
+      "https://storefront.example.test/ucp/catalog/product",
+    ]);
+    expect(result.catalog).toMatchObject({
+      search: { productCount: 1 },
+      lookup: { inputId: variantId, productCount: 1 },
+      product: { inputId: variantId, firstVariantId: variantId, variantCount: 1 },
+    });
   });
 });
