@@ -47,6 +47,12 @@ describe("admin product mutation OpenAPI responses", () => {
             "403",
             "409",
         ]);
+        const bulkDelete = JSON.stringify(
+            spec.paths?.["/api/v1/admin/products/bulk-delete"]?.post,
+        );
+        expect(bulkDelete).toContain('"outcomes"');
+        expect(bulkDelete).toContain('"blocked"');
+        expect(bulkDelete).toContain('"failed"');
         expectResponses(spec, "/api/v1/admin/products/{id}/permanent", "delete", [
             "204",
             "401",

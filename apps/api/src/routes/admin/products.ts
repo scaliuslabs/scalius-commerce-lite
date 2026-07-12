@@ -148,6 +148,12 @@ const bulkDeleteSchema = z.object({
     })).min(1).max(90),
     permanent: z.boolean().default(false)
 });
+const bulkDeleteOutcomeSchema = z.object({
+    id: z.string(),
+    status: z.enum(["trashed", "deleted", "blocked", "failed"]),
+    code: z.string().nullable(),
+    message: z.string().nullable(),
+});
 
 const productMutationConflictResponse = {
     description: "Product revision or domain conflict",
@@ -390,6 +396,7 @@ const bulkDeleteRoute = createRoute({
                     aggregateRevision: z.number().int().min(1),
                 })),
                 deletedIds: z.array(z.string()),
+                outcomes: z.array(bulkDeleteOutcomeSchema),
             })) } },
         },
         ...conflictMutationErrorResponses,
@@ -401,14 +408,20 @@ app.openapi(bulkDeleteRoute, async (c) => {
     const data = c.req.valid("json");
     const productIds = data.products.map((product) => product.id);
     const htmlPaths = await productStorefrontHtmlPathsByIds(db, productIds);
-    const revisions = await ProductsAdmin.bulkDeleteProducts(db, data.products, data.permanent);
-    await invalidateCatalogCaches("products", c, { htmlPaths });
+    const result = await ProductsAdmin.bulkDeleteProducts(db, data.products, data.permanent);
+    const deletedIds = result.outcomes
+        .filter((outcome) => outcome.status === "deleted")
+        .map((outcome) => outcome.id);
+    if (!data.permanent || deletedIds.length > 0) {
+        await invalidateCatalogCaches("products", c, { htmlPaths });
+    }
     return ok(c, {
-        products: revisions.map((revision, index) => ({
+        products: result.revisions.map((revision, index) => ({
             id: data.products[index]!.id,
             aggregateRevision: revision.aggregateRevision,
         })),
-        deletedIds: data.permanent ? productIds : [],
+        deletedIds,
+        outcomes: result.outcomes,
     });
 });
 

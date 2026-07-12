@@ -144,6 +144,12 @@ export interface BulkDeleteProductsInput {
 export interface BulkDeleteProductsPayload {
   products: Array<{ id: string; aggregateRevision: number }>;
   deletedIds: string[];
+  outcomes: Array<{
+    id: string;
+    status: "trashed" | "deleted" | "blocked" | "failed";
+    code: string | null;
+    message: string | null;
+  }>;
 }
 
 export interface ProductIdPayload extends ProductAggregateRevisionResult {
