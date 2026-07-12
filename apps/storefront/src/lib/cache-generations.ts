@@ -4,6 +4,7 @@ const PRODUCT_SLUG_KEY_PREFIX = "product_slug_";
 const PRODUCT_VARIANTS_KEY_PREFIX = "product_variants_";
 const ALL_PRODUCTS_KEY_PREFIX = "all_products_";
 const CATEGORY_PRODUCTS_KEY_PREFIX = "category_products_";
+const COLLECTION_BY_ID_KEY_PREFIX = "collection_by_id_";
 const FEED_PRODUCTS_KEY_PREFIX = "feed_products_";
 const SITEMAP_PRODUCTS_KEY_PREFIX = "sitemap_products_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
@@ -52,6 +53,13 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
 
   if (logicalKey.startsWith(CATEGORY_PRODUCTS_KEY_PREFIX)) {
     return CATEGORY_PRODUCTS_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(COLLECTION_BY_ID_KEY_PREFIX)) {
+    const familyDelimiter = logicalKey.indexOf("::", COLLECTION_BY_ID_KEY_PREFIX.length);
+    if (familyDelimiter >= 0) {
+      return logicalKey.slice(0, familyDelimiter + 2);
+    }
   }
 
   if (

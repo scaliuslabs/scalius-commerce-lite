@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CATALOG_CACHE_GROUPS,
+  D1_CACHE_SUBJECT_ID_CHUNK_SIZE,
   INVALIDATION_GROUPS,
   MAX_STOREFRONT_EXACT_HTML_PATHS,
   collectCmsShortcodePageInvalidation,
+  collectCollectionCacheInvalidation,
   collectProductAvailabilityCacheInvalidation,
   createStorefrontCacheWarmMessageForPurge,
   getCatalogStorefrontHtmlPaths,
@@ -23,6 +25,7 @@ import {
   purgeStorefrontForGroups,
   purgeStorefrontForPrefixes,
   resolveCmsShortcodePageTargets,
+  resolveCollectionCacheTargets,
   resolveProductAvailabilityCacheSubjects,
   triggerStorefrontPurgeForGroups,
   triggerStorefrontPurgeForPrefixes,
@@ -1029,6 +1032,31 @@ describe("triggerStorefrontPurgeForGroups", () => {
     ]);
   });
 
+  it("builds exact collection detail invalidation without clearing unrelated collections", () => {
+    expect(collectCollectionCacheInvalidation([
+      { id: "col_manual" },
+      { id: "col_dynamic" },
+      { id: "col_manual" },
+    ])).toEqual({
+      apiKeys: [
+        "api:collections:/api/v1/collections/col_manual",
+        "api:collections:/api/v1/collections/col_dynamic",
+      ],
+      apiPatterns: [
+        "api:collections:/api/v1/collections/col_manual?*",
+        "api:collections:/api/v1/collections/col_dynamic?*",
+      ],
+      storefrontPrefixes: [
+        "collection_by_id_col_manual::",
+        "collection_by_id_col_dynamic::",
+      ],
+      storefrontHtmlPaths: [
+        "/collections/col_manual",
+        "/collections/col_dynamic",
+      ],
+    });
+  });
+
   it("invalidates product availability exact cache families without deleting sibling slugs", async () => {
     const store = new Set([
       "sc:api:products:/api/v1/products/phone",
@@ -1147,6 +1175,13 @@ describe("triggerStorefrontPurgeForGroups", () => {
     };
     const db = {
       select: vi.fn(() => pageQuery),
+      selectDistinct: vi.fn(() => {
+        const collectionQuery = {
+          from: vi.fn(() => collectionQuery),
+          where: vi.fn(() => Promise.resolve([])),
+        };
+        return collectionQuery;
+      }),
     };
 
     vi.stubGlobal("fetch", fetchMock);
@@ -1189,6 +1224,98 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
   });
 
+  it("invalidates only collection detail caches affected by availability", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const waitUntil = vi.fn();
+    const kv = {
+      list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
+      delete: vi.fn(),
+    };
+    const pageQuery = {
+      from: vi.fn(() => pageQuery),
+      where: vi.fn(() => Promise.resolve([])),
+    };
+    const collectionQuery = {
+      from: vi.fn(() => collectionQuery),
+      where: vi.fn(() => Promise.resolve([
+        { id: "col_manual" },
+        { id: "col_dynamic" },
+      ])),
+    };
+    const db = {
+      select: vi.fn(() => pageQuery),
+      selectDistinct: vi.fn(() => collectionQuery),
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invalidateProductAvailabilityCacheSubjects(
+      [{ productId: "prod_1", slug: "phone", categoryId: "cat_1" }],
+      {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      },
+      db as never,
+    );
+
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:collections:/api/v1/collections/col_manual",
+    );
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:collections:/api/v1/collections/col_dynamic",
+    );
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:collections:/api/v1/collections/col_manual?",
+    });
+    expect(kv.list).not.toHaveBeenCalledWith({ prefix: "sc:api:collections:" });
+
+    const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
+    await purgePromise;
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      groups: ["products", "collections"],
+      exactKeys: expect.arrayContaining([
+        "collection_by_id_col_manual::",
+        "collection_by_id_col_dynamic::",
+      ]),
+      htmlPaths: expect.arrayContaining([
+        "/collections/col_manual",
+        "/collections/col_dynamic",
+      ]),
+      bumpVersion: false,
+    });
+  });
+
+  it("resolves manual, dynamic, and featured collection dependencies in one D1-safe query", async () => {
+    const query = {
+      from: vi.fn(() => query),
+      where: vi.fn(() => Promise.resolve([
+        { id: "col_manual" },
+        { id: "col_dynamic" },
+        { id: "col_featured" },
+        { id: "col_manual" },
+      ])),
+    };
+    const selectDistinct = vi.fn(() => query);
+
+    await expect(resolveCollectionCacheTargets(
+      { selectDistinct } as never,
+      {
+        productIds: Array.from({ length: 150 }, (_, index) => `prod_${index}`),
+        categoryIds: Array.from({ length: 150 }, (_, index) => `cat_${index}`),
+      },
+    )).resolves.toEqual([
+      { id: "col_manual" },
+      { id: "col_dynamic" },
+      { id: "col_featured" },
+    ]);
+    expect(selectDistinct).toHaveBeenCalledTimes(1);
+  });
+
   it("resolves product availability subjects across order, product, and variant inputs", async () => {
     const responses = [
       [
@@ -1227,6 +1354,31 @@ describe("triggerStorefrontPurgeForGroups", () => {
       { productId: "prod_4", slug: "cable" },
     ]);
     expect(selectDistinct).toHaveBeenCalledTimes(3);
+  });
+
+  it("chunks product availability subject lookups below D1's binding limit", async () => {
+    const where = vi.fn(() => Promise.resolve([]));
+    const selectDistinct = vi.fn(() => {
+      const query = {
+        from: vi.fn(() => query),
+        innerJoin: vi.fn(() => query),
+        where,
+      };
+      return query;
+    });
+
+    await resolveProductAvailabilityCacheSubjects(
+      { selectDistinct } as never,
+      {
+        productIds: Array.from(
+          { length: D1_CACHE_SUBJECT_ID_CHUNK_SIZE + 1 },
+          (_, index) => `prod_${index}`,
+        ),
+      },
+    );
+
+    expect(selectDistinct).toHaveBeenCalledTimes(2);
+    expect(where).toHaveBeenCalledTimes(2);
   });
 });
 

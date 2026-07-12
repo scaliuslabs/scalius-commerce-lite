@@ -1,10 +1,16 @@
 // src/server/utils/cache-invalidation.ts
 import type { Database } from "@scalius/database/client";
-import { orderItems, pages, products, productVariants } from "@scalius/database/schema";
+import {
+  collections,
+  orderItems,
+  pages,
+  products,
+  productVariants,
+} from "@scalius/database/schema";
 import { publicPageVisibilityCondition } from "@scalius/core/modules/pages";
 import { parseShortcodes } from "@scalius/shared/shortcodes";
 import { normalizeStorefrontHtmlCachePaths } from "@scalius/shared/storefront-cache-path";
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { deleteCacheByPattern } from "./kv-cache";
 import {
   API_CACHE_FENCE_GLOBAL_SCOPE,
@@ -15,6 +21,7 @@ import {
 } from "./api-cache-fence";
 
 export const MAX_STOREFRONT_EXACT_HTML_PATHS = 20;
+export const D1_CACHE_SUBJECT_ID_CHUNK_SIZE = 90;
 const STOREFRONT_WARM_PATH_BATCH_SIZE = 2;
 
 // ---------------------------------------------------------------------------
@@ -36,6 +43,7 @@ export interface InvalidationGroupDef {
 export interface ProductAvailabilityCacheSubject {
   productId: string;
   slug: string | null;
+  categoryId?: string | null;
 }
 
 export interface ProductAvailabilityCacheInput {
@@ -45,6 +53,22 @@ export interface ProductAvailabilityCacheInput {
 }
 
 export interface ProductAvailabilityCacheInvalidation {
+  apiKeys: string[];
+  apiPatterns: string[];
+  storefrontPrefixes: string[];
+  storefrontHtmlPaths: string[];
+}
+
+export interface CollectionCacheDependencyInput {
+  productIds?: readonly string[];
+  categoryIds?: readonly string[];
+}
+
+export interface CollectionCacheTarget {
+  id: string;
+}
+
+export interface CollectionCacheInvalidation {
   apiKeys: string[];
   apiPatterns: string[];
   storefrontPrefixes: string[];
@@ -1056,6 +1080,125 @@ function uniqueAvailabilitySubjects(
   return [...byProduct.values()];
 }
 
+function uniqueCollectionCacheTargets(
+  targets: readonly CollectionCacheTarget[],
+): CollectionCacheTarget[] {
+  const byId = new Map<string, CollectionCacheTarget>();
+  for (const target of targets) {
+    if (!target.id) continue;
+    byId.set(target.id, target);
+  }
+  return [...byId.values()];
+}
+
+function chunkValues(values: readonly string[]): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < values.length; index += D1_CACHE_SUBJECT_ID_CHUNK_SIZE) {
+    chunks.push(values.slice(index, index + D1_CACHE_SUBJECT_ID_CHUNK_SIZE));
+  }
+  return chunks;
+}
+
+/**
+ * Resolve active collection detail projections that directly depend on the
+ * changed products/categories. Collection config arrays are matched with one
+ * bound JSON set per dependency kind, avoiding D1's 100-parameter ceiling.
+ */
+export async function resolveCollectionCacheTargets(
+  db: Database,
+  input: CollectionCacheDependencyInput,
+): Promise<CollectionCacheTarget[]> {
+  const productIds = uniqueValues(input.productIds);
+  const categoryIds = uniqueValues(input.categoryIds);
+  const dependencyConditions: SQL[] = [];
+  const safeCollectionConfig = sql`CASE
+    WHEN json_valid(${collections.config}) THEN ${collections.config}
+    ELSE '{}'
+  END`;
+
+  if (productIds.length > 0) {
+    const productIdsJson = JSON.stringify(productIds);
+    dependencyConditions.push(sql`(
+      (
+        json_extract(${safeCollectionConfig}, '$.source') = 'manual'
+        AND EXISTS (
+          SELECT 1
+          FROM json_each(${safeCollectionConfig}, '$.productIds') AS configured_product
+          WHERE CAST(configured_product.value AS TEXT) IN (
+            SELECT CAST(changed_product.value AS TEXT)
+            FROM json_each(${productIdsJson}) AS changed_product
+          )
+        )
+      )
+      OR CAST(json_extract(${safeCollectionConfig}, '$.featuredProductId') AS TEXT) IN (
+        SELECT CAST(changed_featured.value AS TEXT)
+        FROM json_each(${productIdsJson}) AS changed_featured
+      )
+    )`);
+  }
+
+  if (categoryIds.length > 0) {
+    const categoryIdsJson = JSON.stringify(categoryIds);
+    dependencyConditions.push(sql`(
+      json_extract(${safeCollectionConfig}, '$.source') = 'dynamic'
+      AND EXISTS (
+        SELECT 1
+        FROM json_each(${safeCollectionConfig}, '$.categoryIds') AS configured_category
+        WHERE CAST(configured_category.value AS TEXT) IN (
+          SELECT CAST(changed_category.value AS TEXT)
+          FROM json_each(${categoryIdsJson}) AS changed_category
+        )
+      )
+    )`);
+  }
+
+  const dependencyCondition = or(...dependencyConditions);
+  if (!dependencyCondition) return [];
+
+  const rows = await db
+    .selectDistinct({ id: collections.id })
+    .from(collections)
+    .where(and(
+      eq(collections.isActive, true),
+      isNull(collections.deletedAt),
+      dependencyCondition,
+    ));
+
+  return uniqueCollectionCacheTargets(rows);
+}
+
+async function tryResolveCollectionCacheTargets(
+  db: Database,
+  input: CollectionCacheDependencyInput,
+): Promise<CollectionCacheTarget[]> {
+  try {
+    return await resolveCollectionCacheTargets(db, input);
+  } catch (error) {
+    console.error("[Cache] Failed to resolve collection cache targets:", error);
+    return [];
+  }
+}
+
+export function collectCollectionCacheInvalidation(
+  targets: readonly CollectionCacheTarget[],
+): CollectionCacheInvalidation {
+  const normalizedTargets = uniqueCollectionCacheTargets(targets);
+  return {
+    apiKeys: normalizedTargets.map(
+      (target) => `api:collections:/api/v1/collections/${target.id}`,
+    ),
+    apiPatterns: normalizedTargets.map(
+      (target) => `api:collections:/api/v1/collections/${target.id}?*`,
+    ),
+    storefrontPrefixes: normalizedTargets.map(
+      (target) => `collection_by_id_${target.id}::`,
+    ),
+    storefrontHtmlPaths: normalizedTargets.map(
+      (target) => `/collections/${target.id}`,
+    ),
+  };
+}
+
 /**
  * Resolve product detail cache subjects from stock-changing entities.
  * Order items can survive soft deletes, but permanent deletes remove them, so
@@ -1071,38 +1214,41 @@ export async function resolveProductAvailabilityCacheSubjects(
   const variantIds = uniqueValues(input.variantIds);
   const subjectRows: ProductAvailabilityCacheSubject[] = [];
 
-  if (orderIds.length > 0) {
+  for (const orderIdChunk of chunkValues(orderIds)) {
     const rows = await db
       .selectDistinct({
         productId: products.id,
         slug: products.slug,
+        categoryId: products.categoryId,
       })
       .from(orderItems)
       .innerJoin(products, eq(orderItems.productId, products.id))
-      .where(inArray(orderItems.orderId, orderIds));
+      .where(inArray(orderItems.orderId, orderIdChunk));
     subjectRows.push(...rows);
   }
 
-  if (productIds.length > 0) {
+  for (const productIdChunk of chunkValues(productIds)) {
     const rows = await db
       .selectDistinct({
         productId: products.id,
         slug: products.slug,
+        categoryId: products.categoryId,
       })
       .from(products)
-      .where(inArray(products.id, productIds));
+      .where(inArray(products.id, productIdChunk));
     subjectRows.push(...rows);
   }
 
-  if (variantIds.length > 0) {
+  for (const variantIdChunk of chunkValues(variantIds)) {
     const rows = await db
       .selectDistinct({
         productId: products.id,
         slug: products.slug,
+        categoryId: products.categoryId,
       })
       .from(productVariants)
       .innerJoin(products, eq(productVariants.productId, products.id))
-      .where(inArray(productVariants.id, variantIds));
+      .where(inArray(productVariants.id, variantIdChunk));
     subjectRows.push(...rows);
   }
 
@@ -1216,9 +1362,27 @@ export async function invalidateProductAvailabilityCacheSubjects(
   const shortcodeInvalidation = collectCmsShortcodePageInvalidation(
     shortcodeResult.targets,
   );
+  const collectionTargets = db
+    ? await tryResolveCollectionCacheTargets(db, {
+        productIds: normalizedSubjects.map((subject) => subject.productId),
+        categoryIds: normalizedSubjects
+          .map((subject) => subject.categoryId)
+          .filter((categoryId): categoryId is string => (
+            typeof categoryId === "string" && categoryId.length > 0
+          )),
+      })
+    : [];
+  const collectionInvalidation = collectCollectionCacheInvalidation(
+    collectionTargets,
+  );
+  const apiKeys = [
+    ...invalidation.apiKeys,
+    ...collectionInvalidation.apiKeys,
+  ];
   const apiPatterns = [
     ...invalidation.apiPatterns,
     ...shortcodeInvalidation.apiPatterns,
+    ...collectionInvalidation.apiPatterns,
   ];
 
   console.log(
@@ -1227,7 +1391,7 @@ export async function invalidateProductAvailabilityCacheSubjects(
 
   await bumpApiCacheFences(
     [
-      ...invalidation.apiKeys,
+      ...apiKeys,
       ...apiPatterns
         .map(getApiCacheFenceScopeForPattern)
         .filter((scope): scope is string => Boolean(scope)),
@@ -1236,7 +1400,7 @@ export async function invalidateProductAvailabilityCacheSubjects(
   );
 
   await Promise.all([
-    ...invalidation.apiKeys.map((key) =>
+    ...apiKeys.map((key) =>
       deleteVersionedCacheKeyFamily(key, c.env?.CACHE),
     ),
     ...apiPatterns.map((pattern) =>
@@ -1247,12 +1411,18 @@ export async function invalidateProductAvailabilityCacheSubjects(
   const body = buildStorefrontPrefixPurgeBody(
     shortcodeInvalidation.storefrontPrefixes,
     {
-      groups: ["products"],
+      groups: collectionTargets.length > 0
+        ? ["products", "collections"]
+        : ["products"],
       bumpVersion: shortcodeInvalidation.bumpVersion || shortcodeResult.failed,
-      exactKeys: invalidation.storefrontPrefixes,
+      exactKeys: [
+        ...invalidation.storefrontPrefixes,
+        ...collectionInvalidation.storefrontPrefixes,
+      ],
       htmlPaths: [
         ...invalidation.storefrontHtmlPaths,
         ...shortcodeInvalidation.storefrontHtmlPaths,
+        ...collectionInvalidation.storefrontHtmlPaths,
       ],
     },
   );

@@ -117,7 +117,7 @@ export async function getCollectionByIdResult(
     defaultParams: { page: 1, limit: 20 },
   });
   const result = await withEdgeCache<CollectionByIdResult>(
-    `collection_by_id_${id}_${queryString || "default"}`,
+    `collection_by_id_${id}::${queryString || "default"}`,
     async () => {
       try {
         const sdkArgs = {
