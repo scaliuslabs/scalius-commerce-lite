@@ -878,10 +878,10 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 type: string;
                 images: Array<{
+                    id: string;
                     url: string;
-                    alt: string | null;
-                    sortOrder: number;
-                    [key: string]: unknown;
+                    title: string;
+                    link: string;
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -891,10 +891,10 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 type: string;
                 images: Array<{
+                    id: string;
                     url: string;
-                    alt: string | null;
-                    sortOrder: number;
-                    [key: string]: unknown;
+                    title: string;
+                    link: string;
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -904,19 +904,19 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 type: string;
                 images: Array<{
+                    id: string;
                     url: string;
-                    alt: string | null;
-                    sortOrder: number;
-                    [key: string]: unknown;
+                    title: string;
+                    link: string;
                 }>;
                 isActive: boolean;
                 [key: string]: unknown;
             } | null;
             images: Array<{
+                id: string;
                 url: string;
-                alt: string | null;
-                sortOrder: number;
-                [key: string]: unknown;
+                title: string;
+                link: string;
             }>;
             isMobile?: boolean;
             [key: string]: unknown;
@@ -973,10 +973,10 @@ export type GetApiV1HeroSlidersByIdResponses = {
                 id: string;
                 type: string;
                 images: Array<{
+                    id: string;
                     url: string;
-                    alt: string | null;
-                    sortOrder: number;
-                    [key: string]: unknown;
+                    title: string;
+                    link: string;
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -24246,6 +24246,7 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 link: string;
             }>;
             isActive: boolean;
+            revision: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;
@@ -24370,6 +24371,7 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 link: string;
             }>;
             isActive: boolean;
+            revision: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;
@@ -24381,7 +24383,9 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
 export type PostApiV1AdminSettingsHeroSlidersResponse = PostApiV1AdminSettingsHeroSlidersResponses[keyof PostApiV1AdminSettingsHeroSlidersResponses];
 
 export type DeleteApiV1AdminSettingsHeroSlidersByIdData = {
-    body?: never;
+    body?: {
+        expectedRevision: number;
+    };
     path: {
         id: string;
     };
@@ -24435,6 +24439,17 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -24476,6 +24491,7 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
+            revision: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;
@@ -24582,6 +24598,7 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
+            revision: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;
@@ -24594,7 +24611,7 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponse = GetApiV1AdminSettings
 
 export type PutApiV1AdminSettingsHeroSlidersByIdData = {
     body?: {
-        type?: 'desktop' | 'mobile';
+        expectedRevision: number;
         images?: Array<{
             id: string;
             url: string;
@@ -24656,6 +24673,17 @@ export type PutApiV1AdminSettingsHeroSlidersByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -24697,6 +24725,7 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 link: string;
             }>;
             isActive: boolean;
+            revision: number;
             createdAt: string | number;
             updatedAt: string | number;
             deletedAt: string | number | null;

@@ -13,10 +13,10 @@ export function SlideOverlay({
   return (
     <div
       className={cn(
-        "flex flex-col md:flex-row gap-4 p-4 rounded-xl border bg-background shadow-xl ring-2 ring-primary/20 cursor-grabbing w-[600px] max-w-[90vw]",
+        "flex w-[560px] max-w-[90vw] cursor-grabbing gap-2 rounded-lg border bg-background p-2.5 shadow-xl ring-2 ring-primary/20",
       )}
     >
-      <div className="shrink-0 flex items-center justify-center w-8 text-foreground">
+      <div className="flex w-7 shrink-0 items-center justify-center text-foreground">
         <GripVertical className="w-5 h-5" />
       </div>
 
@@ -24,8 +24,8 @@ export function SlideOverlay({
         className={cn(
           "relative shrink-0 overflow-hidden rounded-lg border bg-muted/30",
           type === "desktop"
-            ? "aspect-16/5 w-[280px]"
-            : "aspect-16/5 w-[200px]",
+            ? "aspect-16/5 w-[180px]"
+            : "aspect-16/5 w-[132px]",
         )}
       >
         <img
@@ -35,9 +35,9 @@ export function SlideOverlay({
         />
       </div>
 
-      <div className="flex-1 grid gap-4 opacity-50">
-        <div className="h-9 w-full bg-muted rounded-md" />
-        <div className="h-9 w-full bg-muted rounded-md" />
+      <div className="grid flex-1 gap-2 opacity-50">
+        <div className="h-8 w-full rounded-md bg-muted" />
+        <div className="h-8 w-full rounded-md bg-muted" />
       </div>
     </div>
   );

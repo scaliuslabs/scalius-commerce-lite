@@ -2,11 +2,17 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../../utils/api-response";
+import { AppError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
   getOptionalExecutionContext: vi.fn(),
   invalidateGroups: vi.fn(),
   triggerStorefrontPurgeForGroups: vi.fn(),
+  listHeroSliders: vi.fn(),
+  getHeroSlider: vi.fn(),
+  createHeroSlider: vi.fn(),
+  updateHeroSlider: vi.fn(),
+  deleteHeroSlider: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -15,40 +21,29 @@ vi.mock("../../../utils/cache-invalidation", () => ({
   triggerStorefrontPurgeForGroups: mocks.triggerStorefrontPurgeForGroups,
 }));
 
+vi.mock("@scalius/core/modules/hero-sliders", () => ({
+  listHeroSliders: mocks.listHeroSliders,
+  getHeroSlider: mocks.getHeroSlider,
+  createHeroSlider: mocks.createHeroSlider,
+  updateHeroSlider: mocks.updateHeroSlider,
+  deleteHeroSlider: mocks.deleteHeroSlider,
+}));
+
 import { heroSlidersRoutes } from "./hero-sliders";
 
 const sliderRecord = {
   id: "slider_1",
   type: "desktop",
-  images: JSON.stringify([{ id: "img_1", url: "https://cdn.example.com/hero.jpg", title: "Hero", link: "/" }]),
+  images: [{ id: "img_1", url: "https://cdn.example.com/hero.jpg", title: "Hero", link: "/" }],
   isActive: true,
+  revision: 1,
   createdAt: 1,
   updatedAt: 1,
   deletedAt: null,
 };
 
-function createDb(options: { selectResult?: unknown; updateResult?: unknown } = {}) {
-  return {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          get: async () => options.selectResult ?? null,
-        }),
-      }),
-    }),
-    insert: () => ({
-      values: () => ({
-        returning: async () => [sliderRecord],
-      }),
-    }),
-    update: () => ({
-      set: () => ({
-        where: () => ({
-          returning: async () => [options.updateResult ?? sliderRecord],
-        }),
-      }),
-    }),
-  };
+function createDb() {
+  return { id: "db" };
 }
 
 function createTestApp(db = createDb()) {
@@ -59,6 +54,11 @@ function createTestApp(db = createDb()) {
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
+  mocks.listHeroSliders.mockResolvedValue([sliderRecord]);
+  mocks.getHeroSlider.mockResolvedValue(sliderRecord);
+  mocks.createHeroSlider.mockResolvedValue(sliderRecord);
+  mocks.updateHeroSlider.mockResolvedValue(sliderRecord);
+  mocks.deleteHeroSlider.mockResolvedValue({ ...sliderRecord, isActive: false });
   mocks.invalidateGroups.mockResolvedValue(undefined);
   mocks.getOptionalExecutionContext.mockReturnValue(undefined);
   app.onError((error, c) => {
@@ -101,7 +101,7 @@ describe("hero slider cache invalidation", () => {
   });
 
   it("does not invalidate homepage caches after hero slider reads", async () => {
-    const { app, env } = createTestApp(createDb({ selectResult: sliderRecord }));
+    const { app, env } = createTestApp();
 
     const response = await app.request(
       "/api/v1/admin/settings/hero-sliders/slider_1",
@@ -122,7 +122,7 @@ describe("hero slider cache invalidation", () => {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: false }),
+        body: JSON.stringify({ expectedRevision: 1, isActive: false }),
       },
       env,
     );
@@ -137,12 +137,46 @@ describe("hero slider cache invalidation", () => {
 
     const response = await app.request(
       "/api/v1/admin/settings/hero-sliders/slider_1",
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: 1 }),
+      },
       env,
     );
 
     expect(response.status).toBe(200);
     expect(mocks.invalidateGroups).toHaveBeenCalledWith(["homepage"], env.CACHE);
     expect(mocks.triggerStorefrontPurgeForGroups).toHaveBeenCalledWith(["homepage"], env, undefined);
+  });
+
+  it("preserves the typed stale-write conflict and does not invalidate caches", async () => {
+    const { app, env } = createTestApp();
+    mocks.updateHeroSlider.mockRejectedValueOnce(new AppError(
+      409,
+      "HERO_SLIDER_REVISION_CONFLICT",
+      "This hero slider changed in another session.",
+      { id: "slider_1", expectedRevision: 1, currentRevision: 2 },
+    ));
+
+    const response = await app.request(
+      "/api/v1/admin/settings/hero-sliders/slider_1",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: 1, isActive: false }),
+      },
+      env,
+    );
+    const payload = await response.json() as {
+      error?: { code?: string; details?: unknown };
+    };
+
+    expect(response.status).toBe(409);
+    expect(payload.error).toMatchObject({
+      code: "HERO_SLIDER_REVISION_CONFLICT",
+      details: { expectedRevision: 1, currentRevision: 2 },
+    });
+    expect(mocks.invalidateGroups).not.toHaveBeenCalled();
   });
 });

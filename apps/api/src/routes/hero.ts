@@ -9,16 +9,18 @@ import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { CACHE_TTLS } from "../utils/cache-ttls";
+import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 
-const heroImageSchema = z.object({ url: z.string(), alt: z.string().nullable(), sortOrder: z.number() }).passthrough();
+const heroImageSchema = z.object({
+  id: z.string(),
+  url: z.string().url(),
+  title: z.string(),
+  link: z.string(),
+});
 type HeroImage = z.infer<typeof heroImageSchema>;
 
 const parseHeroImages = (imagesJson: string | null | undefined): HeroImage[] => {
-  try {
-    return imagesJson ? (JSON.parse(imagesJson) as HeroImage[]) : [];
-  } catch {
-    return [];
-  }
+  return parseStoredHeroSlides(imagesJson);
 };
 
 const formatHeroTimestamp = (value: unknown): string | null => {

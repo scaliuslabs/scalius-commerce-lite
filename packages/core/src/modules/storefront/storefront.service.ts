@@ -14,7 +14,6 @@ import {
   metaConversionsSettings,
   pages,
   settings,
-  type Analytics,
 } from "@scalius/database/schema";
 import { eq, isNull, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -30,6 +29,7 @@ import { parseMediaOptimizationSettings } from "../settings/site-settings.servic
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 import {
   DEFAULT_CURRENCY,
   normalizeSupportedCurrencyCode,
@@ -43,19 +43,6 @@ import { ServiceUnavailableError } from "@scalius/core/errors";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
-function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
-  if (!json) return fallback;
-  try {
-    return JSON.parse(json);
-  } catch (e: unknown) {
-    console.warn(
-      "[Storefront] JSON parse failed:",
-      e instanceof Error ? e.message : e,
-    );
-    return fallback;
-  }
-}
-
 function parsePersistedNavigationConfig(
   type: "header" | "footer",
   json: string,
@@ -68,23 +55,6 @@ function parsePersistedNavigationConfig(
     );
   }
 }
-
-const unixToISO = (timestamp: unknown): string | null => {
-  try {
-    if (timestamp === null || timestamp === undefined) return null;
-    const numTimestamp =
-      typeof timestamp === "number" ? timestamp : Number(timestamp);
-    if (isNaN(numTimestamp) || numTimestamp <= 0) return null;
-    const date = new Date(numTimestamp * 1000);
-    if (!isNaN(date.getTime())) return date.toISOString();
-  } catch (e: unknown) {
-    console.warn(
-      "[Storefront] Failed to convert unix timestamp to ISO:",
-      e instanceof Error ? e.message : e,
-    );
-  }
-  return null;
-};
 
 interface NestedNavigationItem {
   id?: string;
@@ -188,7 +158,7 @@ export async function getHomepageData(db: Database) {
     return {
       id: slider.id,
       type: slider.type,
-      images: safeJsonParse(slider.images as string, []),
+      images: parseStoredHeroSlides(slider.images),
     };
   };
   const hero = {
@@ -262,7 +232,14 @@ export async function getLayoutData(
 ) {
   const batchResults = await db.batch([
     // 0. Analytics configurations
-    db.select().from(analytics).where(eq(analytics.isActive, true)),
+    db.select({
+      id: analytics.id,
+      type: analytics.type,
+      isActive: analytics.isActive,
+      usePartytown: analytics.usePartytown,
+      config: analytics.config,
+      location: analytics.location,
+    }).from(analytics).where(and(eq(analytics.isActive, true), isNull(analytics.deletedAt))),
 
     // 1. Site settings (header + footer config)
     db
@@ -376,22 +353,18 @@ export async function getLayoutData(
   );
 
   // Process Analytics
-  const processedAnalytics = (analyticsResults as Analytics[])
+  const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
-    .map((script: Analytics) => {
+    .map((script) => {
       let processedConfig = script.config;
       if (shouldUsePartytown(script))
         processedConfig = processAnalyticsScript(script);
       return {
         id: script.id,
-        name: script.name,
         type: script.type,
-        isActive: script.isActive,
         usePartytown: script.usePartytown,
         config: processedConfig,
         location: script.location,
-        createdAt: unixToISO(script.createdAt),
-        updatedAt: unixToISO(script.updatedAt),
       };
     });
 

@@ -29,7 +29,7 @@ Fetches and shapes all homepage data in **two batched D1 round-trips**.
 Returns: `{ seo, hero, collections }`.
 
 - **SEO**: Defaults to "Scalius Commerce" / "Welcome to Scalius Commerce" if no settings row exists.
-- **Hero**: Separate `desktop` and `mobile` sliders. Images are JSON-parsed from the `images` column via `safeJsonParse()`.
+- **Hero**: Separate revision-guarded `desktop` and `mobile` documents. Images are validated through the shared bounded hero contract; malformed or unsafe saved documents fail closed to no public slides.
 - **Collections**: Filtered to only include collections with resolved products. Config is JSON-parsed via `safeJsonParse()`. Includes `categories`, `products`, and `featuredProduct` from resolution.
 
 ### `getLayoutData(db)`

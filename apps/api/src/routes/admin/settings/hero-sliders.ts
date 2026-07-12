@@ -1,9 +1,13 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { heroSliders } from "@scalius/database/schema";
-import { nanoid } from "nanoid";
-import { sql, and, eq, isNull } from "drizzle-orm";
-import { NotFoundError, ValidationError, ConflictError } from "../../../utils/api-error";
+import {
+    createHeroSlider,
+    deleteHeroSlider,
+    getHeroSlider,
+    listHeroSliders,
+    updateHeroSlider,
+} from "@scalius/core/modules/hero-sliders";
+import { HERO_SLIDE_LIMIT, HERO_SLIDE_TITLE_LIMIT } from "@scalius/shared/hero-slider";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
@@ -24,32 +28,23 @@ async function invalidateHomepageCaches(c: { env: Env; executionCtx?: WaitUntilE
 }
 
 const sliderImageSchema = z.object({
-    id: z.string(),
-    url: z.string().url(),
-    title: z.string(),
-    link: z.string()
+    id: z.string().min(1).max(80),
+    url: z.string().url().max(2_048),
+    title: z.string().min(1).max(HERO_SLIDE_TITLE_LIMIT),
+    link: z.string().max(2_048),
 });
-type SliderImage = z.infer<typeof sliderImageSchema>;
 
 const createHeroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]),
-    images: z.array(sliderImageSchema),
+    images: z.array(sliderImageSchema).max(HERO_SLIDE_LIMIT),
     isActive: z.boolean().optional()
 });
 
 const updateHeroSliderSchema = z.object({
-    type: z.enum(["desktop", "mobile"]).optional(),
-    images: z.array(sliderImageSchema).optional(),
+    expectedRevision: z.number().int().min(1),
+    images: z.array(sliderImageSchema).max(HERO_SLIDE_LIMIT).optional(),
     isActive: z.boolean().optional()
 });
-
-const parseSliderImages = (images: string): SliderImage[] => {
-    try {
-        return JSON.parse(images) as SliderImage[];
-    } catch {
-        return [];
-    }
-};
 
 // ── List Sliders ──
 
@@ -58,6 +53,7 @@ const heroSliderSchema = z.object({
     type: z.enum(["desktop", "mobile"]),
     images: z.array(sliderImageSchema),
     isActive: z.boolean(),
+    revision: z.number().int().min(1),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
     deletedAt: nullableTimestampSchema,
@@ -76,9 +72,7 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, (async (c) => {
     const db = c.get("db");
-    const data = await db.select().from(heroSliders).where(isNull(heroSliders.deletedAt));
-    const parsedData = data.map((slider: typeof heroSliders.$inferSelect) => ({ ...slider, images: parseSliderImages(slider.images) }));
-    return ok(c, parsedData);
+    return ok(c, await listHeroSliders(db));
 }) as AppRouteHandler<typeof listRoute>);
 
 // ── Create Slider ──
@@ -99,26 +93,9 @@ const createSliderRoute = createRoute({
 app.openapi(createSliderRoute, (async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const existingSlider = await db.select().from(heroSliders).where(sql`type = ${data.type} AND deleted_at IS NULL`).get();
-
-    if (existingSlider) {
-        throw new ConflictError(`A ${data.type} slider already exists`);
-    }
-
-    const sliderId = "slider_" + nanoid();
-    const sliderArr = await db.insert(heroSliders).values({
-        id: sliderId,
-        type: data.type,
-        images: JSON.stringify(data.images),
-        isActive: data.isActive ?? true,
-        createdAt: sql`(unixepoch())`,
-        updatedAt: sql`(unixepoch())`
-    }).returning();
-    const slider = sliderArr[0];
-    if (!slider) throw new ValidationError("Failed to create slider");
-
+    const slider = await createHeroSlider(db, data);
     await invalidateHomepageCaches(c);
-    return created(c, { ...slider, images: parseSliderImages(slider.images) });
+    return created(c, slider);
 }) as AppRouteHandler<typeof createSliderRoute>);
 
 // ── Get Slider ──
@@ -140,10 +117,7 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const slider = await db.select().from(heroSliders).where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt))).get();
-
-    if (!slider) throw new NotFoundError("Slider not found");
-    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
+    return ok(c, await getHeroSlider(db, id));
 }) as AppRouteHandler<typeof getByIdRoute>);
 
 // ── Update Slider ──
@@ -160,6 +134,7 @@ const updateSliderRoute = createRoute({
     responses: {
         200: { description: "Slider updated", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -167,21 +142,9 @@ app.openapi(updateSliderRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-
-    const updateData = {
-        ...data,
-        images: data.images ? JSON.stringify(data.images) : undefined,
-        updatedAt: sql`(unixepoch())`
-    };
-
-    const [slider] = await db.update(heroSliders)
-        .set(updateData)
-        .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
-        .returning();
-
-    if (!slider) throw new NotFoundError("Slider not found");
+    const slider = await updateHeroSlider(db, id, data);
     await invalidateHomepageCaches(c);
-    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
+    return ok(c, slider);
 }) as AppRouteHandler<typeof updateSliderRoute>);
 
 // ── Delete Slider ──
@@ -193,24 +156,28 @@ const deleteSliderRoute = createRoute({
     summary: "Soft-delete a hero slider",
     request: {
         params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ expectedRevision: z.number().int().min(1) }),
+                },
+            },
+        },
     },
     responses: {
         200: { description: "Slider deleted", content: { "application/json": { schema: successEnvelope(heroSliderSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(deleteSliderRoute, (async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const [slider] = await db.update(heroSliders)
-        .set({ deletedAt: sql`(unixepoch())` })
-        .where(and(eq(heroSliders.id, id), isNull(heroSliders.deletedAt)))
-        .returning();
-
-    if (!slider) throw new NotFoundError("Slider not found");
+    const { expectedRevision } = c.req.valid("json");
+    const slider = await deleteHeroSlider(db, id, expectedRevision);
     await invalidateHomepageCaches(c);
-    return ok(c, { ...slider, images: parseSliderImages(slider.images) });
+    return ok(c, slider);
 }) as AppRouteHandler<typeof deleteSliderRoute>);
 
 export { app as heroSlidersRoutes };

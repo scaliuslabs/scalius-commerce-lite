@@ -48,6 +48,10 @@ model presented as if it were a complete theme system.
   rejected and relevant caches invalidate.
 - The admin exposes five palettes and 17 individual color cards with a small
   synthetic product preview. It tracks dirty state locally.
+- Theme and Hero remain separate authorities. Theme controls allowlisted color
+  tokens; Hero controls viewport media, alternative text, destination, order,
+  and visibility through its own revision. Carousel overlay contrast is not
+  derived from arbitrary merchant colors.
 
 ## Theme: P1/P2 gaps
 

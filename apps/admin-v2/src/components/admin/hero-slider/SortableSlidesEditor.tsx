@@ -26,7 +26,6 @@ import type { HeroSlider, SliderImage } from "./helpers";
 interface SortableSlidesEditorProps {
   type: "desktop" | "mobile";
   slider: HeroSlider;
-  onUpdate: (type: "desktop" | "mobile", updates: Partial<HeroSlider>) => void;
   onUpdateImageLocal: (
     type: "desktop" | "mobile",
     imageId: string,
@@ -39,7 +38,6 @@ interface SortableSlidesEditorProps {
 export function SortableSlidesEditor({
   type,
   slider,
-  onUpdate,
   onUpdateImageLocal,
   onRemove,
   setSlider,
@@ -86,7 +84,7 @@ export function SortableSlidesEditor({
 
   const handleDragEnd = (_event: DragEndEvent) => {
     setActiveDragItem(null);
-    onUpdate(type, { images: latestImagesRef.current });
+    setSlider({ ...slider, images: latestImagesRef.current });
   };
 
   return (

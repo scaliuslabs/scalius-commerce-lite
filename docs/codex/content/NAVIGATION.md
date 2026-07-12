@@ -32,16 +32,14 @@ depth/count/identity bounds, and duplicate footer columns; admin boundary tests
 cover the three-level UI; storefront boundaries cover label-only nodes and the
 single copyright/storage contract.
 
-## Deferred hero correctness slice
+## Hero correctness slice completed
 
-Hero management must not be folded into a cosmetic settings pass. Its current
-debounced editor persists whole image arrays without a revision token, so nearby
-title/link edits or concurrent sessions can overwrite one another. The next
-hero slice should replace field debounce with an explicit dirty/save/conflict
-workflow, validate slide destinations with the shared safe-link policy, render
-unlinked slides without fake `#` anchors, and only then compact the visual
-editor. Existing hero demo assets should be replaced after that write contract
-is proven.
+Hero management now uses an explicit dirty/save/discard workflow, a monotonic
+revision/CAS write, preserved drafts on conflicts, bounded normalized slides,
+the shared safe-link policy, and genuinely non-interactive unlinked storefront
+slides. The editor was compacted only after those boundaries were established.
+See [HERO.md](HERO.md). Existing hero demo assets may now be replaced through
+the proven editor in a separate live demo-data run.
 
 ## Current strengths
 

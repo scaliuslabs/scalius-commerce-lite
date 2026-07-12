@@ -162,6 +162,13 @@
       "when": 1783896767360,
       "tag": "0022_greedy_lucky_pierre",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1783897979680,
+      "tag": "0023_bouncy_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

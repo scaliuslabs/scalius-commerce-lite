@@ -1,12 +1,19 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
+import {
+  AlertTriangle,
+  Image as ImageIcon,
+  Loader2,
+  Plus,
+  RotateCcw,
+  Save,
+} from "lucide-react";
+import { toast } from "sonner";
+import { HERO_SLIDE_LIMIT, validateAndNormalizeHeroSlides } from "@scalius/shared/hero-slider";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { GripVertical, Image as ImageIcon, Plus } from "lucide-react";
 import { MediaManager } from "../media-manager";
-import { SlideRow } from "./SlideRow";
 import type { HeroSlider, SliderImage, MediaFile } from "./helpers";
 import { generateImageId } from "./helpers";
 
@@ -19,190 +26,205 @@ const SortableSlidesEditor = lazy(() =>
 interface SliderTabProps {
   type: "desktop" | "mobile";
   slider: HeroSlider | null;
+  dirty: boolean;
+  saving: boolean;
+  conflict: boolean;
   onCreate: (type: "desktop" | "mobile") => void;
-  onUpdate: (type: "desktop" | "mobile", updates: Partial<HeroSlider>) => void;
-  onUpdateImageLocal: (type: "desktop" | "mobile", imageId: string, updates: Partial<SliderImage>) => void;
-  setSlider: (slider: HeroSlider) => void;
+  onChange: (slider: HeroSlider) => void;
+  onSave: () => void;
+  onDiscard: () => void;
+  onLoadLatest: () => void;
 }
 
 export function SliderTab({
   type,
   slider,
+  dirty,
+  saving,
+  conflict,
   onCreate,
-  onUpdate,
-  onUpdateImageLocal,
-  setSlider,
+  onChange,
+  onSave,
+  onDiscard,
+  onLoadLatest,
 }: SliderTabProps) {
-  const [isReordering, setIsReordering] = useState(false);
-
-  useEffect(() => {
-    if ((slider?.images.length ?? 0) < 2 && isReordering) {
-      setIsReordering(false);
-    }
-  }, [isReordering, slider?.images.length]);
-
-  const handleAddImages = (files: MediaFile[]) => {
-    if (!slider) return;
-
-    const newImages: SliderImage[] = files.map((file) => ({
-      id: generateImageId(),
-      url: file.url,
-      title: file.filename,
-      link: "",
-    }));
-
-    onUpdate(type, {
-      images: [...slider.images, ...newImages],
-    });
-  };
-
-  const handleRemoveImage = (imageId: string) => {
-    if (!slider) return;
-
-    onUpdate(type, {
-      images: slider.images.filter((img) => img.id !== imageId),
-    });
-  };
+  const validation = useMemo(
+    () => validateAndNormalizeHeroSlides(slider?.images ?? []),
+    [slider?.images],
+  );
+  const issues = [
+    ...(slider?.isActive && slider.images.length === 0
+      ? ["Add at least one slide before showing this hero."]
+      : []),
+    ...(validation.ok ? [] : validation.errors),
+  ];
 
   if (!slider) {
     return (
-      <Card className="border-dashed shadow-sm">
-        <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-          <div className="bg-muted rounded-full p-4 mb-4">
-            <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
-          </div>
-          <h3 className="font-semibold text-lg mb-2">No {type} Slider</h3>
-          <p className="max-w-xs mb-6 text-sm">
-            Create a {type} slider to start adding banner images to your
-            storefront.
-          </p>
-          <Button onClick={() => onCreate(type)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create {type === "desktop" ? "Desktop" : "Mobile"} Slider
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/10 px-6 text-center">
+        <div className="mb-3 rounded-lg border bg-background p-2.5">
+          <ImageIcon className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <h2 className="text-sm font-semibold">No {type} hero yet</h2>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          Create an inactive draft, add its banner images, then turn it on when it is ready.
+        </p>
+        <Button className="mt-4" size="sm" onClick={() => onCreate(type)} disabled={saving}>
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+          Create {type} hero
+        </Button>
+      </div>
     );
   }
 
+  const updateImage = (imageId: string, updates: Partial<SliderImage>) => {
+    onChange({
+      ...slider,
+      images: slider.images.map((image) =>
+        image.id === imageId ? { ...image, ...updates } : image,
+      ),
+    });
+  };
+
+  const addImages = (files: MediaFile[]) => {
+    const remaining = HERO_SLIDE_LIMIT - slider.images.length;
+    if (remaining <= 0) {
+      toast.error(`A hero can contain at most ${HERO_SLIDE_LIMIT} slides.`);
+      return;
+    }
+    const accepted = files.slice(0, remaining);
+    if (accepted.length < files.length) {
+      toast.warning(`Only ${accepted.length} image${accepted.length === 1 ? "" : "s"} added`, {
+        description: `A hero can contain at most ${HERO_SLIDE_LIMIT} slides.`,
+      });
+    }
+    onChange({
+      ...slider,
+      images: [
+        ...slider.images,
+        ...accepted.map((file) => ({
+          id: generateImageId(),
+          url: file.url,
+          title: file.altText?.trim() || file.filename,
+          link: "",
+        })),
+      ],
+    });
+  };
+
+  const removeImage = (imageId: string) => {
+    onChange({
+      ...slider,
+      images: slider.images.filter((image) => image.id !== imageId),
+    });
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-muted/30 p-4 rounded-lg border">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center space-x-2">
+    <div className="space-y-3">
+      {conflict ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="flex min-w-0 items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">A newer saved version exists</p>
+              <p className="text-xs opacity-80">Your local draft is preserved. Loading latest replaces it.</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={onLoadLatest} disabled={saving}>
+            Load latest
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/15 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
             <Switch
               id={`${type}-active`}
               checked={slider.isActive}
-              onCheckedChange={(checked) =>
-                onUpdate(type, { isActive: checked })
-              }
+              onCheckedChange={(isActive) => onChange({ ...slider, isActive })}
             />
-            <Label
-              htmlFor={`${type}-active`}
-              className="font-medium cursor-pointer"
-            >
-              {slider.isActive ? "Active" : "Inactive"}
+            <Label htmlFor={`${type}-active`} className="cursor-pointer text-sm">
+              {slider.isActive ? "Visible on storefront" : "Hidden from storefront"}
             </Label>
           </div>
-          <div className="hidden sm:block h-4 w-px bg-border" />
-          <Badge
-            variant="secondary"
-            className="font-normal text-muted-foreground"
-          >
-            {type === "desktop"
-              ? "Recommended: 1400x450 px"
-              : "Recommended: 640x200 px"}
-          </Badge>
+          <span className="hidden h-4 w-px bg-border sm:block" />
+          <span className="text-xs text-muted-foreground">
+            {type === "desktop" ? "Recommended 1400 × 450" : "Recommended 640 × 300"}
+          </span>
+          <Badge variant="outline" className="h-5 font-normal">Revision {slider.revision}</Badge>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {slider.images.length > 1 && (
-            <Button
-              type="button"
-              size="sm"
-              variant={isReordering ? "secondary" : "outline"}
-              className="gap-2"
-              onClick={() => setIsReordering((value) => !value)}
-            >
-              <GripVertical className="h-4 w-4" />
-              {isReordering ? "Done" : "Reorder"}
+        <MediaManager
+          capability="image"
+          onSelect={(file) => addImages([file])}
+          onSelectMultiple={addImages}
+          trigger={
+            <Button size="sm" disabled={slider.images.length >= HERO_SLIDE_LIMIT}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add slides
             </Button>
-          )}
-
-          <MediaManager
-            capability="image"
-            onSelect={(file) => handleAddImages([file])}
-            onSelectMultiple={(files) => handleAddImages(files)}
-            trigger={
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Slide Image
-              </Button>
-            }
-          />
-        </div>
+          }
+        />
       </div>
 
-      {slider.images.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/10">
-          <p className="text-muted-foreground text-sm">
-            No images added yet. Click &quot;Add Slide Image&quot; to begin.
-          </p>
+      {issues.length > 0 ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <p className="font-medium">Fix before saving</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+            {issues.slice(0, 4).map((issue) => <li key={issue}>{issue}</li>)}
+          </ul>
         </div>
-      ) : isReordering ? (
-        <Suspense
-          fallback={
-            <SlideRows
-              images={slider.images}
-              type={type}
-              onRemove={handleRemoveImage}
-              onUpdate={(id, u) => onUpdateImageLocal(type, id, u)}
-            />
-          }
-        >
+      ) : null}
+
+      {slider.images.length === 0 ? (
+        <div className="flex min-h-40 w-full flex-col items-center justify-center rounded-lg border border-dashed bg-muted/10 px-6 text-center">
+          <ImageIcon className="h-5 w-5 text-muted-foreground" />
+          <span className="mt-2 text-sm font-medium">Add the first banner image</span>
+          <span className="mt-1 text-xs text-muted-foreground">Use concise descriptive text; a destination is optional.</span>
+        </div>
+      ) : (
+        <Suspense fallback={<SlideListFallback count={slider.images.length} />}>
           <SortableSlidesEditor
             type={type}
             slider={slider}
-            onUpdate={onUpdate}
-            onUpdateImageLocal={onUpdateImageLocal}
-            onRemove={handleRemoveImage}
-            setSlider={setSlider}
+            onUpdateImageLocal={(_, id, updates) => updateImage(id, updates)}
+            onRemove={removeImage}
+            setSlider={onChange}
           />
         </Suspense>
-      ) : (
-        <SlideRows
-          images={slider.images}
-          type={type}
-          onRemove={handleRemoveImage}
-          onUpdate={(id, u) => onUpdateImageLocal(type, id, u)}
-        />
       )}
+
+      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className={`h-2 w-2 rounded-full ${dirty ? "bg-amber-500" : "bg-emerald-500"}`} />
+          {dirty ? "Unsaved changes" : "All changes saved"}
+          <span>· {slider.images.length}/{HERO_SLIDE_LIMIT} slides</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={!dirty || saving}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Discard
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onSave}
+            disabled={!dirty || saving || conflict || issues.length > 0}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save changes
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function SlideRows({
-  images,
-  type,
-  onRemove,
-  onUpdate,
-}: {
-  images: SliderImage[];
-  type: "desktop" | "mobile";
-  onRemove: (id: string) => void;
-  onUpdate: (id: string, updates: Partial<SliderImage>) => void;
-}) {
+function SlideListFallback({ count }: { count: number }) {
   return (
-    <div className="space-y-3">
-      {images.map((image, index) => (
-        <SlideRow
-          key={image.id}
-          image={image}
-          index={index}
-          type={type}
-          onRemove={onRemove}
-          onUpdate={onUpdate}
-        />
+    <div className="space-y-2" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div key={index} className="h-24 animate-pulse rounded-lg border bg-muted/20" />
       ))}
     </div>
   );

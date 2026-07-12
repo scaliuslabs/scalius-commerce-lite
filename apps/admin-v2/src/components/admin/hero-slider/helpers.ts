@@ -14,9 +14,10 @@ export interface HeroSlider {
   type: "desktop" | "mobile";
   images: SliderImage[];
   isActive: boolean;
+  revision: number;
 }
 
 /** Generate a unique image ID using crypto.randomUUID() */
 export function generateImageId(): string {
-  return `img_${crypto.randomUUID().replace(/-/g, "").substring(0, 7)}`;
+  return `img_${crypto.randomUUID().replace(/-/g, "").substring(0, 20)}`;
 }

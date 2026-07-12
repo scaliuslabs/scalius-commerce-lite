@@ -2719,25 +2719,26 @@
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "url": {
+                                  "id": {
                                     "type": "string"
                                   },
-                                  "alt": {
+                                  "url": {
                                     "type": "string",
-                                    "nullable": true
+                                    "format": "uri"
                                   },
-                                  "sortOrder": {
-                                    "type": "number"
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "link": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
+                                  "id",
                                   "url",
-                                  "alt",
-                                  "sortOrder"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "title",
+                                  "link"
+                                ]
                               }
                             },
                             "isActive": {
@@ -2776,25 +2777,26 @@
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "url": {
+                                  "id": {
                                     "type": "string"
                                   },
-                                  "alt": {
+                                  "url": {
                                     "type": "string",
-                                    "nullable": true
+                                    "format": "uri"
                                   },
-                                  "sortOrder": {
-                                    "type": "number"
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "link": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
+                                  "id",
                                   "url",
-                                  "alt",
-                                  "sortOrder"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "title",
+                                  "link"
+                                ]
                               }
                             },
                             "isActive": {
@@ -2833,25 +2835,26 @@
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "url": {
+                                  "id": {
                                     "type": "string"
                                   },
-                                  "alt": {
+                                  "url": {
                                     "type": "string",
-                                    "nullable": true
+                                    "format": "uri"
                                   },
-                                  "sortOrder": {
-                                    "type": "number"
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "link": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
+                                  "id",
                                   "url",
-                                  "alt",
-                                  "sortOrder"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "title",
+                                  "link"
+                                ]
                               }
                             },
                             "isActive": {
@@ -2873,25 +2876,26 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "url": {
+                              "id": {
                                 "type": "string"
                               },
-                              "alt": {
+                              "url": {
                                 "type": "string",
-                                "nullable": true
+                                "format": "uri"
                               },
-                              "sortOrder": {
-                                "type": "number"
+                              "title": {
+                                "type": "string"
+                              },
+                              "link": {
+                                "type": "string"
                               }
                             },
                             "required": [
+                              "id",
                               "url",
-                              "alt",
-                              "sortOrder"
-                            ],
-                            "additionalProperties": {
-                              "nullable": true
-                            }
+                              "title",
+                              "link"
+                            ]
                           }
                         },
                         "isMobile": {
@@ -3004,25 +3008,26 @@
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "url": {
+                                  "id": {
                                     "type": "string"
                                   },
-                                  "alt": {
+                                  "url": {
                                     "type": "string",
-                                    "nullable": true
+                                    "format": "uri"
                                   },
-                                  "sortOrder": {
-                                    "type": "number"
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "link": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
+                                  "id",
                                   "url",
-                                  "alt",
-                                  "sortOrder"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "title",
+                                  "link"
+                                ]
                               }
                             },
                             "isActive": {
@@ -39413,7 +39418,8 @@
                   "code": {
                     "type": "string",
                     "minLength": 3,
-                    "maxLength": 50
+                    "maxLength": 50,
+                    "pattern": "^[a-zA-Z0-9_-]+$"
                   },
                   "type": {
                     "type": "string",
@@ -39438,7 +39444,9 @@
                   },
                   "minPurchaseAmount": {
                     "type": "number",
-                    "nullable": true
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true
                   },
                   "minQuantity": {
                     "type": "integer",
@@ -39450,7 +39458,8 @@
                     "type": "integer",
                     "nullable": true,
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "maximum": 1
                   },
                   "maxUses": {
                     "type": "integer",
@@ -39485,7 +39494,8 @@
                         "format": "date-time"
                       },
                       {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       {
                         "type": "number"
@@ -39499,7 +39509,8 @@
                         "format": "date-time"
                       },
                       {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       {
                         "type": "number"
@@ -39514,14 +39525,18 @@
                   "appliesToProducts": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 90
                   },
                   "appliesToCollections": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -40750,7 +40765,8 @@
                   "code": {
                     "type": "string",
                     "minLength": 3,
-                    "maxLength": 50
+                    "maxLength": 50,
+                    "pattern": "^[a-zA-Z0-9_-]+$"
                   },
                   "type": {
                     "type": "string",
@@ -40775,7 +40791,9 @@
                   },
                   "minPurchaseAmount": {
                     "type": "number",
-                    "nullable": true
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true
                   },
                   "minQuantity": {
                     "type": "integer",
@@ -40787,7 +40805,8 @@
                     "type": "integer",
                     "nullable": true,
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "maximum": 1
                   },
                   "maxUses": {
                     "type": "integer",
@@ -40822,7 +40841,8 @@
                         "format": "date-time"
                       },
                       {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       {
                         "type": "number"
@@ -40836,7 +40856,8 @@
                         "format": "date-time"
                       },
                       {
-                        "type": "string"
+                        "type": "string",
+                        "minLength": 1
                       },
                       {
                         "type": "number"
@@ -40851,17 +40872,22 @@
                   "appliesToProducts": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 90
                   },
                   "appliesToCollections": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 90
                   },
                   "id": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -81992,17 +82018,23 @@
                               "type": "object",
                               "properties": {
                                 "id": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 80
                                 },
                                 "url": {
                                   "type": "string",
+                                  "maxLength": 2048,
                                   "format": "uri"
                                 },
                                 "title": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 160
                                 },
                                 "link": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "maxLength": 2048
                                 }
                               },
                               "required": [
@@ -82015,6 +82047,10 @@
                           },
                           "isActive": {
                             "type": "boolean"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
                           },
                           "createdAt": {
                             "anyOf": [
@@ -82053,6 +82089,7 @@
                           "type",
                           "images",
                           "isActive",
+                          "revision",
                           "createdAt",
                           "updatedAt",
                           "deletedAt"
@@ -82342,17 +82379,23 @@
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
                         },
                         "url": {
                           "type": "string",
+                          "maxLength": 2048,
                           "format": "uri"
                         },
                         "title": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
                         },
                         "link": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 2048
                         }
                       },
                       "required": [
@@ -82361,7 +82404,8 @@
                         "title",
                         "link"
                       ]
-                    }
+                    },
+                    "maxItems": 12
                   },
                   "isActive": {
                     "type": "boolean"
@@ -82408,17 +82452,23 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
                               },
                               "url": {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               "title": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
                               },
                               "link": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 2048
                               }
                             },
                             "required": [
@@ -82431,6 +82481,10 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "createdAt": {
                           "anyOf": [
@@ -82469,6 +82523,7 @@
                         "type",
                         "images",
                         "isActive",
+                        "revision",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -82823,17 +82878,23 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
                               },
                               "url": {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               "title": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
                               },
                               "link": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 2048
                               }
                             },
                             "required": [
@@ -82846,6 +82907,10 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "createdAt": {
                           "anyOf": [
@@ -82884,6 +82949,7 @@
                         "type",
                         "images",
                         "isActive",
+                        "revision",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -83169,12 +83235,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "desktop",
-                      "mobile"
-                    ]
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   },
                   "images": {
                     "type": "array",
@@ -83182,17 +83245,23 @@
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
                         },
                         "url": {
                           "type": "string",
+                          "maxLength": 2048,
                           "format": "uri"
                         },
                         "title": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
                         },
                         "link": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 2048
                         }
                       },
                       "required": [
@@ -83201,12 +83270,16 @@
                         "title",
                         "link"
                       ]
-                    }
+                    },
+                    "maxItems": 12
                   },
                   "isActive": {
                     "type": "boolean"
                   }
-                }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
               }
             }
           }
@@ -83244,17 +83317,23 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
                               },
                               "url": {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               "title": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
                               },
                               "link": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 2048
                               }
                             },
                             "required": [
@@ -83267,6 +83346,10 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "createdAt": {
                           "anyOf": [
@@ -83305,6 +83388,7 @@
                         "type",
                         "images",
                         "isActive",
+                        "revision",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -83444,6 +83528,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -83584,6 +83708,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Slider deleted",
@@ -83617,17 +83759,23 @@
                             "type": "object",
                             "properties": {
                               "id": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 80
                               },
                               "url": {
                                 "type": "string",
+                                "maxLength": 2048,
                                 "format": "uri"
                               },
                               "title": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 160
                               },
                               "link": {
-                                "type": "string"
+                                "type": "string",
+                                "maxLength": 2048
                               }
                             },
                             "required": [
@@ -83640,6 +83788,10 @@
                         },
                         "isActive": {
                           "type": "boolean"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         },
                         "createdAt": {
                           "anyOf": [
@@ -83678,6 +83830,7 @@
                         "type",
                         "images",
                         "isActive",
+                        "revision",
                         "createdAt",
                         "updatedAt",
                         "deletedAt"
@@ -83817,6 +83970,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

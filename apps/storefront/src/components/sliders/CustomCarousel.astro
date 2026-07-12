@@ -38,18 +38,21 @@ if (images.length === 0) return;
     {/* Slides */}
     <div class="slides-container w-full h-full relative">
       {
-        images.map((image: Props["images"][0], index: number) => (
-          <div
-            class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-            data-slide-index={index}
-          >
-            <a
-              href={image.link || "#"}
-              class="slide-link block w-full h-full group"
-              aria-label={image.title || `Slide ${index + 1}`}
-              target={image.link?.startsWith("http") ? "_blank" : undefined}
-              rel={image.link?.startsWith("http") ? "noopener" : undefined}
+        images.map((image: Props["images"][0], index: number) => {
+          const SlideFrame = image.link ? "a" : "div";
+          const isExternal = image.link?.startsWith("https://");
+          return (
+            <div
+              class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              data-slide-index={index}
             >
+              <SlideFrame
+                href={image.link || undefined}
+                class={`slide-link group block h-full w-full ${image.link ? "cursor-pointer" : "cursor-default"}`}
+                aria-label={image.link ? (image.title || `Slide ${index + 1}`) : undefined}
+                target={isExternal ? "_blank" : undefined}
+                rel={isExternal ? "noopener noreferrer" : undefined}
+              >
               <img
                 src={getOptimizedImageUrl(image.url, {
                   width: type === "desktop" ? 1300 : 640,
@@ -66,12 +69,13 @@ if (images.length === 0) return;
                 decoding={index === 0 ? "sync" : "async"}
               />
 
-              {/* Hover overlay - only appears on hover */}
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-
-            </a>
-          </div>
-        ))
+                {image.link && (
+                  <div class="absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/20" />
+                )}
+              </SlideFrame>
+            </div>
+          );
+        })
       }
     </div>
 
@@ -167,7 +171,9 @@ if (images.length === 0) return;
 
       constructor(carousel: HTMLElement) {
         this.carousel = carousel;
-        this.autoRotate = carousel.dataset.autoRotate === "true";
+        this.autoRotate =
+          carousel.dataset.autoRotate === "true" &&
+          !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         this.interval = parseInt(carousel.dataset.interval || "3000");
 
         // Get all slides

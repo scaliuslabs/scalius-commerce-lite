@@ -7,7 +7,7 @@ const desktopSlider = {
   id: "slider_desktop",
   type: "desktop",
   images: JSON.stringify([
-    { url: "https://cdn.example.com/desktop.jpg", alt: null, sortOrder: 1 },
+    { id: "img_desktop", url: "https://cdn.example.com/desktop.jpg", title: "Desktop promotion", link: "" },
   ]),
   isActive: true,
   createdAt: new Date("2026-06-18T00:00:00.000Z"),
@@ -19,7 +19,7 @@ const mobileSlider = {
   id: "slider_mobile",
   type: "mobile",
   images: JSON.stringify([
-    { url: "https://cdn.example.com/mobile.jpg", alt: null, sortOrder: 1 },
+    { id: "img_mobile", url: "https://cdn.example.com/mobile.jpg", title: "Mobile promotion", link: "/collections/new" },
   ]),
   isActive: true,
   createdAt: new Date("2026-06-18T00:00:00.000Z"),
@@ -179,5 +179,26 @@ describe("hero route cache policy", () => {
     expect(body.success).toBe(true);
     expect(body.data?.slider?.createdAt).toBeNull();
     expect(body.data?.slider?.updatedAt).toBeNull();
+  });
+
+  it("fails closed instead of exposing an unsafe saved destination", async () => {
+    const app = createTestApp([{
+      ...desktopSlider,
+      images: JSON.stringify([{
+        id: "img_unsafe",
+        url: "https://cdn.example.com/desktop.jpg",
+        title: "Unsafe promotion",
+        link: "javascript:alert(1)",
+      }]),
+    }]);
+    const { kv } = createKvMock();
+    const response = await app.request(
+      "/api/v1/hero/sliders?type=desktop",
+      {},
+      { CACHE: kv } as unknown as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await readHeroImages(response)).toEqual([]);
   });
 });

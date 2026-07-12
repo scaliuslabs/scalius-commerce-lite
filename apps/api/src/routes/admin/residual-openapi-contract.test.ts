@@ -88,6 +88,8 @@ describe("admin residual OpenAPI mutation responses", () => {
     const spec = buildResidualSpec();
 
     expectResponses(spec, "/api/v1/admin/settings/hero-sliders", "post", ["201", "409"]);
+    expectResponses(spec, "/api/v1/admin/settings/hero-sliders/{id}", "put", ["200", "409"]);
+    expectResponses(spec, "/api/v1/admin/settings/hero-sliders/{id}", "delete", ["200", "409"]);
 
     expectResponses(spec, "/api/v1/admin/settings/auth", "post", ["200", "503"]);
     expectResponses(spec, "/api/v1/admin/settings/email", "post", ["200", "503"]);
