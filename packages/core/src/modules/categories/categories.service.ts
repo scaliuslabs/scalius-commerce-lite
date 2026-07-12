@@ -3,10 +3,14 @@
 // Used by both admin Hono routes and storefront Hono routes.
 
 import { categories, products, collections } from "@scalius/database/schema";
-import { sql, and, isNull, isNotNull, eq, desc, asc, inArray, type SQL } from "drizzle-orm";
+import { sql, and, isNull, isNotNull, eq, ne, desc, asc, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
-import type { CreateCategoryInput, UpdateCategoryInput } from "./categories.validation";
+import {
+    CATEGORY_BATCH_LIMIT,
+    type CreateCategoryInput,
+    type UpdateCategoryInput,
+} from "./categories.validation";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -38,6 +42,52 @@ function categoryDeleteUsageGuard(
     `);
 }
 
+function allCategoriesTrashedCondition(
+    categoryIds: string[],
+): SQL {
+    return sql`(
+        SELECT count(*) FROM ${categories}
+        WHERE ${categories.id} IN (
+            SELECT CAST(value AS TEXT)
+            FROM json_each(${JSON.stringify(categoryIds)})
+        )
+          AND ${categories.deletedAt} IS NOT NULL
+    ) = ${categoryIds.length}`;
+}
+
+function categoryActiveStateGuard(
+    db: Database,
+    categoryIds: string[],
+): SQLiteBatchItem {
+    return buildBatchGuard(db, sql`
+        CASE WHEN (
+            SELECT count(*) FROM ${categories}
+            WHERE ${inArray(categories.id, categoryIds)}
+              AND ${categories.deletedAt} IS NULL
+        ) = ${categoryIds.length}
+        THEN 1 ELSE json_extract('CATEGORY_ACTIVE_STATE_REQUIRED', '$') END
+    `);
+}
+
+function categoryTrashedStateGuard(
+    db: Database,
+    categoryIds: string[],
+): SQLiteBatchItem {
+    return buildBatchGuard(db, sql`
+        CASE WHEN (
+            SELECT count(*) FROM ${categories}
+            WHERE ${inArray(categories.id, categoryIds)}
+              AND ${categories.deletedAt} IS NOT NULL
+        ) = ${categoryIds.length}
+        THEN 1 ELSE json_extract('CATEGORY_TRASHED_STATE_REQUIRED', '$') END
+    `);
+}
+
+function isCategorySlugConstraintError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /categories(?:_slug_idx|\.slug)|UNIQUE constraint failed: categories\.slug/i.test(message);
+}
+
 // ─────────────────────────────────────────
 // Admin queries
 // ─────────────────────────────────────────
@@ -58,14 +108,17 @@ export async function listCategories(
     } = {},
 ) {
     const {
-        page = 1,
+        page: rawPage = 1,
         limit: rawLimit = 10,
         search = "",
         showTrashed = false,
         sort = "updatedAt",
         order = "desc",
     } = options;
-    const limit = Math.min(Math.max(rawLimit, 1), 500);
+    const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+    const limit = Number.isSafeInteger(rawLimit)
+        ? Math.min(Math.max(rawLimit, 1), 500)
+        : 10;
 
     const whereConditions: (SQL | undefined)[] = [];
 
@@ -111,6 +164,12 @@ export async function listCategories(
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${categories.deletedAt} AS INTEGER)`,
+            productCount: sql<number>`(
+                SELECT count(*)
+                FROM ${products}
+                WHERE ${products.categoryId} = ${categories.id}
+                  AND ${products.deletedAt} IS NULL
+            )`,
         })
         .from(categories)
         .where(whereClause)
@@ -118,32 +177,18 @@ export async function listCategories(
         .offset(offset)
         .orderBy(order === "asc" ? asc(sortField) : desc(sortField));
 
-    const countsQuery = db
-        .select({
-            categoryId: products.categoryId,
-            count: sql<number>`count(*)`.as("count"),
-        })
-        .from(products)
-        .where(and(isNull(products.deletedAt), eq(products.isActive, true)))
-        .groupBy(products.categoryId);
-
-    const [countArr, results, productCounts] = await db.batch([
+    const [countArr, results] = await db.batch([
         countQuery,
         resultsQuery,
-        countsQuery,
     ]);
     const count = countArr[0]?.count ?? 0;
-
-    const countMap = new Map(
-        productCounts.map(({ categoryId, count }: { categoryId: string | null; count: number }) => [categoryId, Number(count)]),
-    );
 
     const formattedCategories = results.map((category) => ({
         ...category,
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,
         updatedAt: category.updatedAt ? new Date(category.updatedAt * 1000).toISOString() : null,
         deletedAt: category.deletedAt ? new Date(category.deletedAt * 1000).toISOString() : null,
-        productCount: countMap.get(category.id) || 0,
+        productCount: Number(category.productCount ?? 0),
     }));
 
     return {
@@ -196,6 +241,7 @@ export async function getCategoryById(db: Database, id: string) {
             canonicalPath: categories.canonicalPath,
             noIndex: categories.noIndex,
             excludeFromSitemap: categories.excludeFromSitemap,
+            deletedAt: sql<number | null>`CAST(${categories.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${categories.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${categories.updatedAt} AS INTEGER)`,
         })
@@ -216,32 +262,43 @@ export async function createCategory(
     data: CreateCategoryInput,
 ): Promise<{ id: string }> {
     const existing = await db
-        .select({ id: categories.id })
+        .select({ id: categories.id, deletedAt: categories.deletedAt })
         .from(categories)
-        .where(sql`slug = ${data.slug} AND deleted_at IS NULL`)
+        .where(eq(categories.slug, data.slug))
         .get();
 
     if (existing) {
-        throw new ConflictError("A category with this slug already exists");
+        throw new ConflictError(
+            existing.deletedAt
+                ? "A category with this slug already exists in trash. Restore it or choose another slug."
+                : "A category with this slug already exists.",
+        );
     }
 
     const categoryId = "cat_" + nanoid();
 
-    await db.insert(categories).values({
-        id: categoryId,
-        name: data.name,
-        description: data.description || null,
-        slug: data.slug,
-        imageUrl: data.image?.url || null,
-        metaTitle: data.metaTitle || null,
-        metaDescription: data.metaDescription || null,
-        canonicalPath: data.canonicalPath ?? null,
-        noIndex: data.noIndex ?? false,
-        excludeFromSitemap: data.excludeFromSitemap ?? false,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-        deletedAt: null,
-    });
+    try {
+        await db.insert(categories).values({
+            id: categoryId,
+            name: data.name,
+            description: data.description,
+            slug: data.slug,
+            imageUrl: data.image?.url || null,
+            metaTitle: data.metaTitle,
+            metaDescription: data.metaDescription,
+            canonicalPath: data.canonicalPath ?? null,
+            noIndex: data.noIndex ?? false,
+            excludeFromSitemap: data.excludeFromSitemap ?? false,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+            deletedAt: null,
+        });
+    } catch (error) {
+        if (isCategorySlugConstraintError(error)) {
+            throw new ConflictError("A category with this slug already exists.");
+        }
+        throw error;
+    }
 
     return { id: categoryId };
 }
@@ -255,38 +312,55 @@ export async function updateCategory(
     data: UpdateCategoryInput,
 ): Promise<void> {
     const existing = await db
-        .select({ id: categories.id })
+        .select({ id: categories.id, deletedAt: categories.deletedAt })
         .from(categories)
         .where(eq(categories.id, id))
         .get();
 
     if (!existing) throw new NotFoundError("Category not found");
+    if (existing.deletedAt) {
+        throw new ConflictError("Restore this category before editing it.");
+    }
 
     const slugConflict = await db
         .select({ id: categories.id })
         .from(categories)
-        .where(sql`${categories.slug} = ${data.slug} AND ${categories.deletedAt} IS NULL`)
+        .where(and(eq(categories.slug, data.slug), ne(categories.id, id)))
         .get();
 
-    if (slugConflict && slugConflict.id !== id) {
-        throw new ConflictError("A category with this slug already exists");
+    if (slugConflict) {
+        throw new ConflictError("A category with this slug already exists, including in trash.");
     }
 
-    await db
-        .update(categories)
-        .set({
-            name: data.name,
-            description: data.description,
-            slug: data.slug,
-            imageUrl: data.image?.url || null,
-            metaTitle: data.metaTitle,
-            metaDescription: data.metaDescription,
-            canonicalPath: data.canonicalPath ?? null,
-            noIndex: data.noIndex ?? false,
-            excludeFromSitemap: data.excludeFromSitemap ?? false,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(eq(categories.id, id));
+    try {
+        await safeBatch(db, [
+            categoryActiveStateGuard(db, [id]),
+            db
+                .update(categories)
+                .set({
+                    name: data.name,
+                    description: data.description,
+                    slug: data.slug,
+                    imageUrl: data.image?.url || null,
+                    metaTitle: data.metaTitle,
+                    metaDescription: data.metaDescription,
+                    canonicalPath: data.canonicalPath ?? null,
+                    noIndex: data.noIndex ?? false,
+                    excludeFromSitemap: data.excludeFromSitemap ?? false,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(eq(categories.id, id), isNull(categories.deletedAt))),
+            categoryProductRevisionBump(db, [id]),
+        ] as never);
+    } catch (error) {
+        if (isCategorySlugConstraintError(error)) {
+            throw new ConflictError("A category with this slug already exists.");
+        }
+        if (error instanceof Error && /CATEGORY_ACTIVE_STATE_REQUIRED|malformed json/i.test(error.message)) {
+            throw new ConflictError("Restore this category before editing it.");
+        }
+        throw error;
+    }
 }
 
 /**
@@ -307,8 +381,8 @@ export async function bulkDeleteCategories(
 ): Promise<void> {
     if (categoryIds.length === 0) return;
     const uniqueCategoryIds = [...new Set(categoryIds)];
-    if (uniqueCategoryIds.length > 90) {
-        throw new ValidationError("Delete at most 90 categories at a time.");
+    if (uniqueCategoryIds.length > CATEGORY_BATCH_LIMIT) {
+        throw new ValidationError(`Delete at most ${CATEGORY_BATCH_LIMIT} categories at a time.`);
     }
 
     const referencedProducts = await db
@@ -331,46 +405,135 @@ export async function bulkDeleteCategories(
     }
 
     if (permanent) {
+        const categoryStates = await db
+            .select({ id: categories.id, deletedAt: categories.deletedAt })
+            .from(categories)
+            .where(inArray(categories.id, uniqueCategoryIds))
+            .all();
+        if (
+            categoryStates.length !== uniqueCategoryIds.length ||
+            categoryStates.some((category) => !category.deletedAt)
+        ) {
+            throw new ConflictError(
+                "Only categories already in trash can be permanently deleted.",
+            );
+        }
+
         const affectedCollections = await db
-            .select()
+            .select({
+                id: collections.id,
+                name: collections.name,
+                config: collections.config,
+                isActive: collections.isActive,
+                deletedAt: collections.deletedAt,
+            })
             .from(collections)
-            .where(isNull(collections.deletedAt))
+            .where(sql`
+                CASE
+                    WHEN json_valid(${collections.config}) = 0 THEN 1
+                    WHEN json_type(${collections.config}, '$.categoryIds') IS NOT NULL
+                         AND json_type(${collections.config}, '$.categoryIds') <> 'array'
+                    THEN 1
+                    ELSE EXISTS (
+                        SELECT 1
+                        FROM json_each(${collections.config}, '$.categoryIds') AS membership
+                        INNER JOIN json_each(${JSON.stringify(uniqueCategoryIds)}) AS target
+                            ON CAST(membership.value AS TEXT) = CAST(target.value AS TEXT)
+                    )
+                END = 1
+            `)
             .all();
 
         const statements: SQLiteBatchItem[] = [
             categoryDeleteUsageGuard(db, uniqueCategoryIds),
-            categoryProductRevisionBump(db, uniqueCategoryIds),
+            db.update(products)
+                .set({
+                    aggregateRevision: sql`${products.aggregateRevision} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    inArray(products.categoryId, uniqueCategoryIds),
+                    allCategoriesTrashedCondition(uniqueCategoryIds),
+                )),
         ];
         for (const collection of affectedCollections) {
+            let config: Record<string, unknown>;
             try {
-                const config = JSON.parse(collection.config);
-                if (Array.isArray(config.categoryIds)) {
-                    const updated = config.categoryIds.filter((cid: string) => !uniqueCategoryIds.includes(cid));
-                    if (updated.length !== config.categoryIds.length) {
-                        config.categoryIds = updated;
-                        statements.push(
-                            db
-                                .update(collections)
-                                .set({
-                                    config: JSON.stringify(config),
-                                    updatedAt: sql`unixepoch()`,
-                                })
-                                .where(eq(collections.id, collection.id)),
-                        );
-                    }
+                const parsed = JSON.parse(collection.config) as unknown;
+                if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                    throw new Error("invalid collection config");
                 }
+                config = parsed as Record<string, unknown>;
             } catch {
                 throw new ConflictError(
                     `Collection ${collection.id} has invalid configuration. Repair it before permanently deleting categories.`,
                 );
             }
+            if (config.categoryIds === undefined) continue;
+            if (!Array.isArray(config.categoryIds)) {
+                throw new ConflictError(
+                    `Collection ${collection.id} has invalid category membership. Repair it before permanently deleting categories.`,
+                );
+            }
+            if (config.categoryIds.some((categoryId) => typeof categoryId !== "string")) {
+                throw new ConflictError(
+                    `Collection ${collection.id} has invalid category membership. Repair it before permanently deleting categories.`,
+                );
+            }
+
+            const categoryIds = config.categoryIds.filter(
+                (categoryId): categoryId is string => typeof categoryId === "string",
+            );
+            const updated = categoryIds.filter(
+                (categoryId) => !uniqueCategoryIds.includes(categoryId),
+            );
+            if (updated.length === categoryIds.length) continue;
+            if (
+                collection.deletedAt == null &&
+                collection.isActive &&
+                config.source === "dynamic" &&
+                updated.length === 0
+            ) {
+                throw new ValidationError(
+                    `Category deletion would leave active collection “${collection.name}” without a source.`,
+                    {
+                        suggestion:
+                            "Add another category to the collection or deactivate it before deleting this category permanently.",
+                    },
+                );
+            }
+            config.categoryIds = updated;
+            statements.push(
+                db
+                    .update(collections)
+                    .set({
+                        config: JSON.stringify(config),
+                        updatedAt: sql`unixepoch()`,
+                    })
+                    .where(and(
+                        eq(collections.id, collection.id),
+                        allCategoriesTrashedCondition(uniqueCategoryIds),
+                    )),
+            );
         }
 
         statements.push(
-            db.delete(categories).where(inArray(categories.id, uniqueCategoryIds)),
+            db.delete(categories)
+                .where(and(
+                    inArray(categories.id, uniqueCategoryIds),
+                    isNotNull(categories.deletedAt),
+                    allCategoriesTrashedCondition(uniqueCategoryIds),
+                ))
+                .returning({ id: categories.id }),
         );
         try {
-            await safeBatch(db, statements as never);
+            const results = await safeBatch(db, statements as never) as unknown[][];
+            const deletedRows = results.at(-1) ?? [];
+            if (deletedRows.length !== uniqueCategoryIds.length) {
+                throw new ConflictError(
+                    "Only categories already in trash can be permanently deleted.",
+                );
+            }
         } catch (error) {
             if (
                 error instanceof Error &&
@@ -392,8 +555,12 @@ export async function bulkDeleteCategories(
                 categoryDeleteUsageGuard(db, uniqueCategoryIds),
                 db
                     .update(categories)
-                    .set({ deletedAt: sql`unixepoch()` })
-                    .where(inArray(categories.id, uniqueCategoryIds)),
+                    .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+                    .where(and(
+                        inArray(categories.id, uniqueCategoryIds),
+                        isNull(categories.deletedAt),
+                    )),
+                categoryProductRevisionBump(db, uniqueCategoryIds),
             ] as never);
         } catch (error) {
             if (
@@ -419,10 +586,29 @@ export async function bulkDeleteCategories(
 export async function restoreCategories(db: Database, categoryIds: string[]): Promise<void> {
     if (categoryIds.length === 0) return;
 
-    await db
-        .update(categories)
-        .set({ deletedAt: null })
-        .where(inArray(categories.id, categoryIds));
+    const uniqueCategoryIds = [...new Set(categoryIds)];
+    if (uniqueCategoryIds.length > CATEGORY_BATCH_LIMIT) {
+        throw new ValidationError(`Restore at most ${CATEGORY_BATCH_LIMIT} categories at a time.`);
+    }
+
+    try {
+        await safeBatch(db, [
+            categoryTrashedStateGuard(db, uniqueCategoryIds),
+            db
+                .update(categories)
+                .set({ deletedAt: null, updatedAt: sql`unixepoch()` })
+                .where(and(
+                    inArray(categories.id, uniqueCategoryIds),
+                    isNotNull(categories.deletedAt),
+                )),
+            categoryProductRevisionBump(db, uniqueCategoryIds),
+        ] as never);
+    } catch (error) {
+        if (error instanceof Error && /CATEGORY_TRASHED_STATE_REQUIRED|malformed json/i.test(error.message)) {
+            throw new ConflictError("Only categories currently in trash can be restored.");
+        }
+        throw error;
+    }
 }
 
 /**

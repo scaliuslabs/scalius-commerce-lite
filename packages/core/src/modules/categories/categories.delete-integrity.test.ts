@@ -1,34 +1,50 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { collections, products } from "@scalius/database/schema";
-import { ValidationError } from "@scalius/core/errors";
-import { bulkDeleteCategories } from "./categories.service";
+import { categories, collections, products } from "@scalius/database/schema";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
+import { bulkDeleteCategories, restoreCategories } from "./categories.service";
 
 describe("category permanent delete integrity", () => {
   it("batches collection cleanup with the category delete", async () => {
-    let selectCount = 0;
     const batchCalls: unknown[][] = [];
     const db = {
       select() {
-        selectCount++;
         return {
-          from() {
+          from(table: unknown) {
             return {
               kind: "guard",
+              all: async () => table === collections ? [
+                {
+                  id: "col_1",
+                  name: "Seasonal",
+                  isActive: false,
+                  deletedAt: null,
+                  config: JSON.stringify({
+                    source: "dynamic",
+                    categoryIds: ["cat_delete", "cat_keep"],
+                  }),
+                },
+              ] : [],
               where() {
-                if (selectCount === 1) {
+                if (table === products) {
                   return { limit: () => ({ all: async () => [] }) };
                 }
-                return {
-                  all: async () => [
-                    {
-                      id: "col_1",
-                      config: JSON.stringify({
-                        categoryIds: ["cat_delete", "cat_keep"],
-                      }),
-                    },
-                  ],
-                };
+                if (table === categories) {
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                }
+                if (table === collections) {
+                  return { all: async () => [{
+                    id: "col_1",
+                    name: "Seasonal",
+                    isActive: false,
+                    deletedAt: null,
+                    config: JSON.stringify({
+                      source: "dynamic",
+                      categoryIds: ["cat_delete", "cat_keep"],
+                    }),
+                  }] };
+                }
+                return { all: async () => [] };
               },
             };
           },
@@ -51,13 +67,19 @@ describe("category permanent delete integrity", () => {
       delete(table: unknown) {
         return {
           where() {
-            return { kind: "delete", table };
+            return {
+              returning() {
+                return { kind: "delete", table };
+              },
+            };
           },
         };
       },
       async batch(statements: unknown[]) {
         batchCalls.push(statements);
-        return statements.map(() => []);
+        return statements.map((statement, index) =>
+          index === statements.length - 1 ? [{ id: "cat_delete" }] : [],
+        );
       },
     };
 
@@ -74,7 +96,10 @@ describe("category permanent delete integrity", () => {
       kind: "update",
       table: collections,
       values: {
-        config: JSON.stringify({ categoryIds: ["cat_keep"] }),
+        config: JSON.stringify({
+          source: "dynamic",
+          categoryIds: ["cat_keep"],
+        }),
       },
     });
     expect(batchCalls[0]?.[3]).toMatchObject({ kind: "delete" });
@@ -98,18 +123,21 @@ describe("category permanent delete integrity", () => {
   });
 
   it("fails closed when a product is assigned after the initial usage read", async () => {
-    let selectCount = 0;
     const db = {
       select() {
-        selectCount++;
         return {
-          from() {
+          from(table: unknown) {
             return {
               kind: "guard",
+              all: async () => [],
               where() {
-                return selectCount === 1
-                  ? { limit: () => ({ all: async () => [] }) }
-                  : { all: async () => [] };
+                if (table === products) {
+                  return { limit: () => ({ all: async () => [] }) };
+                }
+                if (table === categories) {
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                }
+                return { all: async () => [] };
               },
             };
           },
@@ -122,7 +150,7 @@ describe("category permanent delete integrity", () => {
         return { set: () => ({ where: () => ({ kind: "update" }) }) };
       },
       delete() {
-        return { where: () => ({ kind: "delete" }) };
+        return { where: () => ({ returning: () => ({ kind: "delete" }) }) };
       },
       async batch() {
         throw new Error("D1_ERROR: malformed JSON");
@@ -132,5 +160,88 @@ describe("category permanent delete integrity", () => {
     await expect(
       bulkDeleteCategories(db as never, ["cat_delete"], true),
     ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("requires trash before permanent deletion", async () => {
+    const db = {
+      select() {
+        return {
+          from(table: unknown) {
+            return {
+              where() {
+                if (table === products) {
+                  return { limit: () => ({ all: async () => [] }) };
+                }
+                return { all: async () => [{ id: "cat_active", deletedAt: null }] };
+              },
+            };
+          },
+        };
+      },
+      update() {
+        return { set: () => ({ where: () => ({ kind: "update" }) }) };
+      },
+      run() {
+        return { kind: "guard" };
+      },
+    };
+
+    await expect(
+      bulkDeleteCategories(db as never, ["cat_active"], true),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("does not orphan an active dynamic collection", async () => {
+    const db = {
+      select() {
+        return {
+          from(table: unknown) {
+            return {
+              where() {
+                if (table === products) {
+                  return { limit: () => ({ all: async () => [] }) };
+                }
+                if (table === categories) {
+                  return { all: async () => [{ id: "cat_delete", deletedAt: new Date() }] };
+                }
+                if (table === collections) {
+                  return { all: async () => [{
+                    id: "col_1",
+                    name: "Featured shoes",
+                    isActive: true,
+                    deletedAt: null,
+                    config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_delete"] }),
+                  }] };
+                }
+                return { all: async () => [] };
+              },
+              all: async () => table === collections ? [{
+                id: "col_1",
+                name: "Featured shoes",
+                isActive: true,
+                deletedAt: null,
+                config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_delete"] }),
+              }] : [],
+            };
+          },
+        };
+      },
+      update() {
+        return { set: () => ({ where: () => ({ kind: "update" }) }) };
+      },
+      run() {
+        return { kind: "guard" };
+      },
+    };
+
+    await expect(
+      bulkDeleteCategories(db as never, ["cat_delete"], true),
+    ).rejects.toThrow("without a source");
+  });
+
+  it("caps restore sets before constructing a D1 query", async () => {
+    const categoryIds = Array.from({ length: 91 }, (_, index) => `cat_${index}`);
+    await expect(restoreCategories({} as never, categoryIds))
+      .rejects.toBeInstanceOf(ValidationError);
   });
 });

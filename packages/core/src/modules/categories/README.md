@@ -15,10 +15,10 @@ Product category CRUD with FTS5 search, soft-delete, storefront queries, and col
 
 **`createCategorySchema` / `updateCategorySchema`** (identical):
 - `name`: string, 3-100 chars
-- `description`: string | null
+- `description`: trimmed string | null, max 100,000 characters
 - `slug`: string, 3-100 chars, regex `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`
-- `metaTitle`: string | null
-- `metaDescription`: string | null
+- `metaTitle`: trimmed string | null, max 70 characters
+- `metaDescription`: trimmed string | null, max 200 characters
 - `image`: `{ id, url, filename, size, createdAt }` | null
 
 **Exported types:** `CreateCategoryInput`, `UpdateCategoryInput`
@@ -37,11 +37,11 @@ Product category CRUD with FTS5 search, soft-delete, storefront queries, and col
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `createCategory` | `(db, data)` | Slug uniqueness check among non-deleted. ID format: `cat_{nanoid}`. Returns `{ id }`. |
-| `updateCategory` | `(db, id, data)` | Slug conflict check. Throws `NotFoundError` if missing. |
+| `createCategory` | `(db, data)` | Global active/trash slug uniqueness with typed race conflicts. ID format: `cat_{nanoid}`. Returns `{ id }`. |
+| `updateCategory` | `(db, id, data)` | Rejects trash edits, enforces global slug authority, and atomically bumps affected product revisions. |
 | `deleteCategory` | `(db, id)` | Soft-delete. Rejects if products assigned (up to 5 shown). Throws `ValidationError` with suggestion + affected product list. |
-| `bulkDeleteCategories` | `(db, categoryIds, permanent?)` | Checks for products first. Permanent mode cleans collection configs (strips deleted category IDs from `config.categoryIds` JSON). |
-| `restoreCategories` | `(db, categoryIds)` | Sets `deletedAt = null`. |
+| `bulkDeleteCategories` | `(db, categoryIds, permanent?)` | Caps 90 IDs and atomically rechecks products. Permanent mode is trash-only, cleans active/trashed collection configs, and refuses to orphan an active dynamic collection. |
+| `restoreCategories` | `(db, categoryIds)` | Caps 90 IDs, restores timestamps, and bumps affected product revisions. |
 | `permanentlyDeleteCategory` | `(db, id)` | Hard delete. Checks for products first. Throws `ConflictError` with count. |
 
 ## Storefront Queries (`categories.storefront.ts`)
@@ -58,9 +58,9 @@ Product category CRUD with FTS5 search, soft-delete, storefront queries, and col
 - **FTS5 search**: Admin list uses `ftsMatch("categories_fts", "categories", search)`
 - **Soft-delete with guards**: Cannot soft-delete if products still assigned (throws `ValidationError`)
 - **Permanent delete with collection cleanup**: `bulkDeleteCategories()` with `permanent=true` strips deleted category IDs from collection JSON configs
-- **Slug uniqueness**: Enforced at create and update time (only among non-deleted)
-- **Product count**: Admin list enriches results with per-category product count
-- **Batch queries**: `listCategories()` uses `db.batch()` for count + results + product counts
+- **Slug uniqueness**: Enforced globally across active and trashed categories; database races become typed conflicts
+- **Product count**: Admin list uses an indexed per-row count of all non-trashed assigned products, matching deletion truth
+- **Batch queries**: `listCategories()` batches only total count + the requested page; it does not group-scan every product row
 - **Unix timestamp formatting**: Stored as Unix epochs; converted to ISO strings for API responses
 
 ## Dependencies
