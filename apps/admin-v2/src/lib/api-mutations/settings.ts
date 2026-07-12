@@ -6,6 +6,7 @@ import {
   type FooterConfigInput,
   type HeaderConfigInput,
   type SettingsPayload,
+  type UpdateThemeSettingsInput,
   updateAuthSettings,
   updateBusinessSettings,
   updateEmailSettings,
@@ -181,7 +182,7 @@ export function useUpdateBusinessSettings() {
 export function useUpdateThemeSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: SettingsPayload) => updateThemeSettings({ data }),
+    mutationFn: (data: UpdateThemeSettingsInput) => updateThemeSettings({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.settings.theme() });
       toast.success("Theme settings updated");

@@ -106,7 +106,11 @@ function createTestApp() {
   });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
-  mocks.saveThemeSettings.mockResolvedValue(undefined);
+  mocks.getThemeSettings.mockResolvedValue({ colors: {}, revision: 1 });
+  mocks.saveThemeSettings.mockResolvedValue({
+    colors: { primary: "#000000" },
+    revision: 2,
+  });
   mocks.isValidMediaHostInput.mockReturnValue(true);
   mocks.saveMediaOptimizationSettings.mockResolvedValue({
     enabled: true,
@@ -467,7 +471,7 @@ describe("site settings cache invalidation", () => {
     {
       path: "/theme",
       method: "POST" as const,
-      body: { colors: { primary: "#000000" } },
+      body: { expectedRevision: 1, colors: { primary: "#000000" } },
       groups: ["layout"],
     },
     {
@@ -664,6 +668,7 @@ describe("site settings cache invalidation", () => {
     const { app, env } = createTestApp();
 
     const response = await requestJson(app, env, "POST", "/theme", {
+      expectedRevision: 1,
       colors: {
         primary: "#059669",
         background: "#fff; color: red",
@@ -673,6 +678,28 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("does not invalidate storefront caches after a stale theme publish", async () => {
+    const { app, env } = createTestApp();
+    mocks.saveThemeSettings.mockRejectedValueOnce(
+      new ConflictError(
+        "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
+      ),
+    );
+
+    const response = await requestJson(app, env, "POST", "/theme", {
+      expectedRevision: 1,
+      colors: { primary: "#2563eb" },
+    });
+
+    expect(response.status).toBe(409);
+    expect(mocks.saveThemeSettings).toHaveBeenCalledWith(
+      { id: "db" },
+      { primary: "#2563eb" },
+      1,
+    );
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 });

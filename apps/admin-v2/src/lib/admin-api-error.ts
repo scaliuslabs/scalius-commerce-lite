@@ -97,6 +97,10 @@ export function isAdminApiNotFoundError(error: unknown): boolean {
   return readAdminApiError(error)?.status === 404;
 }
 
+export function isAdminApiConflictError(error: unknown): boolean {
+  return readAdminApiError(error)?.status === 409;
+}
+
 export function readProductRevisionConflict(
   error: unknown,
 ): ProductRevisionConflict | null {

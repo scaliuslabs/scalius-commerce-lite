@@ -3,7 +3,13 @@
 // Cache invalidation is intentionally NOT here — it stays in the route handlers
 // which have access to KV from the Hono context.
 
-import { orders, products, siteSettings, settings } from "@scalius/database/schema";
+import {
+  orders,
+  products,
+  siteSettings,
+  settings,
+  themeSettings,
+} from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
@@ -35,6 +41,14 @@ const IMAGE_OPTIMIZATION_KEY = "image_optimization";
 const SEO_SETTINGS_CATEGORY = "seo";
 const DISCOVERY_SETTINGS_KEY = "discovery";
 const RETURN_POLICY_SETTINGS_KEY = "return_policy";
+const THEME_SETTINGS_ID = "default";
+const THEME_SETTINGS_CATEGORY = "theme";
+const THEME_COLORS_KEY = "storefront_colors";
+
+export interface ThemeSettingsDocument {
+  colors: Record<string, string>;
+  revision: number;
+}
 
 type PartialSeoDiscoverySettings = {
   [Section in keyof SeoDiscoverySettings]?: Partial<SeoDiscoverySettings[Section]>;
@@ -310,22 +324,11 @@ export async function saveFooterConfig(
 // Theme
 // ─────────────────────────────────────────
 
-export async function getThemeSettings(db: Database) {
-  const row = await db
-    .select({ value: settings.value })
-    .from(settings)
-    .where(
-      and(
-        eq(settings.category, "theme"),
-        eq(settings.key, "storefront_colors"),
-      ),
-    )
-    .get();
-
+function parseThemeColors(value: string | null | undefined): Record<string, string> {
   let colors: unknown = {};
-  if (row?.value) {
+  if (value) {
     try {
-      colors = JSON.parse(row.value);
+      colors = JSON.parse(value);
     } catch (e: unknown) {
       console.warn(
         "[Settings] Failed to parse storefront theme colors:",
@@ -333,15 +336,90 @@ export async function getThemeSettings(db: Database) {
       );
     }
   }
-  return { colors: sanitizeStorefrontThemeColors(colors as Record<string, unknown>) };
+  return sanitizeStorefrontThemeColors(colors as Record<string, unknown>);
+}
+
+export async function getThemeSettings(
+  db: Database,
+): Promise<ThemeSettingsDocument> {
+  const current = await db
+    .select({
+      colors: themeSettings.colors,
+      revision: themeSettings.revision,
+    })
+    .from(themeSettings)
+    .where(eq(themeSettings.id, THEME_SETTINGS_ID))
+    .get();
+
+  if (current) {
+    return {
+      colors: parseThemeColors(current.colors),
+      revision: current.revision,
+    };
+  }
+
+  // Pre-versioned installations stored colors in the generic settings table.
+  // A missing document is represented as revision 0 so the first writer can
+  // atomically claim revision 1 without overwriting another first writer.
+  const legacy = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(
+      and(
+        eq(settings.category, THEME_SETTINGS_CATEGORY),
+        eq(settings.key, THEME_COLORS_KEY),
+      ),
+    )
+    .get();
+  return { colors: parseThemeColors(legacy?.value), revision: 0 };
 }
 
 export async function saveThemeSettings(
   db: Database,
   colors: Record<string, unknown>,
-) {
+  expectedRevision: number,
+): Promise<ThemeSettingsDocument> {
   const sanitized = sanitizeStorefrontThemeColors(colors);
-  await upsertSetting(db, "theme", "storefront_colors", JSON.stringify(sanitized));
+  const serialized = JSON.stringify(sanitized);
+
+  if (expectedRevision === 0) {
+    const inserted = await db
+      .insert(themeSettings)
+      .values({
+        id: THEME_SETTINGS_ID,
+        colors: serialized,
+        revision: 1,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .onConflictDoNothing()
+      .returning({ revision: themeSettings.revision });
+    if (inserted[0]) return { colors: sanitized, revision: inserted[0].revision };
+    throw new ConflictError(
+      "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
+    );
+  }
+
+  const updated = await db
+    .update(themeSettings)
+    .set({
+      colors: serialized,
+      revision: sql`${themeSettings.revision} + 1`,
+      updatedAt: sql`unixepoch()`,
+    })
+    .where(
+      and(
+        eq(themeSettings.id, THEME_SETTINGS_ID),
+        eq(themeSettings.revision, expectedRevision),
+      ),
+    )
+    .returning({ revision: themeSettings.revision });
+  if (!updated[0]) {
+    throw new ConflictError(
+      "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
+    );
+  }
+  return { colors: sanitized, revision: updated[0].revision };
 }
 
 // ─────────────────────────────────────────

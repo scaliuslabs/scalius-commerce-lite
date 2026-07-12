@@ -169,6 +169,13 @@
       "when": 1783897979680,
       "tag": "0023_bouncy_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1783899154815,
+      "tag": "0024_kind_spitfire",
+      "breakpoints": true
     }
   ]
 }

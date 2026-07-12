@@ -24,6 +24,29 @@ export const settings = sqliteTable(
     (table) => [unique("settings_key_category").on(table.key, table.category)],
 );
 
+/**
+ * Published storefront theme document.
+ *
+ * Theme colors affect every buyer-facing route, so they need an explicit
+ * revision instead of the generic settings row's second-granularity timestamp.
+ * The singleton shape also leaves room for future semantic theme controls
+ * without scattering more presentation authority across generic keys.
+ */
+export const themeSettings = sqliteTable("theme_settings", {
+    id: text("id").primaryKey().default("default"),
+    colors: text("colors").notNull().default("{}"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    check("theme_settings_singleton", sql`${table.id} = 'default'`),
+    check("theme_settings_revision_positive", sql`${table.revision} >= 1`),
+]);
+
 export const siteSettings = sqliteTable("site_settings", {
     id: text("id").primaryKey(),
     singletonKey: text("singleton_key").notNull().default("default"),

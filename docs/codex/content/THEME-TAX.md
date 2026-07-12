@@ -85,6 +85,28 @@ model presented as if it were a complete theme system.
   theme tokens may affect its global colors/type only through the same published
   theme contract.
 
+## Implemented theme authority slice (2026-07-13)
+
+- Migration `0024_kind_spitfire.sql` adds the singleton `theme_settings`
+  document and copies any legacy `settings.theme/storefront_colors` value into
+  revision 1 without deleting the legacy row.
+- Reads prefer the versioned document and retain a revision-0 legacy fallback.
+  First publish uses insert-on-conflict and later publishes use revision CAS, so
+  two tabs cannot silently replace each other even within the same second.
+- The storefront layout projection reads the same document first and falls back
+  to the legacy row only when the versioned document is absent. Published color
+  values continue through the shared allowlist sanitizer.
+- A stale publish returns 409 before cache invalidation. The admin preserves the
+  local draft, fetches the latest revision, and lets the merchant explicitly
+  load that saved version or review and republish the retained draft.
+- The color workspace is palette-first, keeps raw semantic tokens in collapsed
+  advanced disclosure, shows published revision/dirty state in a persistent
+  publish bar, and disables all mutations without `settings.general.edit`.
+
+This slice deliberately does not claim the larger semantic theme system is
+finished. Typography, density, radius, real-route isolated previews, automated
+contrast enforcement, publish history, and rollback remain follow-up work.
+
 ## Shared UI direction
 
 - Route-backed compact subsections, a persistent readiness/preview rail, one
