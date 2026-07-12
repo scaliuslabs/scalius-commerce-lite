@@ -304,11 +304,11 @@ export function orderSelectedOptionValueIds(
 
 export function assertVariantImageOwnership(
     imageId: string | null,
-    productImages: ReadonlyMap<string, { status: "ready" | "trashed" | "deleting" | "deleted" }>,
+    attachedSkuImages: ReadonlyMap<string, { status: "ready" | "trashed" | "deleting" | "deleted" }>,
     retainedImageId: string | null = null,
 ): void {
     if (!imageId) return;
-    const association = productImages.get(imageId);
+    const association = attachedSkuImages.get(imageId);
     if (!association || (
         association.status !== "ready"
         && !(association.status === "trashed" && imageId === retainedImageId)
@@ -472,7 +472,7 @@ export async function saveProductOptionMatrix(
     const definitionById = new Map(existingDefinitions.map((definition) => [definition.id, definition]));
     const valueById = new Map(existingValues.map((value) => [value.id, value]));
     const activeVariantById = new Map(existingVariants.map((variant) => [variant.id, variant]));
-    const productImages = new Map(productImageRows.map((image) => [image.id, { status: image.status }]));
+    const attachedSkuImages = new Map(productImageRows.map((image) => [image.id, { status: image.status }]));
     const definitionIdMap = new Map<string, string>();
     const valueIdMap = new Map<string, string>();
 
@@ -524,7 +524,7 @@ export async function saveProductOptionMatrix(
             : resolveRetiredCombinationCandidate(retiredCandidates, optionCombinationKey);
         assertVariantImageOwnership(
             variant.imageId,
-            productImages,
+            attachedSkuImages,
             activeVariant?.imageId ?? retiredVariant?.imageId ?? null,
         );
         if (retiredVariant) {

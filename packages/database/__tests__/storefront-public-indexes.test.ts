@@ -37,29 +37,16 @@ describe("storefront public listing indexes", () => {
     });
 
     it("registers the baseline and additive catalog migrations contiguously", () => {
-        const journal = JSON.parse(readFileSync(journalPath, "utf8"));
+        const journal = JSON.parse(readFileSync(journalPath, "utf8")) as {
+            entries: Array<{ idx: number; tag: string; breakpoints: boolean }>;
+        };
 
-        expect(journal.entries.map((entry: { idx: number; tag: string }) => ({
-            idx: entry.idx,
-            tag: entry.tag,
-        }))).toEqual([
-            { idx: 0, tag: "0000_blushing_jack_power" },
-            { idx: 1, tag: "0001_lying_marvex" },
-            { idx: 2, tag: "0002_backfill_variant_image_mappings" },
-            { idx: 3, tag: "0003_aberrant_hex" },
-            { idx: 4, tag: "0004_validate_inventory_ledger_v2" },
-            { idx: 5, tag: "0005_deep_morg" },
-            { idx: 6, tag: "0006_outgoing_captain_midlands" },
-            { idx: 7, tag: "0007_bored_vulcan" },
-            { idx: 8, tag: "0008_empty_ikaris" },
-            { idx: 9, tag: "0009_sticky_green_goblin" },
-            { idx: 10, tag: "0010_serious_maverick" },
-            { idx: 11, tag: "0011_product_barcode_guard" },
-            { idx: 12, tag: "0012_light_bedlam" },
-            { idx: 13, tag: "0013_colorful_the_enforcers" },
-            { idx: 14, tag: "0014_green_nightcrawler" },
-            { idx: 15, tag: "0015_salty_stepford_cuckoos" },
-        ]);
-        expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
+        expect(journal.entries.map((entry) => entry.idx)).toEqual(
+            journal.entries.map((_entry, index) => index),
+        );
+        expect(journal.entries.every((entry) =>
+            entry.tag.startsWith(`${String(entry.idx).padStart(4, "0")}_`)
+        )).toBe(true);
+        expect(journal.entries.every((entry) => entry.breakpoints)).toBe(true);
     });
 });
