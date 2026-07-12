@@ -4,7 +4,8 @@ import {
     products,
     categories,
     productVariants,
-    productImages,
+    productMedia,
+    media,
     productRichContent,
     productAttributeValues,
     productAttributes,
@@ -20,7 +21,7 @@ import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
-import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -42,12 +43,19 @@ import {
     rethrowProductVariantIdentityConstraint,
 } from "./products.variants";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import {
+    loadProductMediaProjections,
+    MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+    PRODUCT_MEDIA_REORDER_OFFSET,
+    resolveProductImageRepresentation,
+} from "./products.media";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
 // Each D1 statement accepts at most 100 bound parameters. Keep multi-row
 // product aggregate inserts comfortably below that boundary.
 const PRODUCT_AGGREGATE_INSERT_CHUNK = 18;
+const PRODUCT_MEDIA_INSERT_CHUNK = 12;
 const MAX_PRODUCT_ATTRIBUTE_ASSIGNMENTS = 90;
 
 async function assertActiveAttributeAssignments(
@@ -95,35 +103,277 @@ function defaultVariantValues(productId: string, price: number) {
     return defaultProductSkuValues(productId, price);
 }
 
-function prepareProductImageRows(
+type ProductMediaInput = CreateProductInput["media"][number];
+type ProductMediaPlanRow = ProductMediaInput & {
+    productId: string;
+    sortOrder: number;
+    kind: "image" | "video";
+    status: "ready" | "trashed" | "deleting" | "deleted";
+    existing: boolean;
+};
+
+type ProductMediaPlan = {
+    rows: ProductMediaPlanRow[];
+    existingRows: Array<{ id: string; mediaId: string }>;
+    retainedRows: ProductMediaPlanRow[];
+    newRows: ProductMediaPlanRow[];
+};
+
+export class ProductMediaSkuReferenceConflictError extends AppError {
+    constructor(details: {
+        affectedCount: number;
+        affectedAssociationIds: string[];
+        affectedSkus: Array<{ id: string; sku: string; imageId: string }>;
+    }) {
+        super(
+            409,
+            "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT",
+            "One or more removed images are still assigned to SKUs. Confirm that those SKUs should use the featured fallback.",
+            details,
+        );
+        this.name = "ProductMediaSkuReferenceConflictError";
+    }
+}
+
+async function validateProductMediaPlan(
+    db: Database,
     productId: string,
-    images: CreateProductInput["images"],
-    alwaysGenerateIds = false,
-    existingImageIdByUrl: ReadonlyMap<string, string> = new Map(),
-) {
-    const imageIdMap = new Map<string, string>();
-    const submittedImageIds = new Set<string>();
-    const rows = images.map((image, index) => {
-        if (submittedImageIds.has(image.id)) {
-            throw new ValidationError("Each product image may appear only once.");
+    submitted: CreateProductInput["media"],
+    existingProduct: boolean,
+): Promise<ProductMediaPlan> {
+    if (submitted.length > MAX_PRODUCT_MEDIA_ASSOCIATIONS) {
+        throw new ValidationError(`Attach at most ${MAX_PRODUCT_MEDIA_ASSOCIATIONS} media items to a product.`);
+    }
+    const associationIds = submitted.map((item) => item.id);
+    const mediaIds = submitted.map((item) => item.mediaId);
+    if (
+        new Set(associationIds).size !== associationIds.length
+        || new Set(mediaIds).size !== mediaIds.length
+    ) {
+        throw new ValidationError("Product media association and asset IDs must be unique.");
+    }
+    const primaryCount = submitted.filter((item) => item.isPrimary).length;
+    if (submitted.length > 0 && primaryCount !== 1) {
+        throw new ValidationError("Choose exactly one featured media item.");
+    }
+
+    const existingRows = existingProduct
+        ? await db
+            .select({ id: productMedia.id, mediaId: productMedia.mediaId })
+            .from(productMedia)
+            .where(eq(productMedia.productId, productId))
+        : [];
+    const existingById = new Map(existingRows.map((row) => [row.id, row]));
+
+    const collisions = associationIds.length === 0
+        ? []
+        : await db
+            .select({ id: productMedia.id, productId: productMedia.productId, mediaId: productMedia.mediaId })
+            .from(productMedia)
+            .where(sql`${productMedia.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(associationIds)})
+            )`);
+    const collisionById = new Map(collisions.map((row) => [row.id, row]));
+
+    const assetRows = mediaIds.length === 0
+        ? []
+        : await db
+            .select({ id: media.id, kind: media.kind, status: media.status })
+            .from(media)
+            .where(sql`${media.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)})
+            )`);
+    const assetById = new Map(assetRows.map((row) => [row.id, row]));
+
+    const rows = submitted.map((item, sortOrder): ProductMediaPlanRow => {
+        const existing = existingById.get(item.id);
+        const collision = collisionById.get(item.id);
+        if (collision && (collision.productId !== productId || collision.mediaId !== item.mediaId)) {
+            throw new ValidationError("A product media association ID is already in use or points to another asset.");
         }
-        submittedImageIds.add(image.id);
-        const persistedId = alwaysGenerateIds
-            ? `img_${nanoid()}`
-            : image.id.startsWith("temp_")
-                ? existingImageIdByUrl.get(image.url) ?? `img_${nanoid()}`
-                : image.id;
-        imageIdMap.set(image.id, persistedId);
+        if (existing && existing.mediaId !== item.mediaId) {
+            throw new ValidationError("An existing product media association cannot be changed to another asset.");
+        }
+        const asset = assetById.get(item.mediaId);
+        if (!asset) throw new ValidationError("One or more selected media assets no longer exist.");
+        if (existing) {
+            if (asset.status !== "ready" && asset.status !== "trashed") {
+                throw new ValidationError("An attached media asset is no longer available.");
+            }
+        } else if (asset.status !== "ready") {
+            throw new ValidationError("Only ready media assets can be newly attached to a product.");
+        }
         return {
-            id: persistedId,
+            ...item,
             productId,
-            url: image.url,
-            alt: image.filename,
-            isPrimary: index === 0,
-            sortOrder: index,
+            sortOrder,
+            kind: asset.kind,
+            status: asset.status,
+            existing: Boolean(existing),
         };
     });
-    return { rows, imageIdMap };
+
+    return {
+        rows,
+        existingRows,
+        retainedRows: rows.filter((row) => row.existing),
+        newRows: rows.filter((row) => !row.existing),
+    };
+}
+
+function assertSubmittedSkuImage(
+    imageId: string | null,
+    rows: readonly ProductMediaPlanRow[],
+): void {
+    if (!imageId) return;
+    const association = rows.find((row) => row.id === imageId);
+    if (!association || association.kind !== "image" || association.status !== "ready") {
+        throw new ValidationError("A selected SKU image must be a ready image attached to this product.");
+    }
+}
+
+function buildProductMediaInsertStatements(
+    db: Database,
+    rows: readonly ProductMediaPlanRow[],
+): SQLiteBatchItem[] {
+    const statements: SQLiteBatchItem[] = [];
+    for (let index = 0; index < rows.length; index += PRODUCT_MEDIA_INSERT_CHUNK) {
+        statements.push(db.insert(productMedia).values(
+            rows.slice(index, index + PRODUCT_MEDIA_INSERT_CHUNK).map((row) => ({
+                id: row.id,
+                productId: row.productId,
+                mediaId: row.mediaId,
+                altText: row.altText,
+                isPrimary: row.isPrimary,
+                sortOrder: row.sortOrder,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })),
+        ));
+    }
+    return statements;
+}
+
+async function assertRemovedSkuImagesAcknowledged(
+    db: Database,
+    productId: string,
+    removedAssociationIds: readonly string[],
+    acknowledgedAssociationIds: readonly string[],
+): Promise<string[]> {
+    if (removedAssociationIds.length === 0) {
+        if (acknowledgedAssociationIds.length > 0) {
+            throw new ValidationError("SKU image fallback acknowledgement is stale. Reload the product and try again.");
+        }
+        return [];
+    }
+    const removedJson = JSON.stringify(removedAssociationIds);
+    const affected = await db
+        .select({
+            id: productVariants.id,
+            sku: productVariants.sku,
+            imageId: productVariants.imageId,
+        })
+        .from(productVariants)
+        .where(and(
+            eq(productVariants.productId, productId),
+            isNull(productVariants.deletedAt),
+            sql`${productVariants.imageId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${removedJson})
+            )`,
+        ));
+    const affectedAssociationIds = [...new Set(
+        affected.flatMap((row) => row.imageId ? [row.imageId] : []),
+    )];
+    const affectedIdSet = new Set(affectedAssociationIds);
+    const acknowledged = new Set(acknowledgedAssociationIds);
+    if (acknowledgedAssociationIds.some((id) => !affectedIdSet.has(id))) {
+        throw new ValidationError("SKU image fallback acknowledgement is stale. Reload the product and try again.");
+    }
+    if (affectedAssociationIds.some((id) => !acknowledged.has(id))) {
+        throw new ProductMediaSkuReferenceConflictError({
+            affectedCount: affected.length,
+            affectedAssociationIds: affectedAssociationIds.slice(0, 20),
+            affectedSkus: affected.slice(0, 5).map((row) => ({
+                id: row.id,
+                sku: row.sku,
+                imageId: row.imageId!,
+            })),
+        });
+    }
+    return affectedAssociationIds;
+}
+
+function buildProductMediaUpdateStatements(
+    db: Database,
+    productId: string,
+    plan: ProductMediaPlan,
+    clearSkuImageIds: readonly string[],
+): SQLiteBatchItem[] {
+    const statements: SQLiteBatchItem[] = [];
+    if (plan.existingRows.length > 0) {
+        statements.push(db.update(productMedia).set({
+            isPrimary: false,
+            sortOrder: sql`${productMedia.sortOrder} + ${PRODUCT_MEDIA_REORDER_OFFSET}`,
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(productMedia.productId, productId)));
+    }
+    if (clearSkuImageIds.length > 0) {
+        statements.push(db.update(productVariants).set({
+            imageId: null,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(productVariants.productId, productId),
+            isNull(productVariants.deletedAt),
+            sql`${productVariants.imageId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(clearSkuImageIds)})
+            )`,
+        )));
+    }
+
+    const submittedIds = plan.rows.map((row) => row.id);
+    statements.push(submittedIds.length > 0
+        ? db.delete(productMedia).where(and(
+            eq(productMedia.productId, productId),
+            sql`${productMedia.id} NOT IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(submittedIds)})
+            )`,
+        ))
+        : db.delete(productMedia).where(eq(productMedia.productId, productId)));
+
+    if (plan.retainedRows.length > 0) {
+        const retainedJson = JSON.stringify(plan.retainedRows.map((row) => ({
+            id: row.id,
+            altText: row.altText,
+            isPrimary: row.isPrimary ? 1 : 0,
+            sortOrder: row.sortOrder,
+        })));
+        statements.push(db.update(productMedia).set({
+            altText: sql`(
+                SELECT json_extract(value, '$.altText')
+                FROM json_each(${retainedJson})
+                WHERE json_extract(value, '$.id') = ${productMedia.id}
+            )`,
+            isPrimary: sql`(
+                SELECT CAST(json_extract(value, '$.isPrimary') AS INTEGER)
+                FROM json_each(${retainedJson})
+                WHERE json_extract(value, '$.id') = ${productMedia.id}
+            )`,
+            sortOrder: sql`(
+                SELECT CAST(json_extract(value, '$.sortOrder') AS INTEGER)
+                FROM json_each(${retainedJson})
+                WHERE json_extract(value, '$.id') = ${productMedia.id}
+            )`,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(productMedia.productId, productId),
+            sql`${productMedia.id} IN (
+                SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                FROM json_each(${retainedJson})
+            )`,
+        )));
+    }
+    statements.push(...buildProductMediaInsertStatements(db, plan.newRows));
+    return statements;
 }
 
 function isSimpleDefaultSkuSet(variants: Array<{ isDefault: boolean; optionCombinationKey: string | null }>): boolean {
@@ -274,8 +524,9 @@ export async function listProducts(db: Database, options: {
     }
 
     const productIds: string[] = productResults.map((p) => p.id);
+    const productIdSet = JSON.stringify(productIds);
 
-    const [variantCounts, imageCounts, primaryImages, productSkus] = await db.batch([
+    const [variantCounts, mediaCounts, productSkus] = await db.batch([
         db
             .select({
                 productId: productVariants.productId,
@@ -283,29 +534,21 @@ export async function listProducts(db: Database, options: {
             })
             .from(productVariants)
             .where(
-                sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
+                sql`${productVariants.productId} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+                ) AND ${productVariants.deletedAt} IS NULL`,
             )
             .groupBy(productVariants.productId),
         db
             .select({
-                productId: productImages.productId,
-                count: sql<number>`count(${productImages.id})`,
+                productId: productMedia.productId,
+                count: sql<number>`count(${productMedia.id})`,
             })
-            .from(productImages)
-            .where(sql`${productImages.productId} IN ${productIds}`)
-            .groupBy(productImages.productId),
-        db
-            .select({
-                productId: productImages.productId,
-                url: productImages.url,
-            })
-            .from(productImages)
-            .where(
-                and(
-                    sql`${productImages.productId} IN ${productIds}`,
-                    eq(productImages.isPrimary, true),
-                ),
-            ),
+            .from(productMedia)
+            .where(sql`${productMedia.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+            )`)
+            .groupBy(productMedia.productId),
         db
             .select({
                 productId: productVariants.productId,
@@ -313,21 +556,27 @@ export async function listProducts(db: Database, options: {
             })
             .from(productVariants)
             .where(
-                sql`${productVariants.productId} IN ${productIds} AND ${productVariants.deletedAt} IS NULL`,
+                sql`${productVariants.productId} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+                ) AND ${productVariants.deletedAt} IS NULL`,
             )
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
     ]);
+    const mediaByProduct = await loadProductMediaProjections(db, productIds);
 
     const variantCountMap = new Map<string, number>(
         variantCounts.map((vc: { productId: string; count: number }) => [vc.productId, vc.count]),
     );
 
-    const imageCountMap = new Map<string, number>(
-        imageCounts.map((ic: { productId: string; count: number }) => [ic.productId, ic.count]),
+    const mediaCountMap = new Map<string, number>(
+        mediaCounts.map((ic: { productId: string; count: number }) => [ic.productId, ic.count]),
     );
 
     const primaryImageMap = new Map<string, string>(
-        primaryImages.map((pi: { productId: string; url: string }) => [pi.productId, pi.url]),
+        productIds.flatMap((productId) => {
+            const representation = resolveProductImageRepresentation(mediaByProduct.get(productId) ?? []);
+            return representation ? [[productId, representation.url] as const] : [];
+        }),
     );
 
     const skuMap = new Map<string, string>();
@@ -355,7 +604,7 @@ export async function listProducts(db: Database, options: {
             name: product.categoryName || "Uncategorized",
         },
         variantCount: variantCountMap.get(product.id) || 0,
-        imageCount: imageCountMap.get(product.id) || 0,
+        mediaCount: mediaCountMap.get(product.id) || 0,
         primaryImage: primaryImageMap.get(product.id) || null,
         sku: skuMap.get(product.id) || undefined,
     }));
@@ -381,7 +630,7 @@ export interface ProductPickerSummary {
 }
 
 function normalizeLookupIds(ids: string[]): string[] {
-    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 90);
 }
 
 /** Returns lightweight product metadata for already-known product IDs. */
@@ -400,25 +649,19 @@ export async function getProductsByIds(
             price: products.price,
             categoryId: products.categoryId,
             discountPercentage: products.discountPercentage,
-            primaryImage: sql<string | null>`(
-                SELECT ${productImages.url}
-                FROM ${productImages}
-                WHERE ${productImages.productId} = ${products.id}
-                  AND ${productImages.isPrimary} = 1
-                ORDER BY ${productImages.sortOrder} ASC
-                LIMIT 1
-            )`.as("primaryImage"),
         })
         .from(products)
         .where(and(inArray(products.id, lookupIds), isNull(products.deletedAt)));
 
-    return rows.sort(
-        (a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0),
-    );
+    const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
+    return rows.map((row) => ({
+        ...row,
+        primaryImage: resolveProductImageRepresentation(mediaByProduct.get(row.id) ?? [])?.url ?? null,
+    })).sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
 }
 
 /**
- * Returns full product details including variants and images.
+ * Returns full product details including variants and ordered media.
  * Returns null if the product does not exist.
  */
 export async function getProductDetails(
@@ -461,24 +704,12 @@ export async function getProductDetails(
 
     if (!result) return null;
 
-    const [variants, imageRows, richContent, attributeValues] = await Promise.all([
+    const [variants, mediaByProduct, richContent, attributeValues] = await Promise.all([
         db
             .select()
             .from(productVariants)
             .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
-        db
-            .select({
-                id: productImages.id,
-                productId: productImages.productId,
-                url: productImages.url,
-                alt: productImages.alt,
-                isPrimary: productImages.isPrimary,
-                sortOrder: productImages.sortOrder,
-                createdAt: productImages.createdAt,
-            })
-            .from(productImages)
-            .where(eq(productImages.productId, id))
-            .orderBy(productImages.sortOrder),
+        loadProductMediaProjections(db, [id]),
         db
             .select()
             .from(productRichContent)
@@ -493,15 +724,6 @@ export async function getProductDetails(
             .from(productAttributeValues)
             .where(eq(productAttributeValues.productId, id)),
     ]);
-    const images = imageRows.map((image) => ({
-        id: image.id,
-        productId: image.productId,
-        url: image.url,
-        alt: image.alt,
-        isPrimary: image.isPrimary,
-        sortOrder: image.sortOrder,
-        createdAt: image.createdAt,
-    }));
     const [optionsByProduct, selectedOptionsByVariant] = await Promise.all([
         loadProductOptions(db, [id]),
         loadVariantSelectedOptions(db, variants.map((variant) => variant.id)),
@@ -518,10 +740,7 @@ export async function getProductDetails(
             selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
         })),
         options: optionsByProduct.get(id) ?? [],
-        images: images.map((img) => ({
-            ...img,
-            createdAt: requireProductTimestamp(img.createdAt, "image created timestamp"),
-        })),
+        media: mediaByProduct.get(id) ?? [],
         additionalInfo: richContent.map((item) => ({
             id: item.id,
             title: item.title,
@@ -551,14 +770,22 @@ export async function getProductStats(db: Database) {
                 count: sql<number>`count(DISTINCT ${products.id})`,
             })
             .from(products)
-            .innerJoin(
-                productImages,
-                and(
-                    eq(productImages.productId, products.id),
-                    eq(productImages.isPrimary, true),
-                ),
-            )
-            .where(sql`${products.deletedAt} IS NULL`),
+            .where(sql`${products.deletedAt} IS NULL AND EXISTS (
+                SELECT 1
+                FROM product_media AS admin_product_media
+                JOIN media AS admin_media ON admin_media.id = admin_product_media.media_id
+                LEFT JOIN media AS admin_poster ON admin_poster.id = admin_media.poster_media_id
+                WHERE admin_product_media.product_id = ${products.id}
+                  AND admin_media.status IN ('ready', 'trashed')
+                  AND (
+                    admin_media.kind = 'image'
+                    OR (
+                      admin_media.kind = 'video'
+                      AND admin_poster.kind = 'image'
+                      AND admin_poster.status IN ('ready', 'trashed')
+                    )
+                  )
+            )`),
         db
             .select({ count: sql<number>`count(*)` })
             .from(categories)
@@ -604,7 +831,7 @@ export async function getCategoryStats(db: Database) {
 // ─────────────────────────────────────────
 
 /**
- * Creates a new product along with its images, rich content, and attribute values.
+ * Creates a new product along with ordered media, rich content, and attributes.
  * Checks for slug uniqueness before inserting.
  * Returns the new product ID on success.
  */
@@ -626,7 +853,7 @@ export async function createProduct(
 
     const productId = "prod_" + nanoid();
     const defaultVariant = defaultVariantValues(productId, data.price);
-    const preparedImages = prepareProductImageRows(productId, data.images, true);
+    const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: [SQLiteBatchItem, ...SQLiteBatchItem[]] = [
@@ -659,11 +886,7 @@ export async function createProduct(
         batchOps.push(db.insert(productVariants).values(defaultVariant));
     }
 
-    if (preparedImages.rows.length > 0) {
-        batchOps.push(...preparedImages.rows.map((image) =>
-            db.insert(productImages).values(image)
-        ));
-    }
+    batchOps.push(...buildProductMediaInsertStatements(db, mediaPlan.newRows));
 
     if (data.optionMatrix) {
         const definitionIdMap = new Map<string, string>();
@@ -710,12 +933,7 @@ export async function createProduct(
                 if (!valueId) throw new ValidationError("A selected option value is not in this product matrix.");
                 return valueId;
             });
-            const imageId = matrixVariant.imageId
-                ? preparedImages.imageIdMap.get(matrixVariant.imageId)
-                : null;
-            if (matrixVariant.imageId && !imageId) {
-                throw new ValidationError("A selected SKU image is not in this product media set.");
-            }
+            assertSubmittedSkuImage(matrixVariant.imageId, mediaPlan.rows);
             const barcode = resolveNewVariantBarcode(
                 variantId,
                 matrixVariant.barcode,
@@ -725,7 +943,7 @@ export async function createProduct(
                 id: variantId,
                 productId,
                 optionCombinationKey: selectedOptionValueIds.join("|"),
-                imageId,
+                imageId: matrixVariant.imageId,
                 weight: matrixVariant.weight,
                 sku: matrixVariant.sku.trim(),
                 price: matrixVariant.price,
@@ -824,7 +1042,7 @@ export async function createProduct(
 }
 
 /**
- * Updates an existing product, replacing images, rich content, and attributes.
+ * Updates an existing product, replacing ordered media, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
  */
 export async function updateProduct(
@@ -879,34 +1097,25 @@ export async function updateProduct(
             sortOrder: item.sortOrder,
         }));
 
-    const [activeVariants, existingImages] = await Promise.all([
-        db
-            .select({
-                id: productVariants.id,
-                isDefault: productVariants.isDefault,
-                optionCombinationKey: productVariants.optionCombinationKey,
-            })
-            .from(productVariants)
-            .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt))),
-        db
-            .select({ id: productImages.id, url: productImages.url })
-            .from(productImages)
-            .where(eq(productImages.productId, id)),
-    ]);
-    const preparedImages = prepareProductImageRows(
+    const activeVariants = await db
+        .select({
+            id: productVariants.id,
+            isDefault: productVariants.isDefault,
+            optionCombinationKey: productVariants.optionCombinationKey,
+        })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
+    const mediaPlan = await validateProductMediaPlan(db, id, data.media, true);
+    const submittedMediaIds = new Set(mediaPlan.rows.map((row) => row.id));
+    const removedAssociationIds = mediaPlan.existingRows
+        .map((row) => row.id)
+        .filter((associationId) => !submittedMediaIds.has(associationId));
+    const clearSkuImageIds = await assertRemovedSkuImagesAcknowledged(
+        db,
         id,
-        data.images,
-        false,
-        new Map(existingImages.map((image) => [image.url, image.id])),
+        removedAssociationIds,
+        data.acknowledgedSkuImageRemovalIds ?? [],
     );
-    const existingImageIds = new Set(existingImages.map((image) => image.id));
-    for (const image of data.images) {
-        if (!image.id.startsWith("temp_") && !existingImageIds.has(image.id)) {
-            throw new ValidationError("A submitted product image does not belong to this product.");
-        }
-    }
-    const submittedImageIds = preparedImages.rows.map((image) => image.id);
-    const submittedImageIdSet = JSON.stringify(submittedImageIds);
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
@@ -935,31 +1144,10 @@ export async function updateProduct(
             })
             .where(eq(products.id, id))
             .returning({ aggregateRevision: products.aggregateRevision }),
-        submittedImageIds.length > 0
-            ? db.delete(productImages).where(and(
-                eq(productImages.productId, id),
-                sql`${productImages.id} NOT IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${submittedImageIdSet})
-                )`,
-            ))
-            : db.delete(productImages).where(eq(productImages.productId, id)),
+        ...buildProductMediaUpdateStatements(db, id, mediaPlan, clearSkuImageIds),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
     ];
-
-    if (preparedImages.rows.length > 0) {
-        batchOps.push(...preparedImages.rows.map((image) =>
-            db.insert(productImages).values(image).onConflictDoUpdate({
-                target: productImages.id,
-                set: {
-                    url: image.url,
-                    alt: image.alt,
-                    isPrimary: image.isPrimary,
-                    sortOrder: image.sortOrder,
-                },
-            })
-        ));
-    }
 
     if (attributeValuesToInsert.length > 0) {
         for (let index = 0; index < attributeValuesToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
@@ -1234,7 +1422,7 @@ function deleteLowStockAlertsForProductBatch(
 }
 
 /**
- * Permanently deletes a product and all of its related data (variants, images, attributes, rich content).
+ * Permanently deletes a product and all of its related data (variants, media associations, attributes, rich content).
  * Throws an error if the product is linked to any existing orders or discounts.
  */
 export async function permanentlyDeleteProduct(
@@ -1260,7 +1448,7 @@ export async function permanentlyDeleteProduct(
         buildPermanentDeleteReferenceGuard(db, [id]),
         deleteLowStockAlertsForProductBatch(db, [id], variantIds),
         db.delete(productVariants).where(eq(productVariants.productId, id)),
-        db.delete(productImages).where(eq(productImages.productId, id)),
+        db.delete(productMedia).where(eq(productMedia.productId, id)),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
         db.delete(products).where(eq(products.id, id)),
@@ -1351,7 +1539,7 @@ export async function bulkDeleteProducts(
                 buildPermanentDeleteReferenceGuard(db, productIds),
                 deleteLowStockAlertsForProductBatch(db, productIds, variantIds),
                 db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
-                db.delete(productImages).where(inArray(productImages.productId, productIds)),
+                db.delete(productMedia).where(inArray(productMedia.productId, productIds)),
                 db.delete(productAttributeValues).where(inArray(productAttributeValues.productId, productIds)),
                 db.delete(productRichContent).where(inArray(productRichContent.productId, productIds)),
                 db.delete(products).where(inArray(products.id, productIds)),

@@ -236,10 +236,13 @@ describe("normalized product option matrix", () => {
     });
 
     it("rejects image IDs not owned by the product", () => {
-        const ownedImages = new Set(["img_primary", "img_detail"]);
+        const ownedImages = new Map([
+            ["pmed_primary", { status: "ready" as const }],
+            ["pmed_detail", { status: "ready" as const }],
+        ]);
         expect(() => assertVariantImageOwnership(null, ownedImages)).not.toThrow();
-        expect(() => assertVariantImageOwnership("img_primary", ownedImages)).not.toThrow();
-        expect(() => assertVariantImageOwnership("img_other_product", ownedImages))
+        expect(() => assertVariantImageOwnership("pmed_primary", ownedImages)).not.toThrow();
+        expect(() => assertVariantImageOwnership("pmed_other_product", ownedImages))
             .toThrow(ValidationError);
     });
 

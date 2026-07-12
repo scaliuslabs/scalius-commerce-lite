@@ -17,7 +17,7 @@ describe("normalized option-matrix image ownership", () => {
             variants: [{
                 id: "variant_cotton",
                 selectedOptionValueIds: ["value_cotton"],
-                imageId: "img_cotton",
+                imageId: "pmed_cotton",
                 sku: "FABRIC-COTTON",
                 price: 500,
                 stock: 3,
@@ -33,7 +33,7 @@ describe("normalized option-matrix image ownership", () => {
         });
 
         expect(result.success).toBe(true);
-        if (result.success) expect(result.data.variants[0]!.imageId).toBe("img_cotton");
+        if (result.success) expect(result.data.variants[0]!.imageId).toBe("pmed_cotton");
     });
 
     it("accepts a partial matrix where only some SKUs have an exact image", () => {
@@ -51,7 +51,7 @@ describe("normalized option-matrix image ownership", () => {
                 {
                     id: "variant_white",
                     selectedOptionValueIds: ["value_white"],
-                    imageId: "img_white",
+                    imageId: "pmed_white",
                     sku: "COLOR-WHITE",
                     price: 500,
                     stock: 3,
@@ -84,14 +84,30 @@ describe("normalized option-matrix image ownership", () => {
 
         expect(result.success).toBe(true);
         if (result.success) {
-            expect(result.data.variants.map((variant) => variant.imageId)).toEqual(["img_white", null]);
+            expect(result.data.variants.map((variant) => variant.imageId)).toEqual(["pmed_white", null]);
         }
     });
 
     it("rejects a concrete SKU image owned by another product", () => {
         expect(() => assertVariantImageOwnership(
-            "img_other_product",
-            new Set(["img_this_product"]),
+            "pmed_other_product",
+            new Map([["pmed_this_product", { status: "ready" as const }]]),
+        )).toThrow(ValidationError);
+    });
+
+    it("allows only an unchanged SKU assignment to retain a trashed exact image", () => {
+        const associations = new Map([
+            ["pmed_trashed", { status: "trashed" as const }],
+        ]);
+        expect(() => assertVariantImageOwnership(
+            "pmed_trashed",
+            associations,
+            "pmed_trashed",
+        )).not.toThrow();
+        expect(() => assertVariantImageOwnership(
+            "pmed_trashed",
+            associations,
+            null,
         )).toThrow(ValidationError);
     });
 });

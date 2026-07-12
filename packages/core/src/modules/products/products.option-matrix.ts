@@ -5,7 +5,8 @@ import {
     orderItems,
     orders,
     OrderStatus,
-    productImages,
+    productMedia,
+    media,
     productOptionDefinitions,
     productOptionValues,
     productVariantOptionValues,
@@ -47,7 +48,9 @@ const matrixVariantInputSchema = z.object({
     selectedOptionValueIds: z.array(z.string().trim().min(1))
         .min(1)
         .max(MAX_PRODUCT_OPTION_AXES),
-    imageId: z.string().trim().min(1).nullable(),
+    imageId: z.string().trim().min(10).max(80)
+        .regex(/^pmed_[A-Za-z0-9_-]+$/u)
+        .nullable(),
     sku: z.string().trim().min(3).max(100),
     price: z.number().min(0).max(MAX_PRODUCT_PRICE),
     stock: z.number().int().min(0),
@@ -301,11 +304,15 @@ export function orderSelectedOptionValueIds(
 
 export function assertVariantImageOwnership(
     imageId: string | null,
-    productImageIds: ReadonlySet<string>,
+    productImages: ReadonlyMap<string, { status: "ready" | "trashed" | "deleting" | "deleted" }>,
+    retainedImageId: string | null = null,
 ): void {
-    if (imageId && !productImageIds.has(imageId)) {
-        throw new ValidationError("A selected SKU image is not on this product.");
-    }
+    if (!imageId) return;
+    const association = productImages.get(imageId);
+    if (!association || (
+        association.status !== "ready"
+        && !(association.status === "trashed" && imageId === retainedImageId)
+    )) throw new ValidationError("A selected SKU image must be a ready image attached to this product.");
 }
 
 type RetiredCombinationCandidate = {
@@ -448,7 +455,10 @@ export async function saveProductOptionMatrix(
             )
             .where(eq(productOptionDefinitions.productId, productId)),
         db.select().from(productVariants).where(eq(productVariants.productId, productId)),
-        db.select({ id: productImages.id }).from(productImages).where(eq(productImages.productId, productId)),
+        db.select({ id: productMedia.id, status: media.status })
+            .from(productMedia)
+            .innerJoin(media, eq(media.id, productMedia.mediaId))
+            .where(and(eq(productMedia.productId, productId), eq(media.kind, "image"))),
     ]);
 
     const existingVariants = allProductVariants.filter((variant) => variant.deletedAt === null);
@@ -462,7 +472,7 @@ export async function saveProductOptionMatrix(
     const definitionById = new Map(existingDefinitions.map((definition) => [definition.id, definition]));
     const valueById = new Map(existingValues.map((value) => [value.id, value]));
     const activeVariantById = new Map(existingVariants.map((variant) => [variant.id, variant]));
-    const productImageIds = new Set(productImageRows.map((image) => image.id));
+    const productImages = new Map(productImageRows.map((image) => [image.id, { status: image.status }]));
     const definitionIdMap = new Map<string, string>();
     const valueIdMap = new Map<string, string>();
 
@@ -498,7 +508,6 @@ export async function saveProductOptionMatrix(
         if (!isDraftId(variant.id) && !activeVariantById.has(variant.id)) {
             throw new ValidationError("A SKU changed or no longer exists. Reload and try again.");
         }
-        assertVariantImageOwnership(variant.imageId, productImageIds);
         const orderedInputValueIds = orderSelectedOptionValueIds(
             input.options,
             variant.selectedOptionValueIds,
@@ -513,6 +522,11 @@ export async function saveProductOptionMatrix(
         const retiredVariant = activeVariant || !isDraftId(variant.id)
             ? null
             : resolveRetiredCombinationCandidate(retiredCandidates, optionCombinationKey);
+        assertVariantImageOwnership(
+            variant.imageId,
+            productImages,
+            activeVariant?.imageId ?? retiredVariant?.imageId ?? null,
+        );
         if (retiredVariant) {
             if (retiredVariant.reservedStock > 0 || retiredVariant.preorderStock > 0) {
                 throw new ConflictError(

@@ -31,7 +31,7 @@ const productInput = {
     excludeFromProductFeed: false,
     productCondition: DEFAULT_PRODUCT_CONDITION,
     slug: "main-shoe",
-    images: [],
+    media: [],
     attributes: [],
     additionalInfo: [],
 };
@@ -107,17 +107,46 @@ describe("product validation", () => {
         }).success).toBe(false);
     });
 
-    it("rejects unsafe product image sources before discovery pagination", () => {
+    it("validates stable product media associations and normalizes empty contextual alt", () => {
+        const parsed = createProductSchema.parse({
+            ...productInput,
+            media: [{
+                id: "pmed_primary_1",
+                mediaId: "media_primary_1",
+                altText: "   ",
+                isPrimary: true,
+            }],
+        });
+        expect(parsed.media[0]?.altText).toBeNull();
         expect(createProductSchema.safeParse({
             ...productInput,
-            images: [{
-                id: "image_1",
-                url: "//untrusted.example/image.jpg",
-                filename: "image.jpg",
-                size: 10,
-                createdAt: new Date(),
-            }],
-        }).success).toBe(false);
+            media: Array.from({ length: 250 }, (_, index) => ({
+                id: `pmed_item_${index}`,
+                mediaId: `media_item_${index}`,
+                altText: null,
+                isPrimary: index === 0,
+            })),
+        }).success).toBe(true);
+
+        for (const media of [
+            [{ id: "image_1", mediaId: "media_primary_1", altText: null, isPrimary: true }],
+            [
+                { id: "pmed_primary_1", mediaId: "media_same", altText: null, isPrimary: true },
+                { id: "pmed_detail_1", mediaId: "media_same", altText: null, isPrimary: false },
+            ],
+            [
+                { id: "pmed_primary_1", mediaId: "media_primary_1", altText: null, isPrimary: true },
+                { id: "pmed_detail_1", mediaId: "media_detail_1", altText: null, isPrimary: true },
+            ],
+            Array.from({ length: 251 }, (_, index) => ({
+                id: `pmed_item_${index}`,
+                mediaId: `media_item_${index}`,
+                altText: null,
+                isPrimary: index === 0,
+            })),
+        ]) {
+            expect(createProductSchema.safeParse({ ...productInput, media }).success).toBe(false);
+        }
     });
 
     it("canonicalizes and bounds product attribute assignments", () => {
