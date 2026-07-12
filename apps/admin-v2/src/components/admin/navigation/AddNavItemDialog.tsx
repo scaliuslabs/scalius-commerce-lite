@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
+import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import type { NavigationItem, NavigationSource } from "./types";
 import { getCategories } from "~/lib/api-functions/categories";
 import {
@@ -48,7 +49,6 @@ import {
   getNavigationPreviewProducts,
   type NavigationPreviewProductsInput,
 } from "~/lib/api-functions/navigation";
-import { getPages } from "~/lib/api-functions/pages";
 
 type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
 
@@ -125,6 +125,7 @@ export function AddNavItemDialog({
   // Custom/Label states
   const [customLabel, setCustomLabel] = useState("");
   const [customUrl, setCustomUrl] = useState("");
+  const customUrlResult = parseNavigationHref(customUrl);
 
   // Dynamic link states
   const [dynamicCategory, setDynamicCategory] = useState("");
@@ -194,23 +195,21 @@ export function AddNavItemDialog({
       }
 
       try {
-        const data = await getPages({
-          data: { page, limit: PAGE_SIZE, search: search || undefined },
-        });
-
-        const pgs: NavigationSource[] = data.pages.map((p) => ({
-          id: p.id,
-          name: p.title || p.slug,
-          slug: p.slug,
-          type: "page",
-          url: `/pages/${p.slug}`,
-        }));
+        const data = await getNavigationItems();
+        const normalizedSearch = search.trim().toLowerCase();
+        const matchingPages = (data.items.pages ?? []).filter((item) =>
+          !normalizedSearch ||
+          item.name.toLowerCase().includes(normalizedSearch) ||
+          item.slug.toLowerCase().includes(normalizedSearch),
+        );
+        const offset = (page - 1) * PAGE_SIZE;
+        const pgs = matchingPages.slice(offset, offset + PAGE_SIZE);
 
         setPageState((prev) => ({
           items: append ? [...prev.items, ...pgs] : pgs,
-          total: data.pagination.total,
-          page: data.pagination.page,
-          hasMore: data.pagination.page < data.pagination.totalPages,
+          total: matchingPages.length,
+          page,
+          hasMore: offset + pgs.length < matchingPages.length,
           isLoading: false,
           isLoadingMore: false,
           search,
@@ -430,11 +429,11 @@ export function AddNavItemDialog({
         });
       }
     } else if (activeType === "custom") {
-      if (customLabel.trim()) {
+      if (customLabel.trim() && customUrlResult.ok) {
         newItems.push({
           id: nanoid(),
           title: customLabel.trim(),
-          href: customUrl.trim() || undefined,
+          href: customUrlResult.href,
           subMenu: [],
         });
       }
@@ -460,7 +459,7 @@ export function AddNavItemDialog({
     if (activeType === "category") return selectedCategoryMap.size > 0;
     if (activeType === "page") return selectedPageMap.size > 0;
     if (activeType === "dynamic") return dynamicCategory && dynamicLabel.trim();
-    if (activeType === "custom") return customLabel.trim();
+    if (activeType === "custom") return customLabel.trim() && customUrlResult.ok;
     if (activeType === "label") return customLabel.trim();
     return false;
   };
@@ -948,7 +947,13 @@ export function AddNavItemDialog({
                       value={customUrl}
                       onChange={(e) => setCustomUrl(e.target.value)}
                       placeholder="e.g., /about or https://example.com"
+                      aria-invalid={!customUrlResult.ok}
                     />
+                    {!customUrlResult.ok && (
+                      <p className="text-xs text-destructive">
+                        {customUrlResult.reason}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

@@ -5,10 +5,11 @@ import { categories, pages, siteSettings } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError } from "@scalius/core/errors";
+import { NotFoundError, ServiceUnavailableError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../products/products.storefront";
 import { publicCategoryConditions } from "../categories/categories.publication";
+import { parseNavigationConfig } from "./navigation.validation";
 
 // ─────────────────────────────────────────
 // Types
@@ -159,12 +160,21 @@ export async function getNavigationMenus(db: Database) {
     const row = settingsRows[0];
     const publishedSlugs = new Set(categoryRows.map((category) => category.slug));
 
-    const headerConfig: Record<string, unknown> = (() => {
-        try { return row?.headerConfig ? JSON.parse(row.headerConfig) : {}; } catch { return {}; }
-    })();
-    const footerConfig: Record<string, unknown> = (() => {
-        try { return row?.footerConfig ? JSON.parse(row.footerConfig) : {}; } catch { return {}; }
-    })();
+    const parsePersistedConfig = (
+        type: "header" | "footer",
+        rawValue: string | null | undefined,
+    ): Record<string, unknown> => {
+        if (!rawValue) return {};
+        try {
+            return parseNavigationConfig(type, JSON.parse(rawValue));
+        } catch {
+            throw new ServiceUnavailableError(
+                `Stored ${type} navigation configuration is invalid. Re-save it in Settings.`,
+            );
+        }
+    };
+    const headerConfig = parsePersistedConfig("header", row?.headerConfig);
+    const footerConfig = parsePersistedConfig("footer", row?.footerConfig);
 
     return {
         headerConfig: filterNavigationByPublishedCategories(headerConfig, publishedSlugs) as Record<string, unknown>,
@@ -224,7 +234,7 @@ export async function saveNavigationConfig(
     config: Record<string, unknown>,
 ) {
     const configField = type === "header" ? "headerConfig" : "footerConfig";
-    const configJson = JSON.stringify(config);
+    const configJson = JSON.stringify(parseNavigationConfig(type, config));
 
     const [existing] = await db
         .select({ id: siteSettings.id })
@@ -270,7 +280,10 @@ export async function updateNavigationConfig(
     const configField = type === "header" ? "headerConfig" : "footerConfig";
     await db
         .update(siteSettings)
-        .set({ [configField]: JSON.stringify(config), updatedAt: sql`unixepoch()` })
+        .set({
+            [configField]: JSON.stringify(parseNavigationConfig(type, config)),
+            updatedAt: sql`unixepoch()`,
+        })
         .where(eq(siteSettings.id, id));
 }
 
@@ -325,7 +338,6 @@ export async function buildDefaultNavigation(db: Database): Promise<NavigationIt
         nav.push({
             id: "categories",
             title: "Categories",
-            href: "#",
             subMenu: categoriesData.map((cat) => ({
                 id: `cat_${cat.id}`,
                 title: cat.name,

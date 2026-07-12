@@ -63,12 +63,15 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                 {hasSubMenu ? (
                   <div class="group/item">
                     <div class="flex items-center justify-between">
-                      <a
-                        href={item.href || "#"}
-                        class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
-                      >
-                        {item.title}
-                      </a>
+                      {item.href ? (
+                        <a href={item.href} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                          {item.title}
+                        </a>
+                      ) : (
+                        <span class="flex-1 text-[16px] font-bold text-foreground py-2.5">
+                          {item.title}
+                        </span>
+                      )}
                       <button
                         type="button"
                         class="flex items-center justify-center w-10 h-10 -mr-2 text-muted-foreground hover:text-foreground active:bg-muted rounded-full transition-all"
@@ -96,12 +99,15 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                 {hasLevel2Sub ? (
                                   <div>
                                     <div class="flex items-center justify-between group/sub">
-                                      <a
-                                        href={level2Item.href || "#"}
-                                        class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
-                                      >
-                                        {level2Item.title}
-                                      </a>
+                                      {level2Item.href ? (
+                                        <a href={level2Item.href} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                          {level2Item.title}
+                                        </a>
+                                      ) : (
+                                        <span class="flex-1 text-[14px] font-semibold text-foreground py-2">
+                                          {level2Item.title}
+                                        </span>
+                                      )}
                                       <button
                                         type="button"
                                         class="flex items-center justify-center w-9 h-9 -mr-1 text-muted-foreground hover:text-foreground rounded-full transition-colors"
@@ -118,12 +124,15 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                           (level3Item) => {
                                             return (
                                               <li>
-                                                <a
-                                                  href={level3Item.href || "#"}
-                                                  class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5"
-                                                >
-                                                  {level3Item.title}
-                                                </a>
+                                                {level3Item.href ? (
+                                                  <a href={level3Item.href} class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5">
+                                                    {level3Item.title}
+                                                  </a>
+                                                ) : (
+                                                  <span class="block text-[13px] font-medium text-muted-foreground py-1.5">
+                                                    {level3Item.title}
+                                                  </span>
+                                                )}
                                               </li>
                                             );
                                           },
@@ -131,14 +140,15 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                       </ul>
                                     </div>
                                   </div>
-                                ) : (
-                                  <a
-                                    href={level2Item.href || "#"}
-                                    class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
-                                  >
-                                    {level2Item.title}
-                                  </a>
-                                )}
+                                ) : level2Item.href ? (
+                                    <a href={level2Item.href} class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                      {level2Item.title}
+                                    </a>
+                                  ) : (
+                                    <span class="block text-[14px] font-semibold text-foreground py-2">
+                                      {level2Item.title}
+                                    </span>
+                                  )}
                               </li>
                             );
                           })}
@@ -146,14 +156,15 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <a
-                    href={item.href || "#"}
-                    class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
-                  >
-                    {item.title}
-                  </a>
-                )}
+                ) : item.href ? (
+                    <a href={item.href} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                      {item.title}
+                    </a>
+                  ) : (
+                    <span class="block text-[16px] font-bold text-foreground py-2.5">
+                      {item.title}
+                    </span>
+                  )}
               </li>
             );
           })

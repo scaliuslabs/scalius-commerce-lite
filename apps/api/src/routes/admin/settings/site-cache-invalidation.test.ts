@@ -100,6 +100,10 @@ function createTestApp() {
   });
   mocks.isCurrencyCodeLocked.mockResolvedValue(false);
   mocks.saveCurrencySettings.mockResolvedValue(undefined);
+  mocks.getGeneralSettings.mockResolvedValue({
+    headerConfig: {},
+    footerConfig: {},
+  });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
   mocks.saveThemeSettings.mockResolvedValue(undefined);
@@ -243,6 +247,21 @@ describe("site settings cache invalidation", () => {
     expect(response.status).toBe(500);
     expect(body).toMatchObject({ success: false });
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
+  });
+
+  it("fails general settings reads visibly instead of returning empty success", async () => {
+    const { app, env } = createTestApp();
+    mocks.getGeneralSettings.mockRejectedValueOnce(new Error("D1 unavailable"));
+
+    const response = await app.request(
+      "/api/v1/admin/settings/general",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toMatchObject({ success: false });
   });
 
   it("exposes return policy settings on SEO reads", async () => {

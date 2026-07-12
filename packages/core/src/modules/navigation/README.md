@@ -42,7 +42,10 @@ Accepted input:
 
 ### `getNavigationMenus(db)`
 
-Returns header and footer configs from the `siteSettings` singleton. Each is JSON-parsed from `headerConfig` / `footerConfig`. Returns `{ header, footer }`.
+Returns header and footer configs from the `siteSettings` singleton. Stored JSON
+is parsed and validated; malformed or unsafe persisted configuration raises an
+explicit service-unavailable error instead of returning empty menus. Legacy
+`/pages/{slug}` links normalize to the real public `/{slug}` route.
 
 ### `getNavigationMenu(db, id)`
 
@@ -50,7 +53,10 @@ Returns a single navigation config by ID. Accepts `"header"` or `"footer"` as th
 
 ### `saveNavigationConfig(db, data)`
 
-Saves a navigation configuration. Uses `siteSettings` singleton upsert (insert with `onConflictDoUpdate` targeting `singletonKey`). Accepts `{ type: "header" | "footer", config }`. Generates a `settings_` prefixed nanoid for new rows.
+Validates and normalizes a navigation configuration before saving it. Internal
+and relative links remain same-store; external links must be credential-free
+HTTPS. Unsafe schemes, protocol-relative URLs, traversal, and unsafe characters
+are rejected before any database write.
 
 ### `updateNavigationConfig(db, id, data)`
 
@@ -88,7 +94,7 @@ const navigationItemSchema: z.ZodType<NavigationItem> = z.lazy(() =>
     z.object({
         id: z.string(),
         title: z.string(),
-        href: z.string().optional(),
+        href: navigationHrefSchema,
         subMenu: z.array(navigationItemSchema).optional(),
     })
 );
@@ -100,7 +106,9 @@ Schemas for header and footer configuration. The header config includes `topBar`
 
 ### `saveNavigationConfigSchema`
 
-Schema for the save operation: `{ type: "header" | "footer", config: z.record(z.string(), z.unknown()) }`. Uses `z.record()` for the config field to accommodate the flexible JSON structure.
+`parseNavigationConfig(type, config)` selects the matching header/footer schema,
+recursively validates links, and returns the normalized persisted shape. Empty
+or legacy `#` hrefs become label-only nodes.
 
 Exported type: `SaveNavigationConfigInput`.
 
@@ -165,5 +173,4 @@ API: GET /admin/navigation/items  -->  Admin AddNavItemDialog (picker)
 
 ## Known Gaps
 
-- **Public routes use raw `db` import**: Both `apps/api/src/routes/navigation.ts` and `apps/api/src/routes/header.ts` and `apps/api/src/routes/footer.ts` import `db` directly from `@scalius/database/client` instead of using `c.get("db")` from Hono context.
 - **No product collections**: The service only surfaces categories and pages. Collections and custom URLs are still handled in the admin UI. Dynamic filtered category links are assembled client-side, with server-side count preview through `getNavigationPreviewProductCount()`.

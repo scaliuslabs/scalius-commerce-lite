@@ -14,6 +14,9 @@ const SORTABLE_NAVIGATION_EDITOR_SOURCE = fileURLToPath(
 const SORTABLE_NAV_ITEM_SOURCE = fileURLToPath(
   new URL("./SortableNavItem.tsx", import.meta.url),
 );
+const ADD_NAV_ITEM_DIALOG_SOURCE = fileURLToPath(
+  new URL("./AddNavItemDialog.tsx", import.meta.url),
+);
 
 describe("NavigationBuilder bundle boundaries", () => {
   it("keeps dnd-kit behind the reorder-mode lazy boundary", () => {
@@ -44,5 +47,14 @@ describe("NavigationBuilder bundle boundaries", () => {
 
     expect(treeRowsSource).toContain("onOutdent(parentPath, index)");
     expect(treeRowsSource).toContain("canOutdent");
+  });
+
+  it("uses public page sources and the shared safe-link policy", () => {
+    const dialogSource = readFileSync(ADD_NAV_ITEM_DIALOG_SOURCE, "utf8");
+
+    expect(dialogSource).toContain("data.items.pages");
+    expect(dialogSource).toContain("parseNavigationHref(customUrl)");
+    expect(dialogSource).not.toContain("`/pages/${p.slug}`");
+    expect(dialogSource).not.toContain('from "~/lib/api-functions/pages"');
   });
 });
