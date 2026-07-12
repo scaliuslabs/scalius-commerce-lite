@@ -41,11 +41,11 @@ Customer Auth Flow (storefront):
 | File | Purpose |
 |------|---------|
 | `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `ProtectedRouteConfig`, `SystemRole`, `PermissionGroup`, `PermissionCategory`, `PermissionMetadata`, `RoleWithPermissions`, `UserPermissionOverride` |
-| `rbac/permissions.ts` | `PERMISSIONS` constant (81 permissions across 14 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
+| `rbac/permissions.ts` | `PERMISSIONS` constant (78 permissions across 13 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
 | `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (L1 Map + L2 KV + D1 batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), `clearPermissionCache()`, `clearAllPermissionCache()` |
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
 | `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
-| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds all 81 permissions and 5 system roles on first admin access. Sets first `role=admin` user as super admin. Runs once per isolate lifecycle (in-memory flag) and uses a versioned six-hour Cloudflare KV marker when a `CACHE` binding is supplied so fresh isolates can skip the expensive seed-current D1 batch. |
+| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent D1 batches. API middleware schedules reconciliation outside the request critical path, deduplicates it per isolate, and uses a versioned six-hour Cloudflare KV marker so fresh isolates normally need one KV read. |
 | `rbac/api-protection.ts` | Higher-order functions for wrapping API route handlers: `withPermission()`, `withAnyPermission()`, `withAllPermissions()`, `withSuperAdmin()`. Also `checkPermissionForApi()`, `checkAnyPermissionForApi()`, `checkAllPermissionsForApi()` helpers, and `unauthorizedResponse()` / `forbiddenResponse()` factory functions. These are Astro-style wrappers; the Hono API uses middleware instead. |
 | `rbac/index.ts` | Barrel re-export of all RBAC modules. |
 
@@ -85,7 +85,7 @@ Customer Auth Flow (storefront):
 2. User-level overrides (grant or deny from `user_permissions` table)
 3. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
 
-### 76 Permissions Across 13 Categories
+### 78 Permissions Across 13 Categories
 
 | Category | Count | Sensitive |
 |----------|-------|-----------|
@@ -99,7 +99,7 @@ Customer Auth Flow (storefront):
 | Media | 4 | No |
 | Attributes | 4 | No |
 | Analytics | 4 | No |
-| Settings | 16 | `general.*`, `delivery_providers.*`, `fraud_checker.*` |
+| Settings | 18 | `general.*`, `delivery_providers.*`, `fraud_checker.*`, `taxes.*` |
 | Team | 3 | `view`, `manage`, `manage_roles` |
 | Dashboard | 2 | No |
 
@@ -107,7 +107,7 @@ Customer Auth Flow (storefront):
 
 | Role | Permissions | Notes |
 |------|-------------|-------|
-| `super_admin` | All 76 | System role, cannot modify permissions |
+| `super_admin` | All 78 | System role, cannot modify permissions |
 | `manager` | All except `permanent_delete`, `orders.refund`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
 | `sales_rep` | Dashboard, products/categories/collections (view), orders (full CRUD + shipments), customers (view/create/edit/history), discounts (view) | System role |
 | `content_editor` | Dashboard, pages (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
@@ -140,8 +140,7 @@ The TanStack admin app now uses route/server-function guards rather than the old
 ### 3. RBAC Loader (`apps/admin-v2/src/middleware/rbac.server.ts`)
 
 - Returns immediately for a known super admin before importing Cloudflare env, database helpers, or core RBAC modules.
-- Calls `autoSeedRbacIfNeeded(db, kv)` before non-super-admin permission loads; keep the KV binding wired so seed-current checks are not repeated by every fresh isolate.
-- Loads user permissions via `getUserPermissions()` and returns permission arrays to the route context
+- Loads user permissions via `getUserPermissions()` and returns permission arrays to the route context. It never seeds or repairs roles on the page-request critical path.
 - Checks `isSuperAdmin()` and `hasAdminAccess()`
 - **Page-level protection**: `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/settings/account` are always accessible.
 
@@ -158,6 +157,7 @@ Then validates:
 - Invited admins with `user.mustEnrollTwoFactor = true` and `twoFactorEnabled = false` are blocked before RBAC except exact 2FA setup endpoints (`GET /2fa/info`, `POST /2fa/method`).
 - 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
+- Code-owned permission/role reconciliation runs through `waitUntil()` after effective permissions resolve. Existing D1 grants remain fail-closed authority for ordinary admins; a missing or expired seed marker must never delay an authenticated response.
 - Fine-grained route permission check via `getRoutePermission()`. Unmapped admin routes fail closed, including for super admins.
 - Scanner sessions use only the scanner allowlist and never inherit the minting admin's role or permissions.
 - Scanner QR token single-use state lives in `scanner_token_claims`, not KV. KV stores only the post-claim `scanner:session:*` payload with `claimTokenHash`.

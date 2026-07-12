@@ -92,6 +92,7 @@ function createContext(
     env?: Record<string, unknown>;
     db?: unknown;
     liveUser?: Record<string, unknown>;
+    executionCtx?: { waitUntil(promise: Promise<unknown>): void };
   } = {},
 ) {
   const headers = options.headers ?? {
@@ -115,6 +116,7 @@ function createContext(
     get: vi.fn((key: string) => (key === "db" ? db : undefined)),
     header: vi.fn(),
     env: { BETTER_AUTH_SECRET: TEST_SECRET, ...(options.env ?? {}) },
+    ...(options.executionCtx ? { executionCtx: options.executionCtx } : {}),
   };
 }
 
@@ -215,10 +217,15 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("synchronizes the RBAC catalog before reading effective permissions", async () => {
+  it("schedules RBAC catalog reconciliation outside the request critical path", async () => {
     const callOrder: string[] = [];
-    mocks.autoSeedRbacIfNeeded.mockImplementation(async () => {
+    let finishReconciliation!: () => void;
+    const reconciliation = new Promise<void>((resolve) => {
+      finishReconciliation = resolve;
+    });
+    mocks.autoSeedRbacIfNeeded.mockImplementation(() => {
       callOrder.push("seed");
+      return reconciliation;
     });
     mocks.getUserPermissions.mockImplementation(async () => {
       callOrder.push("permissions");
@@ -226,8 +233,10 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     });
     const next = vi.fn().mockResolvedValue(undefined);
     const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
+    const waitUntil = vi.fn();
     const context = createContext("/api/v1/admin/products", "GET", {
       env: { CACHE: cache },
+      executionCtx: { waitUntil },
     });
 
     await adminAuthMiddleware(context as never, next);
@@ -236,8 +245,11 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       expect.objectContaining({ id: "db" }),
       cache,
     );
-    expect(callOrder).toEqual(["seed", "permissions"]);
+    expect(callOrder).toEqual(["permissions", "seed"]);
+    expect(waitUntil).toHaveBeenCalledWith(reconciliation);
     expect(next).toHaveBeenCalledTimes(1);
+    finishReconciliation();
+    await reconciliation;
   });
 
   it("publishes the exact effective permission snapshot to downstream authority routes", async () => {

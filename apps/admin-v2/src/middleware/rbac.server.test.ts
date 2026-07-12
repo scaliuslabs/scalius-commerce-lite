@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   cfEnv: { CACHE: {} },
   db: { marker: "db" },
   getDb: vi.fn(),
-  autoSeedRbacIfNeeded: vi.fn(),
   getUserPermissions: vi.fn(),
   isSuperAdmin: vi.fn(),
   retryTransientD1: vi.fn((operation: () => unknown) => operation()),
@@ -14,10 +13,6 @@ vi.mock("cloudflare:workers", () => ({ env: mocks.cfEnv }));
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
-}));
-
-vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
-  autoSeedRbacIfNeeded: mocks.autoSeedRbacIfNeeded,
 }));
 
 vi.mock("@scalius/core/auth/rbac/helpers", () => ({
@@ -33,7 +28,6 @@ describe("loadUserPermissions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getDb.mockReturnValue(mocks.db);
-    mocks.autoSeedRbacIfNeeded.mockResolvedValue(undefined);
     mocks.getUserPermissions.mockResolvedValue(new Set(["orders.read"]));
     mocks.isSuperAdmin.mockResolvedValue(false);
     mocks.retryTransientD1.mockImplementation((operation: () => unknown) => operation());
@@ -48,7 +42,6 @@ describe("loadUserPermissions", () => {
     expect(context.hasAdminAccess).toBe(true);
     expect(context.permissions).toEqual(new Set());
     expect(mocks.getDb).not.toHaveBeenCalled();
-    expect(mocks.autoSeedRbacIfNeeded).not.toHaveBeenCalled();
     expect(mocks.retryTransientD1).not.toHaveBeenCalled();
     expect(mocks.getUserPermissions).not.toHaveBeenCalled();
     expect(mocks.isSuperAdmin).not.toHaveBeenCalled();
@@ -62,10 +55,6 @@ describe("loadUserPermissions", () => {
     expect(context.isSuperAdmin).toBe(false);
     expect(context.hasAdminAccess).toBe(true);
     expect(context.permissions).toEqual(new Set(["orders.read"]));
-    expect(mocks.autoSeedRbacIfNeeded).toHaveBeenCalledWith(
-      mocks.db,
-      mocks.cfEnv.CACHE,
-    );
     expect(mocks.getUserPermissions).toHaveBeenCalledWith(
       mocks.db,
       "user_1",

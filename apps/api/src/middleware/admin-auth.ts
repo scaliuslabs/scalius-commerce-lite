@@ -367,7 +367,6 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
     // getUserPermissions already checks isSuperAdmin internally and returns ALL
     // permissions for super admins — no need for a separate isSuperAdmin() query.
     const db = c.get("db");
-    await retryTransientD1(() => autoSeedRbacIfNeeded(db, c.env.CACHE));
     const userPerms = await getUserPermissions(
         db,
         user.id,
@@ -381,6 +380,20 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
     if (!hasAdminAccess) {
         throw new ForbiddenError("Admin access required");
+    }
+
+    // Seed-definition reconciliation is maintenance, not request authority.
+    // Existing D1 grants remain the fail-closed source for ordinary admins,
+    // while known super admins already resolve against the complete code-owned
+    // permission list. Never make an authenticated read wait for hundreds of
+    // idempotent role-grant repairs after a deploy or KV-marker expiry.
+    const reconciliation = retryTransientD1(() =>
+        autoSeedRbacIfNeeded(db, c.env.CACHE),
+    );
+    try {
+        c.executionCtx.waitUntil(reconciliation);
+    } catch {
+        await reconciliation;
     }
 
     c.set("adminPermissions", userPerms);
