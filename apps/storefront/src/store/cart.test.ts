@@ -147,6 +147,45 @@ describe("cart store", () => {
     });
   });
 
+  it("preserves discounts for presentation-only repairs but clears them for commercial changes", async () => {
+    const {
+      addToCart,
+      applyDiscount,
+      cartStore,
+      createCartItemKey,
+      hydrateCartFromStorage,
+      updateCartItemByKey,
+    } = await importFreshCartModule();
+    hydrateCartFromStorage();
+
+    const item = {
+      id: "lamp",
+      variantId: "variant_matte",
+      name: "Matte Lamp",
+      price: 2500,
+      image: "https://media.example.test/stale.webp",
+    };
+    const lineKey = createCartItemKey(item);
+    expect(addToCart(item)).toBe(true);
+    applyDiscount({
+      id: "disc_1",
+      code: "SAVE10",
+      type: "percentage",
+      valueType: "percentage",
+      discountValue: 10,
+      discountAmount: 250,
+    });
+
+    expect(updateCartItemByKey(lineKey, {
+      image: "https://media.example.test/matte.webp",
+      imageMediaId: "med_matte",
+    })).toBe(true);
+    expect(cartStore.get().discount?.code).toBe("SAVE10");
+
+    expect(updateCartItemByKey(lineKey, { price: 2400 })).toBe(true);
+    expect(cartStore.get().discount).toBeNull();
+  });
+
   it("canonicalizes saved line keys and merchant-defined option labels", async () => {
     localStorage.setItem(
       "cart",

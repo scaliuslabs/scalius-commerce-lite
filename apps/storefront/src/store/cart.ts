@@ -321,8 +321,13 @@ function applyLocalLinePatch(
     string,
     Omit<CartItem, "quantity">
   >,
+  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
-  return applyLinePatchesToLiveStore(patches, trustedExistingItemReplacements);
+  return applyLinePatchesToLiveStore(
+    patches,
+    trustedExistingItemReplacements,
+    options,
+  );
 }
 
 export function addToCart(
@@ -411,6 +416,7 @@ export function updateCartItemsByKeyAtomically(
 
   const patches: CartAbsoluteQuantityPatch[] = [];
   const replacements = new Map<string, Omit<CartItem, "quantity">>();
+  let hasCommercialChange = false;
   for (const { lineKey, updates } of updatesByLine) {
     const existingItem = current.items[lineKey];
     if (
@@ -429,6 +435,11 @@ export function updateCartItemsByKeyAtomically(
       return false;
     }
     const quantity = updates.quantity ?? existingItem.quantity;
+    hasCommercialChange ||=
+      (updates.price !== undefined && updates.price !== existingItem.price) ||
+      (updates.quantity !== undefined && updates.quantity !== existingItem.quantity) ||
+      (updates.freeDelivery !== undefined &&
+        updates.freeDelivery !== existingItem.freeDelivery);
     const refreshed = { ...existingItem, ...updates, quantity };
     const refreshedItem: Omit<CartItem, "quantity"> = {
       id: refreshed.id,
@@ -451,7 +462,9 @@ export function updateCartItemsByKeyAtomically(
     });
     replacements.set(lineKey, refreshedItem);
   }
-  return applyLocalLinePatch(patches, replacements).ok;
+  return applyLocalLinePatch(patches, replacements, {
+    preserveDiscount: !hasCommercialChange,
+  }).ok;
 }
 
 export function applyDiscount(discount: Discount): void {
@@ -587,6 +600,7 @@ function planLinePatches(
     string,
     Omit<CartItem, "quantity">
   >,
+  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
   const state = normalizeCartTotals(sourceState);
 
@@ -677,7 +691,7 @@ function planLinePatches(
   const nextState = normalizeCartTotals({
     ...state,
     items,
-    discount: null,
+    discount: options.preserveDiscount ? state.discount : null,
   });
   return {
     ok: true,
@@ -691,12 +705,14 @@ function applyLinePatchesToLiveStore(
     string,
     Omit<CartItem, "quantity">
   >,
+  options: { preserveDiscount?: boolean } = {},
 ): CartLinePatchResult {
   ensureCartHydrated();
   const result = planLinePatches(
     cartStore.get(),
     patches,
     trustedExistingItemReplacements,
+    options,
   );
   if (!result.ok) return result;
   cartStore.set(result.state);

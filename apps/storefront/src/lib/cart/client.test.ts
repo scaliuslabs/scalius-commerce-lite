@@ -353,6 +353,14 @@ describe("reconcileValidatedCartSnapshot", () => {
   });
 
   it("replaces an untrusted cart image with the authoritative resolved image snapshot", () => {
+    const discount = {
+      id: "disc_1",
+      code: "SAVE",
+      type: "percentage",
+      valueType: "percentage",
+      discountValue: 10,
+      discountAmount: 30,
+    };
     cartStore.set({
       items: {
         [validatedLineKey]: {
@@ -367,17 +375,20 @@ describe("reconcileValidatedCartSnapshot", () => {
       },
       totalItems: 2,
       totalAmount: 300,
-      discount: null,
+      discount,
     });
 
+    const discountCleared = vi.fn();
     expect(reconcileValidatedCartSnapshot(validationResult(false, {
       productImageMediaId: "med_exact_image",
       productImage: "https://media.example.test/exact.webp",
-    }))).toBe(true);
+    }), discountCleared)).toBe(true);
     expect(cartStore.get().items[validatedLineKey]).toEqual(expect.objectContaining({
       imageMediaId: "med_exact_image",
       image: "https://media.example.test/exact.webp",
     }));
+    expect(cartStore.get().discount).toEqual(discount);
+    expect(discountCleared).not.toHaveBeenCalled();
   });
 
   it("updates stale free-delivery eligibility from false to true before checkout totals are transferred", () => {

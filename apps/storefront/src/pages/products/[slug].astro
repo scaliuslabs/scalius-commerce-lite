@@ -581,6 +581,7 @@ const productCategoryAnalytics = productCategory
     data-product-price={String(buyerDisplayedPrice)}
     data-product-original-price={String(product.price)}
     data-product-image={serializedProductImageUrl}
+    data-product-image-media-id={product.imageMediaId ?? undefined}
     data-product-discount-type={product.discountType || ""}
     data-product-discount-percentage={String(product.discountPercentage || 0)}
     data-product-discount-amount={String(product.discountAmount || 0)}

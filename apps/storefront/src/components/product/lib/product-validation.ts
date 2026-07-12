@@ -205,6 +205,7 @@ export interface AddToCartValidation {
     quantity: number;
     variantId?: string;
     image?: string;
+    imageMediaId?: string;
     freeDelivery?: boolean;
   } | null;
 }
@@ -220,6 +221,7 @@ export function validateAddToCart(input: {
   trackInventory?: boolean;
   variantId?: string;
   image?: string;
+  imageMediaId?: string;
   freeDelivery?: boolean;
 }): AddToCartValidation {
   const errors: string[] = [];
@@ -276,6 +278,7 @@ export function validateAddToCart(input: {
       quantity: quantityValidation.value,
       variantId: input.variantId,
       image: input.image,
+      imageMediaId: input.imageMediaId,
       freeDelivery: input.freeDelivery,
     },
   };

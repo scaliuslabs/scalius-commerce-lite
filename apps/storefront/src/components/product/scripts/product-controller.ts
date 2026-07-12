@@ -35,14 +35,13 @@ import {
 } from "../lib/product-analytics";
 import { TOAST_CONFIG } from "../config";
 import type { ProductOptionDefinition } from "@/lib/api";
-import type { ProductMediaChangeDetail } from "./product-media-controller";
+import { resolveVariantCartMedia } from "../lib/cart-media";
 
 const state = {
   variants: [] as Variant[],
   options: [] as ProductOptionDefinition[],
   selection: {} as VariantSelection,
   productPricing: null as ProductPricing | null,
-  currentDisplayedImage: "",
   unavailableRequestedVariant: null as Variant | null,
   hasRequestedVariant: false,
   hasVariantSelectionInteraction: false,
@@ -103,7 +102,6 @@ export function init() {
 
   state.variants = loadVariantsFromDOM();
   state.options = loadOptionsFromDOM();
-  state.currentDisplayedImage = cache.container.dataset.productImage || "";
   state.productPricing = {
     basePrice: number(cache.container.dataset.productOriginalPrice),
     discountType: parseDiscountType(
@@ -142,25 +140,10 @@ export function init() {
     : (requested?.selection ??
       createInitialSelection(state.options, state.variants));
 
-  initImageSync();
   initQuantity();
   bindOptions();
   bindActions();
   refresh();
-}
-
-function initImageSync() {
-  window.addEventListener("product-media-change", ((
-    event: CustomEvent<ProductMediaChangeDetail>,
-  ) => {
-    if (
-      event.detail.kind === "image" &&
-      event.detail.source === "variant" &&
-      event.detail.url
-    ) {
-      state.currentDisplayedImage = event.detail.url;
-    }
-  }) as EventListener);
 }
 
 function initQuantity() {
@@ -511,6 +494,10 @@ function add(redirect: boolean) {
     discountPercentage: validation.variant.discountPercentage,
     discountAmount: validation.variant.discountAmount,
   });
+  const cartMedia = resolveVariantCartMedia(validation.variant, {
+    imageUrl: cache.container.dataset.productImage,
+    imageMediaId: cache.container.dataset.productImageMediaId,
+  });
   const cartData = validateAddToCart({
     productId: cache.container.dataset.productId,
     slug: cache.container.dataset.productSlug,
@@ -521,7 +508,7 @@ function add(redirect: boolean) {
     reservedStock: validation.variant.reservedStock,
     trackInventory: validation.variant.trackInventory,
     variantId: validation.variant.id,
-    image: state.currentDisplayedImage || cache.container.dataset.productImage,
+    ...cartMedia,
     freeDelivery: cache.container.dataset.productFreeDelivery === "true",
   });
   if (!cartData.valid || !cartData.data)
