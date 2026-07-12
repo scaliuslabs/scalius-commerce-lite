@@ -14475,15 +14475,14 @@
           },
           {
             "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1000,
-              "default": 1,
-              "description": "Page number"
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^feed-v1\\.[0-9a-z]+\\.[A-Za-z0-9_-]+$",
+              "description": "Opaque continuation cursor returned by the previous feed response"
             },
             "required": false,
-            "description": "Page number",
-            "name": "page",
+            "description": "Opaque continuation cursor returned by the previous feed response",
+            "name": "cursor",
             "in": "query"
           },
           {
@@ -14497,25 +14496,6 @@
             "required": false,
             "description": "Items per page",
             "name": "limit",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "newest",
-                "price-asc",
-                "price-desc",
-                "name-asc",
-                "name-desc",
-                "discount"
-              ],
-              "default": "newest",
-              "description": "Sort order"
-            },
-            "required": false,
-            "description": "Sort order",
-            "name": "sort",
             "in": "query"
           },
           {
@@ -14887,24 +14867,21 @@
                         "pagination": {
                           "type": "object",
                           "properties": {
-                            "page": {
-                              "type": "number"
-                            },
                             "limit": {
-                              "type": "number"
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 100
                             },
-                            "total": {
-                              "type": "number"
+                            "cursor": {
+                              "type": "string"
                             },
-                            "totalPages": {
-                              "type": "number"
+                            "hasNextPage": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
-                            "page",
                             "limit",
-                            "total",
-                            "totalPages"
+                            "hasNextPage"
                           ]
                         }
                       },

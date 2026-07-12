@@ -4309,17 +4309,13 @@ export type GetApiV1ProductsFeedData = {
          */
         search?: string;
         /**
-         * Page number
+         * Opaque continuation cursor returned by the previous feed response
          */
-        page?: number;
+        cursor?: string;
         /**
          * Items per page
          */
         limit?: number;
-        /**
-         * Sort order
-         */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
         /**
          * Minimum effective buyer-SKU price
          */
@@ -4436,10 +4432,9 @@ export type GetApiV1ProductsFeedResponses = {
                 updatedAt: string | null;
             }>;
             pagination: {
-                page: number;
                 limit: number;
-                total: number;
-                totalPages: number;
+                cursor?: string;
+                hasNextPage: boolean;
             };
         };
     };
