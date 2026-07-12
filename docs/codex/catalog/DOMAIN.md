@@ -11,6 +11,7 @@ Last reviewed: 2026-07-12
 5. **Resolved for new writes in batch 4: ledger v2 has one CAS-ordered edge per SKU mutation.** It records pool/generation identity and before/after/delta values for physical, reserved, and preorder counters. Legacy v1 rows remain an explicit non-foldable history boundary.
 6. **Resolved in batch 1: stock changes reconcile low-stock alerts in both directions.** Restocks and no-op corrections clear stale alerts when the configured threshold is no longer breached.
 7. **Resolved in batch 1: dashboard low-stock truth matches alert policy.** Only an explicit positive threshold enables low-stock state.
+8. **Resolved in the inventory/settings slice: manual stock writes preserve exact intent.** Relative and absolute operations require safe integers, reject overdrafts instead of clamping, enforce reason direction on the primary admin path, and retain ledger-v2/CAS/cache invalidation boundaries.
 
 ## P1 product/variant integrity
 
@@ -18,7 +19,7 @@ Last reviewed: 2026-07-12
 - Migration 0006 keeps audited Mojo SKU `var_-Dc_ytYPws_H9TIR5Ljns` and soft-retires the three exact unreferenced copies. Its precondition guard fails closed if the rows, stock, versions, references, or any other normalized collision differ from the audited state; copied stock is deliberately not summed without physical evidence.
 - Resolved in batches 2–3: bulk creates and mixed create/update spreadsheet plans commit in one D1 transaction; duplicate update IDs and normalized conflicts fail before writes.
 - Resolved in batch 5: product composition has mandatory `aggregateRevision` CAS across product, SKU, sort, and tax-classification writes. Category/attribute/tax cascades bump affected products atomically; typed 409 responses carry expected/current revisions.
-- Resolved across batches 5–6: barcode/type pairs are trimmed and checksum-validated at the application boundary; the database enforces canonical shape, pairing, supported types, and globally unique normalized identity. Scanner and admin lookup share the indexed identity.
+- Resolved across batches 5–6 and the SKU-subset slice: retail barcode/type pairs are trimmed and checksum-validated at the application boundary; new SKUs default to an internal Code 128 identity that is scanner-searchable but excluded from retail discovery identifiers. The database enforces canonical pairing and globally unique normalized identity. Scanner and admin lookup share the indexed identity.
 - Resolved in batch 5: SKU removal always soft-retires identity. Transactional guards recheck reservations, open orders, final-option topology, lifecycle, and stock version before any affected batch writes.
 - Resolved in batch 5: permanent product deletion is trash-only and rechecks order, discount, and inventory-history absence inside the deletion transaction.
 - Product aggregate image/attribute/rich-content writes and list enrichment can exceed D1’s 100-parameter limit. Bound/chunk at 90 or use per-row batch statements.
@@ -28,12 +29,13 @@ Last reviewed: 2026-07-12
 ## P1 attributes and collections
 
 - Resolved in batch 2: attribute value search/pagination and preset reconciliation use authoritative global/search totals and complete D1-safe used-value lookups.
-- Public attribute-filter resolution accepts deleted/non-filterable keys and is not capped below the D1 parameter limit.
-- Search facets derive from categories containing hits instead of the matching product set, so offered values can produce zero results.
-- Attribute deletion paths are inconsistent; bulk can bypass single-delete usage protections.
+- Resolved in the categories/attributes slice: public attribute-filter resolution accepts only active filterable definitions and buyer-resolvable assigned values, normalizes repeated values, and caps requests at 90 values.
+- Resolved in the categories/attributes slice: search facets apply FTS, optional category scope, and buyer-resolvable SKU eligibility to the exact matching product set. They no longer expand through categories containing hits and cannot advertise unrelated zero-result values.
+- Resolved in the categories/attributes slice: single and bulk attribute trash/permanent-delete use one atomic guard, reject assigned values, cap IDs at 90, and require trash state before permanent deletion. Category soft-delete now uses the same race guard as permanent deletion.
+- Resolved in the categories/attributes slice: admin attribute value counts and public ID-set lookups use one bound `json_each()` set, so 100–500 row reads do not exceed D1's 100-parameter ceiling.
 - One `(product_id, attribute_id)` value cannot model legitimate multi-valued attributes without delimiter hacks.
 - Collection detail and homepage resolvers use different category ordering/limits and can return different products for the same collection.
-- Collection `type` is largely cosmetic, config arrays are unbounded, category reads can become one query per category, and product IDs override categories regardless of copy.
+- Resolved in the collections slice: canonical `config.source` separates manual ordered membership from dynamic category membership, while `presentation` independently selects grid or carousel. Migration 0010 converts the demo-era representation once; runtime compatibility branches were removed. IDs are bounded to 90, publish readiness is enforced, and stale inactive-mode selections cannot leak into buyer results. Homepage category fan-out remains bounded but should eventually become one ranked query if collection counts justify it.
 - Collection ordering is not a validated unique permutation; concurrent creates and partial reorder payloads can duplicate ranks.
 
 ## Currency decision boundary
@@ -50,6 +52,7 @@ Last reviewed: 2026-07-12
 - Shared buyer-resolvable SKU eligibility separates visibility from availability.
 - Strict reservation batches use sellability checks, `stockVersion` CAS, deterministic movement claims, and rollback handling.
 - Stock writes invalidate product/list/search, feed, sitemap, exact product HTML, and shortcode targets.
+- Movement type filters use a `(type, created_at)` index and all inventory list inputs are bounded before D1 work.
 - Dedicated feed and sitemap projections remain separate from ordinary product listing reads.
 
 ## Required invariant tests

@@ -34,91 +34,57 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
+import type { ProductDetail } from "@/types/api-responses";
+import {
+  normalizeProductCondition,
+  PRODUCT_CONDITION_LABELS,
+} from "@scalius/shared/product-condition";
 
-interface ProductVariant {
-  id: string;
-  optionCombinationKey: string | null;
-  selectedOptions: Array<{ name: string; value: string }>;
-  weight: number | null;
-  sku: string | null;
-  price: number | null;
-  stock: number;
-  reservedStock: number;
-  isDefault?: boolean | null;
-  trackInventory?: boolean | null;
-  createdAt: Date | string | number;
-  updatedAt: Date | string | number;
-  deletedAt: Date | string | number | null;
-}
-
-interface ProductImage {
-  id: string;
-  url: string;
-  alt?: string | null;
-  altText?: string | null;
-  isPrimary: boolean;
-  sortOrder: number;
-  createdAt: Date | string | number;
-}
-
-interface ProductViewProps {
-  product: {
-    id: string;
-    name: string;
-    description: string | null;
-    price: number;
-    categoryId: string;
-    slug: string;
-    metaTitle: string | null;
-    metaDescription: string | null;
-    isActive: boolean;
-    discountPercentage: number | null;
-    freeDelivery: boolean;
-    createdAt: Date | string | number;
-    updatedAt: Date | string | number;
-    deletedAt: Date | string | number | null;
-    category: {
-      name: string | null;
-    } | null;
-    additionalInfo?: {
-      id: string;
-      title: string;
-      content: string;
-      sortOrder: number;
-    }[];
-    variants: ProductVariant[];
-    images: ProductImage[];
-  };
-}
+interface ProductViewProps { product: ProductDetail }
 
 export function ProductView({ product }: ProductViewProps) {
   const { getStorefrontPath } = useStorefrontUrl();
-  const { symbol } = useCurrency();
+  const { formatPrice } = useCurrency();
   const { products: productActions } = useCatalogActionPermissions();
   const primaryImage = product.images.find((img) => img.isPrimary);
   const otherImages = product.images.filter((img) => !img.isPrimary);
   const visibleMetaDescription = product.metaDescription?.trim() || null;
+  const statusLabel = product.deletedAt
+    ? "Trashed"
+    : product.isActive
+      ? "Active"
+      : "Draft";
+  const conditionLabel = PRODUCT_CONDITION_LABELS[
+    normalizeProductCondition(product.productCondition)
+  ];
+  const productDiscount = product.discountType === "flat"
+    ? product.discountAmount && product.discountAmount > 0
+      ? `${formatPrice(product.discountAmount)} off`
+      : null
+    : product.discountPercentage && product.discountPercentage > 0
+      ? `${product.discountPercentage}% off`
+      : null;
 
   return (
-    <div className="container max-w-[1400px] space-y-4 py-4">
+    <div className="container max-w-[1400px] space-y-3 py-3">
       <Card className="border-none shadow-none bg-transparent sm:bg-card">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col lg:flex-row gap-6 lg:items-start justify-between">
-            <div className="flex-1 space-y-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1 space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
                   {product.name}
                 </h1>
                 <Badge
-                  variant={product.isActive ? "default" : "secondary"}
+                  variant={product.isActive && !product.deletedAt ? "default" : "secondary"}
                   className={cn(
                     "rounded-md px-2 py-0.5 text-xs font-semibold",
-                    product.isActive
+                    product.isActive && !product.deletedAt
                       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 hover:bg-emerald-50"
                       : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {product.isActive ? "Active" : "Draft"}
+                  {statusLabel}
                 </Badge>
                 {product.freeDelivery && (
                   <Badge
@@ -128,19 +94,22 @@ export function ProductView({ product }: ProductViewProps) {
                     Free Delivery
                   </Badge>
                 )}
+                <Badge variant="outline" className="rounded-md px-1.5 py-0 text-[10px] text-muted-foreground">
+                  {conditionLabel}
+                </Badge>
               </div>
 
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
                   <DollarSign className="h-4 w-4" />
                   <span>Base Price:</span>
-                  <span className="font-semibold text-foreground">{symbol}{product.price.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                  <span className="font-semibold text-foreground">{formatPrice(product.price)}</span>
                 </div>
-                {product.discountPercentage && product.discountPercentage > 0 && (
+                {productDiscount && (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <PercentIcon className="h-4 w-4 text-green-600 dark:text-green-500" />
                     <span>Discount:</span>
-                    <span className="font-semibold text-green-600 dark:text-green-500">{product.discountPercentage}% OFF</span>
+                    <span className="font-semibold text-green-600 dark:text-green-500">{productDiscount}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -149,6 +118,17 @@ export function ProductView({ product }: ProductViewProps) {
                   <span className="font-medium text-foreground">
                     {product.category?.name || "Uncategorized"}
                   </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                  <Badge variant="outline" className={product.noIndex ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}>
+                    {product.noIndex ? "Noindex" : "Indexable"}
+                  </Badge>
+                  <Badge variant="outline" className={product.excludeFromSitemap ? "text-muted-foreground" : "text-emerald-700 dark:text-emerald-400"}>
+                    {product.excludeFromSitemap ? "Not in sitemap" : "In sitemap"}
+                  </Badge>
+                  <Badge variant="outline" className={product.excludeFromProductFeed ? "text-muted-foreground" : "text-emerald-700 dark:text-emerald-400"}>
+                    {product.excludeFromProductFeed ? "Not in feed" : "In feed"}
+                  </Badge>
                 </div>
               </div>
 
@@ -229,8 +209,8 @@ export function ProductView({ product }: ProductViewProps) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-1 space-y-4">
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
+        <div className="space-y-3">
           <Card>
             <CardHeader className="p-4 border-b">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -303,8 +283,8 @@ export function ProductView({ product }: ProductViewProps) {
           )}
         </div>
 
-        <div className="lg:col-span-2">
-          <Card className="h-full flex flex-col">
+        <div>
+          <Card>
             <CardHeader className="p-4 border-b">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -314,7 +294,7 @@ export function ProductView({ product }: ProductViewProps) {
                 <Badge variant="secondary" className="font-normal text-[10px] px-1.5 h-5">{product.variants.length} Total</Badge>
               </div>
             </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-auto">
+            <CardContent className="overflow-auto p-0">
               {product.variants.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Package className="h-8 w-8 mb-2 opacity-20" />
@@ -336,7 +316,14 @@ export function ProductView({ product }: ProductViewProps) {
                     {product.variants.map((v) => {
                       const isSimpleDefaultSku = v.isDefault === true && !v.optionCombinationKey;
                       const inventoryTracked = v.trackInventory !== false;
-                      const available = inventoryTracked ? Math.max(0, v.stock - v.reservedStock) : null;
+                      const available = inventoryTracked ? v.stock - v.reservedStock : null;
+                      const variantDiscount = v.discountType === "flat"
+                        ? v.discountAmount && v.discountAmount > 0
+                          ? `${formatPrice(v.discountAmount)} off`
+                          : null
+                        : v.discountType === "percentage" && v.discountPercentage && v.discountPercentage > 0
+                          ? `${v.discountPercentage}% off`
+                          : null;
                       const attributes = isSimpleDefaultSku
                         ? "Product SKU"
                         : [
@@ -350,7 +337,12 @@ export function ProductView({ product }: ProductViewProps) {
                             {attributes}
                           </TableCell>
                           <TableCell className="py-2.5 text-xs font-medium text-right text-foreground">
-                            {symbol}{(v.price ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            <div>{formatPrice(v.price ?? product.price)}</div>
+                            {variantDiscount && (
+                              <div className="text-[10px] font-normal text-emerald-600 dark:text-emerald-400">
+                                {variantDiscount}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="py-2.5 text-xs text-right text-muted-foreground">
                             {inventoryTracked ? v.stock : "No stock limit"}
@@ -372,9 +364,13 @@ export function ProductView({ product }: ProductViewProps) {
                             ) : (
                               <span className={cn(
                                 "text-xs font-bold",
-                                available <= 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-500"
+                                available < 0
+                                  ? "text-red-700 dark:text-red-400"
+                                  : available === 0
+                                    ? "text-amber-700 dark:text-amber-400"
+                                    : "text-emerald-700 dark:text-emerald-500"
                               )}>
-                                {available}
+                                {available < 0 ? `${available} deficit` : available}
                               </span>
                             )}
                           </TableCell>

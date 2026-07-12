@@ -12,12 +12,12 @@ Last reviewed: 2026-07-12
 6. **Resolved in batch 3: the option spreadsheet uses one atomic mixed variant edit plan.** Failed plans preserve drafts and show actionable inline error; successful plans reconcile authoritative returned rows.
 7. **Variant image configuration is tied to SEO and array position.** The form stores an HTML marker in `metaDescription` and maps options to images by array index. Persist explicit stable media associations.
 8. **Resolved in batch 3: collection product picker is one debounced, cancellable, paginated multi-category server query.** Loading, empty, failure, retry, and load-more are distinct; selected labels survive page/search changes.
-9. **Inventory hides operational deficits and allows false reason/sign pairs.** Admin clamps negative availability to zero, and accepts combinations such as positive “damage” or negative “stock received.” Show signed deficit and constrain reason by direction or use an absolute stocktake mode.
+9. **Resolved in the inventory/settings slice: inventory exposes exact signed truth.** The admin no longer clamps adjustments or availability, reason choices follow direction, and an explicit physical stocktake mode warns when the count exposes a reservation deficit.
 10. **Resolved in batch 2: single and bulk category permanent deletion share one atomic cleanup primitive.** Malformed collection config blocks deletion instead of leaving dangling references.
 11. **Resolved in batch 2: detail loaders redirect only on typed 404.** Permission, conflict, timeout, and upstream failure reach the route error boundary.
 12. **Resolved in batch 2: option add/edit/bulk drafts participate in navigation protection.**
 13. **Resolved in batch 2: competing form actions are inert while save is in flight.**
-14. **Destructive confirmation is inconsistent.** Collection and attribute delete/permanent-delete paths can execute immediately while products/categories confirm. Permanent delete requires a consistent impact summary and confirmation.
+14. **Partially resolved in the categories/attributes slice: attribute row and bulk trash/permanent-delete now share a compact impact confirmation, and the service protects assigned values atomically.** Collection destructive actions still need the same confirmation grammar; permanent actions should eventually require typed confirmation at the shared component boundary.
 15. **Resolved in batch 5: product editing is conflict-safe.** A fresh editor-owned snapshot, shared product/SKU revision, draft-preserving dialog, explicit reload, terminal deleted-product action, and persistent action-bar state prevent blind overwrite.
 16. **Resolved in batch 5: option duplication is local and unsaved.** It clears SKU, barcode, stock, and one option axis; the obsolete persisted duplicate and redundant bulk-update APIs are removed.
 
@@ -29,8 +29,10 @@ Last reviewed: 2026-07-12
 - Product names in the main table are not semantic links; several icon controls have no accessible names; inventory tabs lack tab semantics; loading overlays lack `aria-busy`/live status.
 - Mobile product management keeps the desktop table and clips category, price, variants, and actions horizontally without a clear scroll affordance. Use a compact mobile row/card projection while preserving desktop density.
 - General Settings contains thirteen in-memory tabs with no stable URLs. Currency, SEO/discovery, media, scanner, and other major areas need route-backed, permission-aware navigation.
-- Inventory lacks alert acknowledgement, movement filters, actor/order links, date range, export, and explicit stocktake mode despite backend concepts already existing.
-- Collection form copy says categories and products combine, while runtime product IDs take precedence. Show an exact resolvable preview and make `manual` versus `dynamic` behavior real.
+- Inventory now has server-backed movement search/type filtering, order links, stable pagination, and explicit stocktake. It still lacks the alert inbox/acknowledgement UI, actor resolution, date range, cursor pagination, and streaming export.
+- Resolved in the collections slice: content source is explicit and independent from grid/carousel presentation. Manual products are an ordered, keyboard-operable list; dynamic collections expose category membership only. Membership edits participate in dirty-state and publish-readiness validation.
+- Dynamic category selection still reads a bounded 500-row option list rather than a paginated searchable picker; large catalogs need the same server-query pattern already used by the product picker.
+- Resolved in the categories/attributes slice: attribute creation is responsive at narrow widths, icon-only value controls have accessible names, case-insensitive duplicate presets are collapsed in both UI and validation, and names/options have bounded canonical input.
 
 ## Interaction grammar
 

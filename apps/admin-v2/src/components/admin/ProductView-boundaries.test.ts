@@ -10,7 +10,7 @@ describe("ProductView catalog truth boundaries", () => {
   it("does not render untracked simple SKUs as zero available stock", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
-    expect(source).toContain("trackInventory?: boolean | null");
+    expect(source).toContain('import type { ProductDetail }');
     expect(source).toContain("v.trackInventory !== false");
     expect(source).toContain("Product SKU");
     expect(source).not.toContain("Simple product SKU");
@@ -19,7 +19,19 @@ describe("ProductView catalog truth boundaries", () => {
     expect(source).not.toContain("variantOption1Label");
     expect(source).not.toContain("variantOption2Label");
     expect(source).toContain("available === null");
-    expect(source).not.toContain("const available = v.stock - v.reservedStock");
+    expect(source).toContain("const available = inventoryTracked ? v.stock - v.reservedStock : null");
+    expect(source).toContain('`${available} deficit`');
+  });
+
+  it("shows currency-aware discounts and discovery readiness", () => {
+    const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
+
+    expect(source).toContain("const { formatPrice } = useCurrency()");
+    expect(source).toContain("product.discountType === \"flat\"");
+    expect(source).toContain("variantDiscount");
+    expect(source).toContain('product.noIndex ? "Noindex" : "Indexable"');
+    expect(source).toContain('product.excludeFromSitemap ? "Not in sitemap" : "In sitemap"');
+    expect(source).toContain('product.excludeFromProductFeed ? "Not in feed" : "In feed"');
   });
 
   it("renders only the saved normalized SEO description", () => {

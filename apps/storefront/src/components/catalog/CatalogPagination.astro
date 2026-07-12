@@ -1,0 +1,74 @@
+---
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+interface Props {
+  page: number;
+  totalPages: number;
+  getPageUrl: (page: number) => string;
+}
+
+const { page, totalPages, getPageUrl } = Astro.props;
+
+function paginationItems(currentPage: number, pageCount: number): (number | "…")[] {
+  if (pageCount <= 7) return Array.from({ length: pageCount }, (_, index) => index + 1);
+  if (currentPage <= 4) return [1, 2, 3, 4, 5, "…", pageCount];
+  if (currentPage >= pageCount - 3) {
+    return [1, "…", pageCount - 4, pageCount - 3, pageCount - 2, pageCount - 1, pageCount];
+  }
+  return [1, "…", currentPage - 1, currentPage, currentPage + 1, "…", pageCount];
+}
+---
+
+{totalPages > 1 && (
+  <nav class="mb-20 mt-8 flex items-center justify-center lg:mb-8" aria-label="Pagination">
+    <div class="flex items-center space-x-1 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
+      {page > 1 ? (
+        <a
+          href={getPageUrl(page - 1)}
+          aria-label="Previous page"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </a>
+      ) : (
+        <span aria-disabled="true" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </span>
+      )}
+
+      {paginationItems(page, totalPages).map((item) =>
+        typeof item === "number" ? (
+          <a
+            href={getPageUrl(item)}
+            aria-label={`Page ${item}`}
+            aria-current={page === item ? "page" : undefined}
+            class:list={[
+              "inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors",
+              page === item
+                ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                : "border-gray-200 text-gray-700 hover:bg-gray-50",
+            ]}
+          >
+            {item}
+          </a>
+        ) : (
+          <span aria-hidden="true" class="inline-flex h-9 w-9 items-center justify-center text-sm text-gray-400">{item}</span>
+        ),
+      )}
+
+      {page < totalPages ? (
+        <a
+          href={getPageUrl(page + 1)}
+          aria-label="Next page"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 transition-colors hover:bg-gray-50"
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </a>
+      ) : (
+        <span aria-disabled="true" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300">
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </span>
+      )}
+    </div>
+  </nav>
+)}

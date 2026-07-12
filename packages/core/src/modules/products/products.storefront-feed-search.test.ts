@@ -414,6 +414,27 @@ describe("storefront feed category search", () => {
         expect(result.pagination.total).toBe(1);
     });
 
+    it("excludes products without usable primary media before feed pagination", async () => {
+        sqlite.prepare("DELETE FROM product_images WHERE product_id = ?")
+            .run("prod_slip_on");
+        sqlite.prepare("UPDATE product_images SET url = '//unsafe.example/image.jpg' WHERE product_id = ?")
+            .run("prod_loafer");
+
+        const result = await getStorefrontFeedProducts(db, {
+            search: "shoes",
+            page: 1,
+            limit: 10,
+        });
+
+        expect(result.products.map((product) => product.id)).toEqual(["prod_runner"]);
+        expect(result.pagination).toEqual({
+            page: 1,
+            limit: 10,
+            total: 1,
+            totalPages: 1,
+        });
+    });
+
     it("scopes every multi-token term to the category name column", async () => {
         const result = await getStorefrontFeedProducts(db, {
             search: "men clothing",

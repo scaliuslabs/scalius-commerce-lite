@@ -1,5 +1,6 @@
 import { products } from "@scalius/database/schema";
 import { eq, isNull, sql, type SQL } from "drizzle-orm";
+import { generateInternalCode128Barcode } from "@scalius/shared/barcode-identity";
 
 function hasCustomerOptionPredicate(alias: string): SQL {
     return sql`trim(coalesce(${sql.raw(`${alias}.option_combination_key`)}, '')) <> ''`;
@@ -138,6 +139,25 @@ export function publicProductHasAvailableBuyerSku(productId: SQL = sql`${product
     )`;
 }
 
+/** Feed/UCP pagination counts only products with usable primary media. */
+export function publicProductHasPrimaryDiscoveryImage(
+    productId: SQL = sql`${products.id}`,
+): SQL<boolean> {
+    return sql`EXISTS (
+        SELECT 1
+        FROM "product_images" AS discovery_primary_image
+        WHERE discovery_primary_image.product_id = ${productId}
+          AND discovery_primary_image.is_primary = 1
+          AND trim(discovery_primary_image.url) <> ''
+          AND discovery_primary_image.url NOT LIKE '//%'
+          AND (
+            instr(discovery_primary_image.url, ':') = 0
+            OR lower(discovery_primary_image.url) LIKE 'http://%'
+            OR lower(discovery_primary_image.url) LIKE 'https://%'
+          )
+    )`;
+}
+
 export function publicProductBaseConditions(): SQL[] {
     return [
         eq(products.isActive, true),
@@ -156,8 +176,9 @@ export function publicCollectionProductConditions(...extraConditions: SQL[]): SQ
 }
 
 export function defaultProductSkuValues(productId: string, price: number) {
+    const variantId = `var_default_${productId}`;
     return {
-        id: `var_default_${productId}`,
+        id: variantId,
         productId,
         optionCombinationKey: null,
         imageId: null,
@@ -177,6 +198,8 @@ export function defaultProductSkuValues(productId: string, price: number) {
         discountPercentage: 0,
         discountType: "percentage" as const,
         discountAmount: 0,
+        barcode: generateInternalCode128Barcode(variantId),
+        barcodeType: "code128" as const,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
         deletedAt: null,

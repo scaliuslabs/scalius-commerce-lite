@@ -9,6 +9,7 @@ import type { CartItem, CartItemOption } from "@/store/cart";
 import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
+import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
 
 export const prerender = false;
 
@@ -107,49 +108,21 @@ export const GET: APIRoute = async ({ params, url }) => {
       return productRedirect(slug, "variant_required");
     }
 
-    let finalPrice = product.discountedPrice;
-    if (itemToAdd?.price) {
-      const variantPrice = itemToAdd.price;
-
-      // Use variant-specific discount if available, otherwise use product discount
-      const hasVariantDiscount =
-        (itemToAdd.discountType === "flat" && itemToAdd.discountAmount) ||
-        (itemToAdd.discountType === "percentage" &&
-          itemToAdd.discountPercentage);
-
-      if (hasVariantDiscount) {
-        if (itemToAdd.discountType === "flat" && itemToAdd.discountAmount) {
-          finalPrice = Math.max(
-            0,
-            Math.round(variantPrice - itemToAdd.discountAmount),
-          );
-        } else if (
-          itemToAdd.discountType === "percentage" &&
-          itemToAdd.discountPercentage
-        ) {
-          finalPrice = Math.round(
-            variantPrice * (1 - itemToAdd.discountPercentage / 100),
-          );
-        }
-      } else {
-        // Apply product-level discount
-        if (product.discountType === "flat" && product.discountAmount) {
-          finalPrice = Math.max(
-            0,
-            Math.round(variantPrice - product.discountAmount),
-          );
-        } else if (
-          product.discountType === "percentage" &&
-          product.discountPercentage
-        ) {
-          finalPrice = Math.round(
-            variantPrice * (1 - product.discountPercentage / 100),
-          );
-        } else {
-          finalPrice = variantPrice;
-        }
-      }
-    }
+    let finalPrice = calculateVariantPrice(
+      {
+        basePrice: product.price,
+        discountType: product.discountType,
+        discountPercentage: product.discountPercentage,
+        discountAmount: product.discountAmount,
+        currencyDecimalPlaces: layoutData?.currency?.decimalPlaces,
+      },
+      {
+        price: itemToAdd.price,
+        discountType: itemToAdd.discountType,
+        discountPercentage: itemToAdd.discountPercentage,
+        discountAmount: itemToAdd.discountAmount,
+      },
+    ).finalPrice;
 
     const validation = await validateCartItems([{
       cartKey: `quick_buy:${product.id}:${itemToAdd.id}`,

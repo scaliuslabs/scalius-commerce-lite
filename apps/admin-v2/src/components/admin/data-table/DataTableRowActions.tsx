@@ -29,6 +29,7 @@ interface DataTableRowActionsProps {
   extraActions?: ExtraAction[];
   isLoading?: boolean;
   children?: ReactNode;
+  menuLabel?: string;
 }
 
 const LazyDataTableRowActionsMenu = lazy(async () => {
@@ -54,6 +55,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
   extraActions,
   isLoading = false,
   children,
+  menuLabel = "Open actions menu",
 }: DataTableRowActionsProps) {
   const [isMenuRequested, setIsMenuRequested] = useState(false);
   const [open, setOpen] = useState(false);
@@ -94,7 +96,7 @@ export const DataTableRowActions = memo(function DataTableRowActions({
       onClick={isMenuRequested ? undefined : requestMenuOpen}
       onKeyDown={isMenuRequested ? undefined : handleTriggerKeyDown}
     >
-      <span className="sr-only">Open menu</span>
+      <span className="sr-only">{menuLabel}</span>
       <MoreHorizontal className="h-4 w-4" />
     </Button>
   );

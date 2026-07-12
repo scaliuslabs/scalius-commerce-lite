@@ -56,7 +56,7 @@ Last reviewed: 2026-07-12
 - Resolved: explicit image-ID-to-variant/option-value media associations, one-time marker backfill, permanent marker removal, and stable reorder behavior.
 - Normalized option/value identities and unique active combinations.
 - Inventory ledger v2 with pool and before/after physical/reserved/preorder counters.
-- Catalog collection membership/rules separated from merchandising modules.
+- Resolved locally: collection membership is explicit in canonical `config.source`; independent `presentation` values are `grid` and `carousel`, with no runtime legacy inference.
 - Currency-aware catalog money representation and optional audited conversion workflow.
 
 ### Batch 5 — product aggregate safety and editor recovery

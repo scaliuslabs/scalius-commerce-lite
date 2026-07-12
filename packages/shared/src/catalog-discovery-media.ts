@@ -31,6 +31,23 @@ function parseAbsoluteHttpUrl(value: string | null | undefined): URL | null {
   }
 }
 
+/** Validate a persisted catalog image source without needing a store origin. */
+export function isCatalogDiscoveryImageSource(
+  imageUrl: string | null | undefined,
+): boolean {
+  const source = cleanString(imageUrl);
+  if (!source || source.startsWith("//") || hasUnsafeUrlChars(source)) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(source, "https://catalog-source.invalid/");
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeCatalogDiscoveryBaseUrl(
   baseUrl: string | null | undefined,
 ): string | null {
@@ -48,7 +65,7 @@ export function resolveCatalogDiscoveryImageUrl(
 ): string | null {
   const base = normalizeCatalogDiscoveryBaseUrl(baseUrl);
   const source = cleanString(imageUrl);
-  if (!base || !source || source.startsWith("//") || hasUnsafeUrlChars(source)) {
+  if (!base || !source || !isCatalogDiscoveryImageSource(source)) {
     return null;
   }
 
