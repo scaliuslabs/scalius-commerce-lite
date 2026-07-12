@@ -70,6 +70,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         price: 100,
         productName: "Discounted Product",
         variantLabel: null,
+        productImageMediaId: "med_order_snapshot",
         unitPriceMinor: 10_000,
         lineSubtotalMinor: 20_000,
         discountAmountMinor: 5_000,

@@ -27,9 +27,11 @@ Part 1 must match the declared MIME signature before any R2 part write.
 - A committed completion retry is read-only and verifies the media row still
   matches the upload session.
 - Metadata, moves, folders, trash, and restore use optimistic revisions.
-- Permanent delete requires trash, zero live poster references, durable
-  `deleting`, confirmed R2 deletion, then terminal D1 state. Retrying a
-  `deleting` row repairs the final transition.
+- Permanent delete requires trash and zero live poster/product associations or
+  retained order-item image snapshots,
+  returns bounded dependency counts/samples, atomically claims `deleting`
+  behind `NOT EXISTS` guards, confirms R2 deletion, then commits terminal D1
+  state. Retrying a `deleting` row repairs the final transition.
 - Expired multipart cleanup claims `aborting` before the R2 side effect and is
   bounded to 50 sessions per reconciliation call.
 
@@ -54,6 +56,7 @@ Mounted at `/api/v1/admin/media`:
 | GET/POST | `/folders` | Cursor list/create flat folders |
 | PUT/DELETE | `/folders/{id}` | CAS rename/delete |
 
-Product/storefront gallery integration is a separate owning slice. A video can
-be ready without a poster, but image-only buyer/discovery surfaces must later
-resolve a real image/poster and must never pass a video URL to `<img>`.
+Product associations reference Media IDs rather than copied URLs. A video can
+be ready without a poster, but image-only buyer/discovery surfaces resolve a
+real image/poster through the shared product-media resolver and never pass a
+video URL to `<img>`.

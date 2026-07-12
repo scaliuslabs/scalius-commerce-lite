@@ -266,7 +266,7 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 
 ## Dependencies
 
-- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productImages`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
+- `@scalius/database` -- `orders`, `orderItems`, `orderSupportRequests`, `orderSupportRequestEvents`, `customers`, `customerHistory`, `products`, `productVariants`, `productMedia`, `media`, `deliveryShipments`, `deliveryProviders`, `deliveryLocations`, `discountUsage`, `discountCustomerRedemptions`, `codTracking`
 - `inventory` module -- reservation, deduction, release, transitions
 - `payments` module -- COD collection/return, refund service
 - `delivery` module -- `DeliveryService`, `ShipmentTracker`

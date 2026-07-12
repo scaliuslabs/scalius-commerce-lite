@@ -67,9 +67,9 @@ const itemRows = [
     quantity: 2,
     price: 100,
     productName: "Receipt Product",
-    productImage: null,
-    variantSize: null,
-    variantColor: null,
+    productImageObjectKey: "media/med_receipt_image.webp",
+    productImageStatus: "trashed",
+    variantLabel: null,
     unitPriceMinor: 10_000,
     lineSubtotalMinor: 20_000,
     discountAmountMinor: 1_000,
@@ -304,7 +304,11 @@ describe("order receipt route", () => {
       totalAmountMinor: 25_000,
       taxLabel: "VAT",
       pricesIncludeTax: false,
-      items: itemRows,
+      items: [expect.objectContaining({
+        id: "item_1",
+        productName: "Receipt Product",
+        productImage: "media/med_receipt_image.webp",
+      })],
       supportRequests: [supportRequest],
       supportRequestActions,
       supportRequestIntro: "Send a request and the store will review it.",
@@ -316,6 +320,8 @@ describe("order receipt route", () => {
     expect(body.data?.order).not.toHaveProperty("paymentIntentId");
     expect(body.data?.order).not.toHaveProperty("shipments");
     expect(body.data?.order).not.toHaveProperty("deliveryProviders");
+    expect((body.data?.order?.items as Array<Record<string, unknown>>)[0])
+      .not.toHaveProperty("productImageObjectKey");
     expect(orderSupportMocks.getReceiptOrderSupportRequestStateForOrder).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

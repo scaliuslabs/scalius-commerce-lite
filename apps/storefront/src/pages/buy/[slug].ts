@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { getProductBySlug } from "@/lib/api";
 import { getLayoutData } from "@/lib/api/storefront";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
-import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { getProductImageUrl } from "@/lib/product-media";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { validateCartItems, type CartValidationIssue } from "@/lib/api/orders";
 import type { CartItem, CartItemOption } from "@/store/cart";
@@ -77,7 +77,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       });
     }
 
-    const { product, images, variants, category } = productData;
+    const { product, variants, category } = productData;
     const buyerVariantResolution = resolveBuyerVariants(variants);
     const buyerVariants = buyerVariantResolution.variants;
     const hasCustomerOptions = buyerVariantResolution.hasCustomerOptions;
@@ -150,13 +150,9 @@ export const GET: APIRoute = async ({ params, url }) => {
       return productRedirect(slug, "variant_not_found");
     }
 
-    const primaryImageUrl =
-      images.find((img) => img.id === itemToAdd?.imageId && hasProductImage(img.url))?.url ||
-      images.find((img) => img.isPrimary && hasProductImage(img.url))?.url ||
-      images.find((img) => hasProductImage(img.url))?.url ||
-      product.imageUrl ||
-      "";
-    const cartImageUrl = getProductImageUrl(primaryImageUrl, {
+    // Cart presentation comes from the same authoritative validation that
+    // checked price and stock. It is always an image/poster, never video.
+    const cartImageUrl = getProductImageUrl(validatedItem.productImage ?? "", {
       width: 160,
       height: 160,
       quality: 75,
@@ -170,6 +166,9 @@ export const GET: APIRoute = async ({ params, url }) => {
       name: validatedItem.productName,
       price: finalPrice,
       image: cartImageUrl,
+      ...(validatedItem.productImageMediaId
+        ? { imageMediaId: validatedItem.productImageMediaId }
+        : {}),
       quantity,
       variantId: persistedVariantId,
       ...(options.length > 0 ? { options } : {}),

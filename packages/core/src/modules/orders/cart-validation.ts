@@ -4,6 +4,10 @@ import { DEFAULT_CURRENCY, normalizeSupportedCurrencyCode } from "@scalius/share
 import { roundPrice } from "@scalius/shared/price-utils";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { variantOptionLabelSql } from "../products/products.option-model";
+import {
+    loadProductMediaProjections,
+    resolveSkuImageRepresentation,
+} from "../products/products.media";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -58,6 +62,10 @@ export interface StorefrontCartValidatedItem {
     inventoryTracked: boolean;
     availableQuantity: number | null;
     taxClassId: string | null;
+    /** Actual image/poster Media asset selected by the authoritative SKU resolver. */
+    productImageMediaId: string | null;
+    /** Derived presentation URL; never a video URL and never trusted for checkout facts. */
+    productImage: string | null;
 }
 
 export interface StorefrontCartValidationResult {
@@ -118,6 +126,7 @@ interface VariantRow {
     discountType: string | null;
     discountAmount: number | null;
     taxClassId: string | null;
+    imageId: string | null;
 }
 
 function variantLabel(variant: Pick<VariantRow, "isDefault" | "optionLabel"> | undefined): string | null {
@@ -296,6 +305,7 @@ export async function validateStorefrontCartItems(
                 discountType: productVariants.discountType,
                 discountAmount: productVariants.discountAmount,
                 taxClassId: productVariants.taxClassId,
+                imageId: productVariants.imageId,
             })
             .from(productVariants)
             .where(and(
@@ -308,6 +318,9 @@ export async function validateStorefrontCartItems(
     ]);
 
     const productMap = new Map((productRows as ProductRow[]).map((product) => [product.id, product]));
+    // Product-media enrichment is intentionally a bounded sequential read after
+    // the catalog authority query. It does not participate in price/stock truth.
+    const mediaByProduct = await loadProductMediaProjections(db, productIds);
     const variantsByProduct = new Map<string, VariantRow[]>();
     const variantMap = new Map<string, VariantRow>();
     const persistedVariantRows = (variantRows as VariantRow[])
@@ -426,6 +439,10 @@ export async function validateStorefrontCartItems(
         }
 
         const lineTotal = roundPrice(unitPrice * item.quantity, currencyCode);
+        const image = resolveSkuImageRepresentation(
+            mediaByProduct.get(product.id) ?? [],
+            variant.imageId,
+        );
         subtotal = roundPrice(subtotal + lineTotal, currencyCode);
         hasFreeDeliveryProduct ||= product.freeDelivery === true;
         validatedItems.push({
@@ -441,6 +458,8 @@ export async function validateStorefrontCartItems(
             inventoryTracked: variant.trackInventory,
             availableQuantity: Number.isFinite(availableQuantity) ? availableQuantity : null,
             taxClassId: variant.taxClassId ?? product.taxClassId,
+            productImageMediaId: image?.mediaId ?? null,
+            productImage: image?.url ?? null,
         });
     });
 

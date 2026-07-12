@@ -16,6 +16,9 @@ const transitionMocks = vi.hoisted(() => ({
 const settingsMocks = vi.hoisted(() => ({
     getCurrencySettings: vi.fn(),
 }));
+const mediaMocks = vi.hoisted(() => ({
+    loadProductMediaProjections: vi.fn(async () => new Map()),
+}));
 
 vi.mock("../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
@@ -35,6 +38,11 @@ vi.mock("../settings/site-settings.service", () => ({
     getCurrencySettings: settingsMocks.getCurrencySettings,
 }));
 
+vi.mock("../products/products.media", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../products/products.media")>()),
+    loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
+}));
+
 import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
 
 beforeEach(() => {
@@ -49,6 +57,7 @@ beforeEach(() => {
         currencySymbol: "৳",
         usdExchangeRate: "1",
     });
+    mediaMocks.loadProductMediaProjections.mockResolvedValue(new Map());
 });
 
 interface SkuRow {
@@ -58,6 +67,9 @@ interface SkuRow {
     variantDeletedAt: number | null;
     productActive: boolean;
     productDeletedAt: number | null;
+    imageId?: string | null;
+    productName?: string;
+    variantLabel?: string | null;
 }
 
 interface AdminOrderSkuIssue {
@@ -98,7 +110,12 @@ function activeLocationRows() {
 }
 
 function createSkuDb(rows: SkuRow[]) {
-    const where = vi.fn(async () => rows);
+    const where = vi.fn(async () => rows.map((row) => ({
+        imageId: null,
+        productName: `Product ${row.id}`,
+        variantLabel: null,
+        ...row,
+    })));
     const innerJoin = vi.fn(() => ({ where }));
     const from = vi.fn(() => ({ innerJoin }));
     const select = vi.fn(() => ({ from }));
@@ -137,7 +154,12 @@ function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationR
             };
         }),
     }));
-    const skuWhere = vi.fn(async () => rows);
+    const skuWhere = vi.fn(async () => rows.map((row) => ({
+        imageId: null,
+        productName: `Product ${row.id}`,
+        variantLabel: null,
+        ...row,
+    })));
     const select = vi.fn(() => {
         selectCall += 1;
         if (selectCall === 3) {
@@ -232,9 +254,73 @@ describe("resolveAdminOrderItemInventory", () => {
         ]);
 
         expect(result).toEqual([
-            { productId: "prod_1", variantId: "var_tracked", quantity: 2, price: 100, inventoryTracked: true },
-            { productId: "prod_2", variantId: "var_untracked", quantity: 1, price: 200, inventoryTracked: false },
+            {
+                productId: "prod_1",
+                variantId: "var_tracked",
+                quantity: 2,
+                price: 100,
+                inventoryTracked: true,
+                productName: "Product var_tracked",
+                variantLabel: null,
+                productImageMediaId: null,
+            },
+            {
+                productId: "prod_2",
+                variantId: "var_untracked",
+                quantity: 1,
+                price: 200,
+                inventoryTracked: false,
+                productName: "Product var_untracked",
+                variantLabel: null,
+                productImageMediaId: null,
+            },
         ]);
+    });
+
+    it("resolves the exact SKU image asset for a manual-order snapshot", async () => {
+        mediaMocks.loadProductMediaProjections.mockResolvedValueOnce(new Map([[
+            "prod_1",
+            [{
+                id: "pmed_exact",
+                mediaId: "med_exact",
+                kind: "image",
+                url: "https://media.example.test/exact.webp",
+                posterMediaId: null,
+                posterUrl: null,
+                altText: "Exact",
+                caption: null,
+                width: 800,
+                height: 800,
+                durationMs: null,
+                isPrimary: true,
+                sortOrder: 0,
+                status: "ready",
+            }],
+        ]]));
+        const { db } = createSkuDb([{
+            id: "var_exact",
+            productId: "prod_1",
+            trackInventory: true,
+            variantDeletedAt: null,
+            productActive: true,
+            productDeletedAt: null,
+            imageId: "pmed_exact",
+            productName: "Snapshot product",
+            variantLabel: "Large",
+        }]);
+
+        const [result] = await resolveAdminOrderItemInventory(db, [{
+            productId: "prod_1",
+            variantId: "var_exact",
+            quantity: 1,
+            price: 100,
+        }]);
+
+        expect(result).toEqual(expect.objectContaining({
+            productName: "Snapshot product",
+            variantLabel: "Large",
+            productImageMediaId: "med_exact",
+        }));
     });
 
     it("rejects missing SKUs before reading inventory metadata", async () => {

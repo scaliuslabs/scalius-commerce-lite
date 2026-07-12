@@ -7,6 +7,15 @@ import { validateStorefrontCartItems } from "./cart-validation";
 import { calculateStorefrontTaxQuote } from "../tax";
 import type { CreateStorefrontOrderCustomerIdentity, CreateStorefrontOrderInput } from "./orders.types";
 
+const mediaMocks = vi.hoisted(() => ({
+  loadProductMediaProjections: vi.fn(async () => new Map()),
+}));
+
+vi.mock("../products/products.media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../products/products.media")>()),
+  loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
+}));
+
 vi.mock("../tax", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../tax")>();
   return {
@@ -100,6 +109,7 @@ interface VariantRow {
   discountType: string | null;
   discountAmount: number | null;
   taxClassId: string | null;
+  imageId: string | null;
 }
 
 interface ShippingMethodRow {
@@ -152,6 +162,7 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
     discountType: null,
     discountAmount: null,
     taxClassId: null,
+    imageId: null,
     ...overrides,
   };
 }
@@ -282,6 +293,36 @@ describe("createStorefrontOrder tax discount parity", () => {
     });
     expect(result.commitPayload.items[0]?.id).toMatch(/^item_/);
     expect(result.commitPayload.items[0]?.id).not.toBe("cart:0:var_standard");
+  });
+
+  it("snapshots the actual resolved image asset in the checkout commit payload", async () => {
+    mediaMocks.loadProductMediaProjections.mockResolvedValueOnce(new Map([[
+      "prod_standard",
+      [{
+        id: "pmed_exact",
+        mediaId: "med_exact_image",
+        kind: "image",
+        url: "https://media.example.test/exact.webp",
+        posterMediaId: null,
+        posterUrl: null,
+        altText: "Exact SKU image",
+        caption: null,
+        width: 800,
+        height: 800,
+        durationMs: null,
+        isPrimary: true,
+        sortOrder: 0,
+        status: "ready",
+      }],
+    ]]));
+
+    const result = await placeOrder({
+      variants: [createVariant({ imageId: "pmed_exact" })],
+    });
+
+    expect(result.commitPayload.items[0]).toEqual(expect.objectContaining({
+      productImageMediaId: "med_exact_image",
+    }));
   });
 
   it("passes validated product scope into the same authoritative tax quote service", async () => {
@@ -1147,6 +1188,8 @@ describe("createStorefrontOrder prevalidated input trust", () => {
               inventoryTracked: false,
               availableQuantity: null,
               taxClassId: null,
+              productImageMediaId: null,
+              productImage: null,
             },
           ],
           subtotal: 1,

@@ -13,6 +13,8 @@ export type CartItem = {
   price: number;
   quantity: number;
   image?: string;
+  /** Actual image/poster Media asset identity; never a video asset. */
+  imageMediaId?: string;
   variantId?: string;
   options?: CartItemOption[];
   freeDelivery?: boolean;
@@ -79,7 +81,7 @@ type CartLinePatchResult = CartLinePatchFailure | CartLinePatchSuccess;
 export type CartLineItemUpdate = {
   lineKey: string;
   updates: Partial<
-    Pick<CartItem, "name" | "price" | "quantity" | "freeDelivery">
+    Pick<CartItem, "name" | "price" | "quantity" | "image" | "imageMediaId" | "freeDelivery">
   >;
 };
 
@@ -149,6 +151,10 @@ function normalizeStoredCartItem(value: unknown): VariantCartItem | null {
       Math.max(1, Math.floor(toNumber(value.quantity, 1))),
     ),
     image: typeof value.image === "string" ? value.image : undefined,
+    imageMediaId:
+      typeof value.imageMediaId === "string" && value.imageMediaId.trim()
+        ? value.imageMediaId.trim()
+        : undefined,
     variantId,
     options: normalizeCartItemOptions(value.options),
     freeDelivery:
@@ -383,7 +389,9 @@ export function removeCartItemByKey(itemKey: string): boolean {
 
 export function updateCartItemByKey(
   itemKey: string,
-  updates: Partial<Pick<CartItem, "name" | "price" | "quantity" | "freeDelivery">>,
+  updates: Partial<
+    Pick<CartItem, "name" | "price" | "quantity" | "image" | "imageMediaId" | "freeDelivery">
+  >,
 ): boolean {
   return updateCartItemsByKeyAtomically([{ lineKey: itemKey, updates }]);
 }
@@ -428,6 +436,7 @@ export function updateCartItemsByKeyAtomically(
       name: refreshed.name,
       price: refreshed.price,
       ...(refreshed.image ? { image: refreshed.image } : {}),
+      ...(refreshed.imageMediaId ? { imageMediaId: refreshed.imageMediaId } : {}),
       variantId: existingItem.variantId,
       ...(refreshed.options ? { options: refreshed.options } : {}),
       ...(refreshed.freeDelivery !== undefined

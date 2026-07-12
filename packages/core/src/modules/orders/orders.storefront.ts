@@ -329,6 +329,7 @@ export async function createStorefrontOrder(
             variantLabel: validatedItem.variantLabel,
             inventoryTracked: validatedItem.inventoryTracked,
             taxClassId: validatedItem.taxClassId,
+            productImageMediaId: validatedItem.productImageMediaId,
         };
     });
     const taxQuote = await calculateStorefrontTaxQuote(storefrontDb, {
@@ -426,6 +427,7 @@ export async function createStorefrontOrder(
                 productName: item.productName,
                 variantLabel: item.variantLabel,
                 inventoryTracked: item.inventoryTracked,
+                productImageMediaId: item.productImageMediaId,
                 unitPriceMinor: lineTax.unitPriceMinor,
                 lineSubtotalMinor: lineTax.grossAmountMinor,
                 discountAmountMinor: lineTax.discountMinor,

@@ -64,6 +64,8 @@ export type CartValidationResult = {
     variantLabel: string | null;
     freeDelivery: boolean;
     availableQuantity: number | null;
+    productImageMediaId: string | null;
+    productImage: string | null;
   }>;
   subtotal: number;
   hasFreeDeliveryProduct: boolean;

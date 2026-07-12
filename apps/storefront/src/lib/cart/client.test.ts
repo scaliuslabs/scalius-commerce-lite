@@ -298,6 +298,8 @@ describe("reconcileValidatedCartSnapshot", () => {
           variantLabel: "M / Black",
           freeDelivery,
           availableQuantity: 12,
+          productImageMediaId: null,
+          productImage: null,
           ...overrides,
         },
       ],
@@ -348,6 +350,34 @@ describe("reconcileValidatedCartSnapshot", () => {
       "delivery eligibility changed",
     );
     expect(messages).toEqual(["Discount removed - delivery eligibility changed."]);
+  });
+
+  it("replaces an untrusted cart image with the authoritative resolved image snapshot", () => {
+    cartStore.set({
+      items: {
+        [validatedLineKey]: {
+          id: "prod_1",
+          name: "Cotton Panjabi",
+          price: 150,
+          quantity: 2,
+          variantId: "variant_1",
+          image: "https://stale.example/video.mp4",
+          freeDelivery: false,
+        },
+      },
+      totalItems: 2,
+      totalAmount: 300,
+      discount: null,
+    });
+
+    expect(reconcileValidatedCartSnapshot(validationResult(false, {
+      productImageMediaId: "med_exact_image",
+      productImage: "https://media.example.test/exact.webp",
+    }))).toBe(true);
+    expect(cartStore.get().items[validatedLineKey]).toEqual(expect.objectContaining({
+      imageMediaId: "med_exact_image",
+      image: "https://media.example.test/exact.webp",
+    }));
   });
 
   it("updates stale free-delivery eligibility from false to true before checkout totals are transferred", () => {
@@ -410,6 +440,8 @@ describe("reconcileValidatedCartSnapshot", () => {
           variantLabel: null,
           freeDelivery: true,
           availableQuantity: 5,
+          productImageMediaId: null,
+          productImage: null,
         },
       ],
     })).toBe(false);
