@@ -371,13 +371,13 @@ describe("storefront feed category search", () => {
     it("returns paginated category-name matches whose product titles omit the term", async () => {
         const firstPage = await getStorefrontFeedProducts(db, {
             search: "shoes",
-            page: 1,
             limit: 2,
         });
+        expect(firstPage.pagination.cursor).toMatch(/^feed-v1\./);
         const secondPage = await getStorefrontFeedProducts(db, {
             search: "shoes",
-            page: 2,
             limit: 2,
+            cursor: firstPage.pagination.cursor,
         });
 
         expect(firstPage.products.map((product) => product.name)).toEqual([
@@ -385,15 +385,14 @@ describe("storefront feed category search", () => {
             "Everyday Loafer",
         ]);
         expect(firstPage.pagination).toEqual({
-            page: 1,
             limit: 2,
-            total: 3,
-            totalPages: 2,
+            cursor: expect.stringMatching(/^feed-v1\./),
+            hasNextPage: true,
         });
         expect(secondPage.products.map((product) => product.name)).toEqual([
             "Classic Runner",
         ]);
-        expect(secondPage.pagination.total).toBe(3);
+        expect(secondPage.pagination).toEqual({ limit: 2, hasNextPage: false });
         expect(
             [...firstPage.products, ...secondPage.products].some(
                 (product) => product.id === "prod_mixed",
@@ -401,17 +400,52 @@ describe("storefront feed category search", () => {
         ).toBe(false);
     });
 
+    it("uses a stable created-at/id keyset and rejects retired page scans", async () => {
+        insertProduct({
+            id: "prod_tie_a",
+            name: "Tie A",
+            slug: "tie-a",
+            categoryId: "cat_shoes",
+            createdAt: 50,
+        });
+        insertSimpleSku("prod_tie_a");
+        insertProduct({
+            id: "prod_tie_b",
+            name: "Tie B",
+            slug: "tie-b",
+            categoryId: "cat_shoes",
+            createdAt: 50,
+        });
+        insertSimpleSku("prod_tie_b");
+
+        const first = await getStorefrontFeedProducts(db, { limit: 1 });
+        const second = await getStorefrontFeedProducts(db, {
+            limit: 1,
+            cursor: first.pagination.cursor,
+        });
+
+        expect(first.products.map((product) => product.id)).toEqual(["prod_tie_b"]);
+        expect(second.products.map((product) => product.id)).toEqual(["prod_tie_a"]);
+        await expect(getStorefrontFeedProducts(db, {
+            page: 999,
+            limit: 1,
+        })).rejects.toThrow(/page pagination is retired/i);
+        await expect(getStorefrontFeedProducts(db, {
+            cursor: "page:999",
+            limit: 1,
+        })).rejects.toThrow(/invalid product feed cursor/i);
+    });
+
     it("matches an exact indexed category slug without a product-title match", async () => {
         const result = await getStorefrontFeedProducts(db, {
             search: "formal-footwear",
-            page: 1,
             limit: 10,
         });
 
         expect(result.products.map((product) => product.name)).toEqual([
             "Oxford Classic",
         ]);
-        expect(result.pagination.total).toBe(1);
+        expect(result.pagination).toEqual({ limit: 10, hasNextPage: false });
     });
 
     it("excludes products without usable primary media before feed pagination", async () => {
@@ -422,23 +456,19 @@ describe("storefront feed category search", () => {
 
         const result = await getStorefrontFeedProducts(db, {
             search: "shoes",
-            page: 1,
             limit: 10,
         });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_runner"]);
         expect(result.pagination).toEqual({
-            page: 1,
             limit: 10,
-            total: 1,
-            totalPages: 1,
+            hasNextPage: false,
         });
     });
 
     it("scopes every multi-token term to the category name column", async () => {
         const result = await getStorefrontFeedProducts(db, {
             search: "men clothing",
-            page: 1,
             limit: 10,
         });
 
@@ -447,7 +477,7 @@ describe("storefront feed category search", () => {
         ]);
         expect(result.products.some((product) => product.id === "prod_description_trap"))
             .toBe(false);
-        expect(result.pagination.total).toBe(1);
+        expect(result.pagination).toEqual({ limit: 10, hasNextPage: false });
     });
 
     it("keeps full feed-page enrichment queries within D1's bind limit", async () => {
@@ -464,7 +494,6 @@ describe("storefront feed category search", () => {
         }
 
         const result = await getStorefrontFeedProducts(db, {
-            page: 1,
             limit: 100,
         });
         const searchResult = await searchStorefrontProducts(db, {
@@ -478,16 +507,16 @@ describe("storefront feed category search", () => {
         });
         const lookupResult = await getStorefrontFeedProducts(db, {
             ids: lookupTokens.join(","),
-            page: 1,
             limit: 100,
         });
 
         expect(result.products).toHaveLength(100);
-        expect(result.pagination.total).toBe(106);
+        expect(result.pagination).toMatchObject({ limit: 100, hasNextPage: true });
+        expect(result.pagination.cursor).toMatch(/^feed-v1\./);
         expect(searchResult.data).toHaveLength(100);
         expect(searchResult.pagination.total).toBe(106);
         expect(lookupResult.products).toHaveLength(100);
-        expect(lookupResult.pagination.total).toBe(100);
+        expect(lookupResult.pagination).toEqual({ limit: 100, hasNextPage: false });
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("barcode");
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("barcodeType");
         expect(searchResult.data[0]?.variants[0]).not.toHaveProperty("deletedAt");

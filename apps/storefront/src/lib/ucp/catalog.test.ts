@@ -207,9 +207,7 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
-      sort: "newest",
       search: "khaki",
       category: "shoes",
       minPrice: 1000,
@@ -314,9 +312,7 @@ describe("UCP catalog mapping", () => {
     );
 
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
-      sort: "newest",
       search: "shoes",
     });
     expect(result.status).toBe(200);
@@ -325,6 +321,48 @@ describe("UCP catalog mapping", () => {
       "Everyday Loafer",
       "Canvas Slip-On",
     ]);
+  });
+
+  it("passes opaque feed cursors through without converting them to page offsets", async () => {
+    const nextCursor = "feed-v1.abc.cHJvZF8x";
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [productFixture()],
+      pagination: { limit: 5, cursor: nextCursor, hasNextPage: true },
+    });
+
+    const result = await searchCatalog(
+      {
+        query: "khaki",
+        pagination: { limit: 5, cursor: "feed-v1.abd.cHJvZF8y" },
+      },
+      context,
+    );
+
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      cursor: "feed-v1.abd.cHJvZF8y",
+      limit: 5,
+      search: "khaki",
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.pagination).toEqual({
+      cursor: nextCursor,
+      has_next_page: true,
+    });
+    expect(result.body.pagination).not.toHaveProperty("total_count");
+  });
+
+  it("rejects retired page cursors instead of rescanning from the beginning", async () => {
+    const result = await searchCatalog(
+      { query: "khaki", pagination: { cursor: "page:999", limit: 5 } },
+      context,
+    );
+
+    expect(result.status).toBe(400);
+    expect(result.body.messages?.[0]).toMatchObject({
+      code: "request_invalid",
+      path: "$.pagination.cursor",
+    });
+    expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
   it("filters catalog products without a safe discovery image", async () => {
@@ -358,10 +396,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
       ids: "var_1,SKU-BLUE",
-      sort: "newest",
     });
     expect(result.body.products[0].variants).toHaveLength(2);
     expect(result.body.products[0].variants[0].inputs).toEqual([
@@ -383,10 +419,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
       ids: "khaki-shoes",
-      sort: "newest",
     });
     expect(result.body.products[0].variants[0].inputs).toEqual([
       { id: productUrl, match: "featured" },
@@ -432,10 +466,8 @@ describe("UCP catalog mapping", () => {
 
     expect(result.status).toBe(200);
     expect(mocks.getFeedProducts).toHaveBeenCalledWith({
-      page: 1,
       limit: 10,
       ids: "khaki-shoes",
-      sort: "newest",
     });
     expect(mocks.getProductBySlug).not.toHaveBeenCalled();
     expect(result.body.products).toEqual([]);
