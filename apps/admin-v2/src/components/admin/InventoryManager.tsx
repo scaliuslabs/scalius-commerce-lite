@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@scalius/shared/utils";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
-import { StatCard } from "@/components/admin/shared/StatCard";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
   adjustInventory,
@@ -164,6 +164,43 @@ function timeAgo(dateValue: string | number) {
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString("en-US");
+}
+
+function InventorySummaryStrip({ stats }: { stats: InventoryStats }) {
+  const items = [
+    { label: "SKUs", value: stats.totalVariants, icon: Package, detail: "Sellable inventory identities" },
+    { label: "On hand", value: stats.totalOnHand, icon: Package, detail: "Physical stock recorded across tracked SKUs" },
+    { label: "Committed", value: stats.totalReserved, icon: History, detail: "Units reserved by open orders" },
+    { label: "Available", value: stats.totalAvailable, icon: Package, detail: "On hand minus committed units" },
+    { label: "Low stock", value: stats.lowStockCount, icon: AlertTriangle, detail: "SKUs at or below their saved alert threshold" },
+    { label: "Sold out", value: stats.outOfStockCount, icon: AlertTriangle, detail: "SKUs with no buyer-available units" },
+  ] as const;
+
+  return (
+    <div className="mt-2 grid grid-cols-3 gap-px overflow-hidden rounded-md border bg-border lg:grid-cols-6">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Tooltip key={item.label}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-2 bg-background px-2 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                aria-label={`${item.label}: ${item.value}. ${item.detail}`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="truncate text-xs text-muted-foreground">{item.label}</p>
+                  <p className="text-sm font-semibold tabular-nums text-foreground">{item.value}</p>
+                </div>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-64">{item.detail}</TooltipContent>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
 }
 
 // ---------- Main Component ----------
@@ -290,16 +327,7 @@ export function InventoryManager() {
           </div>
         </div>
 
-        {stats && (
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <StatCard title="Total SKUs" value={stats.totalVariants} icon={Package} iconBgColor="bg-blue-100 dark:bg-blue-900/30" iconTextColor="text-blue-600 dark:text-blue-400" />
-            <StatCard title="On Hand" value={stats.totalOnHand} icon={Package} iconBgColor="bg-slate-100 dark:bg-slate-900/30" iconTextColor="text-slate-600 dark:text-slate-400" />
-            <StatCard title="Reserved" value={stats.totalReserved} icon={History} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
-            <StatCard title="Available" value={stats.totalAvailable} icon={Package} iconBgColor="bg-emerald-100 dark:bg-emerald-900/30" iconTextColor="text-emerald-600 dark:text-emerald-400" />
-            <StatCard title="Low Stock" value={stats.lowStockCount} icon={AlertTriangle} iconBgColor="bg-amber-100 dark:bg-amber-900/30" iconTextColor="text-amber-600 dark:text-amber-400" />
-            <StatCard title="Out of Stock" value={stats.outOfStockCount} icon={AlertTriangle} iconBgColor="bg-red-100 dark:bg-red-900/30" iconTextColor="text-red-600 dark:text-red-400" />
-          </div>
-        )}
+        {stats ? <InventorySummaryStrip stats={stats} /> : null}
       </CardHeader>
 
       <CardContent className="p-0">
@@ -313,7 +341,7 @@ export function InventoryManager() {
               aria-selected={activeTab === "variants"}
               aria-controls="inventory-variants-panel"
               onClick={() => setActiveTab("variants")}
-              className={cn("flex items-center gap-2 py-2 text-xs font-medium border-b-2 transition-colors", activeTab === "variants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+              className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "variants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <Package className="h-3.5 w-3.5" /> All Variants
             </button>
@@ -324,7 +352,7 @@ export function InventoryManager() {
               aria-selected={activeTab === "movements"}
               aria-controls="inventory-movements-panel"
               onClick={() => setActiveTab("movements")}
-              className={cn("flex items-center gap-2 py-2 text-xs font-medium border-b-2 transition-colors", activeTab === "movements" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+              className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "movements" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <History className="h-3.5 w-3.5" /> Recent Movements
             </button>
@@ -354,14 +382,14 @@ export function InventoryManager() {
                       setLocalSearch(e.target.value);
                       setRequestedPage(1);
                     }}
-                    className="pl-7 h-7 w-full text-xs"
+                    className="h-8 w-full pl-7 text-sm"
                   />
                 </div>
                 <Select value={stockFilter} onValueChange={(v: StockFilter) => {
                   setStockFilter(v);
                   setRequestedPage(1);
                 }}>
-                  <SelectTrigger className="h-7 w-[130px] text-xs">
+                  <SelectTrigger className="h-8 w-[140px] text-sm">
                     <SelectValue placeholder="Status: All" />
                   </SelectTrigger>
                   <SelectContent className="text-xs">
@@ -372,7 +400,7 @@ export function InventoryManager() {
                   </SelectContent>
                 </Select>
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs text-muted-foreground" onClick={clearFilters}>
+                  <Button variant="ghost" size="sm" className="h-8 px-1.5 text-sm text-muted-foreground" onClick={clearFilters}>
                     <X className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 )}
@@ -443,25 +471,25 @@ export function InventoryManager() {
                       return (
                         <TableRow key={v.id} className="hover:bg-muted/50">
                           <TableCell className="py-2 pl-3">
-                            <Link to={`/admin/products/${v.productId}` as string} className="font-medium text-xs text-primary hover:underline block truncate w-[230px]">
+                            <Link to={`/admin/products/${v.productId}` as string} className="block w-[230px] truncate text-sm font-medium text-primary hover:underline">
                               {v.productName || "Unknown Product"}
                             </Link>
                           </TableCell>
-                          <TableCell className="py-2 font-mono text-[11px] text-muted-foreground">{v.sku}</TableCell>
-                          <TableCell className="py-2 text-xs text-muted-foreground">
+                          <TableCell className="py-2 font-mono text-xs text-muted-foreground">{v.sku}</TableCell>
+                          <TableCell className="py-2 text-sm text-muted-foreground">
                             {v.optionLabel || "\u2014"}
                           </TableCell>
-                          <TableCell className="py-2 text-right text-xs">{v.stock}</TableCell>
-                          <TableCell className="py-2 text-right text-xs">
+                          <TableCell className="py-2 text-right text-sm tabular-nums">{v.stock}</TableCell>
+                          <TableCell className="py-2 text-right text-sm tabular-nums">
                             {v.reservedStock > 0 ? (
                               <span className="text-amber-600 dark:text-amber-400">{v.reservedStock}</span>
                             ) : (
                               <span className="text-muted-foreground opacity-50">0</span>
                             )}
                           </TableCell>
-                          <TableCell className="py-2 text-right text-xs font-semibold">{v.available}</TableCell>
+                          <TableCell className="py-2 text-right text-sm font-semibold tabular-nums">{v.available}</TableCell>
                           <TableCell className="py-2 text-center">
-                            <Badge variant={badge.variant} className={cn("text-[10px] px-1.5 py-0", badge.className)}>
+                            <Badge variant={badge.variant} className={cn("px-1.5 py-0 text-xs", badge.className)}>
                               {badge.label}
                             </Badge>
                           </TableCell>
@@ -470,7 +498,7 @@ export function InventoryManager() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-6 px-2 text-[11px] font-medium"
+                                className="h-7 px-2 text-sm font-medium"
                                 onClick={() => setAdjustingVariant(v)}
                               >
                                 <ArrowUpDown className="h-3 w-3 mr-1" /> Adjust
@@ -514,14 +542,14 @@ export function InventoryManager() {
                     setMovementLocalSearch(event.target.value);
                     setMovementsRequestedPage(1);
                   }}
-                  className="h-7 pl-7 text-xs"
+                  className="h-8 pl-7 text-sm"
                 />
               </div>
               <Select value={movementType} onValueChange={(value: MovementTypeFilter) => {
                 setMovementType(value);
                 setMovementsRequestedPage(1);
               }}>
-                <SelectTrigger className="h-7 w-[145px] text-xs" aria-label="Filter movement type">
+                <SelectTrigger className="h-8 w-[160px] text-sm" aria-label="Filter movement type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -540,7 +568,7 @@ export function InventoryManager() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                  className="h-8 px-1.5 text-sm text-muted-foreground"
                   onClick={() => {
                     setMovementLocalSearch("");
                     setMovementType("all");
@@ -552,7 +580,7 @@ export function InventoryManager() {
               ) : null}
             </div>
             {ledgerHealth ? (
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <span>{ledgerHealth.v2Rows} verified v2 movements across {ledgerHealth.v2Variants} SKUs</span>
                 {ledgerHealth.legacyRows > 0 ? <span>{ledgerHealth.legacyRows} legacy history rows</span> : null}
                 {ledgerHealth.invalidV2Rows > 0 ? (
@@ -601,22 +629,22 @@ export function InventoryManager() {
                       return (
                         <TableRow key={m.id} className="hover:bg-muted/50">
                           <TableCell className="py-2 pl-3">
-                            <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 font-medium whitespace-nowrap", badge.className)}>
+                            <Badge variant="outline" className={cn("whitespace-nowrap px-1.5 py-0 text-xs font-medium", badge.className)}>
                               {badge.label}
                             </Badge>
                             {m.ledgerVersion === 2 && m.pool ? (
-                              <div className="mt-1 text-[10px] text-muted-foreground whitespace-nowrap">
+                              <div className="mt-1 whitespace-nowrap text-xs text-muted-foreground">
                                 {m.pool}{m.reservationGeneration ? ` · g${m.reservationGeneration}` : ""}
                               </div>
                             ) : null}
                           </TableCell>
-                          <TableCell className="py-2 text-xs">
+                          <TableCell className="py-2 text-sm">
                             <div className="font-medium text-foreground">{m.variantSku || m.variantId.slice(0, 8)}</div>
                             <div className="text-muted-foreground truncate max-w-[200px]">{m.productName}</div>
                             {m.orderId ? (
                               <Link
                                 to={`/admin/orders/${m.orderId}` as string}
-                                className="text-[10px] text-primary hover:underline"
+                                className="text-xs text-primary hover:underline"
                               >
                                 Order {m.orderId.slice(0, 8)}
                               </Link>
@@ -629,16 +657,16 @@ export function InventoryManager() {
                             <div className="space-y-0.5">
                               {counterChanges.map((change) => (
                                 <div key={change.label} className="whitespace-nowrap">
-                                  <span className="text-[10px] text-muted-foreground">{change.label} </span>
-                                  <span className={cn("text-xs font-bold", change.delta > 0 ? "text-emerald-600 dark:text-emerald-400" : change.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                                  <span className="text-xs text-muted-foreground">{change.label} </span>
+                                  <span className={cn("text-sm font-semibold", change.delta > 0 ? "text-emerald-600 dark:text-emerald-400" : change.delta < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
                                     {change.delta > 0 ? "+" : ""}{change.delta}
                                   </span>
-                                  <span className="ml-1 text-[10px] text-muted-foreground">{change.previous} → {change.next}</span>
+                                  <span className="ml-1 text-xs text-muted-foreground">{change.previous} → {change.next}</span>
                                 </div>
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className="py-2 text-right pr-3 text-[11px] text-muted-foreground whitespace-nowrap">
+                          <TableCell className="whitespace-nowrap py-2 pr-3 text-right text-xs text-muted-foreground">
                             {timeAgo(m.createdAt)}
                           </TableCell>
                         </TableRow>
@@ -831,7 +859,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold">Adjust Stock</DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-sm">
             {variant && (
               <>
                 <span className="font-medium text-foreground">{variant.productName}</span> — <span className="font-mono">{variant.sku}</span>
@@ -844,21 +872,21 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-muted/50 rounded-md p-2 border">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">On Hand</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">On hand</div>
                 <div className="text-sm font-bold mt-0.5">{variant.stock}</div>
               </div>
               <div className="bg-muted/50 rounded-md p-2 border">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Reserved</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Committed</div>
                 <div className="text-sm font-bold mt-0.5 text-amber-600 dark:text-amber-400">{variant.reservedStock}</div>
               </div>
               <div className="bg-muted/50 rounded-md p-2 border">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Available</div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Available</div>
                 <div className="text-sm font-bold mt-0.5 text-emerald-600 dark:text-emerald-400">{variant.available}</div>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-mode" className="text-xs font-medium text-foreground">Operation</label>
+              <label htmlFor="inventory-adjustment-mode" className="text-sm font-medium text-foreground">Operation</label>
               <Select
                 value={mode}
                 onValueChange={(value: AdjustmentMode) => {
@@ -868,7 +896,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                   }
                 }}
               >
-                <SelectTrigger id="inventory-adjustment-mode" className="h-8 text-xs">
+                <SelectTrigger id="inventory-adjustment-mode" className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -876,7 +904,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                   <SelectItem value="stocktake">Set counted stock</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {mode === "stocktake"
                   ? "Use the physical count. The audit log records the calculated difference."
                   : "Enter the exact quantity received or removed."}
@@ -884,7 +912,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-amount" className="text-xs font-medium text-foreground">
+              <label htmlFor="inventory-adjustment-amount" className="text-sm font-medium text-foreground">
                 {mode === "stocktake" ? "Counted on hand" : "Adjustment amount"}
               </label>
               {mode === "stocktake" ? (
@@ -896,7 +924,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                   inputMode="numeric"
                   value={countInput}
                   onChange={(event) => setCountInput(event.target.value)}
-                  className="h-8 text-center font-bold"
+                  className="h-9 text-center text-sm font-semibold"
                 />
               ) : (
                 <div className="flex items-center gap-2">
@@ -905,7 +933,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                     aria-label="Decrease adjustment by one"
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 shrink-0"
+                    className="h-9 w-9 shrink-0"
                     onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) - 1))}
                   >
                     <Minus className="h-3.5 w-3.5" />
@@ -917,14 +945,14 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                     inputMode="numeric"
                     value={deltaInput}
                     onChange={(event) => updateRelativeDelta(event.target.value)}
-                    className="h-8 text-center font-bold"
+                    className="h-9 text-center text-sm font-semibold"
                   />
                   <Button
                     type="button"
                     aria-label="Increase adjustment by one"
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 shrink-0"
+                    className="h-9 w-9 shrink-0"
                     onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) + 1))}
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -932,35 +960,35 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                 </div>
               )}
               {effectiveDelta !== 0 && targetIsValid ? (
-                <p className="text-[11px] text-muted-foreground text-center mt-1">
+                <p className="mt-1 text-center text-xs text-muted-foreground">
                   New on hand: <span className="font-medium">{targetStock}</span> {"\u2192"}{" "}
                   Available: <span className={cn("font-medium", newAvailable <= 0 ? "text-red-500" : "text-emerald-600")}>{newAvailable}</span>
                 </p>
               ) : null}
               {!targetIsValid ? (
-                <p role="alert" className="text-[11px] font-medium text-destructive">
+                <p role="alert" className="text-xs font-medium text-destructive">
                   Stock cannot be negative or fractional. Enter the exact whole-number operation.
                 </p>
               ) : null}
               {targetIsValid && newAvailable < 0 ? (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                <p className="text-xs text-amber-700 dark:text-amber-400">
                   This count leaves an availability deficit of {Math.abs(newAvailable)} against existing reservations.
                 </p>
               ) : null}
             </div>
 
             {mode === "relative" ? <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-reason" className="text-xs font-medium text-foreground">Reason</label>
+              <label htmlFor="inventory-adjustment-reason" className="text-sm font-medium text-foreground">Reason</label>
               <Select
                 value={reason}
                 onValueChange={(value) =>
                   setReason(value as InventoryAdjustmentReason)
                 }
               >
-                <SelectTrigger id="inventory-adjustment-reason" className="h-8 text-xs">
+                <SelectTrigger id="inventory-adjustment-reason" className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="text-xs">
+                <SelectContent className="text-sm">
                   {reasonOptions.map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
                   ))}
@@ -969,17 +997,17 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div> : null}
 
             <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-notes" className="text-xs font-medium text-foreground">
+              <label htmlFor="inventory-adjustment-notes" className="text-sm font-medium text-foreground">
                 {mode === "stocktake" ? "Stocktake note" : "Notes (optional)"}
               </label>
-              <Input id="inventory-adjustment-notes" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
+              <Input id="inventory-adjustment-notes" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-9 text-sm" />
             </div>
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="h-7 text-xs">Cancel</Button>
-          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit} className="h-7 text-xs">
+          <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="h-8 text-sm">Cancel</Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit} className="h-8 text-sm">
             {submitting
               ? "Applying..."
               : mode === "stocktake"
