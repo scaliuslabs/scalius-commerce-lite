@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import * as schema from "@scalius/database/schema";
+import { drizzle } from "drizzle-orm/d1";
 import { adjustInventory, getInventoryOverview } from "./inventory.service";
 import { checkAndAlertLowStock } from "./alerts";
 
@@ -160,6 +162,42 @@ describe("adjustInventory stock ledger", () => {
 });
 
 describe("inventory overview query boundaries", () => {
+  it("qualifies the correlated variant id in the normalized option-label projection", async () => {
+    const queries: string[] = [];
+    const d1 = {
+      prepare(query: string) {
+        queries.push(query);
+        const statement = {
+          bind: () => statement,
+          all: async () => ({ results: [] }),
+          raw: async () => [],
+          first: async () => null,
+        };
+        return statement;
+      },
+    };
+    const db = drizzle(d1 as unknown as D1Database, { schema });
+
+    await expect(getInventoryOverview(db, {
+      section: "variants",
+      search: "",
+      status: "all",
+      page: 1,
+      limit: 50,
+      sort: "available",
+      order: "asc",
+    })).resolves.toMatchObject({
+      variants: [],
+      pagination: { total: 0 },
+    });
+
+    expect(queries).toHaveLength(3);
+    expect(queries[0]).toContain(
+      'pvov.variant_id = "product_variants"."id"',
+    );
+    expect(queries[0]).not.toContain("pvov.variant_id = \"id\"");
+  });
+
   it.each([
     [{ section: "unknown", search: "", status: "all", page: 1, limit: 50 }, /section/],
     [{ section: "variants", search: "", status: "unknown", page: 1, limit: 50 }, /status/],
