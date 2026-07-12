@@ -31,9 +31,14 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : (
-        <span aria-disabled="true" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300">
+        <button
+          type="button"
+          disabled
+          aria-label="Previous page"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+        >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        </span>
+        </button>
       )}
 
       {paginationItems(page, totalPages).map((item) =>
@@ -65,9 +70,14 @@ function paginationItems(currentPage: number, pageCount: number): (number | "…
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : (
-        <span aria-disabled="true" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300">
+        <button
+          type="button"
+          disabled
+          aria-label="Next page"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+        >
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </span>
+        </button>
       )}
     </div>
   </nav>
