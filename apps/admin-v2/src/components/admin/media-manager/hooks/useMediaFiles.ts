@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import { ITEMS_PER_PAGE, type LibraryMediaFile, type MediaFilterOptions } from "../types";
 
@@ -16,6 +15,7 @@ export function useMediaFiles(autoLoad = false) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState<MediaFilterOptions>(DEFAULT_FILTERS);
   const requestRef = useRef(0);
 
@@ -27,6 +27,7 @@ export function useMediaFiles(autoLoad = false) {
     const merged = { ...DEFAULT_FILTERS, ...nextFilters };
     if (cursor) setIsLoadingMore(true);
     else setIsLoading(true);
+    setLoadError(null);
     try {
       const data = await MediaApiClient.fetchFiles(cursor, ITEMS_PER_PAGE, merged);
       if (requestId !== requestRef.current) return;
@@ -38,9 +39,10 @@ export function useMediaFiles(autoLoad = false) {
       setNextCursor(data.pagination.nextCursor);
       setHasMore(data.pagination.hasMore);
       setFilters(merged);
+      setLoadError(null);
     } catch (error) {
       if (requestId === requestRef.current) {
-        toast.error("Media could not be loaded", { description: error instanceof Error ? error.message : "Try again." });
+        setLoadError(error instanceof Error ? error.message : "The media service did not respond.");
       }
     } finally {
       if (requestId === requestRef.current) {
@@ -71,6 +73,7 @@ export function useMediaFiles(autoLoad = false) {
     isLoadingMore,
     nextCursor,
     hasMore,
+    loadError,
     filters,
     loadFiles,
     loadMore,

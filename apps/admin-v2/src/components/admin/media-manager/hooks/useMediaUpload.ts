@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import type { LibraryMediaFile, MediaCapability, UploadQueueItem } from "../types";
+import { readIntrinsicMediaMetadata } from "../utils/intrinsic-metadata";
 
 const MAX_CONCURRENT_FILES = 2;
 
@@ -41,6 +42,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
   const runItem = useCallback(async (id: string) => {
     let item = queueRef.current.find((candidate) => candidate.id === id);
     if (!item || item.status !== "initiating") return;
+    const intrinsicMetadata = readIntrinsicMediaMetadata(item.file, item.kind);
     let sessionId = item.sessionId;
     let failedPart: number | null = null;
     try {
@@ -81,6 +83,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
         uploadedParts: [...uploadedParts].sort((a, b) => a - b),
         status: item.status === "paused" ? "paused" : "uploading",
         error: null,
+        warning: null,
         failedPart: null,
       });
       if (item.status === "paused") return;
@@ -111,8 +114,17 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       item = queueRef.current.find((candidate) => candidate.id === id);
       if (!item || item.status === "paused" || item.status === "cancelled") return;
       mutate(id, { status: "completing", progress: 97 });
-      const file = await MediaApiClient.completeUpload(session.id);
-      mutate(id, { status: "complete", progress: 100, result: file });
+      let file = await MediaApiClient.completeUpload(session.id);
+      const metadata = await intrinsicMetadata;
+      let warning: string | null = null;
+      if (metadata) {
+        try {
+          file = await MediaApiClient.updateFile(file, metadata);
+        } catch {
+          warning = "Uploaded, but dimensions or duration could not be saved. The asset is still usable.";
+        }
+      }
+      mutate(id, { status: "complete", progress: 100, result: file, warning });
       onUploadComplete?.([file]);
     } catch (error) {
       controllersRef.current.delete(id);
@@ -175,6 +187,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
         sessionId: null,
         failedPart: null,
         error: null,
+        warning: null,
         result: null,
       });
     }

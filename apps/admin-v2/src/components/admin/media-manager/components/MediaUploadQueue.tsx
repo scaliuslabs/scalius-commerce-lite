@@ -48,6 +48,7 @@ export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFi
               {item.status === "complete" ? <Check className="h-4 w-4 text-emerald-600" /> : !["cancelled", "completing"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onCancel(item.id)} aria-label={`Cancel ${item.file.name}`}><X className="h-3.5 w-3.5" /></Button>}
             </div>
             {item.error && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-destructive"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.failedPart ? `Part ${item.failedPart}: ` : ""}{item.error}</p>}
+            {item.warning && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400" role="status"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.warning}</p>}
           </div>
         ))}
       </div>
