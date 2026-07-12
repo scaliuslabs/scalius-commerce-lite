@@ -310,6 +310,14 @@ Drizzle config (`drizzle.config.ts`):
 - Several JSON columns (`headerConfig`, `footerConfig`, etc.) are typed as plain `text()` -- there are no Drizzle JSON mode annotations or Zod validators at the schema level. Validation happens in the service layer.
 # Product variant image associations
 
-`products.variant_images_enabled` and `products.variant_image_axis` own the product-level behavior. `product_variant_image_mappings` assigns a stable product image ID to either one active non-default SKU or one normalized option value; an image can have only one target, while a target may own multiple images. Core validation enforces same-product ownership before the transactional product write.
+`product_variants.image_id` is the sole variant-image authority: one optional,
+same-product image reference per exact SKU. `NULL` means the SKU uses the
+product primary image, so only the combinations that genuinely need distinct
+media require a reference. Image deletion uses `ON DELETE SET NULL` and safely
+returns affected SKUs to that primary fallback.
 
-Migration `0002_backfill_variant_image_mappings.sql` materialized the historical positional configuration into stable rows. Migration `0006_outgoing_captain_midlands.sql` strips the retired metadata, rejects reintroduction, repairs the audited normalized option collision, and installs normalized SKU/barcode/active-option identity indexes. Explicit product fields and mapping rows are the sole variant-image authority.
+Migration `0007_bored_vulcan.sql` removed the former product-level image-axis
+switches and `product_variant_image_mappings` table during the normalized option
+cutover. Do not restore label/axis inheritance, SEO-marker serialization, or
+positional matching. Bulk assignment is an editor convenience that writes the
+same exact image ID to each selected SKU.
