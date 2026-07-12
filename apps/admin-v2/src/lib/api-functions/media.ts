@@ -19,6 +19,7 @@ export interface MediaFileDto {
   height?: number | null;
   durationMs?: number | null;
   posterMediaId?: string | null;
+  posterUrl: string | null;
   folderId: string | null;
   status: "ready" | "trashed" | "deleting" | "deleted";
   version: number;

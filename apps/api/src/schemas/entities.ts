@@ -641,6 +641,7 @@ export const mediaSchema = z
     height: z.number().nullable().optional(),
     durationMs: z.number().nullable().optional(),
     posterMediaId: z.string().nullable().optional(),
+    posterUrl: z.string().nullable(),
     folderId: z.string().nullable(),
     status: z.enum(["ready", "trashed", "deleting", "deleted"]),
     version: z.number().int().min(1),

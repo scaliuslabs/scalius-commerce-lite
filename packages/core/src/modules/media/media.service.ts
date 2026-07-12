@@ -14,7 +14,6 @@ import {
     completeMediaMultipartUpload,
     createMediaMultipartUpload,
     deleteFile,
-    getCurrentPublicMediaUrl,
     headMediaObject,
     uploadMediaMultipartPart,
     type MediaMultipartPartValue,
@@ -24,7 +23,8 @@ import {
     validateMediaFileMetadata,
     validateMediaSignature,
 } from "@scalius/shared/media-policy";
-import { and, asc, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import {
     AppError,
@@ -34,6 +34,7 @@ import {
     ValidationError,
 } from "@scalius/core/errors";
 import type { InitiateMediaUploadInput, UpdateMediaInput } from "./media.validation";
+import { presentMediaProjection } from "./media.presentation";
 
 const MAX_COMMAND_IDS = 90;
 const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1_000;
@@ -95,8 +96,20 @@ function decodeCursor<T>(cursor: string): T {
     }
 }
 
-function presentMedia<T extends { objectKey: string }>(row: T) {
-    return { ...row, url: getCurrentPublicMediaUrl(row.objectKey) };
+const poster = alias(media, "media_poster");
+const mediaProjection = {
+    ...getTableColumns(media),
+    posterObjectKey: poster.objectKey,
+    posterKind: poster.kind,
+    posterStatus: poster.status,
+};
+
+async function readPresentedMedia(db: Database, id: string) {
+    const row = await db.select(mediaProjection).from(media)
+        .leftJoin(poster, eq(poster.id, media.posterMediaId))
+        .where(eq(media.id, id))
+        .get();
+    return row ? presentMediaProjection(row) : null;
 }
 
 function expectedPartCount(size: number): number {
@@ -215,7 +228,9 @@ export async function listMediaFiles(db: Database, input: {
         if (compare) conditions.push(compare);
     }
 
-    const rows = await db.select().from(media).where(and(...conditions)).orderBy(
+    const rows = await db.select(mediaProjection).from(media)
+        .leftJoin(poster, eq(poster.id, media.posterMediaId))
+        .where(and(...conditions)).orderBy(
         (sortOrder === "asc" ? asc : desc)(sortColumn),
         (sortOrder === "asc" ? asc : desc)(media.id),
     ).limit(boundedLimit + 1);
@@ -226,7 +241,7 @@ export async function listMediaFiles(db: Database, input: {
         ? sortBy === "size" ? last.size : sortBy === "filename" ? last.filename : last.createdAt.getTime()
         : null;
     return {
-        files: pageRows.map(presentMedia),
+        files: pageRows.map(presentMediaProjection),
         pagination: {
             limit: boundedLimit,
             hasMore,
@@ -443,9 +458,9 @@ async function commitCompletedUpload(db: Database, session: typeof mediaUploadSe
             eq(mediaUploadSessions.state, "completing"),
         )),
     ]);
-    const row = await db.select().from(media).where(eq(media.id, session.mediaId)).get();
+    const row = await readPresentedMedia(db, session.mediaId);
     if (!row) throw new ServiceUnavailableError("Media completion could not be committed.");
-    return presentMedia(row);
+    return row;
 }
 
 export async function completeMediaUpload(db: Database, sessionId: string) {
@@ -453,11 +468,11 @@ export async function completeMediaUpload(db: Database, sessionId: string) {
         .where(eq(mediaUploadSessions.id, sessionId)).get();
     if (!session) throw new NotFoundError("Media upload session not found.");
     if (session.state === "committed") {
-        const existing = await db.select().from(media).where(eq(media.id, session.mediaId)).get();
+        const existing = await readPresentedMedia(db, session.mediaId);
         if (!existing || existing.objectKey !== session.objectKey || existing.mimeType !== session.mimeType || existing.size !== session.size) {
             throw new ConflictError("Committed media does not match its upload session.");
         }
-        return presentMedia(existing);
+        return existing;
     }
     if (!["initiated", "uploading", "completing"].includes(session.state)) {
         throw new ConflictError("This media upload cannot be completed.");
@@ -611,7 +626,9 @@ export async function updateMediaFile(db: Database, id: string, data: UpdateMedi
         eq(media.status, "ready"),
     )).returning().get();
     if (!updated) throw new ConflictError("Media changed while you were editing it. Reload and try again.");
-    return presentMedia(updated);
+    const presented = await readPresentedMedia(db, updated.id);
+    if (!presented) throw new ConflictError("Media changed while it was being read. Reload and try again.");
+    return presented;
 }
 
 export async function trashMediaFile(db: Database, id: string, expectedVersion: number) {
@@ -623,7 +640,9 @@ export async function trashMediaFile(db: Database, id: string, expectedVersion: 
     }).where(and(eq(media.id, id), eq(media.version, expectedVersion), eq(media.status, "ready")))
         .returning().get();
     if (!row) throw new ConflictError("Only a current, ready media item can be moved to trash.");
-    return presentMedia(row);
+    const presented = await readPresentedMedia(db, row.id);
+    if (!presented) throw new ConflictError("Media changed while it was being read. Reload and try again.");
+    return presented;
 }
 
 export async function restoreMediaFile(db: Database, id: string, expectedVersion: number) {
@@ -635,7 +654,9 @@ export async function restoreMediaFile(db: Database, id: string, expectedVersion
     }).where(and(eq(media.id, id), eq(media.version, expectedVersion), eq(media.status, "trashed")))
         .returning().get();
     if (!row) throw new ConflictError("Only a current trashed media item can be restored.");
-    return presentMedia(row);
+    const presented = await readPresentedMedia(db, row.id);
+    if (!presented) throw new ConflictError("Media changed while it was being read. Reload and try again.");
+    return presented;
 }
 
 async function loadMediaDeleteDependencies(
