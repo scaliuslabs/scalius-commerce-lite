@@ -12,11 +12,13 @@ Last reviewed: 2026-07-12
 - Provider health separates browser readiness from server-side Meta CAPI state,
   and layout caches invalidate after script mutations.
 - RBAC distinguishes view, create, edit, toggle, and delete behavior.
+- New scripts default Inactive, and create/edit services reject activation
+  changes unless the API supplies verified `analytics.toggle` authority.
 
 ## P1 authority/workflow defects
 
 1. Scripts have no version/CAS. Edit and activation can overwrite another
-   operator. Create defaults Active instead of a safe Draft.
+   operator.
 2. List reads silently cap at 50 and the UI paginates only the already-loaded
    array. There is no URL-backed server search/provider/status/readiness sort or
    truthful total.

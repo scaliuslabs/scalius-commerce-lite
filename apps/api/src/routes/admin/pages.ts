@@ -16,6 +16,7 @@ import {
     createPageSchema,
     updatePageSchema
 } from "@scalius/core/modules/pages";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import type { Database } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { and, inArray } from "drizzle-orm";
@@ -130,7 +131,9 @@ const createPageRoute = createRoute({
 
 app.openapi(createPageRoute, async (c) => {
     const db = c.get("db");
-    const result = await createPage(db, c.req.valid("json"));
+    const result = await createPage(db, c.req.valid("json"), {
+        canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
+    });
     await invalidatePageCaches(c, {
         htmlPaths: await publicPageHtmlPathsByIds(db, [result.id]),
     });
@@ -327,7 +330,9 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await updatePage(db, id, c.req.valid("json"));
+    await updatePage(db, id, c.req.valid("json"), {
+        canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
+    });
     await invalidatePageCaches(c, {
         htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
     });

@@ -27,6 +27,8 @@ import {
   getDiscountColumns,
   type DiscountItem,
 } from "~/components/admin/data-table/columns/discount-columns";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 const baseSearchValidator = createListSearchValidator(
   ["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"] as const,
@@ -87,6 +89,10 @@ function DiscountsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { symbol } = useCurrency();
+  const { hasPermission } = usePermissions();
+  const canToggleStatus = hasPermission(
+    ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+  );
   const showTrashed = search.trashed;
 
   // Mutations
@@ -149,6 +155,7 @@ function DiscountsPage() {
       getDiscountColumns({
         showTrashed,
         symbol,
+        canToggleStatus,
         onEdit: handleEdit,
         onDuplicate: handleDuplicate,
         onDelete: handleDelete,
@@ -159,6 +166,7 @@ function DiscountsPage() {
     [
       showTrashed,
       symbol,
+      canToggleStatus,
       handleEdit,
       handleDuplicate,
       handleDelete,

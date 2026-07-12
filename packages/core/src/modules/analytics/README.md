@@ -22,14 +22,14 @@ Third-party analytics script management, Meta Conversions API integration, and a
 |----------|-----------|-------------|
 | `listAnalyticsScripts` | `(db: Database)` | Returns all analytics rows with formatted ISO timestamps |
 | `getAnalyticsScript` | `(db: Database, id: string)` | Get single script by ID |
-| `createAnalyticsScript` | `(db: Database, data: CreateAnalyticsInput)` | Insert new script. ID format: `analytics_{nanoid}`. Timestamps via `unixepoch()`. Returns `{ id, script }` |
-| `updateAnalyticsScript` | `(db: Database, id: string, data: UpdateAnalyticsInput)` | Full update of all fields. Returns null if not found |
+| `createAnalyticsScript` | `(db, data, authority?)` | Defaults inactive; active create requires verified `analytics.toggle` authority. |
+| `updateAnalyticsScript` | `(db, id, data, authority?)` | Ordinary edit may preserve status; changing it requires verified `analytics.toggle` authority. |
 | `toggleAnalyticsScript` | `(db: Database, id: string, isActive: boolean)` | Toggle active status only |
 | `deleteAnalyticsScript` | `(db: Database, id: string)` | Hard-delete. Returns the deleted script for confirmation, null if not found |
 
 ### Zod Schemas (`analytics.validation.ts`)
 
-- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `google_tag_manager` | `facebook_pixel` | `tiktok_pixel` | `cloudflare_web_analytics` | `custom`), isActive (default true), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
+- `createAnalyticsSchema` -- name (3-100 chars), type (`google_analytics` | `google_tag_manager` | `facebook_pixel` | `tiktok_pixel` | `cloudflare_web_analytics` | `custom`), isActive (default false), usePartytown (default true), config (non-empty string), location (`head` | `body_start` | `body_end`)
 - `updateAnalyticsSchema` -- same fields plus `id` (required)
 - `toggleAnalyticsSchema` -- `{ isActive: boolean }`
 

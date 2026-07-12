@@ -115,6 +115,7 @@ function buildDiscountSummary(
 interface DiscountColumnOptions {
   showTrashed: boolean;
   symbol: string;
+  canToggleStatus: boolean;
   onEdit: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
@@ -127,10 +128,12 @@ function DiscountStatusCell({
   discount,
   showTrashed,
   onToggleStatus,
+  canToggleStatus,
 }: {
   discount: DiscountItem;
   showTrashed: boolean;
   onToggleStatus: (id: string, currentStatus: boolean) => void;
+  canToggleStatus: boolean;
 }) {
   if (showTrashed) {
     return (
@@ -172,6 +175,24 @@ function DiscountStatusCell({
     );
   }
 
+  const statusBadge = (
+    <Badge
+      variant={discount.isActive ? "default" : "outline"}
+      className={cn(
+        discount.isActive
+          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-700"
+          : "text-muted-foreground",
+        "text-xs font-medium px-2 py-0.5 rounded-full",
+      )}
+    >
+      {discount.isActive ? "Active" : "Inactive"}
+    </Badge>
+  );
+
+  if (!canToggleStatus) {
+    return statusBadge;
+  }
+
   return (
     <Button
       variant="ghost"
@@ -179,17 +200,7 @@ function DiscountStatusCell({
       className="p-0 h-auto hover:bg-transparent"
       onClick={() => onToggleStatus(discount.id, discount.isActive)}
     >
-      <Badge
-        variant={discount.isActive ? "default" : "outline"}
-        className={cn(
-          discount.isActive
-            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-700"
-            : "text-muted-foreground",
-          "text-xs font-medium px-2 py-0.5 rounded-full",
-        )}
-      >
-        {discount.isActive ? "Active" : "Inactive"}
-      </Badge>
+      {statusBadge}
     </Button>
   );
 }
@@ -401,6 +412,7 @@ export function getDiscountColumns(
           discount={row.original}
           showTrashed={opts.showTrashed}
           onToggleStatus={opts.onToggleStatus}
+          canToggleStatus={opts.canToggleStatus}
         />
       ),
       enableSorting: false,
@@ -416,11 +428,11 @@ export function getDiscountColumns(
         !opts.showTrashed
           ? [
               { label: "Duplicate", icon: Copy, onClick: () => opts.onDuplicate(d.id) },
-              {
+              ...(opts.canToggleStatus ? [{
                 label: d.isActive ? "Deactivate" : "Activate",
                 icon: d.isActive ? X : Check,
                 onClick: () => opts.onToggleStatus(d.id, d.isActive),
-              },
+              }] : []),
             ]
           : undefined,
     }),

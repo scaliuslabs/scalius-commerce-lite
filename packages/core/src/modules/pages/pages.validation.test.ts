@@ -31,6 +31,22 @@ const pageInput = {
 };
 
 describe("page validation", () => {
+  it("creates pages as drafts by default", () => {
+    const parsed = createPageSchema.parse({
+      title: "Draft Page",
+      slug: "draft-page",
+      content: "<p>Draft content</p>",
+      metaTitle: null,
+      metaDescription: null,
+      sortOrder: 0,
+      hideHeader: false,
+      hideFooter: false,
+      hideTitle: false,
+    });
+
+    expect(parsed.isPublished).toBe(false);
+  });
+
   it("accepts a featured image when creating a page", () => {
     const parsed = createPageSchema.parse({
       title: "Combo Offer",

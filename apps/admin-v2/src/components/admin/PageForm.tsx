@@ -84,6 +84,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.PAGES_CREATE);
+  const canPublish = hasPermission(PERMISSIONS.PAGES_PUBLISH);
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.PAGES_EDIT)
     : canCreate;
@@ -103,7 +104,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
-      isPublished: true,
+      isPublished: false,
       publishedAt: null,
       sortOrder: 0,
       hideHeader: false,
@@ -266,12 +267,15 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                           Published Status
                         </FormLabel>
                         <FormDescription>
-                          Page will be visible on the site
+                          {canPublish
+                            ? "Published pages are visible to storefront visitors."
+                            : "You need page publish permission to change this status."}
                         </FormDescription>
                       </div>
                       <FormControl>
                         <Switch
                           checked={field.value}
+                          disabled={!canPublish}
                           onCheckedChange={field.onChange}
                         />
                       </FormControl>

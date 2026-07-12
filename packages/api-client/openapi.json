@@ -35191,7 +35191,7 @@
                   },
                   "isPublished": {
                     "type": "boolean",
-                    "default": true
+                    "default": false
                   },
                   "sortOrder": {
                     "type": "number",
@@ -39057,7 +39057,7 @@
                   },
                   "isActive": {
                     "type": "boolean",
-                    "default": true
+                    "default": false
                   },
                   "appliesToProducts": {
                     "type": "array",
@@ -40394,7 +40394,7 @@
                   },
                   "isActive": {
                     "type": "boolean",
-                    "default": true
+                    "default": false
                   },
                   "appliesToProducts": {
                     "type": "array",
@@ -53870,7 +53870,7 @@
                   },
                   "isActive": {
                     "type": "boolean",
-                    "default": true
+                    "default": false
                   },
                   "usePartytown": {
                     "type": "boolean",

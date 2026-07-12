@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../utils/api-response";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 const mocks = vi.hoisted(() => ({
   listPages: vi.fn(),
@@ -69,7 +70,10 @@ function createDb(publicRows = [{ slug: "about-us" }]) {
   };
 }
 
-function createTestApp(publicRows = [{ slug: "about-us" }]) {
+function createTestApp(
+  publicRows = [{ slug: "about-us" }],
+  permissions = new Set([PERMISSIONS.PAGES_PUBLISH]),
+) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = createDb(publicRows);
   const env = {
@@ -93,6 +97,7 @@ function createTestApp(publicRows = [{ slug: "about-us" }]) {
   });
   app.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.set("adminPermissions", permissions);
     await next();
   });
   app.route("/admin/pages", adminPageRoutes);
@@ -157,6 +162,39 @@ describe("admin page cache invalidation", () => {
       ["pages", "layout"],
       expect.objectContaining({ env }),
       { htmlPaths: [] },
+    );
+  });
+
+  it("passes the caller's publication authority into create and edit services", async () => {
+    const { app, env } = createTestApp([], new Set());
+
+    const createResponse = await requestJson(
+      app,
+      env,
+      "",
+      "POST",
+      createPageBody({ isPublished: false }),
+    );
+    const updateResponse = await requestJson(
+      app,
+      env,
+      "/page_1",
+      "PUT",
+      { title: "Still a draft", isPublished: false },
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(updateResponse.status).toBe(200);
+    expect(mocks.createPage).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isPublished: false }),
+      { canPublish: false },
+    );
+    expect(mocks.updatePage).toHaveBeenCalledWith(
+      expect.anything(),
+      "page_1",
+      expect.objectContaining({ isPublished: false }),
+      { canPublish: false },
     );
   });
 

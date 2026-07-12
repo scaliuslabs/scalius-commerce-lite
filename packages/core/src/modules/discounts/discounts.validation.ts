@@ -42,7 +42,7 @@ const baseDiscountFields = {
             }
             return new Date(val);
         }),
-    isActive: z.boolean().default(true),
+    isActive: z.boolean().default(false),
     appliesToProducts: z.array(z.string()).optional(),
     appliesToCollections: z.array(z.string()).optional(),
 } as const;

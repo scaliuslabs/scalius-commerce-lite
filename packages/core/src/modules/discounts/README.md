@@ -35,8 +35,9 @@ Three types defined in `@scalius/database/schema`:
 |----------|-----------|-------|
 | `listDiscounts` | `(db, { page, limit, search, showTrashed, sort, order, type? })` | Paginated with FTS5 search and optional discount-type filtering. Joins `discountProducts`, `discountCollections`, `discountUsage` to return `relatedProducts`, `relatedCollections`, `usageCount`, `totalDiscountAmount` per discount. Sortable by code/type/value/startDate/endDate/createdAt/updatedAt. |
 | `getDiscountById` | `(db, id)` | Single discount with `relatedProducts` and `relatedCollections` (each `{ buy: string[], get: string[] }`). Returns null if not found. |
-| `createDiscount` | `(db, data)` | Validates unique code among non-deleted. Uses `db.batch()` to atomically insert discount + product/collection associations. Only creates associations for `amount_off_products` type. ID format: `disc_{nanoid}`. Returns `{ id }`. |
-| `updateDiscount` | `(db, id, data)` | Validates existence and unique code (excluding self). Uses `db.batch()` to atomically update discount, delete old associations, insert new ones. Handles date parsing (Date/string/number). Returns `{ id }`. Throws `NotFoundError`. |
+| `createDiscount` | `(db, data, authority?)` | Defaults inactive. Active create requires verified `discounts.toggle_status` authority. Validates unique code and atomically inserts discount + associations. |
+| `updateDiscount` | `(db, id, data, authority?)` | Ordinary edit may preserve status but changing it requires verified `discounts.toggle_status` authority. Atomically updates the discount and associations. |
+| `setDiscountActiveStatus` | `(db, id, isActive)` | Dedicated active/inactive command used only by the toggle-permission route. |
 | `deleteDiscount` | `(db, id)` | Soft-delete: sets `deletedAt = unixepoch()`. |
 | `bulkDeleteDiscounts` | `(db, discountIds, permanent?)` | Soft-delete or hard-delete array of IDs. |
 | `restoreDiscounts` | `(db, discountIds)` | Checks for code conflicts before restoring: throws `ConflictError` if an active discount already uses any of the codes being restored. Sets `deletedAt = null`. |
@@ -85,7 +86,7 @@ Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 
 ## Validation Schemas (`discounts.validation.ts`)
 
-**`createDiscountSchema`**: Validates all discount fields. Date handling accepts `Date`, `string`, or `number` (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
+**`createDiscountSchema`**: Validates all discount fields and defaults `isActive` to false. Date handling accepts `Date`, `string`, or `number` (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
 
 **`updateDiscountSchema`**: Same as create with required `id` field. Same percentage cap.
 

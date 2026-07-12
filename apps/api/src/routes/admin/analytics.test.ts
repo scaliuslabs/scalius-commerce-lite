@@ -3,9 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { finalizeOpenApiContract, type OpenApiDocument } from "../../openapi-contract";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 const mocks = vi.hoisted(() => ({
     getAnalyticsProviderHealth: vi.fn(),
+    createAnalyticsScript: vi.fn(),
+    updateAnalyticsScript: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/analytics", async (importOriginal) => {
@@ -13,12 +16,17 @@ vi.mock("@scalius/core/modules/analytics", async (importOriginal) => {
     return {
         ...actual,
         getAnalyticsProviderHealth: mocks.getAnalyticsProviderHealth,
+        createAnalyticsScript: mocks.createAnalyticsScript,
+        updateAnalyticsScript: mocks.updateAnalyticsScript,
     };
 });
 
 import { adminAnalyticsRoutes } from "./analytics";
 
-function createTestApp(db: unknown = { id: "db" }) {
+function createTestApp(
+    db: unknown = { id: "db" },
+    permissions = new Set([PERMISSIONS.ANALYTICS_TOGGLE]),
+) {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     const env = {
         CREDENTIAL_ENCRYPTION_KEY: "credential-key",
@@ -30,6 +38,7 @@ function createTestApp(db: unknown = { id: "db" }) {
     });
     app.use("*", async (c, next) => {
         c.set("db", db as never);
+        c.set("adminPermissions", permissions);
         await next();
     });
     app.route("/analytics", adminAnalyticsRoutes);
@@ -118,5 +127,37 @@ describe("admin analytics routes", () => {
 
         expect(operation).toBeDefined();
         expect(operation?.security).toEqual([{ adminSession: [] }]);
+    });
+
+    it("passes lifecycle authority separately from ordinary script creation", async () => {
+        mocks.createAnalyticsScript.mockResolvedValue({
+            id: "analytics_1",
+            script: { id: "analytics_1", isActive: false },
+        });
+        const { app, env, db } = createTestApp(undefined, new Set());
+
+        const response = await app.request(
+            "/api/v1/admin/analytics",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: "Draft custom script",
+                    type: "custom",
+                    config: "<script>window.demo = true;</script>",
+                    location: "head",
+                    usePartytown: true,
+                    isActive: false,
+                }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(201);
+        expect(mocks.createAnalyticsScript).toHaveBeenCalledWith(
+            db,
+            expect.objectContaining({ isActive: false }),
+            { canToggle: false },
+        );
     });
 });

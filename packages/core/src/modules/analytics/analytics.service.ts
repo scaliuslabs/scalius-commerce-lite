@@ -5,7 +5,7 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import type { Analytics } from "@scalius/database/schema";
 import type { z } from "zod";
-import { ValidationError } from "@scalius/core/errors";
+import { ForbiddenError, ValidationError } from "@scalius/core/errors";
 import {
     getActiveAnalyticsConfigError,
     isMainThreadOnlyAnalyticsType,
@@ -16,6 +16,22 @@ import {
 
 type CreateAnalyticsInput = z.infer<typeof createAnalyticsSchema>;
 type UpdateAnalyticsInput = z.infer<typeof updateAnalyticsSchema>;
+
+export interface AnalyticsLifecycleAuthority {
+    canToggle?: boolean;
+}
+
+function assertAnalyticsLifecycleAuthority(
+    requestedActive: boolean,
+    currentActive: boolean,
+    authority: AnalyticsLifecycleAuthority,
+) {
+    if (requestedActive !== currentActive && authority.canToggle !== true) {
+        throw new ForbiddenError(
+            "Activating or deactivating analytics scripts requires analytics.toggle permission.",
+        );
+    }
+}
 
 /**
  * Format dates for consistent API responses.
@@ -76,7 +92,12 @@ export async function getAnalyticsScript(db: Database, id: string) {
     return formatScriptResponse(script);
 }
 
-export async function createAnalyticsScript(db: Database, data: CreateAnalyticsInput) {
+export async function createAnalyticsScript(
+    db: Database,
+    data: CreateAnalyticsInput,
+    authority: AnalyticsLifecycleAuthority = {},
+) {
+    assertAnalyticsLifecycleAuthority(data.isActive, false, authority);
     const analyticsId = "analytics_" + nanoid();
     const normalized = normalizeAnalyticsScriptValues(data);
     assertAnalyticsScriptCanBeActive({
@@ -103,9 +124,14 @@ export async function createAnalyticsScript(db: Database, data: CreateAnalyticsI
     return { id: analyticsId, script: formatScriptResponse(script) };
 }
 
-export async function updateAnalyticsScript(db: Database, id: string, data: UpdateAnalyticsInput) {
+export async function updateAnalyticsScript(
+    db: Database,
+    id: string,
+    data: UpdateAnalyticsInput,
+    authority: AnalyticsLifecycleAuthority = {},
+) {
     const existingScript = await db
-        .select({ id: analytics.id })
+        .select({ id: analytics.id, isActive: analytics.isActive })
         .from(analytics)
         .where(eq(analytics.id, id))
         .get();
@@ -113,6 +139,12 @@ export async function updateAnalyticsScript(db: Database, id: string, data: Upda
     if (!existingScript) {
         return null;
     }
+
+    assertAnalyticsLifecycleAuthority(
+        data.isActive,
+        existingScript.isActive,
+        authority,
+    );
 
     const normalized = normalizeAnalyticsScriptValues(data);
     assertAnalyticsScriptCanBeActive({

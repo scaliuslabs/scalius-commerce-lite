@@ -4,6 +4,35 @@ import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
 
 describe("route permissions", () => {
+  it("separates content edits from activation and publishing authority", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/analytics/analytics_1",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.ANALYTICS_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/analytics/analytics_1/toggle",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.ANALYTICS_TOGGLE });
+
+    expect(getRoutePermission(
+      "/api/v1/admin/pages/page_1",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.PAGES_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/pages/bulk-publish",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.PAGES_PUBLISH });
+
+    expect(getRoutePermission(
+      "/api/v1/admin/discounts/disc_1",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_EDIT });
+    expect(getRoutePermission(
+      "/api/v1/admin/discounts/disc_1/toggle-status",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
+  });
+
   it("gates the atomic normalized option matrix behind product edit permission", () => {
     expect(getRoutePermission(
       "/api/v1/admin/products/prod_1/options/matrix",

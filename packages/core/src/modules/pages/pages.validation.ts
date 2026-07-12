@@ -69,7 +69,7 @@ const updatePublishedAtSchema = publishedAtInputSchema.transform((val) =>
 export const createPageSchema = z.object({
     ...pageFieldSchemas,
     publishedAt: createPublishedAtSchema,
-    isPublished: z.boolean().default(true),
+    isPublished: z.boolean().default(false),
     sortOrder: z.number().default(0),
     hideHeader: z.boolean().default(false),
     hideFooter: z.boolean().default(false),
