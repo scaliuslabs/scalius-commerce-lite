@@ -20,10 +20,20 @@ export function reconcileValidatedCartSnapshot(
     const currentItem = state.items[key];
     if (!currentItem) continue;
 
-    if (currentItem.freeDelivery !== validatedItem.freeDelivery) {
+    const nextImage = validatedItem.productImage ?? undefined;
+    const nextImageMediaId = validatedItem.productImageMediaId ?? undefined;
+    if (
+      currentItem.freeDelivery !== validatedItem.freeDelivery ||
+      currentItem.image !== nextImage ||
+      currentItem.imageMediaId !== nextImageMediaId
+    ) {
       updates.push({
         lineKey: key,
-        updates: { freeDelivery: validatedItem.freeDelivery },
+        updates: {
+          freeDelivery: validatedItem.freeDelivery,
+          image: nextImage,
+          imageMediaId: nextImageMediaId,
+        },
       });
     }
   }

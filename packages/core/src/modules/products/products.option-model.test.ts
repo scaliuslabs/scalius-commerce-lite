@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { eq } from "drizzle-orm";
 import {
   orderItems,
-  productImages,
+  media,
   products,
   productVariants,
 } from "@scalius/database/schema";
@@ -51,18 +51,16 @@ describe("variantOptionLabelSql", () => {
     const query = db
       .select({
         id: orderItems.id,
-        productName: products.name,
-        productImage: productImages.url,
+        productName: orderItems.productName,
+        productImageObjectKey: media.objectKey,
         variantId: orderItems.variantId,
-        variantLabel: variantOptionLabelSql(productVariants.id),
+        variantLabel: orderItems.variantLabel,
+        currentVariantLabel: variantOptionLabelSql(productVariants.id),
       })
       .from(orderItems)
       .leftJoin(products, eq(products.id, orderItems.productId))
       .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-      .leftJoin(
-        productImages,
-        eq(productImages.productId, orderItems.productId),
-      )
+      .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
       .where(eq(orderItems.orderId, "ord_regression"))
       .toSQL();
 

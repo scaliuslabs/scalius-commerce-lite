@@ -311,6 +311,7 @@ function buildOrderWriteBatch(
                     orderId: od.id,
                     productId: item.productId,
                     variantId: item.variantId,
+                    productImageMediaId: item.productImageMediaId,
                     quantity: item.quantity,
                     price: item.price,
                     productName: item.productName,

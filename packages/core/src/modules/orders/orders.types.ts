@@ -254,6 +254,8 @@ export interface StorefrontOrderCommitPayload {
         productName: string | null;
         variantLabel: string | null;
         inventoryTracked?: boolean;
+        /** Historical image/poster Media asset selected before the order batch. */
+        productImageMediaId: string | null;
         unitPriceMinor: number;
         lineSubtotalMinor: number;
         discountAmountMinor: number;

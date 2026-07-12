@@ -3,6 +3,9 @@ import {
     mediaFolders,
     mediaUploadParts,
     mediaUploadSessions,
+    productMedia,
+    products,
+    orderItems,
 } from "@scalius/database/schema";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
@@ -24,6 +27,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
+    AppError,
     ConflictError,
     NotFoundError,
     ServiceUnavailableError,
@@ -33,6 +37,33 @@ import type { InitiateMediaUploadInput, UpdateMediaInput } from "./media.validat
 
 const MAX_COMMAND_IDS = 90;
 const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1_000;
+
+export type MediaDependencyConflictDetails = {
+    posterReferences: {
+        count: number;
+        samples: Array<{ mediaId: string; filename: string }>;
+    };
+    productReferences: {
+        count: number;
+        samples: Array<{ productId: string; productName: string; productMediaId: string }>;
+    };
+    orderReferences: {
+        count: number;
+        samples: Array<{ orderId: string; orderItemId: string }>;
+    };
+};
+
+export class MediaDependencyConflictError extends AppError {
+    constructor(details: MediaDependencyConflictDetails) {
+        super(
+            409,
+            "MEDIA_DEPENDENCY_CONFLICT",
+            "Remove this media from every product and video poster. Retained order snapshots cannot be deleted.",
+            details,
+        );
+        this.name = "MediaDependencyConflictError";
+    }
+}
 
 type SortField = "createdAt" | "size" | "filename";
 type SortOrder = "asc" | "desc";
@@ -607,23 +638,107 @@ export async function restoreMediaFile(db: Database, id: string, expectedVersion
     return presentMedia(row);
 }
 
+async function loadMediaDeleteDependencies(
+    db: Database,
+    id: string,
+): Promise<MediaDependencyConflictDetails> {
+    const posterRows = await db
+        .select({
+            mediaId: media.id,
+            filename: media.filename,
+            total: sql<number>`count(*) OVER ()`,
+        })
+        .from(media)
+        .where(and(eq(media.posterMediaId, id), ne(media.status, "deleted")))
+        .orderBy(asc(media.id))
+        .limit(5);
+    const productRows = await db
+        .select({
+            productId: productMedia.productId,
+            productName: products.name,
+            productMediaId: productMedia.id,
+            total: sql<number>`count(*) OVER ()`,
+        })
+        .from(productMedia)
+        .innerJoin(products, eq(products.id, productMedia.productId))
+        .where(eq(productMedia.mediaId, id))
+        .orderBy(asc(productMedia.productId), asc(productMedia.id))
+        .limit(5);
+    const orderRows = await db
+        .select({
+            orderId: orderItems.orderId,
+            orderItemId: orderItems.id,
+            total: sql<number>`count(*) OVER ()`,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.productImageMediaId, id))
+        .orderBy(asc(orderItems.orderId), asc(orderItems.id))
+        .limit(5);
+    return {
+        posterReferences: {
+            count: posterRows[0]?.total ?? 0,
+            samples: posterRows.map(({ mediaId, filename }) => ({ mediaId, filename })),
+        },
+        productReferences: {
+            count: productRows[0]?.total ?? 0,
+            samples: productRows.map(({ productId, productName, productMediaId }) => ({
+                productId,
+                productName,
+                productMediaId,
+            })),
+        },
+        orderReferences: {
+            count: orderRows[0]?.total ?? 0,
+            samples: orderRows.map(({ orderId, orderItemId }) => ({ orderId, orderItemId })),
+        },
+    };
+}
+
+function hasMediaDeleteDependencies(details: MediaDependencyConflictDetails): boolean {
+    return details.posterReferences.count > 0
+        || details.productReferences.count > 0
+        || details.orderReferences.count > 0;
+}
+
 export async function permanentlyDeleteMediaFile(db: Database, id: string, expectedVersion: number) {
     let current = await db.select().from(media).where(eq(media.id, id)).get();
     if (!current) throw new NotFoundError("Media file not found");
     if (current.status === "deleted") return;
     if (current.status === "trashed" && current.version === expectedVersion) {
-        const posterUse = await db.select({ id: media.id }).from(media).where(and(
-            eq(media.posterMediaId, id),
-            ne(media.status, "deleted"),
-        )).limit(1).get();
-        if (posterUse) throw new ConflictError("Remove this image as a video poster before deleting it permanently.");
+        const dependencies = await loadMediaDeleteDependencies(db, id);
+        if (hasMediaDeleteDependencies(dependencies)) {
+            throw new MediaDependencyConflictError(dependencies);
+        }
         const claimed = await db.update(media).set({
             status: "deleting",
             version: expectedVersion + 1,
             updatedAt: sql`(unixepoch())`,
-        }).where(and(eq(media.id, id), eq(media.version, expectedVersion), eq(media.status, "trashed")))
+        }).where(and(
+            eq(media.id, id),
+            eq(media.version, expectedVersion),
+            eq(media.status, "trashed"),
+            sql`NOT EXISTS (
+                SELECT 1 FROM ${media} AS poster_owner
+                WHERE poster_owner.poster_media_id = ${id}
+                  AND poster_owner.status <> 'deleted'
+            )`,
+            sql`NOT EXISTS (
+                SELECT 1 FROM ${productMedia}
+                WHERE ${productMedia.mediaId} = ${id}
+            )`,
+            sql`NOT EXISTS (
+                SELECT 1 FROM ${orderItems}
+                WHERE ${orderItems.productImageMediaId} = ${id}
+            )`,
+        ))
             .returning().get();
-        if (!claimed) throw new ConflictError("Media changed. Reload and try again.");
+        if (!claimed) {
+            const latestDependencies = await loadMediaDeleteDependencies(db, id);
+            if (hasMediaDeleteDependencies(latestDependencies)) {
+                throw new MediaDependencyConflictError(latestDependencies);
+            }
+            throw new ConflictError("Media changed. Reload and try again.");
+        }
         current = claimed;
     } else if (!(
         current.status === "deleting" &&

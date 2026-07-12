@@ -5,9 +5,7 @@ import {
   orders,
   checkoutAttempts,
   orderItems,
-  productVariants,
-  products,
-  productImages,
+  media,
   PaymentMethod,
   InventoryPool,
   siteSettings
@@ -19,7 +17,7 @@ import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/cu
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPrice } from "@scalius/shared/price-utils";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
-import { variantOptionLabelSql } from "@scalius/core/modules/products/products.option-model";
+import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { FRESH_GATEWAY_SETTINGS_READ_OPTIONS, getActivePaymentMethods } from "@scalius/core/modules/payments/gateway-settings";
 import { isCheckoutGatewayUsableForFlow, type CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
 import { getAllowedCountries, getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
@@ -845,15 +843,10 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         variantId: orderItems.variantId,
         quantity: orderItems.quantity,
         price: orderItems.price,
-        productName: products.name,
-        productImage: sql<string>`(
-          SELECT ${productImages.url}
-          FROM ${productImages}
-          WHERE ${productImages.productId} = ${products.id}
-          AND ${productImages.isPrimary} = 1
-          LIMIT 1
-        )`.as("productImage"),
-        variantLabel: variantOptionLabelSql(productVariants.id),
+        productName: orderItems.productName,
+        productImageObjectKey: media.objectKey,
+        productImageStatus: media.status,
+        variantLabel: orderItems.variantLabel,
         unitPriceMinor: orderItems.unitPriceMinor,
         lineSubtotalMinor: orderItems.lineSubtotalMinor,
         discountAmountMinor: orderItems.discountAmountMinor,
@@ -861,8 +854,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         taxAmountMinor: orderItems.taxAmountMinor,
       })
       .from(orderItems)
-      .leftJoin(products, eq(products.id, orderItems.productId))
-      .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+      .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
       .where(eq(orderItems.orderId, id)),
     getReceiptOrderSupportRequestStateForOrder(db, order),
   ]);
@@ -897,7 +889,14 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       balanceDue: order.balanceDue,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
-      items,
+      items: items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
+        ...item,
+        productImage:
+          productImageObjectKey &&
+          (productImageStatus === "ready" || productImageStatus === "trashed")
+            ? getCurrentPublicMediaUrl(productImageObjectKey)
+            : null,
+      })),
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
       supportRequestIntro: supportState.supportRequestIntro,
@@ -1137,6 +1136,8 @@ const cartValidationRoute = createRoute({
               variantLabel: z.string().nullable(),
               freeDelivery: z.boolean(),
               availableQuantity: z.number().nullable(),
+              productImageMediaId: z.string().nullable(),
+              productImage: z.string().url().nullable(),
             })),
             subtotal: z.number(),
             hasFreeDeliveryProduct: z.boolean(),

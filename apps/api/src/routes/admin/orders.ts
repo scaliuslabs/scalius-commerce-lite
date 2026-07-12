@@ -15,7 +15,7 @@ import {
     orderItems,
     products,
     productVariants,
-    productImages,
+    media,
     orders,
 } from "@scalius/database/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
@@ -30,7 +30,7 @@ import {
     conflictResponse,
     serviceUnavailableResponse,
 } from "../../schemas/responses";
-import { variantOptionLabelSql } from "@scalius/core/modules/products/products.option-model";
+import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,
@@ -911,10 +911,11 @@ app.openapi(getItemsRoute, async (c) => {
         .select({
             id: orderItems.id,
             productId: orderItems.productId,
-            productName: products.name,
-            productImage: productImages.url,
+            productName: orderItems.productName,
+            productImageObjectKey: media.objectKey,
+            productImageStatus: media.status,
             variantId: orderItems.variantId,
-            variantLabel: variantOptionLabelSql(productVariants.id),
+            variantLabel: orderItems.variantLabel,
             quantity: orderItems.quantity,
             price: orderItems.price,
             fulfillmentStatus: orderItems.fulfillmentStatus,
@@ -926,17 +927,16 @@ app.openapi(getItemsRoute, async (c) => {
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId))
-        .leftJoin(products, eq(orderItems.productId, products.id))
-        .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
-        .leftJoin(
-            productImages,
-            and(
-                eq(productImages.productId, orderItems.productId),
-                eq(productImages.isPrimary, true),
-            ),
-        );
+        .leftJoin(media, eq(orderItems.productImageMediaId, media.id));
 
-    return ok(c, items);
+    return ok(c, items.map(({ productImageObjectKey, productImageStatus, ...item }) => ({
+        ...item,
+        productImage:
+            productImageObjectKey &&
+            (productImageStatus === "ready" || productImageStatus === "trashed")
+                ? getCurrentPublicMediaUrl(productImageObjectKey)
+                : null,
+    })));
 });
 
 // ─── GET /:id/payments ───────────────────────────────────────────────────────

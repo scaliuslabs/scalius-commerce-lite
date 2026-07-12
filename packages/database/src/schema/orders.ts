@@ -9,6 +9,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
+import { media } from "./media";
 import { inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
 import {
@@ -187,6 +188,9 @@ export const orderItems = sqliteTable("order_items", {
         .notNull()
         .references(() => products.id, { onDelete: "set null" }),
     variantId: text("variant_id").references(() => productVariants.id, { onDelete: "set null" }),
+    /** Historical image/poster asset resolved at order commit; never a video asset. */
+    productImageMediaId: text("product_image_media_id")
+        .references(() => media.id, { onDelete: "restrict" }),
     quantity: integer("quantity").notNull(),
     price: real("price").notNull(),
     productName: text("product_name"),
@@ -205,6 +209,7 @@ export const orderItems = sqliteTable("order_items", {
     index("order_items_order_id_idx").on(table.orderId),
     index("order_items_product_id_idx").on(table.productId),
     index("order_items_variant_id_idx").on(table.variantId),
+    index("order_items_product_image_media_id_idx").on(table.productImageMediaId),
 ]);
 
 /** Monotonic authority for invoice numbering. Updated only with invoice issuance. */

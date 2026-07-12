@@ -10,7 +10,7 @@ import {
     customerHistory,
     products,
     productVariants,
-    productImages,
+    media,
     deliveryShipments,
     deliveryProviders,
     paymentSessionAttempts,
@@ -79,6 +79,10 @@ import {
 } from "../payments/refund-attempt-visibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import {
+    loadProductMediaProjections,
+    resolveSkuImageRepresentation,
+} from "../products/products.media";
+import {
     activePaymentSessionAttemptExistsCondition,
     assertNoActivePaymentSessionAttempt,
     assertNoActivePaymentSessionAttemptsForOrders,
@@ -92,6 +96,7 @@ import {
     assertOrderItemsHaveNoReturnHistory,
 } from "./order-returns";
 import { assertGenericAdminOrderStatusTransition } from "./admin-status-policy";
+import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -147,6 +152,9 @@ type AdminOrderSkuItem = { productId: string; variantId: string | null };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantId: string;
     inventoryTracked: boolean;
+    productName: string;
+    variantLabel: string | null;
+    productImageMediaId: string | null;
 };
 type AdminOrderSkuIssueCode =
     | "SKU_REQUIRED"
@@ -601,11 +609,17 @@ function buildGuardedOrderItemInsert(
             ${orderId},
             ${item.productId},
             ${item.variantId},
+            ${item.productImageMediaId},
             ${item.quantity},
             ${item.price},
-            NULL,
-            NULL,
+            ${item.productName},
+            ${item.variantLabel},
             ${item.inventoryTracked ? 1 : 0},
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            0,
             ${ItemFulfillmentStatus.PENDING},
             unixepoch()
         WHERE ${orderEditCommittedCondition(orderId, committedOrderVersion)}
@@ -661,6 +675,9 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             id: productVariants.id,
             productId: productVariants.productId,
             trackInventory: productVariants.trackInventory,
+            imageId: productVariants.imageId,
+            productName: products.name,
+            variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
             productActive: products.isActive,
             productDeletedAt: products.deletedAt,
@@ -670,6 +687,10 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
         .where(inArray(productVariants.id, variantIds));
 
     const skuByVariantId = new Map(rows.map((row) => [row.id, row]));
+    const mediaByProduct = await loadProductMediaProjections(
+        db,
+        [...new Set(rows.map((row) => row.productId))],
+    );
     const issues: AdminOrderSkuIssue[] = [];
     const resolvedItems: Array<AdminOrderItemWithInventory<T>> = [];
 
@@ -721,6 +742,12 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             ...item,
             variantId,
             inventoryTracked: sku.trackInventory,
+            productName: sku.productName,
+            variantLabel: sku.variantLabel,
+            productImageMediaId: resolveSkuImageRepresentation(
+                mediaByProduct.get(sku.productId) ?? [],
+                sku.imageId,
+            )?.mediaId ?? null,
         });
     });
 
@@ -1359,9 +1386,10 @@ export async function getOrderDetails(
                 variantId: orderItems.variantId,
                 quantity: orderItems.quantity,
                 price: orderItems.price,
-                productName: products.name,
-                productImage: productImages.url,
-                variantLabel: variantOptionLabelSql(productVariants.id),
+                productName: orderItems.productName,
+                productImageObjectKey: media.objectKey,
+                productImageStatus: media.status,
+                variantLabel: orderItems.variantLabel,
                 fulfillmentStatus: orderItems.fulfillmentStatus,
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
@@ -1370,15 +1398,7 @@ export async function getOrderDetails(
                 taxAmountMinor: orderItems.taxAmountMinor,
             })
             .from(orderItems)
-            .leftJoin(products, eq(products.id, orderItems.productId))
-            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
-            .leftJoin(
-                productImages,
-                and(
-                    eq(productImages.productId, orderItems.productId),
-                    eq(productImages.isPrimary, true),
-                ),
-            )
+            .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
             .where(eq(orderItems.orderId, id)),
         db
             .select({
@@ -1414,7 +1434,11 @@ export async function getOrderDetails(
         quantity: item.quantity,
         price: item.price,
         productName: item.productName || null,
-        productImage: item.productImage || null,
+        productImage:
+            item.productImageObjectKey &&
+            (item.productImageStatus === "ready" || item.productImageStatus === "trashed")
+                ? getCurrentPublicMediaUrl(item.productImageObjectKey)
+                : null,
         variantLabel: item.variantLabel || null,
         fulfillmentStatus: item.fulfillmentStatus,
         unitPriceMinor: item.unitPriceMinor,
@@ -1660,8 +1684,11 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
                     orderId,
                     productId: item.productId,
                     variantId: item.variantId,
+                    productImageMediaId: item.productImageMediaId,
                     quantity: item.quantity,
                     price: item.price,
+                    productName: item.productName,
+                    variantLabel: item.variantLabel,
                     inventoryTracked: item.inventoryTracked,
                     createdAt: sql`unixepoch()`,
                 })),

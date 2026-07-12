@@ -55,6 +55,8 @@ function validCartValidation(overrides: Record<string, unknown> = {}) {
           variantLabel: null,
           freeDelivery: false,
           availableQuantity: null,
+          productImageMediaId: "med_validated_image",
+          productImage: "https://media.example.test/validated.webp",
           ...overrides,
         },
       ],
@@ -82,6 +84,8 @@ function extractQuickBuyData(html: string) {
   return JSON.parse(JSON.parse(match?.[1] ?? "\"{}\"")) as {
     cartItem?: {
       options?: Array<{ name: string; label: string }>;
+      image?: string;
+      imageMediaId?: string;
     };
   };
 }
@@ -150,11 +154,16 @@ describe("/buy/[slug]", () => {
       url: new URL("https://storefront.example.test/buy/cotton-panjabi"),
     } as never);
     const html = await response.text();
+    const quickBuyData = extractQuickBuyData(html);
 
     expect(response.status).toBe(200);
     expect(html).toContain("var_default_prod_1");
     expect(html).toContain("sessionStorage.getItem('quickBuyData')");
     expect(html).toContain("/cart?quickBuyStorage=blocked");
+    expect(quickBuyData.cartItem).toMatchObject({
+      image: "https://media.example.test/validated.webp",
+      imageMediaId: "med_validated_image",
+    });
     expect(mocks.validateCartItems).toHaveBeenCalledWith([
       expect.objectContaining({
         cartKey: "quick_buy:prod_1:var_default_prod_1",

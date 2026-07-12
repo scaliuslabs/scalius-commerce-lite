@@ -47,4 +47,19 @@ describe("media lifecycle boundaries", () => {
         expect(folderWrite).toBeGreaterThan(batch);
         expect(mediaWrite).toBeGreaterThan(folderWrite);
     });
+
+    it("blocks referenced permanent deletes before the durable deleting claim", () => {
+        const functionStart = source.indexOf("export async function permanentlyDeleteMediaFile");
+        const dependencyRead = source.indexOf("loadMediaDeleteDependencies", functionStart);
+        const claim = source.indexOf("status: \"deleting\"", functionStart);
+        const productGuard = source.indexOf("SELECT 1 FROM ${productMedia}", claim);
+        const storageDelete = source.indexOf("deleteFile(current.objectKey)", functionStart);
+        expect(dependencyRead).toBeGreaterThan(functionStart);
+        expect(claim).toBeGreaterThan(dependencyRead);
+        expect(productGuard).toBeGreaterThan(claim);
+        expect(storageDelete).toBeGreaterThan(productGuard);
+        expect(source).toContain("MEDIA_DEPENDENCY_CONFLICT");
+        expect(source).toContain("productMediaId");
+        expect(source).toContain("productImageMediaId");
+    });
 });

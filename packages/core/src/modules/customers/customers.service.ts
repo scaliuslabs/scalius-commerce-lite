@@ -16,9 +16,8 @@ import {
     OrderStatus,
     paymentPlans,
     PaymentStatus,
-    productImages,
+    media,
     products,
-    productVariants,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, asc, desc, eq, and, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -26,7 +25,7 @@ import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { variantOptionLabelSql } from "../products/products.option-model";
+import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,
@@ -85,6 +84,15 @@ type CustomerOrderListItem = {
     productImage: string | null;
     variantLabel: string | null;
 };
+
+function historicalOrderImageUrl(
+    objectKey: string | null,
+    status: string | null,
+): string | null {
+    return objectKey && (status === "ready" || status === "trashed")
+        ? getCurrentPublicMediaUrl(objectKey)
+        : null;
+}
 
 export interface CustomerOrderDetailTimelineEvent {
     id: string;
@@ -813,20 +821,15 @@ export async function getCustomerOrders(
                     variantId: orderItems.variantId,
                     quantity: orderItems.quantity,
                     price: orderItems.price,
-                    productName: products.name,
+                    productName: orderItems.productName,
                     productSlug: products.slug,
-                    productImage: sql<string>`(
-                        SELECT ${productImages.url}
-                        FROM ${productImages}
-                        WHERE ${productImages.productId} = ${products.id}
-                        AND ${productImages.isPrimary} = 1
-                        LIMIT 1
-                    )`.as("productImage"),
-                    variantLabel: variantOptionLabelSql(productVariants.id),
+                    productImageObjectKey: media.objectKey,
+                    productImageStatus: media.status,
+                    variantLabel: orderItems.variantLabel,
                 })
                 .from(orderItems)
                 .leftJoin(products, eq(products.id, orderItems.productId))
-                .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+                .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
                 .where(sql`${orderItems.orderId} IN ${orderIds}`),
             db
                 .select({
@@ -848,7 +851,10 @@ export async function getCustomerOrders(
                 .where(sql`${deliveryShipments.orderId} IN ${orderIds}`)
                 .orderBy(desc(deliveryShipments.createdAt)),
         ] as Parameters<Database["batch"]>[0]) as [
-            CustomerOrderListItem[],
+            Array<CustomerOrderListItem & {
+                productImageObjectKey: string | null;
+                productImageStatus: string | null;
+            }>,
             Array<{
                 id: string;
                 orderId: string;
@@ -865,9 +871,15 @@ export async function getCustomerOrders(
             }>,
         ];
 
-        for (const item of allItems) {
+        for (const { productImageObjectKey, productImageStatus, ...item } of allItems) {
             const list = itemsByOrder.get(item.orderId) || [];
-            list.push(item);
+            list.push({
+                ...item,
+                productImage: historicalOrderImageUrl(
+                    productImageObjectKey,
+                    productImageStatus,
+                ),
+            });
             itemsByOrder.set(item.orderId, list);
         }
 
@@ -1014,16 +1026,11 @@ export async function getCustomerOrderDetailForOrder(
                 variantId: orderItems.variantId,
                 quantity: orderItems.quantity,
                 price: orderItems.price,
-                productName: products.name,
+                productName: orderItems.productName,
                 productSlug: products.slug,
-                productImage: sql<string>`(
-                    SELECT ${productImages.url}
-                    FROM ${productImages}
-                    WHERE ${productImages.productId} = ${products.id}
-                    AND ${productImages.isPrimary} = 1
-                    LIMIT 1
-                )`.as("productImage"),
-                variantLabel: variantOptionLabelSql(productVariants.id),
+                productImageObjectKey: media.objectKey,
+                productImageStatus: media.status,
+                variantLabel: orderItems.variantLabel,
                 unitPrice: orderItems.price,
                 lineTotal: sql<number>`${orderItems.quantity} * ${orderItems.price}`.as("lineTotal"),
                 fulfillmentStatus: orderItems.fulfillmentStatus,
@@ -1036,7 +1043,7 @@ export async function getCustomerOrderDetailForOrder(
             })
             .from(orderItems)
             .leftJoin(products, eq(products.id, orderItems.productId))
-            .leftJoin(productVariants, eq(productVariants.id, orderItems.variantId))
+            .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
             .where(eq(orderItems.orderId, orderId)),
         db
             .select({
@@ -1139,7 +1146,8 @@ export async function getCustomerOrderDetailForOrder(
             price: number;
             productName: string | null;
             productSlug: string | null;
-            productImage: string | null;
+            productImageObjectKey: string | null;
+            productImageStatus: string | null;
             variantLabel: string | null;
             unitPrice: number;
             lineTotal: number;
@@ -1202,8 +1210,13 @@ export async function getCustomerOrderDetailForOrder(
         CustomerOrderNotificationReceiptRow[],
     ];
 
-    const formattedItems = items.map((item) => ({
+    const formattedItems = items.map(({
+        productImageObjectKey,
+        productImageStatus,
+        ...item
+    }) => ({
         ...item,
+        productImage: historicalOrderImageUrl(productImageObjectKey, productImageStatus),
         createdAt: timestampToIso(item.createdAt),
     }));
 
