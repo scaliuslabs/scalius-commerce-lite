@@ -3078,6 +3078,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 eligible: boolean;
                 disabledReason: string | null;
             }>;
+            supportRequestIntro: string;
             paymentPlan: {
                 totalAmount: number;
                 depositAmount: number;
@@ -3284,6 +3285,7 @@ export type PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses = {
                 eligible: boolean;
                 disabledReason: string | null;
             }>;
+            supportRequestIntro: string;
         };
     };
 };
@@ -6061,6 +6063,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     eligible: boolean;
                     disabledReason: string | null;
                 }>;
+                supportRequestIntro: string;
             };
         };
     };
@@ -6212,6 +6215,7 @@ export type PostApiV1OrdersReceiptByIdSupportRequestsResponses = {
                 eligible: boolean;
                 disabledReason: string | null;
             }>;
+            supportRequestIntro: string;
         };
     };
 };
@@ -24162,6 +24166,236 @@ export type PostApiV1AdminSettingsSmsResponses = {
 };
 
 export type PostApiV1AdminSettingsSmsResponse = PostApiV1AdminSettingsSmsResponses[keyof PostApiV1AdminSettingsSmsResponses];
+
+export type GetApiV1AdminSettingsCustomerRequestsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/customer-requests';
+};
+
+export type GetApiV1AdminSettingsCustomerRequestsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCustomerRequestsError = GetApiV1AdminSettingsCustomerRequestsErrors[keyof GetApiV1AdminSettingsCustomerRequestsErrors];
+
+export type GetApiV1AdminSettingsCustomerRequestsResponses = {
+    /**
+     * Operational customer cancellation, return, and refund policy
+     */
+    200: {
+        success: true;
+        data: {
+            policy: {
+                cancellationEnabled: boolean;
+                returnEnabled: boolean;
+                refundEnabled: boolean;
+                visibility: 'eligible_only' | 'show_unavailable';
+                introText: string | null;
+            };
+            resolvedIntro: string;
+            preview: Array<{
+                id: 'pre_shipment' | 'shipped_unpaid' | 'delivered_paid';
+                label: string;
+                context: string;
+                actions: Array<{
+                    type: 'cancel_pre_shipment' | 'return' | 'refund';
+                    label: string;
+                    description: string;
+                    eligible: boolean;
+                    disabledReason: string | null;
+                    visible: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCustomerRequestsResponse = GetApiV1AdminSettingsCustomerRequestsResponses[keyof GetApiV1AdminSettingsCustomerRequestsResponses];
+
+export type PutApiV1AdminSettingsCustomerRequestsData = {
+    body: {
+        cancellationEnabled: boolean;
+        returnEnabled: boolean;
+        refundEnabled: boolean;
+        visibility: 'eligible_only' | 'show_unavailable';
+        introText: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/customer-requests';
+};
+
+export type PutApiV1AdminSettingsCustomerRequestsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsCustomerRequestsError = PutApiV1AdminSettingsCustomerRequestsErrors[keyof PutApiV1AdminSettingsCustomerRequestsErrors];
+
+export type PutApiV1AdminSettingsCustomerRequestsResponses = {
+    /**
+     * Operational customer request policy saved
+     */
+    200: {
+        success: true;
+        data: {
+            policy: {
+                cancellationEnabled: boolean;
+                returnEnabled: boolean;
+                refundEnabled: boolean;
+                visibility: 'eligible_only' | 'show_unavailable';
+                introText: string | null;
+            };
+            resolvedIntro: string;
+            preview: Array<{
+                id: 'pre_shipment' | 'shipped_unpaid' | 'delivered_paid';
+                label: string;
+                context: string;
+                actions: Array<{
+                    type: 'cancel_pre_shipment' | 'return' | 'refund';
+                    label: string;
+                    description: string;
+                    eligible: boolean;
+                    disabledReason: string | null;
+                    visible: boolean;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsCustomerRequestsResponse = PutApiV1AdminSettingsCustomerRequestsResponses[keyof PutApiV1AdminSettingsCustomerRequestsResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body?: {

@@ -1,6 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import type {
+  CustomerRequestPolicy,
+  CustomerRequestPreviewState,
+} from "@scalius/core/modules/settings/customer-request-policy";
+import type {
   GetApiV1AdminSettingsSeoResponses,
   PostApiV1AdminSettingsSeoData,
 } from "@scalius/api-client/types";
@@ -113,6 +117,11 @@ export interface CheckoutReadinessPayload {
   hasActiveShippingMethod: boolean;
   hasActiveDeliveryHierarchy: boolean;
   issues: string[];
+}
+export interface CustomerRequestPolicyPayload {
+  policy: CustomerRequestPolicy;
+  resolvedIntro: string;
+  preview: CustomerRequestPreviewState[];
 }
 export type EmailProvider = "cloudflare" | "resend";
 export interface EmailSettingsPayload extends SettingsPayload {
@@ -299,6 +308,16 @@ export const getCheckoutReadiness = createServerFn({ method: "GET" }).handler(
     return apiGet<CheckoutReadinessPayload>("/settings/checkout-readiness");
   },
 );
+
+export const getCustomerRequestPolicySettings = createServerFn({ method: "GET" }).handler(
+  async () => apiGet<CustomerRequestPolicyPayload>("/settings/customer-requests"),
+);
+
+export const updateCustomerRequestPolicySettings = createServerFn({ method: "POST" })
+  .validator((data: CustomerRequestPolicy) => data)
+  .handler(async ({ data }) => (
+    apiPut<CustomerRequestPolicyPayload>("/settings/customer-requests", data)
+  ));
 
 export const getEmailSettings = createServerFn({ method: "GET" }).handler(
   async () => {

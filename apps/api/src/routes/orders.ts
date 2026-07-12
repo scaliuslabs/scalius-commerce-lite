@@ -604,12 +604,14 @@ const orderReceiptSchema = z.object({
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
+  supportRequestIntro: z.string(),
 });
 
 const receiptSupportRequestResponseSchema = z.object({
   request: receiptSupportRequestSchema,
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
+  supportRequestIntro: z.string(),
 });
 
 const orderPaymentRecoveryChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
@@ -898,6 +900,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       items,
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
+      supportRequestIntro: supportState.supportRequestIntro,
     },
   });
 });

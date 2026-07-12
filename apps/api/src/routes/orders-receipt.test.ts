@@ -197,11 +197,13 @@ describe("order receipt route", () => {
     orderSupportMocks.getReceiptOrderSupportRequestStateForOrder.mockResolvedValue({
       supportRequests: [supportRequest],
       supportRequestActions,
+      supportRequestIntro: "Send a request and the store will review it.",
     });
     orderSupportMocks.createReceiptOrderSupportRequest.mockResolvedValue({
       request: supportRequest,
       supportRequests: [supportRequest],
       supportRequestActions,
+      supportRequestIntro: "Send a request and the store will review it.",
     });
     notificationMocks.enqueueOrderSupportRequestNotificationForOrder.mockResolvedValue(undefined);
     vi.clearAllMocks();
@@ -305,6 +307,7 @@ describe("order receipt route", () => {
       items: itemRows,
       supportRequests: [supportRequest],
       supportRequestActions,
+      supportRequestIntro: "Send a request and the store will review it.",
     });
     expect(body.data?.order).not.toHaveProperty("customerPhone");
     expect(body.data?.order).not.toHaveProperty("customerEmail");

@@ -243,6 +243,7 @@ describe("storefront orders API client", () => {
           items: [],
           supportRequests: [],
           supportRequestActions: [],
+          supportRequestIntro: "Send a request and the store will review it.",
         },
       },
     }), { status: 200 }));

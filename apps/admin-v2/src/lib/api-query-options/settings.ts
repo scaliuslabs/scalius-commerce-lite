@@ -12,6 +12,7 @@ import {
   type CheckoutReadinessPayload,
   getAuthSettings,
   getCheckoutReadiness,
+  getCustomerRequestPolicySettings,
   getFirebaseSettings,
   getGeneralSettings,
   getMetaConversionsLogs,
@@ -152,6 +153,13 @@ export const checkoutReadinessQueryOptions = () =>
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
     retry: 2,
+  });
+
+export const customerRequestPolicyQueryOptions = () =>
+  queryOptions({
+    queryKey: queryKeys.settings.customerRequests(),
+    queryFn: () => getCustomerRequestPolicySettings(),
+    staleTime: MODERATE_STALE_TIME_MS,
   });
 
 export const seoSettingsQueryOptions = () =>

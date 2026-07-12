@@ -111,4 +111,15 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.TAXES_MANAGE });
   });
 
+  it("separates customer request policy reads from mutations", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/settings/customer-requests",
+      "GET",
+    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_VIEW });
+    expect(getRoutePermission(
+      "/api/v1/admin/settings/customer-requests",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
+  });
+
 });

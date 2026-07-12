@@ -72,9 +72,9 @@ const orderId = Astro.params.id ?? "";
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 class="text-lg font-bold text-foreground">Order Help</h2>
-            <p class="mt-1 text-sm text-muted-foreground">Request help with cancellation, return, or refund review.</p>
+            <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground">Request help with cancellation, return, or refund review.</p>
           </div>
-          <div id="orderSupportActions" class="flex flex-wrap gap-2"></div>
+          <div id="orderSupportActions" class="grid gap-2 sm:grid-cols-3"></div>
         </div>
         <div id="orderSupportRequests" class="mt-4 space-y-3"></div>
         <div id="orderSupportForm" class="mt-4 hidden rounded-xl border border-border bg-muted/20 p-4">
@@ -436,8 +436,11 @@ const orderId = Astro.params.id ?? "";
     const actionsEl = document.getElementById("orderSupportActions");
     const requests = detail.supportRequests || [];
     const actions = detail.supportRequestActions || [];
-    const eligibleActions = actions.filter((action) => action.eligible);
     const activeRequest = requests.find((request) => request.active);
+    const introEl = document.getElementById("orderSupportIntro");
+    if (introEl) {
+      introEl.textContent = detail.supportRequestIntro;
+    }
 
     if (requestsEl) {
       if (requests.length > 0) {
@@ -453,7 +456,7 @@ const orderId = Astro.params.id ?? "";
             </div>
           </article>
         `).join("");
-      } else if (eligibleActions.length > 0) {
+      } else if (actions.length > 0) {
         requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No support requests submitted for this order.</p>`;
       } else {
         requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No request actions are available for this order right now.</p>`;
@@ -461,9 +464,11 @@ const orderId = Astro.params.id ?? "";
     }
 
     if (actionsEl) {
-      actionsEl.innerHTML = eligibleActions.map((action) => `
-        <button type="button" data-support-request-type="${escapeHtml(action.type)}" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">
-          ${escapeHtml(action.label)}
+      actionsEl.innerHTML = actions.map((action) => `
+        <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:border-primary/40 hover:bg-muted" : "cursor-not-allowed bg-muted/30 text-muted-foreground opacity-75"}">
+          <span class="font-semibold">${escapeHtml(action.label)}</span>
+          <span class="mt-1 block text-xs text-muted-foreground">${escapeHtml(action.description)}</span>
+          ${!action.eligible && action.disabledReason ? `<span class="mt-1.5 block text-xs text-foreground/70">${escapeHtml(action.disabledReason)}</span>` : ""}
         </button>
       `).join("");
     }
