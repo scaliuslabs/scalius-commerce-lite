@@ -1252,6 +1252,22 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
     const productImage = resolveProductImageRepresentation(mediaItems);
+    const publicMedia = mediaItems.map((item) => ({
+        id: item.id,
+        mediaId: item.mediaId,
+        kind: item.kind,
+        url: item.url,
+        posterMediaId: item.posterMediaId,
+        posterUrl: item.posterUrl,
+        altText: item.altText,
+        caption: item.caption,
+        width: item.width,
+        height: item.height,
+        durationMs: item.durationMs,
+        isPrimary: item.isPrimary,
+        sortOrder: item.sortOrder,
+        status: item.status,
+    }));
     const hasVariants = typedVariants.some((variant) =>
         variant.isDefault !== true && Boolean(variant.optionCombinationKey?.trim()),
     );
@@ -1298,7 +1314,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             additionalInfo,
         },
         category,
-        media: mediaItems,
+        media: publicMedia,
         variants: formattedVariants,
         relatedProducts,
     };

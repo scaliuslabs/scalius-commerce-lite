@@ -285,6 +285,19 @@ describe("storefront product query boundaries", () => {
         expect(feedBody).not.toContain("eq(productVariants.productId, product.id)");
     });
 
+    it("keeps admin-only contextual alt overrides out of the public media response", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const detailBody = getFunctionBody(source, "getStorefrontProductBySlug");
+
+        expect(detailBody).toContain("const publicMedia = mediaItems.map((item) => ({");
+        expect(detailBody).toContain("altText: item.altText");
+        expect(detailBody).toContain("media: publicMedia");
+        expect(detailBody).not.toContain("contextualAltText: item.contextualAltText");
+    });
+
     it("keeps products, categories, and collections on one result-scoped catalog core", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
