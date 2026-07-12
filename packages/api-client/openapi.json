@@ -44267,6 +44267,26 @@
                                 ],
                                 "nullable": true
                               },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
                               "productName": {
                                 "type": "string",
                                 "nullable": true
@@ -44290,6 +44310,8 @@
                               "alertSentAt",
                               "acknowledgedAt",
                               "resolvedAt",
+                              "createdAt",
+                              "updatedAt",
                               "productName",
                               "variantSku",
                               "variantLabel"
@@ -44500,6 +44522,26 @@
                                 ],
                                 "nullable": true
                               },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
                               "productName": {
                                 "type": "string",
                                 "nullable": true
@@ -44523,6 +44565,8 @@
                               "alertSentAt",
                               "acknowledgedAt",
                               "resolvedAt",
+                              "createdAt",
+                              "updatedAt",
                               "productName",
                               "variantSku",
                               "variantLabel"
@@ -44598,6 +44642,46 @@
                   "required": [
                     "success",
                     "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
                   ]
                 }
               }
@@ -99518,17 +99602,22 @@
                       "type": "object",
                       "properties": {
                         "attributeId": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         },
                         "value": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         }
                       },
                       "required": [
                         "attributeId",
                         "value"
                       ]
-                    }
+                    },
+                    "maxItems": 90
                   },
                   "additionalInfo": {
                     "type": "array",
@@ -101534,17 +101623,22 @@
                       "type": "object",
                       "properties": {
                         "attributeId": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         },
                         "value": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         }
                       },
                       "required": [
                         "attributeId",
                         "value"
                       ]
-                    }
+                    },
+                    "maxItems": 90
                   },
                   "additionalInfo": {
                     "type": "array",
@@ -109341,8 +109435,8 @@
         "parameters": [
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -109353,14 +109447,14 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 500,
               "default": 10,
-              "description": "Items per page (max 500 for selector dropdowns)"
+              "description": "Items per page (max 500)"
             },
             "required": false,
-            "description": "Items per page (max 500 for selector dropdowns)",
+            "description": "Items per page (max 500)",
             "name": "limit",
             "in": "query"
           },
@@ -109378,6 +109472,13 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "name",
+                "slug",
+                "filterable",
+                "createdAt",
+                "updatedAt"
+              ],
               "default": "name",
               "description": "Sort field"
             },
@@ -109389,6 +109490,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "asc",
               "description": "Sort order"
             },
@@ -109801,6 +109906,7 @@
                   "slug": {
                     "type": "string",
                     "minLength": 2,
+                    "maxLength": 100,
                     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
                   "filterable": {
@@ -110239,6 +110345,7 @@
                   "slug": {
                     "type": "string",
                     "minLength": 2,
+                    "maxLength": 100,
                     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                   },
                   "filterable": {
@@ -112560,7 +112667,8 @@
                 "properties": {
                   "value": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 100
                   }
                 },
                 "required": [
@@ -112910,7 +113018,8 @@
                   },
                   "newValue": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 100
                   }
                 },
                 "required": [

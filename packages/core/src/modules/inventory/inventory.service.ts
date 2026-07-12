@@ -267,6 +267,28 @@ export async function getInventoryOverview(db: Database, params: {
 
     if (section === "alerts") {
         const aStatus = alertStatus ?? "active";
+        const alertConditions: SQL[] = [];
+        if (aStatus !== "all") {
+            alertConditions.push(eq(productLowStockAlerts.alertStatus, aStatus));
+        }
+        if (search.trim()) {
+            const searchPattern = `%${search.trim()}%`;
+            alertConditions.push(or(
+                like(productVariants.sku, searchPattern),
+                like(products.name, searchPattern),
+            )!);
+        }
+        const alertWhere = alertConditions.length > 0
+            ? and(...alertConditions)
+            : undefined;
+
+        const countResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(productLowStockAlerts)
+            .leftJoin(products, eq(products.id, productLowStockAlerts.productId))
+            .leftJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
+            .where(alertWhere)
+            .get();
         const alerts = await db
             .select({
                 id: productLowStockAlerts.id,
@@ -278,6 +300,8 @@ export async function getInventoryOverview(db: Database, params: {
                 alertSentAt: productLowStockAlerts.alertSentAt,
                 acknowledgedAt: productLowStockAlerts.acknowledgedAt,
                 resolvedAt: productLowStockAlerts.resolvedAt,
+                createdAt: productLowStockAlerts.createdAt,
+                updatedAt: productLowStockAlerts.updatedAt,
                 productName: products.name,
                 variantSku: productVariants.sku,
                 variantLabel: variantOptionLabelSql(productVariants.id),
@@ -285,15 +309,21 @@ export async function getInventoryOverview(db: Database, params: {
             .from(productLowStockAlerts)
             .leftJoin(products, eq(products.id, productLowStockAlerts.productId))
             .leftJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
-            .where(
-                aStatus === "all"
-                    ? sql`1=1`
-                    : eq(productLowStockAlerts.alertStatus, aStatus)
-            )
-            .orderBy(desc(productLowStockAlerts.createdAt))
+            .where(alertWhere)
+            .orderBy(desc(productLowStockAlerts.updatedAt), desc(productLowStockAlerts.id))
+            .limit(limit)
+            .offset(offset)
             .all();
 
-        return { alerts };
+        return {
+            alerts,
+            pagination: {
+                page,
+                limit,
+                total: countResult?.count ?? 0,
+                totalPages: Math.ceil((countResult?.count ?? 0) / limit),
+            },
+        };
     }
 
     throw new ValidationError("Invalid section parameter");

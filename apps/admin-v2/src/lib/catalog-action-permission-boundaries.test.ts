@@ -50,6 +50,7 @@ describe("catalog action permission boundaries", () => {
     expect(collectionsRoute).toContain("collectionActions.canCreate");
     expect(collectionsRoute).toContain("collectionActions.canDelete");
     expect(inventory).toContain("inventoryActions.canAdjustStock &&");
+    expect(inventory).toContain("inventoryActions.canAcknowledgeAlerts");
   });
 
   it("removes row selection and mutation menu items when unavailable", () => {

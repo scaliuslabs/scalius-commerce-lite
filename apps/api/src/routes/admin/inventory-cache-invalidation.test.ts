@@ -82,6 +82,7 @@ function createTestApp() {
     movements: [],
     pagination: { page: 2, limit: 20, total: 0, totalPages: 0 },
   });
+  mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -221,6 +222,62 @@ describe("admin inventory cache invalidation", () => {
         limit: 20,
       }),
     );
+  });
+
+  it("forwards bounded alert filters, search, and pagination to the inventory service", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/inventory?section=alerts&search=SKU-LOW&alertStatus=resolved&page=3&limit=10",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getInventoryOverview).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      expect.objectContaining({
+        section: "alerts",
+        search: "SKU-LOW",
+        alertStatus: "resolved",
+        page: 3,
+        limit: 10,
+      }),
+    );
+  });
+
+  it("acknowledges only an active low-stock alert", async () => {
+    const { app, db, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/inventory/alerts",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: "variant_low" }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.acknowledgeLowStockAlert).toHaveBeenCalledWith(db, "variant_low");
+  });
+
+  it("returns not found when the alert is no longer active", async () => {
+    const { app, env } = createTestApp();
+    mocks.acknowledgeLowStockAlert.mockResolvedValueOnce(false);
+
+    const response = await app.request(
+      "/api/v1/admin/inventory/alerts",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: "variant_stale" }),
+      },
+      env,
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it.each([

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { productLowStockAlerts } from "@scalius/database/schema";
-import { checkAndAlertLowStock } from "./alerts";
+import { acknowledgeLowStockAlert, checkAndAlertLowStock } from "./alerts";
 
 type VariantState = {
   id: string;
@@ -135,5 +135,24 @@ describe("low-stock alert lifecycle", () => {
       table: productLowStockAlerts,
       values: { alertStatus: "resolved", currentQty: 6 },
     });
+  });
+});
+
+describe("low-stock alert acknowledgement", () => {
+  it.each([
+    [[{ id: "alert_1" }], true],
+    [[], false],
+  ] as const)("reports whether an active alert was acknowledged", async (rows, expected) => {
+    const returning = vi.fn().mockResolvedValue(rows);
+    const db = {
+      update: () => ({
+        set: () => ({
+          where: () => ({ returning }),
+        }),
+      }),
+    };
+
+    await expect(acknowledgeLowStockAlert(db as never, "variant_1")).resolves.toBe(expected);
+    expect(returning).toHaveBeenCalledOnce();
   });
 });

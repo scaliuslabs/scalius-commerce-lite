@@ -209,6 +209,40 @@ describe("inventory overview query boundaries", () => {
     expect(queries[0]).not.toContain("pvov.variant_id = \"id\"");
   });
 
+  it("keeps low-stock alert search and history bounded and paginated", async () => {
+    const queries: string[] = [];
+    const d1 = {
+      prepare(query: string) {
+        queries.push(query);
+        const statement = {
+          bind: () => statement,
+          all: async () => ({ results: query.toLowerCase().includes("count(*)") ? [{ count: 23 }] : [] }),
+          raw: async () => query.toLowerCase().includes("count(*)") ? [[23]] : [],
+          first: async () => ({ count: 23 }),
+        };
+        return statement;
+      },
+    };
+    const db = drizzle(d1 as unknown as D1Database, { schema });
+
+    await expect(getInventoryOverview(db, {
+      section: "alerts",
+      search: "SKU-LOW",
+      status: "all",
+      alertStatus: "resolved",
+      page: 2,
+      limit: 10,
+    })).resolves.toMatchObject({
+      alerts: [],
+      pagination: { page: 2, limit: 10, total: 23, totalPages: 3 },
+    });
+
+    expect(queries).toHaveLength(2);
+    expect(queries[0]?.toLowerCase()).toContain("count(*)");
+    expect(queries[1]?.toLowerCase()).toContain("limit ? offset ?");
+    expect(queries[1]).toContain('pvov.variant_id = "product_variants"."id"');
+  });
+
   it.each([
     [{ section: "unknown", search: "", status: "all", page: 1, limit: 50 }, /section/],
     [{ section: "variants", search: "", status: "unknown", page: 1, limit: 50 }, /status/],

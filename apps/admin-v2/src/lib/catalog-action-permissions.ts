@@ -49,6 +49,7 @@ export interface CatalogActionPermissions {
   };
   inventory: {
     canAdjustStock: boolean;
+    canAcknowledgeAlerts: boolean;
   };
 }
 
@@ -105,6 +106,7 @@ export function getCatalogActionPermissions(
     },
     inventory: {
       canAdjustStock: canEditProducts,
+      canAcknowledgeAlerts: canEditProducts,
     },
   };
 }

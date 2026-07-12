@@ -5,8 +5,8 @@
 import { Link } from "@tanstack/react-router";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown, Check } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -46,7 +46,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
   adjustInventory,
+  acknowledgeInventoryAlert,
   stockSet,
+  type InventoryAlert,
   type InventoryMovement,
   type InventoryLedgerHealth,
   type InventoryPagination,
@@ -59,8 +61,9 @@ import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissi
 
 // ---------- Types ----------
 
-type Tab = "variants" | "movements";
+type Tab = "variants" | "alerts" | "movements";
 type StockFilter = "all" | "low" | "out" | "reserved";
+type AlertStatusFilter = "active" | "acknowledged" | "resolved" | "all";
 type SortField = "productName" | "sku" | "available";
 type SortOrder = "asc" | "desc";
 type MovementTypeFilter = "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
@@ -215,6 +218,10 @@ export function InventoryManager() {
   const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
   const [movementLocalSearch, setMovementLocalSearch] = useState("");
   const [movementType, setMovementType] = useState<MovementTypeFilter>("all");
+  const [alertsRequestedPage, setAlertsRequestedPage] = useState(1);
+  const [alertsRequestedLimit, setAlertsRequestedLimit] = useState(20);
+  const [alertLocalSearch, setAlertLocalSearch] = useState("");
+  const [alertStatus, setAlertStatus] = useState<AlertStatusFilter>("active");
   const [localSearch, setLocalSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({ field: "available", order: "asc" });
@@ -223,6 +230,7 @@ export function InventoryManager() {
   const queryClient = useQueryClient();
   const search = useDebounce(localSearch, 300);
   const movementSearch = useDebounce(movementLocalSearch, 300);
+  const alertSearch = useDebounce(alertLocalSearch, 300);
 
   // TanStack Query — variants
   const variantsQuery = useQuery({
@@ -252,6 +260,29 @@ export function InventoryManager() {
     enabled: activeTab === "movements",
   });
 
+  const alertsQuery = useQuery({
+    ...inventoryQueryOptions({
+      section: "alerts",
+      search: alertSearch || undefined,
+      alertStatus,
+      page: alertsRequestedPage,
+      limit: alertsRequestedLimit,
+    }),
+    placeholderData: keepPreviousData,
+    enabled: activeTab === "alerts",
+  });
+
+  const acknowledgeAlertMutation = useMutation({
+    mutationFn: (variantId: string) => acknowledgeInventoryAlert({ data: { variantId } }),
+    onSuccess: async () => {
+      toast.success("Alert acknowledged");
+      await queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Could not acknowledge alert");
+    },
+  });
+
   // Extract typed data from query results
   const variantsData = useMemo(() => {
     const raw = variantsQuery.data;
@@ -277,10 +308,27 @@ export function InventoryManager() {
     };
   }, [movementsQuery.data]);
 
+  const alertsData = useMemo(() => {
+    const raw = alertsQuery.data;
+    if (!raw) return {
+      alerts: [] as InventoryAlert[],
+      pagination: null as InventoryPagination | null,
+    };
+    return {
+      alerts: raw.alerts || [],
+      pagination: raw.pagination || null,
+    };
+  }, [alertsQuery.data]);
+
   const { variants, stats, pagination } = variantsData;
   const { movements, pagination: movementsPagination, ledgerHealth } = movementsData;
+  const { alerts, pagination: alertsPagination } = alertsData;
 
-  const loading = activeTab === "variants" ? variantsQuery.isFetching : movementsQuery.isFetching;
+  const loading = activeTab === "variants"
+    ? variantsQuery.isFetching
+    : activeTab === "alerts"
+      ? alertsQuery.isFetching
+      : movementsQuery.isFetching;
   const isInitialLoad = activeTab === "variants" ? variantsQuery.isLoading : movementsQuery.isLoading;
 
   const refresh = useCallback(() => {
@@ -303,6 +351,13 @@ export function InventoryManager() {
 
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
   const hasMovementFilters = movementLocalSearch.trim() || movementType !== "all";
+
+  const reviewAlertSku = useCallback((alert: InventoryAlert) => {
+    setLocalSearch(alert.variantSku || alert.variantId);
+    setStockFilter("all");
+    setRequestedPage(1);
+    setActiveTab("variants");
+  }, []);
 
   return (
     <Card className="border-none shadow-none bg-transparent sm:bg-card">
@@ -344,6 +399,17 @@ export function InventoryManager() {
               className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "variants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <Package className="h-3.5 w-3.5" /> All Variants
+            </button>
+            <button
+              id="inventory-alerts-tab"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "alerts"}
+              aria-controls="inventory-alerts-panel"
+              onClick={() => setActiveTab("alerts")}
+              className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "alerts" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" /> Low-stock alerts
             </button>
             <button
               id="inventory-movements-tab"
@@ -517,6 +583,126 @@ export function InventoryManager() {
               onPageChange={(page) => setRequestedPage(page)}
               onLimitChange={(limit) => { setRequestedLimit(limit); setRequestedPage(1); }}
               itemName="variants"
+            />
+          </div>
+        )}
+
+        {/* Low-stock alerts tab */}
+        {activeTab === "alerts" && (
+          <div
+            id="inventory-alerts-panel"
+            role="tabpanel"
+            aria-labelledby="inventory-alerts-tab"
+            aria-busy={alertsQuery.isFetching}
+            className="space-y-2 p-2 sm:p-3"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="search"
+                  aria-label="Search low-stock alerts by product or SKU"
+                  placeholder="Search product or SKU..."
+                  value={alertLocalSearch}
+                  onChange={(event) => {
+                    setAlertLocalSearch(event.target.value);
+                    setAlertsRequestedPage(1);
+                  }}
+                  className="h-8 pl-7 text-sm"
+                />
+              </div>
+              <Select value={alertStatus} onValueChange={(value: AlertStatusFilter) => {
+                setAlertStatus(value);
+                setAlertsRequestedPage(1);
+              }}>
+                <SelectTrigger className="h-8 w-[160px] text-sm" aria-label="Filter low-stock alert status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Needs review</SelectItem>
+                  <SelectItem value="acknowledged">Acknowledged</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="all">All alerts</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="relative overflow-hidden rounded-md border">
+              {alertsQuery.isFetching && alerts.length > 0 ? (
+                <div aria-hidden="true" className="absolute inset-0 z-10 bg-background/50 backdrop-blur-[1px]" />
+              ) : null}
+              <Table>
+                <TableHeader>
+                  <TableRow className="h-8 bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="h-8 pl-3 text-xs">Product / SKU</TableHead>
+                    <TableHead className="h-8 text-right text-xs">Available</TableHead>
+                    <TableHead className="h-8 text-right text-xs">Threshold</TableHead>
+                    <TableHead className="h-8 text-xs">Status</TableHead>
+                    <TableHead className="h-8 text-xs">Updated</TableHead>
+                    <TableHead className="h-8 pr-3 text-right text-xs">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {alertsQuery.isError ? (
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center">
+                      <p className="text-xs font-medium text-destructive">Low-stock alerts could not be loaded.</p>
+                      <Button type="button" variant="outline" size="sm" className="mt-2 h-7 text-xs" onClick={() => void alertsQuery.refetch()}>Retry</Button>
+                    </TableCell></TableRow>
+                  ) : alertsQuery.isLoading ? (
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center"><RefreshCw className="mx-auto h-4 w-4 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                  ) : alerts.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground">
+                      {alertStatus === "active" ? "No low-stock alerts need review." : "No alerts match this view."}
+                    </TableCell></TableRow>
+                  ) : alerts.map((alert) => {
+                    const statusLabel = alert.alertStatus === "active" ? "Needs review" : alert.alertStatus === "acknowledged" ? "Acknowledged" : "Resolved";
+                    const statusClass = alert.alertStatus === "active"
+                      ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-400"
+                      : alert.alertStatus === "resolved"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-400"
+                        : "border-border bg-muted text-muted-foreground";
+                    const statusTime = alert.updatedAt;
+                    return (
+                      <TableRow key={alert.id}>
+                        <TableCell className="py-2 pl-3">
+                          <Link to={`/admin/products/${alert.productId}` as string} className="block max-w-[260px] truncate text-sm font-medium text-primary hover:underline">
+                            {alert.productName || "Unknown product"}
+                          </Link>
+                          <span className="font-mono text-xs text-muted-foreground">{alert.variantSku || alert.variantId}</span>
+                          {alert.variantLabel ? <span className="ml-2 text-xs text-muted-foreground">{alert.variantLabel}</span> : null}
+                        </TableCell>
+                        <TableCell className="py-2 text-right text-sm font-semibold tabular-nums">{alert.currentQty}</TableCell>
+                        <TableCell className="py-2 text-right text-sm tabular-nums text-muted-foreground">{alert.threshold}</TableCell>
+                        <TableCell className="py-2"><Badge variant="outline" className={cn("px-1.5 py-0 text-xs", statusClass)}>{statusLabel}</Badge></TableCell>
+                        <TableCell className="whitespace-nowrap py-2 text-xs text-muted-foreground">{statusTime ? timeAgo(statusTime) : "—"}</TableCell>
+                        <TableCell className="py-2 pr-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => reviewAlertSku(alert)}>Review SKU</Button>
+                            {alert.alertStatus === "active" && inventoryActions.canAcknowledgeAlerts ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={acknowledgeAlertMutation.isPending}
+                                onClick={() => acknowledgeAlertMutation.mutate(alert.variantId)}
+                              >
+                                <Check className="mr-1 h-3.5 w-3.5" /> Acknowledge
+                              </Button>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <PaginationControls
+              pagination={alertsPagination}
+              onPageChange={setAlertsRequestedPage}
+              onLimitChange={(limit) => { setAlertsRequestedLimit(limit); setAlertsRequestedPage(1); }}
+              itemName="alerts"
             />
           </div>
         )}

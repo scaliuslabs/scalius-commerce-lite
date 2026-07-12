@@ -13146,6 +13146,8 @@ export type GetApiV1AdminInventoryResponses = {
                 alertSentAt: string | number | null;
                 acknowledgedAt: string | number | null;
                 resolvedAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
                 productName: string | null;
                 variantSku: string | null;
                 variantLabel: string | null;
@@ -13207,6 +13209,8 @@ export type GetApiV1AdminInventoryAlertsResponses = {
                 alertSentAt: string | number | null;
                 acknowledgedAt: string | number | null;
                 resolvedAt: string | number | null;
+                createdAt: string | number;
+                updatedAt: string | number;
                 productName: string | null;
                 variantSku: string | null;
                 variantLabel: string | null;
@@ -13229,6 +13233,22 @@ export type PatchApiV1AdminInventoryAlertsData = {
     query?: never;
     url: '/api/v1/admin/inventory/alerts';
 };
+
+export type PatchApiV1AdminInventoryAlertsErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminInventoryAlertsError = PatchApiV1AdminInventoryAlertsErrors[keyof PatchApiV1AdminInventoryAlertsErrors];
 
 export type PatchApiV1AdminInventoryAlertsResponses = {
     /**
@@ -31862,11 +31882,11 @@ export type GetApiV1AdminAttributesData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
-         * Items per page (max 500 for selector dropdowns)
+         * Items per page (max 500)
          */
-        limit?: number | null;
+        limit?: number;
         /**
          * Search term
          */
@@ -31874,11 +31894,11 @@ export type GetApiV1AdminAttributesData = {
         /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'name' | 'slug' | 'filterable' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
         /**
          * Show trashed items
          */
