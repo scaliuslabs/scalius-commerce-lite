@@ -64,6 +64,41 @@ curl -sS -o /tmp/scalius-admin-orders-401.json \
   https://api.scalius.com/api/v1/admin/orders
 ```
 
+When an authenticated production regression check is warranted, use the optional
+admin read smoke. Credentials are accepted only through process environment and
+must belong to a least-privilege account that can view inventory and orders. The
+script creates an authentication session, keeps its cookies only in memory,
+performs bounded `GET` requests for one inventory variant, one order-list
+candidate, and that candidate's detail, then performs best-effort authenticated
+sign-out even when a read fails. A truthfully empty order catalog passes and skips
+detail. It prints only HTTP states, aggregate counts, and safe session-cleanup
+evidence; it never prints credentials, cookies, order IDs, SKUs, customer data,
+or response bodies.
+
+```bash
+SCALIUS_ADMIN_READ_EMAIL='<admin-email>' \
+SCALIUS_ADMIN_READ_PASSWORD='<admin-password>' \
+pnpm admin:read:check
+```
+
+Use a different dashboard origin only when deliberately checking another trusted
+deployment:
+
+```bash
+SCALIUS_ADMIN_READ_EMAIL='<admin-email>' \
+SCALIUS_ADMIN_READ_PASSWORD='<admin-password>' \
+pnpm admin:read:check --dashboard-base-url https://dashboard.example.com --json
+```
+
+Do not put credentials in CLI flags, shell scripts, committed files, screenshots,
+or incident notes. This smoke makes no commerce/settings writes, sends no OTPs or
+notifications, and performs no provider action. Authentication session creation
+and best-effort sign-out are its only non-GET requests. A `200` response with
+`success: true` proves that Better Auth acknowledged sign-out and attempted its
+normal session deletion/cookie clearing path. Better Auth intentionally catches
+adapter deletion errors internally, so this remains best-effort evidence; any
+cleanup warning must be investigated rather than represented as proven deletion.
+
 ## Deploy And Rollback Investigation
 
 Deploy through the repo script from the root:
