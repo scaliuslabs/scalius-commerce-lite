@@ -20,6 +20,15 @@ import {
   resolvePnpmExecutable,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
+import {
+  buildCookieHeader,
+  extractSetCookieHeaders,
+} from "./admin-session-cookie.mjs";
+export {
+  buildCookieHeader,
+  extractSetCookieHeaders,
+  splitCombinedSetCookieHeader,
+} from "./admin-session-cookie.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -113,30 +122,6 @@ export function buildBusinessSettingsSmokePayload(settings) {
     throw new Error("Business settings response did not include invoicePrefix.");
   }
   return { invoicePrefix: settings.invoicePrefix };
-}
-
-export function splitCombinedSetCookieHeader(value) {
-  if (!value) return [];
-  return String(value)
-    .split(/,(?=\s*[^;,=\s]+=[^;]+)/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-export function extractSetCookieHeaders(headers) {
-  if (!headers) return [];
-  if (typeof headers.getSetCookie === "function") {
-    return headers.getSetCookie().filter(Boolean);
-  }
-  const combined = typeof headers.get === "function" ? headers.get("set-cookie") : null;
-  return splitCombinedSetCookieHeader(combined);
-}
-
-export function buildCookieHeader(setCookieHeaders) {
-  return setCookieHeaders
-    .map((value) => String(value).split(";")[0]?.trim())
-    .filter(Boolean)
-    .join("; ");
 }
 
 export async function runAdminSmoke(config) {
