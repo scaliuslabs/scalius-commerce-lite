@@ -2,21 +2,17 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-    processReturn: vi.fn(),
     processRefund: vi.fn(),
     reconcileRefundAttemptForOrder: vi.fn(),
-    getUserPermissions: vi.fn(),
     getCredentialEncryptionKey: vi.fn(),
     invalidateProductAvailabilityCaches: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
-    enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/payments/refund-service", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@scalius/core/modules/payments/refund-service")>();
     return {
         ...actual,
-        processReturn: mocks.processReturn,
         processRefund: mocks.processRefund,
     };
 });
@@ -29,10 +25,6 @@ vi.mock("@scalius/core/modules/payments/refund-reconciliation", async (importOri
     };
 });
 
-vi.mock("@scalius/core/auth/rbac/helpers", () => ({
-    getUserPermissions: mocks.getUserPermissions,
-}));
-
 vi.mock("../../utils/encryption-key", () => ({
     getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
@@ -43,7 +35,6 @@ vi.mock("../../utils/cache-invalidation", () => ({
 
 vi.mock("../../utils/order-notification-queue", () => ({
     enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
-    enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
 }));
 
 import { PartialRefundProcessedError } from "@scalius/core/modules/payments/refund-service";
@@ -85,10 +76,8 @@ describe("admin refund notification routes", () => {
             orderIds: [],
             refundNotifications: [],
         });
-        mocks.getUserPermissions.mockResolvedValue(new Set(["orders.refund"]));
         mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
         mocks.enqueueOrderRefundNotificationForOrder.mockResolvedValue({ orderId: "order_1", enqueued: true });
-        mocks.enqueueOrderStatusChangeNotification.mockResolvedValue({ orderId: "order_1", enqueued: true });
     });
 
     it("enqueues a customer refund notification after a full direct refund", async () => {
@@ -315,174 +304,4 @@ describe("admin refund notification routes", () => {
         expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     });
 
-    it.skip("legacy whole-order return route was removed", async () => {
-        mocks.processReturn.mockResolvedValue({
-            statusChange: {
-                orderId: "order_1",
-                previousStatus: "delivered",
-                newStatus: "returned",
-                version: 7,
-            },
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/return", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "wrong_size" }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
-            db,
-            queue,
-            statusChange: {
-                orderId: "order_1",
-                previousStatus: "delivered",
-                newStatus: "returned",
-                version: 7,
-            },
-            source: "orders-return",
-        });
-    });
-
-    it.skip("legacy whole-order return route was removed", async () => {
-        mocks.processReturn.mockResolvedValue({});
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/return", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "already_returned" }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderStatusChangeNotification).not.toHaveBeenCalled();
-    });
-
-    it.skip("legacy auto-refund return coupling was removed", async () => {
-        mocks.processReturn.mockResolvedValue({
-            statusChange: {
-                orderId: "order_1",
-                previousStatus: "delivered",
-                newStatus: "returned",
-                version: 7,
-            },
-            refundResult: {
-                success: true,
-                gateway: "stripe",
-                refundId: "re_return",
-                amount: 120,
-                isFullRefund: true,
-                refundNotification: {
-                    notificationType: "order_refunded",
-                    dedupeKey: "refund:order_1:refund_order_1_8:full",
-                    amount: 120,
-                    refundId: "re_return",
-                },
-            },
-        });
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/return", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "wrong_size", autoRefund: true }),
-        }, env);
-
-        expect(response.status).toBe(200);
-        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
-            db,
-            queue,
-            statusChange: {
-                orderId: "order_1",
-                previousStatus: "delivered",
-                newStatus: "returned",
-                version: 7,
-            },
-            source: "orders-return",
-        });
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({
-            db,
-            queue,
-            orderId: "order_1",
-            notificationType: "order_refunded",
-            dedupeKey: "refund:order_1:refund_order_1_8:full",
-            source: "orders-return-refund",
-            data: { amount: 120, gateway: "stripe", refundId: "re_return" },
-        });
-        const body = await response.json() as { data: { refundResult?: Record<string, unknown> } };
-        expect(body.data.refundResult).not.toHaveProperty("refundNotification");
-    });
-
-    it.skip("legacy auto-refund return coupling was removed", async () => {
-        mocks.processReturn.mockRejectedValue(new PartialRefundProcessedError(
-            "Refund partially processed: 70 was accepted by the provider, but 30 has an unknown provider outcome. Do not retry until the pending refund is reconciled.",
-            {
-                affectedOrderIds: ["order_1"],
-                gateway: "stripe",
-                statusChange: {
-                    orderId: "order_1",
-                    previousStatus: "delivered",
-                    newStatus: "returned",
-                    version: 7,
-                },
-                refundNotifications: [{
-                    orderId: "order_1",
-                    notificationType: "order_partially_refunded",
-                    dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_7_1:partial",
-                    amount: 70,
-                    refundId: "refund_balance",
-                }, {
-                    orderId: "order_1",
-                    notificationType: "refund_processing",
-                    dedupeKey: "refund:order_1:refund_order_1_7:processing",
-                    amount: 30,
-                }],
-            },
-        ));
-        const { app, env } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/orders/order_1/return", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: "wrong_size", autoRefund: true }),
-        }, env);
-
-        expect(response.status).toBe(503);
-        expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
-            db,
-            { orderIds: ["order_1"] },
-            expect.anything(),
-        );
-        expect(mocks.enqueueOrderStatusChangeNotification).toHaveBeenCalledWith({
-            db,
-            queue,
-            statusChange: {
-                orderId: "order_1",
-                previousStatus: "delivered",
-                newStatus: "returned",
-                version: 7,
-            },
-            source: "orders-return",
-        });
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
-            db,
-            queue,
-            orderId: "order_1",
-            notificationType: "order_partially_refunded",
-            dedupeKey: "refund-reconcile:order_1:rfa_refund_order_1_7_1:partial",
-            source: "orders-return-refund-partial-failure",
-            data: { amount: 70, gateway: "stripe", refundId: "refund_balance" },
-        });
-        expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(2, {
-            db,
-            queue,
-            orderId: "order_1",
-            notificationType: "refund_processing",
-            dedupeKey: "refund:order_1:refund_order_1_7:processing",
-            source: "orders-return-refund-partial-failure",
-            data: { amount: 30, gateway: "stripe" },
-        });
-    });
 });
