@@ -193,6 +193,7 @@ export function validateMediaFileMetadata(input: {
   const filename = input.filename.trim();
   if (!filename) return { ok: false, error: "Invalid file name" };
   if (
+    filename.startsWith(".") ||
     filename.length > MEDIA_MAX_FILENAME_LENGTH ||
     hasUnsafeFilenameCharacter(filename)
   ) {

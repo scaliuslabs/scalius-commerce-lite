@@ -74,6 +74,7 @@ describe("media upload policy", () => {
         size: 100 * 1024 * 1024 + 1,
       },
       { filename: "../photo.png", mimeType: "image/png", size: 100 },
+      { filename: ".hidden.png", mimeType: "image/png", size: 100 },
       { filename: "active.svg", mimeType: "image/svg+xml", size: 100 },
       { filename: "scan.tiff", mimeType: "image/tiff", size: 100 },
       { filename: "legacy.bmp", mimeType: "image/bmp", size: 100 },
