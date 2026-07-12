@@ -376,7 +376,8 @@ export async function getProductsByCategory(
   const queryString = buildCanonicalQueryString(normalizedOptions, {
     defaultParams: { page: 1, limit: 20, sort: "newest" },
   });
-  const cacheKey = `category_products_${categorySlug}_${queryString || "default"}`;
+  // v2 drops category payloads cached before buyer priceRange became authoritative.
+  const cacheKey = `category_products_v2_${categorySlug}_${queryString || "default"}`;
 
   return withEdgeCache(
     cacheKey,
