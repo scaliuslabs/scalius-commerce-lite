@@ -48,7 +48,7 @@ Shared content fields:
 | `updateCategory` | `(db, id, data)` | CAS edit/status write; publish readiness guard; advances revision and affected product revisions |
 | `updateCategoryStatus` | `(db, id, { expectedRevision, status })` | CAS status workflow with the same publish guard |
 | `deleteCategory` | `(db, id, expectedRevision)` | CAS soft-delete, forces draft, rejects assigned products |
-| `bulkDeleteCategories` | `(db, claims, permanent?)` | Up to 90 `{id, expectedRevision}` claims; trash/hard-delete integrity and collection cleanup |
+| `bulkDeleteCategories` | `(db, claims, permanent?)` | Up to 90 `{id, expectedRevision}` claims; soft trash is one all-or-none guarded `UPDATE … RETURNING`, while hard delete preserves transactional collection cleanup |
 | `restoreCategories` | `(db, claims)` | CAS restore to draft; advances category and affected product revisions |
 | `permanentlyDeleteCategory` | `(db, id, expectedRevision)` | Trash-only hard delete with final transactional claim guard |
 

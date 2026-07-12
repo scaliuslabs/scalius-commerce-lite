@@ -9,8 +9,13 @@ const source = readFileSync(
 
 describe("category list projection", () => {
   it("counts assigned non-trashed products per visible row", () => {
-    expect(source).toContain("WHERE ${products.categoryId} = ${categories.id}");
-    expect(source).toContain("AND ${products.deletedAt} IS NULL");
+    expect(source).toContain('const assignedProducts = alias(products, "category_assigned_product")');
+    expect(source).toContain(
+      'WHERE ${sql.raw(\'"category_assigned_product"."category_id"\')} = ${sql.raw(\'"categories"."id"\')}',
+    );
+    expect(source).toContain(
+      'AND ${sql.raw(\'"category_assigned_product"."deleted_at"\')} IS NULL',
+    );
     expect(source).not.toContain("eq(products.isActive, true)");
   });
 

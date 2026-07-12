@@ -75,9 +75,18 @@ export function buildCategoryRevisionGuard(
     claims: readonly CategoryRevisionClaim[],
     requiredState: CategoryLifecycleState,
 ): BatchItem<"sqlite"> {
+    return buildBatchGuard(db, sql`CASE WHEN ${categoryRevisionClaimsMatchCondition(
+        claims,
+        requiredState,
+    )} THEN 1 ELSE json_extract(${CATEGORY_REVISION_CONFLICT}, '$') END`);
+}
+
+export function categoryRevisionClaimsMatchCondition(
+    claims: readonly CategoryRevisionClaim[],
+    requiredState: CategoryLifecycleState,
+): SQL {
     const serialized = JSON.stringify(claims);
-    return buildBatchGuard(db, sql`
-        CASE WHEN (
+    return sql`(
             SELECT count(*)
             FROM json_each(${serialized}) AS claim
             INNER JOIN ${categories}
@@ -86,9 +95,7 @@ export function buildCategoryRevisionGuard(
             WHERE ${requiredState === "active"
                 ? sql`${categories.deletedAt} IS NULL`
                 : sql`${categories.deletedAt} IS NOT NULL`}
-        ) = ${claims.length}
-        THEN 1 ELSE json_extract(${CATEGORY_REVISION_CONFLICT}, '$') END
-    `);
+        ) = ${claims.length}`;
 }
 
 function isCategoryRevisionGuardError(error: unknown): boolean {
