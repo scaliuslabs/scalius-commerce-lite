@@ -267,7 +267,9 @@ describe("storefront mixed-media source boundaries", () => {
     expect(page).not.toContain("const images = media.flatMap");
     expect(types).not.toContain("interface ProductImage");
     expect(controller).toContain('new CustomEvent("product-media-select"');
-    expect(controller).toContain('event.detail.source === "variant"');
+    expect(controller).toContain("resolveVariantCartMedia(validation.variant");
+    expect(controller).toContain("imageMediaId: cache.container.dataset.productImageMediaId");
+    expect(controller).not.toContain("currentDisplayedImage");
     expect(controller).not.toContain("product-image-change");
     expect(controller).not.toContain("controller-image-update");
   });

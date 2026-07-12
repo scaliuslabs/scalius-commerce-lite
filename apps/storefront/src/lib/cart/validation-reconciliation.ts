@@ -42,7 +42,7 @@ export function reconcileValidatedCartSnapshot(
     return false;
   }
 
-  if (state.discount) {
+  if (state.discount && !cartStore.get().discount) {
     onDiscountCleared?.("Discount removed - delivery eligibility changed.");
   }
 

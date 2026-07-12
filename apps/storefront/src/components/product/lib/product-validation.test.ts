@@ -35,4 +35,20 @@ describe("validateAddToCart", () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(["Only 1 item available"]);
   });
+
+  it("preserves the authoritative cart image identity", () => {
+    const result = validateAddToCart({
+      ...baseInput,
+      variantId: "var_red_m",
+      stock: 3,
+      trackInventory: true,
+      image: "https://media.example.test/red.webp",
+      imageMediaId: "med_red",
+    });
+
+    expect(result.data).toMatchObject({
+      image: "https://media.example.test/red.webp",
+      imageMediaId: "med_red",
+    });
+  });
 });
