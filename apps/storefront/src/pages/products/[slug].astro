@@ -1,5 +1,9 @@
 ---
-import { getLayoutData, getProductBySlugResult, getShippingMethods } from "@/lib/api";
+import {
+  getLayoutData,
+  getProductBySlugResult,
+  getShippingMethods,
+} from "@/lib/api";
 import Layout from "@/layouts/Layout.astro";
 import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
@@ -8,9 +12,7 @@ import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
-import {
-  setRuntimeImageCdnPolicy,
-} from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
@@ -37,10 +39,7 @@ import {
   PRODUCT_CONDITION_SCHEMA_URLS,
 } from "@scalius/shared/product-condition";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
-import {
-  DEFAULT_CURRENCY,
-  getDecimalPlaces,
-} from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
 const { slug } = Astro.params;
@@ -71,29 +70,7 @@ if (productResult.state === "unavailable" || !layoutData) {
 }
 
 const productData = productResult.data;
-const {
-  product,
-  category,
-  media,
-  variants,
-  relatedProducts,
-} = productData;
-// The protected gallery is migrated in the dedicated mixed-media UI slice.
-// Until then it receives image representations only; video URLs never enter an
-// <img>, and a featured video's poster remains a safe visual fallback.
-const images = media.flatMap((item) => {
-  const url = item.kind === "image" ? item.url : item.posterUrl;
-  if (!url) return [];
-  return [{
-    id: item.id,
-    productId: product.id,
-    url,
-    alt: item.altText,
-    isPrimary: item.isPrimary,
-    sortOrder: item.sortOrder,
-    createdAt: product.updatedAt,
-  }];
-});
+const { product, category, media, variants, relatedProducts } = productData;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
@@ -111,9 +88,12 @@ const formatMetadataPrice = (price: number) =>
 const buyerVariantResolution = resolveBuyerVariants(variants);
 const buyerVariants = buyerVariantResolution.variants;
 const buyerStockSummary = getBuyerStockSummary(buyerVariants);
-const requestedQueryVariantSelection = resolveExactVariantSelection(buyerVariants, {
-  variantId: Astro.url.searchParams.get("variant"),
-});
+const requestedQueryVariantSelection = resolveExactVariantSelection(
+  buyerVariants,
+  {
+    variantId: Astro.url.searchParams.get("variant"),
+  },
+);
 const queryVariantSelection =
   requestedQueryVariantSelection &&
   isVariantAvailable(requestedQueryVariantSelection.variant)
@@ -169,15 +149,18 @@ const pageDescription = pageMetaDescription;
 const quickBuyNoticeByError: Record<string, string> = {
   product_unavailable: "This item is not available right now.",
   variant_required: "Please choose an available option before buying.",
-  variant_not_found: "That option is no longer available. Please choose another option.",
+  variant_not_found:
+    "That option is no longer available. Please choose another option.",
   out_of_stock: "This item is out of stock right now.",
   invalid_quantity: "Please choose a quantity between 1 and 99.",
-  quantity_unavailable: "The requested quantity is not available. Please lower the quantity.",
+  quantity_unavailable:
+    "The requested quantity is not available. Please lower the quantity.",
   price_changed: "This item's price changed. Please review it before buying.",
   validation_unavailable: "We could not refresh this item. Please try again.",
   processing_failed: "We could not prepare this item. Please try again.",
 };
-const quickBuyNotice = quickBuyNoticeByError[Astro.url.searchParams.get("error") ?? ""] ?? null;
+const quickBuyNotice =
+  quickBuyNoticeByError[Astro.url.searchParams.get("error") ?? ""] ?? null;
 
 // --- SEO: per SEO-01, SEO-02, OG-01, OG-05 ---
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
@@ -195,7 +178,7 @@ const discoverySettings = normalizeSeoDiscoverySettings(
 // video content URL as an image.
 const productImageCandidates = [
   product.imageUrl,
-  ...media.map((item) => item.kind === "image" ? item.url : item.posterUrl),
+  ...media.map((item) => (item.kind === "image" ? item.url : item.posterUrl)),
 ].filter((url): url is string => hasProductImage(url));
 const primaryImageUrl = productImageCandidates[0] ?? null;
 const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
@@ -206,19 +189,27 @@ const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, {
   fit: "contain",
 });
 const schemaImageUrls = storefrontUrl
-  ? Array.from(new Set(productImageCandidates.flatMap((candidate) => {
-      const resolved = resolveCatalogDiscoveryImageUrl(candidate, storefrontUrl, {
-        transformImageUrl: (imageUrl) =>
-          getOptimizedImageUrl(imageUrl, {
-            width: 1200,
-            height: 630,
-            quality: 85,
-            format: "auto",
-            fit: "cover",
-          }),
-      });
-      return resolved ? [resolved] : [];
-    })))
+  ? Array.from(
+      new Set(
+        productImageCandidates.flatMap((candidate) => {
+          const resolved = resolveCatalogDiscoveryImageUrl(
+            candidate,
+            storefrontUrl,
+            {
+              transformImageUrl: (imageUrl) =>
+                getOptimizedImageUrl(imageUrl, {
+                  width: 1200,
+                  height: 630,
+                  quality: 85,
+                  format: "auto",
+                  fit: "cover",
+                }),
+            },
+          );
+          return resolved ? [resolved] : [];
+        }),
+      ),
+    )
   : [];
 const ogImageUrl = schemaImageUrls[0] ?? null;
 
@@ -241,15 +232,20 @@ const brandAttribute = product.attributes?.find(
   (a: { name: string }) => a.name.toLowerCase() === "brand",
 );
 const brandName = brandAttribute?.value?.trim() || null;
-const productCondition = normalizeSavedProductCondition(product.productCondition);
+const productCondition = normalizeSavedProductCondition(
+  product.productCondition,
+);
 const productConditionSchemaUrl = productCondition
   ? PRODUCT_CONDITION_SCHEMA_URLS[productCondition]
   : null;
 
 // Primary SKU
-const primarySku = selectedBuyerVariant?.sku || buyerVariants[0]?.sku || product.id;
+const primarySku =
+  selectedBuyerVariant?.sku || buyerVariants[0]?.sku || product.id;
 
-function normalizedVariantOption(value: string | null | undefined): string | null {
+function normalizedVariantOption(
+  value: string | null | undefined,
+): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
 }
@@ -261,7 +257,9 @@ const PRODUCT_OPTION_SCHEMA_URLS = {
   pattern: "https://schema.org/pattern",
 } as const;
 
-function mappedVariantSchemaProps(variant: typeof buyerVariants[number]): Record<string, string> {
+function mappedVariantSchemaProps(
+  variant: (typeof buyerVariants)[number],
+): Record<string, string> {
   const props: Record<string, string> = {};
   for (const option of variant.selectedOptions) {
     const schema = option.standardMapping;
@@ -272,7 +270,9 @@ function mappedVariantSchemaProps(variant: typeof buyerVariants[number]): Record
   return props;
 }
 
-function buildVariantProductUrl(variant: typeof buyerVariants[number]): string | null {
+function buildVariantProductUrl(
+  variant: (typeof buyerVariants)[number],
+): string | null {
   if (!canonicalUrl) return null;
 
   const url = new URL(canonicalUrl);
@@ -280,12 +280,18 @@ function buildVariantProductUrl(variant: typeof buyerVariants[number]): string |
   return url.toString();
 }
 
-function getVariantSchemaName(variant: typeof buyerVariants[number]): string {
-  const options = variant.selectedOptions.map((option) => `${option.name}: ${option.value}`);
-  return options.length > 0 ? `${product.name} - ${options.join(" / ")}` : product.name;
+function getVariantSchemaName(variant: (typeof buyerVariants)[number]): string {
+  const options = variant.selectedOptions.map(
+    (option) => `${option.name}: ${option.value}`,
+  );
+  return options.length > 0
+    ? `${product.name} - ${options.join(" / ")}`
+    : product.name;
 }
 
-function getVariantSchemaPrice(variant: typeof buyerVariants[number]): number {
+function getVariantSchemaPrice(
+  variant: (typeof buyerVariants)[number],
+): number {
   return getVariantDiscountedPrice(
     variant.price,
     product.price,
@@ -299,25 +305,35 @@ function getVariantSchemaPrice(variant: typeof buyerVariants[number]): number {
   );
 }
 
-function getVariantSchemaImages(variant: typeof buyerVariants[number]): string[] {
+function getVariantSchemaImages(
+  variant: (typeof buyerVariants)[number],
+): string[] {
   if (!storefrontUrl || !variant.imageUrl) return schemaImageUrls;
-  const resolved = resolveCatalogDiscoveryImageUrl(variant.imageUrl, storefrontUrl, {
-    transformImageUrl: (imageUrl) =>
-      getOptimizedImageUrl(imageUrl, {
-        width: 1200,
-        height: 630,
-        quality: 85,
-        format: "auto",
-        fit: "cover",
-      }),
-  });
+  const resolved = resolveCatalogDiscoveryImageUrl(
+    variant.imageUrl,
+    storefrontUrl,
+    {
+      transformImageUrl: (imageUrl) =>
+        getOptimizedImageUrl(imageUrl, {
+          width: 1200,
+          height: 630,
+          quality: 85,
+          format: "auto",
+          fit: "cover",
+        }),
+    },
+  );
   return resolved
     ? Array.from(new Set([resolved, ...schemaImageUrls]))
     : schemaImageUrls;
 }
 
 const productGroupVariesBy = productOptions
-  .flatMap((option) => option.standardMapping === "none" ? [] : [PRODUCT_OPTION_SCHEMA_URLS[option.standardMapping]])
+  .flatMap((option) =>
+    option.standardMapping === "none"
+      ? []
+      : [PRODUCT_OPTION_SCHEMA_URLS[option.standardMapping]],
+  )
   .filter((value, index, values) => values.indexOf(value) === index);
 const shouldEmitProductGroupJsonLd =
   discoverySettings.structuredData.productGroups &&
@@ -325,7 +341,8 @@ const shouldEmitProductGroupJsonLd =
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
-const offerShippingDetails = discoverySettings.structuredData.offerShippingDetails
+const offerShippingDetails = discoverySettings.structuredData
+  .offerShippingDetails
   ? buildOfferShippingDetails({
       shippingMethods,
       currencyCode,
@@ -339,7 +356,9 @@ const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   fallbackCountry: layoutData.business?.country,
 });
 
-function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): T {
+function withOfferCommerceDetails<T extends Record<string, unknown>>(
+  offer: T,
+): T {
   return {
     ...offer,
     ...(sellerSchemaName
@@ -356,7 +375,7 @@ function withOfferCommerceDetails<T extends Record<string, unknown>>(offer: T): 
 
 const primarySchemaVariant = selectedBuyerVariant ?? buyerVariants[0] ?? null;
 const primarySchemaUrl = selectedBuyerVariant
-  ? buildVariantProductUrl(selectedBuyerVariant) ?? canonicalUrl
+  ? (buildVariantProductUrl(selectedBuyerVariant) ?? canonicalUrl)
   : canonicalUrl;
 const primarySchemaName = selectedBuyerVariant
   ? getVariantSchemaName(selectedBuyerVariant)
@@ -366,80 +385,107 @@ const primarySchemaAvailability = selectedBuyerVariant
   : buyerStockSummary.canPurchaseAny;
 
 // Product JSON-LD -- per SEO-01 (merchant listing spec)
-const productJsonLd = discoverySettings.structuredData.products && !product.noIndex && canonicalUrl
-  ? serializeJsonForInlineScript(
-      shouldEmitProductGroupJsonLd
-        ? {
-            "@context": "https://schema.org",
-            "@type": "ProductGroup",
-            name: product.name,
-            url: canonicalUrl,
-            description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-            ...(schemaImageUrls.length > 0 ? { image: schemaImageUrls } : {}),
-            productGroupID: product.id,
-            ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
-            ...(productGroupVariesBy.length > 0 ? { variesBy: productGroupVariesBy } : {}),
-            hasVariant: buyerVariants.map((variant) => {
-              const variantPrice = getVariantSchemaPrice(variant);
-              const variantSchemaImages = getVariantSchemaImages(variant);
-              return {
-                "@type": "Product",
-                name: getVariantSchemaName(variant),
-                url: buildVariantProductUrl(variant) ?? canonicalUrl,
-                description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-                ...(variantSchemaImages.length > 0 ? { image: variantSchemaImages } : {}),
-                sku: normalizedVariantOption(variant.sku) || variant.id,
-                ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
-                ...mappedVariantSchemaProps(variant),
-                ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
-                offers: withOfferCommerceDetails({
-                  "@type": "Offer",
-                  url: buildVariantProductUrl(variant) ?? canonicalUrl,
-                  priceCurrency: currencyCode,
-                  price: formatMetadataPrice(variantPrice),
-                  ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
-                  availability: isVariantAvailable(variant)
-                    ? "https://schema.org/InStock"
-                    : "https://schema.org/OutOfStock",
-                }),
-              };
-            }),
-          }
-        : {
-            "@context": "https://schema.org",
-            "@type": "Product",
-            name: primarySchemaName,
-            url: primarySchemaUrl,
-            description: (product.description || product.name).replace(/<[^>]+>/g, ""),
-            ...((selectedBuyerVariant
-              ? getVariantSchemaImages(selectedBuyerVariant)
-              : schemaImageUrls).length > 0
-                ? { image: selectedBuyerVariant
-                    ? getVariantSchemaImages(selectedBuyerVariant)
-                    : schemaImageUrls }
+const productJsonLd =
+  discoverySettings.structuredData.products && !product.noIndex && canonicalUrl
+    ? serializeJsonForInlineScript(
+        shouldEmitProductGroupJsonLd
+          ? {
+              "@context": "https://schema.org",
+              "@type": "ProductGroup",
+              name: product.name,
+              url: canonicalUrl,
+              description: (product.description || product.name).replace(
+                /<[^>]+>/g,
+                "",
+              ),
+              ...(schemaImageUrls.length > 0 ? { image: schemaImageUrls } : {}),
+              productGroupID: product.id,
+              ...(brandName
+                ? { brand: { "@type": "Brand", name: brandName } }
                 : {}),
-            sku: primarySku,
-            ...gtinJsonLdForVariant(
-              primarySchemaVariant?.barcode,
-              primarySchemaVariant?.barcodeType,
-            ),
-            ...(selectedBuyerVariant
-              ? mappedVariantSchemaProps(selectedBuyerVariant)
-              : {}),
-            ...(brandName ? { brand: { "@type": "Brand", name: brandName } } : {}),
-            offers: withOfferCommerceDetails({
-              "@type": "Offer",
+              ...(productGroupVariesBy.length > 0
+                ? { variesBy: productGroupVariesBy }
+                : {}),
+              hasVariant: buyerVariants.map((variant) => {
+                const variantPrice = getVariantSchemaPrice(variant);
+                const variantSchemaImages = getVariantSchemaImages(variant);
+                return {
+                  "@type": "Product",
+                  name: getVariantSchemaName(variant),
+                  url: buildVariantProductUrl(variant) ?? canonicalUrl,
+                  description: (product.description || product.name).replace(
+                    /<[^>]+>/g,
+                    "",
+                  ),
+                  ...(variantSchemaImages.length > 0
+                    ? { image: variantSchemaImages }
+                    : {}),
+                  sku: normalizedVariantOption(variant.sku) || variant.id,
+                  ...gtinJsonLdForVariant(variant.barcode, variant.barcodeType),
+                  ...mappedVariantSchemaProps(variant),
+                  ...(brandName
+                    ? { brand: { "@type": "Brand", name: brandName } }
+                    : {}),
+                  offers: withOfferCommerceDetails({
+                    "@type": "Offer",
+                    url: buildVariantProductUrl(variant) ?? canonicalUrl,
+                    priceCurrency: currencyCode,
+                    price: formatMetadataPrice(variantPrice),
+                    ...(productConditionSchemaUrl
+                      ? { itemCondition: productConditionSchemaUrl }
+                      : {}),
+                    availability: isVariantAvailable(variant)
+                      ? "https://schema.org/InStock"
+                      : "https://schema.org/OutOfStock",
+                  }),
+                };
+              }),
+            }
+          : {
+              "@context": "https://schema.org",
+              "@type": "Product",
+              name: primarySchemaName,
               url: primarySchemaUrl,
-              priceCurrency: currencyCode,
-              price: formatMetadataPrice(buyerDisplayedPrice),
-              ...(productConditionSchemaUrl ? { itemCondition: productConditionSchemaUrl } : {}),
-              availability: primarySchemaAvailability
-                ? "https://schema.org/InStock"
-                : "https://schema.org/OutOfStock",
-            }),
-          },
-    )
-  : null;
+              description: (product.description || product.name).replace(
+                /<[^>]+>/g,
+                "",
+              ),
+              ...((selectedBuyerVariant
+                ? getVariantSchemaImages(selectedBuyerVariant)
+                : schemaImageUrls
+              ).length > 0
+                ? {
+                    image: selectedBuyerVariant
+                      ? getVariantSchemaImages(selectedBuyerVariant)
+                      : schemaImageUrls,
+                  }
+                : {}),
+              sku: primarySku,
+              ...gtinJsonLdForVariant(
+                primarySchemaVariant?.barcode,
+                primarySchemaVariant?.barcodeType,
+              ),
+              ...(selectedBuyerVariant
+                ? mappedVariantSchemaProps(selectedBuyerVariant)
+                : {}),
+              ...(brandName
+                ? { brand: { "@type": "Brand", name: brandName } }
+                : {}),
+              offers: withOfferCommerceDetails({
+                "@type": "Offer",
+                url: primarySchemaUrl,
+                priceCurrency: currencyCode,
+                price: formatMetadataPrice(buyerDisplayedPrice),
+                ...(productConditionSchemaUrl
+                  ? { itemCondition: productConditionSchemaUrl }
+                  : {}),
+                availability: primarySchemaAvailability
+                  ? "https://schema.org/InStock"
+                  : "https://schema.org/OutOfStock",
+              }),
+            },
+      )
+    : null;
 
 // BreadcrumbList JSON-LD -- per SEO-02
 const breadcrumbItems = [
@@ -462,13 +508,16 @@ const breadcrumbItems = [
   },
 ];
 const breadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs && !product.noIndex && storefrontUrl && canonicalUrl
-  ? serializeJsonForInlineScript({
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: breadcrumbItems,
-    })
-  : null;
+  discoverySettings.structuredData.breadcrumbs &&
+  !product.noIndex &&
+  storefrontUrl &&
+  canonicalUrl
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems,
+      })
+    : null;
 
 const productCategoryAnalytics = productCategory
   ? {
@@ -507,8 +556,20 @@ const productCategoryAnalytics = productCategory
         />
       )
     }
-    {productJsonLd && <script is:inline type="application/ld+json" set:html={productJsonLd} />}
-    {breadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={breadcrumbJsonLd} />}
+    {
+      productJsonLd && (
+        <script is:inline type="application/ld+json" set:html={productJsonLd} />
+      )
+    }
+    {
+      breadcrumbJsonLd && (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={breadcrumbJsonLd}
+        />
+      )
+    }
   </Fragment>
 
   <div
@@ -543,10 +604,7 @@ const productCategoryAnalytics = productCategory
       class="mx-auto max-w-7xl px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
     >
       <div class="grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8">
-        <ProductGallery
-          product={product}
-          images={images}
-        />
+        <ProductGallery product={product} media={media} />
         <ProductSummary
           product={product}
           category={productCategory}

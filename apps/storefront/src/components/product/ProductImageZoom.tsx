@@ -1,23 +1,14 @@
 // src/components/product/ProductImageZoom.tsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { MouseEvent } from "react";
 import { cn } from "@scalius/shared/utils";
+import type { ProductMediaChangeDetail } from "./scripts/product-media-controller";
 
 interface ProductImageZoomProps {
   initialImage: string;
   initialZoomImage?: string;
   alt: string;
   aspectRatio?: string;
-}
-
-type ProductImageChangeDetail = {
-  url?: string;
-  zoomUrl?: string;
-};
-
-declare global {
-  interface WindowEventMap {
-    "product-image-change": CustomEvent<ProductImageChangeDetail>;
-  }
 }
 
 // Global image cache to persist across component updates
@@ -54,7 +45,7 @@ function canLoadHighResImage(): boolean {
   );
 }
 
-export default function ProductImageZoom({
+export function ProductImageZoom({
   initialImage,
   initialZoomImage,
   alt,
@@ -124,16 +115,26 @@ export default function ProductImageZoom({
     setIsHighResLoaded(!!zoomUrl && preloadedImages.get(zoomUrl) === true);
   }, [getZoomUrl]);
 
-  // Listen for external image changes (from thumbnails/variants)
+  // Listen for the one gallery media event. Video selection is handled by the
+  // Astro stage and deliberately never enters the image/zoom pipeline.
   useEffect(() => {
-    const handleImageChange = (e: CustomEvent<ProductImageChangeDetail>) => {
-      if (!e.detail?.url) return;
+    const handleMediaChange = (
+      event: CustomEvent<ProductMediaChangeDetail>,
+    ) => {
+      if (event.detail.kind !== "image" || !event.detail.url) {
+        setIsZoomed(false);
+        return;
+      }
 
-      const newUrl = e.detail.url;
-      const newZoomUrl = e.detail.zoomUrl;
+      const newUrl = event.detail.url;
+      const newZoomUrl = event.detail.zoomUrl ?? undefined;
 
       // Skip if same image
-      if (newUrl === currentImageRef.current) return;
+      if (newUrl === currentImageRef.current) {
+        if (imageElementRef.current)
+          imageElementRef.current.alt = event.detail.altText;
+        return;
+      }
 
       // Update refs (no re-render)
       currentImageRef.current = newUrl;
@@ -142,6 +143,7 @@ export default function ProductImageZoom({
       // Directly update DOM for instant feedback (no React re-render)
       if (imageElementRef.current) {
         imageElementRef.current.src = newUrl;
+        imageElementRef.current.alt = event.detail.altText;
       }
 
       // Check if new zoom image is already preloaded
@@ -155,9 +157,9 @@ export default function ProductImageZoom({
       }
     };
 
-    window.addEventListener("product-image-change", handleImageChange);
+    window.addEventListener("product-media-change", handleMediaChange);
     return () => {
-      window.removeEventListener("product-image-change", handleImageChange);
+      window.removeEventListener("product-media-change", handleMediaChange);
     };
   }, [getHighResUrl]);
 
@@ -175,7 +177,7 @@ export default function ProductImageZoom({
     requestZoomImage();
   }, [requestZoomImage]);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = useCallback((e: MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
 
     const { left, top, width, height } =
@@ -221,7 +223,7 @@ export default function ProductImageZoom({
         src={displayUrl}
         alt={alt}
         className={cn(
-          "w-full h-full object-contain object-center transition-opacity duration-150",
+          "w-full h-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none",
           isZoomed ? "opacity-0" : "opacity-100",
         )}
         loading="eager"
@@ -232,7 +234,7 @@ export default function ProductImageZoom({
       <div
         ref={zoomBgRef}
         className={cn(
-          "absolute inset-0 w-full h-full transition-opacity duration-150 pointer-events-none bg-no-repeat bg-white",
+          "absolute inset-0 w-full h-full transition-opacity duration-150 pointer-events-none bg-no-repeat bg-white motion-reduce:transition-none",
           isZoomed ? "opacity-100" : "opacity-0",
         )}
         style={{
@@ -244,13 +246,13 @@ export default function ProductImageZoom({
       >
         {!isHighResLoaded && isZoomed && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/5 backdrop-blur-[1px]">
-            <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            <span className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full motion-safe:animate-spin" />
           </div>
         )}
       </div>
 
       {/* Hint Text */}
-      <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-sm">
+      <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-sm motion-reduce:transition-none">
         Zoom
       </div>
     </div>
