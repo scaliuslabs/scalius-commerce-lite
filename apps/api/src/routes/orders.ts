@@ -1218,9 +1218,11 @@ async function resolveAuthoritativeTaxQuote(
     const validation = await isDiscountValid(
       db,
       normalizedDiscountCode,
-      totalBeforeDiscount,
+      cartValidation.subtotal,
       discountItems,
       input.customerPhone,
+      "",
+      currencyCode,
     ) as {
       valid?: unknown;
       discount?: {
@@ -1230,6 +1232,7 @@ async function resolveAuthoritativeTaxQuote(
         discountValue: number;
       };
       applicableProductIds?: Set<string>;
+      hasProductRestrictions?: boolean;
     } | null;
     if (!validation?.valid || !validation.discount) {
       throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
@@ -1249,6 +1252,7 @@ async function resolveAuthoritativeTaxQuote(
       delivery.shippingCharge,
       validation.applicableProductIds,
       currencyCode,
+      Boolean(validation.hasProductRestrictions),
     );
   }
 

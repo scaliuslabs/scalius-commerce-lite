@@ -841,6 +841,7 @@ describe("authoritative tax quote", () => {
         discountValue: 50,
       },
       applicableProductIds: new Set(["product_1"]),
+      hasProductRestrictions: true,
     });
     mocks.calculateDiscountAmount.mockResolvedValue(50);
     const { app, kv } = createTestApp();
@@ -871,6 +872,15 @@ describe("authoritative tax quote", () => {
         applicableProductIds: ["product_1"],
       }),
     );
+    expect(mocks.isDiscountValid).toHaveBeenCalledWith(
+      expect.anything(),
+      "PRODUCT50",
+      100,
+      expect.any(Array),
+      "+8801712345678",
+      "",
+      "BDT",
+    );
     expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -879,6 +889,7 @@ describe("authoritative tax quote", () => {
       60,
       new Set(["product_1"]),
       "BDT",
+      true,
     );
   });
 });

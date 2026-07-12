@@ -10,11 +10,21 @@ import { sql, desc, asc, isNull, and, isNotNull, eq, count, sum, inArray } from 
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ConflictError, ForbiddenError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from "@scalius/core/errors";
 import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
 
 export interface DiscountLifecycleAuthority {
     canToggleStatus?: boolean;
+}
+
+const DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE = 20;
+
+function chunksOf<T>(values: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let index = 0; index < values.length; index += size) {
+        chunks.push(values.slice(index, index + size));
+    }
+    return chunks;
 }
 
 function assertDiscountLifecycleAuthority(
@@ -186,15 +196,15 @@ export async function createDiscount(
     assertDiscountLifecycleAuthority(data.isActive, false, authority);
     // Codes are stored uppercase (normalized by validation schema),
     // but ensure uppercase here too for the uniqueness check.
-    const code = (data.code as string).toUpperCase();
+    const code = (data.code as string).trim().toUpperCase();
     const existingCode = await db
         .select({ id: discounts.id })
         .from(discounts)
-        .where(and(eq(discounts.code, code), isNull(discounts.deletedAt)))
+        .where(sql`lower(trim(${discounts.code})) = lower(${code})`)
         .get();
 
     if (existingCode) {
-        throw new ConflictError("A discount with this code already exists");
+        throw new ConflictError("A discount with this code already exists, including in trash");
     }
 
     const discountId = "disc_" + nanoid();
@@ -238,8 +248,12 @@ export async function createDiscount(
         }),
     ];
 
-    if (productsToInsert.length > 0) batchOps.push(db.insert(discountProducts).values(productsToInsert));
-    if (collectionsToInsert.length > 0) batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
+    for (const productChunk of chunksOf(productsToInsert, DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE)) {
+        batchOps.push(db.insert(discountProducts).values(productChunk));
+    }
+    for (const collectionChunk of chunksOf(collectionsToInsert, DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE)) {
+        batchOps.push(db.insert(discountCollections).values(collectionChunk));
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
@@ -255,7 +269,7 @@ export async function updateDiscount(
     const existingDiscount = await db
         .select({ id: discounts.id, isActive: discounts.isActive })
         .from(discounts)
-        .where(eq(discounts.id, id))
+        .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)))
         .get();
     if (!existingDiscount) {
         throw new NotFoundError("Discount not found");
@@ -267,15 +281,18 @@ export async function updateDiscount(
         authority,
     );
 
-    const code = (data.code as string).toUpperCase();
+    const code = (data.code as string).trim().toUpperCase();
     const existingCode = await db
         .select({ id: discounts.id })
         .from(discounts)
-        .where(and(eq(discounts.code, code), sql`${discounts.id} != ${id}`, isNull(discounts.deletedAt)))
+        .where(and(
+            sql`lower(trim(${discounts.code})) = lower(${code})`,
+            sql`${discounts.id} != ${id}`,
+        ))
         .get();
 
     if (existingCode) {
-        throw new ConflictError("A discount with this code already exists");
+        throw new ConflictError("A discount with this code already exists, including in trash");
     }
 
     const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -324,13 +341,17 @@ export async function updateDiscount(
             endDate: endDateTimestamp !== null ? sql`${endDateTimestamp}` : null,
             isActive: data.isActive as boolean,
             updatedAt: sql`${currentTimestamp}`,
-        }).where(eq(discounts.id, id)),
+        }).where(and(eq(discounts.id, id), isNull(discounts.deletedAt))),
         db.delete(discountProducts).where(eq(discountProducts.discountId, id)),
         db.delete(discountCollections).where(eq(discountCollections.discountId, id)),
     ];
 
-    if (productsToInsert.length > 0) batchOps.push(db.insert(discountProducts).values(productsToInsert));
-    if (collectionsToInsert.length > 0) batchOps.push(db.insert(discountCollections).values(collectionsToInsert));
+    for (const productChunk of chunksOf(productsToInsert, DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE)) {
+        batchOps.push(db.insert(discountProducts).values(productChunk));
+    }
+    for (const collectionChunk of chunksOf(collectionsToInsert, DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE)) {
+        batchOps.push(db.insert(discountCollections).values(collectionChunk));
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
@@ -338,46 +359,88 @@ export async function updateDiscount(
 }
 
 export async function deleteDiscount(db: Database, id: string) {
-    await db.update(discounts).set({ deletedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
+    await db
+        .update(discounts)
+        .set({
+            isActive: false,
+            deletedAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)));
 }
 
 export async function bulkDeleteDiscounts(db: Database, discountIds: string[], permanent: boolean = false) {
     if (permanent) {
-        await db.delete(discounts).where(inArray(discounts.id, discountIds));
+        const activeRow = await db
+            .select({ id: discounts.id })
+            .from(discounts)
+            .where(and(inArray(discounts.id, discountIds), isNull(discounts.deletedAt)))
+            .limit(1)
+            .get();
+        if (activeRow) {
+            throw new ConflictError("Move discounts to trash before permanently deleting them");
+        }
+
+        const usageRow = await db
+            .select({ id: discountUsage.id })
+            .from(discountUsage)
+            .where(inArray(discountUsage.discountId, discountIds))
+            .limit(1)
+            .get();
+        if (usageRow) {
+            throw new ConflictError("Discounts with order usage history cannot be permanently deleted");
+        }
+
+        await db
+            .delete(discounts)
+            .where(and(inArray(discounts.id, discountIds), isNotNull(discounts.deletedAt)));
     } else {
-        await db.update(discounts).set({ deletedAt: sql`unixepoch()` }).where(inArray(discounts.id, discountIds));
+        await db
+            .update(discounts)
+            .set({
+                isActive: false,
+                deletedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(inArray(discounts.id, discountIds), isNull(discounts.deletedAt)));
     }
 }
 
 export async function restoreDiscounts(db: Database, discountIds: string[]) {
-    // Check for code conflicts before restoring: ensure no active discount
-    // already uses any of the codes that would be restored
-    const toRestore = await db
-        .select({ id: discounts.id, code: discounts.code })
-        .from(discounts)
-        .where(inArray(discounts.id, discountIds));
-
-    for (const disc of toRestore) {
-        const conflict = await db
-            .select({ id: discounts.id })
-            .from(discounts)
-            .where(and(
-                eq(discounts.code, disc.code),
-                isNull(discounts.deletedAt),
-                sql`${discounts.id} != ${disc.id}`,
-            ))
-            .get();
-
-        if (conflict) {
-            throw new ConflictError(`Cannot restore discount "${disc.code}": an active discount with this code already exists`);
-        }
-    }
-
-    await db.update(discounts).set({ deletedAt: null }).where(inArray(discounts.id, discountIds));
+    await db
+        .update(discounts)
+        .set({
+            isActive: false,
+            deletedAt: null,
+            updatedAt: sql`unixepoch()`,
+        })
+        .where(and(inArray(discounts.id, discountIds), isNotNull(discounts.deletedAt)));
 }
 
 export async function permanentlyDeleteDiscount(db: Database, id: string) {
-    await db.delete(discounts).where(eq(discounts.id, id));
+    const discount = await db
+        .select({ id: discounts.id, deletedAt: discounts.deletedAt })
+        .from(discounts)
+        .where(eq(discounts.id, id))
+        .get();
+    if (!discount) throw new NotFoundError("Discount not found");
+    if (!discount.deletedAt) {
+        throw new ConflictError("Move the discount to trash before permanently deleting it");
+    }
+
+    const usage = await db
+        .select({ id: discountUsage.id })
+        .from(discountUsage)
+        .where(eq(discountUsage.discountId, id))
+        .limit(1)
+        .get();
+    if (usage) {
+        throw new ConflictError("Discounts with order usage history cannot be permanently deleted");
+    }
+
+    await db
+        .delete(discounts)
+        .where(and(eq(discounts.id, id), isNotNull(discounts.deletedAt)));
 }
 
 export async function setDiscountActiveStatus(
@@ -386,12 +449,19 @@ export async function setDiscountActiveStatus(
     isActive: boolean,
 ) {
     const discount = await db
-        .select({ id: discounts.id })
+        .select({ id: discounts.id, endDate: discounts.endDate })
         .from(discounts)
         .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)))
         .get();
     if (!discount) {
         throw new NotFoundError("Discount not found");
+    }
+    if (
+        isActive &&
+        discount.endDate instanceof Date &&
+        discount.endDate.getTime() <= Date.now()
+    ) {
+        throw new ValidationError("Expired discounts cannot be activated; extend the end date first");
     }
 
     await db

@@ -1,5 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { DiscountType } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { isDiscountValid, calculateDiscountAmount } from "@scalius/core/modules/discounts/discounts.eligibility";
 
@@ -69,10 +68,11 @@ app.openapi(validateDiscountRoute, async (c) => {
   const validationResult = await isDiscountValid(
     db,
     code,
-    total ? Number(total) : undefined,
+    total !== undefined ? Number(total) : undefined,
     cartItems,
     customerPhone,
     currencyConfig.symbol,
+    currencyConfig.code,
   );
 
   // If valid, calculate the discount amount
@@ -85,31 +85,12 @@ app.openapi(validateDiscountRoute, async (c) => {
       shippingCost || 0,
       validationResult.applicableProductIds,
       currencyConfig.code,
+      validationResult.hasProductRestrictions,
     );
-
-    const enhancedDiscount = {
-      ...validationResult.discount,
-      combinable: {
-        withProductDiscounts:
-          validationResult.discount.type === DiscountType.FREE_SHIPPING ||
-          !!validationResult.discount.combineWithProductDiscounts,
-
-        withOrderDiscounts:
-          validationResult.discount.type ===
-          DiscountType.AMOUNT_OFF_PRODUCTS ||
-          !!validationResult.discount.combineWithOrderDiscounts,
-
-        withShippingDiscounts:
-          validationResult.discount.type === DiscountType.AMOUNT_OFF_ORDER ||
-          validationResult.discount.type ===
-          DiscountType.AMOUNT_OFF_PRODUCTS ||
-          !!validationResult.discount.combineWithShippingDiscounts
-      }
-    };
 
     return ok(c, {
       valid: true,
-      discount: enhancedDiscount,
+      discount: validationResult.discount,
       discountAmount: roundPrice(discountAmount, currencyConfig.code)
     });
   }
