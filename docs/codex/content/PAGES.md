@@ -17,27 +17,23 @@ Last reviewed: 2026-07-12
   scheduling changes unless the API supplies verified `pages.publish`
   authority. Repeating an unchanged status does not block content edits.
 
-## P1 authority defects
+## Closed lifecycle authority defects (2026-07-13)
 
-1. Pages have no revision/CAS. Two editors can silently overwrite title,
-   content, discovery, display, scheduling, or featured-image changes.
-2. The form's edit loader converts every fetch failure into a redirect to the
-   list. Only a typed 404 may redirect; permission, timeout, and upstream
-   failure must preserve the route and expose Retry.
-3. Update/delete/bulk lifecycle writes are not state-conditioned or row-count
-   checked. Permanent delete is callable for an active row, bulk ID arrays are
-   unbounded, publish can touch trash, and restore can claim success for a
-   missing/non-trashed row.
-4. Slug uniqueness is global in the database but service preflights only active
-   rows. Restore and create/update copy can therefore disagree with the actual
-   unique constraint. Slugs must also reject reserved storefront routes such as
-   checkout, search, account, products, categories, collections, API, and
-   discovery assets; otherwise a saved page has a dead or shadowed public URL.
-5. Publication scheduling is underspecified. Publishing without a date should
-   stamp one authority-side; unpublishing should not accidentally preserve a
-   misleading effective date; future publication must surface as Scheduled,
-   not Published.
-6. `publishedOnly` is a public query parameter but is ignored and cannot safely
+- Pages now have a positive monotonic `revision`; every edit, trash, restore,
+  publish, and unpublish command carries the expected revision and advances it
+  exactly once. Multi-page commands are bounded to 90 unique claims and use an
+  atomic D1 batch guard across revision plus active/trash state.
+- Permanent deletion is trash-only. Trash and restore force Draft and clear
+  `publishedAt`; publishing stamps the timestamp authority-side when absent.
+- Page slug authority is global across active and trash, and both API and admin
+  form validation reject reserved storefront roots.
+- The edit loader redirects only on an authoritative API 404. Permission,
+  timeout, and upstream failures remain on the route error boundary with Retry.
+- Migration `0021` is additive so existing rows and page FTS triggers survive.
+
+## Remaining P1 authority defect
+
+1. `publishedOnly` is a public query parameter but is ignored and cannot safely
    expose drafts. Remove it rather than preserving a false control.
 
 ## P1/P2 workflow defects
@@ -62,8 +58,8 @@ Last reviewed: 2026-07-12
 
 ## Accepted implementation model
 
-- Add positive monotonic `version`; every editor save carries
-  `expectedVersion`, advances once, and returns the committed record/version.
+- Positive monotonic `revision`; every editor save carries
+  `expectedRevision`, advances once, and returns the committed revision.
 - Create as Draft. A shared publish-readiness service validates title, usable
   slug, non-empty meaningful content, reserved-route exclusion, discovery
   fields, featured image shape, and scheduling before any publish transition.

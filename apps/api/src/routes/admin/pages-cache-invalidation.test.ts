@@ -82,8 +82,8 @@ function createTestApp(
     PURGE_TOKEN: "secret-token",
   } as unknown as Env;
 
-  mocks.createPage.mockResolvedValue({ id: "page_1" });
-  mocks.updatePage.mockResolvedValue(undefined);
+  mocks.createPage.mockResolvedValue({ id: "page_1", revision: 1 });
+  mocks.updatePage.mockResolvedValue({ revision: 2 });
   mocks.deletePage.mockResolvedValue(undefined);
   mocks.bulkDeletePages.mockResolvedValue(undefined);
   mocks.bulkPublishPages.mockResolvedValue(undefined);
@@ -129,10 +129,10 @@ describe("admin page cache invalidation", () => {
 
   it.each([
     { label: "create published page", path: "", method: "POST", body: createPageBody(), status: 201 },
-    { label: "update public page", path: "/page_1", method: "PUT", body: { title: "About Scalius" }, status: 200 },
-    { label: "bulk publish pages", path: "/bulk-publish", method: "POST", body: { ids: ["page_1"] }, status: 204 },
-    { label: "bulk restore pages", path: "/bulk-restore", method: "POST", body: { ids: ["page_1"] }, status: 204 },
-    { label: "restore page", path: "/page_1/restore", method: "POST", status: 200 },
+    { label: "update public page", path: "/page_1", method: "PUT", body: { expectedRevision: 1, title: "About Scalius" }, status: 200 },
+    { label: "bulk publish pages", path: "/bulk-publish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
+    { label: "bulk restore pages", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
+    { label: "restore page", path: "/page_1/restore", method: "POST", body: { expectedRevision: 1 }, status: 200 },
   ])("warms exact public CMS paths after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp([{ slug: "about-us" }]);
 
@@ -180,7 +180,7 @@ describe("admin page cache invalidation", () => {
       env,
       "/page_1",
       "PUT",
-      { title: "Still a draft", isPublished: false },
+      { expectedRevision: 1, title: "Still a draft", isPublished: false },
     );
 
     expect(createResponse.status).toBe(201);
@@ -199,10 +199,10 @@ describe("admin page cache invalidation", () => {
   });
 
   it.each([
-    { label: "soft delete", path: "/page_1", method: "DELETE", status: 204 },
-    { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", status: 204 },
-    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pageIds: ["page_1"], permanent: false }, status: 204 },
-    { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { ids: ["page_1"] }, status: 204 },
+    { label: "soft delete", path: "/page_1", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
+    { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
+    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 204 },
+    { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
   ])("keeps freshness invalidation but skips warming now-hidden pages after $label", async ({ path, method, body, status }) => {
     const { app, env, db } = createTestApp([{ slug: "about-us" }]);
 

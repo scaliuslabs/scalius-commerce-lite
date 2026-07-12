@@ -35,6 +35,7 @@ export interface PageDto {
   featuredImage?: PageFeaturedImageDto | null;
   publishedAt?: NullableTimestamp;
   sortOrder: number;
+  revision: number;
   createdAt: NullableTimestamp;
   updatedAt: NullableTimestamp;
   deletedAt: NullableTimestamp;
@@ -81,10 +82,23 @@ export interface CreatePageInput {
   featuredImage?: PageFeaturedImageDto | null;
 }
 
-export type UpdatePageInput = { id: string } & Partial<CreatePageInput>;
+export type UpdatePageInput = {
+  id: string;
+  expectedRevision: number;
+} & Partial<CreatePageInput>;
+
+export interface PageRevisionClaim {
+  id: string;
+  expectedRevision: number;
+}
 
 export interface PageIdPayload {
   id: string;
+  revision: number;
+}
+
+export interface PageMutationPayload {
+  revision: number;
 }
 
 export interface MessagePayload {
@@ -122,49 +136,55 @@ export const createPage = createServerFn({ method: "POST" })
 
 export const updatePage = createServerFn({ method: "POST" })
   .validator((data: UpdatePageInput) => data)
-  .handler(async ({ data }): Promise<Record<string, never>> => {
+  .handler(async ({ data }): Promise<PageMutationPayload> => {
     const { id, ...body } = data;
-    return apiPut<Record<string, never>>(`/pages/${id}`, body);
+    return apiPut<PageMutationPayload>(`/pages/${id}`, body);
   });
 
 export const deletePage = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: PageRevisionClaim) => data)
   .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/pages/${data.id}`);
+    return apiDelete(`/pages/${data.id}`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const permanentDeletePage = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: PageRevisionClaim) => data)
   .handler(async ({ data }): Promise<void> => {
-    return apiDelete(`/pages/${data.id}/permanent`);
+    return apiDelete(`/pages/${data.id}/permanent`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const restorePage = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: PageRevisionClaim) => data)
   .handler(async ({ data }): Promise<MessagePayload> => {
-    return apiPost<MessagePayload>(`/pages/${data.id}/restore`);
+    return apiPost<MessagePayload>(`/pages/${data.id}/restore`, {
+      expectedRevision: data.expectedRevision,
+    });
   });
 
 export const bulkDeletePages = createServerFn({ method: "POST" })
-  .validator((data: { pageIds: string[]; permanent?: boolean }) => data)
+  .validator((data: { pages: PageRevisionClaim[]; permanent?: boolean }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-delete", data);
   });
 
 export const bulkRestorePages = createServerFn({ method: "POST" })
-  .validator((data: { ids: string[] }) => data)
+  .validator((data: { pages: PageRevisionClaim[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-restore", data);
   });
 
 export const bulkPublishPages = createServerFn({ method: "POST" })
-  .validator((data: { ids: string[] }) => data)
+  .validator((data: { pages: PageRevisionClaim[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-publish", data);
   });
 
 export const bulkUnpublishPages = createServerFn({ method: "POST" })
-  .validator((data: { ids: string[] }) => data)
+  .validator((data: { pages: PageRevisionClaim[] }) => data)
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-unpublish", data);
   });

@@ -95,6 +95,7 @@ export type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
 export const pageFormSchema = z.object({
   id: z.string().optional(),
+  revision: z.number().int().min(1).optional(),
   title: z
     .string()
     .min(3, "Page title must be at least 3 characters")
@@ -103,7 +104,10 @@ export const pageFormSchema = z.object({
     .string()
     .min(3, "Slug must be at least 3 characters")
     .max(100, "Slug must be less than 100 characters")
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
+    .refine((slug) => isValidResourceCanonicalPath("page", `/${slug}`), {
+      message: "This URL is reserved by the storefront. Choose another slug.",
+    }),
   content: z.string().min(1, "Content is required"),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),

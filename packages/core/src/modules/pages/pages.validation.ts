@@ -8,6 +8,19 @@ import {
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
+export const PAGE_BATCH_LIMIT = 90;
+
+const expectedRevisionSchema = z.number().int().min(1);
+const pageSlugSchema = z
+    .string()
+    .trim()
+    .min(3)
+    .max(100)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .refine((slug) => isValidResourceCanonicalPath("page", `/${slug}`), {
+        message: "This slug is reserved by the storefront. Choose another page URL.",
+    });
+
 const canonicalPathSchema = z
     .string()
     .nullable()
@@ -47,7 +60,7 @@ export const pageFeaturedImageSchema = z.object({
 
 const pageFieldSchemas = {
     title: z.string().min(3).max(100),
-    slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    slug: pageSlugSchema,
     content: z.string(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
@@ -78,6 +91,7 @@ export const createPageSchema = z.object({
 
 /** Schema for updating an existing page (PUT /api/pages/:id) */
 export const updatePageSchema = z.object({
+    expectedRevision: expectedRevisionSchema,
     title: pageFieldSchemas.title.optional(),
     slug: pageFieldSchemas.slug.optional(),
     content: pageFieldSchemas.content.optional(),
@@ -95,5 +109,15 @@ export const updatePageSchema = z.object({
     featuredImage: pageFieldSchemas.featuredImage,
 });
 
+export const pageRevisionClaimSchema = z.object({
+    id: z.string().trim().min(1).max(180),
+    expectedRevision: expectedRevisionSchema,
+});
+
+export const pageRevisionClaimsSchema = z.object({
+    pages: z.array(pageRevisionClaimSchema).min(1).max(PAGE_BATCH_LIMIT),
+});
+
 export type CreatePageInput = z.infer<typeof createPageSchema>;
 export type UpdatePageInput = z.infer<typeof updatePageSchema>;
+export type PageRevisionClaim = z.infer<typeof pageRevisionClaimSchema>;

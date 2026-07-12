@@ -18,6 +18,7 @@ import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getPageColumns } from "~/components/admin/data-table/columns/page-columns";
 import type { Page } from "~/types/api-responses";
+import type { PageRevisionClaim } from "~/lib/api-functions/pages";
 
 const PageDeleteDialog = lazy(() =>
   import("./-PageDeleteDialog").then((module) => ({
@@ -72,23 +73,23 @@ function PagesPage() {
   const bulkDeleteMutation = useBulkDeletePages();
 
   // Delete confirmation state
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteClaim, setDeleteClaim] = useState<PageRevisionClaim | null>(null);
 
   const isActionLoading =
     deleteMutation.isPending || permanentDeleteMutation.isPending;
 
   const handleConfirmDelete = useCallback(() => {
-    if (!deleteId) return;
-    const id = deleteId;
-    setDeleteId(null);
+    if (!deleteClaim) return;
+    const claim = deleteClaim;
+    setDeleteClaim(null);
     if (showTrashed) {
-      permanentDeleteMutation.mutate(id);
+      permanentDeleteMutation.mutate(claim);
     } else {
-      deleteMutation.mutate(id);
+      deleteMutation.mutate(claim);
     }
-  }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+  }, [deleteClaim, showTrashed, deleteMutation, permanentDeleteMutation]);
 
-  const isPageDeleteDialogOpen = !!deleteId;
+  const isPageDeleteDialogOpen = !!deleteClaim;
 
   // Column definitions
   const columns = useMemo(
@@ -98,9 +99,9 @@ function PagesPage() {
         getStorefrontPath,
         onEdit: (id) =>
           void navigate({ to: "/admin/pages/$pageId/edit", params: { pageId: id } }),
-        onDelete: (id) => setDeleteId(id),
-        onRestore: (id) => restoreMutation.mutate(id),
-        onPermanentDelete: (id) => setDeleteId(id),
+        onDelete: (claim) => setDeleteClaim(claim),
+        onRestore: (claim) => restoreMutation.mutate(claim),
+        onPermanentDelete: (claim) => setDeleteClaim(claim),
       }),
     [showTrashed, getStorefrontPath, navigate, restoreMutation],
   );
@@ -126,7 +127,7 @@ function PagesPage() {
     [navigate],
   );
 
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, isFetching, isLoading, selectedRows, selectedIds, clearSelection } =
     useServerTable({
       columns,
       queryOptions: pagesQueryOptions(mapParams(search)),
@@ -207,7 +208,10 @@ function PagesPage() {
                 onClick={() => {
                   bulkDeleteMutation.mutate(
                     {
-                      pageIds: selectedIds,
+                      pages: selectedRows.map((page) => ({
+                        id: page.id,
+                        expectedRevision: page.revision,
+                      })),
                       permanent: showTrashed,
                     },
                     { onSuccess: clearSelection },
@@ -228,7 +232,7 @@ function PagesPage() {
             showTrashed={showTrashed}
             isOpen={isPageDeleteDialogOpen}
             isActionLoading={isActionLoading}
-            onOpenChange={(open) => !open && setDeleteId(null)}
+            onOpenChange={(open) => !open && setDeleteClaim(null)}
             onConfirm={handleConfirmDelete}
           />
         </Suspense>

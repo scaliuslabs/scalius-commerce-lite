@@ -70,15 +70,15 @@ describe("page validation", () => {
   });
 
   it("allows featured image removal when updating a page", () => {
-    const parsed = updatePageSchema.parse({ featuredImage: null });
+    const parsed = updatePageSchema.parse({ expectedRevision: 1, featuredImage: null });
 
-    expect(parsed).toEqual({ featuredImage: null });
+    expect(parsed).toEqual({ expectedRevision: 1, featuredImage: null });
   });
 
   it("does not clear canonical path on unrelated partial updates", () => {
-    const parsed = updatePageSchema.parse({ title: "Updated Offer" });
+    const parsed = updatePageSchema.parse({ expectedRevision: 3, title: "Updated Offer" });
 
-    expect(parsed).toEqual({ title: "Updated Offer" });
+    expect(parsed).toEqual({ expectedRevision: 3, title: "Updated Offer" });
   });
 
   it("accepts single-segment page canonical overrides", () => {
@@ -117,5 +117,17 @@ describe("page validation", () => {
         canonicalPath,
       ).toBe(false);
     }
+  });
+
+  it("rejects reserved storefront slugs", () => {
+    for (const slug of ["account", "admin", "api", "buy", "cart", "categories", "checkout", "collections", "health", "products", "search"]) {
+      expect(createPageSchema.safeParse({ ...pageInput, slug }).success, slug).toBe(false);
+    }
+  });
+
+  it("requires a positive expected revision on updates", () => {
+    expect(updatePageSchema.safeParse({ title: "Updated Offer" }).success).toBe(false);
+    expect(updatePageSchema.safeParse({ expectedRevision: 0, title: "Updated Offer" }).success).toBe(false);
+    expect(updatePageSchema.safeParse({ expectedRevision: 1, title: "Updated Offer" }).success).toBe(true);
   });
 });

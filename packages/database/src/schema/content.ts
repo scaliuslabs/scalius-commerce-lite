@@ -1,7 +1,8 @@
 // src/db/schema/content.ts
 // Site content tables: pages, heroSections, heroSliders, pageTemplates.
 
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -38,6 +39,7 @@ export const pages = sqliteTable(
         featuredImage: text("featured_image", { mode: "json" }).$type<PageFeaturedImage | null>(),
         publishedAt: integer("published_at", { mode: "timestamp" }),
         sortOrder: integer("sort_order").notNull().default(0),
+        revision: integer("revision").notNull().default(1),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -49,6 +51,7 @@ export const pages = sqliteTable(
     (table) => [
         uniqueIndex("pages_slug_idx").on(table.slug),
         index("pages_deleted_at_idx").on(table.deletedAt),
+        check("pages_revision_positive", sql.raw(`"revision" >= 1`)),
     ],
 );
 

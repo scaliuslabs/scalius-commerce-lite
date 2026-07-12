@@ -120,7 +120,18 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     isEdit,
     entityId: defaultValues?.id,
     createFn: (data) => createPage({ data: toPageInput(data) }),
-    updateFn: (data) => updatePage({ data: { id: data.id, ...toPageInput(data) } }),
+    updateFn: (data) => {
+      if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
+        throw new Error("Page revision is missing. Reload the page before saving.");
+      }
+      return updatePage({
+        data: {
+          id: data.id,
+          expectedRevision: data.revision,
+          ...toPageInput(data),
+        },
+      });
+    },
     invalidateKeys: [
       queryKeys.pages.list(),
       ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),

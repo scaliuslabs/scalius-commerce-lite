@@ -26,7 +26,7 @@ These flags are passed through the storefront's `Layout` component and respected
 
 ## Slug System
 
-Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected at the service layer (`ConflictError`), checked against non-deleted pages.
+Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected globally across active and trashed pages, and reserved storefront roots are rejected before persistence.
 
 On the storefront, `[slug].astro` is the catch-all dynamic route. It performs early validation before making API calls:
 1. Rejects empty slugs, file extensions, known non-page paths (`api`, `favicon`, `_astro`, etc.)
@@ -38,9 +38,9 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `getPageById(db, id)` filters `deletedAt IS NULL` -- soft-deleted pages are invisible to lookups
 - `getPageBySlug(db, slug)` also filters `deletedAt IS NULL`
 - `listPages` supports `showTrashed` flag: when true, shows only deleted pages (`deletedAt IS NOT NULL`); when false (default), shows only non-deleted pages
-- `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
-- `bulkDeletePages(db, ids, permanent?)` -- soft delete by default; permanent=true does hard delete
-- `restorePages(db, ids)` -- clears `deletedAt`
+- Every edit and lifecycle command carries a positive `expectedRevision`.
+- Trash and restore force Draft and clear scheduling; permanent deletion is trash-only.
+- Bulk lifecycle commands accept at most 90 unique `{ id, expectedRevision }` claims and atomically guard revision plus lifecycle state.
 
 ## Files
 
@@ -62,11 +62,11 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 
 **Mutations:**
 - `createPage(db, data, authority?)` -- defaults Draft; publication or scheduling requires verified `pages.publish` authority.
-- `updatePage(db, id, data, authority?)` -- ordinary edit may preserve publication state; changing publication or schedule requires verified `pages.publish` authority.
-- `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
-- `bulkDeletePages(db, ids, permanent?)` -- soft or hard delete
-- `bulkPublishPages(db, ids)` / `bulkUnpublishPages(db, ids)` -- toggle `isPublished`
-- `restorePages(db, ids)` -- clears `deletedAt`
+- `updatePage(db, id, data, authority?)` -- CAS edit; ordinary edit may preserve publication state, while changing publication or schedule requires verified `pages.publish` authority.
+- `deletePage(db, id, expectedRevision)` -- CAS soft-delete to Draft.
+- `bulkDeletePages(db, claims, permanent?)` -- bounded CAS trash or trash-only hard delete.
+- `bulkPublishPages(db, claims)` / `bulkUnpublishPages(db, claims)` -- bounded CAS lifecycle transitions.
+- `restorePages(db, claims)` -- bounded CAS restore to Draft.
 
 ### Validation Schema
 
@@ -94,12 +94,10 @@ Exported types: `CreatePageInput`, `UpdatePageInput`.
 | DELETE | `/admin/pages/{id}` | Soft-delete page |
 | DELETE | `/admin/pages/{id}/permanent` | Hard-delete page |
 | POST | `/admin/pages/{id}/restore` | Restore soft-deleted page |
-| POST | `/admin/pages/bulk-delete` | Bulk soft/hard delete (body: `{ pageIds, permanent }`) |
-| POST | `/admin/pages/bulk-publish` | Bulk publish (body: `{ ids }`) |
-| POST | `/admin/pages/bulk-unpublish` | Bulk unpublish (body: `{ ids }`) |
-| POST | `/admin/pages/bulk-restore` | Bulk restore (body: `{ ids }`) |
-
-Note: bulk-delete uses `pageIds` as the key name (not `ids`), unlike other bulk endpoints.
+| POST | `/admin/pages/bulk-delete` | Bulk soft/hard delete with revision claims |
+| POST | `/admin/pages/bulk-publish` | Bulk publish with revision claims |
+| POST | `/admin/pages/bulk-unpublish` | Bulk unpublish with revision claims |
+| POST | `/admin/pages/bulk-restore` | Bulk restore to Draft with revision claims |
 
 ### Public (via `apps/api/src/routes/pages.ts`)
 

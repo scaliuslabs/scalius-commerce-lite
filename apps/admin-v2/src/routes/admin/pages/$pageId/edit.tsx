@@ -6,10 +6,13 @@ import type { PageDto } from "~/lib/api-functions/pages";
 import type { PageFormValues } from "~/lib/form-schemas";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { unixToDate } from "@scalius/shared/timestamps";
+import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    const data = await queryClient.ensureQueryData({ ...pageQueryOptions(params.pageId), staleTime: Infinity }).catch(() => null);
+    const data = await queryClient
+      .ensureQueryData({ ...pageQueryOptions(params.pageId), staleTime: Infinity })
+      .catch(nullForAdminApiNotFound);
     if (!data) throw redirect({ to: "/admin/pages" });
   },
   head: () => ({
@@ -34,6 +37,7 @@ function EditPagePage() {
 function toPageFormValues(page: PageDto): PageFormValues {
   return {
     id: page.id,
+    revision: page.revision,
     title: page.title,
     slug: page.slug,
     content: page.content,

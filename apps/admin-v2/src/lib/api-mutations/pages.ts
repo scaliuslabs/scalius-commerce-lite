@@ -9,6 +9,7 @@ import {
   restorePage,
   updatePage,
   type CreatePageInput,
+  type PageRevisionClaim,
   type UpdatePageInput,
 } from "../api-functions/pages";
 import { getServerFnError, queryKeys } from "./shared";
@@ -45,10 +46,10 @@ export function useUpdatePage() {
 export function useDeletePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => deletePage({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: PageRevisionClaim) => deletePage({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.removeQueries({ queryKey: queryKeys.pages.detail(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
       toast.success("Page moved to trash");
     },
     onError: (err) =>
@@ -59,10 +60,10 @@ export function useDeletePage() {
 export function usePermanentDeletePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => permanentDeletePage({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: PageRevisionClaim) => permanentDeletePage({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.removeQueries({ queryKey: queryKeys.pages.detail(id) });
+      queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
       toast.success("Page permanently deleted");
     },
     onError: (err) =>
@@ -73,10 +74,10 @@ export function usePermanentDeletePage() {
 export function useRestorePage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restorePage({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (claim: PageRevisionClaim) => restorePage({ data: claim }),
+    onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pages.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pages.detail(claim.id) });
       toast.success("Page restored");
     },
     onError: (err) =>
@@ -87,14 +88,14 @@ export function useRestorePage() {
 export function useBulkDeletePages() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { pageIds: string[]; permanent?: boolean }) =>
+    mutationFn: (data: { pages: PageRevisionClaim[]; permanent?: boolean }) =>
       bulkDeletePages({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(
         variables.permanent
-          ? `${variables.pageIds.length} pages permanently deleted`
-          : `${variables.pageIds.length} pages moved to trash`,
+          ? `${variables.pages.length} pages permanently deleted`
+          : `${variables.pages.length} pages moved to trash`,
       );
     },
     onError: (err) =>
@@ -105,10 +106,10 @@ export function useBulkDeletePages() {
 export function useBulkRestorePages() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => bulkRestorePages({ data: { ids } }),
-    onSuccess: (_data, ids) => {
+    mutationFn: (pages: PageRevisionClaim[]) => bulkRestorePages({ data: { pages } }),
+    onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      toast.success(`${ids.length} pages restored`);
+      toast.success(`${pages.length} pages restored`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore pages")),

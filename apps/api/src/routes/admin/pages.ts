@@ -14,7 +14,9 @@ import {
     restorePages,
     publicPageVisibilityCondition,
     createPageSchema,
-    updatePageSchema
+    updatePageSchema,
+    pageRevisionClaimSchema,
+    pageRevisionClaimsSchema,
 } from "@scalius/core/modules/pages";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import type { Database } from "@scalius/database/client";
@@ -25,7 +27,6 @@ import {
     successEnvelope,
     paginatedEnvelope,
     messageResponse,
-    idResponse,
     noContentResponse,
     errorResponses,
     conflictResponse,
@@ -41,6 +42,9 @@ import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PAGE_CACHE_GROUPS = ["pages", "layout"] as const;
+const pageMutationSchema = z.object({ revision: z.number().int().min(1) });
+const pageCreateResultSchema = pageMutationSchema.extend({ id: z.string() });
+const pageRevisionBodySchema = pageRevisionClaimSchema.omit({ id: true });
 
 function pageHtmlPath(slug: string | null | undefined): string[] {
     return slug ? [`/${slug}`] : [];
@@ -122,7 +126,7 @@ const createPageRoute = createRoute({
     responses: {
         201: {
             description: "Page created",
-            content: { "application/json": { schema: idResponse } },
+            content: { "application/json": { schema: successEnvelope(pageCreateResultSchema) } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -151,8 +155,7 @@ const bulkDeleteRoute = createRoute({
         body: {
             content: {
                 "application/json": {
-                    schema: z.object({
-                        pageIds: z.array(z.string()),
+                    schema: pageRevisionClaimsSchema.extend({
                         permanent: z.boolean().default(false)
                     })
                 }
@@ -162,13 +165,14 @@ const bulkDeleteRoute = createRoute({
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
-    const { pageIds, permanent } = c.req.valid("json");
-    await bulkDeletePages(db, pageIds, permanent);
+    const { pages: revisionClaims, permanent } = c.req.valid("json");
+    await bulkDeletePages(db, revisionClaims, permanent);
     await invalidatePageCaches(c);
     return noContent(c);
 });
@@ -181,20 +185,24 @@ const bulkPublishRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk publish pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: pageRevisionClaimsSchema } } }
     },
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(bulkPublishRoute, async (c) => {
     const db = c.get("db");
-    const { ids } = c.req.valid("json");
-    await bulkPublishPages(db, ids);
+    const { pages: revisionClaims } = c.req.valid("json");
+    await bulkPublishPages(db, revisionClaims);
     await invalidatePageCaches(c, {
-        htmlPaths: await publicPageHtmlPathsByIds(db, ids),
+        htmlPaths: await publicPageHtmlPathsByIds(
+            db,
+            revisionClaims.map((claim) => claim.id),
+        ),
     });
     return noContent(c);
 });
@@ -207,17 +215,18 @@ const bulkUnpublishRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk unpublish pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: pageRevisionClaimsSchema } } }
     },
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(bulkUnpublishRoute, async (c) => {
     const db = c.get("db");
-    await bulkUnpublishPages(db, c.req.valid("json").ids);
+    await bulkUnpublishPages(db, c.req.valid("json").pages);
     await invalidatePageCaches(c);
     return noContent(c);
 });
@@ -230,20 +239,24 @@ const bulkRestoreRoute = createRoute({
     tags: ["Admin - Pages"],
     summary: "Bulk restore pages",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: pageRevisionClaimsSchema } } }
     },
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(bulkRestoreRoute, async (c) => {
     const db = c.get("db");
-    const { ids } = c.req.valid("json");
-    await restorePages(db, ids);
+    const { pages: revisionClaims } = c.req.valid("json");
+    await restorePages(db, revisionClaims);
     await invalidatePageCaches(c, {
-        htmlPaths: await publicPageHtmlPathsByIds(db, ids),
+        htmlPaths: await publicPageHtmlPathsByIds(
+            db,
+            revisionClaims.map((claim) => claim.id),
+        ),
     });
     return noContent(c);
 });
@@ -257,6 +270,13 @@ const restoreRoute = createRoute({
     summary: "Restore a soft-deleted page",
     request: {
         params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: pageRevisionBodySchema,
+                },
+            },
+        },
     },
     responses: {
         200: {
@@ -264,6 +284,7 @@ const restoreRoute = createRoute({
             content: { "application/json": { schema: messageResponse } },
         },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
@@ -272,7 +293,7 @@ app.openapi(restoreRoute, async (c) => {
     const { id } = c.req.valid("param");
     // Note: do NOT call getPageById here — it filters deletedAt IS NULL,
     // which would always 404 for soft-deleted pages being restored
-    await restorePages(db, [id]);
+    await restorePages(db, [{ id, expectedRevision: c.req.valid("json").expectedRevision }]);
     await invalidatePageCaches(c, {
         htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
     });
@@ -320,7 +341,7 @@ const updatePageRoute = createRoute({
     responses: {
         200: {
             description: "Page updated",
-            content: { "application/json": { schema: successEnvelope(z.object({})) } },
+            content: { "application/json": { schema: successEnvelope(pageMutationSchema) } },
         },
         ...errorResponses,
         409: conflictResponse,
@@ -330,13 +351,13 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await updatePage(db, id, c.req.valid("json"), {
+    const result = await updatePage(db, id, c.req.valid("json"), {
         canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     });
     await invalidatePageCaches(c, {
         htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
     });
-    return ok(c, {});
+    return ok(c, result);
 });
 
 // ── Delete Page ──
@@ -348,17 +369,25 @@ const deletePageRoute = createRoute({
     summary: "Soft-delete a page",
     request: {
         params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: pageRevisionBodySchema,
+                },
+            },
+        },
     },
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(deletePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await deletePage(db, id);
+    await deletePage(db, id, c.req.valid("json").expectedRevision);
     await invalidatePageCaches(c);
     return noContent(c);
 });
@@ -372,17 +401,29 @@ const permanentDeleteRoute = createRoute({
     summary: "Permanently delete a page",
     request: {
         params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: pageRevisionBodySchema,
+                },
+            },
+        },
     },
     responses: {
         204: noContentResponse,
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    await bulkDeletePages(db, [id], true);
+    await bulkDeletePages(
+        db,
+        [{ id, expectedRevision: c.req.valid("json").expectedRevision }],
+        true,
+    );
     await invalidatePageCaches(c);
     return noContent(c);
 });

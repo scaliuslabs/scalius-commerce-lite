@@ -607,6 +607,7 @@ export const pageSchema = z
     featuredImage: pageFeaturedImageSchema.nullable().optional(),
     publishedAt: optionalNullableTimestampSchema,
     sortOrder: z.number(),
+    revision: z.number().int().min(1),
     createdAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
     deletedAt: nullableTimestampSchema,
