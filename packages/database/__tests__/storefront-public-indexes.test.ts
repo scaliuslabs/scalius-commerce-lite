@@ -55,6 +55,7 @@ describe("storefront public listing indexes", () => {
             { idx: 9, tag: "0009_sticky_green_goblin" },
             { idx: 10, tag: "0010_serious_maverick" },
             { idx: 11, tag: "0011_product_barcode_guard" },
+            { idx: 12, tag: "0012_light_bedlam" },
         ]);
         expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
     });

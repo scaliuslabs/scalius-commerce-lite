@@ -112,6 +112,7 @@ export type InventoryAdjustmentReason =
   | "other";
 
 export interface AdjustInventoryInput {
+  operationKey: string;
   variantId: string;
   delta: number;
   reason: InventoryAdjustmentReason;
@@ -127,12 +128,14 @@ export interface AdjustInventoryResult {
 }
 
 export interface StockAdjustInput {
+  operationKey: string;
   variantId: string;
   adjustment: number;
   reason?: string;
 }
 
 export interface StockSetInput {
+  operationKey: string;
   variantId: string;
   newStock: number;
   reason?: string;

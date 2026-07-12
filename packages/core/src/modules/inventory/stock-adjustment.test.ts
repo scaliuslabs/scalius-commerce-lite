@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   inventoryMovements,
+  inventoryOperations,
   productImages,
   productVariants,
 } from "@scalius/database/schema";
@@ -37,11 +38,11 @@ function createStockDbMock(variant: {
   const db = {
     select() {
       return {
-        from() {
+        from(table: unknown) {
           return {
             where() {
               return {
-                get: async () => persistedVariant,
+                get: async () => table === inventoryOperations ? null : persistedVariant,
               };
             },
           };
@@ -76,7 +77,11 @@ function createStockDbMock(variant: {
     },
     batch: async (statements: MockStatement[]) => {
       batchCalls.push(statements);
-      return [[{ id: "movement_1" }], [{ id: variant.id }]];
+      return [
+        [{ id: "movement_1" }],
+        [{ operationKey: "invop_stock_test_000001" }],
+        [{ id: variant.id }],
+      ];
     },
   };
 
@@ -183,7 +188,14 @@ describe("stock adjustment ledger", () => {
       stockVersion: 3,
     });
 
-    const result = await setStock(db as never, "variant_1", 12, "Product variant edit", "admin_1");
+    const result = await setStock(
+      db as never,
+      "variant_1",
+      12,
+      "invop_stock_test_000001",
+      "Product variant edit",
+      "admin_1",
+    );
 
     expect(result).toEqual({
       variantId: "variant_1",
@@ -196,7 +208,7 @@ describe("stock adjustment ledger", () => {
       kind: "insert",
       table: inventoryMovements,
     });
-    expect(batchCalls[0]?.[1]).toMatchObject({
+    expect(batchCalls[0]?.[2]).toMatchObject({
       kind: "update",
       table: productVariants,
       values: { stock: 12 },
@@ -212,7 +224,14 @@ describe("stock adjustment ledger", () => {
     });
 
     await expect(
-      adjustStock(db as never, "variant_1", -5, "damaged", "admin_1"),
+      adjustStock(
+        db as never,
+        "variant_1",
+        -5,
+        "invop_stock_overdraw_01",
+        "damaged",
+        "admin_1",
+      ),
     ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
 
     expect(batchCalls).toHaveLength(0);
@@ -226,7 +245,7 @@ describe("stock adjustment ledger", () => {
       const db = { select };
 
       await expect(
-        adjustStock(db as never, "variant_1", adjustment),
+        adjustStock(db as never, "variant_1", adjustment, "invop_stock_invalid_001"),
       ).rejects.toThrow(/adjustment must/);
       expect(select).not.toHaveBeenCalled();
     },
@@ -239,7 +258,7 @@ describe("stock adjustment ledger", () => {
       const db = { select };
 
       await expect(
-        setStock(db as never, "variant_1", newStock),
+        setStock(db as never, "variant_1", newStock, "invop_stock_invalid_002"),
       ).rejects.toThrow(/newStock must/);
       expect(select).not.toHaveBeenCalled();
     },

@@ -22,7 +22,9 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     adjustStock: mocks.adjustStock,
     setStock: mocks.setStock,
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
+    inventoryOperationKeySchema: z.string().min(16).max(128),
     adjustInventorySchema: z.object({
+      operationKey: z.string().min(16),
       delta: z.number().int().refine((value) => value !== 0),
       reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
       notes: z.string().optional(),
@@ -122,28 +124,32 @@ describe("admin inventory cache invalidation", () => {
     {
       label: "adjust inventory",
       path: "/var_1/adjust",
-      body: { delta: 2, reason: "received" },
+      body: { operationKey: "invop_api_adjust_0001", delta: 2, reason: "received" },
       coreCall: () => mocks.adjustInventory,
+      operationKey: "invop_api_adjust_0001",
     },
     {
       label: "scanner stock adjust",
       path: "/stock-adjust",
-      body: { variantId: "var_1", adjustment: 3, reason: "cycle count" },
+      body: { operationKey: "invop_api_scanner_001", variantId: "var_1", adjustment: 3, reason: "cycle count" },
       coreCall: () => mocks.adjustStock,
+      operationKey: "invop_api_scanner_001",
     },
     {
       label: "scanner stock set",
       path: "/stock-set",
-      body: { variantId: "var_1", newStock: 10, reason: "stocktake" },
+      body: { operationKey: "invop_api_stocktake_01", variantId: "var_1", newStock: 10, reason: "stocktake" },
       coreCall: () => mocks.setStock,
+      operationKey: "invop_api_stocktake_01",
     },
-  ])("uses targeted product availability invalidation after $label", async ({ path, body, coreCall }) => {
+  ])("uses targeted product availability invalidation after $label", async ({ path, body, coreCall, operationKey }) => {
     const { app, db, env } = createTestApp();
 
     const response = await postJson(app, env, path, body);
 
     expect(response.status).toBe(200);
     expect(coreCall()).toHaveBeenCalled();
+    expect(JSON.stringify(coreCall().mock.calls[0])).toContain(operationKey);
     expect(mocks.invalidateProductAvailabilityCaches).toHaveBeenCalledWith(
       db,
       { variantIds: ["var_1"] },
@@ -157,6 +163,7 @@ describe("admin inventory cache invalidation", () => {
     mocks.adjustInventory.mockRejectedValueOnce(new Error("Variant not found"));
 
     const response = await postJson(app, env, "/missing_variant/adjust", {
+      operationKey: "invop_api_missing_0001",
       delta: 2,
       reason: "received",
     });
@@ -167,10 +174,24 @@ describe("admin inventory cache invalidation", () => {
   });
 
   it.each([
-    ["/var_1/adjust", { delta: -2, reason: "received" }, () => mocks.adjustInventory],
-    ["/stock-adjust", { variantId: "var_1", adjustment: 1.5 }, () => mocks.adjustStock],
-    ["/stock-set", { variantId: "var_1", newStock: 1.5 }, () => mocks.setStock],
+    ["/var_1/adjust", { operationKey: "invop_api_invalid_0001", delta: -2, reason: "received" }, () => mocks.adjustInventory],
+    ["/stock-adjust", { operationKey: "invop_api_invalid_0002", variantId: "var_1", adjustment: 1.5 }, () => mocks.adjustStock],
+    ["/stock-set", { operationKey: "invop_api_invalid_0003", variantId: "var_1", newStock: 1.5 }, () => mocks.setStock],
   ] as const)("rejects invalid stock semantics before calling the core write at %s", async (path, body, coreCall) => {
+    const { app, env } = createTestApp();
+
+    const response = await postJson(app, env, path, body);
+
+    expect(response.status).toBe(400);
+    expect(coreCall()).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["/var_1/adjust", { delta: 2, reason: "received" }, () => mocks.adjustInventory],
+    ["/stock-adjust", { variantId: "var_1", adjustment: 2 }, () => mocks.adjustStock],
+    ["/stock-set", { variantId: "var_1", newStock: 7 }, () => mocks.setStock],
+  ] as const)("requires a merchant operation key before inventory work at %s", async (path, body, coreCall) => {
     const { app, env } = createTestApp();
 
     const response = await postJson(app, env, path, body);

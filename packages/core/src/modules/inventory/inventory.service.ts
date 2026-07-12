@@ -1,15 +1,13 @@
 import { productVariants, products, inventoryMovements, productLowStockAlerts } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
-import { checkAndAlertLowStock } from "./alerts";
-import { safeBatch, type Database } from "@scalius/database/client";
+import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
-import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { buildStockMovementClaim } from "./stock-movement-claims";
+import { ValidationError } from "@scalius/core/errors";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
 import { adjustInventorySchema } from "./inventory.validation";
-import { validateAbsoluteStockCount } from "./validation";
+import { executeInventoryOperation } from "./inventory-operations";
 
 const ALLOWED_INVENTORY_SECTIONS: ReadonlySet<string> = new Set(["variants", "movements", "alerts"]);
 const ALLOWED_INVENTORY_STATUSES: ReadonlySet<string> = new Set(["all", "low", "out", "reserved"]);
@@ -302,123 +300,27 @@ export async function getInventoryOverview(db: Database, params: {
 }
 
 export async function adjustInventory(db: Database, variantId: string, payload: {
+    operationKey: string;
     delta: number;
     reason: string;
     notes?: string;
     pool?: string;
 }, adminUserId?: string) {
-    const MAX_RETRIES = 3;
-    const BASE_BACKOFF_MS = 50;
     const parsedPayload = adjustInventorySchema.safeParse(payload);
     if (!parsedPayload.success) {
         throw new ValidationError(
             parsedPayload.error.issues[0]?.message ?? "Invalid stock adjustment",
         );
     }
-    const { pool, delta, reason, notes } = parsedPayload.data;
-
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        const variant = await db
-            .select({
-                id: productVariants.id,
-                stock: productVariants.stock,
-                reservedStock: productVariants.reservedStock,
-                preorderStock: productVariants.preorderStock,
-                stockVersion: productVariants.stockVersion,
-            })
-            .from(productVariants)
-            .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
-            .get();
-
-        if (!variant) {
-            throw new NotFoundError("Variant not found");
-        }
-
-        const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
-        const newStock = previousStock + delta;
-        validateAbsoluteStockCount(newStock, "resulting stock");
-        const effectiveDelta = newStock - previousStock;
-
-        if (effectiveDelta === 0) {
-            return {
-                variantId,
-                previousStock,
-                newStock,
-                delta: 0,
-            };
-        }
-
-        const updateSet = pool === "preorderStock"
-            ? {
-                preorderStock: newStock,
-                stockVersion: sql`${productVariants.stockVersion} + 1`,
-                updatedAt: sql`unixepoch()`,
-            }
-            : {
-                stock: newStock,
-                stockVersion: sql`${productVariants.stockVersion} + 1`,
-                updatedAt: sql`unixepoch()`,
-            };
-
-        const movementInsert = buildStockMovementClaim(db, {
-            movementId: crypto.randomUUID(),
-            variantId,
-            pool: pool === "preorderStock" ? "preorder" : "regular",
-            quantity: effectiveDelta,
-            before: {
-                stock: variant.stock,
-                reservedStock: variant.reservedStock,
-                preorderStock: variant.preorderStock,
-                stockVersion: variant.stockVersion,
-            },
-            after: {
-                stock: pool === "preorderStock" ? variant.stock : newStock,
-                reservedStock: variant.reservedStock,
-                preorderStock: pool === "preorderStock" ? newStock : variant.preorderStock,
-                stockVersion: variant.stockVersion + 1,
-            },
-            notes: `Manual adjustment (${reason})${notes ? `: ${notes}` : ""}`,
-            adminUserId,
-        });
-
-        const stockUpdate = db
-            .update(productVariants)
-            .set(updateSet)
-            .where(
-                and(
-                    eq(productVariants.id, variantId),
-                    eq(productVariants.stockVersion, variant.stockVersion),
-                    isNull(productVariants.deletedAt),
-                )
-            )
-            .returning({ id: productVariants.id });
-
-        const [movementRows, updateRows] = await safeBatch(
-            db,
-            [movementInsert, stockUpdate] as never,
-        ) as { id: string }[][];
-
-        if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
-            if (pool === "stock") {
-                await checkAndAlertLowStock(db, variantId);
-            }
-
-            return {
-                variantId,
-                previousStock,
-                newStock,
-                delta: effectiveDelta,
-            };
-        }
-
-        // CAS conflict — retry with backoff
-        if (attempt < MAX_RETRIES - 1) {
-            const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
-            await new Promise((resolve) => setTimeout(resolve, backoff));
-        }
-    }
-
-    throw new ConflictError(
-        `Failed to adjust inventory after ${MAX_RETRIES} retries due to concurrent modifications`
-    );
+    const { operationKey, pool, delta, reason, notes } = parsedPayload.data;
+    return executeInventoryOperation(db, {
+        operationKey,
+        operationType: "manual_adjustment",
+        variantId,
+        pool,
+        mode: "relative",
+        delta,
+        reason,
+        ...(notes ? { notes } : {}),
+    }, adminUserId);
 }

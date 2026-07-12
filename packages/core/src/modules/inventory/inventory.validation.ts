@@ -7,7 +7,18 @@ const signedStockAdjustmentSchema = z
     .max(Number.MAX_SAFE_INTEGER)
     .refine((value) => value !== 0, "Adjustment must not be zero.");
 
+export const inventoryOperationKeySchema = z
+    .string()
+    .trim()
+    .min(16, "operationKey must be at least 16 characters")
+    .max(128, "operationKey must be at most 128 characters")
+    .regex(
+        /^[A-Za-z0-9][A-Za-z0-9._:-]*$/,
+        "operationKey contains unsupported characters",
+    );
+
 export const adjustInventorySchema = z.object({
+    operationKey: inventoryOperationKeySchema,
     delta: signedStockAdjustmentSchema,
     reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
     notes: z.string().trim().max(500).optional(),

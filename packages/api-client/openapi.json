@@ -44617,6 +44617,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "operationKey": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
                   "delta": {
                     "type": "integer",
                     "minimum": -9007199254740991,
@@ -44647,6 +44653,7 @@
                   }
                 },
                 "required": [
+                  "operationKey",
                   "delta",
                   "reason"
                 ]
@@ -44995,6 +45002,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "operationKey": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
                   "variantId": {
                     "type": "string",
                     "description": "Variant ID"
@@ -45012,6 +45025,7 @@
                   }
                 },
                 "required": [
+                  "operationKey",
                   "variantId",
                   "adjustment"
                 ]
@@ -45168,6 +45182,12 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "operationKey": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+                  },
                   "variantId": {
                     "type": "string",
                     "description": "Variant ID"
@@ -45185,6 +45205,7 @@
                   }
                 },
                 "required": [
+                  "operationKey",
                   "variantId",
                   "newStock"
                 ]

@@ -116,6 +116,51 @@ function nextId(): string {
   return `scan-${Date.now()}-${++idCounter}`;
 }
 
+function createInventoryOperationKey(): string {
+  return `invop_${crypto.randomUUID()}`;
+}
+
+class InventoryOperationHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "InventoryOperationHttpError";
+  }
+}
+
+async function postInventoryOperation(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (response.ok) {
+        return unwrapEnvelope(await response.json());
+      }
+      const errorBody = await response.json().catch(() => null);
+      const message = errorBody?.error?.message ?? errorBody?.error ?? `API error: ${response.status}`;
+      throw new InventoryOperationHttpError(message, response.status);
+    } catch (error) {
+      lastError = error;
+      if (
+        attempt === 1 ||
+        (error instanceof InventoryOperationHttpError && error.status < 500)
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Inventory operation failed");
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -275,27 +320,12 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
       // Fire API call — correct on failure
       try {
-        const res = await fetch("/api/v1/admin/inventory/stock-adjust", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            variantId: product.variantId,
-            adjustment: quantity,
-            reason: isAdd ? "Quick Receive" : "Quick Deduct",
-          }),
+        await postInventoryOperation("/api/v1/admin/inventory/stock-adjust", {
+          operationKey: createInventoryOperationKey(),
+          variantId: product.variantId,
+          adjustment: quantity,
+          reason: isAdd ? "Quick Receive" : "Quick Deduct",
         });
-        if (!res.ok) {
-          // Mark result as failed in history
-          setHistory((prev) =>
-            prev.map((r) =>
-              r.id === result.id
-                ? { ...r, action: "error" as const, reason: "API call failed" }
-                : r,
-            ),
-          );
-        }
       } catch {
         setHistory((prev) =>
           prev.map((r) =>
@@ -384,9 +414,10 @@ export function ScannerApp({ token }: ScannerAppProps) {
       adjustment: number;
       reason: string;
       isAbsolute: boolean;
+      operationKey: string;
       product: ScannedProduct;
     }) => {
-      const { variantId, adjustment, reason, isAbsolute, product } = opts;
+      const { variantId, adjustment, reason, isAbsolute, operationKey, product } = opts;
 
       try {
         const url = isAbsolute
@@ -394,27 +425,13 @@ export function ScannerApp({ token }: ScannerAppProps) {
           : "/api/v1/admin/inventory/stock-adjust";
 
         const body = isAbsolute
-          ? { variantId, newStock: adjustment, reason }
-          : { variantId, adjustment, reason };
+          ? { operationKey, variantId, newStock: adjustment, reason }
+          : { operationKey, variantId, adjustment, reason };
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => null);
-          throw new Error(
-            errBody?.error?.message ?? errBody?.error ?? `API error: ${res.status}`,
-          );
-        }
-
-        const json = await res.json();
-        const data = unwrapEnvelope(json);
-        const newStock = data.stock ?? (isAbsolute ? adjustment : product.stock + adjustment);
+        const data = await postInventoryOperation(url, body);
+        const newStock = typeof data.newStock === "number"
+          ? data.newStock
+          : isAbsolute ? adjustment : product.stock + adjustment;
         const oldStock = product.stock;
 
         const result: ScanResult = {
@@ -475,18 +492,12 @@ export function ScannerApp({ token }: ScannerAppProps) {
       if (!item.product) return;
 
       try {
-        const res = await fetch("/api/v1/admin/inventory/stock-set", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            variantId: item.product.variantId,
-            newStock: item.oldStock,
-            reason: "Undo scanner adjustment",
-          }),
+        await postInventoryOperation("/api/v1/admin/inventory/stock-set", {
+          operationKey: createInventoryOperationKey(),
+          variantId: item.product.variantId,
+          newStock: item.oldStock,
+          reason: "Undo scanner adjustment",
         });
-        if (!res.ok) throw new Error("Undo failed");
 
         haptic("medium");
         beep("success");

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   X,
   Check,
@@ -42,6 +42,7 @@ interface ManualSheetProps {
     adjustment: number;
     reason: string;
     isAbsolute: boolean;
+    operationKey: string;
     product: ScannedProduct;
   }) => Promise<void>;
   onCancel: () => void;
@@ -64,6 +65,7 @@ export function ManualSheet({
   const [reason, setReason] = useState<AdjustmentReason>("Receiving");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const newStock = isAbsolute
     ? Number(absoluteValue) || 0
@@ -98,11 +100,24 @@ export function ManualSheet({
     setError(null);
 
     try {
+      const fingerprint = JSON.stringify({
+        variantId: product.variantId,
+        isAbsolute,
+        adjustment: isAbsolute ? Number(absoluteValue) : adjustment,
+        reason,
+      });
+      if (operationIntentRef.current?.fingerprint !== fingerprint) {
+        operationIntentRef.current = {
+          fingerprint,
+          key: `invop_${crypto.randomUUID()}`,
+        };
+      }
       await onSubmit({
         variantId: product.variantId,
         adjustment: isAbsolute ? Number(absoluteValue) : adjustment,
         reason,
         isAbsolute,
+        operationKey: operationIntentRef.current.key,
         product,
       });
     } catch (err) {

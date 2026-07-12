@@ -16,6 +16,12 @@ The inventory system tracks stock at the **product variant** level. Three stock 
 
 Concurrency is managed through `stockVersion` (CAS -- compare-and-swap), a dedicated optimistic-locking counter on `product_variants` that is independent from the general `version` column used for non-stock updates (price, metadata, etc.). Every stock mutation increments `stockVersion` and conditions the UPDATE on the previously-read value. On conflict the operation retries up to 3 times with exponential backoff (50ms base).
 
+Merchant-originated manual adjustments, scanner adjustments, and stocktakes
+also require an operation key. `inventory_operations` stores the canonical
+request hash and committed result in the same D1 batch as the ledger-v2 claim
+and counter CAS. Exact retries replay; changed-payload key reuse is a conflict.
+There is no pre-commit pending row.
+
 ## Inventory Lifecycle / State Machine
 
 Stock follows a clear lifecycle driven by order status transitions. The order-level `inventoryAction` column (`orders.inventory_action`) tracks which phase each order is in.
@@ -140,6 +146,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
 | `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
+| `inventory-operations.ts`  | Shared idempotent manual/scanner/stocktake command engine; canonical request hashing, exact replay, atomic operation + movement + counter batch |
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated variants/movements/alerts query; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
@@ -184,6 +191,19 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 New production counter writes use `ledger_version = 2` and additionally record `pool`, `reservation_generation`, `stock_version_before/after`, and before/after/delta values for physical, reserved, and preorder counters. `(variant_id, stock_version_after)` is unique, so the CAS version is also the deterministic per-SKU ledger sequence. Legacy rows remain version 1 history and are not falsely backfilled with counter facts that were never recorded. See `docs/codex/catalog/INVENTORY-LEDGER-V2.md` for the complete event and generation contract.
 
 Indexes: `variant_id`, `order_id`, `created_at`
+
+### `inventory_operations` (merchant command replay ledger)
+
+| Column | Notes |
+|---|---|
+| `operation_key` | Merchant/client generated primary replay identity |
+| `request_hash` | SHA-256 of canonical mode/type/SKU/pool/quantity/reason/notes |
+| `operation_type` | `manual_adjustment`, `scanner_adjustment`, or `stocktake` |
+| `variant_id` | Affected SKU |
+| `movement_id` | Matching ledger-v2 edge, null only for a no-op stocktake |
+| `result_payload` | Exact committed `previousStock/newStock/delta` response |
+| `stock_version_before/after` | Counter CAS edge committed with the operation |
+| `created_by`, `created_at` | Original actor and timestamp; actor is not part of replay identity |
 
 ### `product_low_stock_alerts`
 
