@@ -87,6 +87,7 @@ function toOrderViewModel(
 ): Order {
   return {
     id: order.id,
+    version: order.version,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     customerEmail: order.customerEmail,

@@ -15,8 +15,6 @@ import type {
   PostApiV1AdminOrdersByIdRefundData,
   PostApiV1AdminOrdersByIdRefundResponse,
   PostApiV1AdminOrdersByIdRestoreResponse,
-  PostApiV1AdminOrdersByIdReturnData,
-  PostApiV1AdminOrdersByIdReturnResponse,
   PostApiV1AdminOrdersByIdShipmentsData,
   PostApiV1AdminOrdersByIdShipmentsResponse,
   PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse,
@@ -41,6 +39,15 @@ import type {
   PostApiV1AdminOrdersBulkShipResponse,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
+import type {
+  ApproveOrderReturnInput,
+  CancelOrderReturnInput,
+  CreateOrderReturnInput,
+  OrderReturnCommandResult,
+  OrderReturnsPayload,
+  ReceiveOrderReturnInput,
+  ReconcileOrderReturnInput,
+} from "../order-return-workflow";
 
 type JsonSerializable<T> = T extends Array<infer Item>
   ? JsonSerializable<Item>[]
@@ -93,9 +100,6 @@ export type MessagePayload =
   | ApiData<PutApiV1AdminOrdersByIdFulfillmentStatusResponse>;
 export type UpdateOrderStatusInput = { orderId: string; note?: string } &
   ApiBody<PutApiV1AdminOrdersByIdStatusData>;
-export type ReturnOrderInput = { orderId: string } &
-  ApiBody<PostApiV1AdminOrdersByIdReturnData>;
-export type ReturnOrderPayload = ApiData<PostApiV1AdminOrdersByIdReturnResponse>;
 export type RefundOrderInput = { orderId: string } &
   ApiBody<PostApiV1AdminOrdersByIdRefundData>;
 export type RefundOrderPayload = ApiData<PostApiV1AdminOrdersByIdRefundResponse>;
@@ -303,13 +307,55 @@ export const updateOrderStatus = createServerFn({ method: "POST" })
     });
   });
 
-export const returnOrder = createServerFn({ method: "POST" })
-  .validator((data: ReturnOrderInput) => data)
+export const getOrderReturns = createServerFn({ method: "GET" })
+  .validator((data: { orderId: string }) => data)
   .handler(async ({ data }) => {
-    return apiPost<ReturnOrderPayload>(`/orders/${data.orderId}/return`, {
-      reason: data.reason,
-      autoRefund: data.autoRefund,
-    });
+    return apiGet<OrderReturnsPayload>(`/orders/${data.orderId}/returns`);
+  });
+
+export const createOrderReturn = createServerFn({ method: "POST" })
+  .validator((data: CreateOrderReturnInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, ...body } = data;
+    return apiPost<OrderReturnCommandResult>(`/orders/${orderId}/returns`, body);
+  });
+
+export const approveOrderReturn = createServerFn({ method: "POST" })
+  .validator((data: ApproveOrderReturnInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, returnId, ...body } = data;
+    return apiPost<OrderReturnCommandResult>(
+      `/orders/${orderId}/returns/${returnId}/approve`,
+      body,
+    );
+  });
+
+export const receiveOrderReturn = createServerFn({ method: "POST" })
+  .validator((data: ReceiveOrderReturnInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, returnId, ...body } = data;
+    return apiPost<OrderReturnCommandResult>(
+      `/orders/${orderId}/returns/${returnId}/receive`,
+      body,
+    );
+  });
+
+export const cancelOrderReturn = createServerFn({ method: "POST" })
+  .validator((data: CancelOrderReturnInput) => data)
+  .handler(async ({ data }) => {
+    const { orderId, returnId, ...body } = data;
+    return apiPost<OrderReturnCommandResult>(
+      `/orders/${orderId}/returns/${returnId}/cancel`,
+      body,
+    );
+  });
+
+export const reconcileOrderReturn = createServerFn({ method: "POST" })
+  .validator((data: ReconcileOrderReturnInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<OrderReturnCommandResult>(
+      `/orders/${data.orderId}/returns/${data.returnId}/reconcile`,
+    );
   });
 
 export const restoreOrder = createServerFn({ method: "POST" })

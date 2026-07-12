@@ -1,20 +1,24 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  approveOrderReturn,
   bulkDeleteOrders,
   bulkShipOrders,
+  cancelOrderReturn,
   createFulfillmentShipment,
   createOrder,
+  createOrderReturn,
   createOrderShipment,
   issueOrderPaymentRecoveryLink,
   reconcileRefundAttempt,
+  receiveOrderReturn,
   refundOrder,
   reconcileShipment,
   resendOrderNotification,
   resolveOrderSupportRequest,
   retryOrderNotification,
   restoreOrder,
-  returnOrder,
+  reconcileOrderReturn,
   updateFulfillmentStatus,
   updateOrder,
   updateOrderCod,
@@ -31,12 +35,18 @@ import {
   type ReconcileRefundAttemptInput,
   type ResendOrderNotificationInput,
   type ResolveOrderSupportRequestInput,
-  type ReturnOrderInput,
   type UpdateFulfillmentStatusInput,
   type UpdateOrderCodInput,
   type UpdateOrderInput,
   type UpdateOrderStatusInput,
 } from "../api-functions/orders";
+import type {
+  ApproveOrderReturnInput,
+  CancelOrderReturnInput,
+  CreateOrderReturnInput,
+  ReceiveOrderReturnInput,
+  ReconcileOrderReturnInput,
+} from "../order-return-workflow";
 import {
   getServerFnError,
   invalidateDashboardQueries,
@@ -411,20 +421,89 @@ export function useResolveOrderSupportRequest() {
   });
 }
 
-export function useReturnOrder() {
+function invalidateOrderReturnQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orderId: string,
+) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.orders.returns(orderId) });
+  invalidateDashboardQueries(queryClient);
+}
+
+export function useCreateOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: ReturnOrderInput) => returnOrder({ data }),
+    mutationFn: (data: CreateOrderReturnInput) => createOrderReturn({ data }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      toast.success("Return processed");
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.success("Return requested");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to process return")),
+    onError: (err, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.error(getServerFnError(err, "Failed to request return"));
+    },
+  });
+}
+
+export function useApproveOrderReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ApproveOrderReturnInput) => approveOrderReturn({ data }),
+    onSuccess: (result, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.success(result.status === "rejected" ? "Return rejected" : "Return approved");
+    },
+    onError: (err, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.error(getServerFnError(err, "Failed to decide return"));
+    },
+  });
+}
+
+export function useReceiveOrderReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReceiveOrderReturnInput) => receiveOrderReturn({ data }),
+    onSuccess: (result, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.success(result.status === "completed" ? "Return received" : "Receipt recorded");
+    },
+    onError: (err, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.error(getServerFnError(err, "Failed to record receipt"));
+    },
+  });
+}
+
+export function useCancelOrderReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CancelOrderReturnInput) => cancelOrderReturn({ data }),
+    onSuccess: (_result, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.success("Return cancelled");
+    },
+    onError: (err, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.error(getServerFnError(err, "Failed to cancel return"));
+    },
+  });
+}
+
+export function useReconcileOrderReturn() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ReconcileOrderReturnInput) =>
+      reconcileOrderReturn({ data }),
+    onSuccess: (_result, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.success("Receipt recovery completed");
+    },
+    onError: (err, variables) => {
+      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      toast.error(getServerFnError(err, "Failed to recover receipt"));
+    },
   });
 }
 

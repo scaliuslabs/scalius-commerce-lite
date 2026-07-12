@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -12,25 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Receipt, Loader2, Undo2 } from "lucide-react";
+import { AlertTriangle, Receipt, Loader2 } from "lucide-react";
 import type { Order } from "./types";
-import { getAvailableTransitions } from "./types";
-import { useUpdateOrderStatus, useReturnOrder } from "@/lib/api-mutations/orders";
+import { useUpdateOrderStatus } from "@/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
 
 interface OrderStatusCardProps {
   order: Order;
@@ -38,14 +24,9 @@ interface OrderStatusCardProps {
 
 export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const orderActions = useOrderActionPermissions();
-  const canRefund = orderActions.canRefundOrders;
   const canChangeStatus = orderActions.canChangeOrderStatus;
-  const [returnReason, setReturnReason] = useState("");
-  const [autoRefund, setAutoRefund] = useState(false);
-  const [isReturnDialogOpen, setIsReturnDialogOpen] = useState(false);
 
   const statusMutation = useUpdateOrderStatus();
-  const returnMutation = useReturnOrder();
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
@@ -70,44 +51,6 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     statusMutation.mutate({ orderId: order.id, status: newStatus });
   };
 
-  const handleReturnOrder = () => {
-    if (!canChangeStatus) {
-      toast.error("Return unavailable", {
-        description: "Your role can view orders but cannot change order status.",
-      });
-      return;
-    }
-    if (!returnReason.trim()) {
-      toast.error("Error", { description: "Return reason is required." });
-      return;
-    }
-    if (refundLocked) {
-      toast.error("Order locked", { description: "Complete or reconcile the active refund before returning this order." });
-      return;
-    }
-    if (shipmentLocked) {
-      toast.error("Shipment recovery active", {
-        description: order.shipmentRecovery?.message ?? "Resolve the active shipment recovery before returning this order.",
-      });
-      return;
-    }
-
-    returnMutation.mutate(
-      { orderId: order.id, reason: returnReason, autoRefund: autoRefund && canRefund },
-      {
-        onSuccess: () => {
-          setIsReturnDialogOpen(false);
-        },
-      },
-    );
-  };
-
-  const isReturnable = ["delivered", "completed", "shipped"].includes(order.status.toLowerCase());
-  const canAutoRefund =
-    canRefund &&
-    order.paymentStatus !== "unpaid" &&
-    order.paymentStatus !== "refunded";
-
   return (
     <Card className="overflow-hidden">
       <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
@@ -119,7 +62,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
       <CardContent className="p-4 space-y-4">
         <div className="space-y-2">
           <Select
-            defaultValue={order.status.toLowerCase()}
+            value={order.status.toLowerCase()}
             onValueChange={handleStatusChange}
             disabled={statusMutation.isPending || refundLocked || shipmentLocked || !canChangeStatus}
           >
@@ -142,7 +85,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 {order.status.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
               </SelectItem>
               {/* Valid transitions from current status */}
-              {getAvailableTransitions(order.status).map((status) => (
+              {getAdminOrderStatusTransitions(order.status).map((status) => (
                 <SelectItem
                   key={status}
                   value={status}
@@ -154,14 +97,14 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
             </SelectContent>
           </Select>
           {!canChangeStatus && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Status changes require order status permission.
             </p>
           )}
         </div>
 
         {activeRefundOperation && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <div>
@@ -173,7 +116,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
         )}
 
         {shipmentLocked && order.shipmentRecovery && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <div>
@@ -184,72 +127,6 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           </div>
         )}
 
-        {isReturnable && canChangeStatus && (
-          <Dialog open={isReturnDialogOpen} onOpenChange={setIsReturnDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full mt-2" size="sm" disabled={refundLocked || shipmentLocked}>
-                <Undo2 className="h-4 w-4 md:mr-2" />
-                <span className="hidden md:inline">Return Order</span>
-                <span className="md:hidden">Return</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Return Order</DialogTitle>
-                <DialogDescription>
-                  Process a return for this order. This will change the order status to Returned and optionally process an automatic refund.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reason">Return Reason <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="reason"
-                    placeholder="e.g. Defective item, wrong size"
-                    value={returnReason}
-                    onChange={(e) => setReturnReason(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center space-x-2 border rounded-md p-3">
-                  <Checkbox
-                    id="auto-refund"
-                    checked={autoRefund}
-                    onCheckedChange={(checked) => setAutoRefund(Boolean(checked) && canAutoRefund)}
-                    disabled={!canAutoRefund || refundLocked}
-                  />
-                  <div className="space-y-1 leading-none">
-                    <Label
-                      htmlFor="auto-refund"
-                      className="text-sm font-medium leading-none"
-                    >
-                      Automatically refund payment
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      {refundLocked
-                        ? "Locked while refund recovery is active"
-                        : shipmentLocked
-                        ? "Locked while shipment recovery is active"
-                        : order.paymentStatus === "unpaid" || order.paymentStatus === "refunded"
-                        ? "Not available (no refundable payment)"
-                        : !canRefund
-                          ? "Requires refund permission"
-                          : "Will attempt to automatically refund the paid amount via the original payment gateway."}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsReturnDialogOpen(false)} disabled={returnMutation.isPending}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={handleReturnOrder} disabled={returnMutation.isPending || refundLocked || shipmentLocked}>
-                  {returnMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Confirm Return
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
       </CardContent>
     </Card>
   );

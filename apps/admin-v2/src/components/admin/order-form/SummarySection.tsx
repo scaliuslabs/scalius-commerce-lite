@@ -21,8 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { OrderStatus } from "@/types/api-responses";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   type OrderCalculation,
   getOrderCalculation,
@@ -32,11 +31,17 @@ import {
 } from "../../../store/orderStore";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "@/hooks/use-currency";
+import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
 
 export function SummarySection() {
   const { form, isEdit, refs, handleKeyDown } = useOrderForm();
   const { symbol } = useCurrency();
   const [calculations, setCalculations] = useState<OrderCalculation>(getOrderCalculation());
+  const persistedStatus = useRef(form.getValues("status") ?? "pending").current;
+  const availableStatuses = [
+    persistedStatus,
+    ...getAdminOrderStatusTransitions(persistedStatus),
+  ];
 
   useEffect(() => {
     return subscribe(setCalculations);
@@ -47,7 +52,7 @@ export function SummarySection() {
       <Card>
         <CardHeader className="pb-3 pt-4 px-4">
           <CardTitle className="text-base">Order Summary</CardTitle>
-          <CardDescription className="text-xs">Review and finalize the order.</CardDescription>
+          <CardDescription className="text-sm">Review and finalize the order.</CardDescription>
         </CardHeader>
         <CardContent className="px-4 pb-4 space-y-3">
           <div className="grid gap-3 md:grid-cols-2">
@@ -170,7 +175,9 @@ export function SummarySection() {
         <Card>
           <CardHeader className="pb-3 pt-4 px-4">
             <CardTitle className="text-base">Order Status</CardTitle>
-            <CardDescription className="text-xs">Update the current status of the order.</CardDescription>
+            <CardDescription className="text-sm">
+              Use this for operational progress. Returns and refunds have their own evidence-backed workflows.
+            </CardDescription>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <FormField
@@ -184,7 +191,7 @@ export function SummarySection() {
                       field.onChange(value);
                       setTimeout(() => refs.submitButtonRef.current?.focus(), 100);
                     }}
-                    defaultValue={field.value}
+                    value={field.value}
                   >
                     <FormControl>
                       <SelectTrigger ref={refs.statusButtonRef} className="w-full">
@@ -192,7 +199,7 @@ export function SummarySection() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="rounded-xl bg-background">
-                      {Object.values(OrderStatus).map((status) => (
+                      {availableStatuses.map((status) => (
                         <SelectItem key={status} value={status}>
                           {status.charAt(0).toUpperCase() +
                             status.slice(1).toLowerCase().replace("_", " ")}
