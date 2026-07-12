@@ -48,4 +48,25 @@ describe("ProductShortcode normalized options", () => {
     const buttons = [...host.querySelectorAll("button")];
     expect(buttons.find((button) => button.textContent === "Print")?.hasAttribute("disabled")).toBe(true);
   });
+
+  it("uses an exact SKU image and falls back to primary for an unmapped SKU", async () => {
+    const productData = data();
+    productData.images = [
+      { id: "img_primary", productId: "prod_1", url: "https://images.example.com/primary.jpg", alt: "Primary", isPrimary: true, sortOrder: 0, createdAt: "2026-01-01" },
+      { id: "img_digital", productId: "prod_1", url: "https://images.example.com/digital.jpg", alt: "Digital", isPrimary: false, sortOrder: 1, createdAt: "2026-01-01" },
+    ];
+    productData.variants[0]!.imageId = "img_digital";
+    productData.variants[1]!.stock = 10;
+
+    await act(async () => root.render(<ProductShortcode productData={productData} />));
+    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("primary.jpg");
+
+    const digital = [...host.querySelectorAll("button")].find((button) => button.textContent === "Digital");
+    await act(async () => digital?.click());
+    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("digital.jpg");
+
+    const print = [...host.querySelectorAll("button")].find((button) => button.textContent === "Print");
+    await act(async () => print?.click());
+    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("primary.jpg");
+  });
 });

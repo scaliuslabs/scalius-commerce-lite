@@ -75,6 +75,27 @@ describe("option matrix editor model", () => {
     expect(new Set(rows.map((row) => row.sku)).size).toBe(2);
   });
 
+  it("keeps partial SKU imagery explicit when a new axis expands the matrix", () => {
+    const white = variant("white", ["white"]);
+    white.imageId = "img_white";
+    const black = variant("black", ["black"]);
+    const rows = materializeVariants(
+      [
+        option("color", "Color", [["white", "White"], ["black", "Black"]]),
+        option("size", "Size", [["small", "Small"], ["large", "Large"]]),
+      ],
+      [white, black],
+      "T-shirt",
+      100,
+      0,
+    );
+
+    expect(rows.filter((row) => row.selectedOptionValueIds.includes("white")).map((row) => row.imageId))
+      .toEqual(["img_white", "img_white"]);
+    expect(rows.filter((row) => row.selectedOptionValueIds.includes("black")).map((row) => row.imageId))
+      .toEqual([null, null]);
+  });
+
   it("preserves total inventory when removing an axis merges SKUs", () => {
     const rows = materializeVariants(
       [option("size", "Size", [["small", "Small"]])],
@@ -219,5 +240,12 @@ describe("option matrix editor density and stock disclosure", () => {
     expect(editorSource).toContain("available to sell; ${committed} committed from ${value} on hand");
     expect(editorSource).toContain("committed to open orders");
     expect(editorSource).not.toContain("committed ·");
+  });
+
+  it("uses exact selected-SKU assignments and an explicit primary fallback", () => {
+    expect(editorSource).toContain("Use primary image");
+    expect(editorSource).toContain("Set image for selected SKUs");
+    expect(editorSource).toContain("selected.forEach((id) => onChange(id, { imageId }))");
+    expect(editorSource).not.toContain("variantImageAxis");
   });
 });
