@@ -75,6 +75,6 @@ Last reviewed: 2026-07-12
   exact replay, changed-payload conflict, operation-key races, CAS retries,
   atomic batch composition, cache invalidation, bounded query validation,
   movement filters, and migration registration.
-- API typecheck and generated OpenAPI client complete successfully. Repository
-  typecheck remains independently gated by currently active Collections work;
-  do not attribute that unrelated failure to inventory.
+- The generated OpenAPI client, repository typecheck, API/admin production
+  builds, migration metadata, and focused core/API/admin/database tests pass
+  from the clean inventory release commit.
