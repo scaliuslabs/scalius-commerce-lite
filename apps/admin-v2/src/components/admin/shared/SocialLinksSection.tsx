@@ -42,6 +42,17 @@ interface SocialLinksSectionProps {
   cardClassName?: string;
 }
 
+const MAX_SOCIAL_LINKS = 8;
+
+export function isSafeSocialDestination(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 const SortableSocialLink = React.memo(function SortableSocialLink({
   link,
   onUpdate,
@@ -74,7 +85,7 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-2 p-2 border rounded-md bg-card",
+        "grid grid-cols-[28px_36px_minmax(100px,1fr)_32px] items-center gap-2 rounded-md border bg-card p-1.5 sm:grid-cols-[28px_36px_minmax(110px,0.7fr)_minmax(180px,1.3fr)_32px]",
         isDragging && "shadow-lg ring-2 ring-primary/30 opacity-50",
       )}
     >
@@ -82,7 +93,8 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
       <div
         {...attributes}
         {...listeners}
-        className="cursor-grab p-1 rounded hover:bg-muted shrink-0"
+        className="cursor-grab rounded p-1 hover:bg-muted shrink-0"
+        aria-label={`Reorder ${link.label || "social link"}`}
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </div>
@@ -102,6 +114,8 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
               variant="destructive"
               size="icon"
               className="absolute -top-1 -right-1 h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+              type="button"
+              aria-label={`Remove icon from ${link.label || "social link"}`}
               onClick={() => onIconRemove(link.id)}
             >
               <X className="h-2 w-2" />
@@ -125,23 +139,32 @@ const SortableSocialLink = React.memo(function SortableSocialLink({
         value={link.label}
         onChange={(e) => onUpdate(link.id, { label: e.target.value })}
         placeholder="Label"
-        className="flex-1 h-9"
+        className="h-8 min-w-0"
+        aria-label="Social link label"
       />
 
       {/* URL Input */}
       <Input
         value={link.url}
         onChange={(e) => onUpdate(link.id, { url: e.target.value })}
-        placeholder="URL"
-        className="flex-1 h-9"
+        placeholder="https://…"
+        className={cn(
+          "col-span-3 col-start-2 h-8 min-w-0 sm:col-auto",
+          link.url && !isSafeSocialDestination(link.url) && "border-destructive focus-visible:ring-destructive",
+        )}
+        aria-label={`${link.label || "Social"} destination`}
+        aria-invalid={Boolean(link.url && !isSafeSocialDestination(link.url))}
+        type="url"
       />
 
       {/* Remove Button */}
       <Button
         size="icon"
         variant="ghost"
+        type="button"
         onClick={() => onRemove(link.id)}
-        className="h-9 w-9 shrink-0"
+        className="row-start-1 col-start-4 h-8 w-8 shrink-0 sm:col-auto sm:row-auto"
+        aria-label={`Remove ${link.label || "social link"}`}
       >
         <Trash2 className="h-4 w-4 text-muted-foreground" />
       </Button>
@@ -232,26 +255,25 @@ export function SocialLinksSection({
 
   return (
     <Card className={cardClassName}>
-      <CardHeader>
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Social Links</CardTitle>
+            <CardTitle className="text-base">Social links</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <Button size="sm" onClick={addSocialLink} variant="outline">
+          <Button size="sm" onClick={addSocialLink} variant="outline" disabled={social.length >= MAX_SOCIAL_LINKS}>
             <Plus className="h-4 w-4 mr-2" />
             Add Link
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4">
         {social.length === 0 ? (
-          <div className="text-center py-8 border-2 border-dashed rounded-lg text-muted-foreground">
-            <Link2 className="h-10 w-10 mx-auto mb-3 opacity-50" />
-            <p className="text-sm font-medium mb-1">No social links added</p>
-            <p className="text-xs mb-4">
-              Add your first social media link to get started
-            </p>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <Link2 className="h-5 w-5 opacity-50" />
+              <p className="text-sm">No social links</p>
+            </div>
             <Button size="sm" onClick={addSocialLink}>
               <Plus className="h-4 w-4 mr-2" />
               Add First Link
@@ -267,7 +289,7 @@ export function SocialLinksSection({
               items={socialIds}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {social.map((link) => (
                   <SortableSocialLink
                     key={link.id}
@@ -282,6 +304,9 @@ export function SocialLinksSection({
             </SortableContext>
           </DndContext>
         )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          Up to {MAX_SOCIAL_LINKS} credential-free HTTPS destinations. Icons are optional.
+        </p>
       </CardContent>
     </Card>
   );

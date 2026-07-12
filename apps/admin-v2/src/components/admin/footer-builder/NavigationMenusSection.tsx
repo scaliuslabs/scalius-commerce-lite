@@ -30,6 +30,9 @@ import { cn } from "@scalius/shared/utils";
 import { NavigationBuilder } from "../navigation/NavigationBuilder";
 import { getSortableStyle } from "../shared/sortable-style";
 import type { FooterMenu, NavigationItem } from "./types";
+import { useStorefrontUrl } from "~/hooks/use-storefront-url";
+
+const MAX_FOOTER_MENUS = 4;
 
 interface NavigationMenusSectionProps {
   menus: FooterMenu[];
@@ -41,11 +44,13 @@ const SortableMenuCard = React.memo(function SortableMenuCard({
   onRemove,
   onUpdateTitle,
   onUpdateLinks,
+  getStorefrontPath,
 }: {
   menu: FooterMenu;
   onRemove: (id: string, e: React.MouseEvent) => void;
   onUpdateTitle: (id: string, title: string) => void;
   onUpdateLinks: (menuId: string, links: NavigationItem[]) => void;
+  getStorefrontPath: (path: string) => string;
 }) {
   const {
     attributes,
@@ -66,48 +71,59 @@ const SortableMenuCard = React.memo(function SortableMenuCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "rounded-lg border bg-card",
+        "rounded-md border bg-card",
         isDragging && "shadow-lg ring-2 ring-primary/30 opacity-50",
       )}
     >
       <AccordionItem value={menu.id} className="border-0">
-        <div className="flex items-center px-4 py-2 border-b bg-muted/10">
+        <div className="flex items-center bg-muted/10 px-2 py-1.5">
           <div
             {...attributes}
             {...listeners}
-            className="mr-2 cursor-grab"
+            className="mr-1 cursor-grab rounded p-1 hover:bg-muted"
+            aria-label={`Reorder ${menu.title}`}
           >
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
 
-          <AccordionTrigger className="flex-1 py-1 hover:no-underline pr-4">
-            <span className="font-medium text-sm">
-              {menu.title}
+          <AccordionTrigger className="flex-1 py-1 hover:no-underline pr-3">
+            <span className="flex items-center gap-2 font-medium text-sm">
+              {menu.title || "Untitled menu"}
+              <span className="text-xs font-normal text-muted-foreground">
+                {menu.links.length} links
+              </span>
             </span>
           </AccordionTrigger>
 
-          <div className="flex items-center gap-2 ml-auto pl-4 border-l">
-            <Input
-              value={menu.title}
-              onChange={(e) => onUpdateTitle(menu.id, e.target.value)}
-              className="h-8 w-[200px]"
-              onClick={(e) => e.stopPropagation()}
-            />
+          <div className="ml-auto flex items-center border-l pl-2">
             <Button
               size="icon"
               variant="ghost"
               className="h-8 w-8 text-muted-foreground hover:text-destructive"
               onClick={(e) => onRemove(menu.id, e)}
+              aria-label={`Remove ${menu.title || "footer menu"}`}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
-        <AccordionContent className="p-4 bg-background">
+        <AccordionContent className="border-t bg-background p-3">
+          <div className="mb-3 grid max-w-sm gap-1.5">
+            <label htmlFor={`footer-menu-${menu.id}`} className="text-xs font-medium">
+              Column heading
+            </label>
+            <Input
+              id={`footer-menu-${menu.id}`}
+              value={menu.title}
+              onChange={(e) => onUpdateTitle(menu.id, e.target.value)}
+              className="h-8"
+              placeholder="e.g. Help"
+            />
+          </div>
           <NavigationBuilder
             navigation={menu.links}
             onChange={(newLinks) => onUpdateLinks(menu.id, newLinks)}
-            getStorefrontPath={() => "#"}
+            getStorefrontPath={getStorefrontPath}
           />
         </AccordionContent>
       </AccordionItem>
@@ -119,6 +135,7 @@ export function NavigationMenusSection({
   menus,
   onChange,
 }: NavigationMenusSectionProps) {
+  const { getStorefrontPath } = useStorefrontUrl();
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   const sensors = useSensors(
@@ -196,26 +213,26 @@ export function NavigationMenusSection({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-medium">Navigation Columns</h3>
-          <p className="text-sm text-muted-foreground">
-            Create and manage footer menu columns.
+          <h3 className="text-base font-medium">Footer columns</h3>
+          <p className="text-xs text-muted-foreground">
+            Up to {MAX_FOOTER_MENUS} focused groups of shopping and help links.
           </p>
         </div>
-        <Button onClick={addMenu}>
+        <Button onClick={addMenu} size="sm" disabled={menus.length >= MAX_FOOTER_MENUS}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Menu Column
+          Add column
         </Button>
       </div>
 
       {menus.length === 0 ? (
-        <div className="text-center py-8 border-2 border-dashed rounded-lg text-muted-foreground">
-          <p className="mb-2">No menus added yet.</p>
+        <div className="flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-muted-foreground">
+          <p className="text-sm">No footer columns</p>
           <Button size="sm" onClick={addMenu}>
             <Plus className="h-4 w-4 mr-2" />
-            Add First Menu
+            Add first column
           </Button>
         </div>
       ) : (
@@ -242,6 +259,7 @@ export function NavigationMenusSection({
                     onRemove={removeMenu}
                     onUpdateTitle={updateMenuTitle}
                     onUpdateLinks={updateMenuLinks}
+                    getStorefrontPath={getStorefrontPath}
                   />
                 ))}
               </div>

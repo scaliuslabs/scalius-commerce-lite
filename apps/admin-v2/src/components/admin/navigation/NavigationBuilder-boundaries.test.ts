@@ -47,6 +47,17 @@ describe("NavigationBuilder bundle boundaries", () => {
 
     expect(treeRowsSource).toContain("onOutdent(parentPath, index)");
     expect(treeRowsSource).toContain("canOutdent");
+    expect(treeRowsSource).toContain("depth + 1 < maxDepth");
+  });
+
+  it("keeps public menus to three usable levels", () => {
+    const typesSource = readFileSync(
+      fileURLToPath(new URL("./types.ts", import.meta.url)),
+      "utf8",
+    );
+
+    expect(typesSource).toContain("MAX_NAV_DEPTH = 3");
+    expect(typesSource).not.toContain("MAX_NAV_DEPTH = 10");
   });
 
   it("uses public page sources and the shared safe-link policy", () => {

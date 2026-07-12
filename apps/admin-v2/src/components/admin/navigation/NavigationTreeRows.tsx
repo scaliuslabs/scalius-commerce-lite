@@ -116,15 +116,15 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
   const hasSubMenu = item.subMenu && item.subMenu.length > 0;
   const isLabel = !item.href;
   const hasLinkAndSubmenu = item.href && hasSubMenu;
-  const canAddChildren = depth < maxDepth;
-  const indentPadding = depth * 20;
+  const canAddChildren = depth + 1 < maxDepth;
+  const indentPadding = depth * 16;
   const hrefResult = parseNavigationHref(item.href);
 
   return (
     <>
       <TableRow
         className={cn(
-          "group border-l-4",
+          "group border-l-2",
           getDepthColor(depth),
           "hover:bg-muted/30",
         )}
@@ -175,12 +175,13 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
               }
               className="h-8 text-sm"
               placeholder="Menu label"
+              aria-label={`Label for ${item.title || `item ${index + 1}`}`}
             />
             <div className="flex items-center gap-1 shrink-0">
               {depth > 0 && (
                 <Badge
                   variant="outline"
-                  className="text-[10px] px-1.5 py-0"
+                  className="text-[10px] px-1.5 py-0 font-normal"
                 >
                   L{depth + 1}
                 </Badge>
@@ -225,11 +226,12 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                 })
               }
               className={cn(
-                "h-8 text-sm",
+                "h-8 text-sm font-mono text-xs",
                 !hrefResult.ok && "border-destructive focus-visible:ring-destructive",
               )}
               placeholder="URL (empty = label only)"
               aria-invalid={!hrefResult.ok}
+              aria-label={`Destination for ${item.title || `item ${index + 1}`}`}
             />
             {item.href && hrefResult.ok && hrefResult.href && (
               <Button
@@ -245,6 +247,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                   }
                   window.open(url, "_blank");
                 }}
+                aria-label={`Preview ${item.title}`}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
               </Button>

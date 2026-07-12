@@ -1,13 +1,14 @@
 // src/components/admin/footer-builder/FooterBuilder.tsx
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
-import { nanoid } from "nanoid";
+import { Image as ImageIcon, LayoutList, Loader2, RotateCcw, Share2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveFooterConfig } from "~/lib/api-functions/settings";
+import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";
@@ -15,9 +16,6 @@ import { ContentSection } from "./ContentSection";
 import type {
   FooterConfig,
   FooterBuilderProps,
-  FooterMenu,
-  SocialLink,
-  LogoConfig,
 } from "./types";
 import { defaultFooterConfig } from "./types";
 
@@ -41,73 +39,29 @@ function FooterSubtabSpinner() {
   );
 }
 
-/**
- * Migrate legacy config formats to the new structure
- */
-function migrateConfig(config: unknown): FooterConfig {
-  const cfg = config as Record<string, unknown>;
-  // Ensure menu items have IDs
-  const ensureMenuIds = (menus: unknown[]): FooterMenu[] => {
-    return (menus || []).map((menu) => {
-      const m = menu as Record<string, unknown>;
-      return {
-        ...m,
-        id: (m.id as string) || nanoid(),
-        links: (m.links as unknown[]) || [],
-      } as FooterMenu;
-    });
-  };
-
-  // Migrate old social object format to array
-  let socialLinks: SocialLink[] = [];
-  if (Array.isArray(cfg.social)) {
-    socialLinks = cfg.social.map((link: unknown) => {
-      const l = link as Record<string, unknown>;
-      return {
-        id: (l.id as string) || nanoid(),
-        label: (l.label as string) || (l.platform as string) || "",
-        url: (l.url as string) || "",
-        iconUrl: (l.iconUrl as string) || (l.icon as string),
-      };
-    });
-  } else if (cfg.social && typeof cfg.social === "object") {
-    // Legacy format: { facebook: "url", twitter: "url" }
-    Object.entries(cfg.social as Record<string, unknown>).forEach(([platform, url]) => {
-      if (url && typeof url === "string") {
-        socialLinks.push({
-          id: nanoid(),
-          label: platform.charAt(0).toUpperCase() + platform.slice(1),
-          url: url,
-        });
-      }
-    });
-  }
-
+export function normalizeFooterConfig(config?: FooterConfig | null): FooterConfig {
+  if (!config) return defaultFooterConfig;
   return {
-    logo: (cfg.logo as LogoConfig) || defaultFooterConfig.logo,
-    tagline: (cfg.tagline as string) || "",
-    description: (cfg.description as string) || "",
-    copyrightText: (cfg.copyrightText as string) || defaultFooterConfig.copyrightText,
-    menus: ensureMenuIds(cfg.menus as unknown[]),
-    social: socialLinks,
+    logo: { ...defaultFooterConfig.logo, ...config.logo },
+    tagline: config.tagline ?? "",
+    description: config.description ?? "",
+    copyrightText: config.copyrightText ?? "",
+    menus: Array.isArray(config.menus) ? config.menus : [],
+    social: Array.isArray(config.social) ? config.social : [],
   };
 }
 
 export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
   const queryClient = useQueryClient();
 
-  const [config, setConfig] = useState<FooterConfig>(() => {
-    return migrateConfig(initialConfig || defaultFooterConfig);
-  });
+  const normalizedInitialConfig = useMemo(
+    () => normalizeFooterConfig(initialConfig),
+    [initialConfig],
+  );
+  const { config, setConfig, isDirty, discard, markSaved } =
+    useConfigDraft(normalizedInitialConfig);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("branding");
-
-  // Update config when initialConfig changes
-  useEffect(() => {
-    if (initialConfig) {
-      setConfig(migrateConfig(initialConfig));
-    }
-  }, [initialConfig]);
 
   const handleSave = async () => {
     if (isLoading) return;
@@ -121,7 +75,8 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
       }
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
-      toast.success("Saved", { description: "Footer configuration updated." });
+      markSaved();
+      toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       console.error("Error saving footer:", error);
       toast.error("Error", { description: getServerFnError(error, "Failed to save.") });
@@ -131,30 +86,46 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="border-b border-border w-full justify-start rounded-none bg-transparent p-0 mb-6">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Storefront footer</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Keep brand context, help links, and social destinations easy to scan.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className={cn("h-2 w-2 rounded-full", isDirty ? "bg-amber-500" : "bg-emerald-500")} />
+          {isDirty ? "Unsaved changes" : "All changes saved"}
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
-            className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 data-[state=active]:border-b-primary"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <ImageIcon className="h-4 w-4" />
             Branding & Text
           </TabsTrigger>
           <TabsTrigger
             value="navigation"
-            className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 data-[state=active]:border-b-primary"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <LayoutList className="h-4 w-4" />
             Navigation Menus
           </TabsTrigger>
           <TabsTrigger
             value="social"
-            className="rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 data-[state=active]:border-b-primary"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <Share2 className="h-4 w-4" />
             Social Media
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="branding" className="space-y-6">
+        <TabsContent value="branding" className="mt-0 min-w-0 space-y-3">
           <BrandingSection
             logo={config.logo}
             onLogoChange={(logo) => setConfig((prev) => ({ ...prev, logo }))}
@@ -175,7 +146,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
           />
         </TabsContent>
 
-        <TabsContent value="navigation" className="space-y-6">
+        <TabsContent value="navigation" className="mt-0 min-w-0">
           {activeTab === "navigation" && (
             <Suspense fallback={<FooterSubtabSpinner />}>
               <NavigationMenusSection
@@ -188,7 +159,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="social" className="space-y-6">
+        <TabsContent value="social" className="mt-0 min-w-0">
           {activeTab === "social" && (
             <Suspense fallback={<FooterSubtabSpinner />}>
               <SocialLinksSection
@@ -202,10 +173,14 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         </TabsContent>
       </Tabs>
 
-      <div className="flex justify-end pt-4 border-t">
-        <Button onClick={handleSave} disabled={isLoading} size="lg">
+      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+        <Button type="button" variant="ghost" size="sm" onClick={discard} disabled={!isDirty || isLoading}>
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Discard
+        </Button>
+        <Button onClick={handleSave} disabled={isLoading || !isDirty} size="sm">
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save Footer
+          Save changes
         </Button>
       </div>
     </div>

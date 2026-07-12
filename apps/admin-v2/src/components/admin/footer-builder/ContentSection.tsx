@@ -1,4 +1,10 @@
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
@@ -22,10 +28,13 @@ export function ContentSection({
 }: ContentSectionProps) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="px-4 py-3">
         <CardTitle>Footer Content</CardTitle>
+        <CardDescription>
+          Keep this short so help links remain easy to scan.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 px-4 pb-4">
         <div className="grid gap-2">
           <Label>Tagline</Label>
           <Input
@@ -47,12 +56,15 @@ export function ContentSection({
         </div>
 
         <div className="grid gap-2">
-          <Label>Copyright Text</Label>
+          <Label>Copyright owner</Label>
           <Input
             value={copyrightText}
             onChange={(e) => onCopyrightChange(e.target.value)}
-            placeholder="© 2024 Your Company. All rights reserved."
+            placeholder="Your business or store name"
           />
+          <p className="text-xs text-muted-foreground">
+            The storefront adds the current year and “All rights reserved.”
+          </p>
         </div>
       </CardContent>
     </Card>

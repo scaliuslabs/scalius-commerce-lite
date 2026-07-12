@@ -47,4 +47,74 @@ describe("navigation configuration validation", () => {
       navigation: [{ id: "unsafe", title: "Unsafe", href }],
     })).toThrow(ValidationError);
   });
+
+  it("rejects navigation trees that are too deep or reuse item IDs", () => {
+    expect(() => parseNavigationConfig("header", {
+      navigation: [{
+        id: "one",
+        title: "One",
+        subMenu: [{
+          id: "two",
+          title: "Two",
+          subMenu: [{
+            id: "three",
+            title: "Three",
+            subMenu: [{ id: "four", title: "Four" }],
+          }],
+        }],
+      }],
+    })).toThrow("at most 3 levels");
+
+    expect(() => parseNavigationConfig("footer", {
+      menus: [{
+        id: "support",
+        title: "Support",
+        links: [
+          { id: "same", title: "Contact", href: "/contact" },
+          { id: "same", title: "Returns", href: "/returns" },
+        ],
+      }],
+    })).toThrow("item IDs must be unique");
+  });
+
+  it("keeps social destinations HTTPS-only and bounded", () => {
+    expect(parseNavigationConfig("header", {
+      social: [{
+        id: "facebook",
+        label: "Facebook",
+        url: "https://facebook.com/scalius",
+      }],
+    })).toMatchObject({
+      social: [{ url: "https://facebook.com/scalius" }],
+    });
+
+    expect(() => parseNavigationConfig("header", {
+      social: [{
+        id: "unsafe",
+        label: "Unsafe",
+        url: "javascript:alert(1)",
+      }],
+    })).toThrow("credential-free HTTPS URL");
+
+    expect(() => parseNavigationConfig("footer", {
+      social: Array.from({ length: 9 }, (_, index) => ({
+        id: `social-${index}`,
+        label: `Social ${index}`,
+        url: `https://example.com/${index}`,
+      })),
+    })).toThrow(ValidationError);
+  });
+
+  it("rejects blank labels and duplicate footer menu IDs", () => {
+    expect(() => parseNavigationConfig("header", {
+      navigation: [{ id: "blank", title: "  " }],
+    })).toThrow(ValidationError);
+
+    expect(() => parseNavigationConfig("footer", {
+      menus: [
+        { id: "links", title: "Shop", links: [] },
+        { id: "links", title: "Help", links: [] },
+      ],
+    })).toThrow("menu IDs must be unique");
+  });
 });

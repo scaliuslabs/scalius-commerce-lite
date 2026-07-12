@@ -14,7 +14,6 @@ import {
   withOptimizedSocialIcons,
   type SerializedSocialLink,
 } from "@/lib/serialized-media";
-import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
 interface Props {
@@ -24,21 +23,9 @@ interface Props {
 const { footerData } = Astro.props;
 
 const logo = footerData?.logo || { src: "/logo.svg", alt: "Store Logo" };
-const favicon = footerData?.favicon;
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
 const optimizedDescription = optimizeRichContentImages(sanitizeHtml(description));
-const optimizedFavicon =
-  favicon?.src && !favicon.src.endsWith(".svg")
-    ? {
-        ...favicon,
-        src: getOptimizedImageUrl(favicon.src, {
-          width: 64,
-          height: 64,
-          fit: "contain",
-        }),
-      }
-    : favicon;
 const copyrightText = footerData?.copyrightText || "";
 const rawMenus: FooterMenu[] = footerData?.menus || [];
 const socialRaw: SocialLink[] = footerData?.social || [];
@@ -100,19 +87,6 @@ let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
 if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
 if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
 
-const siteSettingsJson = serializeJsonForInlineScript({
-  siteName: footerData?.copyrightText || "Your Store",
-  social,
-  favicon: optimizedFavicon || null,
-});
-const siteSettingsScript = `
-  var siteSettings = ${siteSettingsJson};
-  try {
-    localStorage.setItem("siteSettings", JSON.stringify(siteSettings));
-  } catch (e) {
-    console.error("Error storing site settings in localStorage:", e);
-  }
-`;
 ---
 
 <footer class="relative bg-primary text-primary-foreground overflow-hidden">
@@ -225,9 +199,7 @@ const siteSettingsScript = `
         <span
           class="text-sm text-white/80 font-normal text-center sm:text-left [text-shadow:0_1px_2px_rgba(0,0,0,0.3)]"
         >
-          © {new Date().getFullYear()}
-          <span class="text-white font-semibold ml-1">{copyrightText}</span>.
-          All rights reserved.
+          © {new Date().getFullYear()} <span class="text-white font-semibold">{copyrightText || "Store"}</span>. All rights reserved.
         </span>
 
         {
@@ -273,8 +245,6 @@ const siteSettingsScript = `
     </div>
   </div>
 </footer>
-
-<script is:inline set:html={siteSettingsScript}></script>
 
 <style>
   html,

@@ -19,12 +19,12 @@ interface ContactSectionProps {
 export function ContactSection({ contact, onChange }: ContactSectionProps) {
   return (
     <Card className="border border-border shadow-sm">
-      <CardHeader>
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Contact Information</CardTitle>
+            <CardTitle className="text-base">Header contact</CardTitle>
             <CardDescription>
-              Display contact details in the header area.
+              Give customers a direct support number.
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
@@ -41,25 +41,27 @@ export function ContactSection({ contact, onChange }: ContactSectionProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
+      <CardContent className="grid max-w-3xl grid-cols-1 gap-3 px-4 pb-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="contact-phone">Contact Phone Number</Label>
+          <Label htmlFor="contact-phone">Phone number</Label>
           <Input
             id="contact-phone"
             value={contact.phone}
             onChange={(e) => onChange({ ...contact, phone: e.target.value })}
-            placeholder="e.g., +1 (555) 123-4567"
+            placeholder="e.g. +880 1712 345678"
+            className="h-9"
             type="tel"
             disabled={!contact.isEnabled}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="contact-text">Supporting Text</Label>
+          <Label htmlFor="contact-text">Supporting text</Label>
           <Input
             id="contact-text"
             value={contact.text}
             onChange={(e) => onChange({ ...contact, text: e.target.value })}
-            placeholder="e.g., Call us Mon-Fri 9am-5pm"
+            placeholder="e.g. Every day, 9am–9pm"
+            className="h-9"
             disabled={!contact.isEnabled}
           />
         </div>

@@ -44,21 +44,21 @@ export function BrandingSection({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="grid gap-3 xl:grid-cols-2">
       {/* Logo Section */}
       <Card className="border border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Site Logo</CardTitle>
+        <CardHeader className="px-4 py-3">
+          <CardTitle className="text-base">Logo</CardTitle>
           <CardDescription>
-            Upload and manage your primary site logo displayed in the header.
+            Shown in desktop and mobile navigation.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div className="md:col-span-1 flex flex-col items-center justify-center space-y-2">
-              <Label className="text-sm font-medium mb-1">Logo Preview</Label>
+        <CardContent className="px-4 pb-4">
+          <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <Label className="text-xs font-medium">Preview</Label>
               {logo.src ? (
-                <div className="relative group border border-border rounded-lg p-3 bg-muted/30 w-full aspect-2/1 flex items-center justify-center">
+                <div className="relative group border border-border rounded-md p-2 bg-muted/30 w-full aspect-2/1 flex items-center justify-center">
                   <img
                     src={logo.src}
                     alt={logo.alt || "Logo preview"}
@@ -69,7 +69,7 @@ export function BrandingSection({
                   <Button
                     variant="destructive"
                     size="icon"
-                    className="absolute -top-3 -right-3 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shadow-md rounded-full z-10"
+                    className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-md rounded-full z-10"
                     onClick={removeLogo}
                     title="Remove logo"
                   >
@@ -77,30 +77,31 @@ export function BrandingSection({
                   </Button>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-border rounded-lg p-3 bg-muted/30 w-full aspect-2/1 flex items-center justify-center text-xs text-muted-foreground font-medium">
-                  No Logo Selected
+                <div className="border border-dashed border-border rounded-md p-2 bg-muted/30 w-full aspect-2/1 flex items-center justify-center text-xs text-muted-foreground font-medium">
+                  No logo
                 </div>
               )}
             </div>
-            <div className="md:col-span-2 space-y-4">
+            <div className="space-y-3">
               <MediaManager
                 capability="image"
                 onSelect={handleLogoSelect}
                 triggerLabel={logo.src ? "Change Logo" : "Select Logo Image"}
               />
               {!logo.src && (
-                <Alert variant="destructive" className="mt-2">
+                <Alert variant="destructive" className="px-3 py-2">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Logo Required</AlertTitle>
+                  <AlertTitle>Logo required</AlertTitle>
                   <AlertDescription>
-                    A site logo is essential for branding. Please upload one.
+                    Select an image before saving.
                   </AlertDescription>
                 </Alert>
               )}
               <Input
                 value={logo.alt}
                 onChange={(e) => onLogoChange({ ...logo, alt: e.target.value })}
-                placeholder="Describe your logo (for accessibility)"
+                placeholder="Logo description for screen readers"
+                className="h-9"
                 disabled={!logo.src}
               />
             </div>
@@ -110,20 +111,20 @@ export function BrandingSection({
 
       {/* Favicon Section */}
       <Card className="border border-border shadow-sm">
-        <CardHeader>
-          <CardTitle>Site Favicon</CardTitle>
+        <CardHeader className="px-4 py-3">
+          <CardTitle className="text-base">Browser icon</CardTitle>
           <CardDescription>
-            Upload the favicon displayed in the browser tab.
+            A square mark for tabs and bookmarks.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div className="md:col-span-1 flex flex-col items-center justify-center space-y-2">
-              <Label className="text-sm font-medium mb-1">
-                Favicon Preview
+        <CardContent className="px-4 pb-4">
+          <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 items-start">
+            <div className="flex flex-col items-center justify-center space-y-2">
+              <Label className="text-xs font-medium">
+                Preview
               </Label>
               {favicon.src ? (
-                <div className="relative group border border-border rounded-lg p-3 bg-muted/30 w-full aspect-square flex items-center justify-center max-w-[120px] mx-auto">
+                <div className="relative group border border-border rounded-md p-2 bg-muted/30 h-20 w-20 flex items-center justify-center mx-auto">
                   <img
                     src={favicon.src}
                     alt={favicon.alt || "Favicon preview"}
@@ -134,7 +135,7 @@ export function BrandingSection({
                   <Button
                     variant="destructive"
                     size="icon"
-                    className="absolute -top-3 -right-3 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shadow-md rounded-full z-10"
+                    className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity shadow-md rounded-full z-10"
                     onClick={removeFavicon}
                     title="Remove favicon"
                   >
@@ -142,12 +143,12 @@ export function BrandingSection({
                   </Button>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-border rounded-lg p-3 bg-muted/30 w-full aspect-square flex items-center justify-center text-xs text-muted-foreground font-medium max-w-[120px] mx-auto">
-                  No Favicon
+                <div className="border border-dashed border-border rounded-md p-2 bg-muted/30 h-20 w-20 flex items-center justify-center text-xs text-muted-foreground font-medium mx-auto">
+                  No icon
                 </div>
               )}
             </div>
-            <div className="md:col-span-2 space-y-4">
+            <div className="space-y-3">
               <MediaManager
                 capability="image"
                 onSelect={handleFaviconSelect}
@@ -160,7 +161,8 @@ export function BrandingSection({
                 onChange={(e) =>
                   onFaviconChange({ ...favicon, alt: e.target.value })
                 }
-                placeholder="Describe your favicon"
+                placeholder="Icon description"
+                className="h-9"
                 disabled={!favicon.src}
               />
             </div>
