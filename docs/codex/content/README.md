@@ -17,6 +17,8 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   typed resource links, WordPress-like builder direction, and storefront truth.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,
   scalable list/edit workflows, activation, and public injection.
+- [ACTIVATION-PERMISSIONS.md](ACTIVATION-PERMISSIONS.md) — shared draft-first
+  create/edit boundary for Pages, Analytics, and Discounts.
 - [THEME-TAX.md](THEME-TAX.md) — tax domain strengths and workflow gaps plus a
   versioned, accessible, previewable theme model.
 

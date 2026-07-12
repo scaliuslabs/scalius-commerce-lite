@@ -10,8 +10,27 @@ import { sql, desc, asc, isNull, and, isNotNull, eq, count, sum, inArray } from 
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError, ForbiddenError } from "@scalius/core/errors";
 import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
+
+export interface DiscountLifecycleAuthority {
+    canToggleStatus?: boolean;
+}
+
+function assertDiscountLifecycleAuthority(
+    requestedActive: boolean,
+    currentActive: boolean,
+    authority: DiscountLifecycleAuthority,
+) {
+    if (
+        requestedActive !== currentActive &&
+        authority.canToggleStatus !== true
+    ) {
+        throw new ForbiddenError(
+            "Activating or deactivating discounts requires discounts.toggle_status permission.",
+        );
+    }
+}
 
 export async function listDiscounts(db: Database, options: { page: number; limit: number; search: string; showTrashed: boolean; sort: string; order: "asc" | "desc"; type?: DiscountType }) {
     const { page, limit: rawLimit, search, showTrashed, sort, order, type } = options;
@@ -159,7 +178,12 @@ export async function getDiscountById(db: Database, id: string) {
     };
 }
 
-export async function createDiscount(db: Database, data: CreateDiscountInput) {
+export async function createDiscount(
+    db: Database,
+    data: CreateDiscountInput,
+    authority: DiscountLifecycleAuthority = {},
+) {
+    assertDiscountLifecycleAuthority(data.isActive, false, authority);
     // Codes are stored uppercase (normalized by validation schema),
     // but ensure uppercase here too for the uniqueness check.
     const code = (data.code as string).toUpperCase();
@@ -222,11 +246,26 @@ export async function createDiscount(db: Database, data: CreateDiscountInput) {
     return { id: discountId };
 }
 
-export async function updateDiscount(db: Database, id: string, data: UpdateDiscountInput) {
-    const existingDiscount = await db.select({ id: discounts.id }).from(discounts).where(eq(discounts.id, id)).get();
+export async function updateDiscount(
+    db: Database,
+    id: string,
+    data: UpdateDiscountInput,
+    authority: DiscountLifecycleAuthority = {},
+) {
+    const existingDiscount = await db
+        .select({ id: discounts.id, isActive: discounts.isActive })
+        .from(discounts)
+        .where(eq(discounts.id, id))
+        .get();
     if (!existingDiscount) {
         throw new NotFoundError("Discount not found");
     }
+
+    assertDiscountLifecycleAuthority(
+        data.isActive,
+        existingDiscount.isActive,
+        authority,
+    );
 
     const code = (data.code as string).toUpperCase();
     const existingCode = await db
@@ -339,4 +378,26 @@ export async function restoreDiscounts(db: Database, discountIds: string[]) {
 
 export async function permanentlyDeleteDiscount(db: Database, id: string) {
     await db.delete(discounts).where(eq(discounts.id, id));
+}
+
+export async function setDiscountActiveStatus(
+    db: Database,
+    id: string,
+    isActive: boolean,
+) {
+    const discount = await db
+        .select({ id: discounts.id })
+        .from(discounts)
+        .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)))
+        .get();
+    if (!discount) {
+        throw new NotFoundError("Discount not found");
+    }
+
+    await db
+        .update(discounts)
+        .set({ isActive, updatedAt: sql`unixepoch()` })
+        .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)));
+
+    return { id, isActive };
 }

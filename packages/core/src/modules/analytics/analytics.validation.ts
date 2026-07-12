@@ -238,7 +238,7 @@ function validateAnalyticsConfig(
 
 export const createAnalyticsSchema = z.object({
     ...analyticsFields,
-    isActive: z.boolean().default(true),
+    isActive: z.boolean().default(false),
     usePartytown: z.boolean().default(true),
 }).superRefine(validateAnalyticsConfig);
 

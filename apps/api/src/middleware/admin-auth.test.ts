@@ -142,6 +142,51 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    {
+      label: "analytics",
+      editPermission: PERMISSIONS.ANALYTICS_EDIT,
+      editPath: "/api/v1/admin/analytics/analytics_1",
+      editMethod: "PUT",
+      lifecyclePath: "/api/v1/admin/analytics/analytics_1/toggle",
+    },
+    {
+      label: "pages",
+      editPermission: PERMISSIONS.PAGES_EDIT,
+      editPath: "/api/v1/admin/pages/page_1",
+      editMethod: "PUT",
+      lifecyclePath: "/api/v1/admin/pages/bulk-publish",
+    },
+    {
+      label: "discounts",
+      editPermission: PERMISSIONS.DISCOUNTS_EDIT,
+      editPath: "/api/v1/admin/discounts/disc_1",
+      editMethod: "PUT",
+      lifecyclePath: "/api/v1/admin/discounts/disc_1/toggle-status",
+    },
+  ])(
+    "does not let $label edit permission invoke the dedicated lifecycle command",
+    async ({ editPermission, editPath, editMethod, lifecyclePath }) => {
+      mocks.getUserPermissions.mockResolvedValue(new Set([editPermission]));
+      const editNext = vi.fn().mockResolvedValue(undefined);
+      const lifecycleNext = vi.fn().mockResolvedValue(undefined);
+
+      await adminAuthMiddleware(
+        createContext(editPath, editMethod) as never,
+        editNext,
+      );
+
+      await expect(
+        adminAuthMiddleware(
+          createContext(lifecyclePath, "POST") as never,
+          lifecycleNext,
+        ),
+      ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+      expect(editNext).toHaveBeenCalledTimes(1);
+      expect(lifecycleNext).not.toHaveBeenCalled();
+    },
+  );
+
   it("allows checkout readiness reads for settings viewers", async () => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]),

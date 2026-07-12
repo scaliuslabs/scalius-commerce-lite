@@ -568,6 +568,43 @@ describe("admin route graph boundaries", () => {
     expect(listSource).toContain("aria-label={`Delete ${script.name}`}");
   });
 
+  it("keeps create forms draft-first and lifecycle controls permission-gated", () => {
+    const analyticsForm = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsForm.tsx"),
+      "utf8",
+    );
+    const pageForm = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "PageForm.tsx"),
+      "utf8",
+    );
+    const discountForm = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "discount",
+        "FreeShippingForm.tsx",
+      ),
+      "utf8",
+    );
+    const permissionsSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "admin-permissions.ts"),
+      "utf8",
+    );
+
+    expect(analyticsForm).toContain("isActive: false");
+    expect(analyticsForm).toContain("PERMISSIONS.ANALYTICS_TOGGLE");
+    expect(analyticsForm).toContain("disabled={!canToggle}");
+    expect(pageForm).toContain("isPublished: false");
+    expect(pageForm).toContain("PERMISSIONS.PAGES_PUBLISH");
+    expect(pageForm).toContain("disabled={!canPublish}");
+    expect(discountForm).toContain("isActive: false");
+    expect(discountForm).toContain("disabled={!canToggleStatus}");
+    expect(permissionsSource).toContain(
+      'DISCOUNTS_TOGGLE_STATUS: "discounts.toggle_status"',
+    );
+  });
+
   it("keeps the hot login route off the generic Better Auth UI chunk", () => {
     const loginRouteSource = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "auth", "login.tsx"),

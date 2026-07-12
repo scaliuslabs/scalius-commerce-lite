@@ -2,9 +2,9 @@
 // Admin OpenAPI routes for discounts.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
-import { DiscountType, discounts } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
+import { listDiscounts, getDiscountById, createDiscount, updateDiscount, deleteDiscount, bulkDeleteDiscounts, restoreDiscounts, permanentlyDeleteDiscount, setDiscountActiveStatus, createDiscountSchema, updateDiscountSchema } from "@scalius/core/modules/discounts";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { DiscountType } from "@scalius/database/schema";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -94,7 +94,11 @@ const createDiscountRoute = createRoute({
 app.openapi(createDiscountRoute, (async (c: AdminRouteContext<typeof createDiscountRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await createDiscount(db, data);
+    const result = await createDiscount(db, data, {
+        canToggleStatus: c.get("adminPermissions").has(
+            PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+        ),
+    });
     await invalidateCatalogCaches("discounts", c);
     return created(c, result);
 }) as unknown as AdminRouteHandler<typeof createDiscountRoute>);
@@ -210,7 +214,11 @@ app.openapi(updateDiscountRoute, (async (c: AdminRouteContext<typeof updateDisco
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
-    const result = await updateDiscount(db, id, data);
+    const result = await updateDiscount(db, id, data, {
+        canToggleStatus: c.get("adminPermissions").has(
+            PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+        ),
+    });
     await invalidateCatalogCaches("discounts", c);
     return ok(c, result);
 }) as unknown as AdminRouteHandler<typeof updateDiscountRoute>);
@@ -292,11 +300,9 @@ app.openapi(toggleStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { isActive } = c.req.valid("json");
-    const discount = await getDiscountById(db, id);
-    if (!discount) throw new NotFoundError("Discount not found");
-    await db.update(discounts).set({ isActive, updatedAt: sql`unixepoch()` }).where(eq(discounts.id, id));
+    const result = await setDiscountActiveStatus(db, id, isActive);
     await invalidateCatalogCaches("discounts", c);
-    return ok(c, { id, isActive });
+    return ok(c, result);
 });
 
 // ── Restore Discount ──

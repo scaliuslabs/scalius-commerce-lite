@@ -40,6 +40,8 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
 import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 const formSchema = refineEndDateAfterStart(
   z.object({
@@ -59,6 +61,10 @@ interface FreeShippingFormProps {
 export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
   const { symbol } = useCurrency();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canToggleStatus = hasPermission(
+    ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createMut = useCreateDiscount();
   const updateMut = useUpdateDiscount();
@@ -75,7 +81,7 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
       combineWithOrderDiscounts: true,
       startDate: new Date(),
       endDate: null,
-      isActive: true,
+      isActive: false,
       ...defaultValues,
       ...(defaultValues?.startDate && {
         startDate:
@@ -492,13 +498,16 @@ export function FreeShippingForm({ defaultValues }: FreeShippingFormProps) {
                   <FormControl>
                     <Checkbox
                       checked={field.value}
+                      disabled={!canToggleStatus}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel>Active</FormLabel>
                     <FormDescription>
-                      Discount is active and can be used by customers
+                      {canToggleStatus
+                        ? "Active discounts can be redeemed during their valid dates."
+                        : "You need discount status permission to change activation."}
                     </FormDescription>
                   </div>
                 </FormItem>

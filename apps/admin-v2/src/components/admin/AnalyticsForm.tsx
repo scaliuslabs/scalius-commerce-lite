@@ -189,13 +189,14 @@ export function AnalyticsForm({
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.ANALYTICS_EDIT)
     : hasPermission(PERMISSIONS.ANALYTICS_CREATE);
+  const canToggle = hasPermission(PERMISSIONS.ANALYTICS_TOGGLE);
   const defaultType = defaultValues?.type ?? "custom";
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
       name: "",
       type: defaultType,
-      isActive: true,
+      isActive: false,
       usePartytown:
         defaultType === "cloudflare_web_analytics"
           ? false
@@ -451,12 +452,15 @@ export function AnalyticsForm({
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Active Status</FormLabel>
                   <FormDescription>
-                    Enable or disable this analytics script
+                    {canToggle
+                      ? "Active scripts load on matching storefront pages."
+                      : "You need analytics toggle permission to change this status."}
                   </FormDescription>
                 </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
+                    disabled={!canToggle}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>

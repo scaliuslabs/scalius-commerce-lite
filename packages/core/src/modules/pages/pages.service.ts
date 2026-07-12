@@ -6,7 +6,7 @@ import { sql, asc, desc, isNull, isNotNull, and, or, lte, inArray, eq, type SQL 
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ConflictError } from "@scalius/core/errors";
+import { NotFoundError, ConflictError, ForbiddenError } from "@scalius/core/errors";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import {
     createPageSchema,
@@ -16,6 +16,46 @@ import {
 } from "./pages.validation";
 
 export { createPageSchema, updatePageSchema, type CreatePageInput, type UpdatePageInput };
+
+export interface PageLifecycleAuthority {
+    canPublish?: boolean;
+}
+
+function assertPageLifecycleAuthority(
+    requestedPublished: boolean,
+    currentPublished: boolean,
+    authority: PageLifecycleAuthority,
+) {
+    if (requestedPublished !== currentPublished && authority.canPublish !== true) {
+        throw new ForbiddenError(
+            "Publishing or unpublishing pages requires pages.publish permission.",
+        );
+    }
+}
+
+function pagePublicationTimestamp(value: Date | string | null | undefined) {
+    if (value == null) return null;
+    const timestamp = value instanceof Date
+        ? value.getTime()
+        : new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function assertPageScheduleAuthority(
+    requestedPublishedAt: Date | string | null | undefined,
+    currentPublishedAt: Date | string | null | undefined,
+    authority: PageLifecycleAuthority,
+) {
+    if (
+        pagePublicationTimestamp(requestedPublishedAt) !==
+            pagePublicationTimestamp(currentPublishedAt) &&
+        authority.canPublish !== true
+    ) {
+        throw new ForbiddenError(
+            "Scheduling page publication requires pages.publish permission.",
+        );
+    }
+}
 
 export function publicPageVisibilityCondition(): SQL {
     return and(
@@ -175,7 +215,13 @@ export async function getPublicPages(
 // Mutations
 // ─────────────────────────────────────────
 
-export async function createPage(db: Database, data: CreatePageInput): Promise<{ id: string }> {
+export async function createPage(
+    db: Database,
+    data: CreatePageInput,
+    authority: PageLifecycleAuthority = {},
+): Promise<{ id: string }> {
+    assertPageLifecycleAuthority(data.isPublished, false, authority);
+    assertPageScheduleAuthority(data.publishedAt, null, authority);
     const existing = await db
         .select({ id: pages.id })
         .from(pages)
@@ -210,9 +256,29 @@ export async function createPage(db: Database, data: CreatePageInput): Promise<{
     return { id: pageId };
 }
 
-export async function updatePage(db: Database, id: string, data: UpdatePageInput): Promise<void> {
+export async function updatePage(
+    db: Database,
+    id: string,
+    data: UpdatePageInput,
+    authority: PageLifecycleAuthority = {},
+): Promise<void> {
     const existing = await getPageById(db, id);
     if (!existing) throw new NotFoundError("Page not found");
+
+    if (data.isPublished !== undefined) {
+        assertPageLifecycleAuthority(
+            data.isPublished,
+            existing.isPublished,
+            authority,
+        );
+    }
+    if (data.publishedAt !== undefined) {
+        assertPageScheduleAuthority(
+            data.publishedAt,
+            existing.publishedAt,
+            authority,
+        );
+    }
 
     if (data.slug && data.slug !== existing.slug) {
         const slugConflict = await db

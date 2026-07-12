@@ -25,6 +25,8 @@ import { ActiveDatesSection } from "./ActiveDatesSection";
 import { SummaryCard } from "./SummaryCard";
 import { formSchema } from "./types";
 import type { FormValues, Product, Collection } from "./types";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 interface AmountOffProductsContainerProps {
   defaultValues?: Partial<Omit<FormValues, "appliesTo"> & { id?: string }>;
@@ -58,6 +60,10 @@ export function AmountOffProductsContainer({
 }: AmountOffProductsContainerProps) {
   const { symbol } = useCurrency();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canToggleStatus = hasPermission(
+    ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createMut = useCreateDiscount();
   const updateMut = useUpdateDiscount();
@@ -120,7 +126,7 @@ export function AmountOffProductsContainer({
       combineWithShippingDiscounts: false,
       startDate: new Date(),
       endDate: null,
-      isActive: true,
+      isActive: false,
       ...defaultValues,
       ...(defaultValues?.startDate && {
         startDate:
@@ -240,6 +246,7 @@ export function AmountOffProductsContainer({
                   <Switch
                     id="isActiveSwitch"
                     checked={field.value}
+                    disabled={!canToggleStatus}
                     onCheckedChange={field.onChange}
                     aria-labelledby="isActiveLabel"
                   />
@@ -254,7 +261,9 @@ export function AmountOffProductsContainer({
                 <FormDescription>
                   {field.value
                     ? "This discount is currently active."
-                    : "This discount is inactive and cannot be used."}
+                    : canToggleStatus
+                      ? "This discount is inactive and cannot be used."
+                      : "You need discount status permission to change activation."}
                 </FormDescription>
               </FormItem>
             )}

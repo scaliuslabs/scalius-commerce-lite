@@ -49,6 +49,8 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useNavigate } from "@tanstack/react-router";
 import { generateDiscountCode } from "./utils";
 import { discountCodeSchema, sharedDiscountFields, refineEndDateAfterStart } from "./shared-validation";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 const formSchema = refineEndDateAfterStart(
   z.object({
@@ -95,11 +97,13 @@ const CheckboxFormItem = ({
   label,
   description,
   control,
+  disabled = false,
 }: {
   name: keyof FormValues;
   label: string;
   description: string;
   control: Control<FormValues>;
+  disabled?: boolean;
 }) => (
   <FormField
     control={control}
@@ -110,6 +114,7 @@ const CheckboxFormItem = ({
         <FormControl>
           <Checkbox
             checked={field.value as boolean} // Assert type
+            disabled={disabled}
             onCheckedChange={field.onChange}
             id={name} // Add id for label association
           />
@@ -132,6 +137,10 @@ export function AmountOffOrderForm({
 }: AmountOffOrderFormProps) {
   const { symbol } = useCurrency();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canToggleStatus = hasPermission(
+    ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormValues>({
@@ -148,7 +157,7 @@ export function AmountOffOrderForm({
       combineWithShippingDiscounts: true, // Typically allowed
       startDate: new Date(new Date().setHours(0, 0, 0, 0)), // Start of today
       endDate: null,
-      isActive: true,
+      isActive: false,
       ...defaultValues,
       // Ensure Date objects are used, handling string conversion
       ...(defaultValues?.startDate && {
@@ -595,7 +604,10 @@ export function AmountOffOrderForm({
                 control={form.control}
                 name="isActive"
                 label="Enable discount code"
-                description="Make this discount available for use at checkout."
+                description={canToggleStatus
+                  ? "Active discounts can be redeemed during their valid dates."
+                  : "You need discount status permission to change activation."}
+                disabled={!canToggleStatus}
               />
             </FormSection>
             <Separator className="my-4" />

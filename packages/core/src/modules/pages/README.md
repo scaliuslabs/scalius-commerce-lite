@@ -61,8 +61,8 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `getPublicPages(db, options?)` -- paginated list of published pages. Sort options: `title`, `createdAt`, `-title`, `-createdAt` (prefix `-` for descending). Defaults: page 1, limit 10, sort by `title` asc.
 
 **Mutations:**
-- `createPage(db, data)` -- inserts with `page_` prefixed nanoid; checks slug uniqueness among non-deleted pages; returns `{ id }`
-- `updatePage(db, id, data)` -- partial update; validates slug uniqueness if slug changed; throws `NotFoundError` / `ConflictError`
+- `createPage(db, data, authority?)` -- defaults Draft; publication or scheduling requires verified `pages.publish` authority.
+- `updatePage(db, id, data, authority?)` -- ordinary edit may preserve publication state; changing publication or schedule requires verified `pages.publish` authority.
 - `deletePage(db, id)` -- soft-delete (sets `deletedAt`)
 - `bulkDeletePages(db, ids, permanent?)` -- soft or hard delete
 - `bulkPublishPages(db, ids)` / `bulkUnpublishPages(db, ids)` -- toggle `isPublished`
@@ -74,7 +74,7 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `slug`: 3-100 chars, lowercase alphanumeric with hyphens
 - `content`: required string (TipTap HTML)
 - `metaTitle`, `metaDescription`: nullable strings
-- `isPublished`: boolean (default true)
+- `isPublished`: boolean (default false)
 - `publishedAt`: optional date (auto-set on publish if not provided)
 - `sortOrder`: number (default 0)
 - `hideHeader`, `hideFooter`, `hideTitle`: boolean (default false)

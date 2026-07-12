@@ -22,6 +22,7 @@ import {
     analyticsProviderHealthBrowserStatuses,
     analyticsProviderHealthServerStatuses,
 } from "@scalius/core/modules/analytics";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
@@ -71,7 +72,9 @@ const createScriptRoute = createRoute({
 app.openapi(createScriptRoute, (async (c: AdminRouteContext<typeof createScriptRoute>) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await createAnalyticsScript(db, data);
+    const result = await createAnalyticsScript(db, data, {
+        canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
+    });
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return created(c, result);
 }) as unknown as AdminRouteHandler<typeof createScriptRoute>);
@@ -198,7 +201,9 @@ app.openapi(updateScriptRoute, async (c) => {
         throw new ValidationError("ID mismatch");
     }
 
-    const updated = await updateAnalyticsScript(db, id, data);
+    const updated = await updateAnalyticsScript(db, id, data, {
+        canToggle: c.get("adminPermissions").has(PERMISSIONS.ANALYTICS_TOGGLE),
+    });
     if (!updated) throw new NotFoundError("Analytics script not found");
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
     return ok(c, { script: updated });

@@ -42,6 +42,18 @@ const VALID_TIKTOK_PIXEL_CONFIG =
   "<script>ttq.load('C1234567890ABCDEFG');ttq.page();</script>";
 
 describe("analytics validation", () => {
+  it("creates analytics scripts as inactive drafts by default", () => {
+    const result = createAnalyticsSchema.parse({
+      name: "Draft custom script",
+      type: "custom",
+      usePartytown: true,
+      config: "<script>window.demo = true;</script>",
+      location: "head",
+    });
+
+    expect(result.isActive).toBe(false);
+  });
+
   it("accepts Google Tag Manager as a first-class script type", () => {
     expect(analyticsScriptTypes).toContain("google_tag_manager");
 
