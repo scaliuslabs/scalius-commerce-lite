@@ -262,7 +262,7 @@ function ProductEditor({
   };
 
   return (
-    <div className="container max-w-7xl space-y-6 py-4 pb-8">
+    <div className="container max-w-6xl space-y-4 py-4 pb-8">
       <ProductForm
         key={formGeneration}
         categories={categories}
@@ -278,7 +278,7 @@ function ProductEditor({
         onOptionLabelsChange={setEditorOptionLabels}
       />
 
-      <div className="mt-6" id="variant-section">
+      <div id="variant-section">
         {isHydrated ? (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <VariantManager

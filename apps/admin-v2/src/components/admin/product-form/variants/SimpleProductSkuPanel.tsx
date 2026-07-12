@@ -161,7 +161,7 @@ export function SimpleProductSkuPanel({
         isDirty={form.formState.isDirty}
         isSubmitting={isSubmitting}
       />
-      <Card className="border-none shadow-none bg-transparent sm:bg-card">
+      <Card>
       <CardHeader className="px-2 pt-2 pb-2 sm:px-3 sm:pt-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>

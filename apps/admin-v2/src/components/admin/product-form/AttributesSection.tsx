@@ -12,8 +12,8 @@ interface AttributesSectionProps {
 export function AttributesSection({ form }: AttributesSectionProps) {
   return (
     <CollapsibleCard
-      title="Product Attributes"
-      description="Add attributes like brand, warranty, or material"
+      title="Attributes"
+      description="Brand, material, warranty, and catalog facts"
       defaultOpen={false}
     >
       <FormField

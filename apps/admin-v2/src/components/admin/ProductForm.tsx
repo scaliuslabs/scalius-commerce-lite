@@ -266,10 +266,10 @@ export function ProductForm({
         <form
           method="post"
           onSubmit={form.handleSubmit(handleSubmit)}
-          className="-mt-4 pb-6"
+          className="-mt-3 pb-5"
           noValidate
         >
-          <div className="mb-4">
+          <div className="mb-3">
             <h1
               id="product-form-heading"
               tabIndex={-1}
@@ -284,9 +284,9 @@ export function ProductForm({
             </p>
           </div>
           {/* Two-Column Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
             {/* Left Column - Main Content (2/3 width on large screens) */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className="space-y-3 lg:col-span-2">
               {/* Title & Description */}
               <TitleDescriptionSection form={form} />
 

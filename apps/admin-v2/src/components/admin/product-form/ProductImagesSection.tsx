@@ -17,8 +17,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ChevronDown, Info } from "lucide-react";
+import { ChevronDown, ImagePlus, Info, Plus } from "lucide-react";
 import { MediaManager } from "../media-manager";
+import { Button } from "@/components/ui/button";
 import { cn } from "@scalius/shared/utils";
 import type {
   ProductFormValues,
@@ -68,6 +69,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
   activeVariantIds,
 }: ProductImagesSectionProps) {
   const [isOpen, setIsOpen] = React.useState(true);
+  const imageCount = form.watch("images")?.length ?? 0;
   const normalizedOptionLabels = React.useMemo(
     () => normalizeVariantOptionLabels(optionLabels),
     [optionLabels],
@@ -161,7 +163,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
 
   return (
     <Card>
-      <CardHeader className="pb-2 pt-3 px-3">
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
@@ -177,9 +179,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
               )}
             />
             <CardTitle className="text-sm">
-              Media{" "}
-              {form.watch("images")?.length > 0 &&
-                `(${form.watch("images").length})`}
+              Media{imageCount > 0 ? ` (${imageCount})` : ""}
             </CardTitle>
           </button>
 
@@ -224,7 +224,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <div className="flex items-center gap-1.5 rounded border px-2 py-1">
+                <div className="flex h-8 items-center gap-1.5 rounded-md border px-2">
                   <Switch
                     checked={enableVariantImages}
                     onCheckedChange={setEnableVariantImages}
@@ -238,41 +238,43 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     Map images
                   </Label>
                 </div>
-                <Select
-                  value={variantImageAxis}
-                  onValueChange={(value) => setVariantImageAxis(value as VariantImageAxis)}
-                >
-                  <SelectTrigger className="h-8 w-[150px] text-xs">
-                    <span className="truncate">{variantImageAxisLabel}</span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      value="option1"
-                      disabled={uniqueOptionOneValues.length === 0}
-                    >
-                      {normalizedOptionLabels.option1}
-                    </SelectItem>
-                    <SelectItem
-                      value="option2"
-                      disabled={uniqueOptionTwoValues.length === 0}
-                    >
-                      {normalizedOptionLabels.option2}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                {enableVariantImages ? (
+                  <Select
+                    value={variantImageAxis}
+                    onValueChange={(value) => setVariantImageAxis(value as VariantImageAxis)}
+                  >
+                    <SelectTrigger className="h-8 w-[132px] text-xs">
+                      <span className="truncate">{variantImageAxisLabel}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="option1"
+                        disabled={uniqueOptionOneValues.length === 0}
+                      >
+                        {normalizedOptionLabels.option1}
+                      </SelectItem>
+                      <SelectItem
+                        value="option2"
+                        disabled={uniqueOptionTwoValues.length === 0}
+                      >
+                        {normalizedOptionLabels.option2}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
             )}
           </div>
         </div>
       </CardHeader>
       {isOpen && (
-        <CardContent id="product-media-content" className="space-y-2 px-3 pb-3">
+        <CardContent id="product-media-content" className="px-4 pb-4 pt-0">
           <FormField
             control={form.control}
             name="images"
             render={({ field }) => (
               <FormItem>
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {field.value.length > 0 && (
                     <Suspense
                       fallback={<ImageGalleryFallback count={field.value.length} />}
@@ -294,6 +296,29 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   )}
                   <MediaManager
                     selectedFiles={field.value}
+                    trigger={
+                      field.value.length > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                        >
+                          <Plus className="mr-1.5 h-3.5 w-3.5" />
+                          Add media
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                        >
+                          <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+                          Choose media
+                        </Button>
+                      )
+                    }
                     onSelect={(file) => {
                       const updatedImages = handleImageSelect(
                         file,
@@ -311,6 +336,11 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       reconcileMappingsForImages(updatedImages, true);
                     }}
                   />
+                  {field.value.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Add product images from the media library. The first image is the primary image.
+                    </p>
+                  ) : null}
                 </div>
 
                 <FormMessage />
@@ -327,11 +357,10 @@ function ImageGalleryFallback({ count }: { count: number }) {
   const placeholders = Array.from({ length: Math.min(count, 6) });
 
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
       {placeholders.map((_, index) => (
-        <div key={index} className="space-y-2">
+        <div key={index}>
           <div className="aspect-square animate-pulse rounded-md border bg-muted/60" />
-          <div className="h-3 w-16 animate-pulse rounded bg-muted" />
         </div>
       ))}
     </div>

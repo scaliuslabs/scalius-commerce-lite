@@ -56,7 +56,7 @@ function NewProductPage() {
   const allCategories = categoryData.categories as Category[];
 
   return (
-    <div className="container max-w-7xl py-4 pb-8">
+    <div className="container max-w-6xl py-4 pb-8">
       <ProductForm
         categories={allCategories}
         defaultValues={defaultValues}

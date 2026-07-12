@@ -582,7 +582,7 @@ export function VariantManager({
         isDirty={hasUnsavedVariantDrafts}
         isSubmitting={isSubmitting}
       />
-      <Card className="border-none shadow-none bg-transparent sm:bg-card">
+      <Card>
         <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
