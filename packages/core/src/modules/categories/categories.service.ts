@@ -34,21 +34,6 @@ import {
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION = "CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION";
 
-function categoryProductRevisionBump(
-    db: Database,
-    claims: readonly CategoryRevisionClaim[],
-): SQLiteBatchItem {
-    return db.update(products)
-        .set({
-            aggregateRevision: sql`${products.aggregateRevision} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(sql`${products.categoryId} IN (
-            SELECT CAST(json_extract(value, '$.id') AS TEXT)
-            FROM json_each(${JSON.stringify(claims)})
-        )`);
-}
-
 function categoryDeleteUsageGuard(
     db: Database,
     claims: readonly CategoryRevisionClaim[],
@@ -447,11 +432,10 @@ export async function updateCategory(
                     isNull(categories.deletedAt),
                 ))
                 .returning({ revision: categories.revision }),
-            categoryProductRevisionBump(db, claims),
         );
         const results = await safeBatch(db, statements as never) as unknown[];
         return {
-            revision: revisionResult(results.at(-2)),
+            revision: revisionResult(results.at(-1)),
             status: data.status,
         };
     } catch (error) {
@@ -523,12 +507,11 @@ export async function updateCategoryStatus(
                 isNull(categories.deletedAt),
             ))
             .returning({ revision: categories.revision }),
-        categoryProductRevisionBump(db, claims),
     );
 
     try {
         const results = await safeBatch(db, statements as never) as unknown[];
-        return { revision: revisionResult(results.at(-2)), status: data.status };
+        return { revision: revisionResult(results.at(-1)), status: data.status };
     } catch (error) {
         try {
             await rethrowCategoryRevisionConflict(db, claims, error, "active");
@@ -787,7 +770,6 @@ export async function bulkDeleteCategories(
                         categoryClaimIdsCondition(claims),
                         isNull(categories.deletedAt),
                     )),
-                categoryProductRevisionBump(db, claims),
             ] as never);
         } catch (error) {
             try {
@@ -839,7 +821,6 @@ export async function restoreCategories(
                     categoryClaimIdsCondition(claims),
                     isNotNull(categories.deletedAt),
                 )),
-            categoryProductRevisionBump(db, claims),
         ] as never);
     } catch (error) {
         try {
