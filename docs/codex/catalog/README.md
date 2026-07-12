@@ -17,6 +17,7 @@ This is the durable working record for the Products, Categories, Attributes, Col
 
 - [ADMIN.md](ADMIN.md) — admin routes, forms, tables, permissions, error states, destructive actions, and settings UX.
 - [DOMAIN.md](DOMAIN.md) — schema, services, inventory ledger, variants, attributes, collections, currency, and D1 limits.
+- [ATTRIBUTES.md](ATTRIBUTES.md) — attribute authority, admin assignment/value workflows, public facet versus fact semantics, verified defects, and release tests.
 - [INVENTORY.md](INVENTORY.md) — inventory authority, adjustment/stocktake semantics, movement history, RBAC, currency boundary, and remaining scale gaps.
 - [STOREFRONT.md](STOREFRONT.md) — buyer catalog, caching, pricing, discovery, feeds, UCP, category/search UX, and protected product-page boundaries.
 - [PRODUCT-EDITOR-UX.md](PRODUCT-EDITOR-UX.md) — product create/edit interaction, conflict, keyboard, and responsive UX contract.
