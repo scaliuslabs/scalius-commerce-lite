@@ -35,6 +35,10 @@ import {
     executeProductAggregateMutationBatch as executeProductAggregateMutationBatchRaw,
     type ProductAggregateRevisionResult,
 } from "./products.aggregate-revision";
+import {
+    productVariantBarcodeIdentityEquals,
+    productVariantBarcodeIdentityIn,
+} from "./products.variant-identity";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);
@@ -144,10 +148,7 @@ export async function assertUniqueVariantBarcodes(
     const rows = await db
         .select({ id: productVariants.id, barcode: productVariants.barcode })
         .from(productVariants)
-        .where(sql`lower(trim(${productVariants.barcode})) IN (
-            SELECT CAST(value AS TEXT)
-            FROM json_each(${JSON.stringify([...ownerByKey.keys()])})
-        )`);
+        .where(productVariantBarcodeIdentityIn([...ownerByKey.keys()]));
     for (const row of rows) {
         const rowKey = getBarcodeIdentityKey(row.barcode);
         if (!rowKey) continue;
@@ -306,7 +307,7 @@ export async function lookupByBarcode(db: DrizzleD1Database<typeof schema>, barc
         .innerJoin(products, eq(productVariants.productId, products.id))
         .where(
             and(
-                sql`lower(trim(${productVariants.barcode})) = ${barcodeKey}`,
+                productVariantBarcodeIdentityEquals(barcodeKey),
                 isNull(productVariants.deletedAt),
                 isNull(products.deletedAt),
             ),

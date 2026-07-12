@@ -11,6 +11,7 @@ import {
   getBarcodeIdentityKey,
   normalizeBarcodeValue,
 } from "@scalius/shared/barcode-identity";
+import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
 import { buildStockMovementClaim } from "./stock-movement-claims";
 
 const MAX_CAS_RETRIES = 3;
@@ -260,7 +261,7 @@ export async function lookupByBarcodeOrSku(
     .innerJoin(products, eq(productVariants.productId, products.id))
     .where(
       and(
-        sql`lower(trim(${productVariants.barcode})) = ${barcodeIdentity}`,
+        productVariantBarcodeIdentityEquals(barcodeIdentity),
         isNull(productVariants.deletedAt),
         isNull(products.deletedAt),
       ),
