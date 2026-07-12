@@ -1623,7 +1623,7 @@ function productSearchQueryFromUrl(productUrl, storefrontOrigin) {
   }
 }
 
-function firstUcpSearchCandidate(searchPayload) {
+export function firstUcpSearchCandidate(searchPayload) {
   const products = Array.isArray(searchPayload?.products) ? searchPayload.products : [];
   for (const product of products) {
     if (!isRecord(product)) continue;
@@ -2320,7 +2320,7 @@ async function checkDiscoveredProductRoute(
   };
 }
 
-async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
+export async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
   const storefront = new URL(options.storefrontUrl);
   const storefrontOrigin = storefront.origin;
   if (storefront.protocol !== "https:") {
@@ -2386,11 +2386,6 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
   const searchPayload = requireJsonResponse(searchResponse, "UCP catalog search");
   const searchedProducts = Array.isArray(searchPayload?.products) ? searchPayload.products.length : 0;
   const searchCandidate = firstUcpSearchCandidate(searchPayload);
-  const candidate = searchCandidate ?? {
-    id: productUrl,
-    productId: null,
-    variantId: null,
-  };
 
   result.catalog = {
     search: {
@@ -2399,9 +2394,19 @@ async function checkUcpDiscovery(options, { fetchImpl, productUrl, logger }) {
       durationMs: searchResponse.durationMs,
       query: searchQuery,
       productCount: searchedProducts,
-      ...(searchCandidate ? {} : { fallbackInputId: redactUrl(productUrl) }),
     },
   };
+
+  if (!searchCandidate) {
+    const reason = "UCP catalog search returned no buyer-resolvable product candidate.";
+    result.catalog.lookup = { status: "skipped", reason };
+    result.catalog.product = { status: "skipped", reason };
+    logger?.warn(`WARN UCP catalog: lookup/product skipped because ${reason.toLowerCase()}`);
+    logger?.log("PASS UCP discovery: HTTPS profile plus catalog search; catalog is empty for this candidate.");
+    return result;
+  }
+
+  const candidate = searchCandidate;
 
   const lookupResponse = await fetchJson(`${serviceEndpoint}/catalog/lookup`, {
     fetchImpl,
