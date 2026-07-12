@@ -226,6 +226,11 @@ export function formatSelectedOptions(
 
 /** Compact buyer/admin label for projections that do not need structured axes. */
 export function variantOptionLabelSql(variantId: SQLWrapper): SQL<string | null> {
+    // Every caller projects from the concrete product_variants table. Drizzle
+    // intentionally renders interpolated columns without their table prefix in
+    // a single-table select. That is normally convenient, but this expression
+    // contains an inner join where `id` is ambiguous. Keep the correlated
+    // reference explicitly qualified so D1 can resolve the outer variant row.
     return sql<string | null>`(
         SELECT group_concat(option_label.value, ' / ')
         FROM (
@@ -233,7 +238,7 @@ export function variantOptionLabelSql(variantId: SQLWrapper): SQL<string | null>
             FROM product_variant_option_values pvov
             JOIN product_option_definitions pod ON pod.id = pvov.option_definition_id
             JOIN product_option_values pov ON pov.id = pvov.option_value_id
-            WHERE pvov.variant_id = ${variantId}
+            WHERE pvov.variant_id = ${sql.raw('"product_variants".')}${variantId}
             ORDER BY pod.position
         ) AS option_label
     )`;
