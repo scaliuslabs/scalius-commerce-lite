@@ -31,6 +31,7 @@ function makeOrder(overrides: Partial<OrderReceipt> = {}): OrderReceipt {
     items: [],
     supportRequests: [],
     supportRequestActions: [],
+    supportRequestIntro: "Send a request and the store will review it.",
     ...overrides,
   };
 }

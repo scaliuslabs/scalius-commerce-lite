@@ -15,15 +15,20 @@ import {
   listOrderRefundAttempts,
   summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
+import {
+  CUSTOMER_REQUEST_ACTION_COPY,
+  CUSTOMER_REQUEST_STATE_REASONS,
+  CUSTOMER_REQUEST_TYPES,
+  getCustomerRequestIntro,
+  getCustomerRequestPolicy,
+  projectCustomerRequestActions,
+  type CustomerRequestPolicy,
+  type CustomerRequestType,
+} from "../settings/customer-request-policy";
 
-export const CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES = [
-  "cancel_pre_shipment",
-  "return",
-  "refund",
-] as const;
+export const CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES = CUSTOMER_REQUEST_TYPES;
 
-export type CustomerOrderSupportRequestType =
-  typeof CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES[number];
+export type CustomerOrderSupportRequestType = CustomerRequestType;
 
 export const ORDER_SUPPORT_REQUEST_STATUSES = [
   "submitted",
@@ -164,28 +169,6 @@ const supportRequestSelectFields = {
   updatedAt: sql<number | null>`CAST(${orderSupportRequests.updatedAt} AS INTEGER)`,
 };
 
-const SUPPORT_REQUEST_COPY: Record<CustomerOrderSupportRequestType, {
-  label: string;
-  actionLabel: string;
-  description: string;
-}> = {
-  cancel_pre_shipment: {
-    label: "Cancellation request",
-    actionLabel: "Request cancellation",
-    description: "Ask the merchant to review this order before it ships.",
-  },
-  return: {
-    label: "Return request",
-    actionLabel: "Request return",
-    description: "Ask the merchant to review a return for this order.",
-  },
-  refund: {
-    label: "Refund request",
-    actionLabel: "Request refund",
-    description: "Ask the merchant to review a payment refund.",
-  },
-};
-
 const STATUS_COPY: Record<string, { label: string; severity: SupportRequestSeverity }> = {
   submitted: { label: "Submitted", severity: "info" },
   under_review: { label: "Under review", severity: "warning" },
@@ -247,7 +230,9 @@ function isConstraintError(error: unknown): boolean {
 }
 
 export function getOrderSupportRequestTypeLabel(type: string): string {
-  return isSupportRequestType(type) ? SUPPORT_REQUEST_COPY[type].label : "Support request";
+  return isSupportRequestType(type)
+    ? CUSTOMER_REQUEST_ACTION_COPY[type].label
+    : "Support request";
 }
 
 export function getOrderSupportRequestStatusLabel(status: string): string {
@@ -256,7 +241,9 @@ export function getOrderSupportRequestStatusLabel(status: string): string {
 
 function openRequestReason(activeRequestTypes: ReadonlySet<string>): string {
   const [type] = [...activeRequestTypes];
-  const copy = type && isSupportRequestType(type) ? SUPPORT_REQUEST_COPY[type] : null;
+  const copy = type && isSupportRequestType(type)
+    ? CUSTOMER_REQUEST_ACTION_COPY[type]
+    : null;
   return copy
     ? `${copy.label} is already open for this order.`
     : "A support request is already open for this order.";
@@ -267,10 +254,10 @@ function createAction(
   eligible: boolean,
   disabledReason: string | null = null,
 ): CustomerOrderSupportRequestAction {
-  const copy = SUPPORT_REQUEST_COPY[type];
+  const copy = CUSTOMER_REQUEST_ACTION_COPY[type];
   return {
     type,
-    label: copy.actionLabel,
+    label: copy.requestLabel,
     description: copy.description,
     eligible,
     disabledReason,
@@ -288,8 +275,8 @@ export function formatOrderSupportRequest(row: SupportRequestRow): OrderSupportR
     status: row.status,
     active: Boolean(row.activeKey) && ACTIVE_SUPPORT_REQUEST_STATUSES.has(row.status),
     severity: status.severity,
-    label: `${SUPPORT_REQUEST_COPY[type].label} ${status.label.toLowerCase()}`,
-    actionLabel: SUPPORT_REQUEST_COPY[type].actionLabel,
+    label: `${CUSTOMER_REQUEST_ACTION_COPY[type].label} ${status.label.toLowerCase()}`,
+    actionLabel: CUSTOMER_REQUEST_ACTION_COPY[type].requestLabel,
     reason: row.reason,
     message: row.message,
     returnId: row.returnId,
@@ -368,23 +355,37 @@ export function getCustomerOrderSupportRequestActions(
     createAction(
       "cancel_pre_shipment",
       canCancel,
-      canCancel ? null : "Cancellation requests are available before shipment starts.",
+      canCancel ? null : CUSTOMER_REQUEST_STATE_REASONS.cancellationUnavailable,
     ),
     createAction(
       "return",
       RETURN_REQUEST_STATUSES.has(order.status),
       RETURN_REQUEST_STATUSES.has(order.status)
         ? null
-        : "Return requests are available after the order ships.",
+        : CUSTOMER_REQUEST_STATE_REASONS.returnUnavailable,
     ),
     createAction(
       "refund",
       canRequestRefund,
       canRequestRefund
         ? null
-        : "Refund requests are available for paid orders after fulfillment starts.",
+        : CUSTOMER_REQUEST_STATE_REASONS.refundUnavailable,
     ),
   ];
+}
+
+export function applyCustomerRequestPolicyToSupportActions(
+  policy: CustomerRequestPolicy,
+  actions: readonly CustomerOrderSupportRequestAction[],
+  options: { includeHidden?: boolean } = {},
+): CustomerOrderSupportRequestAction[] {
+  return projectCustomerRequestActions(policy, actions, options).map((action) => ({
+    type: action.type,
+    label: action.label,
+    description: action.description,
+    eligible: action.eligible,
+    disabledReason: action.disabledReason,
+  }));
 }
 
 export async function listOrderSupportRequests(
@@ -515,6 +516,7 @@ export async function createCustomerOrderSupportRequest(
   request: OrderSupportRequestView;
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }> {
   return createVerifiedOrderSupportRequest(db, orderId, input, {
     actorType: "customer",
@@ -531,6 +533,7 @@ export async function createReceiptOrderSupportRequest(
   request: OrderSupportRequestView;
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }> {
   return createVerifiedOrderSupportRequest(db, orderId, input, {
     actorType: "guest_receipt",
@@ -544,6 +547,7 @@ export async function getReceiptOrderSupportRequestState(
 ): Promise<{
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }> {
   const order = await selectSupportRequestOrderState(db, orderId);
   if (!order) {
@@ -558,11 +562,13 @@ export async function getReceiptOrderSupportRequestStateForOrder(
 ): Promise<{
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }> {
   const state = await buildOrderSupportRequestState(db, order);
   return {
     supportRequests: state.supportRequests,
     supportRequestActions: state.supportRequestActions,
+    supportRequestIntro: state.supportRequestIntro,
   };
 }
 
@@ -581,6 +587,7 @@ async function createVerifiedOrderSupportRequest(
   request: OrderSupportRequestView;
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }> {
   if (!isSupportRequestType(input.type)) {
     throw new ValidationError("Unsupported support request type.");
@@ -603,7 +610,7 @@ async function createVerifiedOrderSupportRequest(
 
   const state = await buildOrderSupportRequestState(db, order);
   const activeRequestTypes = getActiveSupportRequestTypes(state.supportRequests);
-  const actions = state.supportRequestActions;
+  const actions = state.allSupportRequestActions;
   const selectedAction = actions.find((action) => action.type === input.type);
   if (!selectedAction?.eligible) {
     const reasonText = selectedAction?.disabledReason ?? "This request is not available for the current order state.";
@@ -664,11 +671,15 @@ async function createVerifiedOrderSupportRequest(
   return {
     request,
     supportRequests: updatedSupportRequests,
-    supportRequestActions: getCustomerOrderSupportRequestActions(order, {
-      hasShipment: state.hasShipment,
-      hasActiveRefundOperation: state.hasActiveRefundOperation,
-      activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
-    }),
+    supportRequestActions: applyCustomerRequestPolicyToSupportActions(
+      state.policy,
+      getCustomerOrderSupportRequestActions(order, {
+        hasShipment: state.hasShipment,
+        hasActiveRefundOperation: state.hasActiveRefundOperation,
+        activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
+      }),
+    ),
+    supportRequestIntro: state.supportRequestIntro,
   };
 }
 
@@ -706,10 +717,13 @@ async function buildOrderSupportRequestState(
 ): Promise<{
   supportRequests: OrderSupportRequestView[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  allSupportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
   hasShipment: boolean;
   hasActiveRefundOperation: boolean;
+  policy: CustomerRequestPolicy;
 }> {
-  const [shipmentRows, supportRequests, refundAttemptViews] = await Promise.all([
+  const [shipmentRows, supportRequests, refundAttemptViews, policy] = await Promise.all([
     db
       .select({ id: deliveryShipments.id })
       .from(deliveryShipments)
@@ -717,17 +731,26 @@ async function buildOrderSupportRequestState(
       .limit(1),
     listOrderSupportRequests(db, order.id),
     listOrderRefundAttempts(db, order.id, { audience: "customer" }),
+    getCustomerRequestPolicy(db),
   ]);
   const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
   const activeRequestTypes = getActiveSupportRequestTypes(supportRequests);
-  return {
-    supportRequests,
-    supportRequestActions: getCustomerOrderSupportRequestActions(order, {
-      hasShipment: shipmentRows.length > 0,
-      hasActiveRefundOperation: Boolean(activeRefundOperation),
-      activeRequestTypes,
-    }),
+  const baseActions = getCustomerOrderSupportRequestActions(order, {
     hasShipment: shipmentRows.length > 0,
     hasActiveRefundOperation: Boolean(activeRefundOperation),
+    activeRequestTypes,
+  });
+  return {
+    supportRequests,
+    supportRequestActions: applyCustomerRequestPolicyToSupportActions(policy, baseActions),
+    allSupportRequestActions: applyCustomerRequestPolicyToSupportActions(
+      policy,
+      baseActions,
+      { includeHidden: true },
+    ),
+    supportRequestIntro: getCustomerRequestIntro(policy),
+    hasShipment: shipmentRows.length > 0,
+    hasActiveRefundOperation: Boolean(activeRefundOperation),
+    policy,
   };
 }

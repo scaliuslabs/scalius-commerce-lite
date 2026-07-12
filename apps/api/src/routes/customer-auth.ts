@@ -856,6 +856,7 @@ const customerOrderDetailSchema = z.object({
   activeRefundOperation: customerActiveRefundOperationSchema.nullable(),
   supportRequests: z.array(customerOrderSupportRequestSchema),
   supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
+  supportRequestIntro: z.string(),
   paymentPlan: z.object({
     totalAmount: z.number(),
     depositAmount: z.number(),
@@ -977,6 +978,7 @@ const createCustomerOrderSupportRequestRoute = createRoute({
             request: customerOrderSupportRequestSchema,
             supportRequests: z.array(customerOrderSupportRequestSchema),
             supportRequestActions: z.array(customerOrderSupportRequestActionSchema),
+            supportRequestIntro: z.string(),
           })),
         },
       },

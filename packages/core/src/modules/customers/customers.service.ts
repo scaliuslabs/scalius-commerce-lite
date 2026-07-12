@@ -32,10 +32,15 @@ import {
     summarizeActiveRefundOperation,
 } from "../payments/refund-attempt-visibility";
 import {
+    applyCustomerRequestPolicyToSupportActions,
     getActiveSupportRequestTypes,
     getCustomerOrderSupportRequestActions,
     listOrderSupportRequests,
 } from "../orders/order-support-requests";
+import {
+    getCustomerRequestIntro,
+    getCustomerRequestPolicy,
+} from "../settings/customer-request-policy";
 
 // Re-export schemas from the canonical validation module
 export {
@@ -1000,7 +1005,7 @@ export async function getCustomerOrderDetailForOrder(
 ) {
     const orderId = order.id;
 
-    const [batchedRows, refundAttemptViews, supportRequests] = await Promise.all([
+    const [batchedRows, refundAttemptViews, supportRequests, customerRequestPolicy] = await Promise.all([
         db.batch([
         db
             .select({
@@ -1122,6 +1127,7 @@ export async function getCustomerOrderDetailForOrder(
         ] as Parameters<Database["batch"]>[0]),
         listOrderRefundAttempts(db, orderId, { audience: "customer" }),
         listOrderSupportRequests(db, orderId),
+        getCustomerRequestPolicy(db),
     ]);
 
     const [items, shipments, payments, plans, codRows, notificationReceipts] = batchedRows as [
@@ -1235,11 +1241,14 @@ export async function getCustomerOrderDetailForOrder(
 
     const notifications = projectCustomerOrderNotifications(notificationReceipts);
     const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
-    const supportRequestActions = getCustomerOrderSupportRequestActions(order, {
-        hasShipment: formattedShipments.length > 0,
-        hasActiveRefundOperation: Boolean(activeRefundOperation),
-        activeRequestTypes: getActiveSupportRequestTypes(supportRequests),
-    });
+    const supportRequestActions = applyCustomerRequestPolicyToSupportActions(
+        customerRequestPolicy,
+        getCustomerOrderSupportRequestActions(order, {
+            hasShipment: formattedShipments.length > 0,
+            hasActiveRefundOperation: Boolean(activeRefundOperation),
+            activeRequestTypes: getActiveSupportRequestTypes(supportRequests),
+        }),
+    );
 
     const timeline: CustomerOrderDetailTimelineEvent[] = buildCustomerOrderBaseTimelineEvents(order);
 
@@ -1337,6 +1346,7 @@ export async function getCustomerOrderDetailForOrder(
         activeRefundOperation,
         supportRequests,
         supportRequestActions,
+        supportRequestIntro: getCustomerRequestIntro(customerRequestPolicy),
         paymentPlan,
         cod,
         notifications,

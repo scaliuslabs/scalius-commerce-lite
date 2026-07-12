@@ -12,6 +12,7 @@ type OrderSuccessButtonsProps = {
   orderId?: string;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
+  supportRequestIntro?: string;
 };
 
 type SubmitState =
@@ -19,6 +20,9 @@ type SubmitState =
   | { status: "submitting"; message: string | null }
   | { status: "success"; message: string }
   | { status: "error"; message: string };
+
+const EMPTY_SUPPORT_REQUESTS: OrderReceiptSupportRequest[] = [];
+const EMPTY_SUPPORT_REQUEST_ACTIONS: OrderReceiptSupportRequestAction[] = [];
 
 function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
   switch (severity) {
@@ -49,8 +53,9 @@ function getApiMessage(payload: unknown, fallback: string) {
 
 export default function OrderSuccessButtons({
   orderId,
-  supportRequests: initialSupportRequests = [],
-  supportRequestActions: initialSupportRequestActions = [],
+  supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
+  supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
+  supportRequestIntro: initialSupportRequestIntro = "Send a request and the store will review it before changing payment, shipment, or inventory.",
 }: OrderSuccessButtonsProps) {
   const [isAnimated, setIsAnimated] = useState(false);
   const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
@@ -58,6 +63,7 @@ export default function OrderSuccessButtons({
   const [receiptCopyState, setReceiptCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
+  const [supportRequestIntro, setSupportRequestIntro] = useState(initialSupportRequestIntro);
   const [selectedSupportType, setSelectedSupportType] = useState<OrderReceiptSupportRequestType | null>(null);
   const [supportReason, setSupportReason] = useState("");
   const [supportMessage, setSupportMessage] = useState("");
@@ -80,12 +86,15 @@ export default function OrderSuccessButtons({
     setSupportRequestActions(initialSupportRequestActions);
   }, [initialSupportRequestActions]);
 
+  useEffect(() => {
+    setSupportRequestIntro(initialSupportRequestIntro);
+  }, [initialSupportRequestIntro]);
+
   const activeSupportRequest = useMemo(
     () => supportRequests.find((request) => request.active) ?? null,
     [supportRequests],
   );
   const latestSupportRequest = supportRequests[0] ?? null;
-  const eligibleSupportActions = supportRequestActions.filter((action) => action.eligible);
   const selectedSupportAction = selectedSupportType
     ? supportRequestActions.find((action) => action.type === selectedSupportType)
     : null;
@@ -167,6 +176,7 @@ export default function OrderSuccessButtons({
           request?: OrderReceiptSupportRequest;
           supportRequests?: OrderReceiptSupportRequest[];
           supportRequestActions?: OrderReceiptSupportRequestAction[];
+          supportRequestIntro?: string;
         };
       } | null;
 
@@ -176,6 +186,7 @@ export default function OrderSuccessButtons({
 
       setSupportRequests(payload.data.supportRequests ?? [payload.data.request]);
       setSupportRequestActions(payload.data.supportRequestActions ?? []);
+      setSupportRequestIntro(payload.data.supportRequestIntro ?? initialSupportRequestIntro);
       setSelectedSupportType(null);
       setSupportReason("");
       setSupportMessage("");
@@ -318,7 +329,7 @@ export default function OrderSuccessButtons({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">Need help with this order?</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Send one request from this private receipt. The store reviews it before changing payment, shipment, or inventory.
+              {supportRequestIntro}
             </p>
           </div>
         </div>
@@ -332,22 +343,28 @@ export default function OrderSuccessButtons({
                 : "This request is already settled. Contact the store if you still need help."}
             </p>
           </div>
-        ) : eligibleSupportActions.length > 0 ? (
+        ) : supportRequestActions.length > 0 ? (
           <div className="mt-4 space-y-3">
             <div className="grid gap-2 sm:grid-cols-3">
-              {eligibleSupportActions.map((action) => (
+              {supportRequestActions.map((action) => (
                 <button
                   key={action.type}
                   type="button"
-                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
                     selectedSupportType === action.type
                       ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-muted/20 text-foreground hover:border-primary/40"
+                      : action.eligible
+                        ? "border-border bg-muted/20 text-foreground hover:border-primary/40"
+                        : "border-border bg-muted/10 text-muted-foreground"
                   }`}
                   onClick={() => handleSelectSupportAction(action)}
+                  disabled={!action.eligible}
                 >
                   <span className="font-medium">{action.label}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">{action.description}</span>
+                  {!action.eligible && action.disabledReason && (
+                    <span className="mt-1.5 block text-xs text-foreground/70">{action.disabledReason}</span>
+                  )}
                 </button>
               ))}
             </div>

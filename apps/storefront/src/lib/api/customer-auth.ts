@@ -527,6 +527,7 @@ interface CustomerOrderSupportRequestData {
   request: CustomerOrderSupportRequest;
   supportRequests: CustomerOrderSupportRequest[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
 }
 
 export type CustomerOrderPaymentSession = CustomerOrderPaymentSessionData;
@@ -585,6 +586,7 @@ export interface CustomerOrderDetail {
   activeRefundOperation: CustomerActiveRefundOperation | null;
   supportRequests: CustomerOrderSupportRequest[];
   supportRequestActions: CustomerOrderSupportRequestAction[];
+  supportRequestIntro: string;
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
   notifications: CustomerOrderDetailNotification[];

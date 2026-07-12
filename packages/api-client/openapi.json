@@ -9947,6 +9947,9 @@
                             ]
                           }
                         },
+                        "supportRequestIntro": {
+                          "type": "string"
+                        },
                         "paymentPlan": {
                           "type": "object",
                           "nullable": true,
@@ -10329,6 +10332,7 @@
                         "activeRefundOperation",
                         "supportRequests",
                         "supportRequestActions",
+                        "supportRequestIntro",
                         "paymentPlan",
                         "cod",
                         "notifications",
@@ -10922,12 +10926,16 @@
                               "disabledReason"
                             ]
                           }
+                        },
+                        "supportRequestIntro": {
+                          "type": "string"
                         }
                       },
                       "required": [
                         "request",
                         "supportRequests",
-                        "supportRequestActions"
+                        "supportRequestActions",
+                        "supportRequestIntro"
                       ]
                     }
                   },
@@ -20222,6 +20230,9 @@
                                   "disabledReason"
                                 ]
                               }
+                            },
+                            "supportRequestIntro": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -20255,7 +20266,8 @@
                             "updatedAt",
                             "items",
                             "supportRequests",
-                            "supportRequestActions"
+                            "supportRequestActions",
+                            "supportRequestIntro"
                           ]
                         }
                       },
@@ -20593,12 +20605,16 @@
                               "disabledReason"
                             ]
                           }
+                        },
+                        "supportRequestIntro": {
+                          "type": "string"
                         }
                       },
                       "required": [
                         "request",
                         "supportRequests",
-                        "supportRequestActions"
+                        "supportRequestActions",
+                        "supportRequestIntro"
                       ]
                     }
                   },
@@ -81021,6 +81037,829 @@
           },
           "503": {
             "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/settings/customer-requests": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get operational customer request policy",
+        "responses": {
+          "200": {
+            "description": "Operational customer cancellation, return, and refund policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "policy": {
+                          "type": "object",
+                          "properties": {
+                            "cancellationEnabled": {
+                              "type": "boolean"
+                            },
+                            "returnEnabled": {
+                              "type": "boolean"
+                            },
+                            "refundEnabled": {
+                              "type": "boolean"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "eligible_only",
+                                "show_unavailable"
+                              ]
+                            },
+                            "introText": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 240
+                            }
+                          },
+                          "required": [
+                            "cancellationEnabled",
+                            "returnEnabled",
+                            "refundEnabled",
+                            "visibility",
+                            "introText"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "resolvedIntro": {
+                          "type": "string"
+                        },
+                        "preview": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "pre_shipment",
+                                  "shipped_unpaid",
+                                  "delivered_paid"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "context": {
+                                "type": "string"
+                              },
+                              "actions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "cancel_pre_shipment",
+                                        "return",
+                                        "refund"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "eligible": {
+                                      "type": "boolean"
+                                    },
+                                    "disabledReason": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "visible": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "label",
+                                    "description",
+                                    "eligible",
+                                    "disabledReason",
+                                    "visible"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "context",
+                              "actions"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "policy",
+                        "resolvedIntro",
+                        "preview"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save operational customer request policy",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cancellationEnabled": {
+                    "type": "boolean"
+                  },
+                  "returnEnabled": {
+                    "type": "boolean"
+                  },
+                  "refundEnabled": {
+                    "type": "boolean"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "eligible_only",
+                      "show_unavailable"
+                    ]
+                  },
+                  "introText": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 240
+                  }
+                },
+                "required": [
+                  "cancellationEnabled",
+                  "returnEnabled",
+                  "refundEnabled",
+                  "visibility",
+                  "introText"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operational customer request policy saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "policy": {
+                          "type": "object",
+                          "properties": {
+                            "cancellationEnabled": {
+                              "type": "boolean"
+                            },
+                            "returnEnabled": {
+                              "type": "boolean"
+                            },
+                            "refundEnabled": {
+                              "type": "boolean"
+                            },
+                            "visibility": {
+                              "type": "string",
+                              "enum": [
+                                "eligible_only",
+                                "show_unavailable"
+                              ]
+                            },
+                            "introText": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 240
+                            }
+                          },
+                          "required": [
+                            "cancellationEnabled",
+                            "returnEnabled",
+                            "refundEnabled",
+                            "visibility",
+                            "introText"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "resolvedIntro": {
+                          "type": "string"
+                        },
+                        "preview": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "enum": [
+                                  "pre_shipment",
+                                  "shipped_unpaid",
+                                  "delivered_paid"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "context": {
+                                "type": "string"
+                              },
+                              "actions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "cancel_pre_shipment",
+                                        "return",
+                                        "refund"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "description": {
+                                      "type": "string"
+                                    },
+                                    "eligible": {
+                                      "type": "boolean"
+                                    },
+                                    "disabledReason": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "visible": {
+                                      "type": "boolean"
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "label",
+                                    "description",
+                                    "eligible",
+                                    "disabledReason",
+                                    "visible"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "context",
+                              "actions"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "policy",
+                        "resolvedIntro",
+                        "preview"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
             "content": {
               "application/json": {
                 "schema": {

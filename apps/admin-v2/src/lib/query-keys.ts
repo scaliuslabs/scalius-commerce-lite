@@ -189,6 +189,7 @@ export const queryKeys = {
     auth: () => ["settings", "auth"] as const,
     checkoutFlow: () => ["settings", "checkout-flow"] as const,
     checkoutReadiness: () => ["settings", "checkout-readiness"] as const,
+    customerRequests: () => ["settings", "customer-requests"] as const,
     email: () => ["settings", "email"] as const,
     firebase: () => ["settings", "firebase"] as const,
     business: () => ["settings", "business"] as const,

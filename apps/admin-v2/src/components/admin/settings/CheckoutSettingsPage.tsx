@@ -23,6 +23,9 @@ const DeliveryLocationsManager = lazy(() =>
         default: m.DeliveryLocationsManager,
     }))
 );
+const CustomerRequestSettings = lazy(() =>
+    import("./CustomerRequestSettings")
+);
 
 function TabSpinner() {
     return (
@@ -38,6 +41,7 @@ const tabs = [
     { value: "languages", label: "Languages" },
     { value: "shipping", label: "Shipping Methods" },
     { value: "delivery", label: "Delivery Locations" },
+    { value: "customer-requests", label: "Customer Requests" },
 ] as const;
 
 export default function CheckoutSettingsPage() {
@@ -122,6 +126,14 @@ export default function CheckoutSettingsPage() {
                         {mountedTabs.has("delivery") && (
                             <Suspense fallback={<TabSpinner />}>
                                 <DeliveryLocationsManager />
+                            </Suspense>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="customer-requests" className="mt-0">
+                        {mountedTabs.has("customer-requests") && (
+                            <Suspense fallback={<TabSpinner />}>
+                                <CustomerRequestSettings />
                             </Suspense>
                         )}
                     </TabsContent>

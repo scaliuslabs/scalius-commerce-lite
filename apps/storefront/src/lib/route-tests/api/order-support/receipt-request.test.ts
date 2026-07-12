@@ -94,6 +94,7 @@ describe("receipt-token order support proxy", () => {
         request: { id: "req_1" },
         supportRequests: [{ id: "req_1" }],
         supportRequestActions: [],
+        supportRequestIntro: "Send a request and the store will review it.",
       },
     }), {
       status: 201,

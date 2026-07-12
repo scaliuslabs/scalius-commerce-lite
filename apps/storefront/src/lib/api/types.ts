@@ -475,6 +475,7 @@ export interface OrderReceipt {
   items: OrderItem[];
   supportRequests: OrderReceiptSupportRequest[];
   supportRequestActions: OrderReceiptSupportRequestAction[];
+  supportRequestIntro: string;
 }
 
 export type CreateOrderPayload = OrderPostRequest;
