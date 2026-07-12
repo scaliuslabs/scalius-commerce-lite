@@ -26,7 +26,6 @@ async function claimedMovementId(input: {
         input.variantId,
         input.operation,
         input.pool,
-        String(input.generation ?? 0),
     ].join("\0");
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
     const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -44,6 +43,7 @@ function createClaimBatchDb(options: {
     }>;
     insertResult?: Array<{ id: string }>;
     updateResult?: Array<{ id: string }>;
+    movementGeneration?: number;
 } = {}) {
     const batchCalls: Array<Array<{ kind?: string; table?: unknown }>> = [];
     const db = {
@@ -63,7 +63,7 @@ function createClaimBatchDb(options: {
                                             stockVersion: 7,
                                         };
                                     }
-                                    if ("count" in projection) return { count: 0 };
+                                    if ("count" in projection) return { count: options.movementGeneration ?? 0 };
                                     return null;
                                 },
                                 all: async () => options.existingMovements ?? [],
@@ -159,6 +159,9 @@ describe("applyClaimedInventoryEntryBatch", () => {
         });
         const { db, batchCalls } = createClaimBatchDb({
             batchError: new Error("D1_ERROR: UNIQUE constraint failed: inventory_movements.id transition:claim"),
+            // The deterministic explicit key must remain stable even after
+            // earlier movement rows increase the observed generation.
+            movementGeneration: 7,
             existingMovements: [{
                 id,
                 variantId: "var_a",
@@ -174,7 +177,7 @@ describe("applyClaimedInventoryEntryBatch", () => {
             entries: [{ variantId: "var_a", quantity: 2, pool: "regular" }],
             claimKey,
             pool: "regular",
-        })).resolves.toBeUndefined();
+        })).resolves.toEqual([id]);
 
         expect(batchCalls).toHaveLength(1);
         expect(alertMocks.checkAndAlertLowStock).toHaveBeenCalledOnce();

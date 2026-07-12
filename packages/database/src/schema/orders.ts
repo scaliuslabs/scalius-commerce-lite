@@ -9,6 +9,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
+import { inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
 import {
     OrderStatus,
@@ -206,6 +207,175 @@ export const orderItems = sqliteTable("order_items", {
     index("order_items_variant_id_idx").on(table.variantId),
 ]);
 
+export const orderReturns = sqliteTable("order_returns", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    status: text("status", {
+        enum: ["requested", "approved", "receiving", "completed", "rejected", "cancelled"],
+    }).notNull().default("requested"),
+    reason: text("reason").notNull(),
+    notes: text("notes"),
+    actorType: text("actor_type", { enum: ["admin", "customer", "guest_receipt", "system"] }).notNull(),
+    actorId: text("actor_id"),
+    source: text("source", { enum: ["admin", "support_request", "cod_return_to_sender"] }).notNull().default("admin"),
+    sourceReferenceId: text("source_reference_id"),
+    version: integer("version").notNull().default(1),
+    activeOrderKey: text("active_order_key"),
+    activeCommandKey: text("active_command_key"),
+    activeCommandHash: text("active_command_hash"),
+    activeCommandType: text("active_command_type"),
+    activeCommandStartedAt: integer("active_command_started_at"),
+    requestedAt: integer("requested_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    approvedAt: integer("approved_at", { mode: "timestamp" }),
+    receivingStartedAt: integer("receiving_started_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    rejectedAt: integer("rejected_at", { mode: "timestamp" }),
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_returns_order_created_idx").on(table.orderId, table.createdAt),
+    index("order_returns_order_status_idx").on(table.orderId, table.status),
+    uniqueIndex("order_returns_source_reference_unique").on(table.source, table.sourceReferenceId),
+    uniqueIndex("order_returns_active_order_key_unique").on(table.activeOrderKey),
+    check("order_returns_version_positive", sql`${table.version} >= 1`),
+    check("order_returns_reason_length", sql`length(trim(${table.reason})) BETWEEN 1 AND 500`),
+    check("order_returns_active_claim_shape", sql`(
+        (${table.activeOrderKey} IS NULL
+            AND ${table.activeCommandKey} IS NULL
+            AND ${table.activeCommandHash} IS NULL
+            AND ${table.activeCommandType} IS NULL
+            AND ${table.activeCommandStartedAt} IS NULL)
+        OR
+        (${table.activeOrderKey} = ${table.orderId}
+            AND ${table.activeCommandKey} IS NOT NULL
+            AND ${table.activeCommandHash} IS NOT NULL
+            AND ${table.activeCommandType} = 'receive'
+            AND ${table.activeCommandStartedAt} IS NOT NULL)
+    )`),
+]);
+
+export const orderReturnLines = sqliteTable("order_return_lines", {
+    id: text("id").primaryKey(),
+    returnId: text("return_id")
+        .notNull()
+        .references(() => orderReturns.id, { onDelete: "restrict" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    orderItemId: text("order_item_id")
+        .notNull()
+        .references(() => orderItems.id, { onDelete: "restrict" }),
+    variantId: text("variant_id")
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    inventoryTracked: integer("inventory_tracked", { mode: "boolean" }).notNull().default(true),
+    requestedQuantity: integer("requested_quantity").notNull(),
+    approvedQuantity: integer("approved_quantity").notNull().default(0),
+    receivedQuantity: integer("received_quantity").notNull().default(0),
+    restockQuantity: integer("restock_quantity").notNull().default(0),
+    damagedQuantity: integer("damaged_quantity").notNull().default(0),
+    rejectedQuantity: integer("rejected_quantity").notNull().default(0),
+    reason: text("reason"),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_return_lines_return_item_unique").on(table.returnId, table.orderItemId),
+    index("order_return_lines_order_item_idx").on(table.orderId, table.orderItemId),
+    index("order_return_lines_variant_idx").on(table.variantId),
+    check("order_return_lines_requested_positive", sql`${table.requestedQuantity} > 0`),
+    check("order_return_lines_quantities_nonnegative", sql`(
+        ${table.approvedQuantity} >= 0
+        AND ${table.receivedQuantity} >= 0
+        AND ${table.restockQuantity} >= 0
+        AND ${table.damagedQuantity} >= 0
+        AND ${table.rejectedQuantity} >= 0
+    )`),
+    check("order_return_lines_approval_bounded", sql`(
+        ${table.approvedQuantity} + ${table.rejectedQuantity} <= ${table.requestedQuantity}
+    )`),
+    check("order_return_lines_receipt_bounded", sql`(
+        ${table.receivedQuantity} <= ${table.approvedQuantity}
+        AND ${table.restockQuantity} + ${table.damagedQuantity} = ${table.receivedQuantity}
+    )`),
+]);
+
+export const orderReturnCommands = sqliteTable("order_return_commands", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    returnId: text("return_id")
+        .notNull()
+        .references(() => orderReturns.id, { onDelete: "restrict" }),
+    commandKey: text("command_key").notNull(),
+    commandType: text("command_type", { enum: ["create", "approve", "receive", "cancel"] }).notNull(),
+    requestHash: text("request_hash").notNull(),
+    /** Canonical bounded input for server-owned recovery of multi-batch inventory receipts. */
+    requestPayload: text("request_payload"),
+    status: text("status", { enum: ["processing", "committed"] }).notNull().default("processing"),
+    responsePayload: text("response_payload"),
+    actorType: text("actor_type", { enum: ["admin", "customer", "guest_receipt", "system"] }).notNull(),
+    actorId: text("actor_id"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_return_commands_order_key_unique").on(table.orderId, table.commandKey),
+    index("order_return_commands_return_created_idx").on(table.returnId, table.createdAt),
+    index("order_return_commands_status_created_idx").on(table.status, table.createdAt),
+    check("order_return_commands_key_length", sql`length(trim(${table.commandKey})) BETWEEN 8 AND 200`),
+    check("order_return_commands_request_payload_bounded", sql`${table.requestPayload} IS NULL OR length(${table.requestPayload}) <= 200000`),
+    check("order_return_commands_processing_recovery_payload", sql`${table.status} <> 'processing' OR (${table.commandType} = 'receive' AND ${table.requestPayload} IS NOT NULL)`),
+]);
+
+/**
+ * Immutable warehouse evidence for each received/dispositioned return line.
+ * The counters on order_return_lines are projections of these command rows.
+ */
+export const orderReturnReceiptLines = sqliteTable("order_return_receipt_lines", {
+    id: text("id").primaryKey(),
+    commandId: text("command_id")
+        .notNull()
+        .references(() => orderReturnCommands.id, { onDelete: "restrict" }),
+    returnId: text("return_id")
+        .notNull()
+        .references(() => orderReturns.id, { onDelete: "restrict" }),
+    returnLineId: text("return_line_id")
+        .notNull()
+        .references(() => orderReturnLines.id, { onDelete: "restrict" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    variantId: text("variant_id")
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    receivedQuantity: integer("received_quantity").notNull(),
+    restockQuantity: integer("restock_quantity").notNull(),
+    damagedQuantity: integer("damaged_quantity").notNull(),
+    actorType: text("actor_type", { enum: ["admin", "customer", "guest_receipt", "system"] }).notNull(),
+    actorId: text("actor_id"),
+    inventoryMovementId: text("inventory_movement_id")
+        .references(() => inventoryMovements.id, { onDelete: "restrict" }),
+    notes: text("notes"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("order_return_receipt_lines_command_line_unique").on(table.commandId, table.returnLineId),
+    index("order_return_receipt_lines_return_created_idx").on(table.returnId, table.createdAt),
+    index("order_return_receipt_lines_order_created_idx").on(table.orderId, table.createdAt),
+    index("order_return_receipt_lines_movement_idx").on(table.inventoryMovementId),
+    check("order_return_receipt_lines_received_positive", sql`${table.receivedQuantity} > 0`),
+    check("order_return_receipt_lines_disposition_exact", sql`(
+        ${table.restockQuantity} >= 0
+        AND ${table.damagedQuantity} >= 0
+        AND ${table.restockQuantity} + ${table.damagedQuantity} = ${table.receivedQuantity}
+    )`),
+    check("order_return_receipt_lines_movement_shape", sql`(
+        (${table.restockQuantity} = 0 AND ${table.inventoryMovementId} IS NULL)
+        OR (${table.restockQuantity} > 0 AND ${table.inventoryMovementId} IS NOT NULL)
+    )`),
+]);
+
 /** Immutable calculation context captured when an order is committed. */
 export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
     orderId: text("order_id")
@@ -382,6 +552,8 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     reason: text("reason").notNull(),
     message: text("message"),
     activeKey: text("active_key"),
+    returnId: text("return_id")
+        .references(() => orderReturns.id, { onDelete: "set null" }),
     submittedAt: integer("submitted_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -398,6 +570,7 @@ export const orderSupportRequests = sqliteTable("order_support_requests", {
     index("order_support_requests_customer_created_idx").on(table.customerId, table.createdAt),
     index("order_support_requests_status_created_idx").on(table.status, table.createdAt),
     index("order_support_requests_type_status_idx").on(table.type, table.status),
+    index("order_support_requests_return_id_idx").on(table.returnId),
 ]);
 
 export const orderSupportRequestEvents = sqliteTable("order_support_request_events", {
@@ -612,6 +785,10 @@ export const abandonedCheckouts = sqliteTable(
 export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
+export type OrderReturn = InferSelectModel<typeof orderReturns>;
+export type OrderReturnLine = InferSelectModel<typeof orderReturnLines>;
+export type OrderReturnCommand = InferSelectModel<typeof orderReturnCommands>;
+export type OrderReturnReceiptLine = InferSelectModel<typeof orderReturnReceiptLines>;
 export type OrderTaxSnapshot = InferSelectModel<typeof orderTaxSnapshots>;
 export type OrderItemTaxSnapshot = InferSelectModel<typeof orderItemTaxSnapshots>;
 export type OrderPayment = InferSelectModel<typeof orderPayments>;

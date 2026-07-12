@@ -110,7 +110,7 @@ export type {
 } from "./payment-state";
 
 // --- Refund service ---
-export { finalizeAcceptedRefundAttemptIds, processRefund, processReturn } from "./refund-service";
+export { finalizeAcceptedRefundAttemptIds, processRefund } from "./refund-service";
 export type {
   FinalizeAcceptedRefundAttemptsResult,
   RefundNotificationFact,

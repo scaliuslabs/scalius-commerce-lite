@@ -51,6 +51,13 @@ import {
     SHIPMENT_CLAIM_LEASE_SECONDS,
 } from "./shipment-claim";
 import { rollbackOrderStatusIfInventoryUnchanged } from "./order-status-claim";
+import { assertGenericAdminOrderStatusTransition } from "./admin-status-policy";
+import {
+    approveOrderReturn,
+    createOrderReturn,
+    getOrderReturn,
+    listOrderReturns,
+} from "./order-returns";
 
 async function reconcileInventoryForStatus(
     db: Database,
@@ -715,45 +722,66 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD failure recorded" };
         }
         case "returned": {
-            let returnClaim: { previousStatus: string; claimedVersion: number } | null = null;
-            const rollbackReturnClaim = async () => {
-                if (!returnClaim) return;
-                await rollbackOrderStatusIfInventoryUnchanged(db, {
-                    orderId,
-                    previousStatus: returnClaim.previousStatus,
-                    claimedStatus: OrderStatus.RETURNED,
-                    claimedVersion: returnClaim.claimedVersion,
-                    previousInventoryAction: order.inventoryAction as string,
+            if (
+                order.status !== OrderStatus.SHIPPED
+                && order.status !== OrderStatus.DELIVERED
+                && order.status !== OrderStatus.COMPLETED
+            ) {
+                throw new ValidationError("Courier return-to-sender can be recorded only after shipment.");
+            }
+
+            const sourceReferenceId = `cod-rts:${orderId}`;
+            let returnRecord = (await listOrderReturns(db, orderId)).find(
+                (candidate) => candidate.source === "cod_return_to_sender"
+                    && candidate.sourceReferenceId === sourceReferenceId,
+            );
+            if (!returnRecord) {
+                const fulfilledItems = await db.select({
+                    id: orderItems.id,
+                    quantity: orderItems.quantity,
+                }).from(orderItems).where(and(
+                    eq(orderItems.orderId, orderId),
+                    sql`${orderItems.fulfillmentStatus} IN (${ItemFulfillmentStatus.SHIPPED}, ${ItemFulfillmentStatus.DELIVERED})`,
+                )).all();
+                if (fulfilledItems.length === 0) {
+                    throw new ValidationError(
+                        "Courier return evidence cannot be linked because no shipped order items were found.",
+                    );
+                }
+                const createdReturn = await createOrderReturn(db, orderId, {
+                    commandKey: `cod-rts-create:${orderId}`,
+                    expectedOrderVersion: order.version,
+                    reason: "Courier return to sender",
+                    notes: typeof body.notes === "string" ? body.notes : null,
+                    lines: fulfilledItems.map((item) => ({
+                        orderItemId: item.id,
+                        quantity: item.quantity,
+                        reason: typeof body.reason === "string" ? body.reason : "return_to_sender",
+                    })),
+                }, { type: "system", id: "cod" }, {
+                    source: "cod_return_to_sender",
+                    sourceReferenceId,
                 });
+                returnRecord = await getOrderReturn(db, orderId, createdReturn.returnId);
+            }
+            if (returnRecord.status === "requested") {
+                await approveOrderReturn(db, orderId, returnRecord.id, {
+                    commandKey: `cod-rts-approve:${orderId}`,
+                    expectedVersion: returnRecord.version,
+                    notes: "Awaiting explicit warehouse receipt and disposition.",
+                    lines: returnRecord.lines.map((line) => ({
+                        lineId: line.id,
+                        approvedQuantity: line.requestedQuantity,
+                        rejectedQuantity: 0,
+                    })),
+                }, { type: "system", id: "cod" });
+            }
+            const retResult = await markCODReturned(db, orderId);
+            if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
+            return {
+                message: "Courier return-to-sender recorded; stock awaits warehouse receipt.",
+                returnId: returnRecord.id,
             };
-            if (order.status !== OrderStatus.RETURNED) {
-                validateTransition("order", order.status, OrderStatus.RETURNED);
-                const retCasResult = await db.update(orders).set({ status: OrderStatus.RETURNED, version: order.version + 1, updatedAt: sql`unixepoch()` }).where(and(
-                    eq(orders.id, orderId),
-                    eq(orders.version, order.version),
-                    noActiveRefundAttemptForOrderIdCondition(orderId),
-                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
-                )).returning({ id: orders.id });
-                if (retCasResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
-                returnClaim = {
-                    previousStatus: order.status,
-                    claimedVersion: order.version + 1,
-                };
-            }
-            try {
-                const retResult = await markCODReturned(db, orderId);
-                if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
-            } catch (error: unknown) {
-                await rollbackReturnClaim();
-                throw error;
-            }
-            try {
-                await reconcileInventoryForStatus(db, orderId, OrderStatus.RETURNED);
-            } catch (error: unknown) {
-                await rollbackReturnClaim();
-                throw error;
-            }
-            return { message: "Order marked as returned" };
         }
         default:
             throw new ValidationError("Invalid action");
@@ -958,6 +986,8 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         await reconcileInventoryForStatus(db, orderId, nextStatus);
         return { message: "Status unchanged; inventory reconciled" };
     }
+
+    assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
 
     // Validate the status transition before applying any side effects
     validateTransition("order", currentStatus, nextStatus);

@@ -2,14 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,
-    processReturn,
     processRefund,
     type RefundNotificationFact,
 } from "@scalius/core/modules/payments/refund-service";
 import { reconcileRefundAttemptForOrder } from "@scalius/core/modules/payments/refund-reconciliation";
-import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import {
@@ -36,10 +33,6 @@ const refundResultSchema = z.object({
     isFullRefund: z.boolean(),
     error: z.string().optional(),
 }).passthrough();
-
-const returnResultSchema = successEnvelope(z.object({
-    refundResult: refundResultSchema.optional(),
-}));
 
 const reconcileRefundAttemptResultSchema = successEnvelope(z.object({
     attemptId: z.string(),
@@ -210,83 +203,6 @@ function publicRefundResult<T extends { refundNotification?: unknown }>(result: 
     const { refundNotification: _refundNotification, ...publicResult } = result;
     return publicResult;
 }
-
-// ─── POST /:id/return ────────────────────────────────────────────────────────
-
-const returnOrderRoute = createRoute({
-    method: "post",
-    path: "/{id}/return",
-    tags: ["Admin - Orders"],
-    summary: "Process order return",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: z.object({ reason: z.string().optional(), autoRefund: z.boolean().optional() }) } } }
-    },
-    responses: {
-        200: {
-            description: "Return processed",
-            content: { "application/json": { schema: returnResultSchema } },
-        },
-        ...adminRefundMutationErrorResponses,
-    }
-});
-
-app.openapi(returnOrderRoute, async (c) => {
-    const orderId = c.req.valid("param").id;
-    const data = c.req.valid("json");
-    const db = c.get("db");
-    if (data.autoRefund) {
-        const user = c.get("user") as { id?: string } | undefined;
-        const userPerms = user?.id ? await getUserPermissions(db, user.id) : new Set<string>();
-        if (!userPerms.has(PERMISSIONS.ORDERS_REFUND)) {
-            throw new ForbiddenError("Refund permission is required to auto-refund a returned order");
-        }
-    }
-    const envCache = c.env?.CACHE;
-    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    let result: Awaited<ReturnType<typeof processReturn>>;
-    try {
-        result = await processReturn(
-            db,
-            envCache,
-            { orderId, reason: data.reason ?? "Customer return", autoRefund: data.autoRefund ?? false },
-            encryptionKey,
-        );
-    } catch (error: unknown) {
-        if (error instanceof PartialRefundProcessedError) {
-            await recordPartialRefundProcessedSideEffects({
-                db,
-                queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-                error,
-                context: c,
-                source: "orders-return-refund-partial-failure",
-                statusSource: "orders-return",
-            });
-        }
-        throw error;
-    }
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    if (result.statusChange) {
-        await enqueueOrderStatusChangeNotification({
-            db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-            statusChange: result.statusChange,
-            source: "orders-return",
-        });
-    }
-    if (result.refundResult?.success) {
-        await enqueueRefundNotification({
-            db,
-            queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
-            orderId,
-            result: result.refundResult,
-            source: "orders-return-refund",
-        });
-    }
-    return ok(c, {
-        ...(result.refundResult ? { refundResult: publicRefundResult(result.refundResult) } : {}),
-    });
-});
 
 // ─── POST /:id/refund ────────────────────────────────────────────────────────
 
