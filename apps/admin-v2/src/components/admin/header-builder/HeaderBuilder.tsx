@@ -1,21 +1,29 @@
 // src/components/admin/header-builder/HeaderBuilder.tsx
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
-import { Loader2 } from "lucide-react";
-import { nanoid } from "nanoid";
+import {
+  BadgeInfo,
+  Contact,
+  Image as ImageIcon,
+  Loader2,
+  Menu,
+  Megaphone,
+  RotateCcw,
+} from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveHeaderConfig } from "~/lib/api-functions/settings";
+import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
 import { ContactSection } from "./ContactSection";
 
-import type { HeaderConfig, HeaderBuilderProps, NavigationItem, LogoConfig, FaviconConfig, SocialLink } from "./types";
+import type { HeaderConfig, HeaderBuilderProps } from "./types";
 import { defaultHeaderConfig } from "./types";
 
 const SocialLinksSection = lazy(() =>
@@ -38,54 +46,15 @@ function HeaderSubtabSpinner() {
   );
 }
 
-/**
- * Migrate legacy config formats to the new structure
- */
-function migrateConfig(config: unknown): HeaderConfig {
-  const cfg = config as Record<string, unknown>;
-  // Ensure navigation items have IDs and subMenus
-  const ensureNavIds = (items: unknown[]): NavigationItem[] => {
-    return (items || []).map((item) => {
-      const it = item as Record<string, unknown>;
-      return {
-        ...it,
-        id: (it.id as string) || nanoid(),
-        subMenu: it.subMenu ? ensureNavIds(it.subMenu as unknown[]) : [],
-      } as NavigationItem;
-    });
-  };
-
-  // Migrate old social.facebook to social array
-  let socialLinks: SocialLink[] = (cfg.social as SocialLink[]) || [];
-  if (!Array.isArray(socialLinks)) {
-    // Legacy format: { facebook: "url" }
-    const socialObj = cfg.social as Record<string, unknown> | undefined;
-    socialLinks = [];
-    if (socialObj?.facebook) {
-      socialLinks.push({
-        id: nanoid(),
-        label: "Facebook",
-        url: socialObj.facebook as string,
-      });
-    }
-  }
-
-  const topBar = cfg.topBar as Record<string, unknown> | undefined;
-  const contact = cfg.contact as Record<string, unknown> | undefined;
+export function normalizeHeaderConfig(config?: HeaderConfig | null): HeaderConfig {
+  if (!config) return defaultHeaderConfig;
   return {
-    topBar: {
-      text: (topBar?.text as string) || "",
-      isEnabled: (topBar?.isEnabled as boolean) ?? true,
-    },
-    logo: (cfg.logo as LogoConfig) || defaultHeaderConfig.logo,
-    favicon: (cfg.favicon as FaviconConfig) || defaultHeaderConfig.favicon,
-    contact: {
-      phone: (contact?.phone as string) || "",
-      text: (contact?.text as string) || "",
-      isEnabled: (contact?.isEnabled as boolean) ?? true,
-    },
-    social: socialLinks,
-    navigation: ensureNavIds(cfg.navigation as unknown[]),
+    topBar: { ...defaultHeaderConfig.topBar, ...config.topBar },
+    logo: { ...defaultHeaderConfig.logo, ...config.logo },
+    favicon: { ...defaultHeaderConfig.favicon, ...config.favicon },
+    contact: { ...defaultHeaderConfig.contact, ...config.contact },
+    social: Array.isArray(config.social) ? config.social : [],
+    navigation: Array.isArray(config.navigation) ? config.navigation : [],
   };
 }
 
@@ -93,18 +62,14 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const queryClient = useQueryClient();
 
-  const [config, setConfig] = useState<HeaderConfig>(() => {
-    return migrateConfig(initialConfig || defaultHeaderConfig);
-  });
+  const normalizedInitialConfig = useMemo(
+    () => normalizeHeaderConfig(initialConfig),
+    [initialConfig],
+  );
+  const { config, setConfig, isDirty, discard, markSaved } =
+    useConfigDraft(normalizedInitialConfig);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("branding");
-
-  // Update config when initialConfig changes
-  useEffect(() => {
-    if (initialConfig) {
-      setConfig(migrateConfig(initialConfig));
-    }
-  }, [initialConfig]);
 
   const handleSave = async () => {
     if (isLoading) return;
@@ -124,7 +89,8 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
       }
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
-      toast.success("Success!", { description: "Header configuration saved successfully." });
+      markSaved();
+      toast.success("Header saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       console.error("Error saving header:", error);
       toast.error("Save Failed", { description: getServerFnError(error, "Failed to save header configuration.") });
@@ -134,36 +100,57 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="border-b border-border w-full justify-start rounded-none bg-transparent p-0 mb-6">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Storefront header</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Brand, announce, and guide customers from one compact workspace.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className={cn("h-2 w-2 rounded-full", isDirty ? "bg-amber-500" : "bg-emerald-500")} />
+          {isDirty ? "Unsaved changes" : "All changes saved"}
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
-            className="data-[state=active]:border-b-primary data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 transition-none"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <ImageIcon className="h-4 w-4" />
             Branding
           </TabsTrigger>
           <TabsTrigger
             value="top-bar"
-            className="data-[state=active]:border-b-primary data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 transition-none"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <Megaphone className="h-4 w-4" />
             Announcement
           </TabsTrigger>
           <TabsTrigger
             value="contact-social"
-            className="data-[state=active]:border-b-primary data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 transition-none"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <Contact className="h-4 w-4" />
             Contact & Social
           </TabsTrigger>
           <TabsTrigger
             value="navigation"
-            className="data-[state=active]:border-b-primary data-[state=active]:shadow-none rounded-none border-b-2 border-transparent px-4 pb-3 pt-2 transition-none"
+            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
+            <Menu className="h-4 w-4" />
             Navigation
           </TabsTrigger>
+          <div className="hidden border-t px-3 py-3 text-xs leading-5 text-muted-foreground lg:block">
+            <BadgeInfo className="mb-1 h-4 w-4" />
+            Customers see saved changes after the storefront cache refreshes.
+          </div>
         </TabsList>
 
-        <TabsContent value="branding" className="mt-0 p-1">
+        <TabsContent value="branding" className="mt-0 min-w-0">
           <BrandingSection
             logo={config.logo}
             favicon={config.favicon}
@@ -174,14 +161,14 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
           />
         </TabsContent>
 
-        <TabsContent value="top-bar" className="mt-0 p-1">
+        <TabsContent value="top-bar" className="mt-0 min-w-0">
           <TopBarSection
             topBar={config.topBar}
             onChange={(topBar) => setConfig((prev) => ({ ...prev, topBar }))}
           />
         </TabsContent>
 
-        <TabsContent value="contact-social" className="mt-0 p-1 space-y-6">
+        <TabsContent value="contact-social" className="mt-0 min-w-0 space-y-3">
           <ContactSection
             contact={config.contact}
             onChange={(contact) => setConfig((prev) => ({ ...prev, contact }))}
@@ -198,7 +185,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="navigation" className="mt-0 p-1">
+        <TabsContent value="navigation" className="mt-0 min-w-0">
           {activeTab === "navigation" && (
             <Suspense fallback={<HeaderSubtabSpinner />}>
               <NavigationSection
@@ -213,12 +200,16 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         </TabsContent>
       </Tabs>
 
-      <div className="flex justify-end pt-6 border-t border-border mt-8">
+      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+        <Button type="button" variant="ghost" size="sm" onClick={discard} disabled={!isDirty || isLoading}>
+          <RotateCcw className="mr-2 h-4 w-4" />
+          Discard
+        </Button>
         <Button
           onClick={handleSave}
-          disabled={isLoading || !config.logo.src}
-          className="relative min-w-[140px]"
-          size="lg"
+          disabled={isLoading || !config.logo.src || !isDirty}
+          className="relative min-w-[124px]"
+          size="sm"
         >
           {isLoading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-primary rounded-md">
@@ -226,7 +217,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
             </div>
           ) : null}
           <span className={cn(isLoading ? "opacity-0" : "opacity-100")}>
-            Save Header Settings
+            Save changes
           </span>
         </Button>
       </div>

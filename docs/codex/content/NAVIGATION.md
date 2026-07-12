@@ -1,6 +1,47 @@
 # Navigation, Header, and Footer Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
+
+## 2026-07-13 bounded builder hardening
+
+The current JSON authority remains in place for this release slice, but its
+unsafe and confusing edges are now bounded while the accepted versioned-menu
+model remains the architectural destination:
+
+- Header and footer editors use a dense section rail, explicit dirty/saved
+  status, discard, a sticky save action, and a browser-leave warning. Query
+  revalidation cannot overwrite an active merchant draft.
+- Client-side legacy migration no longer invents random menu or social IDs.
+  Demo data must be repaired once instead of perpetuating nondeterministic
+  compatibility branches in every browser session.
+- Public menu configuration is limited to 150 nodes and three visible levels;
+  IDs must be stable and unique, labels are bounded/non-blank, and footer
+  layouts are limited to four focused columns. The admin builder mirrors these
+  limits instead of allowing structures the desktop/mobile storefront cannot
+  present well.
+- Social destinations are limited to eight per placement and accept only
+  credential-free HTTPS URLs. The editor exposes invalid destinations inline.
+- Footer menu previews now resolve against the real storefront origin rather
+  than opening a fake `#` URL.
+- Copyright input is defined as the owner/business name. The storefront owns
+  the current year and rights suffix exactly once, and no longer writes unused
+  footer presentation data into `localStorage` on every page.
+
+Focused proof: navigation validation covers unsafe links, HTTPS social rules,
+depth/count/identity bounds, and duplicate footer columns; admin boundary tests
+cover the three-level UI; storefront boundaries cover label-only nodes and the
+single copyright/storage contract.
+
+## Deferred hero correctness slice
+
+Hero management must not be folded into a cosmetic settings pass. Its current
+debounced editor persists whole image arrays without a revision token, so nearby
+title/link edits or concurrent sessions can overwrite one another. The next
+hero slice should replace field debounce with an explicit dirty/save/conflict
+workflow, validate slide destinations with the shared safe-link policy, render
+unlinked slides without fake `#` anchors, and only then compact the visual
+editor. Existing hero demo assets should be replaced after that write contract
+is proven.
 
 ## Current strengths
 
@@ -18,29 +59,30 @@ Last reviewed: 2026-07-12
 - Stored header/footer JSON is validated on read and write. Malformed persisted
   settings fail explicitly instead of becoming an empty-success response, and
   label-only menu nodes render without fake `#` anchors.
+- The interim JSON model enforces bounded labels, stable unique node IDs,
+  three menu levels, 150 total nodes, four footer columns, and eight
+  credential-free HTTPS social destinations per placement.
 
 ## P1 architecture defects
 
-1. Header and footer are opaque JSON blobs with permissive record validation.
-   The API does not enforce the UI's depth, item count, URL, label, ID, social,
-   media, or structural rules.
+1. Header and footer remain opaque JSON blobs even though their interim
+   validator now enforces depth, count, URL, label, identity, social, and
+   structural bounds. The shape still cannot express reusable menus,
+   placements, lifecycle, or per-resource dependency evidence.
 2. No revision/CAS exists. Header, footer, General Settings, or two open editors
    can overwrite the same singleton without conflict. Each builder saves a
    complete blob rather than a scoped command.
 3. Navigation items copy `href` strings instead of storing typed resource
    references. Page/category slug or visibility changes can leave dead menu
    links; dependency invalidation and deletion impact cannot be proven.
-4. Client-side “migration” invents random IDs while loading older shapes. It can
-   create nondeterministic dirty state and perpetuates formats the API should
-   have removed through one schema migration.
-5. Default navigation expands every visible category/page in an unbounded read
-   and uses a `#` Categories parent. Large catalogs will create unusable markup,
-   and placeholder links are poor keyboard/browser behavior.
-6. Several implementations overlap: generic NavigationBuilder, header
+4. Default navigation expands every visible category/page in an unbounded read.
+   Large catalogs can still create unusable markup even though the Categories
+   parent is now a truthful non-clickable label.
+5. Several implementations overlap: generic NavigationBuilder, header
    NavigationSection, footer menu editor, separate header/footer route shapes,
    and inline default builders. One canonical menu model/validator/resolver is
    required.
-7. External-link presentation still needs an explicit merchant new-tab choice;
+6. External-link presentation still needs an explicit merchant new-tab choice;
    safe target validation and scheme blocking are now enforced.
 
 ## Merchant workflow direction

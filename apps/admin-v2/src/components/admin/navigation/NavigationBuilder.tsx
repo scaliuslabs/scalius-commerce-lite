@@ -2,13 +2,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -317,7 +311,7 @@ export function NavigationBuilder({
   );
 
   const totalItems = countItems(navigation);
-  const maxDepth = getMaxDepth(navigation) + 1;
+  const maxDepth = navigation.length > 0 ? getMaxDepth(navigation) + 1 : 0;
 
   const renderNavigationTable = () => (
     <Table>
@@ -335,14 +329,11 @@ export function NavigationBuilder({
         {navigation.length === 0 ? (
           <TableRow>
             <td colSpan={4} className="py-12 text-center">
-              <Menu className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
-              <p className="text-muted-foreground mb-1">
-                No navigation items yet
+              <Menu className="h-5 w-5 mx-auto mb-2 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground mb-3">
+                No links yet. Add a published page, category, custom link, or label.
               </p>
-              <p className="text-sm text-muted-foreground/70 mb-4">
-                Add categories, pages, custom links, or labels
-              </p>
-              <Button onClick={handleAddRoot}>
+              <Button onClick={handleAddRoot} size="sm">
                 <Plus className="h-4 w-4 mr-2" />
                 Add First Item
               </Button>
@@ -368,22 +359,22 @@ export function NavigationBuilder({
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
+    <Card className="overflow-hidden shadow-none">
+      <CardHeader className="px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Menu className="h-5 w-5" />
-              Navigation Menu
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Menu className="h-4 w-4" />
+              Menu structure
             </CardTitle>
-            <CardDescription>
-              Build your navigation with up to {MAX_NAV_DEPTH} levels of nesting
-            </CardDescription>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Keep labels short. Nest up to {MAX_NAV_DEPTH} levels for desktop and mobile.
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-normal">
+            <Badge variant="outline" className="h-8 font-normal">
               <Layers className="h-3 w-3 mr-1" />
-              {totalItems} items • {maxDepth} levels
+              {totalItems} items · {maxDepth} levels
             </Badge>
             {isReorderMode ? (
               <Button

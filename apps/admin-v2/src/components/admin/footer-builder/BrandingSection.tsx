@@ -1,5 +1,5 @@
 // src/components/admin/footer-builder/BrandingSection.tsx
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { MediaManager } from "../media-manager";
 import { Trash2 } from "lucide-react";
@@ -21,14 +21,17 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Footer Logo</CardTitle>
+      <CardHeader className="px-4 py-3">
+        <CardTitle className="text-base">Footer logo</CardTitle>
+        <CardDescription>
+          Reuse the header logo or choose one for the footer background.
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-1">
+      <CardContent className="px-4 pb-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
+          <div>
             {logo.src ? (
-              <div className="relative group border rounded-lg p-4 bg-muted/30 aspect-2/1 flex items-center justify-center">
+              <div className="relative group border rounded-md p-2 bg-muted/30 aspect-2/1 flex items-center justify-center">
                 <img
                   src={logo.src}
                   alt={logo.alt}
@@ -37,19 +40,19 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
                 <Button
                   size="icon"
                   variant="destructive"
-                  className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                   onClick={removeLogo}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
-              <div className="border-2 border-dashed rounded-lg p-4 bg-muted/30 aspect-2/1 flex items-center justify-center text-muted-foreground text-sm">
-                No Logo
+              <div className="border border-dashed rounded-md p-2 bg-muted/30 aspect-2/1 flex items-center justify-center text-muted-foreground text-xs">
+                No logo
               </div>
             )}
           </div>
-          <div className="md:col-span-2 space-y-4">
+          <div className="space-y-3">
             <MediaManager
               capability="image"
               onSelect={handleLogoSelect}

@@ -26,21 +26,16 @@ export interface NavigationBuilderProps {
   getStorefrontPath: (path: string) => string;
 }
 
-export const MAX_NAV_DEPTH = 10;
+// Public desktop/mobile menus are intentionally capped at three visible levels.
+// Deeper trees are difficult to scan, operate by keyboard, and render on mobile.
+export const MAX_NAV_DEPTH = 3;
 
 // Helper to get depth indicator color based on level
 export function getDepthColor(depth: number): string {
   const colors = [
-    "border-l-blue-500",
-    "border-l-green-500",
-    "border-l-purple-500",
-    "border-l-orange-500",
-    "border-l-pink-500",
-    "border-l-cyan-500",
-    "border-l-yellow-500",
-    "border-l-red-500",
-    "border-l-indigo-500",
-    "border-l-teal-500",
+    "border-l-foreground/50",
+    "border-l-muted-foreground/40",
+    "border-l-muted-foreground/20",
   ];
   return colors[depth % colors.length];
 }

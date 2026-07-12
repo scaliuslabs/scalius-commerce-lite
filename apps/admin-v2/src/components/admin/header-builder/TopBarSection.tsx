@@ -19,13 +19,12 @@ interface TopBarSectionProps {
 export function TopBarSection({ topBar, onChange }: TopBarSectionProps) {
   return (
     <Card className="border border-border shadow-sm">
-      <CardHeader>
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Announcement Bar</CardTitle>
+            <CardTitle className="text-base">Announcement bar</CardTitle>
             <CardDescription>
-              Display a promotional message or announcement at the very top of
-              your site.
+              One short message above the storefront header.
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
@@ -42,14 +41,14 @@ export function TopBarSection({ topBar, onChange }: TopBarSectionProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <Label htmlFor="announcement-text">Announcement Text</Label>
+      <CardContent className="space-y-2 px-4 pb-4">
+        <Label htmlFor="announcement-text">Message</Label>
         <Input
           id="announcement-text"
           value={topBar.text}
           onChange={(e) => onChange({ ...topBar, text: e.target.value })}
-          placeholder="E.g., Free shipping on orders over $50!"
-          className="max-w-2xl"
+          placeholder="Free delivery in Dhaka on orders over ৳2,000"
+          className="max-w-2xl h-9"
           disabled={!topBar.isEnabled}
         />
         {!topBar.isEnabled && topBar.text && (

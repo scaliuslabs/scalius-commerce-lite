@@ -45,7 +45,7 @@ export const defaultFooterConfig: FooterConfig = {
   },
   tagline: "",
   description: "",
-  copyrightText: `© ${new Date().getFullYear()} Your Company Name. All Rights Reserved.`,
+  copyrightText: "Your store",
   menus: [],
   social: [],
 };

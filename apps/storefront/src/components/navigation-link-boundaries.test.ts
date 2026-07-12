@@ -19,4 +19,13 @@ describe("storefront navigation link boundaries", () => {
       expect(source).toContain(".href ? (");
     }
   });
+
+  it("renders copyright once without persisting presentation settings in browser storage", () => {
+    const footer = component("./Footer.astro");
+
+    expect(footer).toContain("© {new Date().getFullYear()}");
+    expect(footer).toContain("All rights reserved.");
+    expect(footer).not.toContain('localStorage.setItem("siteSettings"');
+    expect(footer).not.toContain("© {new Date().getFullYear()}\n");
+  });
 });
