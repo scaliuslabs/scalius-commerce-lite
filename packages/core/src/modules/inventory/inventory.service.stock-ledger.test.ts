@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inventoryMovements, productVariants } from "@scalius/database/schema";
-import { adjustInventory } from "./inventory.service";
+import { adjustInventory, getInventoryOverview } from "./inventory.service";
 import { checkAndAlertLowStock } from "./alerts";
 
 vi.mock("./alerts", () => ({
@@ -87,7 +87,7 @@ describe("adjustInventory stock ledger", () => {
     const result = await adjustInventory(
       db as never,
       "variant_1",
-      { delta: -3, reason: "damaged", notes: "warehouse count" },
+      { delta: -3, reason: "damage", notes: "warehouse count" },
       "admin_1",
     );
 
@@ -127,5 +127,53 @@ describe("adjustInventory stock ledger", () => {
 
     expect(result).toMatchObject({ previousStock: 2, newStock: 10, delta: 8 });
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
+  });
+
+  it.each([
+    [{ delta: 1.5, reason: "correction" }, /whole number|integer/i],
+    [{ delta: 0, reason: "correction" }, /must not be zero/i],
+    [{ delta: -1, reason: "received" }, /require a positive adjustment/i],
+    [{ delta: 1, reason: "damage" }, /require a negative adjustment/i],
+  ] as const)("rejects invalid manual adjustment semantics before reading stock", async (payload, message) => {
+    const select = vi.fn();
+    const db = { select };
+
+    await expect(
+      adjustInventory(db as never, "variant_1", payload),
+    ).rejects.toThrow(message);
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("rejects manual adjustment overdrafts without writing a smaller movement", async () => {
+    const { db, batchCalls } = createInventoryAdjustmentDbMock({
+      id: "variant_1",
+      stock: 2,
+      preorderStock: 0,
+      stockVersion: 4,
+    });
+
+    await expect(
+      adjustInventory(db as never, "variant_1", { delta: -3, reason: "damage" }),
+    ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
+    expect(batchCalls).toHaveLength(0);
+  });
+});
+
+describe("inventory overview query boundaries", () => {
+  it.each([
+    [{ section: "unknown", search: "", status: "all", page: 1, limit: 50 }, /section/],
+    [{ section: "variants", search: "", status: "unknown", page: 1, limit: 50 }, /status/],
+    [{ section: "variants", search: "", status: "all", page: 0, limit: 50 }, /page/],
+    [{ section: "variants", search: "", status: "all", page: 1, limit: 101 }, /page size/],
+    [{ section: "movements", search: "", status: "all", page: 1, limit: 50, movementType: "unknown" }, /movement type/],
+    [{ section: "variants", search: "", status: "all", page: 1, limit: 50, sort: "unknown" }, /sort/],
+    [{ section: "variants", search: "", status: "all", page: 1, limit: 50, order: "sideways" }, /sort order/],
+  ] as const)("rejects invalid list input before database work", async (params, message) => {
+    const select = vi.fn();
+
+    await expect(
+      getInventoryOverview({ select } as never, params),
+    ).rejects.toThrow(message);
+    expect(select).not.toHaveBeenCalled();
   });
 });

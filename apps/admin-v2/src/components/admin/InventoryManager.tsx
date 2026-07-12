@@ -46,6 +46,7 @@ import { StatCard } from "@/components/admin/shared/StatCard";
 import { inventoryQueryOptions } from "@/lib/api-query-options/inventory";
 import {
   adjustInventory,
+  stockSet,
   type InventoryMovement,
   type InventoryLedgerHealth,
   type InventoryPagination,
@@ -62,6 +63,8 @@ type Tab = "variants" | "movements";
 type StockFilter = "all" | "low" | "out" | "reserved";
 type SortField = "productName" | "sku" | "available";
 type SortOrder = "asc" | "desc";
+type MovementTypeFilter = "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
+type AdjustmentMode = "relative" | "stocktake";
 
 // ---------- Helper Functions ----------
 
@@ -169,6 +172,8 @@ export function InventoryManager() {
   const [requestedLimit, setRequestedLimit] = useState(50);
   const [movementsRequestedPage, setMovementsRequestedPage] = useState(1);
   const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
+  const [movementLocalSearch, setMovementLocalSearch] = useState("");
+  const [movementType, setMovementType] = useState<MovementTypeFilter>("all");
   const [localSearch, setLocalSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({ field: "available", order: "asc" });
@@ -176,6 +181,7 @@ export function InventoryManager() {
 
   const queryClient = useQueryClient();
   const search = useDebounce(localSearch, 300);
+  const movementSearch = useDebounce(movementLocalSearch, 300);
 
   // TanStack Query — variants
   const variantsQuery = useQuery({
@@ -196,6 +202,8 @@ export function InventoryManager() {
   const movementsQuery = useQuery({
     ...inventoryQueryOptions({
       section: "movements",
+      search: movementSearch || undefined,
+      movementType,
       page: movementsRequestedPage,
       limit: movementsRequestedLimit,
     }),
@@ -241,9 +249,11 @@ export function InventoryManager() {
   const clearFilters = useCallback(() => {
     setLocalSearch("");
     setStockFilter("all");
+    setRequestedPage(1);
   }, []);
 
   const handleSort = useCallback((field: SortField) => {
+    setRequestedPage(1);
     setSort(prev => ({
       field,
       order: prev.field === field && prev.order === "asc" ? "desc" : "asc"
@@ -251,6 +261,7 @@ export function InventoryManager() {
   }, []);
 
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
+  const hasMovementFilters = movementLocalSearch.trim() || movementType !== "all";
 
   return (
     <Card className="border-none shadow-none bg-transparent sm:bg-card">
@@ -322,6 +333,7 @@ export function InventoryManager() {
             id="inventory-variants-panel"
             role="tabpanel"
             aria-labelledby="inventory-variants-tab"
+            aria-busy={variantsQuery.isFetching}
             className="p-2 sm:p-3 space-y-2"
           >
             {/* Toolbar */}
@@ -332,12 +344,19 @@ export function InventoryManager() {
                   <Input
                     type="search"
                     placeholder="Search name or SKU..."
+                    aria-label="Search inventory by product name or SKU"
                     value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
+                    onChange={(e) => {
+                      setLocalSearch(e.target.value);
+                      setRequestedPage(1);
+                    }}
                     className="pl-7 h-7 w-full text-xs"
                   />
                 </div>
-                <Select value={stockFilter} onValueChange={(v: StockFilter) => setStockFilter(v)}>
+                <Select value={stockFilter} onValueChange={(v: StockFilter) => {
+                  setStockFilter(v);
+                  setRequestedPage(1);
+                }}>
                   <SelectTrigger className="h-7 w-[130px] text-xs">
                     <SelectValue placeholder="Status: All" />
                   </SelectTrigger>
@@ -359,7 +378,7 @@ export function InventoryManager() {
             {/* Table */}
             <div className="border rounded-md overflow-hidden relative">
               {loading && variants.length > 0 && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
+                <div aria-hidden="true" className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
               )}
               <Table>
                 <TableHeader>
@@ -476,8 +495,58 @@ export function InventoryManager() {
             id="inventory-movements-panel"
             role="tabpanel"
             aria-labelledby="inventory-movements-tab"
-            className="p-2 sm:p-3"
+            aria-busy={movementsQuery.isFetching}
+            className="p-2 sm:p-3 space-y-2"
           >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative flex-1 sm:max-w-xs">
+                <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="search"
+                  aria-label="Search movements by product, SKU, or order"
+                  placeholder="Search product, SKU, or order..."
+                  value={movementLocalSearch}
+                  onChange={(event) => {
+                    setMovementLocalSearch(event.target.value);
+                    setMovementsRequestedPage(1);
+                  }}
+                  className="h-7 pl-7 text-xs"
+                />
+              </div>
+              <Select value={movementType} onValueChange={(value: MovementTypeFilter) => {
+                setMovementType(value);
+                setMovementsRequestedPage(1);
+              }}>
+                <SelectTrigger className="h-7 w-[145px] text-xs" aria-label="Filter movement type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All movements</SelectItem>
+                  <SelectItem value="adjusted">Adjusted</SelectItem>
+                  <SelectItem value="reserved">Reserved</SelectItem>
+                  <SelectItem value="deducted">Deducted</SelectItem>
+                  <SelectItem value="released">Released</SelectItem>
+                  <SelectItem value="restored">Restored</SelectItem>
+                  <SelectItem value="preorder_reserved">Preorder reserved</SelectItem>
+                  <SelectItem value="preorder_deducted">Preorder deducted</SelectItem>
+                </SelectContent>
+              </Select>
+              {hasMovementFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                  onClick={() => {
+                    setMovementLocalSearch("");
+                    setMovementType("all");
+                    setMovementsRequestedPage(1);
+                  }}
+                >
+                  <X className="mr-1 h-3.5 w-3.5" /> Clear
+                </Button>
+              ) : null}
+            </div>
             {ledgerHealth ? (
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                 <span>{ledgerHealth.v2Rows} verified v2 movements across {ledgerHealth.v2Variants} SKUs</span>
@@ -489,7 +558,7 @@ export function InventoryManager() {
             ) : null}
             <div className="border rounded-md overflow-hidden relative">
               {loading && movements.length > 0 && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
+                <div aria-hidden="true" className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
               )}
               <Table>
                 <TableHeader>
@@ -540,6 +609,14 @@ export function InventoryManager() {
                           <TableCell className="py-2 text-xs">
                             <div className="font-medium text-foreground">{m.variantSku || m.variantId.slice(0, 8)}</div>
                             <div className="text-muted-foreground truncate max-w-[200px]">{m.productName}</div>
+                            {m.orderId ? (
+                              <Link
+                                to={`/admin/orders/${m.orderId}` as string}
+                                className="text-[10px] text-primary hover:underline"
+                              >
+                                Order {m.orderId.slice(0, 8)}
+                              </Link>
+                            ) : null}
                           </TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
                             {m.notes || "\u2014"}
@@ -616,28 +693,79 @@ function PaginationControls({
 }
 
 function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVariant | null; onClose: () => void; onSubmit: () => void }) {
-  const [delta, setDelta] = useState(0);
+  const [mode, setMode] = useState<AdjustmentMode>("relative");
+  const [deltaInput, setDeltaInput] = useState("0");
+  const [countInput, setCountInput] = useState("0");
   const [reason, setReason] =
     useState<InventoryAdjustmentReason>("received");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const delta = Number(deltaInput);
+  const countedStock = Number(countInput);
+  const relativeInputValid = deltaInput.trim() !== "" && Number.isSafeInteger(delta) && delta !== 0;
+  const stocktakeInputValid = countInput.trim() !== "" && Number.isSafeInteger(countedStock) && countedStock >= 0;
+  const targetStock = variant
+    ? mode === "stocktake" ? countedStock : variant.stock + delta
+    : 0;
+  const targetIsValid = mode === "stocktake"
+    ? stocktakeInputValid
+    : relativeInputValid && Number.isSafeInteger(targetStock) && targetStock >= 0;
+  const effectiveDelta = variant ? targetStock - variant.stock : 0;
+  const canSubmit = Boolean(
+    variant &&
+    !submitting &&
+    targetIsValid &&
+    effectiveDelta !== 0 &&
+    (mode === "relative" ? relativeInputValid : stocktakeInputValid),
+  );
+
+  const resetForm = () => {
+    setMode("relative");
+    setDeltaInput("0");
+    setCountInput("0");
+    setReason("received");
+    setNotes("");
+  };
+
+  const updateRelativeDelta = (nextValue: string) => {
+    setDeltaInput(nextValue);
+    const nextDelta = Number(nextValue);
+    if (nextDelta < 0 && (reason === "received" || reason === "return")) {
+      setReason("damage");
+    } else if (nextDelta > 0 && (reason === "damage" || reason === "theft")) {
+      setReason("received");
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!variant || delta === 0) return;
+    if (!variant || !canSubmit) return;
     setSubmitting(true);
     try {
-      await adjustInventory({
-        data: { variantId: variant.id, delta, reason, ...(notes ? { notes } : {}) },
-      });
+      if (mode === "stocktake") {
+        await stockSet({
+          data: {
+            variantId: variant.id,
+            newStock: countedStock,
+            reason: notes.trim() || "Manual stocktake",
+          },
+        });
+      } else {
+        await adjustInventory({
+          data: {
+            variantId: variant.id,
+            delta,
+            reason,
+            ...(notes.trim() ? { notes: notes.trim() } : {}),
+          },
+        });
+      }
       onSubmit();
       onClose();
-      // Reset form state for next open
-      setDelta(0);
-      setReason("received");
-      setNotes("");
+      resetForm();
     } catch (error) {
       console.error("Failed to adjust stock:", error);
-      toast.error("Failed to adjust stock");
+      toast.error(error instanceof Error ? error.message : "Failed to adjust stock");
     } finally {
       setSubmitting(false);
     }
@@ -647,14 +775,24 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose();
-      setDelta(0);
-      setReason("received");
-      setNotes("");
+      resetForm();
     }
   };
 
-  const newStock = variant ? Math.max(0, variant.stock + delta) : 0;
-  const newAvailable = variant ? Math.max(0, newStock - variant.reservedStock) : 0;
+  const newAvailable = variant ? targetStock - variant.reservedStock : 0;
+  const reasonOptions = delta < 0
+    ? [
+      ["damage", "Damaged / write-off"],
+      ["theft", "Theft / shrinkage"],
+      ["correction", "Count correction"],
+      ["other", "Other"],
+    ] as const
+    : [
+      ["received", "Stock received"],
+      ["return", "Customer return"],
+      ["correction", "Count correction"],
+      ["other", "Other"],
+    ] as const;
 
   return (
     <Dialog open={!!variant} onOpenChange={handleOpenChange}>
@@ -688,21 +826,98 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-amount" className="text-xs font-medium text-foreground">Adjustment Amount</label>
-              <div className="flex items-center gap-2">
-                <Button type="button" aria-label="Decrease adjustment by one" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d - 1)}><Minus className="h-3.5 w-3.5" /></Button>
-                <Input id="inventory-adjustment-amount" type="number" step={1} value={delta} onChange={(e) => setDelta(parseInt(e.target.value, 10) || 0)} className="text-center font-bold h-8" />
-                <Button type="button" aria-label="Increase adjustment by one" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setDelta(d => d + 1)}><Plus className="h-3.5 w-3.5" /></Button>
-              </div>
-              {delta !== 0 && (
-                <p className="text-[11px] text-muted-foreground text-center mt-1">
-                  New on hand: <span className="font-medium">{newStock}</span> {"\u2192"}{" "}
-                  Available: <span className={cn("font-medium", newAvailable <= 0 ? "text-red-500" : "text-emerald-600")}>{newAvailable}</span>
-                </p>
-              )}
+              <label htmlFor="inventory-adjustment-mode" className="text-xs font-medium text-foreground">Operation</label>
+              <Select
+                value={mode}
+                onValueChange={(value: AdjustmentMode) => {
+                  setMode(value);
+                  if (value === "stocktake" && variant) {
+                    setCountInput(String(variant.stock));
+                  }
+                }}
+              >
+                <SelectTrigger id="inventory-adjustment-mode" className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="relative">Add or remove stock</SelectItem>
+                  <SelectItem value="stocktake">Set counted stock</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {mode === "stocktake"
+                  ? "Use the physical count. The audit log records the calculated difference."
+                  : "Enter the exact quantity received or removed."}
+              </p>
             </div>
 
             <div className="space-y-1.5">
+              <label htmlFor="inventory-adjustment-amount" className="text-xs font-medium text-foreground">
+                {mode === "stocktake" ? "Counted on hand" : "Adjustment amount"}
+              </label>
+              {mode === "stocktake" ? (
+                <Input
+                  id="inventory-adjustment-amount"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={countInput}
+                  onChange={(event) => setCountInput(event.target.value)}
+                  className="h-8 text-center font-bold"
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    aria-label="Decrease adjustment by one"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) - 1))}
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                  <Input
+                    id="inventory-adjustment-amount"
+                    type="number"
+                    step={1}
+                    inputMode="numeric"
+                    value={deltaInput}
+                    onChange={(event) => updateRelativeDelta(event.target.value)}
+                    className="h-8 text-center font-bold"
+                  />
+                  <Button
+                    type="button"
+                    aria-label="Increase adjustment by one"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => updateRelativeDelta(String((Number.isSafeInteger(delta) ? delta : 0) + 1))}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+              {effectiveDelta !== 0 && targetIsValid ? (
+                <p className="text-[11px] text-muted-foreground text-center mt-1">
+                  New on hand: <span className="font-medium">{targetStock}</span> {"\u2192"}{" "}
+                  Available: <span className={cn("font-medium", newAvailable <= 0 ? "text-red-500" : "text-emerald-600")}>{newAvailable}</span>
+                </p>
+              ) : null}
+              {!targetIsValid ? (
+                <p role="alert" className="text-[11px] font-medium text-destructive">
+                  Stock cannot be negative or fractional. Enter the exact whole-number operation.
+                </p>
+              ) : null}
+              {targetIsValid && newAvailable < 0 ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  This count leaves an availability deficit of {Math.abs(newAvailable)} against existing reservations.
+                </p>
+              ) : null}
+            </div>
+
+            {mode === "relative" ? <div className="space-y-1.5">
               <label htmlFor="inventory-adjustment-reason" className="text-xs font-medium text-foreground">Reason</label>
               <Select
                 value={reason}
@@ -714,27 +929,30 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
-                  <SelectItem value="received">Stock Received</SelectItem>
-                  <SelectItem value="correction">Count Correction</SelectItem>
-                  <SelectItem value="return">Customer Return</SelectItem>
-                  <SelectItem value="damage">Damaged / Write-off</SelectItem>
-                  <SelectItem value="theft">Theft / Shrinkage</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  {reasonOptions.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
+            </div> : null}
 
             <div className="space-y-1.5">
-              <label htmlFor="inventory-adjustment-notes" className="text-xs font-medium text-foreground">Notes (optional)</label>
-              <Input id="inventory-adjustment-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
+              <label htmlFor="inventory-adjustment-notes" className="text-xs font-medium text-foreground">
+                {mode === "stocktake" ? "Stocktake note" : "Notes (optional)"}
+              </label>
+              <Input id="inventory-adjustment-notes" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add context for audit log..." className="h-8 text-xs" />
             </div>
           </div>
         )}
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => handleOpenChange(false)} className="h-7 text-xs">Cancel</Button>
-          <Button size="sm" onClick={handleSubmit} disabled={delta === 0 || submitting} className="h-7 text-xs">
-            {submitting ? "Applying..." : `Apply ${delta > 0 ? "+" : ""}${delta}`}
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit} className="h-7 text-xs">
+            {submitting
+              ? "Applying..."
+              : mode === "stocktake"
+                ? `Set to ${stocktakeInputValid ? countedStock : "—"}`
+                : `Apply ${relativeInputValid && delta > 0 ? "+" : ""}${relativeInputValid ? delta : "—"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

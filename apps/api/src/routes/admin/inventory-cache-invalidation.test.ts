@@ -23,10 +23,17 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     setStock: mocks.setStock,
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
     adjustInventorySchema: z.object({
-      delta: z.number(),
+      delta: z.number().int().refine((value) => value !== 0),
       reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
       notes: z.string().optional(),
       pool: z.enum(["stock", "preorderStock"]).optional().default("stock"),
+    }).superRefine((value, context) => {
+      if ((value.reason === "received" || value.reason === "return") && value.delta < 0) {
+        context.addIssue({ code: "custom", path: ["reason"], message: "positive adjustment required" });
+      }
+      if ((value.reason === "damage" || value.reason === "theft") && value.delta > 0) {
+        context.addIssue({ code: "custom", path: ["reason"], message: "negative adjustment required" });
+      }
     }),
   };
 });
@@ -68,6 +75,10 @@ function createTestApp() {
     previousStock: 5,
     newStock: 10,
     delta: 5,
+  });
+  mocks.getInventoryOverview.mockResolvedValue({
+    movements: [],
+    pagination: { page: 2, limit: 20, total: 0, totalPages: 0 },
   });
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
 
@@ -153,5 +164,55 @@ describe("admin inventory cache invalidation", () => {
     expect(response.status).toBe(404);
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
     expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["/var_1/adjust", { delta: -2, reason: "received" }, () => mocks.adjustInventory],
+    ["/stock-adjust", { variantId: "var_1", adjustment: 1.5 }, () => mocks.adjustStock],
+    ["/stock-set", { variantId: "var_1", newStock: 1.5 }, () => mocks.setStock],
+  ] as const)("rejects invalid stock semantics before calling the core write at %s", async (path, body, coreCall) => {
+    const { app, env } = createTestApp();
+
+    const response = await postJson(app, env, path, body);
+
+    expect(response.status).toBe(400);
+    expect(coreCall()).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+  });
+
+  it("forwards bounded movement filters and pagination to the inventory service", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/admin/inventory?section=movements&search=SKU-1&movementType=deducted&page=2&limit=20",
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getInventoryOverview).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "db" }),
+      expect.objectContaining({
+        section: "movements",
+        search: "SKU-1",
+        movementType: "deducted",
+        page: 2,
+        limit: 20,
+      }),
+    );
+  });
+
+  it.each([
+    "?page=0",
+    "?limit=0",
+    "?status=unknown",
+    "?movementType=unknown",
+  ])("rejects an invalid overview query before database work: %s", async (query) => {
+    const { app, env } = createTestApp();
+
+    const response = await app.request(`/api/v1/admin/inventory${query}`, undefined, env);
+
+    expect(response.status).toBe(400);
+    expect(mocks.getInventoryOverview).not.toHaveBeenCalled();
   });
 });

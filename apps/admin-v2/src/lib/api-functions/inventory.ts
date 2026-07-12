@@ -98,6 +98,7 @@ export interface InventoryQueryInput {
   section?: string;
   status?: string;
   alertStatus?: string;
+  movementType?: "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
   sort?: "productName" | "sku" | "available" | string;
   order?: "asc" | "desc" | string;
 }
@@ -146,6 +147,7 @@ function toQueryParams(data: InventoryQueryInput): Record<string, string> {
   if (data.status) params.status = data.status;
   else if (data.lowStock) params.status = "low";
   if (data.alertStatus) params.alertStatus = data.alertStatus;
+  if (data.movementType) params.movementType = data.movementType;
   if (data.sort) params.sort = data.sort;
   if (data.order) params.order = data.order;
   return params;

@@ -26,5 +26,23 @@ describe("InventoryManager boundaries", () => {
     expect(source).toContain('htmlFor="inventory-adjustment-amount"');
     expect(source).toContain('aria-label="Decrease adjustment by one"');
     expect(source).toContain('aria-label="Increase adjustment by one"');
+    expect(source).toContain("aria-busy={variantsQuery.isFetching}");
+    expect(source).toContain("aria-busy={movementsQuery.isFetching}");
+  });
+
+  it("keeps adjustments exact and exposes an explicit stocktake workflow", () => {
+    expect(source).toContain('value="stocktake"');
+    expect(source).toContain("await stockSet");
+    expect(source).toContain('countInput.trim() !== ""');
+    expect(source).toContain("targetStock - variant.reservedStock");
+    expect(source).not.toContain("Math.max(0, variant.stock + delta)");
+    expect(source).not.toContain("Math.max(0, newStock - variant.reservedStock)");
+  });
+
+  it("supports server-backed movement search, type filtering, and order navigation", () => {
+    expect(source).toContain("movementSearch");
+    expect(source).toContain("movementType");
+    expect(source).toContain("Search movements by product, SKU, or order");
+    expect(source).toContain("`/admin/orders/${m.orderId}`");
   });
 });
