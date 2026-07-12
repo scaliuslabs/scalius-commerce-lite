@@ -36,21 +36,29 @@ export const productSummarySchema = z
     updatedAt: timestampSchema,
     category: z.object({ name: z.string() }),
     variantCount: z.number(),
-    imageCount: z.number(),
+    mediaCount: z.number(),
     primaryImage: z.string().nullable(),
     sku: z.string().optional(),
   })
 
-/** Product image. */
-export const productImageSchema = z
+/** Ordered image/video association returned by product detail. */
+export const productMediaSchema = z
   .object({
     id: z.string(),
-    productId: z.string(),
+    mediaId: z.string(),
+    kind: z.enum(["image", "video"]),
     url: z.string(),
-    alt: z.string().nullable(),
+    posterMediaId: z.string().nullable(),
+    posterUrl: z.string().nullable(),
+    altText: z.string(),
+    contextualAltText: z.string().nullable().optional(),
+    caption: z.string().nullable(),
+    width: z.number().int().positive().nullable(),
+    height: z.number().int().positive().nullable(),
+    durationMs: z.number().int().nonnegative().nullable(),
     isPrimary: z.boolean(),
-    sortOrder: z.number(),
-    createdAt: timestampSchema,
+    sortOrder: z.number().int().nonnegative(),
+    status: z.enum(["ready", "trashed"]),
   })
 
 /** Product variant — returned by variant CRUD endpoints. */
@@ -158,7 +166,7 @@ export const productDetailSchema = z
     deletedAt: nullableTimestampSchema,
     category: z.object({ name: z.string().nullable() }).nullable(),
     variants: z.array(productVariantSchema),
-    images: z.array(productImageSchema),
+    media: z.array(productMediaSchema),
     additionalInfo: z.array(productRichContentSchema),
     attributes: z.array(productAttributeValueSchema),
   })

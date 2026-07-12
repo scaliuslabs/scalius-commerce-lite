@@ -43,7 +43,7 @@ export interface ProductListItemDto {
   updatedAt: Timestamp;
   category: { name: string };
   variantCount: number;
-  imageCount: number;
+  mediaCount: number;
   primaryImage: string | null;
   sku?: string;
 }
@@ -77,12 +77,11 @@ export interface ProductStatsPayload {
   categoriesCount: number;
 }
 
-export interface ProductImageInput {
+export interface ProductMediaInput {
   id: string;
-  url: string;
-  filename: string;
-  size: number;
-  createdAt: string;
+  mediaId: string;
+  altText: string | null;
+  isPrimary: boolean;
 }
 
 export interface ProductAttributeInput {
@@ -115,7 +114,7 @@ export interface ProductWriteInput {
   excludeFromProductFeed: boolean;
   productCondition: ProductCondition;
   slug: string;
-  images: ProductImageInput[];
+  media: ProductMediaInput[];
   attributes: ProductAttributeInput[];
   additionalInfo: ProductAdditionalInfoInput[];
   optionMatrix?: Omit<ProductOptionMatrixInput, "expectedAggregateRevision">;
@@ -125,6 +124,7 @@ export type CreateProductInput = ProductWriteInput;
 export type UpdateProductInput = {
   id: string;
   expectedAggregateRevision: number;
+  acknowledgedSkuImageRemovalIds?: string[];
 } & ProductWriteInput;
 
 export interface ProductAggregateRevisionResult {
@@ -150,14 +150,22 @@ export interface ProductIdPayload extends ProductAggregateRevisionResult {
   id: string;
 }
 
-export interface ProductImageDto {
+export interface ProductMediaDto {
   id: string;
-  productId: string;
+  mediaId: string;
+  kind: "image" | "video";
   url: string;
-  alt: string | null;
+  posterMediaId: string | null;
+  posterUrl: string | null;
+  altText: string;
+  contextualAltText?: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
   isPrimary: boolean;
   sortOrder: number;
-  createdAt: Timestamp;
+  status: "ready" | "trashed";
 }
 
 export interface ProductVariantDto {
@@ -244,7 +252,7 @@ export interface ProductDetailDto {
   deletedAt: NullableTimestamp;
   category: { name: string | null } | null;
   variants: ProductVariantDto[];
-  images: ProductImageDto[];
+  media: ProductMediaDto[];
   additionalInfo: ProductAdditionalInfoInput[];
   attributes: ProductAttributeInput[];
 }

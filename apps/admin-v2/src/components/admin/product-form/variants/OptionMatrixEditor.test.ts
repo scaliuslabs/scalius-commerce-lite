@@ -207,6 +207,7 @@ describe("option matrix editor model", () => {
     rows[1]!.barcode = "456";
     rows[0]!.imageId = "missing";
     expect(getOptionMatrixIssue(options, rows, [], false)).toContain("no longer in this product");
+    expect(getOptionMatrixIssue(options, rows, [], false, new Map(), 0, 0, true)).toBeNull();
 
     rows[0]!.imageId = null;
     rows[0]!.discountType = "flat";
@@ -242,14 +243,18 @@ describe("option matrix editor density and stock disclosure", () => {
     expect(editorSource).not.toContain("committed ·");
   });
 
-  it("uses exact selected-SKU assignments and an explicit primary fallback", () => {
-    expect(editorSource).toContain("Product primary (fallback)");
-    expect(editorSource).toContain("Using product primary fallback");
-    expect(editorSource).toContain('title="Product primary fallback"');
-    expect(editorSource).toContain("effectiveImage");
-    expect(editorSource).toContain("selected ?? (usesPrimaryFallback ? primary : undefined)");
-    expect(editorSource).toContain("Clears this SKU's exact image");
+  it("uses exact selected-SKU assignments and an explicit automatic fallback", () => {
+    expect(editorSource).toContain("Automatic product image");
+    expect(editorSource).toContain("Using automatic product image");
+    expect(editorSource).toContain('title="Automatic product image"');
+    expect(editorSource).toContain("Uses the best product image available");
     expect(editorSource).not.toContain("variantImageAxis");
+  });
+
+  it("keeps retained trash images visible without allowing new assignments", () => {
+    expect(editorSource).toContain('image.status === "trashed" && value !== image.id');
+    expect(editorSource).toContain("disabled={unavailable}");
+    expect(editorSource).toContain("In trash · existing assignments remain");
   });
 
   it("stages bulk image assignment and clear through the shared Apply action", () => {
@@ -264,8 +269,8 @@ describe("option matrix editor density and stock disclosure", () => {
   });
 
   it("keeps empty media and image controls explicit and accessible", () => {
-    expect(editorSource).toContain("Add product media first. Fallback SKUs will use the primary image once one exists.");
-    expect(editorSource).toContain('aria-label="Use product primary image fallback"');
+    expect(editorSource).toContain("Add product media first. SKUs without an exact image use the automatic product image.");
+    expect(editorSource).toContain('aria-label="Use the automatic product image"');
     expect(editorSource).toContain("as the exact SKU image");
     expect(editorSource).toContain("No image change staged");
   });

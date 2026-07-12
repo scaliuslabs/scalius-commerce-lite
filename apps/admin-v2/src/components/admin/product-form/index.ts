@@ -23,7 +23,7 @@ export {
   productFormSchema,
   type ProductFormValues,
   type Category,
-  type ProductImage,
+  type ProductMediaItem,
 } from "./types";
 
 // Utils

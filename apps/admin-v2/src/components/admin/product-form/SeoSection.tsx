@@ -129,7 +129,7 @@ export const SeoSection = memo(function SeoSection({
   const metaTitle = form.watch("metaTitle");
   const metaDescription = form.watch("metaDescription");
   const isActive = form.watch("isActive");
-  const images = form.watch("images");
+  const media = form.watch("media");
   const noIndex = form.watch("noIndex");
   const excludeFromSitemap = form.watch("excludeFromSitemap");
   const excludeFromProductFeed = form.watch("excludeFromProductFeed");
@@ -143,7 +143,7 @@ export const SeoSection = memo(function SeoSection({
           slug,
           canonicalPath,
           isActive,
-          images,
+          media,
           noIndex,
           excludeFromSitemap,
           excludeFromProductFeed,
@@ -156,7 +156,7 @@ export const SeoSection = memo(function SeoSection({
       }),
     [
       discovery,
-      images,
+      media,
       isActive,
       canonicalPath,
       excludeFromProductFeed,

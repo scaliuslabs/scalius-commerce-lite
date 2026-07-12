@@ -25,7 +25,7 @@ export interface ProductListItem {
     name: string;
   };
   variantCount: number;
-  imageCount: number;
+  mediaCount: number;
   primaryImage: string | null;
   sku?: string;
 }

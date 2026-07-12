@@ -9,7 +9,9 @@ import { useNavigate } from "@tanstack/react-router";
 import { createProduct, updateProduct } from "~/lib/api-functions/products";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
+  readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
+  type ProductMediaSkuReferenceConflict,
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
 import type { ProductOptionMatrixInput } from "~/lib/api-functions/products";
@@ -35,6 +37,14 @@ interface UseProductSubmitReturn {
   alertMessage: string;
   setShowAlert: (show: boolean) => void;
   handleSubmit: (values: ProductFormValues) => Promise<boolean>;
+  mediaRemovalConflict: ProductMediaSkuReferenceConflict | null;
+  confirmMediaRemoval: () => Promise<boolean>;
+  cancelMediaRemoval: () => void;
+}
+
+interface ProductMutationVariables {
+  values: ProductFormValues;
+  acknowledgedSkuImageRemovalIds?: string[];
 }
 
 export function useProductSubmit({
@@ -55,9 +65,11 @@ export function useProductSubmit({
   const queryClient = useQueryClient();
   const [showAlert, setShowAlert] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
+  const [mediaRemovalConflict, setMediaRemovalConflict] = useState<ProductMediaSkuReferenceConflict | null>(null);
+  const [pendingValues, setPendingValues] = useState<ProductFormValues | null>(null);
 
   const mutation = useMutation({
-    mutationFn: async (values: ProductFormValues) => {
+    mutationFn: async ({ values, acknowledgedSkuImageRemovalIds }: ProductMutationVariables) => {
       const formattedValues = formatFormValuesForSubmission(values);
       if (isEdit) {
         const entityId = productId || values.id;
@@ -70,6 +82,7 @@ export function useProductSubmit({
             ...formattedValues,
             id: entityId,
             expectedAggregateRevision: aggregateRevision,
+            ...(acknowledgedSkuImageRemovalIds ? { acknowledgedSkuImageRemovalIds } : {}),
           },
         });
       }
@@ -80,7 +93,9 @@ export function useProductSubmit({
         },
       });
     },
-    onSuccess: (result, values) => {
+    onSuccess: (result, { values }) => {
+      setMediaRemovalConflict(null);
+      setPendingValues(null);
       toast.success("Success", {
         description: isEdit
           ? "Product updated successfully."
@@ -115,10 +130,18 @@ export function useProductSubmit({
         });
       }
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, { values }: ProductMutationVariables) => {
       const conflict = readProductRevisionConflict(error);
       if (conflict) {
+        setMediaRemovalConflict(null);
+        setPendingValues(null);
         onRevisionConflict?.(conflict);
+        return;
+      }
+      const mediaConflict = readProductMediaSkuReferenceConflict(error);
+      if (mediaConflict) {
+        setPendingValues(values);
+        setMediaRemovalConflict(mediaConflict);
         return;
       }
       const errorMessage = getServerFnError(error, "Failed to save product");
@@ -150,7 +173,7 @@ export function useProductSubmit({
       return false;
     }
     try {
-      await mutation.mutateAsync(values);
+      await mutation.mutateAsync({ values });
       return true;
     } catch {
       // React Query has already run the mutation's onError handler, so keep the
@@ -159,11 +182,32 @@ export function useProductSubmit({
     }
   };
 
+  const confirmMediaRemoval = async () => {
+    if (!pendingValues || !mediaRemovalConflict) return false;
+    try {
+      await mutation.mutateAsync({
+        values: pendingValues,
+        acknowledgedSkuImageRemovalIds: mediaRemovalConflict.affectedAssociationIds,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const cancelMediaRemoval = () => {
+    setMediaRemovalConflict(null);
+    setPendingValues(null);
+  };
+
   return {
     isSubmitting: mutation.isPending,
     showAlert,
     alertMessage,
     setShowAlert,
     handleSubmit,
+    mediaRemovalConflict,
+    confirmMediaRemoval,
+    cancelMediaRemoval,
   };
 }

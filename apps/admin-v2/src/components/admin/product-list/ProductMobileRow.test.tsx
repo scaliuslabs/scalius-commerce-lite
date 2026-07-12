@@ -54,7 +54,7 @@ describe("ProductMobileRow", () => {
           updatedAt: new Date("2026-07-12T00:00:00Z"),
           category: { name: "Lighting" },
           variantCount: 8,
-          imageCount: 1,
+          mediaCount: 1,
           primaryImage: null,
           sku: "LAMP-MATTE-EU",
         }}

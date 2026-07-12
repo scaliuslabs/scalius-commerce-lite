@@ -168,6 +168,22 @@ const productMutationConflictResponse = {
                 z.object({
                     success: z.literal(false),
                     error: z.object({
+                        code: z.literal("PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT"),
+                        message: z.string(),
+                        details: z.object({
+                            affectedCount: z.number().int().positive(),
+                            affectedAssociationIds: z.array(z.string()).max(20),
+                            affectedSkus: z.array(z.object({
+                                id: z.string(),
+                                sku: z.string(),
+                                imageId: z.string(),
+                            })).max(5),
+                        }),
+                    }),
+                }),
+                z.object({
+                    success: z.literal(false),
+                    error: z.object({
                         code: z.string(),
                         message: z.string(),
                         details: z.unknown().optional(),

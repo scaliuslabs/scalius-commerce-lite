@@ -187,6 +187,46 @@ describe("useProductSubmit", () => {
     });
   });
 
+  it("requires explicit SKU fallback acknowledgement before removing assigned media", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    mocks.serverMutation.mockRejectedValueOnce(
+      new AdminApiResponseError(
+        "Removed images are assigned to SKUs.",
+        409,
+        "PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT",
+        {
+          affectedCount: 2,
+          affectedAssociationIds: ["pmed_assigned_1"],
+          affectedSkus: [
+            { id: "var_white", sku: "TEA-WHITE", imageId: "pmed_assigned_1" },
+          ],
+        },
+      ),
+    );
+
+    await act(async () => {
+      await expect(requireResult(result).handleSubmit(productValues())).resolves.toBe(false);
+    });
+    expect(requireResult(result).mediaRemovalConflict).toMatchObject({ affectedCount: 2 });
+    expect(mocks.formReset).not.toHaveBeenCalled();
+    expect(mocks.toastError).not.toHaveBeenCalled();
+
+    mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
+    await act(async () => {
+      await expect(requireResult(result).confirmMediaRemoval()).resolves.toBe(true);
+    });
+
+    expect(mocks.serverMutation).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({
+        id: "prod_one",
+        expectedAggregateRevision: 4,
+        acknowledgedSkuImageRemovalIds: ["pmed_assigned_1"],
+      }),
+    });
+    expect(mocks.formReset).toHaveBeenCalledTimes(1);
+    expect(mocks.onAggregateRevisionChange).toHaveBeenCalledWith(5);
+  });
+
   it("blocks product creation while an option draft needs attention", async () => {
     renderHarness({ optionMatrixIssue: "Update combinations before saving." });
 
@@ -285,7 +325,7 @@ function productValues(): ProductFormValues {
     productCondition: "new",
     slug: "green-tea",
     slugEdited: false,
-    images: [],
+    media: [],
     attributes: [],
     additionalInfo: [],
   };

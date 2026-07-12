@@ -8,6 +8,7 @@ import { ProductActionBar } from "./product-form/ProductStickyHeader";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -33,7 +34,7 @@ import {
 import type { ProductSeoDiagnosticVariant } from "@/lib/product-seo-diagnostics";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import type { ProductOptionMatrixInput } from "@/lib/api-functions/products";
-import type { ProductImageDetail } from "@/types/api-responses";
+import type { ProductSkuImageChoice } from "@/types/api-responses";
 
 interface ProductFormProps {
   categories: Category[];
@@ -49,7 +50,7 @@ interface ProductFormProps {
   onOpenRevisionConflict?: () => void;
   onProductSaved?: (values: ProductFormValues, aggregateRevision: number) => void;
   optionManager?: React.ReactNode | ((context: {
-    images: ProductImageDetail[];
+    skuImages: ProductSkuImageChoice[];
     productName: string;
     productPrice: number;
   }) => React.ReactNode);
@@ -101,7 +102,7 @@ export function ProductForm({
       excludeFromProductFeed: false,
       productCondition: DEFAULT_PRODUCT_CONDITION,
       slug: "",
-      images: [],
+      media: [],
       slugEdited: false,
       attributes: [],
       additionalInfo: [],
@@ -110,7 +111,16 @@ export function ProductForm({
   });
 
   // Set up form submission handler
-  const { isSubmitting, showAlert, alertMessage, setShowAlert, handleSubmit } =
+  const {
+    isSubmitting,
+    showAlert,
+    alertMessage,
+    setShowAlert,
+    handleSubmit,
+    mediaRemovalConflict,
+    confirmMediaRemoval,
+    cancelMediaRemoval,
+  } =
     useProductSubmit({
       isEdit,
       productId: defaultValues?.id,
@@ -236,14 +246,16 @@ export function ProductForm({
               >
                 {typeof optionManager === "function"
                   ? optionManager({
-                      images: form.watch("images").map((image, sortOrder) => ({
-                        ...image,
-                        productId: defaultValues?.id ?? "draft",
-                        alt: image.filename,
-                        isPrimary: sortOrder === 0,
-                        sortOrder,
-                        createdAt: image.createdAt.toISOString(),
-                      })),
+                      skuImages: form.watch("media")
+                        .filter((item) => item.kind === "image")
+                        .map((item) => ({
+                          id: item.id,
+                          url: item.url,
+                          altText: item.effectiveAltText,
+                          isPrimary: item.isPrimary,
+                          sortOrder: item.sortOrder,
+                          status: item.status,
+                        })),
                       productName: form.watch("name"),
                       productPrice: form.watch("price"),
                     })
@@ -266,6 +278,45 @@ export function ProductForm({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogAction>OK</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog
+            open={mediaRemovalConflict !== null}
+            onOpenChange={(open) => { if (!open) cancelMediaRemoval(); }}
+          >
+            <AlertDialogContent aria-describedby="sku-media-removal-description">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove SKU images?</AlertDialogTitle>
+                <AlertDialogDescription id="sku-media-removal-description">
+                  {mediaRemovalConflict?.affectedCount ?? 0} active {mediaRemovalConflict?.affectedCount === 1 ? "SKU uses" : "SKUs use"} media being removed. Confirming clears only those exact assignments; each SKU will use its automatic product image.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              {mediaRemovalConflict?.affectedSkus.length ? (
+                <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border bg-muted/20 p-2 text-xs">
+                  {mediaRemovalConflict.affectedSkus.map((sku) => (
+                    <li key={sku.id} className="flex items-center justify-between gap-3">
+                      <span className="truncate font-medium">{sku.sku}</span>
+                      <span className="shrink-0 text-muted-foreground">Automatic product image</span>
+                    </li>
+                  ))}
+                  {mediaRemovalConflict.affectedCount > mediaRemovalConflict.affectedSkus.length ? (
+                    <li className="text-muted-foreground">+{mediaRemovalConflict.affectedCount - mediaRemovalConflict.affectedSkus.length} more</li>
+                  ) : null}
+                </ul>
+              ) : null}
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={cancelMediaRemoval}>Keep media</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={isSubmitting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void confirmMediaRemoval();
+                  }}
+                >
+                  {isSubmitting ? "Removing…" : "Remove media"}
+                </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

@@ -192,21 +192,33 @@ export interface ProductOptionDefinition {
   values: Array<{ id: string; value: string; position: number }>;
 }
 
-export interface ProductImageDetail {
+export interface ProductMediaDetail {
   id: string;
-  productId: string;
+  mediaId: string;
+  kind: "image" | "video";
   url: string;
-  alt: string | null;
-  altText?: string | null;
+  posterMediaId: string | null;
+  posterUrl: string | null;
+  altText: string;
+  contextualAltText?: string | null;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
   isPrimary: boolean;
   sortOrder: number;
-  createdAt: string | number;
+  status: "ready" | "trashed";
 }
+
+export type ProductSkuImageChoice = Pick<
+  ProductMediaDetail,
+  "id" | "url" | "altText" | "isPrimary" | "sortOrder" | "status"
+>;
 
 export interface ProductDetail extends Product {
   category: { name: string | null };
   variants: ProductVariant[];
-  images: ProductImageDetail[];
+  media: ProductMediaDetail[];
   options: ProductOptionDefinition[];
   attributes: Array<{ attributeId: string; value: string }>;
   additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
@@ -228,7 +240,7 @@ export interface ProductListItem {
   updatedAt: Date | string | number;
   category: { name: string };
   variantCount: number;
-  imageCount: number;
+  mediaCount: number;
   primaryImage: string | null;
   sku?: string;
 }

@@ -5,6 +5,7 @@ import { adminProductsRoutes } from "./products";
 
 type OperationDoc = {
     responses?: Record<string, unknown>;
+    requestBody?: unknown;
 };
 
 type TestOpenApiDocument = {
@@ -68,5 +69,29 @@ describe("admin product mutation OpenAPI responses", () => {
             "404",
             "409",
         ]);
+    });
+
+    it("documents the ordered mixed-media cutover and SKU removal acknowledgement", () => {
+        const spec = buildAdminProductsSpec();
+        const create = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.post);
+        const detail = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}"]?.get);
+        const update = JSON.stringify(spec.paths?.["/api/v1/admin/products/{id}"]?.put);
+
+        expect(create).toContain('"media"');
+        expect(create).toContain('"mediaId"');
+        expect(create).not.toContain('"images"');
+        expect(detail).toContain('"media"');
+        expect(detail).toContain('"posterUrl"');
+        expect(detail).not.toContain('"images"');
+        expect(update).toContain('"acknowledgedSkuImageRemovalIds"');
+        expect(update).toContain("PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT");
+        expect(update).toContain('"affectedSkus"');
+    });
+
+    it("uses mediaCount rather than the removed imageCount list field", () => {
+        const spec = buildAdminProductsSpec();
+        const list = JSON.stringify(spec.paths?.["/api/v1/admin/products"]?.get);
+        expect(list).toContain('"mediaCount"');
+        expect(list).not.toContain('"imageCount"');
     });
 });

@@ -10,7 +10,7 @@ describe("ProductView catalog truth boundaries", () => {
   it("does not render untracked simple SKUs as zero available stock", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
-    expect(source).toContain('import type { ProductDetail }');
+    expect(source).toContain('import type { ProductDetail, ProductMediaDetail }');
     expect(source).toContain("v.trackInventory !== false");
     expect(source).toContain("Product SKU");
     expect(source).not.toContain("Simple product SKU");
@@ -46,5 +46,15 @@ describe("ProductView catalog truth boundaries", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
     expect(source).toContain('product.category?.name || "Uncategorized"');
+  });
+
+  it("renders video in the media stage without sending video URLs through image optimization", () => {
+    const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
+
+    expect(source).toContain('item.kind === "image"');
+    expect(source).toContain("poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}");
+    expect(source).toContain('src={item.url}');
+    expect(source).toContain('preload="metadata"');
+    expect(source).not.toContain("getOptimizedImageUrl(item.url)}\n        aria-label");
   });
 });

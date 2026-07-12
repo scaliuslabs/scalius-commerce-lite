@@ -33,7 +33,7 @@ const defaultValues = {
   excludeFromProductFeed: false,
   productCondition: DEFAULT_PRODUCT_CONDITION,
   slug: "",
-  images: [],
+  media: [],
 };
 
 export const Route = createFileRoute("/admin/products/new")({
@@ -67,12 +67,12 @@ function NewProductPage() {
         optionMatrixDraft={optionMatrixDraft}
         optionMatrixIssue={optionMatrixIssue}
         optionMatrixDirty={optionMatrixDirty}
-        optionManager={({ images, productName, productPrice }) => (
+        optionManager={({ skuImages, productName, productPrice }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               productName={productName}
               productPrice={productPrice}
-              images={images}
+              images={skuImages}
               onDraftChange={setOptionMatrixDraft}
               onDraftIssueChange={setOptionMatrixIssue}
               onDirtyChange={setOptionMatrixDirty}
