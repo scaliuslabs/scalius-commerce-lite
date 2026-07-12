@@ -204,26 +204,46 @@ describe("stock adjustment ledger", () => {
     expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
   });
 
-  it("records the effective delta when a negative adjustment clamps at zero", async () => {
+  it("rejects an adjustment that would overdraw on-hand stock instead of clamping it", async () => {
     const { db, batchCalls } = createStockDbMock({
       id: "variant_1",
       stock: 2,
       stockVersion: 3,
     });
 
-    const result = await adjustStock(db as never, "variant_1", -5, "damaged", "admin_1");
+    await expect(
+      adjustStock(db as never, "variant_1", -5, "damaged", "admin_1"),
+    ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
 
-    expect(result).toMatchObject({
-      previousStock: 2,
-      newStock: 0,
-      delta: -2,
-    });
-    expect(batchCalls[0]?.[1]).toMatchObject({
-      kind: "update",
-      values: { stock: 0 },
-    });
-    expect(checkAndAlertLowStock).toHaveBeenCalledWith(db, "variant_1");
+    expect(batchCalls).toHaveLength(0);
+    expect(checkAndAlertLowStock).not.toHaveBeenCalled();
   });
+
+  it.each([0, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects an invalid relative adjustment before reading inventory: %s",
+    async (adjustment) => {
+      const select = vi.fn();
+      const db = { select };
+
+      await expect(
+        adjustStock(db as never, "variant_1", adjustment),
+      ).rejects.toThrow(/adjustment must/);
+      expect(select).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    "rejects an invalid absolute stocktake before reading inventory: %s",
+    async (newStock) => {
+      const select = vi.fn();
+      const db = { select };
+
+      await expect(
+        setStock(db as never, "variant_1", newStock),
+      ).rejects.toThrow(/newStock must/);
+      expect(select).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("scanner barcode identity lookup", () => {

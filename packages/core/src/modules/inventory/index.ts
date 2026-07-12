@@ -32,6 +32,8 @@ export {
   validateBackorderLimit,
   validateReservedStockConsistency,
   validatePositiveQuantity,
+  validateSignedStockAdjustment,
+  validateAbsoluteStockCount,
   calculateFinalPrice,
 } from "./validation";
 export type { StockOperationResult, ReservationEntry } from "./types";

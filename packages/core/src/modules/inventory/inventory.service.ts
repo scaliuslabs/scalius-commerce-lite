@@ -8,6 +8,24 @@ import { buildStockMovementClaim } from "./stock-movement-claims";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
+import { adjustInventorySchema } from "./inventory.validation";
+import { validateAbsoluteStockCount } from "./validation";
+
+const ALLOWED_INVENTORY_SECTIONS: ReadonlySet<string> = new Set(["variants", "movements", "alerts"]);
+const ALLOWED_INVENTORY_STATUSES: ReadonlySet<string> = new Set(["all", "low", "out", "reserved"]);
+const ALLOWED_ALERT_STATUSES: ReadonlySet<string> = new Set(["active", "acknowledged", "resolved", "all"]);
+const ALLOWED_INVENTORY_SORTS: ReadonlySet<string> = new Set(["productName", "sku", "available"]);
+const ALLOWED_SORT_ORDERS: ReadonlySet<string> = new Set(["asc", "desc"]);
+const ALLOWED_MOVEMENT_TYPES: ReadonlySet<string> = new Set([
+    "all",
+    "reserved",
+    "deducted",
+    "released",
+    "adjusted",
+    "restored",
+    "preorder_reserved",
+    "preorder_deducted",
+]);
 
 export async function getInventoryOverview(db: Database, params: {
     section: string;
@@ -16,11 +34,43 @@ export async function getInventoryOverview(db: Database, params: {
     page: number;
     limit: number;
     alertStatus?: string;
+    movementType?: string;
     sort?: string;
     order?: string;
 }) {
-    const { section, search, status, page, limit, alertStatus, sort, order } = params;
+    const { section, search, status, page, limit, alertStatus, movementType, sort, order } = params;
+
+    if (!ALLOWED_INVENTORY_SECTIONS.has(section)) {
+        throw new ValidationError("Invalid section parameter");
+    }
+    if (!ALLOWED_INVENTORY_STATUSES.has(status)) {
+        throw new ValidationError("Invalid inventory status parameter");
+    }
+    if (alertStatus && !ALLOWED_ALERT_STATUSES.has(alertStatus)) {
+        throw new ValidationError("Invalid alert status parameter");
+    }
+    if (movementType && !ALLOWED_MOVEMENT_TYPES.has(movementType)) {
+        throw new ValidationError("Invalid movement type parameter");
+    }
+    if (sort && !ALLOWED_INVENTORY_SORTS.has(sort)) {
+        throw new ValidationError("Invalid inventory sort parameter");
+    }
+    if (order && !ALLOWED_SORT_ORDERS.has(order)) {
+        throw new ValidationError("Invalid inventory sort order parameter");
+    }
+    if (!Number.isSafeInteger(page) || page < 1) {
+        throw new ValidationError("Inventory page must be a positive safe integer");
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        throw new ValidationError("Inventory page size must be between 1 and 100");
+    }
+    if (search.length > 120) {
+        throw new ValidationError("Inventory search must be at most 120 characters");
+    }
     const offset = (page - 1) * limit;
+    if (!Number.isSafeInteger(offset)) {
+        throw new ValidationError("Inventory page offset exceeds the safe integer range");
+    }
 
     if (section === "variants") {
         const conditions: (SQL | undefined)[] = [
@@ -70,7 +120,7 @@ export async function getInventoryOverview(db: Database, params: {
             .from(productVariants)
             .leftJoin(products, eq(products.id, productVariants.productId))
             .where(and(...conditions))
-            .orderBy(orderBy)
+            .orderBy(orderBy, asc(productVariants.id))
             .limit(limit)
             .offset(offset)
             .all();
@@ -119,7 +169,29 @@ export async function getInventoryOverview(db: Database, params: {
     }
 
     if (section === "movements") {
-        const countResult = await db.select({ count: sql<number>`count(*)` }).from(inventoryMovements).get();
+        const movementConditions: SQL[] = [];
+        if (movementType && movementType !== "all") {
+            movementConditions.push(eq(inventoryMovements.type, movementType));
+        }
+        if (search.trim()) {
+            const searchPattern = `%${search.trim()}%`;
+            movementConditions.push(or(
+                like(productVariants.sku, searchPattern),
+                like(products.name, searchPattern),
+                like(inventoryMovements.orderId, searchPattern),
+            )!);
+        }
+        const movementWhere = movementConditions.length > 0
+            ? and(...movementConditions)
+            : undefined;
+
+        const countResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(inventoryMovements)
+            .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
+            .leftJoin(products, eq(products.id, productVariants.productId))
+            .where(movementWhere)
+            .get();
         const ledgerHealth = await db.select({
             legacyRows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 1 THEN 1 ELSE 0 END), 0)`,
             v2Rows: sql<number>`COALESCE(SUM(CASE WHEN ${inventoryMovements.ledgerVersion} = 2 THEN 1 ELSE 0 END), 0)`,
@@ -172,7 +244,8 @@ export async function getInventoryOverview(db: Database, params: {
             .from(inventoryMovements)
             .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
             .leftJoin(products, eq(products.id, productVariants.productId))
-            .orderBy(desc(inventoryMovements.createdAt))
+            .where(movementWhere)
+            .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.id))
             .limit(limit)
             .offset(offset)
             .all();
@@ -236,8 +309,13 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
 }, adminUserId?: string) {
     const MAX_RETRIES = 3;
     const BASE_BACKOFF_MS = 50;
-    const pool = payload.pool ?? "stock";
-    const delta = Math.round(payload.delta);
+    const parsedPayload = adjustInventorySchema.safeParse(payload);
+    if (!parsedPayload.success) {
+        throw new ValidationError(
+            parsedPayload.error.issues[0]?.message ?? "Invalid stock adjustment",
+        );
+    }
+    const { pool, delta, reason, notes } = parsedPayload.data;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         const variant = await db
@@ -257,7 +335,8 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         }
 
         const previousStock = pool === "preorderStock" ? variant.preorderStock : variant.stock;
-        const newStock = Math.max(0, previousStock + delta);
+        const newStock = previousStock + delta;
+        validateAbsoluteStockCount(newStock, "resulting stock");
         const effectiveDelta = newStock - previousStock;
 
         if (effectiveDelta === 0) {
@@ -298,7 +377,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
                 preorderStock: pool === "preorderStock" ? newStock : variant.preorderStock,
                 stockVersion: variant.stockVersion + 1,
             },
-            notes: `Manual adjustment (${payload.reason})${payload.notes ? `: ${payload.notes}` : ""}`,
+            notes: `Manual adjustment (${reason})${notes ? `: ${notes}` : ""}`,
             adminUserId,
         });
 

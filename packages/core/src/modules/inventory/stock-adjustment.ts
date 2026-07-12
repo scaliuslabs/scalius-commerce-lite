@@ -15,6 +15,10 @@ import { productVariantBarcodeIdentityEquals } from "../products/products.varian
 import { buildStockMovementClaim } from "./stock-movement-claims";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
+import {
+  validateAbsoluteStockCount,
+  validateSignedStockAdjustment,
+} from "./validation";
 
 const MAX_CAS_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -117,7 +121,8 @@ export async function adjustStock(
   reason?: string,
   adminUserId?: string,
 ): Promise<StockAdjustResult> {
-  const delta = Math.round(adjustment);
+  validateSignedStockAdjustment(adjustment);
+  const delta = adjustment;
 
   for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
     const variant = await db
@@ -137,7 +142,8 @@ export async function adjustStock(
     }
 
     const previousStock = variant.stock;
-    const newStock = Math.max(0, previousStock + delta);
+    const newStock = previousStock + delta;
+    validateAbsoluteStockCount(newStock, "resulting stock");
 
     try {
       return await applyStrictStockSet(
@@ -174,7 +180,8 @@ export async function setStock(
   reason?: string,
   adminUserId?: string,
 ): Promise<StockSetResult> {
-  const targetStock = Math.max(0, Math.round(newStockValue));
+  validateAbsoluteStockCount(newStockValue);
+  const targetStock = newStockValue;
 
   for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
     const variant = await db

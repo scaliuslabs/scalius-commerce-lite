@@ -51,10 +51,29 @@ const inventoryMovementSchema = z.object({
     newStock: z.number(),
     notes: z.string().nullable(),
     createdBy: z.string().nullable(),
+    ledgerVersion: z.number().int(),
+    pool: z.string().nullable(),
+    reservationGeneration: z.number().int().nullable(),
+    stockVersionBefore: z.number().int().nullable(),
+    stockVersionAfter: z.number().int().nullable(),
+    stockDelta: z.number().int().nullable(),
+    previousReservedStock: z.number().int().nullable(),
+    newReservedStock: z.number().int().nullable(),
+    reservedStockDelta: z.number().int().nullable(),
+    previousPreorderStock: z.number().int().nullable(),
+    newPreorderStock: z.number().int().nullable(),
+    preorderStockDelta: z.number().int().nullable(),
     createdAt: z.union([z.string(), z.number()]),
     variantSku: z.string().nullable(),
     productName: z.string().nullable(),
 }).passthrough();
+
+const inventoryLedgerHealthSchema = z.object({
+    legacyRows: z.number().int().nonnegative(),
+    v2Rows: z.number().int().nonnegative(),
+    v2Variants: z.number().int().nonnegative(),
+    invalidV2Rows: z.number().int().nonnegative(),
+});
 
 const inventoryAlertSchema = z.object({
     id: z.string(),
@@ -78,6 +97,7 @@ const inventoryOverviewSchema = z.object({
     alerts: z.array(inventoryAlertSchema).optional(),
     pagination: paginationSchema.optional(),
     stats: inventoryStatsSchema.optional(),
+    ledgerHealth: inventoryLedgerHealthSchema.optional(),
 }).passthrough();
 
 const adjustResultSchema = z.object({
@@ -126,12 +146,13 @@ const listRoute = createRoute({
     summary: "Get inventory overview",
     request: {
         query: z.object({
-            section: z.string().optional().default("variants").openapi({ description: "Section type" }),
-            search: z.string().optional().default("").openapi({ description: "Search term" }),
-            status: z.string().optional().default("all").openapi({ description: "Status filter" }),
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(50).openapi({ description: "Items per page" }),
-            alertStatus: z.string().optional().openapi({ description: "Alert status filter" }),
+            section: z.enum(["variants", "movements", "alerts"]).optional().default("variants").openapi({ description: "Section type" }),
+            search: z.string().trim().max(120).optional().default("").openapi({ description: "Product, SKU, or order search term" }),
+            status: z.enum(["all", "low", "out", "reserved"]).optional().default("all").openapi({ description: "Variant stock status filter" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(100).default(50).openapi({ description: "Items per page" }),
+            alertStatus: z.enum(["active", "acknowledged", "resolved", "all"]).optional().openapi({ description: "Alert status filter" }),
+            movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all").openapi({ description: "Movement type filter" }),
             sort: z.enum(["productName", "sku", "available"]).optional().default("available").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
         })
@@ -155,6 +176,7 @@ app.openapi(listRoute, async (c) => {
             page: query.page,
             limit: query.limit,
             alertStatus: query.alertStatus,
+            movementType: query.movementType,
             sort: query.sort,
             order: query.order,
         });
@@ -176,7 +198,7 @@ const alertsRoute = createRoute({
     summary: "Get inventory alerts",
     request: {
         query: z.object({
-            status: z.string().optional().default("active").openapi({ description: "Alert status" })
+            status: z.enum(["active", "acknowledged", "resolved", "all"]).optional().default("active").openapi({ description: "Alert status" })
         })
     },
     responses: {
@@ -279,7 +301,7 @@ const scannerLookupRoute = createRoute({
     summary: "Look up a product variant by barcode or SKU (scanner workflow)",
     request: {
         query: z.object({
-            code: z.string().min(1).openapi({ description: "Barcode or SKU value to search for" }),
+            code: z.string().trim().min(1).max(256).openapi({ description: "Barcode or SKU value to search for" }),
         }),
     },
     responses: {
@@ -314,8 +336,8 @@ const stockAdjustRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         variantId: z.string().openapi({ description: "Variant ID" }),
-                        adjustment: z.number().openapi({ description: "Stock adjustment (positive=add, negative=remove)" }),
-                        reason: z.string().optional().openapi({ description: "Reason for adjustment" }),
+                        adjustment: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Adjustment must not be zero.").openapi({ description: "Whole-number stock adjustment (positive=add, negative=remove)" }),
+                        reason: z.string().trim().max(500).optional().openapi({ description: "Reason for adjustment" }),
                     }),
                 },
             },
@@ -358,8 +380,8 @@ const stockSetRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         variantId: z.string().openapi({ description: "Variant ID" }),
-                        newStock: z.number().min(0).openapi({ description: "New absolute stock value" }),
-                        reason: z.string().optional().openapi({ description: "Reason for stocktake" }),
+                        newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "New absolute whole-number stock value" }),
+                        reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
                     }),
                 },
             },

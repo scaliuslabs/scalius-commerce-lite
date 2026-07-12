@@ -73,6 +73,37 @@ export function validatePositiveQuantity(quantity: number): void {
 }
 
 /**
+ * Validate a relative stock adjustment without changing its meaning.
+ * Manual stock writes must never round fractional values or clamp an
+ * overdraw to a smaller movement because the audit row must match the
+ * merchant's submitted operation exactly.
+ */
+export function validateSignedStockAdjustment(
+  adjustment: number,
+  label = "adjustment",
+): void {
+  if (!Number.isSafeInteger(adjustment)) {
+    throw new ValidationError(`${label} must be a safe integer`);
+  }
+  if (adjustment === 0) {
+    throw new ValidationError(`${label} must not be zero`);
+  }
+}
+
+/** Validate an absolute stocktake count at every service boundary. */
+export function validateAbsoluteStockCount(
+  stock: number,
+  label = "newStock",
+): void {
+  if (!Number.isSafeInteger(stock)) {
+    throw new ValidationError(`${label} must be a safe integer`);
+  }
+  if (stock < 0) {
+    throw new ValidationError(`${label} must be greater than or equal to zero`);
+  }
+}
+
+/**
  * Calculate the final price after applying a discount.
  * Validates that the result is non-negative.
  *
