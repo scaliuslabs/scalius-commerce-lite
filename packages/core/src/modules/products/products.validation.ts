@@ -42,10 +42,26 @@ const productImageSchema = z.object({
 /** Shared attribute schema used in create and update */
 const productAttributeSchema = z.array(
     z.object({
-        attributeId: z.string(),
-        value: z.string(),
+        attributeId: z.string().trim().min(1).max(100),
+        value: z.string().trim().min(1).max(100),
     }),
-).optional();
+)
+    .max(90, "Assign at most 90 attributes to a product")
+    .superRefine((assignments, context) => {
+        const seenAttributeIds = new Set<string>();
+        assignments.forEach((assignment, index) => {
+            const key = assignment.attributeId.toLowerCase();
+            if (seenAttributeIds.has(key)) {
+                context.addIssue({
+                    code: "custom",
+                    path: [index, "attributeId"],
+                    message: "Each attribute can be assigned only once",
+                });
+            }
+            seenAttributeIds.add(key);
+        });
+    })
+    .optional();
 
 /** Shared additional info schema used in create and update */
 const productAdditionalInfoSchema = z.array(

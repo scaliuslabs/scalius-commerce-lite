@@ -128,6 +128,27 @@ describe("storefront product query boundaries", () => {
         expect(listBody).not.toContain("variants:");
     });
 
+    it("keeps assigned facts public while filterable gates facets only", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const feedAttributeStart = source.indexOf("async function readStorefrontFeedAttributeMap");
+        const feedAttributeEnd = source.indexOf("\nasync function readStorefrontFeedVariantMap", feedAttributeStart);
+        const feedAttributeReader = source.slice(feedAttributeStart, feedAttributeEnd);
+        const detailAttributeStart = source.indexOf("name: productAttributes.name", source.indexOf("export async function getStorefrontProductBySlug"));
+        const detailAttributeEnd = source.indexOf('type: "attributes"', detailAttributeStart);
+        const detailAttributeReader = source.slice(detailAttributeStart, detailAttributeEnd);
+
+        expect(feedAttributeStart).toBeGreaterThan(-1);
+        expect(detailAttributeStart).toBeGreaterThan(-1);
+        expect(feedAttributeReader).toContain("isNull(productAttributes.deletedAt)");
+        expect(detailAttributeReader).toContain("isNull(productAttributes.deletedAt)");
+        expect(feedAttributeReader).not.toContain("productAttributes.filterable");
+        expect(detailAttributeReader).not.toContain("productAttributes.filterable");
+        expect(source.match(/eq\(productAttributes\.filterable, true\)/g)).toHaveLength(2);
+    });
+
     it("carries merchant option metadata only in feed and detail projections", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

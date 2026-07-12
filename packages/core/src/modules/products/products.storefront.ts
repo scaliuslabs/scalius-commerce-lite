@@ -545,7 +545,6 @@ async function readStorefrontFeedAttributeMap(
                 productAttributes,
                 and(
                     eq(productAttributeValues.attributeId, productAttributes.id),
-                    eq(productAttributes.filterable, true),
                     isNull(productAttributes.deletedAt),
                 ),
             )
@@ -1115,7 +1114,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             .innerJoin(productAttributes, and(
                 eq(productAttributeValues.attributeId, productAttributes.id),
                 isNull(productAttributes.deletedAt),
-                eq(productAttributes.filterable, true),
             ))
             .where(eq(productAttributeValues.productId, product.id))
             .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
