@@ -29,6 +29,7 @@ describe("R2 storage URL handling", () => {
 
     const result = await uploadFile(file, bucket, "");
 
+    expect(result.key).toMatch(/^media\//);
     expect(result.key).toMatch(/\.png$/);
     expect(result.url).toBe(result.key);
     expect(result.url.startsWith("/")).toBe(false);
