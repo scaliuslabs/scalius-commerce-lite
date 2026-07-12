@@ -1,20 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
 import { productsQueryOptions } from "~/lib/api-query-options/products";
-import type { Product } from "~/components/admin/order-form/types";
-import { RouteErrorComponent } from "~/lib/route-error";
-
-interface ProductListResult {
-  products?: Array<{
-    id: string;
-    name: string;
-    price: number;
-    discountPercentage?: number | null;
-    discountType?: "percentage" | "flat" | null;
-    discountAmount?: number | null;
-    variantCount?: number | null;
-  }>;
-}
+import { deliveryLocationsQueryOptions } from "~/lib/api-query-options/delivery";
+import { OrderFormRouteError } from "./-OrderFormRouteError";
+import {
+  assertOrderFormLocationLookup,
+  buildNewOrderFormRouteData,
+} from "./-order-form-route-state";
 
 const defaultValues = {
   customerName: "",
@@ -30,36 +22,32 @@ const defaultValues = {
   shippingCharge: 0,
 };
 
-function toOrderFormProduct(product: NonNullable<ProductListResult["products"]>[number]): Product {
-  return {
-    id: product.id,
-    name: product.name,
-    price: product.price,
-    discountPercentage: product.discountPercentage ?? null,
-    discountType: product.discountType ?? null,
-    discountAmount: product.discountAmount ?? null,
-    variantCount: product.variantCount ?? 0,
-    variants: [],
-  };
-}
-
 export const Route = createFileRoute("/admin/orders/new")({
   loader: async ({ context: { queryClient } }) => {
-    try {
-      const result = await queryClient.ensureQueryData(
-        productsQueryOptions({ page: 1, limit: 100 }),
-      );
-      const products = (result as ProductListResult).products || [];
-      const productsWithVariants = products.map(toOrderFormProduct);
-      return { productsWithVariants };
-    } catch {
-      return { productsWithVariants: [] };
-    }
+    const result = await queryClient.ensureQueryData(
+      productsQueryOptions({ page: 1, limit: 100 }),
+    );
+    const locations = await queryClient.ensureQueryData(
+      deliveryLocationsQueryOptions({ type: "city" }),
+    );
+    assertOrderFormLocationLookup(locations);
+    return buildNewOrderFormRouteData(result);
   },
   head: () => ({ meta: [{ title: "New Order | Scalius Admin" }] }),
-  errorComponent: RouteErrorComponent,
+  errorComponent: NewOrderFormErrorComponent,
   component: NewOrderPage,
 });
+
+function NewOrderFormErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <OrderFormRouteError
+      title="New order form could not be loaded"
+      description="Required product or delivery-location data is unavailable. No empty catalog was substituted."
+      error={error}
+      reset={reset}
+    />
+  );
+}
 
 function NewOrderPage() {
   const { productsWithVariants } = Route.useLoaderData();

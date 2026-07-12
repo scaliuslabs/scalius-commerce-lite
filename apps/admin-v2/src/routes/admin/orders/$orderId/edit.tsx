@@ -1,53 +1,56 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
 import { orderFormDataQueryOptions } from "~/lib/api-query-options/orders";
-import type { ProductVariant } from "~/types/api-responses";
-import { RouteErrorComponent } from "~/lib/route-error";
-
-interface OrderFormProduct {
-  id: string;
-  name: string;
-  price: number;
-  discountPercentage: number | null;
-  variants: ProductVariant[];
-}
-
-interface OrderFormDataResult {
-  productsWithVariants?: OrderFormProduct[];
-  defaultValues?: Record<string, unknown>;
-}
+import { deliveryLocationsQueryOptions } from "~/lib/api-query-options/delivery";
+import { OrderFormRouteError } from "../-OrderFormRouteError";
+import {
+  assertOrderFormLocationLookup,
+  buildEditOrderFormRouteData,
+} from "../-order-form-route-state";
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
-    try {
-      await queryClient.ensureQueryData({ ...orderFormDataQueryOptions(params.orderId), staleTime: Infinity });
-    } catch {
-      throw redirect({ to: "/admin/orders" });
-    }
+    const result = await queryClient.ensureQueryData({
+      ...orderFormDataQueryOptions(params.orderId),
+      staleTime: Infinity,
+    });
+    const locations = await queryClient.ensureQueryData(
+      deliveryLocationsQueryOptions({ type: "city" }),
+    );
+    assertOrderFormLocationLookup(locations);
+    return buildEditOrderFormRouteData(result);
   },
   head: ({ params }) => ({
     meta: [{ title: `Edit Order #${params.orderId} | Scalius Admin` }],
   }),
-  errorComponent: RouteErrorComponent,
+  errorComponent: EditOrderFormErrorComponent,
   component: EditOrderPage,
 });
 
-function EditOrderPage() {
-  const { orderId } = Route.useParams();
-  const { data } = useSuspenseQuery(orderFormDataQueryOptions(orderId));
-  const r = data as unknown as OrderFormDataResult;
+function EditOrderFormErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <OrderFormRouteError
+      title="Order editor could not be loaded"
+      description="Required order form, product, or delivery-location data is unavailable. The order was not changed."
+      error={error}
+      reset={reset}
+    />
+  );
+}
 
-  const productsWithVariants = (r.productsWithVariants || []).map((p) => ({
+function EditOrderPage() {
+  const r = Route.useLoaderData();
+
+  const productsWithVariants = r.productsWithVariants.map((p) => ({
     ...p,
-    variants: (p.variants || []).map((v) => ({ ...v, sku: v.sku || "", price: v.price ?? 0 })),
+    variants: p.variants.map((v) => ({ ...v, sku: v.sku || "", price: v.price ?? 0 })),
   }));
 
   return (
     <div className="container max-w-7xl py-4 pb-8">
       <OrderForm
         products={productsWithVariants}
-        defaultValues={(r.defaultValues || r) as Record<string, unknown>}
+        defaultValues={r.defaultValues}
         isEdit={true}
       />
     </div>
