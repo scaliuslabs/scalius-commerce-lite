@@ -40,6 +40,8 @@ const toastMock = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
+const permissionMock = vi.hoisted(() => ({ canCreate: true, canEdit: true }));
+
 vi.mock("~/lib/api-functions/collections", () => collectionApi);
 
 vi.mock("~/lib/api-functions/products", () => productApi);
@@ -93,6 +95,12 @@ vi.mock("~/components/admin/shared/ResourceDiscoveryReadiness", () => ({
   ResourceDiscoveryReadiness: () => <div data-testid="discovery-readiness" />,
 }));
 
+vi.mock("~/hooks/use-catalog-action-permissions", () => ({
+  useCatalogActionPermissions: () => ({
+    collections: permissionMock,
+  }),
+}));
+
 const categories: Category[] = [
   { id: "cat_curated", name: "Curated Picks" },
 ];
@@ -100,12 +108,13 @@ const categories: Category[] = [
 const collectionDefaults: Partial<CollectionFormValues> = {
   id: "col_late_labels",
   name: "Late Label Collection",
-  type: "manual",
+  presentation: "grid",
   isActive: true,
   canonicalPath: "/collections/col_late_labels",
   noIndex: false,
   excludeFromSitemap: false,
   config: {
+    source: "manual",
     categoryIds: ["cat_curated"],
     productIds: ["prod_primary", "prod_secondary"],
     featuredProductId: "prod_featured",
@@ -184,6 +193,8 @@ describe("CollectionForm edit product labels", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    permissionMock.canCreate = true;
+    permissionMock.canEdit = true;
     document.body.innerHTML = "";
     host = document.createElement("div");
     appHost = document.createElement("div");
@@ -239,7 +250,6 @@ describe("CollectionForm edit product labels", () => {
     expect(getInputByPlaceholder(host, "Collection name").value).toBe(
       "Late Label Collection",
     );
-    expect(host.textContent).toContain("Curated Picks");
     expect(host.textContent).not.toContain("prod_primary");
     expect(host.textContent).not.toContain("prod_secondary");
     expect(host.textContent).not.toContain("prod_featured");
@@ -255,6 +265,14 @@ describe("CollectionForm edit product labels", () => {
     expect(host.textContent).not.toContain("prod_primary");
     expect(host.textContent).not.toContain("prod_secondary");
     expect(host.textContent).not.toContain("prod_featured");
+
+    const moveSecondaryUp = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Move Secondary Cotton Sari up"]',
+    );
+    expect(moveSecondaryUp).not.toBeNull();
+    await act(async () => {
+      moveSecondaryUp?.click();
+    });
 
     await act(async () => {
       getButton(host, "Save Collection").dispatchEvent(
@@ -272,7 +290,8 @@ describe("CollectionForm edit product labels", () => {
         id: "col_late_labels",
         config: expect.objectContaining({
           categoryIds: ["cat_curated"],
-          productIds: ["prod_primary", "prod_secondary"],
+          source: "manual",
+          productIds: ["prod_secondary", "prod_primary"],
           featuredProductId: "prod_featured",
         }),
       }),
@@ -282,5 +301,14 @@ describe("CollectionForm edit product labels", () => {
     );
     expect(typeof payload.config.featuredProductId).toBe("string");
     expect(collectionApi.createCollection).not.toHaveBeenCalled();
+  });
+
+  it("renders the editor read-only when collection edit permission is absent", async () => {
+    permissionMock.canEdit = false;
+    await renderCollectionForm(productLabels);
+
+    expect(host.textContent).toContain("Read-only access");
+    expect(host.textContent).not.toContain("Save Collection");
+    expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
   });
 });

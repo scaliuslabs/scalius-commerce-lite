@@ -100,7 +100,7 @@ describe("lookup query options", () => {
 
   it("normalizes collection lookup ids without removing the empty placeholder", async () => {
     const payload = {
-      collections: [{ id: "col_1", name: "Featured", type: "manual" }],
+      collections: [{ id: "col_1", name: "Featured", presentation: "grid" }],
     };
     mocks.getCollectionsByIds.mockResolvedValue(payload);
 

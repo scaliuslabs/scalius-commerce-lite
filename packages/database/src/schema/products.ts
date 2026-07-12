@@ -165,7 +165,7 @@ export const productVariants = sqliteTable("product_variants", {
     discountType: text("discount_type", { enum: ["percentage", "flat"] }).default("percentage"),
     discountAmount: real("discount_amount").default(0),
     barcode: text("barcode"),
-    barcodeType: text("barcode_type", { enum: ["ean13", "upc", "isbn", "gtin", "custom"] }),
+    barcodeType: text("barcode_type", { enum: ["ean13", "upc", "isbn", "gtin", "code128", "custom"] }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -245,7 +245,7 @@ export const categories = sqliteTable(
 export const collections = sqliteTable("collections", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    type: text("type", { enum: ["manual", "dynamic"] }).notNull(),
+    presentation: text("presentation", { enum: ["grid", "carousel"] }).notNull(),
     config: text("config").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),

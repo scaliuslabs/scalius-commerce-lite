@@ -31,32 +31,63 @@ const canonicalPathUpdateSchema = z
     );
 
 const collectionConfigSchema = z.object({
-    categoryIds: z.array(z.string()).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
-    productIds: z.array(z.string()).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
-    featuredProductId: z.string().optional(),
+    source: z.enum(["manual", "dynamic"]),
+    categoryIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
+    productIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
+    featuredProductId: z.string().trim().max(180).optional(),
     maxProducts: z.number().int().min(1).max(24).optional().default(8),
-    title: z.string().optional(),
-    subtitle: z.string().optional(),
+    title: z.string().trim().max(120).optional(),
+    subtitle: z.string().trim().max(240).optional(),
 });
+const collectionConfigUpdateSchema = z.object({
+    source: z.enum(["manual", "dynamic"]).optional(),
+    categoryIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional(),
+    productIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional(),
+    featuredProductId: z.string().trim().max(180).optional(),
+    maxProducts: z.number().int().min(1).max(24).optional(),
+    title: z.string().trim().max(120).optional(),
+    subtitle: z.string().trim().max(240).optional(),
+});
+
+function validatePublishReadiness(
+    value: { isActive?: boolean; config?: z.infer<typeof collectionConfigSchema> },
+    ctx: z.RefinementCtx,
+) {
+    if (!value.isActive || !value.config) return;
+    if (value.config.source === "manual" && value.config.productIds.length === 0) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["config", "productIds"],
+            message: "Add at least one product before publishing a manual collection.",
+        });
+    }
+    if (value.config.source === "dynamic" && value.config.categoryIds.length === 0) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["config", "categoryIds"],
+            message: "Select at least one category before publishing a dynamic collection.",
+        });
+    }
+}
 
 export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
-    type: z.enum(["manual", "dynamic"]),
+    presentation: z.enum(["grid", "carousel"]),
     isActive: z.boolean(),
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
     config: collectionConfigSchema,
-});
+}).superRefine(validatePublishReadiness);
 
 export const updateCollectionSchema = z.object({
     name: z.string().min(3).max(100).optional(),
-    type: z.enum(["manual", "dynamic"]).optional(),
+    presentation: z.enum(["grid", "carousel"]).optional(),
     isActive: z.boolean().optional(),
     canonicalPath: canonicalPathUpdateSchema,
     noIndex: z.boolean().optional(),
     excludeFromSitemap: z.boolean().optional(),
-    config: collectionConfigSchema.optional(),
+    config: collectionConfigUpdateSchema.optional(),
 });
 
 export type CreateCollectionInput = z.infer<typeof createCollectionSchema>;

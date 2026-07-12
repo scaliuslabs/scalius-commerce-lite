@@ -25,6 +25,7 @@ import {
 } from "../../integrations/analytics";
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
+import { normalizeCollectionConfig } from "../collections/collection-config";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
@@ -138,7 +139,7 @@ export async function getHomepageData(db: Database) {
       .select({
         id: collections.id,
         name: collections.name,
-        type: collections.type,
+        presentation: collections.presentation,
         config: collections.config,
         sortOrder: collections.sortOrder,
         isActive: collections.isActive,
@@ -184,10 +185,10 @@ export async function getHomepageData(db: Database) {
   ).map((col) => ({
     id: col.id as string,
     name: col.name as string,
-    type: col.type as string,
+    presentation: col.presentation as string,
     sortOrder: col.sortOrder as number,
     isActive: col.isActive as boolean,
-    parsedConfig: safeJsonParse<Record<string, unknown>>(col.config as string, {}),
+    parsedConfig: normalizeCollectionConfig(col.config),
   }));
 
   const resolvedMap = await resolveCollectionProductsBatch(
@@ -205,8 +206,9 @@ export async function getHomepageData(db: Database) {
       return {
         id: col.id,
         name: col.name,
-        type: col.type,
+        presentation: col.presentation,
         config: {
+          source: cfg.source,
           categoryIds: cfg.categoryIds,
           productIds: cfg.productIds,
           featuredProductId: cfg.featuredProductId,

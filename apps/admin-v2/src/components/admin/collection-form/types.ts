@@ -31,15 +31,15 @@ export interface Product {
   isActive?: boolean;
 }
 
-export const collectionTypes = [
+export const collectionPresentations = [
   {
-    value: "manual",
-    label: "Manual (Grid)",
-    description: "Grid layout with featured product (Large card + grid)",
+    value: "grid",
+    label: "Featured grid",
+    description: "Compact product grid with an optional featured product",
   },
   {
-    value: "dynamic",
-    label: "Dynamic (Carousel)",
+    value: "carousel",
+    label: "Carousel",
     description: "Horizontal scrolling product carousel",
   },
 ] as const;
@@ -50,19 +50,36 @@ export const collectionFormSchema = z.object({
     .string()
     .min(3, "Collection name must be at least 3 characters")
     .max(100, "Collection name must be less than 100 characters"),
-  type: z.enum(["manual", "dynamic"]),
+  presentation: z.enum(["grid", "carousel"]),
   isActive: z.boolean(),
   canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   config: z.object({
-    categoryIds: z.array(z.string()),
-    productIds: z.array(z.string()),
-    featuredProductId: z.string().optional(),
+    source: z.enum(["manual", "dynamic"]),
+    categoryIds: z.array(z.string().trim().min(1).max(180)).max(90),
+    productIds: z.array(z.string().trim().min(1).max(180)).max(90),
+    featuredProductId: z.string().trim().max(180).optional(),
     maxProducts: z.number().int().min(1).max(24),
-    title: z.string().optional(),
-    subtitle: z.string().optional(),
+    title: z.string().trim().max(120).optional(),
+    subtitle: z.string().trim().max(240).optional(),
   }),
+}).superRefine((value, ctx) => {
+  if (!value.isActive) return;
+  if (value.config.source === "manual" && value.config.productIds.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["config", "productIds"],
+      message: "Add at least one product before publishing a manual collection.",
+    });
+  }
+  if (value.config.source === "dynamic" && value.config.categoryIds.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["config", "categoryIds"],
+      message: "Select at least one category before publishing a dynamic collection.",
+    });
+  }
 });
 
 export type CollectionFormValues = z.infer<typeof collectionFormSchema>;

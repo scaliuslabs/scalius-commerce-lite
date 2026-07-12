@@ -67,7 +67,7 @@ const formatTimestamp = (
 const storefrontCollectionSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.string(),
+  presentation: z.enum(["grid", "carousel"]),
   config: z.record(z.string(), z.unknown()),
   sortOrder: z.number(),
   isActive: z.boolean(),
@@ -140,7 +140,7 @@ app.openapi(listCollectionsRoute, async (c) => {
     .select({
       id: collections.id,
       name: collections.name,
-      type: collections.type,
+      presentation: collections.presentation,
       config: collections.config,
       sortOrder: collections.sortOrder,
       isActive: collections.isActive,

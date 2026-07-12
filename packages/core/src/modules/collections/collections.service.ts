@@ -17,6 +17,7 @@ import {
 } from "../products/products.buyer-projection";
 import {
     COLLECTION_CONFIG_ID_LIMIT,
+    collectionMembershipForConfig,
     normalizeCollectionConfig,
     stringifyCollectionConfig,
 } from "./collection-config";
@@ -28,7 +29,8 @@ import type { StorefrontProductFilterInput } from "../products/products.types";
 // Admin queries
 // ─────────────────────────────────────────
 
-const ALLOWED_COLLECTION_SORT_FIELDS = ["name", "type", "isActive", "updatedAt", "sortOrder"] as const;
+const ALLOWED_COLLECTION_SORT_FIELDS = ["name", "presentation", "isActive", "updatedAt", "sortOrder"] as const;
+const COLLECTION_MUTATION_ID_LIMIT = 90;
 type CollectionSortField = typeof ALLOWED_COLLECTION_SORT_FIELDS[number];
 
 export async function listCollections(
@@ -76,7 +78,7 @@ export async function listCollections(
     const sortColumn = (() => {
         switch (sort) {
             case "name": return collections.name;
-            case "type": return collections.type;
+            case "presentation": return collections.presentation;
             case "isActive": return collections.isActive;
             case "updatedAt": return collections.updatedAt;
             default: return collections.sortOrder;
@@ -87,7 +89,10 @@ export async function listCollections(
         .select()
         .from(collections)
         .where(whereClause)
-        .orderBy(order === "desc" ? desc(sortColumn) : asc(sortColumn))
+        .orderBy(
+            order === "desc" ? desc(sortColumn) : asc(sortColumn),
+            asc(collections.id),
+        )
         .limit(limit)
         .offset(offset);
 
@@ -112,7 +117,26 @@ export async function getCollectionById(db: Database, id: string) {
 }
 
 function normalizeLookupIds(ids: string[]): string[] {
-    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+    return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean))).slice(0, 90);
+}
+
+function normalizeMutationIds(ids: string[]): string[] {
+    const normalized = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+    if (normalized.length > COLLECTION_MUTATION_ID_LIMIT) {
+        throw new ValidationError(`At most ${COLLECTION_MUTATION_ID_LIMIT} collections can be changed at once.`);
+    }
+    return normalized;
+}
+
+function assertCollectionPublishReady(isActive: boolean, rawConfig: unknown): void {
+    if (!isActive) return;
+    const membership = collectionMembershipForConfig(rawConfig);
+    if (membership.source === "manual" && membership.productIds.length === 0) {
+        throw new ValidationError("Add at least one product before publishing a manual collection.");
+    }
+    if (membership.source === "dynamic" && membership.categoryIds.length === 0) {
+        throw new ValidationError("Select at least one category before publishing a dynamic collection.");
+    }
 }
 
 export async function getCollectionsByIds(db: Database, ids: string[]) {
@@ -124,7 +148,7 @@ export async function getCollectionsByIds(db: Database, ids: string[]) {
         .select({
             id: collections.id,
             name: collections.name,
-            type: collections.type,
+            presentation: collections.presentation,
         })
         .from(collections)
         .where(and(inArray(collections.id, lookupIds), isNull(collections.deletedAt)));
@@ -139,6 +163,7 @@ export async function getCollectionCategoryOptions(db: Database) {
         .select({ id: categories.id, name: categories.name })
         .from(categories)
         .where(isNull(categories.deletedAt))
+        .orderBy(asc(categories.name), asc(categories.id))
         .limit(500);
 }
 
@@ -237,6 +262,7 @@ export async function createCollection(
     if (data.canonicalPath) {
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
+    assertCollectionPublishReady(data.isActive, data.config);
 
     const maxSortOrder = await db
         .select({ max: max(collections.sortOrder) })
@@ -249,7 +275,7 @@ export async function createCollection(
         .values({
             id: nanoid(),
             name: data.name,
-            type: data.type,
+            presentation: data.presentation,
             isActive: data.isActive,
             canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
@@ -266,7 +292,15 @@ export async function updateCollection(
     id: string,
     data: UpdateCollectionInput,
 ) {
-    const existing = await db.select({ id: collections.id }).from(collections).where(eq(collections.id, id)).get();
+    const existing = await db
+        .select({
+            id: collections.id,
+            isActive: collections.isActive,
+            config: collections.config,
+        })
+        .from(collections)
+        .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
+        .get();
     if (!existing) throw new NotFoundError("Collection not found");
 
     if (
@@ -276,14 +310,23 @@ export async function updateCollection(
         throw new ValidationError("Collection canonical path must match this collection's ID route, or be left blank.");
     }
 
+    const existingConfig = normalizeCollectionConfig(existing.config);
+    const nextIsActive = data.isActive ?? existing.isActive;
+    const nextConfig = data.config
+        ? { ...existingConfig, ...data.config }
+        : existingConfig;
+    if (data.isActive === true || data.config !== undefined) {
+        assertCollectionPublishReady(nextIsActive, nextConfig);
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.type !== undefined) updateData.type = data.type;
+    if (data.presentation !== undefined) updateData.presentation = data.presentation;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.canonicalPath !== undefined) updateData.canonicalPath = data.canonicalPath;
     if (data.noIndex !== undefined) updateData.noIndex = data.noIndex;
     if (data.excludeFromSitemap !== undefined) updateData.excludeFromSitemap = data.excludeFromSitemap;
-    if (data.config !== undefined) updateData.config = stringifyCollectionConfig(data.config);
+    if (data.config !== undefined) updateData.config = stringifyCollectionConfig(nextConfig);
 
     return db
         .update(collections)
@@ -308,43 +351,60 @@ export async function bulkDeleteCollections(
     ids: string[],
     permanent = false,
 ): Promise<void> {
-    if (ids.length === 0) return;
+    const normalizedIds = normalizeMutationIds(ids);
+    if (normalizedIds.length === 0) return;
 
     if (permanent) {
-        await db.delete(collections).where(inArray(collections.id, ids));
+        await db.delete(collections).where(and(
+            inArray(collections.id, normalizedIds),
+            isNotNull(collections.deletedAt),
+        ));
     } else {
         await db
             .update(collections)
             .set({ deletedAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
-            .where(inArray(collections.id, ids));
+            .where(and(
+                inArray(collections.id, normalizedIds),
+                isNull(collections.deletedAt),
+            ));
     }
 }
 
 export async function bulkActivateCollections(db: Database, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
+    const normalizedIds = normalizeMutationIds(ids);
+    if (normalizedIds.length === 0) return;
+
+    const rows = await db
+        .select({ id: collections.id, config: collections.config })
+        .from(collections)
+        .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)))
+        .all();
+    for (const row of rows) assertCollectionPublishReady(true, row.config);
 
     await db
         .update(collections)
         .set({ isActive: true, updatedAt: sql`(unixepoch())` })
-        .where(inArray(collections.id, ids));
+        .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
 }
 
 export async function bulkDeactivateCollections(db: Database, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
+    const normalizedIds = normalizeMutationIds(ids);
+    if (normalizedIds.length === 0) return;
 
     await db
         .update(collections)
         .set({ isActive: false, updatedAt: sql`(unixepoch())` })
-        .where(inArray(collections.id, ids));
+        .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
 }
 
 export async function restoreCollections(db: Database, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
+    const normalizedIds = normalizeMutationIds(ids);
+    if (normalizedIds.length === 0) return;
 
     await db
         .update(collections)
         .set({ deletedAt: null, updatedAt: sql`(unixepoch())` })
-        .where(inArray(collections.id, ids));
+        .where(and(inArray(collections.id, normalizedIds), isNotNull(collections.deletedAt)));
 }
 
 export async function reorderCollections(
@@ -352,13 +412,23 @@ export async function reorderCollections(
     items: { id: string; sortOrder: number }[],
 ): Promise<void> {
     if (items.length === 0) return;
+    if (items.length > COLLECTION_MUTATION_ID_LIMIT) {
+        throw new ValidationError(`At most ${COLLECTION_MUTATION_ID_LIMIT} collections can be reordered at once.`);
+    }
+    const ids = items.map((item) => item.id.trim());
+    if (ids.some((id) => !id) || new Set(ids).size !== ids.length) {
+        throw new ValidationError("Collection reorder items must use unique saved IDs.");
+    }
+    if (items.some((item) => !Number.isInteger(item.sortOrder) || item.sortOrder < 0)) {
+        throw new ValidationError("Collection sort order must be a non-negative integer.");
+    }
 
     await safeBatch(
         db,
         items.map((item) =>
             db.update(collections)
                 .set({ sortOrder: item.sortOrder, updatedAt: sql`(unixepoch())` })
-                .where(eq(collections.id, item.id))
+                .where(and(eq(collections.id, item.id.trim()), isNull(collections.deletedAt)))
         )
     );
 }
@@ -384,15 +454,16 @@ export async function getPublicCollectionCatalog(
     if (!collection) return null;
 
     const config = normalizeCollectionConfig(collection.config);
+    const membership = collectionMembershipForConfig(config);
     const catalog = await getStorefrontCollectionProducts(db, {
-        productIds: config.productIds,
-        categoryIds: config.categoryIds,
+        productIds: membership.productIds,
+        categoryIds: membership.categoryIds,
     }, params);
 
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    const categoryIdsJson = JSON.stringify(config.categoryIds);
+    const categoryIdsJson = JSON.stringify(membership.categoryIds);
     const categoryPromise: Promise<Array<{ id: string; name: string; slug: string }>> =
-        config.categoryIds.length > 0
+        membership.categoryIds.length > 0
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
@@ -425,7 +496,7 @@ export async function getPublicCollectionCatalog(
 
     return {
         collection: { ...collection, config },
-        categories: config.categoryIds
+        categories: membership.categoryIds
             .map((categoryId) => categoryById.get(categoryId))
             .filter((category): category is { id: string; name: string; slug: string } => (
                 category !== undefined
@@ -523,8 +594,9 @@ export async function resolveCollectionProducts(
     rawConfig: unknown,
 ): Promise<CollectionProductResult> {
     const config = normalizeCollectionConfig(rawConfig);
-    const productIds = Array.isArray(config.productIds) ? config.productIds : [];
-    const categoryIds = Array.isArray(config.categoryIds) ? config.categoryIds : [];
+    const membership = collectionMembershipForConfig(config);
+    const productIds = membership.productIds;
+    const categoryIds = membership.categoryIds;
     const maxProducts = Math.min(Math.max(config.maxProducts || 8, 1), 24);
     const hasFeaturedProduct = !!config.featuredProductId;
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
@@ -642,9 +714,10 @@ export async function resolveCollectionProductsBatch(
 
     for (const col of parsedCollections) {
         const cfg = normalizeCollectionConfig(col.config);
-        cfg.productIds.forEach((id) => allProductIds.add(id));
-        if (cfg.productIds.length === 0) {
-            cfg.categoryIds.forEach((id) => {
+        const membership = collectionMembershipForConfig(cfg);
+        membership.productIds.forEach((id) => allProductIds.add(id));
+        if (membership.source === "dynamic") {
+            membership.categoryIds.forEach((id) => {
                 categoryProductLimitsById.set(
                     id,
                     Math.max(categoryProductLimitsById.get(id) ?? 0, cfg.maxProducts),
@@ -733,8 +806,9 @@ export async function resolveCollectionProductsBatch(
 
     for (const col of parsedCollections) {
         const cfg = normalizeCollectionConfig(col.config);
-        const productIds = cfg.productIds;
-        const categoryIds = cfg.categoryIds;
+        const membership = collectionMembershipForConfig(cfg);
+        const productIds = membership.productIds;
+        const categoryIds = membership.categoryIds;
         const maxProducts = Math.min(Math.max(cfg.maxProducts || 8, 1), 24);
 
         let collectionProducts: ResolvedProduct[] = [];

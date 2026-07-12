@@ -46,14 +46,14 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
 
 function isCollection1(
   collection: CollectionWithProducts,
-): collection is CollectionWithProducts & { type: "manual" } {
-  return collection.type === "manual";
+): collection is CollectionWithProducts & { presentation: "grid" } {
+  return collection.presentation === "grid";
 }
 
 function isCollection2(
   collection: CollectionWithProducts,
-): collection is CollectionWithProducts & { type: "dynamic" } {
-  return collection.type === "dynamic";
+): collection is CollectionWithProducts & { presentation: "carousel" } {
+  return collection.presentation === "carousel";
 }
 
 ---

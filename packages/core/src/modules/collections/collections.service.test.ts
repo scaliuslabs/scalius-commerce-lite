@@ -118,12 +118,17 @@ describe("resolveCollectionProducts", () => {
     it("rejects create-time collection canonical overrides before an ID route exists", async () => {
         await expect(createCollection(createDb([]), {
             name: "Summer Edit",
-            type: "manual",
+            presentation: "grid",
             isActive: true,
             canonicalPath: "/collections/col_1",
             noIndex: false,
             excludeFromSitemap: false,
-            config: { categoryIds: [], productIds: [], maxProducts: 8 },
+            config: {
+                source: "manual",
+                categoryIds: [],
+                productIds: [],
+                maxProducts: 8,
+            },
         })).rejects.toThrow(/blank until the collection has a saved ID route/);
     });
 
@@ -166,6 +171,7 @@ describe("resolveCollectionProducts", () => {
         ]);
 
         const result = await resolveCollectionProducts(db, {
+            source: "dynamic",
             categoryIds: ["cat_a", "cat_b"],
         });
 
@@ -173,6 +179,23 @@ describe("resolveCollectionProducts", () => {
             "cat_a",
             "cat_b",
         ]);
+    });
+
+    it("uses the explicit content source when stale selections exist", async () => {
+        const db = createDb([
+            [{ id: "cat_a", name: "A", slug: "a" }],
+            [product("category_product", "cat_a")],
+            [],
+        ]);
+
+        const result = await resolveCollectionProducts(db, {
+            source: "dynamic",
+            categoryIds: ["cat_a"],
+            productIds: ["stale_manual_product"],
+        });
+
+        expect(result.products.map((item) => item.id)).toEqual(["category_product"]);
+        expect(result.categories.map((item) => item.id)).toEqual(["cat_a"]);
     });
 });
 
@@ -226,11 +249,11 @@ describe("resolveCollectionProductsBatch", () => {
         const result = await resolveCollectionProductsBatch(db, [
             {
                 id: "small_collection",
-                config: { categoryIds: ["cat_large"], maxProducts: 2 },
+                config: { source: "dynamic", categoryIds: ["cat_large"], maxProducts: 2 },
             },
             {
                 id: "larger_collection",
-                config: { categoryIds: ["cat_large"], maxProducts: 5 },
+                config: { source: "dynamic", categoryIds: ["cat_large"], maxProducts: 5 },
             },
         ]);
 

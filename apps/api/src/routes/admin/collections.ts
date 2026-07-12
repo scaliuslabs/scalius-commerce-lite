@@ -40,7 +40,7 @@ const collectionOptionSchema = z.object({
 });
 
 const collectionPickerSummarySchema = collectionOptionSchema.extend({
-    type: z.enum(["manual", "dynamic"]),
+    presentation: z.enum(["grid", "carousel"]),
 });
 
 const collectionProductOptionSchema = z.object({
@@ -53,8 +53,10 @@ const collectionProductOptionSchema = z.object({
 });
 
 function parseLookupIds(ids: string | undefined): string[] {
-    return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 100);
+    return Array.from(new Set((ids ?? "").split(",").map((id) => id.trim()).filter(Boolean))).slice(0, 90);
 }
+
+const collectionIdsSchema = z.array(z.string().trim().min(1).max(180)).min(1).max(90);
 
 function parseProductOptionCategoryIds(ids: string | undefined): string[] {
     return Array.from(
@@ -189,7 +191,7 @@ const listRoute = createRoute({
             limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-            sort: z.string().optional().default("sortOrder").openapi({ description: "Sort field" }),
+            sort: z.enum(["name", "presentation", "isActive", "updatedAt", "sortOrder"]).optional().default("sortOrder").openapi({ description: "Sort field" }),
             order: z.string().optional().default("asc").openapi({ description: "Sort order" })
         })
     },
@@ -210,7 +212,7 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: q.sort as "name" | "type" | "isActive" | "updatedAt" | "sortOrder" | undefined,
+        sort: q.sort,
         order: q.order as "asc" | "desc" | undefined
     });
     return ok(c, result);
@@ -226,7 +228,7 @@ const getByIdsRoute = createRoute({
     request: {
         query: z.object({
             ids: z.string().optional().default("").openapi({
-                description: "Comma-separated collection IDs. At most 100 IDs are resolved.",
+                description: "Comma-separated collection IDs. At most 90 IDs are resolved.",
             }),
         }),
     },
@@ -291,7 +293,7 @@ const bulkDeleteRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        collectionIds: z.array(z.string()),
+                        collectionIds: collectionIdsSchema,
                         permanent: z.boolean().default(false)
                     })
                 }
@@ -320,7 +322,7 @@ const bulkActivateRoute = createRoute({
     tags: ["Admin - Collections"],
     summary: "Bulk activate collections",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: z.object({ ids: collectionIdsSchema }) } } }
     },
     responses: {
         204: noContentResponse,
@@ -344,7 +346,7 @@ const bulkDeactivateRoute = createRoute({
     tags: ["Admin - Collections"],
     summary: "Bulk deactivate collections",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: z.object({ ids: collectionIdsSchema }) } } }
     },
     responses: {
         204: noContentResponse,
@@ -368,7 +370,7 @@ const bulkRestoreRoute = createRoute({
     tags: ["Admin - Collections"],
     summary: "Bulk restore collections",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: z.object({ ids: collectionIdsSchema }) } } }
     },
     responses: {
         204: noContentResponse,
@@ -425,7 +427,10 @@ const reorderRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        items: z.array(z.object({ id: z.string(), sortOrder: z.number() }))
+                        items: z.array(z.object({
+                            id: z.string().trim().min(1).max(180),
+                            sortOrder: z.number().int().min(0),
+                        })).min(1).max(90)
                     })
                 }
             }

@@ -55,11 +55,12 @@ import { adminCollectionRoutes } from "./collections";
 function createCollectionBody(overrides: Record<string, unknown> = {}) {
   return {
     name: "Homepage Deals",
-    type: "manual",
+    presentation: "grid",
     isActive: true,
     config: {
+      source: "manual",
       categoryIds: [],
-      productIds: [],
+      productIds: ["prod_1"],
       maxProducts: 8,
     },
     ...overrides,
@@ -173,5 +174,24 @@ describe("admin collection cache invalidation", () => {
       "collections",
       expect.objectContaining({ env }),
     );
+  });
+
+  it("rejects bulk collection writes above the D1-safe boundary", async () => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(
+      app,
+      env,
+      "/bulk-delete",
+      "POST",
+      {
+        collectionIds: Array.from({ length: 91 }, (_, index) => `col_${index}`),
+        permanent: false,
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.bulkDeleteCollections).not.toHaveBeenCalled();
+    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
   });
 });

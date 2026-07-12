@@ -12,6 +12,10 @@ const validationMigration = readFileSync(
   resolve(migrationsDirectory, "0004_validate_inventory_ledger_v2.sql"),
   "utf8",
 ).replaceAll("--> statement-breakpoint", "");
+const movementFilterIndexMigration = readFileSync(
+  resolve(migrationsDirectory, "0009_sticky_green_goblin.sql"),
+  "utf8",
+);
 
 const legacyTable = `
   CREATE TABLE inventory_movements (
@@ -41,6 +45,12 @@ const validV2Values = `
 `;
 
 describe("inventory ledger v2 migrations", () => {
+  it("indexes movement type and time for bounded audit-history filtering", () => {
+    expect(movementFilterIndexMigration).toContain(
+      "CREATE INDEX `inventory_movements_type_created_at_idx` ON `inventory_movements` (`type`,`created_at`)",
+    );
+  });
+
   it("adds columns and indexes without rebuilding or deleting legacy movement history", () => {
     expect(additiveMigration).toContain("ALTER TABLE `inventory_movements` ADD `ledger_version`");
     expect(additiveMigration).not.toMatch(/DROP TABLE|__new_inventory_movements/i);

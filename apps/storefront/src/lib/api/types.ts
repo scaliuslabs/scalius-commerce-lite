@@ -237,6 +237,7 @@ export interface CategoryProductsResponse extends PaginatedResponse<Product> {
 // ---------------------------------------------------------------------------
 
 export interface CollectionConfig {
+  source: "manual" | "dynamic";
   categoryIds?: string[];
   productIds?: string[];
   featuredProductId?: string;
@@ -248,7 +249,7 @@ export interface CollectionConfig {
 export interface Collection {
   id: string;
   name: string;
-  type: "manual" | "dynamic" | "AllCategories";
+  presentation: "grid" | "carousel";
   config: CollectionConfig;
   sortOrder: number;
   isActive: boolean;

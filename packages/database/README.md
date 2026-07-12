@@ -58,7 +58,7 @@ All enums follow the pattern: `const` object with `as const`, plus a derived uni
 Some tables use inline enum arrays instead of the centralized enums:
 - `products.discountType`: `["percentage", "flat"]`
 - `productVariants.barcodeType`: `["ean13", "upc", "isbn", "gtin", "custom"]`
-- `collections.type`: `["manual", "dynamic"]`
+- `collections.presentation`: `["grid", "carousel"]`; membership is canonical `config.source` (`manual` or `dynamic`)
 - `heroSliders.type`: `["desktop", "mobile"]`
 - `deliveryLocations.type`: `["city", "zone", "area"]`
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`

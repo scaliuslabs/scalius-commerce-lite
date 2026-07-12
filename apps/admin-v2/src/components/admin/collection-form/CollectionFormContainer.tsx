@@ -29,6 +29,7 @@ import {
 } from "./types";
 
 const DEFAULT_CONFIG = {
+  source: "manual" as const,
   categoryIds: [] as string[],
   productIds: [] as string[],
   maxProducts: 8,
@@ -48,12 +49,13 @@ export function CollectionForm({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { collections: collectionActions } = useCatalogActionPermissions();
+  const canSave = isEdit ? collectionActions.canEdit : collectionActions.canCreate;
   const [knownProducts, setKnownProducts] = React.useState<Product[]>(products);
   const form = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
-      type: "manual",
+      presentation: "grid",
       isActive: false,
       canonicalPath: null,
       noIndex: false,
@@ -65,7 +67,8 @@ export function CollectionForm({
 
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-  const selectedType = form.watch("type");
+  const selectedPresentation = form.watch("presentation");
+  const selectedSource = form.watch("config.source");
   const selectedCategoryIds = form.watch("config.categoryIds");
   const selectedProductIds = form.watch("config.productIds");
 
@@ -105,13 +108,20 @@ export function CollectionForm({
   const handleSubmit: SubmitHandler<CollectionFormValues> = async (values) => {
     try {
       setIsSubmitting(true);
+      const submission = {
+        ...values,
+        config: {
+          ...values.config,
+          featuredProductId: values.config.featuredProductId || "",
+        },
+      };
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
-        await updateCollection({ data: { ...values, id: entityId } });
+        await updateCollection({ data: { ...submission, id: entityId } });
         queryClient.invalidateQueries({ queryKey: ["collections", "detail", entityId] });
       } else {
-        await createCollection({ data: values });
+        await createCollection({ data: submission });
       }
 
       // Invalidate queries so list page shows fresh data
@@ -132,36 +142,57 @@ export function CollectionForm({
     }
   };
 
-  const addCategory = (categoryId: string) => {
+  const addCategory = React.useCallback((categoryId: string) => {
     const currentIds = form.getValues("config.categoryIds");
-    if (!currentIds.includes(categoryId)) {
-      form.setValue("config.categoryIds", [...currentIds, categoryId]);
+    if (currentIds.length < 90 && !currentIds.includes(categoryId)) {
+      form.setValue("config.categoryIds", [...currentIds, categoryId], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
-  };
+  }, [form]);
 
-  const removeCategory = (categoryId: string) => {
+  const removeCategory = React.useCallback((categoryId: string) => {
     const currentIds = form.getValues("config.categoryIds");
     form.setValue(
       "config.categoryIds",
       currentIds.filter((id) => id !== categoryId),
+      { shouldDirty: true, shouldValidate: true },
     );
-  };
+  }, [form]);
 
-  const addProduct = (product: Product) => {
+  const addProduct = React.useCallback((product: Product) => {
     rememberProduct(product);
     const currentIds = form.getValues("config.productIds");
-    if (!currentIds.includes(product.id)) {
-      form.setValue("config.productIds", [...currentIds, product.id]);
+    if (currentIds.length < 90 && !currentIds.includes(product.id)) {
+      form.setValue("config.productIds", [...currentIds, product.id], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
-  };
+  }, [form, rememberProduct]);
 
-  const removeProduct = (productId: string) => {
+  const removeProduct = React.useCallback((productId: string) => {
     const currentIds = form.getValues("config.productIds");
     form.setValue(
       "config.productIds",
       currentIds.filter((id) => id !== productId),
+      { shouldDirty: true, shouldValidate: true },
     );
-  };
+  }, [form]);
+
+  const moveProduct = React.useCallback((productId: string, direction: -1 | 1) => {
+    const currentIds = form.getValues("config.productIds");
+    const currentIndex = currentIds.indexOf(productId);
+    const targetIndex = currentIndex + direction;
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= currentIds.length) return;
+    const reordered = [...currentIds];
+    [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex]!, reordered[currentIndex]!];
+    form.setValue("config.productIds", reordered, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [form]);
 
   return (
     <>
@@ -185,8 +216,13 @@ export function CollectionForm({
                 ? "Update collection membership, layout, and discovery settings."
                 : "Start as a draft, choose its products, and publish when the preview is ready."}
             </p>
+            {!canSave ? (
+              <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+                Read-only access. Collection changes require catalog edit permission.
+              </p>
+            ) : null}
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+          <fieldset disabled={!canSave} className="grid grid-cols-1 gap-4 disabled:opacity-70 lg:grid-cols-3 lg:gap-5">
             {/* Left Column (2/3) - Main content */}
             <div className="lg:col-span-2 space-y-4">
               {/* Name field */}
@@ -201,6 +237,7 @@ export function CollectionForm({
                     <FormControl>
                       <Input
                         placeholder="Collection name"
+                        maxLength={100}
                         {...field}
                         className="text-base"
                       />
@@ -212,6 +249,7 @@ export function CollectionForm({
 
               <ProductSelectionSection
                 form={form}
+                selectedSource={selectedSource}
                 categories={categories}
                 selectedCategories={selectedCategories}
                 selectedProducts={selectedProducts}
@@ -221,21 +259,22 @@ export function CollectionForm({
                 removeCategory={removeCategory}
                 addProduct={addProduct}
                 removeProduct={removeProduct}
+                moveProduct={moveProduct}
               />
             </div>
 
             {/* Right Column (1/3) - Settings */}
             <LayoutSettingsSection
               form={form}
-              selectedType={selectedType}
+              selectedPresentation={selectedPresentation}
               knownProducts={knownProducts}
               selectedCategoryIds={selectedCategoryIds}
               onProductDiscovered={rememberProduct}
             />
-          </div>
+          </fieldset>
         </form>
       </Form>
-      <FormActionBar
+      {canSave ? <FormActionBar
         title="Collections"
         isEdit={isEdit}
         isSubmitting={isSubmitting}
@@ -245,7 +284,7 @@ export function CollectionForm({
         newLabel="New Collection"
         canCreateNew={collectionActions.canCreate}
         onSave={() => form.handleSubmit(handleSubmit)()}
-      />
+      /> : null}
     </>
   );
 }

@@ -115,7 +115,7 @@ export interface Category {
 export interface Collection {
   id: string;
   name: string;
-  type: "manual" | "dynamic";
+  presentation: "grid" | "carousel";
   config: string;
   sortOrder: number;
   isActive: boolean;

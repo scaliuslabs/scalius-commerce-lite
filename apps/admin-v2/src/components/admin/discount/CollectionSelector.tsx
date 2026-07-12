@@ -21,7 +21,7 @@ interface Collection {
   name: string;
   description: string | null;
   slug: string;
-  type?: "manual" | "dynamic";
+  presentation?: "grid" | "carousel";
 }
 
 interface CollectionSelectorProps {
@@ -84,7 +84,7 @@ export function CollectionSelector({
         name: c.name,
         description: null,
         slug: "",
-        type: c.type,
+        presentation: c.presentation,
       }));
 
       if (page === 1) {
@@ -129,7 +129,7 @@ export function CollectionSelector({
             return {
               ...sc,
               name: found.name,
-              type: found.type || sc.type,
+              presentation: found.presentation || sc.presentation,
             };
           }
           return sc;
@@ -140,7 +140,7 @@ export function CollectionSelector({
           resolved.some(
             (r, i) =>
               r.name !== selectedCollections[i].name ||
-              r.type !== selectedCollections[i].type,
+              r.presentation !== selectedCollections[i].presentation,
           )
         ) {
           onChange(resolved);
@@ -306,12 +306,12 @@ export function CollectionSelector({
                           />
                           <span className="truncate">{collection.name}</span>
                         </div>
-                        {collection.type && (
+                        {collection.presentation && (
                           <Badge
                             variant="outline"
                             className="ml-2 shrink-0 text-[10px] px-1.5 py-0"
                           >
-                            {collection.type === "manual"
+                            {collection.presentation === "grid"
                               ? "Manual"
                               : "Dynamic"}
                           </Badge>
@@ -362,12 +362,12 @@ export function CollectionSelector({
               <span className="truncate max-w-[180px]">
                 {collection.name}
               </span>
-              {collection.type && (
+              {collection.presentation && (
                 <Badge
                   variant="outline"
                   className="ml-1 text-[10px] px-1 py-0 border-muted-foreground/30"
                 >
-                  {collection.type === "manual" ? "M" : "D"}
+                  {collection.presentation === "grid" ? "Grid" : "Carousel"}
                 </Badge>
               )}
               <Button

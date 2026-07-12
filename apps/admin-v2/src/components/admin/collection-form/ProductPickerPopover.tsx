@@ -28,6 +28,7 @@ interface ProductPickerPopoverProps {
   excludeProductIds?: string[];
   onSelectProduct: (product: Product) => void;
   buttonClassName?: string;
+  disabled?: boolean;
 }
 
 export function ProductPickerPopover({
@@ -37,6 +38,7 @@ export function ProductPickerPopover({
   excludeProductIds = [],
   onSelectProduct,
   buttonClassName,
+  disabled = false,
 }: ProductPickerPopoverProps) {
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -91,6 +93,7 @@ export function ProductPickerPopover({
           role="combobox"
           aria-expanded={open}
           className={buttonClassName}
+          disabled={disabled}
         >
           <span className="truncate">{triggerLabel}</span>
           <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
