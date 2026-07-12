@@ -42,8 +42,10 @@ support the domain facts; the live observation is only UX evidence.
   low-stock policy, and order-linked movement claims are materially stronger
   than a plain mutable stock counter. Checkout and many order transitions have
   deterministic claims or version guards.
-- Manual adjustment and stocktake accept exact safe integers and record reasons,
-  but the request does not yet carry a merchant-supplied idempotency key.
+- Manual adjustment, scanner adjustment, and stocktake accept exact safe
+  integers and require merchant operation keys. The canonical request hash and
+  committed result are stored atomically with the ledger-v2 movement and
+  `stockVersion` CAS; exact retries replay and changed-payload key reuse fails.
 - Inventory is global per SKU. There is no stock-location/inventory-level,
   unavailable-hold, incoming-receipt, transfer, supplier, or purchase-order
   domain in the current schema or admin.
@@ -181,7 +183,7 @@ support the domain facts; the live observation is only UX evidence.
 
 | Capability | Scalius now | Benchmark signal | Decision |
 |---|---|---|---|
-| Inventory integrity | Strong CAS + atomic ledger-v2 edge; manual retry key missing | Shopify now requires API idempotency; Medusa exposes compensating workflows | Add operation idempotency before more write surfaces |
+| Inventory integrity | Strong CAS + atomic ledger-v2 edge + durable merchant operation replay | Shopify now requires API idempotency; Medusa exposes compensating workflows | Keep this contract for imports, transfers, and receipts |
 | Inventory states | On hand, reserved, preorder; backorder is a policy/pool | Shopify: committed/unavailable/incoming; Medusa: stocked/reserved/incoming | Add explicit operational states without weakening ledger authority |
 | Locations | Single global SKU counter | All three model physical sources/locations | Foundational P1 schema, before transfers or split fulfillment |
 | Reservations | Counter + ledger generation, usually order-scoped | Medusa exposes location-bound reservation objects; Shopify exposes hold reasons | Preserve generation claims; add durable location/owner/reason projection |
@@ -204,11 +206,12 @@ support the domain facts; the live observation is only UX evidence.
    create a location-aware ledger restore. Refund timing remains an independent
    merchant decision and keeps the existing provider single-flight/reconciliation
    protections. Exchange/claim can reuse the same inbound lines later.
-2. **Make every manual/scanner/import inventory write idempotent.** Require an
+2. **Keep every manual/scanner/import inventory write idempotent.** Manual,
+   scanner, and stocktake writes now require an
    operation key, store request hash + result, reject same-key/different-payload,
-   and return the committed result on replay. Keep the movement claim and
-   `stockVersion` CAS in the same D1 batch. Do this before CSV import or transfer
-   receiving creates more retryable write surfaces.
+   and return the committed result on replay. CSV import and future transfer
+   receiving must reuse the same atomic operation contract rather than creating
+   an alternate stock-write path.
 
 ### P1 — operational foundation
 

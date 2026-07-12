@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { inventoryMovements, productVariants } from "@scalius/database/schema";
+import { inventoryMovements, inventoryOperations, productVariants } from "@scalius/database/schema";
 import * as schema from "@scalius/database/schema";
 import { drizzle } from "drizzle-orm/d1";
 import { adjustInventory, getInventoryOverview } from "./inventory.service";
@@ -27,11 +27,11 @@ function createInventoryAdjustmentDbMock(variant: {
   const db = {
     select() {
       return {
-        from() {
+        from(table: unknown) {
           return {
             where() {
               return {
-                get: async () => persistedVariant,
+                get: async () => table === inventoryOperations ? null : persistedVariant,
               };
             },
           };
@@ -66,7 +66,11 @@ function createInventoryAdjustmentDbMock(variant: {
     },
     batch: async (statements: MockStatement[]) => {
       batchCalls.push(statements);
-      return [[{ id: "movement_1" }], [{ id: variant.id }]];
+      return [
+        [{ id: "movement_1" }],
+        [{ operationKey: "invop_inventory_test_0001" }],
+        [{ id: variant.id }],
+      ];
     },
   };
 
@@ -89,7 +93,7 @@ describe("adjustInventory stock ledger", () => {
     const result = await adjustInventory(
       db as never,
       "variant_1",
-      { delta: -3, reason: "damage", notes: "warehouse count" },
+      { operationKey: "invop_inventory_test_0001", delta: -3, reason: "damage", notes: "warehouse count" },
       "admin_1",
     );
 
@@ -104,7 +108,7 @@ describe("adjustInventory stock ledger", () => {
       kind: "insert",
       table: inventoryMovements,
     });
-    expect(batchCalls[0]?.[1]).toMatchObject({
+    expect(batchCalls[0]?.[2]).toMatchObject({
       kind: "update",
       table: productVariants,
       values: { stock: 6 },
@@ -123,7 +127,7 @@ describe("adjustInventory stock ledger", () => {
     const result = await adjustInventory(
       db as never,
       "variant_1",
-      { delta: 8, reason: "received", notes: "supplier delivery" },
+      { operationKey: "invop_inventory_test_0002", delta: 8, reason: "received", notes: "supplier delivery" },
       "admin_1",
     );
 
@@ -141,7 +145,10 @@ describe("adjustInventory stock ledger", () => {
     const db = { select };
 
     await expect(
-      adjustInventory(db as never, "variant_1", payload),
+      adjustInventory(db as never, "variant_1", {
+        operationKey: "invop_inventory_invalid_01",
+        ...payload,
+      }),
     ).rejects.toThrow(message);
     expect(select).not.toHaveBeenCalled();
   });
@@ -155,7 +162,11 @@ describe("adjustInventory stock ledger", () => {
     });
 
     await expect(
-      adjustInventory(db as never, "variant_1", { delta: -3, reason: "damage" }),
+      adjustInventory(db as never, "variant_1", {
+        operationKey: "invop_inventory_overdraw_1",
+        delta: -3,
+        reason: "damage",
+      }),
     ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
     expect(batchCalls).toHaveLength(0);
   });

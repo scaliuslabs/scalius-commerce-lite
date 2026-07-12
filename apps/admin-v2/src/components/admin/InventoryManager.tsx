@@ -3,7 +3,7 @@
 // Uses TanStack Query for data fetching and shadcn Dialog for the adjust modal.
 
 import { Link } from "@tanstack/react-router";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown } from "lucide-react";
@@ -65,6 +65,10 @@ type SortField = "productName" | "sku" | "available";
 type SortOrder = "asc" | "desc";
 type MovementTypeFilter = "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
 type AdjustmentMode = "relative" | "stocktake";
+
+function createInventoryOperationKey(): string {
+  return `invop_${crypto.randomUUID()}`;
+}
 
 // ---------- Helper Functions ----------
 
@@ -700,6 +704,7 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
     useState<InventoryAdjustmentReason>("received");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const delta = Number(deltaInput);
   const countedStock = Number(countInput);
@@ -726,6 +731,16 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
     setCountInput("0");
     setReason("received");
     setNotes("");
+    operationIntentRef.current = null;
+  };
+
+  const operationKeyForIntent = (fingerprint: string) => {
+    if (operationIntentRef.current?.fingerprint === fingerprint) {
+      return operationIntentRef.current.key;
+    }
+    const key = createInventoryOperationKey();
+    operationIntentRef.current = { fingerprint, key };
+    return key;
   };
 
   const updateRelativeDelta = (nextValue: string) => {
@@ -743,20 +758,37 @@ function AdjustDialog({ variant, onClose, onSubmit }: { variant: InventoryVarian
     setSubmitting(true);
     try {
       if (mode === "stocktake") {
+        const stocktakeReason = notes.trim() || "Manual stocktake";
+        const operationKey = operationKeyForIntent(JSON.stringify({
+          mode,
+          variantId: variant.id,
+          newStock: countedStock,
+          reason: stocktakeReason,
+        }));
         await stockSet({
           data: {
+            operationKey,
             variantId: variant.id,
             newStock: countedStock,
-            reason: notes.trim() || "Manual stocktake",
+            reason: stocktakeReason,
           },
         });
       } else {
+        const trimmedNotes = notes.trim();
+        const operationKey = operationKeyForIntent(JSON.stringify({
+          mode,
+          variantId: variant.id,
+          delta,
+          reason,
+          notes: trimmedNotes || null,
+        }));
         await adjustInventory({
           data: {
+            operationKey,
             variantId: variant.id,
             delta,
             reason,
-            ...(notes.trim() ? { notes: notes.trim() } : {}),
+            ...(trimmedNotes ? { notes: trimmedNotes } : {}),
           },
         });
       }

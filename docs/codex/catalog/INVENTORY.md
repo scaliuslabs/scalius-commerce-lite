@@ -18,6 +18,12 @@ Last reviewed: 2026-07-12
 - Directional reasons are enforced for the primary admin adjustment contract:
   received/return add stock, damage/theft remove it, and correction/other work
   in either direction.
+- Manual relative adjustment, scanner adjustment, and stocktake require a
+  merchant operation key. D1 stores the canonical request hash and committed
+  result in `inventory_operations` in the same batch as the guarded ledger-v2
+  movement and `stockVersion` CAS. Exact retries replay the original result;
+  reusing a key with changed mode/SKU/quantity/reason/notes/pool fails closed.
+  No standalone pending operation row exists.
 
 ## Admin workflow contract
 
@@ -47,30 +53,28 @@ Last reviewed: 2026-07-12
 
 ## Remaining release gaps
 
-1. Manual/scanner adjustment requests do not yet have a merchant-supplied
-   idempotency key. A retry after an unknown response can apply twice. Converge
-   the two relative-write routes behind one idempotent operation contract.
-2. Low-stock alerts are durable and acknowledgeable in the API, but the main
+1. Low-stock alerts are durable and acknowledgeable in the API, but the main
    inventory page still lacks the alert inbox, acknowledgement workflow, and
    resolved-history pagination.
-3. Audit history still lacks date range, actor resolution, exact order filter,
+2. Audit history still lacks date range, actor resolution, exact order filter,
    cursor pagination, and streaming CSV export. The current joined substring
    search and global ledger-health aggregate will not remain cheap at very
    large movement counts.
-4. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
+3. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
    validate every row first, use stable SKU/barcode identity, require one
    idempotency key per import, chunk lookup sets below D1's parameter ceiling,
    and avoid partial inventory commits.
-5. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
+4. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
    diagnostics may report them, but reconciliation must not invent missing
    counter edges.
 
 ## Verification for this slice
 
 - Focused core/API/admin/database tests cover invalid numeric input,
-  reason/direction mismatches, overdraw rejection, stocktake behavior, cache
-  invalidation, bounded query validation, movement filters, and migration
-  registration.
+  reason/direction mismatches, overdraw rejection, stocktake behavior,
+  exact replay, changed-payload conflict, operation-key races, CAS retries,
+  atomic batch composition, cache invalidation, bounded query validation,
+  movement filters, and migration registration.
 - API typecheck and generated OpenAPI client complete successfully. Repository
   typecheck remains independently gated by currently active Collections work;
   do not attribute that unrelated failure to inventory.

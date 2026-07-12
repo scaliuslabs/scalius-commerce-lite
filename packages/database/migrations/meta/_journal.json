@@ -85,6 +85,13 @@
       "when": 1783854109412,
       "tag": "0011_product_barcode_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1783856822075,
+      "tag": "0012_light_bedlam",
+      "breakpoints": true
     }
   ]
 }

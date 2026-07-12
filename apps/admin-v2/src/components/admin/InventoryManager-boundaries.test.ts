@@ -39,6 +39,13 @@ describe("InventoryManager boundaries", () => {
     expect(source).not.toContain("Math.max(0, newStock - variant.reservedStock)");
   });
 
+  it("retains one operation key for an unchanged retry and rotates it with intent", () => {
+    expect(source).toContain("operationIntentRef");
+    expect(source).toContain("operationKeyForIntent");
+    expect(source).toContain("createInventoryOperationKey");
+    expect(source).toContain("operationKey,");
+  });
+
   it("supports server-backed movement search, type filtering, and order navigation", () => {
     expect(source).toContain("movementSearch");
     expect(source).toContain("movementType");

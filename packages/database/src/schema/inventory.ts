@@ -64,6 +64,37 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     ),
 ]);
 
+/**
+ * Durable replay ledger for merchant-originated stock writes. Rows are inserted
+ * only in the same D1 batch that commits the matching movement/counter edge;
+ * there is intentionally no standalone pending state to reconcile.
+ */
+export const inventoryOperations = sqliteTable("inventory_operations", {
+    operationKey: text("operation_key").primaryKey(),
+    requestHash: text("request_hash").notNull(),
+    operationType: text("operation_type", {
+        enum: ["manual_adjustment", "scanner_adjustment", "stocktake"],
+    }).notNull(),
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    movementId: text("movement_id")
+        .references(() => inventoryMovements.id, { onDelete: "restrict" }),
+    resultPayload: text("result_payload").notNull(),
+    stockVersionBefore: integer("stock_version_before").notNull(),
+    stockVersionAfter: integer("stock_version_after").notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    index("inventory_operations_variant_created_idx").on(
+        table.variantId,
+        table.createdAt,
+    ),
+    index("inventory_operations_movement_idx").on(table.movementId),
+]);
+
 export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
     id: text("id").primaryKey(),
     variantId: text("variant_id")
@@ -92,4 +123,5 @@ export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
 ]);
 
 export type InventoryMovement = InferSelectModel<typeof inventoryMovements>;
+export type InventoryOperation = InferSelectModel<typeof inventoryOperations>;
 export type ProductLowStockAlert = InferSelectModel<typeof productLowStockAlerts>;

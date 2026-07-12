@@ -13242,6 +13242,7 @@ export type PatchApiV1AdminInventoryAlertsResponse = PatchApiV1AdminInventoryAle
 
 export type PostApiV1AdminInventoryByVariantIdAdjustData = {
     body?: {
+        operationKey: string;
         delta: number;
         reason: 'received' | 'correction' | 'damage' | 'theft' | 'return' | 'other';
         notes?: string;
@@ -13364,6 +13365,7 @@ export type GetApiV1AdminInventoryScannerLookupResponse = GetApiV1AdminInventory
 
 export type PostApiV1AdminInventoryStockAdjustData = {
     body?: {
+        operationKey: string;
         /**
          * Variant ID
          */
@@ -13428,6 +13430,7 @@ export type PostApiV1AdminInventoryStockAdjustResponse = PostApiV1AdminInventory
 
 export type PostApiV1AdminInventoryStockSetData = {
     body?: {
+        operationKey: string;
         /**
          * Variant ID
          */

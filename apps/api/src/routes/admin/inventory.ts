@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getInventoryOverview, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku } from "@scalius/core/modules/inventory";
+import { getInventoryOverview, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -335,6 +335,7 @@ const stockAdjustRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
+                        operationKey: inventoryOperationKeySchema,
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         adjustment: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Adjustment must not be zero.").openapi({ description: "Whole-number stock adjustment (positive=add, negative=remove)" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for adjustment" }),
@@ -355,10 +356,10 @@ const stockAdjustRoute = createRoute({
 
 app.openapi(stockAdjustRoute, async (c) => {
     const db = c.get("db");
-    const { variantId, adjustment, reason } = c.req.valid("json");
+    const { operationKey, variantId, adjustment, reason } = c.req.valid("json");
     const user = c.get("user");
     try {
-        const result = await adjustStock(db, variantId, adjustment, reason, user?.id);
+        const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
         await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
         return ok(c, result);
     } catch (error: unknown) {
@@ -379,6 +380,7 @@ const stockSetRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
+                        operationKey: inventoryOperationKeySchema,
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "New absolute whole-number stock value" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
@@ -399,10 +401,10 @@ const stockSetRoute = createRoute({
 
 app.openapi(stockSetRoute, async (c) => {
     const db = c.get("db");
-    const { variantId, newStock, reason } = c.req.valid("json");
+    const { operationKey, variantId, newStock, reason } = c.req.valid("json");
     const user = c.get("user");
     try {
-        const result = await setStock(db, variantId, newStock, reason, user?.id);
+        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);
         await invalidateProductAvailabilityCaches(db, { variantIds: [variantId] }, c);
         return ok(c, result);
     } catch (error: unknown) {

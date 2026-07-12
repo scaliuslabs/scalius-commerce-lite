@@ -2,26 +2,16 @@
 // Dedicated stock adjustment operations for barcode scanner and stocktake workflows.
 
 import { productVariants, products, productImages } from "@scalius/database/schema";
-import { safeBatch } from "@scalius/database/client";
 import { eq, sql, and, isNull } from "drizzle-orm";
-import { checkAndAlertLowStock } from "./alerts";
 import type { Database } from "@scalius/database/client";
-import { NotFoundError, ConflictError } from "@scalius/core/errors";
 import {
   getBarcodeIdentityKey,
   normalizeBarcodeValue,
 } from "@scalius/shared/barcode-identity";
 import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
-import { buildStockMovementClaim } from "./stock-movement-claims";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
-import {
-  validateAbsoluteStockCount,
-  validateSignedStockAdjustment,
-} from "./validation";
-
-const MAX_CAS_RETRIES = 3;
-const BASE_BACKOFF_MS = 50;
+import { executeInventoryOperation } from "./inventory-operations";
 
 export interface StockAdjustResult {
   variantId: string;
@@ -37,79 +27,6 @@ export interface StockSetResult {
   delta: number;
 }
 
-type StockVariantState = {
-  id: string;
-  stock: number;
-  reservedStock: number;
-  preorderStock: number;
-  stockVersion: number;
-};
-
-async function applyStrictStockSet(
-  db: Database,
-  variant: StockVariantState,
-  targetStock: number,
-  notes: string,
-  adminUserId?: string,
-): Promise<StockSetResult> {
-  const previousStock = variant.stock;
-  const delta = targetStock - previousStock;
-
-  if (delta === 0) {
-    await checkAndAlertLowStock(db, variant.id);
-    return { variantId: variant.id, previousStock, newStock: targetStock, delta: 0 };
-  }
-
-  const movementInsert = buildStockMovementClaim(db, {
-    movementId: crypto.randomUUID(),
-    variantId: variant.id,
-    pool: "regular",
-    quantity: delta,
-    before: {
-      stock: variant.stock,
-      reservedStock: variant.reservedStock,
-      preorderStock: variant.preorderStock,
-      stockVersion: variant.stockVersion,
-    },
-    after: {
-      stock: targetStock,
-      reservedStock: variant.reservedStock,
-      preorderStock: variant.preorderStock,
-      stockVersion: variant.stockVersion + 1,
-    },
-    notes,
-    adminUserId,
-  });
-  const stockUpdate = db
-    .update(productVariants)
-    .set({
-      stock: targetStock,
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(
-      and(
-        eq(productVariants.id, variant.id),
-        eq(productVariants.stockVersion, variant.stockVersion),
-        isNull(productVariants.deletedAt),
-      ),
-    )
-    .returning({ id: productVariants.id });
-
-  const [movementRows, updateRows] = await safeBatch(
-    db,
-    [movementInsert, stockUpdate] as never,
-  ) as { id: string }[][];
-
-  if ((movementRows?.length ?? 0) > 0 && (updateRows?.length ?? 0) > 0) {
-    await checkAndAlertLowStock(db, variant.id);
-
-    return { variantId: variant.id, previousStock, newStock: targetStock, delta };
-  }
-
-  throw new ConflictError("Stock changed concurrently before movement could be recorded");
-}
-
 /**
  * Adjust stock by a relative delta (positive = add, negative = remove).
  * Records an inventory movement and checks low-stock alerts.
@@ -118,55 +35,19 @@ export async function adjustStock(
   db: Database,
   variantId: string,
   adjustment: number,
+  operationKey: string,
   reason?: string,
   adminUserId?: string,
 ): Promise<StockAdjustResult> {
-  validateSignedStockAdjustment(adjustment);
-  const delta = adjustment;
-
-  for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
-    const variant = await db
-      .select({
-        id: productVariants.id,
-        stock: productVariants.stock,
-        reservedStock: productVariants.reservedStock,
-        preorderStock: productVariants.preorderStock,
-        stockVersion: productVariants.stockVersion,
-      })
-      .from(productVariants)
-      .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
-      .get();
-
-    if (!variant) {
-      throw new NotFoundError("Variant not found");
-    }
-
-    const previousStock = variant.stock;
-    const newStock = previousStock + delta;
-    validateAbsoluteStockCount(newStock, "resulting stock");
-
-    try {
-      return await applyStrictStockSet(
-        db,
-        variant,
-        newStock,
-        reason ? `Scanner adjustment: ${reason}` : "Scanner adjustment",
-        adminUserId,
-      );
-    } catch (error) {
-      if (!(error instanceof ConflictError)) throw error;
-    }
-
-    // CAS conflict — retry with backoff
-    if (attempt < MAX_CAS_RETRIES - 1) {
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-    }
-  }
-
-  throw new ConflictError(
-    `Failed to adjust stock after ${MAX_CAS_RETRIES} retries due to concurrent modifications`,
-  );
+  return executeInventoryOperation(db, {
+    operationKey,
+    operationType: "scanner_adjustment",
+    variantId,
+    pool: "stock",
+    mode: "relative",
+    delta: adjustment,
+    reason: reason?.trim() || "Scanner adjustment",
+  }, adminUserId);
 }
 
 /**
@@ -177,61 +58,19 @@ export async function setStock(
   db: Database,
   variantId: string,
   newStockValue: number,
+  operationKey: string,
   reason?: string,
   adminUserId?: string,
 ): Promise<StockSetResult> {
-  validateAbsoluteStockCount(newStockValue);
-  const targetStock = newStockValue;
-
-  for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
-    const variant = await db
-      .select({
-        id: productVariants.id,
-        stock: productVariants.stock,
-        reservedStock: productVariants.reservedStock,
-        preorderStock: productVariants.preorderStock,
-        stockVersion: productVariants.stockVersion,
-      })
-      .from(productVariants)
-      .where(and(eq(productVariants.id, variantId), isNull(productVariants.deletedAt)))
-      .get();
-
-    if (!variant) {
-      throw new NotFoundError("Variant not found");
-    }
-
-    const previousStock = variant.stock;
-
-    // No counter change is needed, but reconcile any stale alert state.
-    if (targetStock === previousStock) {
-      await checkAndAlertLowStock(db, variantId);
-      return { variantId, previousStock, newStock: targetStock, delta: 0 };
-    }
-
-    try {
-      return await applyStrictStockSet(
-        db,
-        variant,
-        targetStock,
-        reason
-          ? `Stocktake: ${reason}`
-          : `Stocktake: set from ${previousStock} to ${targetStock}`,
-        adminUserId,
-      );
-    } catch (error) {
-      if (!(error instanceof ConflictError)) throw error;
-    }
-
-    // CAS conflict — retry with backoff
-    if (attempt < MAX_CAS_RETRIES - 1) {
-      const backoff = BASE_BACKOFF_MS * Math.pow(2, attempt);
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-    }
-  }
-
-  throw new ConflictError(
-    `Failed to set stock after ${MAX_CAS_RETRIES} retries due to concurrent modifications`,
-  );
+  return executeInventoryOperation(db, {
+    operationKey,
+    operationType: "stocktake",
+    variantId,
+    pool: "stock",
+    mode: "stocktake",
+    newStock: newStockValue,
+    reason: reason?.trim() || "Stocktake",
+  }, adminUserId);
 }
 
 /**
