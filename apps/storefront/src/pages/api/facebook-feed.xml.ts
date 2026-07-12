@@ -216,8 +216,11 @@ function getProductVariants(product: Product): ProductVariant[] {
   return Array.isArray(product.variants) ? product.variants : [];
 }
 
-function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
-  const sourceImage = product.imageUrl?.trim();
+function getCatalogImageLink(
+  imageUrl: string | null | undefined,
+  baseUrl: string,
+): string | null {
+  const sourceImage = imageUrl?.trim();
   if (!sourceImage) {
     return null;
   }
@@ -226,6 +229,23 @@ function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
     transformImageUrl: (imageUrl) =>
       getOptimizedImageUrl(imageUrl, FEED_IMAGE_OPTIONS),
   });
+}
+
+function getPrimaryImageLink(product: Product, baseUrl: string): string | null {
+  return getCatalogImageLink(product.imageUrl, baseUrl);
+}
+
+function getVariantImageLink(
+  product: Product,
+  variant: ProductVariant,
+  baseUrl: string,
+): string | null {
+  return (
+    (variant.imageId
+      ? getCatalogImageLink(variant.imageUrl, baseUrl)
+      : null) ??
+    getPrimaryImageLink(product, baseUrl)
+  );
 }
 
 function toFeedProductRow(
@@ -256,7 +276,7 @@ function toFeedVariantRow(
     return null;
   }
 
-  const imageLink = getPrimaryImageLink(product, baseUrl);
+  const imageLink = getVariantImageLink(product, variant, baseUrl);
   if (!imageLink) {
     return null;
   }

@@ -46,6 +46,7 @@ function optionedVariant<T extends Record<string, unknown>>(
   variant: T & { options: FeedOptionFixture[] },
 ) {
   const { options, ...rest } = variant;
+  const imageId = typeof rest.imageId === "string" ? rest.imageId : null;
   const selectedOptions = options.map((option, position) => {
     const optionKey = option.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const valueKey = option.value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -65,7 +66,7 @@ function optionedVariant<T extends Record<string, unknown>>(
     optionCombinationKey: selectedOptions
       .map((option) => option.optionValueId)
       .join("|"),
-    imageId: null,
+    imageId,
     selectedOptions,
   };
 }
@@ -506,6 +507,85 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:material>Cotton</g:material>");
     expect(body).not.toContain("Catalog color");
     expect(body).not.toContain("Catalog size");
+  });
+
+  it("uses exact SKU images in Google and Meta feeds and safely falls back for invalid exact URLs", async () => {
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        {
+          id: "prod_finish",
+          slug: "finish-lamp",
+          name: "Finish Lamp",
+          description: "A lamp with finish-specific photography",
+          price: 2500,
+          discountedPrice: 2500,
+          isActive: true,
+          hasVariants: true,
+          availableForSale: true,
+          imageUrl: "https://cdn.example.test/products/lamp-primary.jpg",
+          variants: [
+            optionedVariant({
+              id: "var_matte",
+              productId: "prod_finish",
+              options: [
+                { name: "Finish", value: "Matte", standardMapping: "material" },
+              ],
+              imageId: "pmed_matte",
+              imageUrl: "/products/lamp-matte.jpg",
+              sku: "LAMP-MATTE",
+              price: 2500,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            }),
+            optionedVariant({
+              id: "var_gloss",
+              productId: "prod_finish",
+              options: [
+                { name: "Finish", value: "Gloss", standardMapping: "material" },
+              ],
+              imageId: "pmed_gloss",
+              imageUrl: "//untrusted.example.test/lamp-gloss.jpg",
+              sku: "LAMP-GLOSS",
+              price: 2500,
+              stock: 4,
+              reservedStock: 0,
+              trackInventory: true,
+              isDefault: false,
+              deletedAt: null,
+              discountType: null,
+              discountAmount: null,
+              discountPercentage: null,
+            }),
+          ],
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+
+    const responses = await Promise.all([
+      GET(context()),
+      GOOGLE_FEED_GET(
+        context("https://storefront.example.test/api/product-feed.xml"),
+      ),
+    ]);
+
+    for (const response of responses) {
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(feedItemById(body, "LAMP-MATTE")).toContain(
+        "<g:image_link>https://storefront.example.test/products/lamp-matte.jpg</g:image_link>",
+      );
+      expect(feedItemById(body, "LAMP-GLOSS")).toContain(
+        "<g:image_link>https://cdn.example.test/products/lamp-primary.jpg</g:image_link>",
+      );
+      expect(body).not.toContain("untrusted.example.test");
+    }
   });
 
   it("uses merchant option mapping for variant feed labels and schema fields", async () => {

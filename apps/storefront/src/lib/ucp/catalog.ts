@@ -546,8 +546,12 @@ function variantUrl(product: Product, variant: ProductVariant, baseUrl: string):
   return url.toString();
 }
 
-function primaryMedia(product: Product, baseUrl: string) {
-  const url = resolveCatalogDiscoveryImageUrl(product.imageUrl, baseUrl, {
+function catalogMedia(
+  imageUrl: string | null | undefined,
+  baseUrl: string,
+  altText?: string | null,
+) {
+  const url = resolveCatalogDiscoveryImageUrl(imageUrl, baseUrl, {
     transformImageUrl: (imageUrl) =>
       getOptimizedImageUrl(imageUrl, CATALOG_IMAGE_OPTIONS),
   });
@@ -556,8 +560,25 @@ function primaryMedia(product: Product, baseUrl: string) {
   return [{
     type: "image" as const,
     url,
-    ...(product.imageAlt ? { alt_text: product.imageAlt } : {}),
+    ...(altText ? { alt_text: altText } : {}),
   }];
+}
+
+function primaryMedia(product: Product, baseUrl: string) {
+  return catalogMedia(product.imageUrl, baseUrl, product.imageAlt);
+}
+
+function variantMedia(
+  product: Product,
+  variant: ProductVariant,
+  baseUrl: string,
+) {
+  if (!variant.imageId) return undefined;
+  return catalogMedia(
+    variant.imageUrl,
+    baseUrl,
+    variantTitle(product, variant),
+  );
 }
 
 function supportedBarcode(variant: ProductVariant) {
@@ -614,7 +635,10 @@ function mapVariant(
   productMedia?: Array<{ type: "image"; url: string; alt_text?: string }>,
 ): UcpVariant {
   const pricing = variantPrices(product, variant, context);
-  const media = productMedia ?? primaryMedia(product, context.baseUrl);
+  const media =
+    variantMedia(product, variant, context.baseUrl) ??
+    productMedia ??
+    primaryMedia(product, context.baseUrl);
   const available = product.isActive !== false && isVariantAvailable(variant);
   const quantity = availableQuantityForVariant(variant);
 
