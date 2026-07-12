@@ -25,12 +25,12 @@ import {
     buildCategoryRevisionGuard,
     CATEGORY_REVISION_CONFLICT,
     categoryClaimIdsCondition,
+    categoryRevisionClaimsMatchCondition,
     normalizeCategoryRevisionClaims,
     rethrowCategoryRevisionConflict,
 } from "./categories.revision";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
-const CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION = "CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION";
 
 function categoryDeleteUsageGuard(
     db: Database,
@@ -46,6 +46,19 @@ function categoryDeleteUsageGuard(
               AND ${products.deletedAt} IS NULL
         ) THEN 1 ELSE json_extract('CATEGORY_DELETE_IN_USE', '$') END
     `);
+}
+
+function categoriesHaveNoAssignedProductsCondition(
+    claims: readonly CategoryRevisionClaim[],
+): SQL {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${products}
+        WHERE ${products.categoryId} IN (
+            SELECT CAST(json_extract(value, '$.id') AS TEXT)
+            FROM json_each(${JSON.stringify(claims)})
+        )
+          AND ${products.deletedAt} IS NULL
+    )`;
 }
 
 function activeDynamicCollectionCategoryReferenceCondition(
@@ -69,16 +82,63 @@ function activeDynamicCollectionCategoryReferenceCondition(
     `;
 }
 
-function categoryUnpublishUsageGuard(
+function categoriesHaveNoActiveDynamicCollectionReferencesCondition(
+    claims: readonly CategoryRevisionClaim[],
+): SQL {
+    return sql`NOT EXISTS (
+        SELECT 1 FROM ${collections}
+        WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
+    )`;
+}
+
+async function loadCategoryDeleteProductUsage(
     db: Database,
     claims: readonly CategoryRevisionClaim[],
-): SQLiteBatchItem {
-    return buildBatchGuard(db, sql`
-        CASE WHEN NOT EXISTS (
-            SELECT 1 FROM ${collections}
-            WHERE ${activeDynamicCollectionCategoryReferenceCondition(claims)}
-        ) THEN 1 ELSE json_extract(${CATEGORY_UNPUBLISH_IN_ACTIVE_COLLECTION}, '$') END
-    `);
+) {
+    return db
+        .select({
+            id: products.id,
+            name: products.name,
+            categoryId: products.categoryId,
+            productCount: sql<number>`count(*) OVER ()`,
+            categoryCount: sql<number>`(
+                SELECT count(DISTINCT assigned.category_id)
+                FROM products AS assigned
+                WHERE assigned.category_id IN (
+                    SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                    FROM json_each(${JSON.stringify(claims)})
+                )
+                  AND assigned.deleted_at IS NULL
+            )`,
+        })
+        .from(products)
+        .where(and(
+            sql`${products.categoryId} IN (
+                SELECT CAST(json_extract(value, '$.id') AS TEXT)
+                FROM json_each(${JSON.stringify(claims)})
+            )`,
+            isNull(products.deletedAt),
+        ))
+        .limit(5)
+        .all();
+}
+
+function throwCategoryDeleteProductUsage(
+    referencedProducts: Awaited<ReturnType<typeof loadCategoryDeleteProductUsage>>,
+): void {
+    if (referencedProducts.length === 0) return;
+    const categoryCount = Number(referencedProducts[0]?.categoryCount ?? 0);
+    const productCount = Number(referencedProducts[0]?.productCount ?? 0);
+    throw new ValidationError(
+        `Cannot delete ${categoryCount === 1 ? "category" : "categories"} because ${productCount} product${productCount === 1 ? "" : "s"} ${productCount === 1 ? "is" : "are"} still assigned to ${categoryCount === 1 ? "it" : "them"}.`,
+        {
+            suggestion: "Please delete the products permanently or move them to another category first.",
+            affectedProducts: referencedProducts.map((product) => ({
+                id: product.id,
+                name: product.name,
+            })),
+        },
+    );
 }
 
 async function assertCategoriesNotUsedByActiveDynamicCollections(
@@ -539,44 +599,7 @@ export async function bulkDeleteCategories(
     const claims = normalizeCategoryRevisionClaims(revisionClaims, CATEGORY_BATCH_LIMIT);
     const targetCategoryIds = new Set(claims.map((claim) => claim.id));
 
-    const referencedProducts = await db
-        .select({
-            id: products.id,
-            name: products.name,
-            categoryId: products.categoryId,
-            productCount: sql<number>`count(*) OVER ()`,
-            categoryCount: sql<number>`(
-                SELECT count(DISTINCT assigned.category_id)
-                FROM products AS assigned
-                WHERE assigned.category_id IN (
-                    SELECT CAST(json_extract(value, '$.id') AS TEXT)
-                    FROM json_each(${JSON.stringify(claims)})
-                )
-                  AND assigned.deleted_at IS NULL
-            )`,
-        })
-        .from(products)
-        .where(and(
-            sql`${products.categoryId} IN (
-                SELECT CAST(json_extract(value, '$.id') AS TEXT)
-                FROM json_each(${JSON.stringify(claims)})
-            )`,
-            isNull(products.deletedAt),
-        ))
-        .limit(5)
-        .all();
-
-    if (referencedProducts.length > 0) {
-        const categoryCount = Number(referencedProducts[0]?.categoryCount ?? 0);
-        const productCount = Number(referencedProducts[0]?.productCount ?? 0);
-        throw new ValidationError(
-            `Cannot delete ${categoryCount === 1 ? "category" : "categories"} because ${productCount} product${productCount === 1 ? "" : "s"} ${productCount === 1 ? "is" : "are"} still assigned to ${categoryCount === 1 ? "it" : "them"}.`,
-            {
-                suggestion: "Please delete the products permanently or move them to another category first.",
-                affectedProducts: referencedProducts.map((p) => ({ id: p.id, name: p.name })),
-            },
-        );
-    }
+    throwCategoryDeleteProductUsage(await loadCategoryDeleteProductUsage(db, claims));
 
     if (permanent) {
         const categoryStates = await db
@@ -735,46 +758,40 @@ export async function bulkDeleteCategories(
         }
     } else {
         await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-        try {
-            await safeBatch(db, [
-                buildCategoryRevisionGuard(db, claims, "active"),
-                categoryUnpublishUsageGuard(db, claims),
-                categoryDeleteUsageGuard(db, claims),
-                db
-                    .update(categories)
-                    .set({
-                        status: "draft",
-                        revision: sql`${categories.revision} + 1`,
-                        deletedAt: sql`unixepoch()`,
-                        updatedAt: sql`unixepoch()`,
-                    })
-                    .where(and(
-                        categoryClaimIdsCondition(claims),
-                        isNull(categories.deletedAt),
-                    )),
-            ] as never);
-        } catch (error) {
+        const updated = await db
+            .update(categories)
+            .set({
+                status: "draft",
+                revision: sql`${categories.revision} + 1`,
+                deletedAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                categoryClaimIdsCondition(claims),
+                isNull(categories.deletedAt),
+                categoryRevisionClaimsMatchCondition(claims, "active"),
+                categoriesHaveNoActiveDynamicCollectionReferencesCondition(claims),
+                categoriesHaveNoAssignedProductsCondition(claims),
+            ))
+            .returning({ id: categories.id })
+            .all();
+        if (updated.length !== claims.length) {
+            const revisionSentinel = new Error(CATEGORY_REVISION_CONFLICT);
             try {
-                await rethrowCategoryRevisionConflict(db, claims, error, "active");
-            } catch (translated) {
-                if (translated !== error) throw translated;
-            }
-            if (error instanceof Error && /malformed json/i.test(error.message)) {
-                await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
-            }
-            if (
-                error instanceof Error &&
-                /CATEGORY_DELETE_IN_USE|malformed json/i.test(error.message)
-            ) {
-                throw new ValidationError(
-                    "Cannot delete categories while active products are still assigned to them.",
-                    {
-                        suggestion:
-                            "Move the products to another category or permanently delete them first.",
-                    },
+                await rethrowCategoryRevisionConflict(
+                    db,
+                    claims,
+                    revisionSentinel,
+                    "active",
                 );
+            } catch (translated) {
+                if (translated !== revisionSentinel) throw translated;
             }
-            throw error;
+            await assertCategoriesNotUsedByActiveDynamicCollections(db, claims);
+            throwCategoryDeleteProductUsage(await loadCategoryDeleteProductUsage(db, claims));
+            throw new ConflictError(
+                "No categories were moved to trash. Reload the category list and try again.",
+            );
         }
     }
 }

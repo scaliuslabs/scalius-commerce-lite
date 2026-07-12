@@ -38,8 +38,11 @@ must be published.
   Existing demo categories migrate to published; all new rows default to draft.
 - Every edit, status call, trash, restore, and hard-delete claim carries the
   expected revision. Successful non-delete mutations advance it exactly once;
-  hard delete removes the claimed row. Bulk claims are capped at 90 and guarded
-  in the same D1 batch as the write. Trash and restore force draft.
+  hard delete removes the claimed row. Bulk claims are capped at 90. Soft trash
+  uses one `UPDATE … RETURNING` whose global predicates require every claimed
+  revision/state, product-assignment guard, and active-collection guard to pass,
+  so D1 cannot apply a partial selection or fail through parameterized guard
+  statements. Trash and restore force draft.
 - The admin list exposes status and readiness. The edit sidebar explains each
   state, shows blockers/warnings, and exposes the storefront link only when
   published. Collection pickers accept only published categories for new
@@ -80,6 +83,13 @@ must be published.
 - Filtered category URLs no longer emit base-category `CollectionPage` JSON-LD.
   Empty categories and empty filtered results give different recovery actions,
   and the sort script binds once across Astro navigation.
+- The production 12-of-14 bulk-trash failure was traced to the remaining
+  multi-statement D1 guard path: all 12 live revision claims matched and had
+  zero product or active-collection references, yet the guard batch returned an
+  opaque 500 before any row changed. The single atomic soft-trash statement now
+  returns every affected ID; a zero/partial result is diagnosed into typed
+  revision/state, collection, assigned-product, or retry conflicts while
+  leaving the complete selection active.
 
 ## Live cache finding
 
