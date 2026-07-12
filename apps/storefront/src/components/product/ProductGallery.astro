@@ -94,7 +94,7 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
 >
   <div
     class:list={[
-      "flex flex-col gap-3 lg:gap-5 lg:sticky",
+      "flex flex-col gap-2 lg:sticky lg:gap-5",
       hasMultipleImages
         ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
         : "lg:block",
@@ -175,7 +175,7 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
           </div>
 
           <div
-            class="lg:hidden relative w-full aspect-square bg-gray-50 rounded-xl overflow-hidden cursor-zoom-in active:scale-[0.99] transition-transform duration-200"
+            class="relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 transition-transform duration-200 active:scale-[0.99] lg:hidden"
             id="mobile-image-trigger"
           >
             <img
@@ -217,7 +217,7 @@ const primaryAlt = primaryImage.original.alt || product.imageAlt || product.name
                 id="mobile-thumbnails"
                 class="absolute inset-0 overflow-y-auto scrollbar-hide pb-2 touch-pan-y snap-y snap-mandatory"
               >
-                <div class="flex flex-col gap-2.5 pt-1">
+                <div class="flex flex-col gap-2 pt-0.5">
                   {optimizedImages.map((imgData, index) => (
                     <button
                       class="thumbnail-btn snap-start group relative w-full aspect-square rounded-lg overflow-hidden border border-gray-100 bg-white transition-all duration-200 active:scale-95"
