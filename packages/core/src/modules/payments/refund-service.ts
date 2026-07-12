@@ -421,32 +421,6 @@ function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean)
     return undefined;
 }
 
-async function updateOrderStatusIfVersionMatches(
-    db: Database,
-    params: {
-        orderId: string;
-        nextStatus: string;
-        expectedVersion: number;
-    },
-): Promise<boolean> {
-    const result = await db
-        .update(orders)
-        .set({
-            status: params.nextStatus,
-            version: sql`${orders.version} + 1`,
-            updatedAt: sql`unixepoch()`,
-        })
-        .where(and(
-            eq(orders.id, params.orderId),
-            eq(orders.version, params.expectedVersion),
-            noActiveRefundAttemptForOrderIdCondition(params.orderId),
-            noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
-        ))
-        .returning({ id: orders.id });
-
-    return result.length > 0;
-}
-
 export interface FinalizeAcceptedRefundAttemptsResult {
     orderIds: string[];
     finalizedAttemptIds: string[];
