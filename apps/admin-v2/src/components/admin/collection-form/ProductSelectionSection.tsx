@@ -55,12 +55,29 @@ export const ProductSelectionSection = React.memo(
     removeProduct,
     moveProduct,
   }: ProductSelectionSectionProps) {
+    const membershipCount = selectedSource === "manual"
+      ? selectedProductIds.length
+      : selectedCategoryIds.length;
+    const publishReady = membershipCount > 0;
+
     return (
       <Card>
         <CardHeader className="px-4 pb-3 pt-4">
           <CardTitle className="text-base">Collection content</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+            <span className="font-medium">
+              {selectedSource === "manual" ? "Manual order" : "Automatic membership"}
+            </span>
+            <span className={publishReady ? "text-muted-foreground" : "font-medium text-amber-700 dark:text-amber-400"}>
+              {publishReady
+                ? `${membershipCount} ${selectedSource === "manual"
+                  ? membershipCount === 1 ? "product" : "products"
+                  : membershipCount === 1 ? "category" : "categories"}`
+                : `Add a ${selectedSource === "manual" ? "product" : "category"} before publishing`}
+            </span>
+          </div>
           <FormField
             control={form.control}
             name="config.source"

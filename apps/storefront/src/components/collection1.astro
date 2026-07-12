@@ -14,9 +14,11 @@ interface Props {
 const { collection, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
 
 // Data is pre-populated from consolidated API
-const products = collection.products || [];
-const categories = collection.categories || [];
 const config = collection.config || {};
+const products = (collection.featuredProduct
+  ? [collection.featuredProduct, ...(collection.products || []).filter((product) => product.id !== collection.featuredProduct?.id)]
+  : collection.products || []).slice(0, config.maxProducts || 8);
+const categories = collection.categories || [];
 
 // Skip rendering if no products
 if (products.length === 0) return null;
@@ -25,12 +27,8 @@ if (products.length === 0) return null;
 const title = config.title || collection.name;
 const subtitle = config.subtitle || "";
 
-// UI Logic:
-// - categories.length === 1 → show "View All" link
-// - categories.length > 1  → show category pills
-// - categories.length === 0 → curated products, no category links
-const showViewAll = categories.length === 1;
-const showCategoryPills = categories.length > 1;
+const showCategoryPills = categories.length > 0;
+const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
 ---
 
 <section class="w-full py-2 md:py-6">
@@ -60,18 +58,13 @@ const showCategoryPills = categories.length > 1;
             ))
         }
 
-        {/* View All link for single category collections */}
-        {
-          showViewAll && (
-            <a
-              href={`/categories/${categories[0].slug}`}
-              class="group hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
-            >
-              View All
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </a>
-          )
-        }
+        <a
+          href={collectionHref}
+          class="group hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+        >
+          View collection
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </a>
       </div>
     </div>
 
@@ -82,19 +75,14 @@ const showCategoryPills = categories.length > 1;
       {products.map((product) => <ProductCard product={product} currencySymbol={currencySymbol} />)}
     </div>
 
-    {/* Mobile View All */}
-    {
-      showViewAll && (
-        <div class="mt-4 flex justify-center sm:hidden">
-          <a
-            href={`/categories/${categories[0].slug}`}
-            class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
-          >
-            View All Products
-            <ArrowRight className="h-4 w-4" />
-          </a>
-        </div>
-      )
-    }
+    <div class="mt-4 flex justify-center sm:hidden">
+      <a
+        href={collectionHref}
+        class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
+      >
+        View collection
+        <ArrowRight className="h-4 w-4" />
+      </a>
+    </div>
   </div>
 </section>

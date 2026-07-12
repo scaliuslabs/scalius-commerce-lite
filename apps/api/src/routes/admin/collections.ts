@@ -27,6 +27,7 @@ import {
     successEnvelope,
     paginatedEnvelope,
     errorResponses,
+    conflictResponse,
     messageResponse,
     noContentResponse,
 } from "../../schemas/responses";
@@ -187,12 +188,12 @@ const listRoute = createRoute({
     summary: "List all collections",
     request: {
         query: z.object({
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(100).default(20).openapi({ description: "Items per page" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(100).default(20).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
             sort: z.enum(["name", "presentation", "isActive", "updatedAt", "sortOrder"]).optional().default("sortOrder").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("asc").openapi({ description: "Sort order" })
+            order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" })
         })
     },
     responses: {
@@ -213,7 +214,7 @@ app.openapi(listRoute, async (c) => {
         search: q.search || "",
         showTrashed: q.trashed === "true",
         sort: q.sort,
-        order: q.order as "asc" | "desc" | undefined
+        order: q.order
     });
     return ok(c, result);
 });
@@ -326,6 +327,7 @@ const bulkActivateRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -374,6 +376,7 @@ const bulkRestoreRoute = createRoute({
     },
     responses: {
         204: noContentResponse,
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -401,6 +404,7 @@ const restoreRoute = createRoute({
             description: "Collection restored",
             content: { "application/json": { schema: messageResponse } },
         },
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -430,6 +434,7 @@ const reorderRoute = createRoute({
                         items: z.array(z.object({
                             id: z.string().trim().min(1).max(180),
                             sortOrder: z.number().int().min(0),
+                            expectedVersion: z.number().int().min(1),
                         })).min(1).max(90)
                     })
                 }
@@ -441,6 +446,7 @@ const reorderRoute = createRoute({
             description: "Collections reordered",
             content: { "application/json": { schema: successEnvelope(z.object({})) } },
         },
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -496,6 +502,7 @@ const updateCollectionRoute = createRoute({
             description: "Collection updated",
             content: { "application/json": { schema: successEnvelope(collectionSchema) } },
         },
+        409: conflictResponse,
         ...errorResponses,
     }
 });

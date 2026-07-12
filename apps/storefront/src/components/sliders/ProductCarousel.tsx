@@ -111,10 +111,9 @@ export default function ProductCarousel({
   const [count, setCount] = React.useState(0);
 
   const products = collection.products || [];
-  const categories = collection.categories || [];
   const config = collection.config || {};
   const title = config.title || collection.name;
-  const showViewAll = categories.length === 1;
+  const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
 
   React.useEffect(() => {
     if (!api) return;
@@ -130,6 +129,8 @@ export default function ProductCarousel({
   // Auto-scroll logic with cleanup
   React.useEffect(() => {
     if (!api || products.length <= 1) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) return;
 
     const intervalId = setInterval(() => {
       if (api.canScrollNext()) {
@@ -157,15 +158,13 @@ export default function ProductCarousel({
           </div>
 
           <div className="flex items-center gap-2">
-            {showViewAll && (
-              <a
-                href={`/categories/${categories[0].slug}`}
+            <a
+                href={collectionHref}
                 className="group hidden sm:flex items-center gap-1.5 text-xs font-bold text-foreground hover:text-primary transition-colors"
               >
-                Explore
+                View collection
                 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
               </a>
-            )}
 
             {/* Desktop Navigation Arrows */}
             <div className="hidden md:flex items-center gap-1.5 ml-1">
@@ -175,6 +174,7 @@ export default function ProductCarousel({
                 className="rounded-full h-8 w-8 border-input hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm disabled:opacity-30"
                 onClick={() => api?.scrollPrev()}
                 disabled={!api?.canScrollPrev()}
+                aria-label="Previous products"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -184,6 +184,7 @@ export default function ProductCarousel({
                 className="rounded-full h-8 w-8 border-input hover:border-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm disabled:opacity-30"
                 onClick={() => api?.scrollNext()}
                 disabled={!api?.canScrollNext()}
+                aria-label="Next products"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -238,15 +239,13 @@ export default function ProductCarousel({
             ))}
           </div>
 
-          {showViewAll && (
-            <a
-              href={`/categories/${categories[0].slug}`}
+          <a
+              href={collectionHref}
               className="sm:hidden flex items-center gap-2 text-[10px] font-bold text-foreground border-b border-primary/30 pb-0.5"
             >
-              Explore Collection
+              View collection
               <ArrowRight className="h-3 w-3" />
             </a>
-          )}
         </div>
       </div>
     </section>

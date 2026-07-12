@@ -116,7 +116,7 @@ export function useRestoreCollection() {
 export function useReorderCollections() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { items: { id: string; sortOrder: number }[] }) =>
+    mutationFn: (data: { items: { id: string; sortOrder: number; expectedVersion: number }[] }) =>
       reorderCollections({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.collections.list() });

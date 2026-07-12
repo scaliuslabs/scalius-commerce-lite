@@ -512,6 +512,7 @@ export const collectionSchema = z
     config: z.string(),
     sortOrder: z.number(),
     isActive: z.boolean(),
+    version: z.number().int().min(1),
     canonicalPath: z.string().nullable(),
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),

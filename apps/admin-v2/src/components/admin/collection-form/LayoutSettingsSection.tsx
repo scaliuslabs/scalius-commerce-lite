@@ -68,10 +68,10 @@ export const LayoutSettingsSection = React.memo(
                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
                   <div className="space-y-0.5">
                     <FormLabel className="text-sm font-medium">
-                      Active
+                      Published
                     </FormLabel>
                     <FormDescription className="text-xs">
-                      Visible on the store
+                      Visible on the storefront and eligible for homepage display
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -268,7 +268,7 @@ export const LayoutSettingsSection = React.memo(
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">
-                      Featured Product
+                      Lead product
                     </FormLabel>
                     <FormControl>
                       <div className="flex gap-2">
@@ -277,7 +277,7 @@ export const LayoutSettingsSection = React.memo(
                             field.value
                               ? productsById.get(field.value)?.name ||
                                 PENDING_PRODUCT_LABEL
-                              : "Select a featured product"
+                              : "Select a lead product"
                           }
                           selectedCategoryIds={selectedCategoryIds}
                           onSelectProduct={(product) => {
@@ -295,14 +295,14 @@ export const LayoutSettingsSection = React.memo(
                           >
                             <X className="h-4 w-4" />
                             <span className="sr-only">
-                              Clear featured product
+                              Clear lead product
                             </span>
                           </Button>
                         ) : null}
                       </div>
                     </FormControl>
                     <FormDescription className="text-xs">
-                      Displayed prominently in the featured-grid homepage section.
+                      Placed first in this homepage grid, even when it is outside the collection membership.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -237,10 +237,6 @@ export interface CategoryProductsResponse extends PaginatedResponse<Product> {
 // ---------------------------------------------------------------------------
 
 export interface CollectionConfig {
-  source: "manual" | "dynamic";
-  categoryIds?: string[];
-  productIds?: string[];
-  featuredProductId?: string;
   maxProducts?: number;
   title?: string;
   subtitle?: string;
