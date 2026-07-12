@@ -99,7 +99,7 @@ Storefront category ([slug].astro)
 | GET | `/lookup-barcode?barcode=X` | `lookupByBarcode` | Find the database-unique normalized barcode identity and its product |
 | GET | `/` | `getProducts` | Paginated list with FTS search, category filter, sort, trash toggle. Returns `discountType`, `discountAmount`, `discountPercentage` per product. |
 | POST | `/` | `createProduct` | Create product with images, attributes, rich content |
-| POST | `/bulk-delete` | `bulkDeleteProducts` | Soft or permanent bulk delete |
+| POST | `/bulk-delete` | `bulkDeleteProducts` | Soft delete is aggregate-atomic. Permanent delete runs one guarded product batch at a time and returns ordered `deleted`/`blocked`/`failed` outcomes so safe rows are not rolled back by one retained-history row. |
 | GET | `/{id}` | `getProductDetails` | Full product with variants (soft-deleted filtered), images, additionalInfo (`{id, title, content, sortOrder}`), attributes (`{attributeId, value}`) |
 | PUT | `/{id}` | `updateProduct` | Replace product + images + attributes + rich content |
 | DELETE | `/{id}` | `deleteProduct` | Soft delete (set deletedAt) |
@@ -166,6 +166,8 @@ Storefront category ([slug].astro)
 - Option-matrix stock edits batch a stock-version guard, movement claim, SKU update, and aggregate revision bump. A tracked default SKU can become optioned only when its entire on-hand quantity is allocated across tracked option rows; its stock is then deducted in the same batch. Topology edits that retire and create combinations must also preserve the affected tracked-stock total.
 - Variant delete and bulk delete must preserve order/inventory history. SKUs with `reservedStock > 0` or non-terminal order references are rejected; SKUs referenced only by terminal `order_items` history or `inventory_movements` are soft-deleted with a zero-reservation guard; only unused, unreserved SKUs may be hard-deleted.
 - Product permanent delete must preserve SKU audit history too. If any SKU under the product has `inventory_movements`, the hard delete is blocked and the merchant should keep the product trashed/soft-deleted; only movement-free products may delete their variants and low-stock alerts permanently.
+- Bulk permanent delete accepts at most 90 product claims, processes them sequentially to respect Worker/D1 connection limits, and isolates every product's revision/reference guard plus deletes in one D1 batch. Large SKU lookup sets use bound `json_each()` arrays rather than one SQL variable per SKU. The API returns per-row outcomes; the admin deselects only successfully deleted rows and leaves blocked/failed rows selected for retry or inspection.
+- Live incident proof (2026-07-13): 31 selected trashed demo products owned 76 SKU rows. The former combined low-stock cleanup attempted 107 bound variables and failed D1's 100-variable statement limit before any useful row outcome reached the admin. The regression suite now proves a 150-SKU product uses two JSON lookup bindings and proves a failed product batch does not stop the next safe product.
 - Optioned SKUs for one product cannot mix shapes: every active combination selects one value from every active arbitrary axis.
 - Variant duplication copies merchandising fields only. The new SKU starts with zero physical stock; merchants must perform an explicit stocktake/adjustment to add sellable quantity.
 

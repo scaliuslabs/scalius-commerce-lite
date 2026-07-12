@@ -17,7 +17,7 @@ import {
     productOptionValues,
     productVariantOptionValues,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
+import { and, sql, desc, eq, asc, inArray, isNull } from "drizzle-orm";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -1328,11 +1328,14 @@ async function assertNoVariantInventoryHistory(
     message: string,
 ): Promise<void> {
     if (variantIds.length === 0) return;
+    const variantIdSet = JSON.stringify(variantIds);
 
     const movementCheckArr = await db
         .select({ count: sql<number>`count(*)` })
         .from(inventoryMovements)
-        .where(inArray(inventoryMovements.variantId, variantIds));
+        .where(sql`${inventoryMovements.variantId} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+        )`);
 
     if ((movementCheckArr[0]?.count ?? 0) > 0) {
         throw new ConflictError(message);
@@ -1411,14 +1414,19 @@ function deleteLowStockAlertsForProductBatch(
     productIds: string[],
     variantIds: string[],
 ): SQLiteBatchItem {
-    const productCondition = inArray(productLowStockAlerts.productId, productIds);
-    const variantCondition = variantIds.length > 0
-        ? inArray(productLowStockAlerts.variantId, variantIds)
-        : undefined;
+    const productIdSet = JSON.stringify(productIds);
+    const variantIdSet = JSON.stringify(variantIds);
 
     return db
         .delete(productLowStockAlerts)
-        .where(variantCondition ? or(productCondition, variantCondition) : productCondition);
+        .where(sql`
+            ${productLowStockAlerts.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+            )
+            ${variantIds.length > 0 ? sql`OR ${productLowStockAlerts.variantId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+            )` : sql``}
+        `);
 }
 
 /**
@@ -1473,6 +1481,18 @@ export type ProductAggregateRevisionClaim = {
     expectedAggregateRevision: number;
 };
 
+export type ProductBulkDeleteOutcome = {
+    id: string;
+    status: "trashed" | "deleted" | "blocked" | "failed";
+    code: string | null;
+    message: string | null;
+};
+
+export type BulkDeleteProductsResult = {
+    revisions: ProductAggregateRevisionResult[];
+    outcomes: ProductBulkDeleteOutcome[];
+};
+
 async function findStaleProductAggregateRevisionClaim(
     db: Database,
     claims: ProductAggregateRevisionClaim[],
@@ -1504,7 +1524,7 @@ export async function bulkDeleteProducts(
     db: Database,
     productClaims: ProductAggregateRevisionClaim[],
     permanent: boolean = false,
-): Promise<ProductAggregateRevisionResult[]> {
+): Promise<BulkDeleteProductsResult> {
     if (productClaims.length === 0) throw new ValidationError("No product IDs provided");
     const productIds = productClaims.map((claim) => claim.id);
     if (new Set(productIds).size !== productIds.length) {
@@ -1512,63 +1532,43 @@ export async function bulkDeleteProducts(
     }
 
     if (permanent) {
-        const referenceMessages = {
-            orders:
-                "Cannot delete products. One or more products are part of existing orders.",
-            discounts:
-                "Cannot delete products. One or more products are linked to discounts.",
-            inventory:
-                "Cannot permanently delete products. One or more SKUs have inventory history; move the products to trash instead.",
-        };
-        const variantIds = await assertNoPermanentDeleteReferences(
-            db,
-            productIds,
-            referenceMessages,
-        );
-
-        try {
-            await safeBatch(db, [
-                ...productClaims.map((claim) =>
-                    buildProductAggregateRevisionGuard(
-                        db,
-                        claim.id,
-                        claim.expectedAggregateRevision,
-                        "trashed",
-                    )
-                ),
-                buildPermanentDeleteReferenceGuard(db, productIds),
-                deleteLowStockAlertsForProductBatch(db, productIds, variantIds),
-                db.delete(productVariants).where(inArray(productVariants.productId, productIds)),
-                db.delete(productMedia).where(inArray(productMedia.productId, productIds)),
-                db.delete(productAttributeValues).where(inArray(productAttributeValues.productId, productIds)),
-                db.delete(productRichContent).where(inArray(productRichContent.productId, productIds)),
-                db.delete(products).where(inArray(products.id, productIds)),
-            ]);
-        } catch (error) {
-            await assertNoPermanentDeleteReferences(
-                db,
-                productIds,
-                referenceMessages,
-            );
-            if (isProductAggregateRevisionConflict(error)) {
-                const failedClaim = await findStaleProductAggregateRevisionClaim(
+        const outcomes: ProductBulkDeleteOutcome[] = [];
+        // Keep every product's guard and destructive writes in its own D1 batch.
+        // One blocked or malformed demo row must not roll back unrelated products,
+        // and sequential execution stays below the six-connection Worker limit.
+        for (const claim of productClaims) {
+            try {
+                await permanentlyDeleteProduct(
                     db,
-                    productClaims,
-                    "trashed",
+                    claim.id,
+                    claim.expectedAggregateRevision,
                 );
-                if (failedClaim) {
-                    return rethrowProductAggregateRevisionConflictIfStale(
-                        db,
-                        failedClaim.id,
-                        failedClaim.expectedAggregateRevision,
-                        error,
-                        "trashed",
-                    );
+                outcomes.push({
+                    id: claim.id,
+                    status: "deleted",
+                    code: null,
+                    message: null,
+                });
+            } catch (error) {
+                if (error instanceof AppError) {
+                    outcomes.push({
+                        id: claim.id,
+                        status: "blocked",
+                        code: error.code,
+                        message: error.message,
+                    });
+                } else {
+                    outcomes.push({
+                        id: claim.id,
+                        status: "failed",
+                        code: "PRODUCT_PERMANENT_DELETE_FAILED",
+                        message:
+                            "This product could not be permanently deleted. Retry it individually; if it still fails, keep it in trash and contact support.",
+                    });
                 }
             }
-            throw error;
         }
-        return [];
+        return { revisions: [], outcomes };
     } else {
         const statements = productClaims.flatMap((claim) => [
             buildProductAggregateRevisionGuard(
@@ -1588,9 +1588,18 @@ export async function bulkDeleteProducts(
         ]);
         try {
             const results = await safeBatch(db, statements as never) as unknown[];
-            return productClaims.map((_, index) =>
+            const revisions = productClaims.map((_, index) =>
                 readProductAggregateRevisionResult(results[index * 2 + 1])
             );
+            return {
+                revisions,
+                outcomes: productClaims.map((claim) => ({
+                    id: claim.id,
+                    status: "trashed" as const,
+                    code: null,
+                    message: null,
+                })),
+            };
         } catch (error) {
             if (isProductAggregateRevisionConflict(error)) {
                 const staleClaim = await findStaleProductAggregateRevisionClaim(

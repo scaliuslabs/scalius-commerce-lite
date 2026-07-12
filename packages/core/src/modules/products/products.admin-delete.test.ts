@@ -10,7 +10,10 @@ type DeleteStatement = {
     condition: unknown;
 };
 
-function createProductDeleteDb(selectRows: unknown[][]) {
+function createProductDeleteDb(
+    selectRows: unknown[][],
+    batchErrors: Array<Error | undefined> = [],
+) {
     let selectIndex = 0;
     const batchCalls: unknown[][] = [];
     const deleteStatements: DeleteStatement[] = [];
@@ -32,6 +35,8 @@ function createProductDeleteDb(selectRows: unknown[][]) {
         })),
         batch: vi.fn(async (statements: unknown[]) => {
             batchCalls.push(statements);
+            const error = batchErrors[batchCalls.length - 1];
+            if (error) throw error;
             return statements;
         }),
     };
@@ -41,6 +46,10 @@ function createProductDeleteDb(selectRows: unknown[][]) {
 
 function compiledConditionSql(condition: unknown): string {
     return new SQLiteSyncDialect().sqlToQuery(condition as never).sql;
+}
+
+function compiledConditionParams(condition: unknown): unknown[] {
+    return new SQLiteSyncDialect().sqlToQuery(condition as never).params;
 }
 
 function expectLowStockAlertCleanupBeforeVariantDelete(batch: unknown[]) {
@@ -74,23 +83,71 @@ describe("admin product permanent delete inventory guards", () => {
         expect(batchCalls).toHaveLength(0);
     });
 
-    it("rejects bulk permanent product delete when any SKU has inventory history", async () => {
+    it("keeps blocked history rows in trash while deleting unrelated safe rows", async () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
             [{ count: 0 }],
-            [{ id: "var_clean" }, { id: "var_history" }],
+            [{ id: "var_history" }],
             [{ count: 1 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ id: "var_clean" }],
+            [{ count: 0 }],
         ]);
 
-        await expect(
-            bulkDeleteProducts(db as never, [
+        await expect(bulkDeleteProducts(db as never, [
                 { id: "prod_1", expectedAggregateRevision: 1 },
                 { id: "prod_2", expectedAggregateRevision: 1 },
-            ], true),
-        ).rejects.toBeInstanceOf(ConflictError);
+            ], true)).resolves.toEqual({
+                revisions: [],
+                outcomes: [
+                    {
+                        id: "prod_1",
+                        status: "blocked",
+                        code: "CONFLICT",
+                        message: "Cannot permanently delete product. One or more SKUs have inventory history; move the product to trash instead.",
+                    },
+                    {
+                        id: "prod_2",
+                        status: "deleted",
+                        code: null,
+                        message: null,
+                    },
+                ],
+            });
 
-        expect(db.delete).not.toHaveBeenCalled();
-        expect(batchCalls).toHaveLength(0);
+        expect(batchCalls).toHaveLength(1);
+    });
+
+    it("keeps order-history rows in trash while deleting the next safe product", async () => {
+        const { db, batchCalls } = createProductDeleteDb([
+            [{ count: 1 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ id: "var_clean" }],
+            [{ count: 0 }],
+        ]);
+
+        const result = await bulkDeleteProducts(db as never, [
+            { id: "prod_ordered", expectedAggregateRevision: 1 },
+            { id: "prod_clean", expectedAggregateRevision: 1 },
+        ], true);
+
+        expect(result.outcomes).toEqual([
+            {
+                id: "prod_ordered",
+                status: "blocked",
+                code: "CONFLICT",
+                message: "Cannot delete product. It is part of one or more existing orders.",
+            },
+            {
+                id: "prod_clean",
+                status: "deleted",
+                code: null,
+                message: null,
+            },
+        ]);
+        expect(batchCalls).toHaveLength(1);
     });
 
     it("clears low-stock alerts before deleting variants during single no-history permanent delete", async () => {
@@ -115,7 +172,11 @@ describe("admin product permanent delete inventory guards", () => {
         const { db, batchCalls } = createProductDeleteDb([
             [{ count: 0 }],
             [{ count: 0 }],
-            [{ id: "var_clean_1" }, { id: "var_clean_2" }],
+            [{ id: "var_clean_1" }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ id: "var_clean_2" }],
             [{ count: 0 }],
         ]);
 
@@ -125,10 +186,75 @@ describe("admin product permanent delete inventory guards", () => {
         ], true);
 
         expect(db.delete).toHaveBeenCalledWith(productLowStockAlerts);
-        expect(batchCalls).toHaveLength(1);
-        expect(batchCalls[0]?.filter((statement) =>
-            (statement as { kind?: string }).kind === "guard"
-        )).toHaveLength(3);
-        expectLowStockAlertCleanupBeforeVariantDelete(batchCalls[0]!);
+        expect(batchCalls).toHaveLength(2);
+        for (const batch of batchCalls) {
+            expect(batch.filter((statement) =>
+                (statement as { kind?: string }).kind === "guard"
+            )).toHaveLength(2);
+            expectLowStockAlertCleanupBeforeVariantDelete(batch);
+        }
+    });
+
+    it("binds large SKU cleanup sets as JSON lookup values instead of one parameter per SKU", async () => {
+        const variantRows = Array.from({ length: 150 }, (_, index) => ({
+            id: `var_${index}`,
+        }));
+        const { db, batchCalls } = createProductDeleteDb([
+            [{ count: 0 }],
+            [{ count: 0 }],
+            variantRows,
+            [{ count: 0 }],
+        ]);
+
+        await permanentlyDeleteProduct(db as never, "prod_large", 1);
+
+        const lowStockDelete = (batchCalls[0] as DeleteStatement[]).find(
+            (statement) => statement.table === productLowStockAlerts,
+        );
+        expect(lowStockDelete).toBeDefined();
+        expect(compiledConditionParams(lowStockDelete!.condition)).toHaveLength(2);
+        expect(compiledConditionSql(lowStockDelete!.condition)).toContain("json_each");
+    });
+
+    it("reports an unexpected per-row D1 failure and continues with the next safe product", async () => {
+        const emptyChecks = [
+            [{ count: 0 }],
+            [{ count: 0 }],
+            [{ id: "var_1" }],
+            [{ count: 0 }],
+        ];
+        const { db, batchCalls } = createProductDeleteDb(
+            [
+                ...emptyChecks,
+                // permanentlyDeleteProduct re-checks references after a batch error.
+                ...emptyChecks,
+                [{ count: 0 }],
+                [{ count: 0 }],
+                [{ id: "var_2" }],
+                [{ count: 0 }],
+            ],
+            [new Error("too many SQL variables"), undefined],
+        );
+
+        const result = await bulkDeleteProducts(db as never, [
+            { id: "prod_failed", expectedAggregateRevision: 1 },
+            { id: "prod_safe", expectedAggregateRevision: 1 },
+        ], true);
+
+        expect(result.outcomes).toEqual([
+            {
+                id: "prod_failed",
+                status: "failed",
+                code: "PRODUCT_PERMANENT_DELETE_FAILED",
+                message: expect.stringContaining("Retry it individually"),
+            },
+            {
+                id: "prod_safe",
+                status: "deleted",
+                code: null,
+                message: null,
+            },
+        ]);
+        expect(batchCalls).toHaveLength(2);
     });
 });

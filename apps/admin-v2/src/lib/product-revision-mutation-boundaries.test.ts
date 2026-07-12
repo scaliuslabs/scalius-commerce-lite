@@ -54,6 +54,18 @@ describe("admin product aggregate revision mutation boundaries", () => {
     expect(route).not.toContain("{ productIds: selectedIds");
   });
 
+  it("keeps blocked permanent-delete rows selected and reports per-row outcomes", () => {
+    const functions = readFileSync(API_FUNCTIONS_SOURCE, "utf8");
+    const mutations = readFileSync(API_MUTATIONS_SOURCE, "utf8");
+    const route = readFileSync(PRODUCT_ROUTE_SOURCE, "utf8");
+
+    expect(functions).toContain('status: "trashed" | "deleted" | "blocked" | "failed"');
+    expect(mutations).toContain('outcome.status === "blocked"');
+    expect(mutations).toContain('outcome.status === "failed"');
+    expect(route).toContain("deselectIds(result.deletedIds)");
+    expect(route).not.toContain("onSuccess: () => clearSelection()");
+  });
+
   it("has no persisted option duplicate client or mutation", () => {
     const functions = readFileSync(API_FUNCTIONS_SOURCE, "utf8");
     const mutations = readFileSync(API_MUTATIONS_SOURCE, "utf8");

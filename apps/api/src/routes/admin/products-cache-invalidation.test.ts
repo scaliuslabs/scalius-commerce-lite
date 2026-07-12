@@ -141,7 +141,15 @@ function createTestApp() {
 
   mocks.createProduct.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });
   mocks.updateProduct.mockResolvedValue({ aggregateRevision: 2 });
-  mocks.bulkDeleteProducts.mockResolvedValue([{ aggregateRevision: 2 }]);
+  mocks.bulkDeleteProducts.mockResolvedValue({
+    revisions: [{ aggregateRevision: 2 }],
+    outcomes: [{
+      id: "prod_1",
+      status: "trashed",
+      code: null,
+      message: null,
+    }],
+  });
   mocks.deleteProduct.mockResolvedValue({ aggregateRevision: 2 });
   mocks.restoreProduct.mockResolvedValue({ aggregateRevision: 2 });
   mocks.permanentlyDeleteProduct.mockResolvedValue(undefined);
@@ -247,6 +255,65 @@ describe("admin product cache invalidation", () => {
       expect.objectContaining({ env }),
       { htmlPaths: ["/products/old-hilsa", "/categories/old-fish"] },
     );
+  });
+
+  it("returns per-product permanent-delete outcomes and invalidates after partial success", async () => {
+    const { app, env } = createTestApp();
+    mocks.bulkDeleteProducts.mockResolvedValueOnce({
+      revisions: [],
+      outcomes: [
+        { id: "prod_1", status: "deleted", code: null, message: null },
+        {
+          id: "prod_blocked",
+          status: "blocked",
+          code: "CONFLICT",
+          message: "Inventory history must be retained.",
+        },
+      ],
+    });
+
+    const response = await requestJson(app, env, "/bulk-delete", "POST", {
+      products: [
+        { id: "prod_1", expectedAggregateRevision: 1 },
+        { id: "prod_blocked", expectedAggregateRevision: 2 },
+      ],
+      permanent: true,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        products: [],
+        deletedIds: ["prod_1"],
+        outcomes: [
+          { id: "prod_1", status: "deleted" },
+          { id: "prod_blocked", status: "blocked", code: "CONFLICT" },
+        ],
+      },
+    });
+    expect(mocks.invalidateCatalogCaches).toHaveBeenCalledOnce();
+  });
+
+  it("does not churn catalog caches when every permanent delete is blocked", async () => {
+    const { app, env } = createTestApp();
+    mocks.bulkDeleteProducts.mockResolvedValueOnce({
+      revisions: [],
+      outcomes: [{
+        id: "prod_1",
+        status: "blocked",
+        code: "CONFLICT",
+        message: "Inventory history must be retained.",
+      }],
+    });
+
+    const response = await requestJson(app, env, "/bulk-delete", "POST", {
+      products: [{ id: "prod_1", expectedAggregateRevision: 1 }],
+      permanent: true,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.invalidateCatalogCaches).not.toHaveBeenCalled();
   });
 
   it.each([

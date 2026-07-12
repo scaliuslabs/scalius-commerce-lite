@@ -273,7 +273,7 @@ function ProductsPage() {
 
   // ── Server table ──────────────────────────────────────────────
 
-  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection } =
+  const { table, error, isFetching, isLoading, refetch, selectedIds, clearSelection, deselectIds } =
     useServerTable({
       columns,
       queryOptions: productsQueryOptions(mapParams(search)),
@@ -337,7 +337,12 @@ function ProductsPage() {
         })),
         permanent: showTrashed,
       },
-      { onSuccess: () => clearSelection() },
+      {
+        onSuccess: (result) => {
+          if (showTrashed) deselectIds(result.deletedIds);
+          else clearSelection();
+        },
+      },
     );
   }, [
     productActions.canBulkDelete,
@@ -346,6 +351,7 @@ function ProductsPage() {
     showTrashed,
     bulkDeleteMut,
     clearSelection,
+    deselectIds,
   ]);
 
   const isProductDeleteDialogOpen = !!productToDelete || isConfirmBulkDeleteOpen;

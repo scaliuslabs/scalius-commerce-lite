@@ -167,16 +167,35 @@ export function useBulkDeleteProducts() {
   return useMutation({
     mutationFn: (data: BulkDeleteProductsInput) =>
       bulkDeleteProducts({ data }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       invalidateProductLookupQueries(queryClient);
       invalidateProductStatsQueries(queryClient);
       invalidateDashboardQueries(queryClient);
-      toast.success(
-        variables.permanent
-          ? `${variables.products.length} products permanently deleted`
-          : `${variables.products.length} products moved to trash`,
+      if (!variables.permanent) {
+        toast.success(`${variables.products.length} products moved to trash`);
+        return;
+      }
+
+      const blocked = data.outcomes.filter(
+        (outcome) => outcome.status === "blocked" || outcome.status === "failed",
       );
+      if (blocked.length === 0) {
+        toast.success(`${data.deletedIds.length} products permanently deleted`);
+        return;
+      }
+
+      const firstMessage = blocked.find((outcome) => outcome.message)?.message;
+      const summary = `${data.deletedIds.length} deleted; ${blocked.length} kept in trash.`;
+      if (data.deletedIds.length === 0) {
+        toast.error("No products were permanently deleted", {
+          description: firstMessage ?? summary,
+        });
+      } else {
+        toast.warning("Permanent delete completed with issues", {
+          description: firstMessage ? `${summary} ${firstMessage}` : summary,
+        });
+      }
     },
     onError: (err) =>
       handleProductListMutationError(
