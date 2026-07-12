@@ -44,6 +44,7 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("orderId={order.id}");
     expect(pageSource).toContain("supportRequests={order.supportRequests}");
     expect(pageSource).toContain("supportRequestActions={order.supportRequestActions}");
+    expect(pageSource).toContain("supportRequestIntro={order.supportRequestIntro}");
     expect(buttonsSource).toContain("Keep this browser receipt");
     expect(buttonsSource).toContain("Guest receipts stay available in this browser for a limited time.");
     expect(buttonsSource).toContain("Account history only includes orders placed while signed in.");
@@ -66,7 +67,12 @@ describe("order success side effects", () => {
     expect(buttonsSource).toContain("Need help with this order?");
     expect(buttonsSource).toContain("/api/order-support/receipt-request");
     expect(buttonsSource).toContain("setSupportRequests(payload.data.supportRequests");
-    expect(buttonsSource).toContain("The store reviews it before changing payment, shipment, or inventory.");
+    expect(buttonsSource).toContain("supportRequestIntro: initialSupportRequestIntro =");
+    expect(buttonsSource).toContain("useState(initialSupportRequestIntro)");
+    expect(buttonsSource).toContain("{supportRequestIntro}");
+    expect(buttonsSource).toContain(
+      "setSupportRequestIntro(payload.data.supportRequestIntro ?? initialSupportRequestIntro)",
+    );
     expect(buttonsSource).not.toContain("getReceiptTokenFromUrl");
     expect(buttonsSource).not.toContain("receiptToken");
     expect(pageSource).not.toContain("receiptToken={");
