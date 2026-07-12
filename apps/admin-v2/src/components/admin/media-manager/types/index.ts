@@ -86,6 +86,7 @@ export interface UploadQueueItem {
   sessionId: string | null;
   failedPart: number | null;
   error: string | null;
+  warning: string | null;
   result: LibraryMediaFile | null;
 }
 

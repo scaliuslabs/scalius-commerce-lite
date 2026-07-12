@@ -122,6 +122,24 @@ derives URLs at response time, provides stable scoped cursors and CAS mutations,
 and makes trash/permanent deletion repairable. The complete video is never
 buffered in a Worker invocation.
 
+### Media workflow follow-up (2026-07-13)
+
+- The local R2 passthrough now accepts the complete immutable object key
+  (`media/<id>.<ext>`) rather than one URL segment, validates it with the same
+  storage-key authority, copies stored HTTP metadata, and forwards byte-range
+  requests as `206` responses. Local MP4/WebM playback can therefore exercise
+  browser seeking instead of hiding a route mismatch behind the production CDN.
+- While the original browser `File` is available, the upload queue reads image
+  dimensions or video dimensions/duration in parallel with multipart upload.
+  After R2 completion and D1 media commit it saves only finite positive hints
+  through the normal Media CAS command. Extraction or metadata-save failure
+  never fabricates facts and never turns a successfully stored blob into a
+  failed upload; the queue keeps a visible follow-up warning instead.
+- A failed initial or refreshed library read is no longer rendered as an empty
+  library. The workspace preserves any prior results, explains that refresh
+  failed, and provides an in-place retry state for both full-page and picker
+  use.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)

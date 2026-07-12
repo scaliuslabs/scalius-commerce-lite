@@ -1,4 +1,4 @@
-import { ImageIcon, Loader2, Upload } from "lucide-react";
+import { AlertCircle, ImageIcon, Loader2, RotateCcw, Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { MediaCard } from "./MediaCard";
@@ -13,11 +13,13 @@ interface MediaGalleryProps {
   isLoading: boolean;
   isLoadingMore: boolean;
   hasMore: boolean;
+  loadError: string | null;
   onFileSelect: (file: LibraryMediaFile) => void;
   onFilePreview: (file: LibraryMediaFile, event: React.MouseEvent) => void;
   onToggleSelection: (id: string) => void;
   onLifecycle: (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => void;
   onLoadMore: () => void;
+  onRetry: () => void;
   onUploadClick?: () => void;
 }
 
@@ -30,6 +32,16 @@ export function MediaGallery(props: MediaGalleryProps) {
     return <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">{Array.from({ length: 12 }, (_, index) => <Skeleton key={index} />)}</div>;
   }
   if (!props.files.length) {
+    if (props.loadError) {
+      return (
+        <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center" role="alert">
+          <span className="mb-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"><AlertCircle className="h-6 w-6 text-destructive" /></span>
+          <h3 className="text-sm font-semibold">Media could not be loaded</h3>
+          <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.loadError}</p>
+          <Button type="button" size="sm" variant="outline" className="mt-4 h-8" onClick={props.onRetry}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Try again</Button>
+        </div>
+      );
+    }
     return (
       <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
         <span className="mb-3 rounded-xl border bg-muted/40 p-3"><ImageIcon className="h-6 w-6 text-muted-foreground" /></span>
@@ -41,6 +53,7 @@ export function MediaGallery(props: MediaGalleryProps) {
   }
   return (
     <ScrollArea className="h-full">
+      {props.loadError && <div className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200" role="status"><AlertCircle className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 flex-1">Could not refresh. The previous results are still shown.</span><Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={props.onRetry}>Retry</Button></div>}
       <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
         {props.files.map((file) => (
           <MediaCard
