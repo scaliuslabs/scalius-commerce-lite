@@ -117,7 +117,12 @@ export interface ProductRichContent {
   content: string;
 }
 
-export type ProductOptionStandardMapping = "size" | "color" | "material" | "pattern" | "none";
+export type ProductOptionStandardMapping =
+  | "size"
+  | "color"
+  | "material"
+  | "pattern"
+  | "none";
 
 export interface ProductOptionDefinition {
   id: string;
@@ -212,17 +217,6 @@ export interface ProductMedia {
   isPrimary: boolean;
   sortOrder: number;
   status: "ready" | "trashed";
-}
-
-/** Presentational image shape retained only until ProductGallery is mixed-media native. */
-export interface ProductImage {
-  id: string;
-  productId: string;
-  url: string;
-  alt: string;
-  isPrimary: boolean;
-  sortOrder: number;
-  createdAt: string;
 }
 
 export interface Category {

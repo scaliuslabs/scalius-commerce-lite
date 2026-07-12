@@ -22,11 +22,20 @@ import {
   type VariantSelection,
   type VariantOptionAvailability,
 } from "../lib/variant-state-machine";
-import { validateQuantity, validateAddToCart, clampQuantity } from "../lib/product-validation";
+import {
+  validateQuantity,
+  validateAddToCart,
+  clampQuantity,
+} from "../lib/product-validation";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
-import { trackProductAddToCart, extractProductDataFromDOM, convertVariantToAnalyticsData } from "../lib/product-analytics";
+import {
+  trackProductAddToCart,
+  extractProductDataFromDOM,
+  convertVariantToAnalyticsData,
+} from "../lib/product-analytics";
 import { TOAST_CONFIG } from "../config";
 import type { ProductOptionDefinition } from "@/lib/api";
+import type { ProductMediaChangeDetail } from "./product-media-controller";
 
 const state = {
   variants: [] as Variant[],
@@ -35,6 +44,8 @@ const state = {
   productPricing: null as ProductPricing | null,
   currentDisplayedImage: "",
   unavailableRequestedVariant: null as Variant | null,
+  hasRequestedVariant: false,
+  hasVariantSelectionInteraction: false,
 };
 
 const cache = {
@@ -50,11 +61,9 @@ const cache = {
   buyButton: null as HTMLButtonElement | null,
   addLabel: null as HTMLElement | null,
   buyLabel: null as HTMLElement | null,
-  thumbnails: [] as HTMLElement[],
   priceElements: [] as HTMLElement[],
   originalPriceElements: [] as HTMLElement[],
   discountBadge: null as HTMLElement | null,
-  mobileMainImage: null as HTMLImageElement | null,
 };
 
 function parseDiscountType(value?: string): DiscountType {
@@ -70,39 +79,68 @@ export function init() {
   cache.container = document.getElementById("product-container");
   if (!cache.container) return;
   cache.actions = document.getElementById("product-actions");
-  cache.quantity = document.getElementById("quantity") as HTMLInputElement | null;
-  cache.optionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".variant-option-btn"));
+  cache.quantity = document.getElementById(
+    "quantity",
+  ) as HTMLInputElement | null;
+  cache.optionButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(".variant-option-btn"),
+  );
   cache.status = document.getElementById("variant-availability-status");
-  cache.unavailableNotice = document.getElementById("variant-unavailable-query-notice");
+  cache.unavailableNotice = document.getElementById(
+    "variant-unavailable-query-notice",
+  );
   cache.stockBadge = document.getElementById("product-stock-badge");
   cache.stockText = document.getElementById("product-stock-text");
   cache.addButton = document.querySelector('[data-action="add-to-cart"]');
   cache.buyButton = document.querySelector('[data-action="buy-now"]');
   cache.addLabel = document.querySelector('[data-action-label="add-to-cart"]');
   cache.buyLabel = document.querySelector('[data-action-label="buy-now"]');
-  cache.thumbnails = Array.from(document.querySelectorAll(".thumbnail-btn"));
   cache.priceElements = Array.from(document.querySelectorAll(".product-price"));
-  cache.originalPriceElements = Array.from(document.querySelectorAll(".product-original-price"));
+  cache.originalPriceElements = Array.from(
+    document.querySelectorAll(".product-original-price"),
+  );
   cache.discountBadge = document.querySelector(".discount-badge");
-  cache.mobileMainImage = document.getElementById("mobile-main-image") as HTMLImageElement | null;
 
   state.variants = loadVariantsFromDOM();
   state.options = loadOptionsFromDOM();
   state.currentDisplayedImage = cache.container.dataset.productImage || "";
   state.productPricing = {
     basePrice: number(cache.container.dataset.productOriginalPrice),
-    discountType: parseDiscountType(cache.container.dataset.productDiscountType),
-    discountPercentage: number(cache.container.dataset.productDiscountPercentage) || null,
-    discountAmount: number(cache.container.dataset.productDiscountAmount) || null,
-    currencyDecimalPlaces: Math.min(6, Math.max(0, Number.parseInt(cache.container.dataset.currencyDecimalPlaces || "2", 10) || 2)),
+    discountType: parseDiscountType(
+      cache.container.dataset.productDiscountType,
+    ),
+    discountPercentage:
+      number(cache.container.dataset.productDiscountPercentage) || null,
+    discountAmount:
+      number(cache.container.dataset.productDiscountAmount) || null,
+    currencyDecimalPlaces: Math.min(
+      6,
+      Math.max(
+        0,
+        Number.parseInt(
+          cache.container.dataset.currencyDecimalPlaces || "2",
+          10,
+        ) || 2,
+      ),
+    ),
   };
 
-  const requestedId = new URLSearchParams(window.location.search).get("variant");
-  const requested = requestedId ? resolveExactVariantSelection(state.variants, { variantId: requestedId }) : null;
-  state.unavailableRequestedVariant = requested && !getBuyerStockSummary([requested.variant]).canPurchaseAny ? requested.variant : null;
+  const requestedId = new URLSearchParams(window.location.search).get(
+    "variant",
+  );
+  state.hasRequestedVariant = Boolean(requestedId);
+  state.hasVariantSelectionInteraction = false;
+  const requested = requestedId
+    ? resolveExactVariantSelection(state.variants, { variantId: requestedId })
+    : null;
+  state.unavailableRequestedVariant =
+    requested && !getBuyerStockSummary([requested.variant]).canPurchaseAny
+      ? requested.variant
+      : null;
   state.selection = state.unavailableRequestedVariant
     ? {}
-    : requested?.selection ?? createInitialSelection(state.options, state.variants);
+    : (requested?.selection ??
+      createInitialSelection(state.options, state.variants));
 
   initImageSync();
   initQuantity();
@@ -112,8 +150,16 @@ export function init() {
 }
 
 function initImageSync() {
-  window.addEventListener("product-image-change", ((event: CustomEvent<{ url?: string }>) => {
-    if (event.detail?.url) state.currentDisplayedImage = event.detail.url;
+  window.addEventListener("product-media-change", ((
+    event: CustomEvent<ProductMediaChangeDetail>,
+  ) => {
+    if (
+      event.detail.kind === "image" &&
+      event.detail.source === "variant" &&
+      event.detail.url
+    ) {
+      state.currentDisplayedImage = event.detail.url;
+    }
   }) as EventListener);
 }
 
@@ -122,12 +168,16 @@ function initQuantity() {
   const plus = document.getElementById("quantity-plus");
   if (!minus || !plus || !cache.quantity) return;
   const update = (delta: number) => {
-    cache.quantity!.value = clampQuantity((Number.parseInt(cache.quantity!.value, 10) || 1) + delta).toString();
+    cache.quantity!.value = clampQuantity(
+      (Number.parseInt(cache.quantity!.value, 10) || 1) + delta,
+    ).toString();
   };
   minus.addEventListener("click", () => update(-1));
   plus.addEventListener("click", () => update(1));
   cache.quantity.addEventListener("change", () => {
-    cache.quantity!.value = validateQuantity(cache.quantity!.value).value.toString();
+    cache.quantity!.value = validateQuantity(
+      cache.quantity!.value,
+    ).value.toString();
   });
 }
 
@@ -138,10 +188,20 @@ function bindOptions() {
     const valueId = button.dataset.optionValueId;
     if (!definitionId || !valueId) return;
     const choose = () => {
+      state.hasVariantSelectionInteraction = true;
       state.unavailableRequestedVariant = null;
-      if (state.selection[definitionId] === valueId) delete state.selection[definitionId];
-      else state.selection = reconcileSelectionForValue(state.variants, definitionId, valueId, state.selection, order);
-      if (cache.status) cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
+      if (state.selection[definitionId] === valueId)
+        delete state.selection[definitionId];
+      else
+        state.selection = reconcileSelectionForValue(
+          state.variants,
+          definitionId,
+          valueId,
+          state.selection,
+          order,
+        );
+      if (cache.status)
+        cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
       refresh();
       replaceVariantUrl();
     };
@@ -152,13 +212,27 @@ function bindOptions() {
         choose();
         return;
       }
-      const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+      const direction =
+        event.key === "ArrowRight" || event.key === "ArrowDown"
+          ? 1
+          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+            ? -1
+            : 0;
       if (!direction) return;
-      const siblings = buttons.filter((candidate) => candidate.dataset.optionDefinitionId === definitionId);
+      const siblings = buttons.filter(
+        (candidate) => candidate.dataset.optionDefinitionId === definitionId,
+      );
       const current = siblings.indexOf(button);
       for (let offset = 1; offset < siblings.length; offset += 1) {
-        const next = siblings[(current + direction * offset + siblings.length) % siblings.length];
-        if (next && !next.disabled) { event.preventDefault(); next.focus(); break; }
+        const next =
+          siblings[
+            (current + direction * offset + siblings.length) % siblings.length
+          ];
+        if (next && !next.disabled) {
+          event.preventDefault();
+          next.focus();
+          break;
+        }
       }
     });
   });
@@ -174,7 +248,10 @@ function bindActions() {
 
 function replaceVariantUrl() {
   const url = new URL(window.location.href);
-  const exact = resolveExactVariantSelection(state.variants, state.selection)?.variant;
+  const exact = resolveExactVariantSelection(
+    state.variants,
+    state.selection,
+  )?.variant;
   if (exact) url.searchParams.set("variant", exact.id);
   else url.searchParams.delete("variant");
   url.searchParams.delete("size");
@@ -191,61 +268,141 @@ function refresh() {
   });
 }
 
-const OPTION_CLASSES = ["bg-black", "text-white", "border-black", "bg-muted", "border-dashed", "border-muted-foreground", "opacity-50", "line-through", "cursor-not-allowed"];
+const OPTION_CLASSES = [
+  "bg-black",
+  "text-white",
+  "border-black",
+  "bg-muted",
+  "border-dashed",
+  "border-muted-foreground",
+  "opacity-50",
+  "line-through",
+  "cursor-not-allowed",
+];
 
 function updateOptionButtons() {
   for (const option of state.options) {
-    const availability = getVariantOptionAvailabilityMap(state.variants, option.id, option.values.map((value) => value.id), state.selection);
-    for (const button of cache.optionButtons.filter((candidate) => candidate.dataset.optionDefinitionId === option.id)) {
+    const availability = getVariantOptionAvailabilityMap(
+      state.variants,
+      option.id,
+      option.values.map((value) => value.id),
+      state.selection,
+    );
+    for (const button of cache.optionButtons.filter(
+      (candidate) => candidate.dataset.optionDefinitionId === option.id,
+    )) {
       const valueId = button.dataset.optionValueId!;
       const status = availability.get(valueId) ?? "sold_out";
       const selected = state.selection[option.id] === valueId;
       button.classList.remove(...OPTION_CLASSES);
       button.classList.add("bg-background", "text-foreground", "border-input");
       if (selected && status !== "sold_out") {
-        button.classList.remove("bg-background", "text-foreground", "border-input");
+        button.classList.remove(
+          "bg-background",
+          "text-foreground",
+          "border-input",
+        );
         button.classList.add("bg-black", "text-white", "border-black");
       } else if (status === "incompatible") {
         button.classList.remove("bg-background", "border-input");
-        button.classList.add("bg-muted", "border-dashed", "border-muted-foreground");
+        button.classList.add(
+          "bg-muted",
+          "border-dashed",
+          "border-muted-foreground",
+        );
       } else if (status === "sold_out") {
-        button.classList.add("opacity-50", "line-through", "cursor-not-allowed");
+        button.classList.add(
+          "opacity-50",
+          "line-through",
+          "cursor-not-allowed",
+        );
       }
       button.disabled = status === "sold_out";
       button.dataset.optionAvailability = status;
       button.setAttribute("aria-pressed", String(selected));
-      button.setAttribute("aria-label", optionButtonLabel(option.name, button.dataset.optionValue || "", status, selected));
+      button.setAttribute(
+        "aria-label",
+        optionButtonLabel(
+          option.name,
+          button.dataset.optionValue || "",
+          status,
+          selected,
+        ),
+      );
     }
   }
 }
 
-function optionButtonLabel(name: string, value: string, status: VariantOptionAvailability, selected: boolean) {
+function optionButtonLabel(
+  name: string,
+  value: string,
+  status: VariantOptionAvailability,
+  selected: boolean,
+) {
   if (status === "sold_out") return `${name}: ${value}. Out of stock.`;
-  if (status === "incompatible") return `${name}: ${value}. Not available with the current selection.`;
+  if (status === "incompatible")
+    return `${name}: ${value}. Not available with the current selection.`;
   if (selected) return `${name}: ${value}. Selected; activate again to clear.`;
   return `${name}: ${value}`;
 }
 
 function exactVariant() {
-  return resolveExactVariantSelection(state.variants, state.selection)?.variant ?? null;
+  return (
+    resolveExactVariantSelection(state.variants, state.selection)?.variant ??
+    null
+  );
 }
 
 function updateStockAndActions() {
   const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const candidates = exact ? [exact] : Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants;
+  const candidates = exact
+    ? [exact]
+    : Object.keys(state.selection).length
+      ? filterVariantsBySelection(state.variants, state.selection)
+      : state.variants;
   const summary = getBuyerStockSummary(candidates);
-  const exactAvailable = Boolean(!state.unavailableRequestedVariant && exact && getBuyerStockSummary([exact]).canPurchaseAny);
-  cache.unavailableNotice?.classList.toggle("hidden", !state.unavailableRequestedVariant);
+  const exactAvailable = Boolean(
+    !state.unavailableRequestedVariant &&
+    exact &&
+    getBuyerStockSummary([exact]).canPurchaseAny,
+  );
+  cache.unavailableNotice?.classList.toggle(
+    "hidden",
+    !state.unavailableRequestedVariant,
+  );
   if (cache.stockBadge) {
-    cache.stockBadge.classList.remove("text-primary", "bg-primary/10", "text-destructive", "bg-destructive/10");
-    cache.stockBadge.classList.add(summary.tone === "available" ? "text-primary" : "text-destructive", summary.tone === "available" ? "bg-primary/10" : "bg-destructive/10");
+    cache.stockBadge.classList.remove(
+      "text-primary",
+      "bg-primary/10",
+      "text-destructive",
+      "bg-destructive/10",
+    );
+    cache.stockBadge.classList.add(
+      summary.tone === "available" ? "text-primary" : "text-destructive",
+      summary.tone === "available" ? "bg-primary/10" : "bg-destructive/10",
+    );
   }
   if (cache.stockText) cache.stockText.textContent = summary.text;
-  setButton(cache.addButton, cache.addLabel, !exactAvailable, exactAvailable ? "Add to Cart" : "Select Options");
-  setButton(cache.buyButton, cache.buyLabel, !summary.canPurchaseAny, summary.canPurchaseAny ? "Buy Now" : "Unavailable");
+  setButton(
+    cache.addButton,
+    cache.addLabel,
+    !exactAvailable,
+    exactAvailable ? "Add to Cart" : "Select Options",
+  );
+  setButton(
+    cache.buyButton,
+    cache.buyLabel,
+    !summary.canPurchaseAny,
+    summary.canPurchaseAny ? "Buy Now" : "Unavailable",
+  );
 }
 
-function setButton(button: HTMLButtonElement | null, label: HTMLElement | null, disabled: boolean, text: string) {
+function setButton(
+  button: HTMLButtonElement | null,
+  label: HTMLElement | null,
+  disabled: boolean,
+  text: string,
+) {
   if (!button) return;
   button.disabled = disabled;
   if (label) label.textContent = text;
@@ -254,28 +411,58 @@ function setButton(button: HTMLButtonElement | null, label: HTMLElement | null, 
 function updatePrice() {
   if (!state.productPricing) return;
   const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const starting = shouldShowStartingVariantPrice(state.options.length > 0, exact);
+  const starting = shouldShowStartingVariantPrice(
+    state.options.length > 0,
+    exact,
+  );
   if (starting) {
-    const candidates = Object.keys(state.selection).length ? filterVariantsBySelection(state.variants, state.selection) : state.variants;
-    const price = getBuyerVariantPricePresentation(state.productPricing, candidates).pricing.finalPrice;
-    cache.priceElements.forEach((element) => element.textContent = `From ${formatPrice(price, undefined, state.productPricing!.currencyDecimalPlaces)}`);
-    cache.originalPriceElements.forEach((element) => element.classList.add("hidden"));
+    const candidates = Object.keys(state.selection).length
+      ? filterVariantsBySelection(state.variants, state.selection)
+      : state.variants;
+    const price = getBuyerVariantPricePresentation(
+      state.productPricing,
+      candidates,
+    ).pricing.finalPrice;
+    cache.priceElements.forEach(
+      (element) =>
+        (element.textContent = `From ${formatPrice(price, undefined, state.productPricing!.currencyDecimalPlaces)}`),
+    );
+    cache.originalPriceElements.forEach((element) =>
+      element.classList.add("hidden"),
+    );
     cache.discountBadge?.classList.add("hidden");
     return;
   }
-  const variantPricing: VariantPricing | null = exact ? {
-    price: exact.price,
-    discountType: exact.discountType,
-    discountPercentage: exact.discountPercentage,
-    discountAmount: exact.discountAmount,
-  } : null;
+  const variantPricing: VariantPricing | null = exact
+    ? {
+        price: exact.price,
+        discountType: exact.discountType,
+        discountPercentage: exact.discountPercentage,
+        discountAmount: exact.discountAmount,
+      }
+    : null;
   const pricing = calculateVariantPrice(state.productPricing, variantPricing);
-  cache.priceElements.forEach((element) => element.textContent = formatPrice(pricing.finalPrice, undefined, state.productPricing!.currencyDecimalPlaces));
+  cache.priceElements.forEach(
+    (element) =>
+      (element.textContent = formatPrice(
+        pricing.finalPrice,
+        undefined,
+        state.productPricing!.currencyDecimalPlaces,
+      )),
+  );
   cache.originalPriceElements.forEach((element) => {
-    element.textContent = formatPrice(pricing.originalPrice, undefined, state.productPricing!.currencyDecimalPlaces);
+    element.textContent = formatPrice(
+      pricing.originalPrice,
+      undefined,
+      state.productPricing!.currencyDecimalPlaces,
+    );
     element.classList.toggle("hidden", !pricing.hasDiscount);
   });
-  const badge = formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount);
+  const badge = formatDiscountBadge(
+    pricing.discountType,
+    pricing.discountPercentage,
+    pricing.discountAmount,
+  );
   if (cache.discountBadge) {
     cache.discountBadge.textContent = badge ?? "";
     cache.discountBadge.classList.toggle("hidden", !badge);
@@ -283,32 +470,40 @@ function updatePrice() {
 }
 
 function updateVariantImage() {
+  if (!state.hasRequestedVariant && !state.hasVariantSelectionInteraction)
+    return;
   const exact = exactVariant();
-  const targetId = exact?.imageId ?? null;
-  const target = targetId
-    ? cache.thumbnails.find((thumbnail) => thumbnail.dataset.imageId === targetId)
-    : cache.thumbnails.find((thumbnail) => thumbnail.dataset.imagePrimary === "true") ?? cache.thumbnails[0];
-  const url = target?.dataset.imageUrl;
-  if (!url || url === state.currentDisplayedImage) return;
-  state.currentDisplayedImage = url;
-  window.dispatchEvent(new CustomEvent("product-image-change", { detail: { url } }));
-  if (cache.mobileMainImage) {
-    cache.mobileMainImage.removeAttribute("srcset");
-    cache.mobileMainImage.removeAttribute("sizes");
-    cache.mobileMainImage.src = url;
-  }
-  window.dispatchEvent(new CustomEvent("controller-image-update", { detail: { url } }));
+  window.dispatchEvent(
+    new CustomEvent("product-media-select", {
+      detail: {
+        productMediaId: exact?.imageId ?? null,
+        source: "variant",
+      },
+    }),
+  );
 }
 
 function selectedCartOptions(variant: Variant): CartItemOption[] {
-  return variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
+  return variant.selectedOptions.map((option) => ({
+    name: option.name,
+    label: option.value,
+  }));
 }
 
 function add(redirect: boolean) {
   if (!cache.container || !state.productPricing) return;
-  if (state.unavailableRequestedVariant) return showToast("The requested option is out of stock. Choose another option.", "error");
-  const validation = validateSelection(state.selection, state.options, state.variants);
-  if (!validation.valid || !validation.variant) return showToast(validation.error || "Please select options", "error");
+  if (state.unavailableRequestedVariant)
+    return showToast(
+      "The requested option is out of stock. Choose another option.",
+      "error",
+    );
+  const validation = validateSelection(
+    state.selection,
+    state.options,
+    state.variants,
+  );
+  if (!validation.valid || !validation.variant)
+    return showToast(validation.error || "Please select options", "error");
   const quantity = Number.parseInt(cache.quantity?.value || "1", 10);
   const pricing = calculateVariantPrice(state.productPricing, {
     price: validation.variant.price,
@@ -329,11 +524,28 @@ function add(redirect: boolean) {
     image: state.currentDisplayedImage || cache.container.dataset.productImage,
     freeDelivery: cache.container.dataset.productFreeDelivery === "true",
   });
-  if (!cartData.valid || !cartData.data) return showToast(cartData.errors[0] || "Unable to add this product", "error");
-  const added = addToCart({ ...cartData.data, variantId: validation.variant.id, options: selectedCartOptions(validation.variant) });
-  if (!added) return showToast("This product option could not be added. Please refresh and try again.", "error");
+  if (!cartData.valid || !cartData.data)
+    return showToast(
+      cartData.errors[0] || "Unable to add this product",
+      "error",
+    );
+  const added = addToCart({
+    ...cartData.data,
+    variantId: validation.variant.id,
+    options: selectedCartOptions(validation.variant),
+  });
+  if (!added)
+    return showToast(
+      "This product option could not be added. Please refresh and try again.",
+      "error",
+    );
   const product = extractProductDataFromDOM(cache.container);
-  if (product) trackProductAddToCart({ product, variant: convertVariantToAnalyticsData(validation.variant), quantity });
+  if (product)
+    trackProductAddToCart({
+      product,
+      variant: convertVariantToAnalyticsData(validation.variant),
+      quantity,
+    });
   showToast("Added to cart", "success");
   if (redirect) window.location.href = "/cart";
   else {
