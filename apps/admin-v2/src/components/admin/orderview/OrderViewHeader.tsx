@@ -19,7 +19,6 @@ import {
   History,
   CreditCard,
   Package,
-  Printer,
   AlertTriangle,
 } from "lucide-react";
 import type { Order } from "./types";
@@ -252,8 +251,8 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
           >
             <Link to={`/invoice/${order.id}` as string} target="_blank" rel="noopener noreferrer">
-              <Printer className="h-4 w-4" />
-              Print Invoice
+              <Receipt className="h-4 w-4" />
+              View invoice
             </Link>
           </Button>
           {orderActions.canEditOrders && (
