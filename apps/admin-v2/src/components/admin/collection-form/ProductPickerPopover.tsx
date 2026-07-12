@@ -3,6 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { AlertCircle, Loader2, Search } from "lucide-react";
 import { useDebounce } from "~/hooks/use-debounce";
 import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
+import { isCollectionProductOptionDto } from "~/lib/collection-product-options";
 import { Button } from "../../ui/button";
 import {
   Command,
@@ -148,6 +149,7 @@ export function ProductPickerPopover({
                         key={product.id}
                         value={product.id}
                         onSelect={() => {
+                          if (!isCollectionProductOptionDto(product)) return;
                           onSelectProduct(product);
                           setOpen(false);
                         }}

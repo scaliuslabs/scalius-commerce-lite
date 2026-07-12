@@ -14,6 +14,9 @@ export function invalidateProductStatsQueries(queryClient: QueryClient) {
 
 export function invalidateProductLookupQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() });
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.products.collectionOptions(),
+  });
 }
 
 export function invalidateCollectionLookupQueries(queryClient: QueryClient) {

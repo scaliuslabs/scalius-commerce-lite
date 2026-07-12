@@ -24,4 +24,9 @@ describe("collection product picker boundaries", () => {
     expect(source).toContain("Searching products...");
     expect(source).toContain("productQuery.refetch()");
   });
+
+  it("revalidates the product DTO before adding manual membership", () => {
+    expect(source).toContain("isCollectionProductOptionDto(product)");
+    expect(source).toContain("onSelectProduct(product)");
+  });
 });

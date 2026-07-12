@@ -30,10 +30,19 @@ const canonicalPathUpdateSchema = z
         },
     );
 
+const productIdSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .max(180)
+    .refine((id) => id.startsWith("prod_"), {
+        message: "Product references must use product IDs.",
+    });
+
 const collectionConfigSchema = z.object({
     source: z.enum(["manual", "dynamic"]),
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
-    productIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
+    productIds: z.array(productIdSchema).max(COLLECTION_CONFIG_ID_LIMIT).optional().default([]),
     featuredProductId: z.string().trim().max(180).optional(),
     maxProducts: z.number().int().min(1).max(24).optional().default(8),
     title: z.string().trim().max(120).optional(),
@@ -42,7 +51,7 @@ const collectionConfigSchema = z.object({
 const collectionConfigUpdateSchema = z.object({
     source: z.enum(["manual", "dynamic"]).optional(),
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional(),
-    productIds: z.array(z.string().trim().min(1).max(180)).max(COLLECTION_CONFIG_ID_LIMIT).optional(),
+    productIds: z.array(productIdSchema).max(COLLECTION_CONFIG_ID_LIMIT).optional(),
     featuredProductId: z.string().trim().max(180).optional(),
     maxProducts: z.number().int().min(1).max(24).optional(),
     title: z.string().trim().max(120).optional(),

@@ -13,6 +13,7 @@ import {
   type CollectionProductOptionsInput,
 } from "../api-functions/collections";
 import { queryKeys } from "../query-keys";
+import { normalizeCollectionProductOptionsPayload } from "../collection-product-options";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
@@ -111,8 +112,7 @@ export const collectionProductOptionsQueryOptions = (
   const limit = input.limit ?? 10;
 
   return infiniteQueryOptions({
-    queryKey: queryKeys.products.list({
-      surface: "collection-picker",
+    queryKey: queryKeys.products.collectionOptions({
       categoryIds,
       search,
       limit,
@@ -120,7 +120,12 @@ export const collectionProductOptionsQueryOptions = (
     queryFn: ({ pageParam }) =>
       getCollectionProductOptions({
         data: { page: pageParam, limit, search, categoryIds },
-      }),
+      }).then((payload) =>
+        normalizeCollectionProductOptionsPayload(payload, {
+          page: pageParam,
+          limit,
+        }),
+      ),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.pagination.page < lastPage.pagination.totalPages

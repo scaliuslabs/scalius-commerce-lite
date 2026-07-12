@@ -79,4 +79,24 @@ describe("collection validation", () => {
             },
         }).success).toBe(true);
     });
+
+    it("rejects category IDs in manual product references", () => {
+        const config = {
+            source: "manual" as const,
+            categoryIds: [],
+            productIds: ["cat_footwear"],
+            maxProducts: 8,
+        };
+
+        expect(createCollectionSchema.safeParse({
+            name: "Footwear picks",
+            presentation: "grid",
+            isActive: false,
+            config,
+        }).success).toBe(false);
+        expect(updateCollectionSchema.safeParse({
+            expectedVersion: 3,
+            config: { productIds: config.productIds },
+        }).success).toBe(false);
+    });
 });
