@@ -53,6 +53,8 @@ describe("page publication authority", () => {
                             id: "page_1",
                             slug: "published-page",
                             isPublished: false,
+                            revision: 1,
+                            deletedAt: null,
                         }),
                     }),
                 }),
@@ -63,6 +65,7 @@ describe("page publication authority", () => {
         await expect(
             updatePage(db as never, "page_1", {
                 canonicalPath: undefined,
+                expectedRevision: 1,
                 isPublished: true,
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);
@@ -79,6 +82,8 @@ describe("page publication authority", () => {
                             slug: "published-page",
                             isPublished: false,
                             publishedAt: null,
+                            revision: 1,
+                            deletedAt: null,
                         }),
                     }),
                 }),
@@ -89,6 +94,7 @@ describe("page publication authority", () => {
         await expect(
             updatePage(db as never, "page_1", {
                 canonicalPath: undefined,
+                expectedRevision: 1,
                 publishedAt: new Date("2026-08-01T00:00:00.000Z"),
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);

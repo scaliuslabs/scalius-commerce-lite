@@ -510,6 +510,7 @@ export interface Page {
   featuredImage?: PageFeaturedImage | null;
   publishedAt: Date | null;
   sortOrder: number;
+  revision: number;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;

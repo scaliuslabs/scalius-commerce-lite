@@ -4,14 +4,15 @@ import { ExternalLink } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createDateColumn, createActionsColumn } from "./column-factories";
 import type { Page } from "~/types/api-responses";
+import type { PageRevisionClaim } from "~/lib/api-functions/pages";
 
 interface PageColumnOptions {
   showTrashed: boolean;
   getStorefrontPath: (path: string) => string;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRestore: (id: string) => void;
-  onPermanentDelete: (id: string) => void;
+  onDelete: (claim: PageRevisionClaim) => void;
+  onRestore: (claim: PageRevisionClaim) => void;
+  onPermanentDelete: (claim: PageRevisionClaim) => void;
 }
 
 export function getPageColumns(
@@ -84,9 +85,9 @@ export function getPageColumns(
         ? (p) => window.open(opts.getStorefrontPath(`/${p.slug}`), "_blank")
         : undefined,
       onEdit: (p) => opts.onEdit(p.id),
-      onDelete: (p) => opts.onDelete(p.id),
-      onRestore: (p) => opts.onRestore(p.id),
-      onPermanentDelete: (p) => opts.onPermanentDelete(p.id),
+      onDelete: (p) => opts.onDelete({ id: p.id, expectedRevision: p.revision }),
+      onRestore: (p) => opts.onRestore({ id: p.id, expectedRevision: p.revision }),
+      onPermanentDelete: (p) => opts.onPermanentDelete({ id: p.id, expectedRevision: p.revision }),
     }),
   ];
 }

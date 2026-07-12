@@ -126,7 +126,7 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
         ]);
     });
 
-    it("documents page slug conflicts without inventing restore conflicts", () => {
+    it("documents page slug and lifecycle conflicts", () => {
         const spec = buildAdminCatalogContentSpec();
 
         expectResponseStatuses(spec, "/api/v1/admin/pages", "post", [
@@ -146,8 +146,11 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
         ]);
         expectResponseStatuses(spec, "/api/v1/admin/pages/{id}/restore", "post", [
             "200",
+            "400",
             "401",
             "403",
+            "404",
+            "409",
         ]);
     });
 
