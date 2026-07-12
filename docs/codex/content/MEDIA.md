@@ -112,6 +112,18 @@ create corrupt previews and buyer surfaces.
 
 ## Platform evidence
 
+- [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)
+  allow 20 MB images and 1 GB MOV/MP4/WebM product videos up to 10 minutes,
+  and describe a processing pipeline that selects streaming/MP4 output. Scalius's
+  initial 100 MB MP4/WebM limit is therefore a safe direct-delivery launch tier,
+  not a claim of competitive parity or a permanent architecture ceiling. Raising
+  it further requires adaptive transcoding/streaming and storage policy, not a
+  larger constant on the buffered upload route.
+- [Shopify product-media guidance](https://help.shopify.com/en/manual/products/product-media/add-media)
+  treats the first product media item as the featured item used on collection,
+  cart, checkout, and home surfaces. Scalius keeps the merchant's ordered primary
+  media choice but must resolve an image/poster representation on image-only
+  surfaces instead of sending a raw video URL to `<img>` or feed consumers.
 - [Cloudflare R2 upload guidance](https://developers.cloudflare.com/r2/objects/upload-objects/)
   identifies multipart upload as the resumable/parallel path for video and
   requires uniform 5 MiB–5 GiB parts except the final part.
