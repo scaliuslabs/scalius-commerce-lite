@@ -10,7 +10,10 @@ describe("storefront feed product API boundaries", () => {
 
     expect(source).toContain("export async function getFeedProducts");
     expect(source).toContain("getApiV1ProductsFeed");
-    expect(source).toContain('includeVariants: "true"');
+    expect(source).toContain("normalizeFeedProductListPayload");
+    expect(source).toContain("hasNextPage: boolean");
+    expect(source).toContain("defaultParams: { limit: 100 }");
+    expect(source).not.toContain('includeVariants: "true"');
     expect(source).toContain("Dedicated product feed SDK route is missing.");
     expect(source).not.toContain("return getAllProducts(normalizedOptions)");
   });

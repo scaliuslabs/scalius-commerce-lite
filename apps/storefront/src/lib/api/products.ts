@@ -174,6 +174,7 @@ export async function getProductVariants(
  */
 export interface ProductListOptions {
   page?: number;
+  cursor?: string;
   limit?: number;
   sort?:
     | "newest"
@@ -204,6 +205,25 @@ type ProductListPayload = {
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
 };
+
+type FeedProductListPayload = {
+  products?: Product[];
+  data?: Product[];
+  pagination?: {
+    limit: number;
+    cursor?: string;
+    hasNextPage: boolean;
+  };
+};
+
+export interface FeedProductPage {
+  data: Product[];
+  pagination: {
+    limit: number;
+    cursor?: string;
+    hasNextPage: boolean;
+  };
+}
 
 function normalizeBuyerPriceRange(value: unknown): BuyerPriceRange | undefined {
   if (!value || typeof value !== "object") return undefined;
@@ -309,6 +329,30 @@ function normalizeProductListPayload(
   };
 }
 
+function normalizeFeedProductListPayload(payload: unknown): FeedProductPage | null {
+  const candidate =
+    unwrapData<FeedProductListPayload>(payload) ??
+    unwrapEnvelope<FeedProductListPayload>(payload) ??
+    (payload as FeedProductListPayload | null);
+  if (!candidate || typeof candidate !== "object") return null;
+  const products = Array.isArray(candidate.products)
+    ? candidate.products
+    : Array.isArray(candidate.data)
+      ? candidate.data
+      : null;
+  const pagination = candidate.pagination;
+  if (
+    !products ||
+    !pagination ||
+    !Number.isInteger(pagination.limit) ||
+    pagination.limit < 1 ||
+    typeof pagination.hasNextPage !== "boolean" ||
+    (pagination.cursor !== undefined && typeof pagination.cursor !== "string") ||
+    (pagination.hasNextPage && !pagination.cursor)
+  ) return null;
+  return { data: products, pagination };
+}
+
 function normalizeSitemapProductListPayload(
   payload: unknown,
 ): PaginatedResponse<SitemapProduct> | null {
@@ -333,7 +377,7 @@ function normalizeSitemapProductListPayload(
 
 async function readDedicatedFeedProducts(
   options: ProductListOptions,
-): Promise<PaginatedResponse<Product> | null> {
+): Promise<FeedProductPage | null> {
   const sdk = (await import("@scalius/api-client/sdk")) as OptionalFeedProductsSdk;
   if (typeof sdk.getApiV1ProductsFeed !== "function") {
     console.error("Dedicated product feed SDK route is missing.");
@@ -349,7 +393,7 @@ async function readDedicatedFeedProducts(
       console.error("Error fetching feed products:", error);
       return null;
     }
-    return normalizeProductListPayload(data);
+    return normalizeFeedProductListPayload(data);
   } catch (error: unknown) {
     console.error("Error fetching feed products:", error);
     return null;
@@ -478,13 +522,10 @@ export async function getAllProducts(
  */
 export async function getFeedProducts(
   options: ProductListOptions = {},
-): Promise<PaginatedResponse<Product> | null> {
-  const normalizedOptions = normalizeProductListOptions({
-    ...options,
-    includeVariants: "true",
-  });
+): Promise<FeedProductPage | null> {
+  const normalizedOptions = normalizeProductListOptions(options);
   const queryString = buildCanonicalQueryString(normalizedOptions, {
-    defaultParams: { page: 1, limit: 20, sort: "newest" },
+    defaultParams: { limit: 100 },
   });
   const cacheKey = `feed_products_${queryString || "default"}`;
 

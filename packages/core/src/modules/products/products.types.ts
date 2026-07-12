@@ -108,7 +108,18 @@ export interface StorefrontProductFilterInput {
 export type StorefrontFeedProductFilterInput = Pick<
     StorefrontProductFilterInput,
     "category" | "search" | "page" | "limit" | "sort" | "minPrice" | "maxPrice" | "ids"
->;
+> & { cursor?: string };
+
+export interface StorefrontFeedPagination {
+    limit: number;
+    cursor?: string;
+    hasNextPage: boolean;
+}
+
+export interface StorefrontFeedProductPage {
+    products: StorefrontFeedProduct[];
+    pagination: StorefrontFeedPagination;
+}
 
 export interface StorefrontFeedProductAttribute {
     name: string;

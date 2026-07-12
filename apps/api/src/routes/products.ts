@@ -27,16 +27,9 @@ import {
 } from "../utils/public-search-query";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PRODUCT_FEED_QUERY_KEYS = new Set(["page", "limit", "sort", "category", "search", "minPrice", "maxPrice", "ids"]);
+const PRODUCT_FEED_QUERY_KEYS = new Set(["cursor", "limit", "category", "search", "minPrice", "maxPrice", "ids"]);
 const PRODUCT_SITEMAP_QUERY_KEYS = new Set(["page", "limit"]);
-const PRODUCT_FEED_SORT_VALUES = new Set([
-  "newest",
-  "price-asc",
-  "price-desc",
-  "name-asc",
-  "name-desc",
-  "discount",
-]);
+const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
 
 function hasOptionalIntegerParamInRange(
   params: URLSearchParams,
@@ -64,10 +57,9 @@ function isStorefrontFeedProductsCacheable(url: string): boolean {
     if (value.trim() === "" && key !== "search") return false;
   }
 
-  const sort = params.get("sort");
+  const cursor = params.get("cursor");
   return (
-    (sort === null || PRODUCT_FEED_SORT_VALUES.has(sort)) &&
-    hasOptionalIntegerParamInRange(params, "page", 1, 1000) &&
+    (cursor === null || (cursor.length <= 512 && PRODUCT_FEED_CURSOR_PATTERN.test(cursor))) &&
     hasOptionalIntegerParamInRange(params, "limit", 1, 100) &&
     hasOptionalFiniteNumberParam(params, "minPrice") &&
     hasOptionalFiniteNumberParam(params, "maxPrice")
@@ -98,7 +90,7 @@ app.use(
         return { search: "", page: 1, limit: 10 };
       }
       if (normalizedPath.endsWith("/products/feed")) {
-        return { page: 1, limit: 100, sort: "newest" };
+        return { limit: 100 };
       }
       if (normalizedPath.endsWith("/products/sitemap")) {
         return { page: 1, limit: 100 };
@@ -178,13 +170,10 @@ const productSearchSchema = z.object({
 const productFeedSchema = z.object({
   category: z.string().optional().openapi({ description: "Category slug or ID filter" }),
   search: z.string().optional().openapi({ description: "Search query" }),
-  page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
+  cursor: z.string().max(512).regex(PRODUCT_FEED_CURSOR_PATTERN).optional().openapi({
+    description: "Opaque continuation cursor returned by the previous feed response",
+  }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(100).openapi({ description: "Items per page" }),
-  sort: z
-    .enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
-    .optional()
-    .default("newest")
-    .openapi({ description: "Sort order" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   ids: z.string().optional().openapi({
@@ -403,7 +392,11 @@ const feedProductsRoute = createRoute({
       description: "Feed product list with pagination",
       content: { "application/json": { schema: successEnvelope(z.object({
         products: z.array(storefrontFeedProductSchema),
-        pagination: paginationSchema,
+        pagination: z.object({
+          limit: z.number().int().min(1).max(100),
+          cursor: z.string().optional(),
+          hasNextPage: z.boolean(),
+        }),
       })) } },
     },
     400: errorResponses[400],

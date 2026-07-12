@@ -1,8 +1,8 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
-import { getFeedProducts } from "@/lib/api/products";
+import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
-import type { PaginatedResponse, Product, ProductVariant } from "@/lib/api/types";
+import type { Product, ProductVariant } from "@/lib/api/types";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
@@ -738,12 +738,20 @@ function parsePagination(value: unknown) {
   const limit = Number.isFinite(requestedLimit)
     ? Math.min(MAX_SEARCH_LIMIT, Math.max(1, Math.floor(requestedLimit)))
     : DEFAULT_SEARCH_LIMIT;
-  const cursor = typeof pagination.cursor === "string" ? pagination.cursor : "";
-  const page = cursor.startsWith("page:")
-    ? Math.max(1, Number.parseInt(cursor.slice("page:".length), 10) || 1)
-    : 1;
+  const cursorValue = pagination.cursor;
+  if (cursorValue !== undefined && (
+    typeof cursorValue !== "string" ||
+    cursorValue.length > 512 ||
+    !/^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/.test(cursorValue)
+  )) {
+    return { valid: false as const, limit };
+  }
 
-  return { page, limit };
+  return {
+    valid: true as const,
+    limit,
+    ...(typeof cursorValue === "string" ? { cursor: cursorValue } : {}),
+  };
 }
 
 function filtersObject(value: unknown): Record<string, unknown> {
@@ -757,21 +765,23 @@ function minorUnitsToMajor(value: unknown, context: UcpCatalogContext): number |
   return value / (10 ** context.currency.decimalPlaces);
 }
 
-function buildSearchOptions(body: SearchRequestBody, context: UcpCatalogContext) {
+function buildSearchOptions(
+  body: SearchRequestBody,
+  context: UcpCatalogContext,
+  pagination: Extract<ReturnType<typeof parsePagination>, { valid: true }>,
+) {
   const filters = filtersObject(body.filters);
   const priceFilter = filtersObject(filters.price);
   const categories = Array.isArray(filters.categories)
     ? filters.categories.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
     : [];
-  const { page, limit } = parsePagination(body.pagination);
   const query = typeof body.query === "string" ? body.query.trim() : "";
   const minPrice = minorUnitsToMajor(priceFilter.min, context);
   const maxPrice = minorUnitsToMajor(priceFilter.max, context);
 
   return {
-    page,
-    limit,
-    sort: "newest" as const,
+    limit: pagination.limit,
+    ...(pagination.cursor ? { cursor: pagination.cursor } : {}),
     ...(query ? { search: query } : {}),
     ...(categories[0] ? { category: categories[0] } : {}),
     ...(minPrice !== undefined ? { minPrice } : {}),
@@ -793,7 +803,7 @@ function hasRecognizedSearchInput(body: SearchRequestBody): boolean {
 
 async function loadFeedProducts(
   options: Parameters<typeof getFeedProducts>[0],
-): Promise<PaginatedResponse<Product> | null> {
+): Promise<FeedProductPage | null> {
   try {
     return await getFeedProducts(options);
   } catch (error) {
@@ -824,7 +834,24 @@ export async function searchCatalog(
     };
   }
 
-  const options = buildSearchOptions(body, context);
+  const pagination = parsePagination(body.pagination);
+  if (!pagination.valid) {
+    return {
+      status: 400,
+      body: {
+        ucp: ucpMetadata("error", [UCP_CATALOG_SEARCH_CAPABILITY]),
+        products: [],
+        messages: [{
+          type: "error",
+          code: "request_invalid",
+          content: "Catalog pagination cursor is invalid or no longer supported.",
+          severity: "recoverable",
+          path: "$.pagination.cursor",
+        }],
+      },
+    };
+  }
+  const options = buildSearchOptions(body, context, pagination);
   const result = await loadFeedProducts(options);
   if (!result) {
     return {
@@ -847,17 +874,14 @@ export async function searchCatalog(
   const products = result.data
     .map((product) => mapProduct(product, context))
     .filter((product): product is UcpProduct => Boolean(product));
-  const hasNextPage = options.page < result.pagination.totalPages;
-
   return {
     status: 200,
     body: {
       ucp: ucpMetadata("success", [UCP_CATALOG_SEARCH_CAPABILITY]),
       products,
       pagination: {
-        has_next_page: hasNextPage,
-        ...(hasNextPage ? { cursor: `page:${options.page + 1}` } : {}),
-        total_count: result.pagination.total,
+        has_next_page: result.pagination.hasNextPage,
+        ...(result.pagination.cursor ? { cursor: result.pagination.cursor } : {}),
       },
     },
   };
@@ -890,10 +914,8 @@ async function loadProductsByInputs(inputs: LookupInput[]): Promise<Product[] | 
   if (inputs.length === 0) return [];
 
   const result = await loadFeedProducts({
-    page: 1,
     limit: Math.max(inputs.length, DEFAULT_SEARCH_LIMIT),
     ids: inputs.map((input) => input.normalized).join(","),
-    sort: "newest",
   });
   if (!result) return null;
 

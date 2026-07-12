@@ -64,7 +64,7 @@ describe("storefront product query boundaries", () => {
             catalogReaderIndex,
         );
         const rowsReadIndex = source.indexOf(
-            "query.orderBy(orderBy).limit(limit).offset(offset).all()",
+            "query.orderBy(orderBy, products.id).limit(limit).offset(offset).all()",
             readWaveIndex,
         );
         const countReadIndex = source.indexOf("countQuery.get()", readWaveIndex);
@@ -213,16 +213,14 @@ describe("storefront product query boundaries", () => {
         expect(source).toContain("MAX_PUBLIC_CATEGORY_SEARCH_SLUG_LENGTH");
     });
 
-    it("keeps feed page rows/count and enrichment bulked by page product IDs", () => {
+    it("keeps feed cursor reads bounded and enrichment bulked by returned product IDs", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
             "utf8",
         );
         const feedBody = getFunctionBody(source, "getStorefrontFeedProducts");
 
-        const readWaveIndex = feedBody.indexOf(
-            "const [productsList, totalCount] = await Promise.all([",
-        );
+        const readWaveIndex = feedBody.indexOf("const scannedProducts = await query");
         const productIdsIndex = feedBody.indexOf(
             "const productIds = productsList.map((product) => product.id);",
         );
@@ -231,8 +229,13 @@ describe("storefront product query boundaries", () => {
         );
 
         expect(readWaveIndex).toBeGreaterThan(-1);
-        expect(feedBody.indexOf("query.orderBy(orderBy).limit(limit).offset(offset).all()", readWaveIndex)).toBeGreaterThan(readWaveIndex);
-        expect(feedBody.indexOf("countQuery.get()", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(feedBody.indexOf(".orderBy(desc(feedCreatedAt), desc(products.id))", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(feedBody.indexOf(".limit(limit + 1)", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(feedBody.indexOf("const productsList = scannedProducts.slice(0, limit)", readWaveIndex)).toBeGreaterThan(readWaveIndex);
+        expect(feedBody).not.toContain(".offset(");
+        expect(feedBody).not.toContain("countQuery");
+        expect(feedBody).toContain("decodeFeedCursor(cursor)");
+        expect(feedBody).toContain("encodeFeedCursor(productsList[productsList.length - 1]!)");
         expect(productIdsIndex).toBeGreaterThan(readWaveIndex);
         expect(enrichmentWaveIndex).toBeGreaterThan(productIdsIndex);
         expect(feedBody.indexOf("readPrimaryProductImageMap(db, productIds)", enrichmentWaveIndex)).toBeGreaterThan(enrichmentWaveIndex);

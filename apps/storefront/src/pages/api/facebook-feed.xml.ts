@@ -2,7 +2,7 @@
  * Product Feed Endpoint
  * Generates XML RSS 2.0 feeds for the canonical Google/Base catalog feed
  * and the Facebook/Meta compatibility catalog feed.
- * Supports pagination for large product catalogs (?page=1&limit=1000)
+ * Supports bounded product continuation for large catalogs (?cursor=...&limit=1000)
  */
 
 import type { APIRoute, APIContext } from "astro";
@@ -40,7 +40,6 @@ export const prerender = false;
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;
 const API_FEED_PAGE_SIZE = 100;
-const API_FEED_BATCH_SIZE = 5;
 const FEED_IMAGE_OPTIONS = {
   width: 1200,
   quality: 90,
@@ -643,112 +642,52 @@ function generateCatalogFeed(
 }
 
 type FeedItemWindowResult =
-  | { status: "ok"; items: FeedItem[] }
+  | { status: "ok"; items: FeedItem[]; cursor?: string }
   | { status: "unavailable" };
 
-function appendFeedItemsForWindow(
-  pageItems: FeedItem[],
-  state: { seen: number; items: FeedItem[] },
-  targetStart: number,
-  targetEnd: number,
-) {
-  const nextSeen = state.seen + pageItems.length;
-  if (nextSeen <= targetStart) {
-    state.seen = nextSeen;
-    return;
-  }
-
-  const startIndex = Math.max(0, targetStart - state.seen);
-  const endIndex = Math.min(pageItems.length, targetEnd - state.seen);
-  if (endIndex > startIndex) {
-    state.items.push(...pageItems.slice(startIndex, endIndex));
-  }
-  state.seen = nextSeen;
-}
-
 async function readFeedItemWindow({
-  page,
+  cursor,
   limit,
   baseUrl,
   currencyCode,
   feedsPolicy,
   feedVariantStrategy,
 }: {
-  page: number;
+  cursor?: string;
   limit: number;
   baseUrl: string;
   currencyCode: string;
   feedsPolicy: SeoDiscoverySettings["feeds"];
   feedVariantStrategy: ReturnType<typeof getFeedVariantStrategy>;
 }): Promise<FeedItemWindowResult> {
-  const targetStart = (page - 1) * limit;
-  const targetEnd = targetStart + limit;
-  const state = { seen: 0, items: [] as FeedItem[] };
+  const items: FeedItem[] = [];
+  let remainingProducts = limit;
+  let nextCursor = cursor;
 
-  const firstResponse = await getFeedProducts({
-    page: 1,
-    limit: API_FEED_PAGE_SIZE,
-  });
-  if (!firstResponse) {
-    return { status: "unavailable" };
-  }
+  do {
+    const response = await getFeedProducts({
+      ...(nextCursor ? { cursor: nextCursor } : {}),
+      limit: Math.min(API_FEED_PAGE_SIZE, remainingProducts),
+    });
+    if (!response) return { status: "unavailable" };
 
-  appendFeedItemsForWindow(
-    toFeedItems(
-      firstResponse.data,
+    items.push(...toFeedItems(
+      response.data,
       baseUrl,
       currencyCode,
       feedsPolicy,
       feedVariantStrategy,
-    ),
-    state,
-    targetStart,
-    targetEnd,
-  );
+    ));
+    remainingProducts -= response.data.length;
+    nextCursor = response.pagination.cursor;
+    if (response.data.length === 0) break;
+  } while (nextCursor && remainingProducts > 0);
 
-  const totalPages = firstResponse.pagination.totalPages;
-  for (
-    let currentApiPage = 2;
-    currentApiPage <= totalPages && state.items.length < limit;
-    currentApiPage += API_FEED_BATCH_SIZE
-  ) {
-    const endBatchPage = Math.min(
-      currentApiPage + API_FEED_BATCH_SIZE - 1,
-      totalPages,
-    );
-    const batchResponses = await Promise.all(
-      Array.from(
-        { length: endBatchPage - currentApiPage + 1 },
-        (_, index) =>
-          getFeedProducts({
-            page: currentApiPage + index,
-            limit: API_FEED_PAGE_SIZE,
-          }),
-      ),
-    );
-
-    for (const response of batchResponses) {
-      if (state.items.length >= limit) break;
-      if (!response) {
-        return { status: "unavailable" };
-      }
-
-      appendFeedItemsForWindow(
-        toFeedItems(
-          response.data,
-          baseUrl,
-          currencyCode,
-          feedsPolicy,
-          feedVariantStrategy,
-        ),
-        state,
-        targetStart,
-        targetEnd,
-      );
-    }
-  }
-
-  return { status: "ok", items: state.items };
+  return {
+    status: "ok",
+    items,
+    ...(nextCursor ? { cursor: nextCursor } : {}),
+  };
 }
 
 export function createCatalogFeedGet(format: FeedFormat): APIRoute {
@@ -787,26 +726,22 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
         });
       }
 
-      const pageParam = url.searchParams.get("page");
+      if (url.searchParams.has("page")) {
+        return new Response("Page pagination is retired; follow the opaque cursor continuation link.", { status: 400 });
+      }
+      const cursor = url.searchParams.get("cursor")?.trim() || undefined;
       const limitParam = url.searchParams.get("limit");
-
-      const page = parsePositiveIntegerParam(
-        pageParam,
-        1,
-        Number.MAX_SAFE_INTEGER,
-      );
       const limit = parsePositiveIntegerParam(
         limitParam,
         DEFAULT_LIMIT,
         MAX_LIMIT,
       );
 
-      if (page === null) {
-        return new Response("Invalid page parameter", { status: 400 });
-      }
-
       if (limit === null) {
         return new Response("Invalid limit parameter", { status: 400 });
+      }
+      if (cursor && (cursor.length > 512 || !/^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/.test(cursor))) {
+        return new Response("Invalid cursor parameter", { status: 400 });
       }
 
       const layoutData = await getLayoutData();
@@ -819,7 +754,7 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
       const currencyCode = layoutData.currency?.code ?? "BDT";
 
       const feedWindow = await readFeedItemWindow({
-        page,
+        cursor,
         limit,
         baseUrl,
         currencyCode,
@@ -832,10 +767,6 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
         );
       }
 
-      if (feedWindow.items.length === 0 && page > 1) {
-        return new Response("Page not found", { status: 404 });
-      }
-
       const xml = generateCatalogFeed(
         feedWindow.items,
         baseUrl,
@@ -844,9 +775,17 @@ export function createCatalogFeedGet(format: FeedFormat): APIRoute {
         format,
       );
 
+      const headers: Record<string, string> = { ...FEED_XML_HEADERS };
+      if (feedWindow.cursor) {
+        const continuationUrl = new URL(url);
+        continuationUrl.searchParams.delete("page");
+        continuationUrl.searchParams.set("cursor", feedWindow.cursor);
+        continuationUrl.searchParams.set("limit", String(limit));
+        headers.Link = `<${continuationUrl.toString()}>; rel="next"`;
+      }
       return new Response(xml, {
         status: 200,
-        headers: FEED_XML_HEADERS,
+        headers,
       });
     } catch (error: unknown) {
       console.error(`Error generating ${feedLabel}:`, error);

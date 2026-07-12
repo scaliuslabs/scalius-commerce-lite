@@ -169,7 +169,42 @@ describe("Facebook product feed route", () => {
     expect(response.headers.get("Content-Type")).toContain("application/xml");
     expect(response.headers.get("Cache-Control")).toContain("max-age=3600");
     expect(body).toContain("<rss");
-    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ limit: 100 });
+  });
+
+  it("starts at the supplied cursor and returns an opaque next continuation link", async () => {
+    mocks.getFeedProducts.mockResolvedValueOnce({
+      data: [{
+        id: "prod_cursor",
+        slug: "cursor-product",
+        name: "Cursor Product",
+        description: "Cursor product",
+        price: 1200,
+        discountedPrice: 1200,
+        availableForSale: true,
+        imageUrl: "https://cdn.example.test/products/cursor-product.jpg",
+      }],
+      pagination: {
+        limit: 1,
+        cursor: "feed-v1.abb.cHJvZF9uZXh0",
+        hasNextPage: true,
+      },
+    });
+
+    const response = await GET(context(
+      "https://storefront.example.test/api/facebook-feed.xml?cursor=feed-v1.abc.cHJvZF9jdXJyZW50&limit=1",
+    ));
+
+    expect(response.status).toBe(200);
+    expect(mocks.getFeedProducts).toHaveBeenCalledTimes(1);
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({
+      cursor: "feed-v1.abc.cHJvZF9jdXJyZW50",
+      limit: 1,
+    });
+    expect(response.headers.get("Link")).toContain(
+      "cursor=feed-v1.abb.cHJvZF9uZXh0",
+    );
+    expect(response.headers.get("Link")).toContain('rel="next"');
   });
 
   it("emits product condition only from a saved product fact", async () => {
@@ -296,18 +331,23 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:product_type>Electronics</g:product_type>");
   });
 
-  it("rejects malformed page and limit query parameters", async () => {
+  it("rejects retired page pagination, malformed cursors, and malformed limits", async () => {
     const badPage = await GET(
       context("https://storefront.example.test/api/facebook-feed.xml?page=2abc"),
     );
     const badLimit = await GET(
       context("https://storefront.example.test/api/facebook-feed.xml?limit=05"),
     );
+    const badCursor = await GET(
+      context("https://storefront.example.test/api/facebook-feed.xml?cursor=page:999"),
+    );
 
     expect(badPage.status).toBe(400);
-    await expect(badPage.text()).resolves.toContain("Invalid page parameter");
+    await expect(badPage.text()).resolves.toContain("Page pagination is retired");
     expect(badLimit.status).toBe(400);
     await expect(badLimit.text()).resolves.toContain("Invalid limit parameter");
+    expect(badCursor.status).toBe(400);
+    await expect(badCursor.text()).resolves.toContain("Invalid cursor parameter");
     expect(mocks.getFeedProducts).not.toHaveBeenCalled();
   });
 
@@ -594,7 +634,7 @@ describe("Facebook product feed route", () => {
     expect(body).not.toContain("<g:brand>Generic</g:brand>");
   });
 
-  it("paginates the flattened feed rows so expanded variants are not dropped", async () => {
+  it("keeps an expanded product variant group atomic within one product continuation", async () => {
     mocks.getFeedProducts.mockResolvedValue({
       data: [
         {
@@ -673,22 +713,12 @@ describe("Facebook product feed route", () => {
       context("https://storefront.example.test/api/facebook-feed.xml?limit=2"),
     );
     const firstBody = await firstPage.text();
-    const secondPage = await GET(
-      context("https://storefront.example.test/api/facebook-feed.xml?page=2&limit=2"),
-    );
-    const secondBody = await secondPage.text();
-
     expect(firstPage.status).toBe(200);
-    expect(firstBody.match(/<item>/g)).toHaveLength(2);
+    expect(firstBody.match(/<item>/g)).toHaveLength(3);
     expect(firstBody).toContain("<g:id>SKU-A</g:id>");
     expect(firstBody).toContain("<g:id>SKU-B</g:id>");
-    expect(firstBody).not.toContain("<g:id>SKU-C</g:id>");
-    expect(secondPage.status).toBe(200);
-    expect(secondBody.match(/<item>/g)).toHaveLength(1);
-    expect(secondBody).not.toContain("<g:id>SKU-A</g:id>");
-    expect(secondBody).not.toContain("<g:id>SKU-B</g:id>");
-    expect(secondBody).toContain("<g:id>SKU-C</g:id>");
-    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ page: 1, limit: 100 });
+    expect(firstBody).toContain("<g:id>SKU-C</g:id>");
+    expect(mocks.getFeedProducts).toHaveBeenCalledWith({ limit: 2 });
   });
 
   it("keeps product-level rows when the feed variant strategy is products", async () => {
@@ -1474,7 +1504,11 @@ describe("Facebook product feed route", () => {
             isActive: true,
           },
         ],
-        pagination: { page: 1, limit: 100, total: 101, totalPages: 2 },
+        pagination: {
+          limit: 100,
+          cursor: "feed-v1.abc.cHJvZF8x",
+          hasNextPage: true,
+        },
       })
       .mockResolvedValueOnce(null);
 
@@ -1484,6 +1518,10 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(mocks.getFeedProducts).toHaveBeenLastCalledWith({
+      cursor: "feed-v1.abc.cHJvZF8x",
+      limit: 100,
+    });
   });
 
   it("returns a non-cacheable 503 when feed generation throws unexpectedly", async () => {

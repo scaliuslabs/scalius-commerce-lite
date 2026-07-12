@@ -9,7 +9,7 @@ import {
     productAttributeValues,
     productAttributes,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, isNull, inArray, or, type SQL } from "drizzle-orm";
+import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { unixToDate } from "@scalius/shared/utils";
 import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
@@ -17,10 +17,12 @@ import type {
     StorefrontFeedProduct,
     StorefrontFeedProductAttribute,
     StorefrontFeedProductFilterInput,
+    StorefrontFeedProductPage,
     StorefrontFeedProductVariant,
     StorefrontProductFilterInput,
 } from "./products.types";
 import type { Database } from "@scalius/database/client";
+import { ValidationError } from "@scalius/core/errors";
 import {
     publicProductBaseConditions,
     publicProductHasBuyerResolvableSku,
@@ -86,10 +88,44 @@ type StorefrontFeedProductListRow = {
     categoryId: string | null;
     excludeFromProductFeed: boolean;
     productCondition: "new" | "refurbished" | "used" | null;
+    createdAt: number;
     updatedAt: number;
     hasCustomerOptions: number;
     availableForSale: number;
 };
+
+const STOREFRONT_FEED_CURSOR_PREFIX = "feed-v1.";
+
+function encodeFeedCursor(position: { createdAt: number; id: string }): string {
+    const bytes = new TextEncoder().encode(position.id);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const encodedId = btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+    return `${STOREFRONT_FEED_CURSOR_PREFIX}${position.createdAt.toString(36)}.${encodedId}`;
+}
+
+function decodeFeedCursor(cursor: string): { createdAt: number; id: string } {
+    const match = /^feed-v1\.([0-9a-z]+)\.([A-Za-z0-9_-]+)$/.exec(cursor);
+    if (!match?.[1] || !match[2]) throw new ValidationError("Invalid product feed cursor.");
+    const createdAt = Number.parseInt(match[1], 36);
+    if (!Number.isSafeInteger(createdAt) || createdAt < 0) {
+        throw new ValidationError("Invalid product feed cursor.");
+    }
+    try {
+        const padded = match[2].replace(/-/g, "+").replace(/_/g, "/")
+            .padEnd(Math.ceil(match[2].length / 4) * 4, "=");
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        const id = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes).trim();
+        if (!id || id.length > 180) throw new Error("invalid id");
+        return { createdAt, id };
+    } catch {
+        throw new ValidationError("Invalid product feed cursor.");
+    }
+}
 
 type StorefrontSitemapProductRow = {
     slug: string;
@@ -808,13 +844,21 @@ export async function getStorefrontProducts(db: Database, params: StorefrontProd
 export async function getStorefrontFeedProducts(
     db: Database,
     params: StorefrontFeedProductFilterInput,
-) {
+): Promise<StorefrontFeedProductPage> {
     const {
         page = 1,
         limit = 100,
         sort = "newest",
+        cursor,
     } = params;
+    if (page !== 1) {
+        throw new ValidationError("Product feed page pagination is retired. Use the cursor returned by the previous response.");
+    }
+    if (sort !== "newest") {
+        throw new ValidationError("Product feed pagination supports newest order only.");
+    }
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    const feedCreatedAt = sql<number>`CAST(${products.createdAt} AS INTEGER)`;
     const conditions = buildStorefrontProductConditions(params, {
         includeLookupHandles: true,
         includeVariantLookups: true,
@@ -822,8 +866,13 @@ export async function getStorefrontFeedProducts(
     }, buyerPricing);
     conditions.push(eq(products.excludeFromProductFeed, false));
     conditions.push(publicProductHasPrimaryDiscoveryImage());
-    const orderBy = getStorefrontProductOrderBy(sort, buyerPricing);
-    const offset = (page - 1) * limit;
+    if (cursor) {
+        const position = decodeFeedCursor(cursor);
+        conditions.push(or(
+            sql`${feedCreatedAt} < ${position.createdAt}`,
+            and(sql`${feedCreatedAt} = ${position.createdAt}`, lt(products.id, position.id)),
+        )!);
+    }
 
     const query = db
         .select({
@@ -840,6 +889,7 @@ export async function getStorefrontFeedProducts(
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             excludeFromProductFeed: products.excludeFromProductFeed,
+            createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: buyerPricing.hasCustomerOptions,
             availableForSale: buyerPricing.availableForSale,
@@ -848,16 +898,12 @@ export async function getStorefrontFeedProducts(
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
 
-    const countQuery = db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-        .where(and(...conditions));
-
-    const [productsList, totalCount] = await Promise.all([
-        query.orderBy(orderBy).limit(limit).offset(offset).all(),
-        countQuery.get(),
-    ]);
+    const scannedProducts = await query
+        .orderBy(desc(feedCreatedAt), desc(products.id))
+        .limit(limit + 1)
+        .all();
+    const hasNextPage = scannedProducts.length > limit;
+    const productsList = scannedProducts.slice(0, limit);
     const productIds = productsList.map((product) => product.id);
     const categoryIds = [...new Set(productsList.map((product) => product.categoryId).filter(Boolean))] as string[];
 
@@ -912,7 +958,13 @@ export async function getStorefrontFeedProducts(
 
     return {
         products: feedProducts,
-        pagination: getPagination(page, limit, totalCount?.count || 0),
+        pagination: {
+            limit,
+            hasNextPage,
+            ...(hasNextPage && productsList.length > 0
+                ? { cursor: encodeFeedCursor(productsList[productsList.length - 1]!) }
+                : {}),
+        },
     };
 }
 
