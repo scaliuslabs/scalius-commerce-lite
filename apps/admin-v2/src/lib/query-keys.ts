@@ -40,6 +40,10 @@ export const queryKeys = {
       ids !== undefined
         ? (["products", "by-ids", ids] as const)
         : (["products", "by-ids"] as const),
+    collectionOptions: (params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["products", "collection-options", params] as const)
+        : (["products", "collection-options"] as const),
     stats: () => ["products", "stats"] as const,
     variants: (productId: string) =>
       ["products", "variants", productId] as const,

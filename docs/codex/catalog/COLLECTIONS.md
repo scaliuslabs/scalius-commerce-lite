@@ -40,6 +40,10 @@ membership or cache dependency matching.
   homepage/layout groups, and collection sitemap discovery.
 - Admin product lookup is paginated, debounced, cache-keyed by filters, and
   distinguishes lookup errors from empty results.
+- Manual product lookup has its own product-cache namespace and validates the
+  exact product DTO at runtime. Category-shaped rows and `cat_*` identities
+  fail closed before they can enter `config.productIds`; the admin and API
+  schemas enforce the same product-identity boundary on save.
 
 ## Landed in the 2026-07-12 hardening slice
 

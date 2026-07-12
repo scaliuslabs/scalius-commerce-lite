@@ -39,4 +39,16 @@ describe("collection form canonical validation", () => {
       expect(result.success).toBe(false);
     }
   });
+
+  it("rejects category IDs in manual product membership", () => {
+    const result = collectionFormSchema.safeParse({
+      ...collectionValues,
+      config: {
+        ...collectionValues.config,
+        productIds: ["cat_footwear"],
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
 });

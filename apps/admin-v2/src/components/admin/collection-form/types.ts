@@ -17,6 +17,15 @@ const canonicalPathSchema = z
     },
   );
 
+const productIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(180)
+  .refine((id) => id.startsWith("prod_"), {
+    message: "Select a product, not a category.",
+  });
+
 export interface Category {
   id: string;
   name: string;
@@ -60,7 +69,7 @@ export const collectionFormSchema = z.object({
   config: z.object({
     source: z.enum(["manual", "dynamic"]),
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(90),
-    productIds: z.array(z.string().trim().min(1).max(180)).max(90),
+    productIds: z.array(productIdSchema).max(90),
     featuredProductId: z.string().trim().max(180).optional(),
     maxProducts: z.number().int().min(1).max(24),
     title: z.string().trim().max(120).optional(),

@@ -148,7 +148,14 @@ describe("lookup query options", () => {
 
   it("keys and pages collection product options by normalized server filters", async () => {
     const payload = {
-      products: [],
+      products: [{
+        id: "prod_1",
+        name: "Blue shirt",
+        price: 1200,
+        categoryId: "cat_2",
+        categoryName: "Shirts",
+        isActive: true,
+      }],
       pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
     };
     mocks.getCollectionProductOptions.mockResolvedValue(payload);
@@ -161,9 +168,8 @@ describe("lookup query options", () => {
 
     expect(options.queryKey).toEqual([
       "products",
-      "list",
+      "collection-options",
       {
-        surface: "collection-picker",
         categoryIds: ["cat_2", "cat_1"],
         search: "blue",
         limit: 10,
@@ -181,5 +187,26 @@ describe("lookup query options", () => {
       },
     });
     expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBe(3);
+  });
+
+  it("fails closed when category rows reach the manual product picker", async () => {
+    mocks.getCollectionProductOptions.mockResolvedValue({
+      products: [{
+        id: "cat_home",
+        name: "Home & Living",
+        status: "published",
+        productCount: 4,
+      }],
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+    });
+
+    const options = collectionProductOptionsQueryOptions({ limit: 10 });
+
+    await expect(
+      requireQueryFn(options)({ pageParam: 1 } as never),
+    ).resolves.toEqual({
+      products: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    });
   });
 });
