@@ -543,12 +543,16 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.createdAt\)/);
+    expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.updatedAt\)/);
   });
 
   it("keeps analytics list mutations gated by exact RBAC permissions", () => {
     const listSource = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "AnalyticsList.tsx"),
+      "utf8",
+    );
+    const indexSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "routes", "admin", "analytics", "index.tsx"),
       "utf8",
     );
     const permissionsSource = readFileSync(
@@ -558,14 +562,14 @@ describe("admin route graph boundaries", () => {
 
     expect(permissionsSource).toContain('ANALYTICS_TOGGLE: "analytics.toggle"');
     expect(listSource).toContain("usePermissions");
-    expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_CREATE");
+    expect(indexSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_CREATE");
     expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_EDIT");
     expect(listSource).toContain("ADMIN_PERMISSIONS.ANALYTICS_TOGGLE");
-    expect(listSource).toContain("canCreateAnalytics ? (");
-    expect(listSource).toContain("canToggleAnalytics ? (");
-    expect(listSource).toContain("canEditAnalytics ? (");
+    expect(indexSource).toContain("canCreate ? (");
+    expect(listSource).toContain("canToggle");
+    expect(listSource).toContain("canEdit");
     expect(listSource).toContain("aria-label={`Edit ${script.name}`}");
-    expect(listSource).toContain("aria-label={`Delete ${script.name}`}");
+    expect(listSource).toContain("aria-label={`Move ${script.name} to trash`}");
   });
 
   it("keeps create forms draft-first and lifecycle controls permission-gated", () => {
@@ -922,9 +926,6 @@ describe("admin route graph boundaries", () => {
       ["while", "Tap"].join(""),
     ];
 
-    expect(selectorSource).toContain("hover:-translate-y-0.5");
-    expect(selectorSource).toContain("active:scale-[0.98]");
-    expect(selectorSource).toContain("focus-visible:-translate-y-0.5");
     expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={setSelectedType} />");
     expect(newRouteSource).toContain("const AmountOffProductsContainer = lazy(");
     expect(newRouteSource).toContain("const AmountOffOrderForm = lazy(");

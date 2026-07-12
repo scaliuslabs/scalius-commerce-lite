@@ -9,6 +9,7 @@
  * their original locations and are re-exported here.
  */
 import { z } from "zod";
+import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/analytics.validation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import {
   isValidResourceCanonicalPath,
@@ -184,6 +185,14 @@ export const analyticsFormSchema = z.object({
   location: z.enum(["head", "body_start", "body_end"]),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+}).superRefine((data, context) => {
+  const configError = getActiveAnalyticsConfigError(data);
+  if (!configError) return;
+  context.addIssue({
+    code: "custom",
+    path: ["config"],
+    message: configError,
+  });
 });
 
 export type AnalyticsFormValues = z.infer<typeof analyticsFormSchema>;
