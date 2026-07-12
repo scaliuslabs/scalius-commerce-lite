@@ -46,6 +46,7 @@ export const collectionPresentations = [
 
 export const collectionFormSchema = z.object({
   id: z.string().optional(),
+  version: z.number().int().min(1).optional(),
   name: z
     .string()
     .min(3, "Collection name must be at least 3 characters")

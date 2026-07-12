@@ -21,8 +21,8 @@ interface CollectionColumnOptions {
   canRestore: boolean;
   canPermanentDelete: boolean;
   canToggleStatus: boolean;
-  onUpdateName: (id: string, name: string) => void;
-  onToggleActive: (id: string, isActive: boolean) => void;
+  onUpdateName: (id: string, version: number, name: string) => void;
+  onToggleActive: (id: string, version: number, isActive: boolean) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
@@ -111,7 +111,7 @@ export function getCollectionColumns(
         return (
           <InlineEditCell
             value={collection.name}
-            onSave={(newName) => opts.onUpdateName(collection.id, newName)}
+            onSave={(newName) => opts.onUpdateName(collection.id, collection.version, newName)}
             disabled={isDisabled}
             isSaving={isSaving}
             minLength={3}
@@ -159,7 +159,7 @@ export function getCollectionColumns(
                 checked={collection.isActive}
                 aria-label={`${collection.isActive ? "Deactivate" : "Activate"} ${collection.name}`}
                 onCheckedChange={(checked) =>
-                  opts.onToggleActive(collection.id, checked)
+                  opts.onToggleActive(collection.id, collection.version, checked)
                 }
                 disabled={isDisabled}
               />

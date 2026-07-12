@@ -119,6 +119,7 @@ export interface Collection {
   config: string;
   sortOrder: number;
   isActive: boolean;
+  version: number;
   canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;

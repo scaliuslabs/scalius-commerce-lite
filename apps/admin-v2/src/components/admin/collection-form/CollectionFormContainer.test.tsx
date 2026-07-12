@@ -107,6 +107,7 @@ const categories: Category[] = [
 
 const collectionDefaults: Partial<CollectionFormValues> = {
   id: "col_late_labels",
+  version: 7,
   name: "Late Label Collection",
   presentation: "grid",
   isActive: true,
@@ -288,6 +289,7 @@ describe("CollectionForm edit product labels", () => {
     expect(payload).toEqual(
       expect.objectContaining({
         id: "col_late_labels",
+        expectedVersion: 7,
         config: expect.objectContaining({
           categoryIds: ["cat_curated"],
           source: "manual",

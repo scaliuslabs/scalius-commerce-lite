@@ -8,6 +8,8 @@ describe("collection reorder boundaries", () => {
     expect(SOURCE).toContain("const hasCompleteOrderedSet");
     expect(SOURCE).toContain("pagination.page === 1");
     expect(SOURCE).toContain("pagination.total === loadedCollectionCount");
+    expect(SOURCE).toContain("pagination.total <= 90");
+    expect(SOURCE).toContain("expectedVersion: item.version");
     expect(SOURCE).toContain("hasCompleteOrderedSet;");
     expect(SOURCE).toContain(
       "Reordering is available when the complete collection list is shown on one page.",

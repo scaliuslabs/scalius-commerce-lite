@@ -8,7 +8,7 @@ import { paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 import { getPublicCollectionCatalog } from "@scalius/core/modules/collections/collections.service";
-import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
+import { publicCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
 import { toIsoTimestamp } from "../utils/timestamps";
 import {
@@ -68,7 +68,11 @@ const storefrontCollectionSchema = z.object({
   id: z.string(),
   name: z.string(),
   presentation: z.enum(["grid", "carousel"]),
-  config: z.record(z.string(), z.unknown()),
+  config: z.object({
+    maxProducts: z.number().int().min(1).max(24),
+    title: z.string(),
+    subtitle: z.string(),
+  }),
   sortOrder: z.number(),
   isActive: z.boolean(),
   canonicalPath: z.string().nullable(),
@@ -156,7 +160,7 @@ app.openapi(listCollectionsRoute, async (c) => {
 
   const formattedCollections = activeCollections.map((collection) => ({
     ...collection,
-    config: normalizeCollectionConfig(collection.config),
+    config: publicCollectionConfig(collection.config),
     createdAt: formatTimestamp(
       collection.createdAt,
       collection.id,
@@ -226,7 +230,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
   return ok(c, {
     collection: {
       ...collection,
-      config: normalizeCollectionConfig(collection.config),
+      config: publicCollectionConfig(collection.config),
       createdAt: formatTimestamp(
         collection.createdAt,
         collection.id,

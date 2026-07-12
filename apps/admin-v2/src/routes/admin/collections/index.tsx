@@ -82,17 +82,17 @@ function CollectionsPage() {
 
   // Column action callbacks
   const handleUpdateName = useCallback(
-    (id: string, name: string) => {
+    (id: string, expectedVersion: number, name: string) => {
       if (!collectionActions.canEdit) return;
-      updateMutation.mutate({ id, name });
+      updateMutation.mutate({ id, expectedVersion, name });
     },
     [collectionActions.canEdit, updateMutation],
   );
 
   const handleToggleActive = useCallback(
-    (id: string, isActive: boolean) => {
+    (id: string, expectedVersion: number, isActive: boolean) => {
       if (!collectionActions.canToggleStatus) return;
-      updateMutation.mutate({ id, isActive });
+      updateMutation.mutate({ id, expectedVersion, isActive });
     },
     [collectionActions.canToggleStatus, updateMutation],
   );
@@ -247,6 +247,7 @@ function CollectionsPage() {
     search.sort === "sortOrder" &&
     search.order === "asc" &&
     !search.search &&
+    pagination.total <= 90 &&
     hasCompleteOrderedSet;
 
   const handleReorder = useCallback(
@@ -260,6 +261,7 @@ function CollectionsPage() {
       const reorderData = items.map((item, idx) => ({
         id: item.id,
         sortOrder: idx,
+        expectedVersion: item.version,
       }));
       reorderMutation.mutate({ items: reorderData });
     },

@@ -118,7 +118,9 @@ export function CollectionForm({
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
-        await updateCollection({ data: { ...submission, id: entityId } });
+        const expectedVersion = defaultValues?.version || values.version;
+        if (!expectedVersion) throw new Error("Collection version is required for update");
+        await updateCollection({ data: { ...submission, id: entityId, expectedVersion } });
         queryClient.invalidateQueries({ queryKey: ["collections", "detail", entityId] });
       } else {
         await createCollection({ data: submission });
@@ -268,7 +270,7 @@ export function CollectionForm({
               form={form}
               selectedPresentation={selectedPresentation}
               knownProducts={knownProducts}
-              selectedCategoryIds={selectedCategoryIds}
+              selectedCategoryIds={selectedSource === "dynamic" ? selectedCategoryIds : []}
               onProductDiscovered={rememberProduct}
             />
           </fieldset>

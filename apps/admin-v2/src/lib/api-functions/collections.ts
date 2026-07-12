@@ -23,6 +23,7 @@ export interface CollectionDto {
   config: string;
   sortOrder: number;
   isActive: boolean;
+  version: number;
   canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
@@ -78,7 +79,10 @@ export interface CreateCollectionInput {
   config: CollectionConfigInput;
 }
 
-export type UpdateCollectionInput = { id: string } & Partial<CreateCollectionInput>;
+export type UpdateCollectionInput = {
+  id: string;
+  expectedVersion: number;
+} & Partial<CreateCollectionInput>;
 
 export interface CollectionFormOptionsPayload {
   categories: Array<{ id: string; name: string }>;
@@ -213,7 +217,7 @@ export const restoreCollection = createServerFn({ method: "POST" })
   });
 
 export const reorderCollections = createServerFn({ method: "POST" })
-  .validator((data: { items: { id: string; sortOrder: number }[] }) => data)
+  .validator((data: { items: { id: string; sortOrder: number; expectedVersion: number }[] }) => data)
   .handler(async ({ data }): Promise<Record<string, never>> => {
     return apiPost<Record<string, never>>("/collections/reorder", data);
   });

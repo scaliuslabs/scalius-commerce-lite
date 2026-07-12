@@ -199,7 +199,7 @@ const collectionJsonLd =
           <div class="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm">
             <Tags className="h-4 w-4 text-gray-400" />
             <span class="text-sm font-medium text-gray-900">
-              {products.length} products
+              {pagination.total} products
             </span>
           </div>
         </div>
@@ -210,6 +210,8 @@ const collectionJsonLd =
       <button
         id="collection-filter-toggle"
         type="button"
+        aria-controls="collection-filter-section"
+        aria-expanded="false"
         class="relative mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground shadow-sm lg:hidden"
       >
         <SlidersHorizontal className="h-4 w-4" />
@@ -225,6 +227,9 @@ const collectionJsonLd =
         <aside
           id="collection-filter-section"
           class="fixed inset-0 z-50 hidden bg-black/50 lg:static lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Collection filters"
         >
           <div class="flex h-full w-4/5 max-w-sm flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
             <div class="flex items-center justify-between border-b p-4 lg:hidden">
@@ -345,11 +350,13 @@ const collectionJsonLd =
 
     const openFilters = () => {
       section.classList.remove("hidden");
+      toggle.setAttribute("aria-expanded", "true");
       document.body.style.overflow = "hidden";
       close.focus();
     };
     const closeFilters = () => {
       section.classList.add("hidden");
+      toggle.setAttribute("aria-expanded", "false");
       document.body.style.overflow = "";
       toggle.focus();
     };
