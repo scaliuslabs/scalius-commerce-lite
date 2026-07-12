@@ -23,32 +23,33 @@ export function CollapsibleCard({
 
   return (
     <Card className={className}>
-      <CardHeader className="pb-3 pt-4 px-4">
+      <CardHeader className="px-4 py-3">
         <button
           type="button"
-          className="flex w-full items-start justify-between text-left group"
+          className="group flex w-full items-center justify-between text-left"
+          aria-expanded={isOpen}
           onClick={() => setIsOpen(!isOpen)}
         >
           <div className="flex-1">
-            <h3 className="text-base font-semibold leading-none group-hover:text-primary transition-colors">
+            <h3 className="text-sm font-semibold leading-none transition-colors group-hover:text-primary">
               {title}
             </h3>
             {description && (
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {description}
               </p>
             )}
           </div>
           <ChevronDown
             className={cn(
-              "h-4 w-4 ml-2 mt-0.5 shrink-0 transition-all duration-200 text-muted-foreground group-hover:text-foreground",
+              "ml-2 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:text-foreground",
               isOpen && "rotate-180"
             )}
           />
         </button>
       </CardHeader>
       {isOpen && (
-        <CardContent className="px-4 pb-4 pt-0 space-y-3 animate-in fade-in-50 slide-in-from-top-2 duration-200">
+        <CardContent className="space-y-3 px-4 pb-4 pt-0 animate-in fade-in-50 duration-150">
           {children}
         </CardContent>
       )}

@@ -17,6 +17,18 @@ const optionNamesSource = readFileSync(
   new URL("./OptionDiscoverySection.tsx", import.meta.url),
   "utf8",
 );
+const pricingSource = readFileSync(
+  new URL("./PricingCard.tsx", import.meta.url),
+  "utf8",
+);
+const mediaSource = readFileSync(
+  new URL("./ProductImagesSection.tsx", import.meta.url),
+  "utf8",
+);
+const gallerySource = readFileSync(
+  new URL("../DraggableImageGallery.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("product editing workflow boundaries", () => {
   it("does not leave live navigation anchors active during product save", () => {
@@ -73,5 +85,18 @@ describe("product editing workflow boundaries", () => {
     expect(optionNamesSource).toContain("storefront, feeds, and structured data");
     expect(optionNamesSource).toContain("Option name");
     expect(optionNamesSource).not.toContain("feeds and ProductGroup JSON-LD only");
+  });
+
+  it("keeps media and pricing dense without hiding invalid secondary fields", () => {
+    expect(mediaSource).toContain("Add media");
+    expect(mediaSource).toContain("field.value.length > 0");
+    expect(mediaSource).toContain("enableVariantImages ? (");
+    expect(gallerySource).toContain("grid-cols-2 gap-2");
+    expect(gallerySource).not.toContain("min-h-[5px]");
+
+    expect(pricingSource).toContain('aria-controls="product-discount-fields"');
+    expect(pricingSource).toContain("showDiscount || Boolean(discountErrors)");
+    expect(pricingSource).toContain("Customer price");
+    expect(pricingSource).toContain("discountSummary.effectivePrice");
   });
 });

@@ -32,30 +32,26 @@ export function TitleDescriptionSection({
   const [activeTab, setActiveTab] = useState("description");
 
   return (
-    <div className="space-y-4">
-      {/* Product Title */}
-      <FormField
-        control={form.control}
-        name="name"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-sm font-medium">
-              Title <span className="text-destructive">*</span>
-            </FormLabel>
-            <FormControl>
-              <Input
-                placeholder="Product title"
-                {...field}
-                className="text-base"
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+    <Card className="overflow-hidden">
+      <div className="p-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-medium">
+                Title <span className="text-destructive">*</span>
+              </FormLabel>
+              <FormControl>
+                <Input placeholder="Product title" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
 
-      {/* Product Description with Additional Info Tabs */}
-      <Card className="overflow-hidden">
+      <div className="border-t">
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
@@ -118,7 +114,7 @@ export function TitleDescriptionSection({
             ) : null}
           </TabsContent>
         </Tabs>
-      </Card>
-    </div>
+      </div>
+    </Card>
   );
 }

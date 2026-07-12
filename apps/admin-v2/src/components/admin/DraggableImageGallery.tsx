@@ -75,7 +75,7 @@ function SortableImage({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group relative flex flex-col gap-2 rounded-xl bg-background touch-none",
+        "group relative flex flex-col gap-1 rounded-lg bg-background touch-none",
         isDragging && "opacity-30 z-0",
       )}
     >
@@ -83,7 +83,7 @@ function SortableImage({
       <div
         {...attributes}
         {...listeners}
-        className="relative aspect-square w-full overflow-hidden rounded-xl border bg-muted/30 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+        className="relative aspect-square w-full overflow-hidden rounded-lg border bg-muted/30 cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
       >
         <img
           src={getOptimizedImageUrl(image.url)}
@@ -133,17 +133,16 @@ function SortableImage({
       </button>
 
       {/* Minimal Info Area */}
-      <div className="flex flex-col gap-1 px-1 min-h-[5px]">
-        {/* Option mapping (just the value) */}
-        {optionMapping && (
+      {optionMapping ? (
+        <div className="min-w-0 px-0.5">
           <span
-            className="self-start inline-flex items-center px-1.5 py-0.5 rounded-md bg-secondary/50 border border-secondary text-[11px] font-medium text-secondary-foreground max-w-full truncate"
+            className="inline-flex max-w-full items-center truncate rounded-md border border-secondary bg-secondary/50 px-1.5 py-0.5 text-[11px] font-medium text-secondary-foreground"
             title={optionMapping}
           >
             {optionMapping}
           </span>
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -290,7 +289,7 @@ export function DraggableImageGallery({
   // but standard grid behavior usually works.
 
   return (
-    <div className="space-y-4 group/gallery">
+    <div className="group/gallery space-y-2">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -302,7 +301,7 @@ export function DraggableImageGallery({
           items={visibleImages.map((img) => img.id)}
           strategy={rectSortingStrategy}
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-x-4 gap-y-6">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {visibleImages.map((image, index) => {
               const optionMapping =
                 enableVariantImages

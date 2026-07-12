@@ -38,11 +38,14 @@ interface OptionDiscoverySectionProps {
 export const OptionDiscoverySection = memo(function OptionDiscoverySection({
   form,
 }: OptionDiscoverySectionProps) {
+  const optionOneLabel = form.watch("variantOption1Label")?.trim() || "Option 1";
+  const optionTwoLabel = form.watch("variantOption2Label")?.trim() || "Option 2";
+
   return (
     <CollapsibleCard
       title="Option names"
-      description="Customer choices and catalog semantics"
-      defaultOpen={true}
+      description={`${optionOneLabel} · ${optionTwoLabel}`}
+      defaultOpen={false}
     >
       <div className="space-y-3">
         <p className="text-xs leading-5 text-muted-foreground">
@@ -51,7 +54,7 @@ export const OptionDiscoverySection = memo(function OptionDiscoverySection({
           type only controls standards mapping.
         </p>
 
-        <div className="grid gap-3">
+        <div className="grid gap-2 sm:grid-cols-2">
           <OptionMappingFields
             form={form}
             labelName="variantOption1Label"
@@ -93,7 +96,7 @@ function OptionMappingFields({
           {description}
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2">
         <FormField
           control={form.control}
           name={labelName}

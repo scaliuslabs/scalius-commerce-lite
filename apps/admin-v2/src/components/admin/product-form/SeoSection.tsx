@@ -168,8 +168,8 @@ export const SeoSection = memo(function SeoSection({
 
   return (
     <CollapsibleCard
-      title="Search Engine Listing"
-      description="Optimize your product for search engines"
+      title="Search and discovery"
+      description="Search preview, canonical URL, sitemap, and feeds"
       defaultOpen={false}
     >
       <div className="space-y-3">

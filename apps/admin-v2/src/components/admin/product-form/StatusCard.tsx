@@ -38,70 +38,62 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
 
   return (
     <Card>
-      <CardHeader className="pb-3 pt-4 px-4">
+      <CardHeader className="px-4 py-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Status</CardTitle>
+          <CardTitle className="text-sm">Status</CardTitle>
           <Badge variant={isActive ? "default" : "secondary"} className="text-xs">
             {isActive ? "Active" : "Draft"}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-3">
-        <FormField
-          control={form.control}
-          name="isActive"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <FormLabel className="text-sm font-medium">
-                  Active Status
-                </FormLabel>
-                <FormDescription className="text-xs">
-                  Product will be visible on the store
-                </FormDescription>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
+      <CardContent className="space-y-3 px-4 pb-4 pt-0">
+        <div className="divide-y rounded-lg border">
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
+                <div className="min-w-0">
+                  <FormLabel className="text-xs font-medium">Published</FormLabel>
+                  <FormDescription className="mt-0.5 truncate text-[11px]">
+                    Visible on the storefront
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control}
-          name="freeDelivery"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-              <div className="space-y-0.5">
-                <FormLabel className="text-sm font-medium">
-                  Free Delivery
-                </FormLabel>
-                <FormDescription className="text-xs">
-                  Offer free delivery for this product
-                </FormDescription>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control}
+            name="freeDelivery"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between gap-3 p-2.5">
+                <div className="min-w-0">
+                  <FormLabel className="text-xs font-medium">Free delivery</FormLabel>
+                  <FormDescription className="mt-0.5 truncate text-[11px]">
+                    Waive product delivery fees
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </div>
 
         <FormField
           control={form.control}
           name="productCondition"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm font-medium">Product condition</FormLabel>
+              <FormLabel className="text-xs font-medium">Condition</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue placeholder="Select condition" />
                   </SelectTrigger>
                 </FormControl>
@@ -113,7 +105,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription className="text-xs">
+              <FormDescription className="text-[11px] leading-4">
                 {PRODUCT_CONDITION_DESCRIPTIONS[field.value]}
               </FormDescription>
             </FormItem>
@@ -125,7 +117,7 @@ export const StatusCard = memo(function StatusCard({ form, isEdit, storefrontUrl
             type="button"
             variant="outline"
             size="sm"
-            className="w-full text-xs"
+            className="h-8 w-full text-xs"
             onClick={() => window.open(storefrontUrl, "_blank")}
           >
             <ExternalLink className="h-3 w-3 mr-1.5" />

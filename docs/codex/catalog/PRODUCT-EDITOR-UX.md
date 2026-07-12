@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-12
 
-This document owns the merchant-facing product create/edit workflow. It is not a visual redesign brief. The editor must preserve Scalius's compact identity while matching the operational guarantees and expert speed of leading commerce tools.
+This document owns the merchant-facing product create/edit workflow and its visual-density contract. The editor must preserve Scalius's identity while matching the operational guarantees and expert speed of leading commerce tools.
 
 ## Non-negotiable outcomes
 
@@ -48,6 +48,88 @@ Observed Shopify structure:
   shipping is independent from whether a product has options.
 - Product defaults supply price, inventory, and shipping data until option SKUs
   take ownership of those facts.
+
+### Visual-density correction — authenticated side-by-side inspection
+
+The first Scalius refactor corrected card ownership and removed the structural
+Media gap, but it did not meet the requested visual or workflow bar. The live
+editor and Shopify create page were inspected again at the same desktop scale,
+including Shopify's collapsed/expanded price controls and arbitrary-option
+creation through its generated inline variant table.
+
+What the comparison exposed:
+
+- Shopify constrains the authoring canvas and keeps a stable readable main/rail
+  ratio. Scalius expands nearly every surface and input across the available
+  viewport, so more pixels produce longer scan lines instead of more useful
+  information.
+- Shopify's card padding is visually about one control-height, headings are
+  small and local, and adjacent facts share a row. Scalius uses larger card
+  padding, larger inter-section gaps, and one full-width control per fact.
+- Shopify's Media empty state is a shallow drop target. With media present, the
+  section becomes a compact thumbnail grid. Scalius gives the picker a full-width
+  button row and renders mapping controls as permanent primary chrome, making
+  six images consume much more height than the catalog work requires.
+- Shopify keeps only the primary price field open. Compare-at price, unit price,
+  tax, and cost appear as compact disclosure chips and expand into a dense grid.
+  Scalius renders discount type and value as separate full-width rows even when
+  the merchant is not changing them.
+- Shopify treats inventory, shipping, and variants as separate compact cards
+  with inline boolean state and secondary disclosures. Scalius mixes topology,
+  pricing, discount, image mapping, and stock affordances across distant areas,
+  increasing scroll and context switching.
+- Shopify option creation happens in place: an arbitrary option name changes
+  the value placeholder, values are entered in one small editor, and `Done`
+  immediately reveals an editable row table with image, price, available
+  quantity, and publishing state. Scalius's separate generator dialog is more
+  powerful, but the normal one/two-axis path feels heavier and the resulting
+  table is separated from option-name/value authoring.
+- Shopify spends borders and shadows on section boundaries, not on every nested
+  control. Scalius has cards inside cards, full-width outlined inputs, and tall
+  accordions competing for attention. The result is technically organized but
+  visually exhausting.
+
+Visual implementation contract:
+
+1. Constrain the desktop editor workspace; extra viewport width becomes outer
+   breathing room, not wider forms. Keep the main column around two thirds and
+   the rail around one third, with a single document scroll.
+2. Standard card anatomy is a 44–48px compact header only when actions require
+   it, 16–20px body padding, 12–16px row gaps, and no redundant nested card for
+   content that already belongs to the section.
+3. Labels stay 12–13px and close to controls. Body controls use a consistent
+   compact height. A number, unit, short enum, or toggle must not occupy a full
+   row merely because space exists.
+4. The primary path remains visible; secondary fields use truthful disclosure
+   rows that summarize their saved state. Hidden fields with validation errors
+   automatically expand and receive focus.
+5. Price is one compact primary control plus a secondary pricing row. Discount
+   type/value, compare-at behavior, cost/margin, tax, and future unit pricing
+   belong in an expandable two/three-column grid, with computed outcomes shown
+   beside inputs rather than below the card.
+6. Media prioritizes the grid. `Add media` is a compact toolbar action and the
+   empty state is shallow. Mapping is an optional mode in the section toolbar;
+   its axis and help appear only while enabled. Image captions reserve one short
+   line and blank captions do not create empty vertical space.
+7. Product options combine definition and result: compact ordered option rows
+   show name plus value chips, expand inline for editing, and sit directly above
+   the generated SKU table. The advanced combination generator remains an
+   acceleration tool, not the only understandable path.
+8. The SKU table is the densest operational surface. Default view shows image,
+   option identity, price, available/on-hand state, and one overflow action.
+   Search, sort, import/export, bulk edit, and generation live in one compact
+   toolbar with secondary actions grouped behind a menu on constrained widths.
+9. Status and Organization remain in the rail, but long explanatory paragraphs
+   become concise state summaries. The rail must not repeat facts already visible
+   in the main workflow.
+10. Density never removes semantics: every icon action has an accessible name,
+    disclosure state is announced, keyboard order follows visual order, and
+    390px mobile reflows to one column without horizontal document scrolling.
+
+The target is not a visual copy. Scalius should retain stronger stock truth,
+revision conflicts, media-to-option mapping, and atomic combination planning,
+while making the common path feel lighter than Shopify's rather than visibly
+heavier.
 
 Authoritative behavior references:
 

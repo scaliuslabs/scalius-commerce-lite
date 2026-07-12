@@ -62,16 +62,16 @@ export const OrganizationCard = memo(function OrganizationCard({
 
   return (
     <Card>
-      <CardHeader className="pb-3 pt-4 px-4">
-        <CardTitle className="text-base">Product Organization</CardTitle>
+      <CardHeader className="px-4 py-3">
+        <CardTitle className="text-sm">Organization</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4 space-y-3">
+      <CardContent className="space-y-3 px-4 pb-4 pt-0">
         <FormField
           control={form.control}
           name="categoryId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>
+              <FormLabel className="text-xs">
                 Category <span className="text-destructive">*</span>
               </FormLabel>
               <CategoryCombobox
@@ -92,17 +92,18 @@ export const OrganizationCard = memo(function OrganizationCard({
           name="slug"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>
-                URL Slug <span className="text-destructive">*</span>
+              <FormLabel className="text-xs">
+                URL slug <span className="text-destructive">*</span>
                 {!isEdit && <span className="text-xs text-muted-foreground ml-1">(Auto-generated)</span>}
               </FormLabel>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
+              <div className="flex items-center gap-1.5">
+                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
                   /products/
                 </span>
                 <FormControl>
                   <Input
                     placeholder="product-url-slug"
+                    className="h-9"
                     {...field}
                     onChange={(e) => {
                       field.onChange(e);
@@ -111,7 +112,7 @@ export const OrganizationCard = memo(function OrganizationCard({
                   />
                 </FormControl>
               </div>
-              <FormDescription className="text-xs">
+              <FormDescription className="text-[11px] leading-4">
                 {!isEdit
                   ? "Auto-generated from product name. You can edit it if needed."
                   : "The URL-friendly identifier for this product"}
@@ -204,7 +205,7 @@ function CategoryCombobox({
           variant="outline"
           role="combobox"
           className={cn(
-            "w-full justify-between h-10 font-normal",
+            "h-9 w-full justify-between font-normal",
             !selectedCategoryId && "text-muted-foreground"
           )}
         >
