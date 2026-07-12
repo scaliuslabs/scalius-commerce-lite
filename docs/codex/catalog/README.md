@@ -23,6 +23,7 @@ This is the durable working record for the Products, Categories, Attributes, Col
 - [STOREFRONT.md](STOREFRONT.md) — buyer catalog, caching, pricing, discovery, feeds, UCP, category/search UX, and protected product-page boundaries.
 - [PRODUCT-EDITOR-UX.md](PRODUCT-EDITOR-UX.md) — product create/edit interaction, conflict, keyboard, and responsive UX contract.
 - [VARIANT-IMAGES.md](VARIANT-IMAGES.md) — stable variant-media authority, editor mapping behavior, storefront precedence, and migration boundaries.
+- [PRODUCT-MEDIA.md](PRODUCT-MEDIA.md) — accepted no-compatibility cutover from copied product image URLs to ordered image/video Media associations, one image fallback resolver, exact SKU image rules, buyer/discovery/order projections, migration, tests, and rollout ownership.
 - [COLLECTIONS.md](COLLECTIONS.md) — collection membership, ordering, publication, admin UX, storefront, discovery, cache, and scale decisions.
 - [DECISIONS.md](DECISIONS.md) — accepted decisions, implementation order, verification requirements, and deferred model work.
 - [PROGRESS.md](PROGRESS.md) — landed fixes, regression evidence, known remaining gaps, and the next implementation slice.
