@@ -38,7 +38,7 @@ describe("category lifecycle authority", () => {
     await expect(updateCategory(
       categoryLookupDb({ id: "cat_trashed", deletedAt: new Date() }) as never,
       "cat_trashed",
-      input,
+      { ...input, expectedRevision: 1, status: "draft" },
     )).rejects.toBeInstanceOf(ConflictError);
   });
 });

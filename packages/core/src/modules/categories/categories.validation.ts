@@ -5,6 +5,7 @@ import {
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 import { isCatalogDiscoveryImageSource } from "@scalius/shared/catalog-discovery-media";
+import { categoryStatusSchema } from "@scalius/shared/category-publication";
 
 export const CATEGORY_BATCH_LIMIT = 90;
 
@@ -68,8 +69,24 @@ function requireCanonicalCategoryHandle(
     }
 }
 
+const expectedRevisionSchema = z.number().int().min(1);
+
+export const categoryRevisionClaimSchema = z.object({
+    id: z.string().trim().min(1).max(180),
+    expectedRevision: expectedRevisionSchema,
+});
+
 export const createCategorySchema = categorySchema.superRefine(requireCanonicalCategoryHandle);
-export const updateCategorySchema = categorySchema.superRefine(requireCanonicalCategoryHandle);
+export const updateCategorySchema = categorySchema.extend({
+    expectedRevision: expectedRevisionSchema,
+    status: categoryStatusSchema,
+}).superRefine(requireCanonicalCategoryHandle);
+export const updateCategoryStatusSchema = z.object({
+    expectedRevision: expectedRevisionSchema,
+    status: categoryStatusSchema,
+});
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+export type UpdateCategoryStatusInput = z.infer<typeof updateCategoryStatusSchema>;
+export type CategoryRevisionClaim = z.infer<typeof categoryRevisionClaimSchema>;
