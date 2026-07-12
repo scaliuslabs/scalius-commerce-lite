@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   getRbacSeedCacheKey,
@@ -7,7 +8,7 @@ import {
 
 describe("RBAC seed cache marker", () => {
   it("uses a compact versioned key derived from the seed definitions", () => {
-    expect(getRbacSeedCacheKey()).toMatch(/^rbac:seed-current:v1:[a-f0-9]{8}$/);
+    expect(getRbacSeedCacheKey()).toMatch(/^rbac:seed-current:v2:[a-f0-9]{8}$/);
   });
 
   it("reads and writes the current marker through KV", async () => {
@@ -26,5 +27,15 @@ describe("RBAC seed cache marker", () => {
     expect(kv.put).toHaveBeenCalledWith(getRbacSeedCacheKey(), "1", {
       expirationTtl: 21600,
     });
+  });
+
+  it("keeps reconciliation batched and deduplicated outside request authority", async () => {
+    const source = readFileSync(new URL("./auto-seed.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("missingPermissionInserts");
+    expect(source).toContain("missingGrantInserts");
+    expect(source).toContain("await db.batch(missingGrantInserts as any)");
+    expect(source).toContain("if (seedingPromise) return seedingPromise");
+    expect(source).toContain(".onConflictDoNothing()");
   });
 });

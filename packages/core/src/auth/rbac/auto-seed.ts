@@ -1,5 +1,4 @@
-// src/lib/rbac/auto-seed.ts
-// Auto-seeds permissions, roles, and sets first admin as super admin on first access
+// Reconciles code-owned permissions and system roles without changing user authority.
 
 import { eq, count, asc, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
@@ -11,11 +10,11 @@ import {
 } from "@scalius/database/schema";
 import { PERMISSIONS, getAllPermissions } from "./permissions";
 
-// Track if seeding has been checked this isolate lifecycle.
-// Reset to false on each new deployment (fresh isolate). The optional KV marker
-// below also needs to expire or be purged after an intentional manual DB reset.
+// Track reconciliation per isolate. A versioned KV marker avoids D1 reads across
+// isolates and must expire or be purged after an intentional manual DB reset.
 let seedingChecked = false;
-const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v1";
+let seedingPromise: Promise<void> | null = null;
+const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v2";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 type SystemRoleSeed = {
@@ -204,26 +203,25 @@ async function seedPermissions(db: Database): Promise<void> {
   const existingPermissions = await db.select({ name: permissions.name }).from(permissions);
   const existingNames = new Set(existingPermissions.map((permission) => permission.name));
 
-  for (const perm of allPermissions) {
-    if (existingNames.has(perm.name)) continue;
-    try {
-      await db.insert(permissions).values({
+  const missingPermissionInserts = allPermissions
+    .filter((permission) => !existingNames.has(permission.name))
+    .map((permission) =>
+      db.insert(permissions).values({
         id: crypto.randomUUID(),
-        name: perm.name,
-        displayName: perm.displayName,
-        description: perm.description,
-        resource: perm.resource,
-        action: perm.action,
-        category: perm.category,
-        isSensitive: perm.isSensitive,
+        name: permission.name,
+        displayName: permission.displayName,
+        description: permission.description,
+        resource: permission.resource,
+        action: permission.action,
+        category: permission.category,
+        isSensitive: permission.isSensitive,
         createdAt: new Date(),
-      });
-    } catch (error: unknown) {
-      // Skip if already exists (UNIQUE constraint)
-      if (!(error instanceof Error && error.message?.includes("UNIQUE constraint failed"))) {
-        console.error(`Error seeding permission ${perm.name}:`, error instanceof Error ? error.message : String(error));
-      }
-    }
+      }).onConflictDoNothing(),
+    );
+
+  if (missingPermissionInserts.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous Drizzle D1 batch statements
+    await db.batch(missingPermissionInserts as any);
   }
 }
 
@@ -231,57 +229,67 @@ async function seedPermissions(db: Database): Promise<void> {
  * Seed system roles with their permissions
  */
 async function seedRoles(db: Database): Promise<void> {
-  // Get all permissions from database
-  const dbPermissions = await db.select().from(permissions);
+  const dbPermissions = await db.select({ id: permissions.id, name: permissions.name }).from(permissions);
   const permNameToId = new Map(dbPermissions.map((p) => [p.name, p.id]));
-
   const systemRoles = getSystemRoleSeeds();
+  const systemRoleNames = systemRoles.map((role) => role.name);
+  let dbRoles = await db
+    .select({ id: roles.id, name: roles.name })
+    .from(roles)
+    .where(inArray(roles.name, systemRoleNames));
+  const existingRoleNames = new Set(dbRoles.map((role) => role.name));
+  const missingRoleInserts = systemRoles
+    .filter((role) => !existingRoleNames.has(role.name))
+    .map((role) =>
+      db.insert(roles).values({
+        id: crypto.randomUUID(),
+        name: role.name,
+        displayName: role.displayName,
+        description: role.description,
+        isSystem: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing(),
+    );
+  if (missingRoleInserts.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous Drizzle D1 batch statements
+    await db.batch(missingRoleInserts as any);
+    dbRoles = await db
+      .select({ id: roles.id, name: roles.name })
+      .from(roles)
+      .where(inArray(roles.name, systemRoleNames));
+  }
 
-  for (const roleData of systemRoles) {
-    try {
-      // Check if role already exists
-      const existingRole = await db
-        .select()
-        .from(roles)
-        .where(eq(roles.name, roleData.name))
-        .limit(1);
-
-      let roleId: string;
-
-      if (existingRole.length > 0 && existingRole[0]) {
-        roleId = existingRole[0].id;
-      } else {
-        roleId = crypto.randomUUID();
-        await db.insert(roles).values({
-          id: roleId,
-          name: roleData.name,
-          displayName: roleData.displayName,
-          description: roleData.description,
-          isSystem: true,
+  const roleIdByName = new Map(dbRoles.map((role) => [role.name, role.id]));
+  const roleIds = dbRoles.map((role) => role.id);
+  const existingGrantRows = roleIds.length > 0
+    ? await db
+        .select({ roleId: rolePermissions.roleId, permissionId: rolePermissions.permissionId })
+        .from(rolePermissions)
+        .where(inArray(rolePermissions.roleId, roleIds))
+    : [];
+  const existingGrants = new Set(
+    existingGrantRows.map((grant) => `${grant.roleId}:${grant.permissionId}`),
+  );
+  const missingGrantInserts = systemRoles.flatMap((role) => {
+    const roleId = roleIdByName.get(role.name);
+    if (!roleId) return [];
+    return role.permissions.flatMap((permissionName) => {
+      const permissionId = permNameToId.get(permissionName);
+      if (!permissionId || existingGrants.has(`${roleId}:${permissionId}`)) return [];
+      return [
+        db.insert(rolePermissions).values({
+          id: crypto.randomUUID(),
+          roleId,
+          permissionId,
           createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      // Add permissions to role
-      for (const permName of roleData.permissions) {
-        const permId = permNameToId.get(permName);
-        if (permId) {
-          try {
-            await db.insert(rolePermissions).values({
-              id: crypto.randomUUID(),
-              roleId,
-              permissionId: permId,
-              createdAt: new Date(),
-            });
-          } catch {
-            // Skip if already exists
-          }
-        }
-      }
-    } catch (error: unknown) {
-      console.error(`Error seeding role ${roleData.name}:`, error instanceof Error ? error.message : String(error));
-    }
+        }).onConflictDoNothing(),
+      ];
+    });
+  });
+  if (missingGrantInserts.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous Drizzle D1 batch statements
+    await db.batch(missingGrantInserts as any);
   }
 }
 
@@ -363,15 +371,10 @@ async function isRbacSeedCurrent(db: Database): Promise<boolean> {
  * Called from middleware on admin route access
  * Safe to call multiple times - only seeds once
  */
-export async function autoSeedRbacIfNeeded(
+async function runRbacSeedReconciliation(
   db: Database,
   kv?: Pick<KVNamespace, "get" | "put">,
 ): Promise<void> {
-  // Quick check — only runs once per isolate lifecycle, zero DB cost after that
-  if (seedingChecked) {
-    return;
-  }
-
   try {
     if (await isRbacSeedCacheCurrent(kv)) {
       seedingChecked = true;
@@ -407,4 +410,17 @@ export async function autoSeedRbacIfNeeded(
     console.error("RBAC: Auto-seeding failed:", error);
     // Don't set seedingChecked so it retries on next request
   }
+}
+
+export async function autoSeedRbacIfNeeded(
+  db: Database,
+  kv?: Pick<KVNamespace, "get" | "put">,
+): Promise<void> {
+  if (seedingChecked) return;
+  if (seedingPromise) return seedingPromise;
+
+  seedingPromise = runRbacSeedReconciliation(db, kv).finally(() => {
+    seedingPromise = null;
+  });
+  return seedingPromise;
 }
