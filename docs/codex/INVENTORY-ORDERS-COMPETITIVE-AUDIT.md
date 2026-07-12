@@ -51,8 +51,8 @@ support the domain facts; the live observation is only UX evidence.
   domain in the current schema or admin.
 - Admin inventory offers server-backed SKU/product search, stock-state filters,
   sorting, stats, adjustment/stocktake, and paginated movement history. The
-  durable audit already records missing idempotency, alert-inbox, actor/date/order
-  filtering, export, and atomic import work.
+  durable audit records the remaining alert-inbox, actor/date/order filtering,
+  export, and atomic import work.
 - Orders have separate order, payment, fulfillment, item-fulfillment, shipment,
   inventory-action, refund-attempt, support-request, and notification evidence.
   Shipment and refund provider recovery are deliberately fail-closed. See the

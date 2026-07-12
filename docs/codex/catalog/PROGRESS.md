@@ -18,11 +18,19 @@ Status: deployed and live-verified on 2026-07-12.
 - Inventory query enums/page sizes and scanner inputs now fail before D1 work;
   successful writes retain targeted buyer/feed/sitemap/storefront cache
   invalidation.
+- Manual adjustment, scanner adjustment, and stocktake now converge on one
+  replay-safe operation engine. Migration 0012 stores the canonical request
+  hash and exact result in the same D1 batch as the ledger-v2 movement and
+  stock-version CAS; exact retries replay and changed-payload key reuse fails.
 - Currency code lock, atomic save, supported-code validation, order snapshots,
   and UI lock copy were re-audited with no new mismatch found.
 - Remaining P1/P2 work is recorded in `INVENTORY.md`, especially adjustment
-  idempotency, alert inbox/acknowledgement UI, audit export/filter depth, and a
-  bounded atomic bulk-stocktake design.
+  alert inbox/acknowledgement UI, audit export/filter depth, and a bounded
+  atomic bulk-stocktake design.
+- Commit `51f557a6` is deployed as API Worker
+  `e0a160ae-12ab-4436-b16a-9e6338e432e3` and Admin Worker
+  `09c60e31-d127-46d5-bb88-a581cfb941cc`. The live inventory read returns 86
+  SKUs, and the write contract rejects a missing operation key before mutation.
 
 ## Collections source and workflow hardening
 
