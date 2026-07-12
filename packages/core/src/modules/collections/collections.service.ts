@@ -80,7 +80,7 @@ export async function listCollections(
         }
     })();
 
-    const [countRows, items] = await safeBatch(db, [
+    const batchResults = await safeBatch(db, [
         db.select({ count: sql<number>`count(*)` })
             .from(collections)
             .where(whereClause),
@@ -94,6 +94,8 @@ export async function listCollections(
             .limit(limit)
             .offset(offset),
     ]);
+    const countRows = batchResults[0] as { count: number }[];
+    const items = batchResults[1] as (typeof collections.$inferSelect)[];
     const total = Number(countRows[0]?.count || 0);
 
     return {
@@ -144,26 +146,39 @@ async function assertCollectionReferencesExist(
     isActive: boolean,
     rawConfig: unknown,
 ): Promise<void> {
-    const config = normalizeCollectionConfig(rawConfig);
-    const membership = collectionMembershipForConfig(config);
-    const productIds = Array.from(new Set([
-        ...(isActive ? membership.productIds : []),
-        ...(config.featuredProductId ? [config.featuredProductId] : []),
-    ]));
-    const categoryIds = isActive ? membership.categoryIds : [];
+    return assertCollectionReferenceSetsExist(db, [{ isActive, rawConfig }]);
+}
+
+async function assertCollectionReferenceSetsExist(
+    db: Database,
+    entries: { isActive: boolean; rawConfig: unknown }[],
+): Promise<void> {
+    const productIds = new Set<string>();
+    const categoryIds = new Set<string>();
+    for (const entry of entries) {
+        const config = normalizeCollectionConfig(entry.rawConfig);
+        const membership = collectionMembershipForConfig(config);
+        if (entry.isActive) {
+            membership.productIds.forEach((id) => productIds.add(id));
+            membership.categoryIds.forEach((id) => categoryIds.add(id));
+        }
+        if (config.featuredProductId) productIds.add(config.featuredProductId);
+    }
+    const productIdList = Array.from(productIds);
+    const categoryIdList = Array.from(categoryIds);
     const [productRows, categoryRows] = await Promise.all([
-        productIds.length > 0
+        productIdList.length > 0
             ? db.select({ id: products.id }).from(products).where(and(
                 sql`${products.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIdList)})
                 )`,
                 isNull(products.deletedAt),
             )).all()
             : Promise.resolve([]),
-        categoryIds.length > 0
+        categoryIdList.length > 0
             ? db.select({ id: categories.id }).from(categories).where(and(
                 sql`${categories.id} IN (
-                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdList)})
                 )`,
                 isNull(categories.deletedAt),
             )).all()
@@ -171,8 +186,8 @@ async function assertCollectionReferencesExist(
     ]);
     const foundProductIds = new Set(productRows.map((row) => row.id));
     const foundCategoryIds = new Set(categoryRows.map((row) => row.id));
-    const missingProductIds = productIds.filter((id) => !foundProductIds.has(id));
-    const missingCategoryIds = categoryIds.filter((id) => !foundCategoryIds.has(id));
+    const missingProductIds = productIdList.filter((id) => !foundProductIds.has(id));
+    const missingCategoryIds = categoryIdList.filter((id) => !foundCategoryIds.has(id));
     if (missingProductIds.length > 0 || missingCategoryIds.length > 0) {
         throw new ValidationError(
             "Collection membership references products or categories that no longer exist.",
@@ -449,10 +464,11 @@ export async function bulkActivateCollections(db: Database, ids: string[]): Prom
         .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)))
         .all();
     if (rows.length !== normalizedIds.length) throw new NotFoundError("One or more collections were not found.");
-    for (const row of rows) {
-        assertCollectionPublishReady(true, row.config);
-        await assertCollectionReferencesExist(db, true, row.config);
-    }
+    for (const row of rows) assertCollectionPublishReady(true, row.config);
+    await assertCollectionReferenceSetsExist(
+        db,
+        rows.map((row) => ({ isActive: true, rawConfig: row.config })),
+    );
     const results = await safeBatch(db, rows.map((row) => db.update(collections).set({
         isActive: true,
         version: row.version + 1,

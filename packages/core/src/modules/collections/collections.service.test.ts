@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
     createCollection,
+    bulkActivateCollections,
     listCollections,
     listCollectionProductOptions,
     resolveCollectionProducts,
@@ -169,6 +170,7 @@ describe("resolveCollectionProducts", () => {
         await expect(updateCollection(db, "col_1", {
             expectedVersion: 3,
             name: "Updated name",
+            canonicalPath: undefined,
         })).rejects.toThrow(/changed while you were editing/);
         expect(db.update).not.toHaveBeenCalled();
     });
@@ -276,6 +278,49 @@ describe("listCollections", () => {
         expect(statements).toHaveLength(2);
         expect(statements[1]?.limit).toHaveBeenCalledWith(100);
         expect(statements[1]?.offset).toHaveBeenCalledWith(0);
+    });
+});
+
+describe("bulkActivateCollections", () => {
+    it("validates all membership references with one product read and one category read", async () => {
+        const rows = [
+            {
+                id: "col_manual",
+                version: 1,
+                config: JSON.stringify({ source: "manual", productIds: ["prod_1"] }),
+            },
+            {
+                id: "col_dynamic",
+                version: 3,
+                config: JSON.stringify({ source: "dynamic", categoryIds: ["cat_1"], featuredProductId: "prod_2" }),
+            },
+        ];
+        const selectedRows = [rows, [{ id: "prod_1" }, { id: "prod_2" }], [{ id: "cat_1" }]];
+        const select = vi.fn(() => {
+            const result = selectedRows.shift() ?? [];
+            const chain: Record<string, unknown> = {};
+            chain.from = vi.fn(() => chain);
+            chain.where = vi.fn(() => chain);
+            chain.all = vi.fn(async () => result);
+            return chain;
+        });
+        const update = vi.fn(() => {
+            const chain: Record<string, unknown> = {};
+            chain.set = vi.fn(() => chain);
+            chain.where = vi.fn(() => chain);
+            chain.returning = vi.fn(() => chain);
+            return chain;
+        });
+        const db = {
+            select,
+            update,
+            batch: vi.fn(async () => [[{ id: "col_manual" }], [{ id: "col_dynamic" }]]),
+        } as unknown as Database;
+
+        await bulkActivateCollections(db, ["col_manual", "col_dynamic"]);
+
+        expect(select).toHaveBeenCalledTimes(3);
+        expect(update).toHaveBeenCalledTimes(2);
     });
 });
 
