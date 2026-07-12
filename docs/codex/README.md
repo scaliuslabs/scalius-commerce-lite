@@ -8,6 +8,7 @@ This folder contains concise engineering context. Treat source code, tests, depl
 
 - `PLATFORM-GOAL.md` - product, architecture, and stable-release bar.
 - `catalog/README.md` - current catalog hardening audit, evidence, decisions, and implementation order.
+- `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
 
 ## Toolchain Rules
 
