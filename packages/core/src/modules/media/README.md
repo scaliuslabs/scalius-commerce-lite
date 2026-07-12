@@ -29,6 +29,14 @@ length and part-1 signature checks finish before the storage side effect.
 - A committed completion retry is read-only and verifies the media row still
   matches the upload session.
 - Metadata, moves, folders, trash, and restore use optimistic revisions.
+- Successful metadata/poster, trash, and restore mutations keyset-scan direct
+  product attachments plus attached videos using the changed image as a
+  poster. The API invalidates those products in sequential 20-product pages so
+  every exact HTML target fits the storefront purge contract while D1 reads
+  remain below the 100-binding limit. The shared product invalidator also
+  clears list/search, collection, feed, sitemap, and exact storefront families;
+  dependency-query failures fall back to the broad product catalog invalidator
+  instead of returning a committed media write with stale buyer projections.
 - Permanent delete requires trash and zero live poster/product associations or
   retained order-item image snapshots,
   returns bounded dependency counts/samples, atomically claims `deleting`

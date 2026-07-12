@@ -527,6 +527,11 @@ migrations.
   reads.
 - `529dd128` and `760cbf7c` integrate the compact admin editor and the protected
   storefront gallery without restoring image-only compatibility shapes.
+- Admin Media PATCH/trash/restore now resolve direct product associations and
+  videos using a changed image as their poster through indexed, keyset pages;
+  each bounded page uses the targeted product invalidator so list/search,
+  dependent collections, feed/sitemap, product HTML, and exact storefront
+  generation families cannot retain stale presentation.
 - Migration 0020 and its generated snapshot remove the last schema declaration
   and physical copied-URL table after 0018/0019 have established the replacement
   foreign keys and order snapshot.
