@@ -289,7 +289,9 @@ export async function listCollectionProductOptions(
             name: products.name,
             price: products.price,
             categoryId: products.categoryId,
-            categoryName: categories.name,
+            categoryName: sql<string | null>`${categories.name}`.as(
+                "collection_product_category_name",
+            ),
             isActive: products.isActive,
         })
         .from(products)
