@@ -64,6 +64,27 @@
       "when": 1783829554888,
       "tag": "0008_empty_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1783841754617,
+      "tag": "0009_sticky_green_goblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1783852590412,
+      "tag": "0010_serious_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1783854109412,
+      "tag": "0011_product_barcode_guard",
+      "breakpoints": true
     }
   ]
 }

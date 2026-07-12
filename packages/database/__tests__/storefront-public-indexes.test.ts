@@ -52,6 +52,9 @@ describe("storefront public listing indexes", () => {
             { idx: 6, tag: "0006_outgoing_captain_midlands" },
             { idx: 7, tag: "0007_bored_vulcan" },
             { idx: 8, tag: "0008_empty_ikaris" },
+            { idx: 9, tag: "0009_sticky_green_goblin" },
+            { idx: 10, tag: "0010_serious_maverick" },
+            { idx: 11, tag: "0011_product_barcode_guard" },
         ]);
         expect(journal.entries.every((entry: { breakpoints: boolean }) => entry.breakpoints)).toBe(true);
     });

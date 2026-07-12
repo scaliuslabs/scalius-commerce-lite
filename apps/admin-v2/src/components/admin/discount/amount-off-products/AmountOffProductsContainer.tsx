@@ -47,7 +47,7 @@ function isSameSelectedCollection(a: Collection, b: Collection): boolean {
     a.name === b.name &&
     a.description === b.description &&
     a.slug === b.slug &&
-    a.type === b.type
+    a.presentation === b.presentation
   );
 }
 

@@ -45,7 +45,7 @@ describe("collections sitemap route", () => {
       {
         id: "collection one",
         name: "Summer",
-        type: "manual",
+        presentation: "grid",
         config: {},
         sortOrder: 1,
         isActive: true,
@@ -93,7 +93,7 @@ describe("collections sitemap route", () => {
       {
         id: "visible",
         name: "Visible",
-        type: "manual",
+        presentation: "grid",
         config: {},
         sortOrder: 1,
         isActive: true,
@@ -106,7 +106,7 @@ describe("collections sitemap route", () => {
       {
         id: "noindex",
         name: "Noindex",
-        type: "manual",
+        presentation: "grid",
         config: {},
         sortOrder: 2,
         isActive: true,
@@ -119,7 +119,7 @@ describe("collections sitemap route", () => {
       {
         id: "excluded",
         name: "Excluded",
-        type: "manual",
+        presentation: "grid",
         config: {},
         sortOrder: 3,
         isActive: true,

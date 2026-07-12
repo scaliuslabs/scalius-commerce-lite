@@ -13,10 +13,15 @@ Curated product groups displayed on the storefront homepage, with manual and dyn
 
 ## Collection Types
 
-| Type | Description |
-|------|-------------|
-| `"manual"` | Admin-curated with optional featured product, grid layout |
-| `"dynamic"` | Category-based or product-based, auto-populated, carousel layout |
+| Presentation | Description |
+|--------------|-------------|
+| `"grid"` | Featured-grid presentation |
+| `"carousel"` | Horizontally scrolling presentation |
+
+Membership is independent from presentation. `config.source` is `manual` for
+an explicitly ordered product list or `dynamic` for category-backed automatic
+membership. Runtime reads and writes require this canonical source; migration
+0010 converts the earlier demo-era representation once.
 
 ## Config Schema
 
@@ -24,6 +29,7 @@ The `config` column stores a JSON object:
 
 ```typescript
 {
+  source: "manual" | "dynamic" // Membership semantics, independent of layout
   categoryIds: string[]      // Categories whose products to include
   productIds: string[]       // Specific product IDs to include
   featuredProductId?: string  // Product shown prominently (manual type only)
@@ -36,17 +42,16 @@ The `config` column stores a JSON object:
 All reads and writes must pass through `normalizeCollectionConfig()` or
 `stringifyCollectionConfig()` from `collection-config.ts`. The helper guarantees
 arrays are always present, clamps `maxProducts` to 1-24, drops invalid product
-IDs, and maps the retired `specificProductIds` field into canonical
-`productIds`. Admin edit, public collection routes, and storefront
+IDs, and ignores retired compatibility fields. Admin edit, public collection routes, and storefront
 product resolution should not call `JSON.parse(collection.config)` directly.
 
 ## Validation (`collections.validation.ts`)
 
 **`createCollectionSchema`** (all required):
 - `name`: string, 3-100 chars
-- `type`: enum `["manual", "dynamic"]`
+- `presentation`: enum `["grid", "carousel"]`
 - `isActive`: boolean
-- `config`: collectionConfigSchema (categoryIds, productIds, featuredProductId?, maxProducts 1-24 default 8, title?, subtitle?)
+- `config`: collectionConfigSchema (source, categoryIds, productIds, featuredProductId?, maxProducts 1-24 default 8, title?, subtitle?)
 
 **`updateCollectionSchema`** (all optional): Same fields.
 
@@ -58,9 +63,9 @@ product resolution should not call `JSON.parse(collection.config)` directly.
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `listCollections` | `(db, { page?, limit?, search?, showTrashed?, sort?, order? })` | LIKE search, sortable by name/type/isActive/updatedAt/sortOrder (whitelist-validated), default limit 20 |
+| `listCollections` | `(db, { page?, limit?, search?, showTrashed?, sort?, order? })` | LIKE search, sortable by name/presentation/isActive/updatedAt/sortOrder (whitelist-validated), default limit 20 |
 | `getCollectionById` | `(db, id)` | Excludes soft-deleted collections; returns null if not found |
-| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving requested order and excluding soft-deleted collections |
+| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving requested order, excluding soft-deleted collections, and capped at 90 IDs |
 | `getCollectionCategoryOptions` | `(db)` | Lightweight non-deleted category options for collection builders |
 | `listCollectionProductOptions` | `(db, { page?, limit?, search?, categoryIds? })` | Stable name/ID pagination for the collection picker; FTS search and OR-matched categories run in one two-statement D1 batch. Category IDs are deduplicated and capped at 90 so search/limit/offset binds stay below D1's 100-parameter ceiling. |
 
@@ -97,14 +102,13 @@ The service provides product resolution for the storefront, computing `discounte
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `resolveCollectionProducts` | `(db, config)` | Resolve products for a single collection. Priority: productIds > categoryIds. Featured product resolved independently. Limits by `maxProducts` (1-24, default 8). |
+| `resolveCollectionProducts` | `(db, config)` | Resolve products from explicit `config.source`. Manual order is preserved; dynamic membership uses selected categories. Featured product resolves independently. Limits by `maxProducts` (1-24, default 8). |
 | `resolveCollectionProductsBatch` | `(db, parsedCollections)` | Batch-resolve products for multiple collections in 2 D1 round-trips (4 batched queries). Returns `Map<collectionId, CollectionProductResult>`. Avoids N+1 queries for homepage. |
 
-**Resolution priority:**
-1. If `productIds` non-empty: fetch those specific products, ignore `categoryIds`
-2. If `categoryIds` non-empty: fetch active products from those categories (newest first)
-3. If only `featuredProductId`: resolve just that product
-4. If all empty: return empty result
+Only the selected membership source is buyer-visible. Stale selections from the
+other mode are retained for reversible admin switching but cannot leak into the
+storefront projection. Active manual collections require a product; active
+dynamic collections require a category.
 
 ## Dependencies
 

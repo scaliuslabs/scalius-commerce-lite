@@ -24,7 +24,7 @@ import {
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 
 const validateCollectionSearch = createListSearchValidator(
-  ["name", "type", "isActive", "sortOrder", "updatedAt"] as const,
+  ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
   { sort: "sortOrder", order: "asc" },
 );
 

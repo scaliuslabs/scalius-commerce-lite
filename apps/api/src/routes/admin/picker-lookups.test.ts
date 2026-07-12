@@ -172,7 +172,7 @@ describe("admin picker lookup routes", () => {
 
     it("resolves collection picker summaries before the ID route can match", async () => {
         mocks.getCollectionsByIds.mockResolvedValue([
-            { id: "col_1", name: "Featured", type: "manual" },
+            { id: "col_1", name: "Featured", presentation: "grid" },
         ]);
         const { app, db } = createTestApp();
 
@@ -185,7 +185,7 @@ describe("admin picker lookup routes", () => {
         expect(body).toEqual({
             success: true,
             data: {
-                collections: [{ id: "col_1", name: "Featured", type: "manual" }],
+                collections: [{ id: "col_1", name: "Featured", presentation: "grid" }],
             },
         });
         expect(mocks.getCollectionsByIds).toHaveBeenCalledWith(db, ["col_1", "col_2"]);

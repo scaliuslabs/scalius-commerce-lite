@@ -4,9 +4,10 @@ import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 type Timestamp = string | number;
 type NullableTimestamp = Timestamp | null;
 
-export type CollectionType = "manual" | "dynamic";
+export type CollectionPresentation = "grid" | "carousel";
 
 export interface CollectionConfigInput {
+  source?: "manual" | "dynamic";
   categoryIds?: string[];
   productIds?: string[];
   featuredProductId?: string;
@@ -18,7 +19,7 @@ export interface CollectionConfigInput {
 export interface CollectionDto {
   id: string;
   name: string;
-  type: CollectionType;
+  presentation: CollectionPresentation;
   config: string;
   sortOrder: number;
   isActive: boolean;
@@ -45,7 +46,7 @@ export interface CollectionsListPayload {
 export interface CollectionPickerItemDto {
   id: string;
   name: string;
-  type: CollectionType;
+  presentation: CollectionPresentation;
 }
 
 export interface CollectionsByIdsInput {
@@ -69,7 +70,7 @@ export interface CollectionsQueryInput {
 
 export interface CreateCollectionInput {
   name: string;
-  type: CollectionType;
+  presentation: CollectionPresentation;
   isActive: boolean;
   canonicalPath: string | null;
   noIndex: boolean;

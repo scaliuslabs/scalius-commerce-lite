@@ -13,7 +13,7 @@ export interface Collection {
   name: string;
   description: string | null;
   slug: string;
-  type?: "manual" | "dynamic";
+  presentation?: "grid" | "carousel";
 }
 
 export const formSchema = refineEndDateAfterStart(

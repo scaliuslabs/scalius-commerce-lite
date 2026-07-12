@@ -1,4 +1,5 @@
 export interface NormalizedCollectionConfig {
+    source: CollectionContentSource;
     categoryIds: string[];
     productIds: string[];
     featuredProductId?: string;
@@ -7,10 +8,13 @@ export interface NormalizedCollectionConfig {
     subtitle: string;
 }
 
+export type CollectionContentSource = "manual" | "dynamic";
+
 // Leave room below D1's 100-bound-parameter ceiling for surrounding predicates.
 export const COLLECTION_CONFIG_ID_LIMIT = 90;
 
 export const DEFAULT_COLLECTION_CONFIG: NormalizedCollectionConfig = {
+    source: "manual",
     categoryIds: [],
     productIds: [],
     maxProducts: 8,
@@ -71,8 +75,8 @@ function optionalString(value: unknown): string | undefined {
     return trimmed || undefined;
 }
 
-function textValue(value: unknown): string {
-    return typeof value === "string" ? value : "";
+function textValue(value: unknown, maxLength: number): string {
+    return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
 function normalizeMaxProducts(value: unknown): number {
@@ -88,20 +92,32 @@ function normalizeMaxProducts(value: unknown): number {
 export function normalizeCollectionConfig(value: unknown): NormalizedCollectionConfig {
     const config = parseConfigInput(value);
     const productIds = uniqueProductIdList(config.productIds);
-    const legacySpecificProductIds = uniqueProductIdList(config.specificProductIds);
-    const legacyProducts = uniqueProductIdList(config.products);
+    const categoryIds = uniqueStringList(config.categoryIds);
+    const source: CollectionContentSource = config.source === "dynamic"
+        ? "dynamic"
+        : "manual";
 
     return {
-        categoryIds: uniqueStringList(config.categoryIds),
-        productIds: productIds.length > 0
-            ? productIds
-            : legacySpecificProductIds.length > 0
-                ? legacySpecificProductIds
-                : legacyProducts,
+        source,
+        categoryIds,
+        productIds,
         featuredProductId: optionalString(config.featuredProductId),
         maxProducts: normalizeMaxProducts(config.maxProducts),
-        title: textValue(config.title),
-        subtitle: textValue(config.subtitle),
+        title: textValue(config.title, 120),
+        subtitle: textValue(config.subtitle, 240),
+    };
+}
+
+export function collectionMembershipForConfig(value: unknown): {
+    source: CollectionContentSource;
+    productIds: string[];
+    categoryIds: string[];
+} {
+    const config = normalizeCollectionConfig(value);
+    return {
+        source: config.source,
+        productIds: config.source === "manual" ? config.productIds : [],
+        categoryIds: config.source === "dynamic" ? config.categoryIds : [],
     };
 }
 

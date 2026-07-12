@@ -1,0 +1,1 @@
+CREATE INDEX `inventory_movements_type_created_at_idx` ON `inventory_movements` (`type`,`created_at`);

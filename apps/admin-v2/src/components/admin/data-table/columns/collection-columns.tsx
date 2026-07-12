@@ -6,6 +6,7 @@ import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { InlineEditCell } from "../InlineEditCell";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
 import type { Collection } from "~/types/api-responses";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 
 export interface CollectionItem extends Collection {
   productCount?: number;
@@ -28,24 +29,24 @@ interface CollectionColumnOptions {
   onPermanentDelete: (id: string) => void;
 }
 
-function getCollectionTypeLabel(type: string): string {
-  switch (type) {
-    case "manual":
-      return "Manual (Grid)";
-    case "dynamic":
-      return "Dynamic (Carousel)";
+function getCollectionPresentationLabel(presentation: string): string {
+  switch (presentation) {
+    case "grid":
+      return "Featured grid";
+    case "carousel":
+      return "Carousel";
     default:
-      return type;
+      return presentation;
   }
 }
 
-function getCollectionTypeIcon(type: string) {
-  switch (type) {
-    case "manual":
+function getCollectionPresentationIcon(presentation: string) {
+  switch (presentation) {
+    case "grid":
       return (
         <LayoutGrid className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
       );
-    case "dynamic":
+    case "carousel":
       return (
         <GridIcon className="h-3.5 w-3.5 text-purple-500 dark:text-purple-400" />
       );
@@ -56,29 +57,25 @@ function getCollectionTypeIcon(type: string) {
 
 function getContentSource(config: string) {
   try {
-    const parsed = JSON.parse(config);
-    const categoryIds = parsed.categoryIds || [];
-    const productIds = parsed.productIds || [];
-
-    if (categoryIds.length > 0) {
+    const parsed = normalizeCollectionConfig(config);
+    if (parsed.source === "dynamic") {
       return (
         <span className="text-sm text-muted-foreground">
-          {categoryIds.length}{" "}
-          {categoryIds.length === 1 ? "category" : "categories"}
-          {productIds.length > 0 &&
-            ` + ${productIds.length} product${productIds.length === 1 ? "" : "s"}`}
+          Dynamic · {parsed.categoryIds.length}{" "}
+          {parsed.categoryIds.length === 1 ? "category" : "categories"}
         </span>
       );
-    } else if (productIds.length > 0) {
+    }
+    if (parsed.productIds.length > 0) {
       return (
         <span className="text-sm text-muted-foreground">
-          {productIds.length} specific product
-          {productIds.length === 1 ? "" : "s"}
+          Manual · {parsed.productIds.length} product
+          {parsed.productIds.length === 1 ? "" : "s"}
         </span>
       );
     }
     return (
-      <span className="text-sm text-muted-foreground">No products</span>
+      <span className="text-sm text-muted-foreground">Manual · no products</span>
     );
   } catch {
     return <span className="text-sm text-muted-foreground">N/A</span>;
@@ -117,7 +114,7 @@ export function getCollectionColumns(
             onSave={(newName) => opts.onUpdateName(collection.id, newName)}
             disabled={isDisabled}
             isSaving={isSaving}
-            minLength={2}
+            minLength={3}
             placeholder="Collection name"
           />
         );
@@ -125,15 +122,15 @@ export function getCollectionColumns(
       size: 250,
     },
     {
-      accessorKey: "type",
+      accessorKey: "presentation",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Type" />
+        <DataTableColumnHeader column={column} title="Presentation" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center space-x-2">
-          {getCollectionTypeIcon(row.original.type)}
+          {getCollectionPresentationIcon(row.original.presentation)}
           <span className="text-sm">
-            {getCollectionTypeLabel(row.original.type)}
+            {getCollectionPresentationLabel(row.original.presentation)}
           </span>
         </div>
       ),
@@ -160,6 +157,7 @@ export function getCollectionColumns(
             {!isTrashed && (
               <Switch
                 checked={collection.isActive}
+                aria-label={`${collection.isActive ? "Deactivate" : "Activate"} ${collection.name}`}
                 onCheckedChange={(checked) =>
                   opts.onToggleActive(collection.id, checked)
                 }

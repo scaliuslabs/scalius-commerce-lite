@@ -3,12 +3,13 @@ import { collectionFormSchema } from "./types";
 
 const collectionValues = {
   name: "Summer Edit",
-  type: "manual" as const,
-  isActive: true,
+  presentation: "grid" as const,
+  isActive: false,
   canonicalPath: null,
   noIndex: false,
   excludeFromSitemap: false,
   config: {
+    source: "manual" as const,
     categoryIds: [],
     productIds: [],
     maxProducts: 8,

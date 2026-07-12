@@ -51,6 +51,7 @@ function EditCollectionPage() {
   const parsedConfig = normalizeCollectionConfig(c.config);
   const selectedProductIds = collectionProductIdsForLookup(parsedConfig);
   const config = {
+    source: parsedConfig.source,
     categoryIds: parsedConfig.categoryIds,
     productIds: parsedConfig.productIds,
     featuredProductId: parsedConfig.featuredProductId,
@@ -62,9 +63,6 @@ function EditCollectionPage() {
     ...productsByIdsQueryOptions(selectedProductIds),
     enabled: selectedProductIds.length > 0,
   });
-  const validTypes = ["manual", "dynamic"];
-  const formType = validTypes.includes(c.type) ? c.type : "manual";
-
   return (
     <div className="container max-w-7xl py-4 pb-8">
       <CollectionForm
@@ -73,7 +71,7 @@ function EditCollectionPage() {
         defaultValues={{
           id: c.id,
           name: c.name,
-          type: formType as "manual" | "dynamic",
+          presentation: c.presentation,
           isActive: c.isActive,
           canonicalPath: c.canonicalPath,
           noIndex: c.noIndex,

@@ -218,7 +218,7 @@ function AmountOffProductsEditor({
       name: found?.name || collectionId,
       description: null,
       slug: "",
-      type: (found?.type as "manual" | "dynamic") || undefined,
+      presentation: found?.presentation,
     };
   });
 

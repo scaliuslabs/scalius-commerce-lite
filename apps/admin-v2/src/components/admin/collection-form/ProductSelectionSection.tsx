@@ -1,16 +1,14 @@
 import React from "react";
 import type { UseFormReturn } from "react-hook-form";
 import {
+  FormControl,
   FormDescription,
+  FormField,
+  FormItem,
   FormLabel,
+  FormMessage,
 } from "../../ui/form";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../../ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import {
   Select,
   SelectContent,
@@ -19,14 +17,17 @@ import {
   SelectValue,
 } from "../../ui/select";
 import { Button } from "../../ui/button";
-import { Alert, AlertDescription } from "../../ui/alert";
 import { Badge } from "../../ui/badge";
-import { Trash2, Layers, Package, Info } from "lucide-react";
+import { SearchableSelect } from "../../ui/searchable-select";
+import { ChevronDown, ChevronUp, Layers, Package, Trash2 } from "lucide-react";
 import type { CollectionFormValues, Category, Product } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
 
+const MAX_MEMBERSHIP_IDS = 90;
+
 interface ProductSelectionSectionProps {
   form: UseFormReturn<CollectionFormValues>;
+  selectedSource: "manual" | "dynamic";
   categories: Category[];
   selectedCategories: Category[];
   selectedProducts: Product[];
@@ -36,10 +37,13 @@ interface ProductSelectionSectionProps {
   removeCategory: (id: string) => void;
   addProduct: (product: Product) => void;
   removeProduct: (id: string) => void;
+  moveProduct: (id: string, direction: -1 | 1) => void;
 }
 
 export const ProductSelectionSection = React.memo(
   function ProductSelectionSection({
+    form,
+    selectedSource,
     categories,
     selectedCategories,
     selectedProducts,
@@ -49,140 +53,111 @@ export const ProductSelectionSection = React.memo(
     removeCategory,
     addProduct,
     removeProduct,
+    moveProduct,
   }: ProductSelectionSectionProps) {
-    const hasSpecificProducts = selectedProductIds.length > 0;
-    const hasCategoriesOnly =
-      selectedCategoryIds.length > 0 && !hasSpecificProducts;
-
     return (
       <Card>
-        <CardHeader className="pb-3 pt-4 px-4">
-          <CardTitle className="text-base">Product Selection</CardTitle>
-          <CardDescription className="text-xs">
-            Choose categories or specific products to include
-          </CardDescription>
+        <CardHeader className="px-4 pb-3 pt-4">
+          <CardTitle className="text-base">Collection content</CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-4 space-y-4">
-          {/* Category Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-muted-foreground" />
-              <FormLabel>Categories</FormLabel>
-            </div>
-            <div className="flex gap-2">
-              <Select
-                onValueChange={(value) => {
-                  if (value) addCategory(value);
-                }}
-                value=""
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select categories to include..." />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl bg-background max-h-[300px]">
-                  {categories
-                    .filter((cat) => !selectedCategoryIds.includes(cat.id))
-                    .map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {selectedCategories.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {selectedCategories.map((category) => (
-                  <Badge
-                    key={category.id}
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1.5"
-                  >
-                    <span className="truncate max-w-[180px]">
-                      {category.name}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-destructive/20"
-                      onClick={() => removeCategory(category.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      <span className="sr-only">Remove</span>
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
+        <CardContent className="space-y-4 px-4 pb-4">
+          <FormField
+            control={form.control}
+            name="config.source"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Content source</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    <SelectItem value="manual">Manual selection</SelectItem>
+                    <SelectItem value="dynamic">Dynamic by category</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription className="text-xs">
+                  {selectedSource === "manual"
+                    ? "Choose products and arrange their storefront order."
+                    : "New eligible products from the selected categories appear automatically."}
+                </FormDescription>
+              </FormItem>
             )}
-          </div>
+          />
 
-          {/* Informational text about how categories/products interact */}
-          {hasCategoriesOnly && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                All active products from selected categories will be shown on
-                the storefront (up to max products limit).
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {hasSpecificProducts && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>
-                These specific products will be shown in the collection.
-                {selectedCategoryIds.length > 0
-                  ? " Category selection is used to filter the product search below only."
-                  : ""}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Product Selection */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-muted-foreground" />
-              <FormLabel>Specific Products (Optional)</FormLabel>
-            </div>
-            <ProductPickerPopover
-              triggerLabel="Search products to add..."
-              selectedCategoryIds={selectedCategoryIds}
-              excludeProductIds={selectedProductIds}
-              onSelectProduct={addProduct}
-              buttonClassName="w-full justify-between font-normal"
+          {selectedSource === "dynamic" ? (
+            <FormField
+              control={form.control}
+              name="config.categoryIds"
+              render={() => (
+                <FormItem className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <FormLabel className="flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-muted-foreground" /> Categories
+                    </FormLabel>
+                    <span className="text-xs tabular-nums text-muted-foreground">{selectedCategoryIds.length}/{MAX_MEMBERSHIP_IDS}</span>
+                  </div>
+                  <SearchableSelect
+                    onValueChange={addCategory}
+                    options={categories
+                      .filter((category) => !selectedCategoryIds.includes(category.id))
+                      .map((category) => ({ value: category.id, label: category.name }))}
+                    placeholder="Add a category"
+                    searchPlaceholder="Search categories..."
+                    emptyMessage="No more categories available."
+                    ariaLabel="Add a category to this collection"
+                    disabled={selectedCategoryIds.length >= MAX_MEMBERSHIP_IDS}
+                    triggerClassName="w-full"
+                  />
+                  {selectedCategories.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCategories.map((category) => (
+                        <Badge key={category.id} variant="secondary" className="gap-1 pr-1">
+                          <span className="max-w-[220px] truncate">{category.name}</span>
+                          <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeCategory(category.id)} aria-label={`Remove ${category.name}`}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">Select a category to define this collection.</p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {selectedProducts.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {selectedProducts.map((product) => (
-                  <Badge
-                    key={product.id}
-                    variant="outline"
-                    className="flex items-center gap-1 pr-1.5"
-                  >
-                    <span className="truncate max-w-[180px]">
-                      {product.name}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-4 w-4 p-0 ml-1 hover:bg-destructive/20"
-                      onClick={() => removeProduct(product.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      <span className="sr-only">Remove</span>
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <FormDescription>
-              Add specific products that will always be included regardless of
-              category selection
-            </FormDescription>
-          </div>
+          ) : (
+            <FormField
+              control={form.control}
+              name="config.productIds"
+              render={() => (
+                <FormItem className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <FormLabel className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-muted-foreground" /> Products
+                    </FormLabel>
+                    <span className="text-xs tabular-nums text-muted-foreground">{selectedProductIds.length}/{MAX_MEMBERSHIP_IDS}</span>
+                  </div>
+                  <ProductPickerPopover triggerLabel="Search products to add" excludeProductIds={selectedProductIds} onSelectProduct={addProduct} buttonClassName="w-full justify-between font-normal" disabled={selectedProductIds.length >= MAX_MEMBERSHIP_IDS} />
+                  {selectedProducts.length > 0 ? (
+                    <ol className="divide-y rounded-md border" aria-label="Manual product order">
+                      {selectedProducts.map((product, index) => (
+                        <li key={product.id} className="flex min-h-10 items-center gap-2 px-2 py-1.5">
+                          <span className="w-6 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+                          <span className="min-w-0 flex-1 truncate text-sm">{product.name}</span>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveProduct(product.id, -1)} aria-label={`Move ${product.name} up`}><ChevronUp className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === selectedProducts.length - 1} onClick={() => moveProduct(product.id, 1)} aria-label={`Move ${product.name} down`}><ChevronDown className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeProduct(product.id)} aria-label={`Remove ${product.name}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">Add products to define this collection. Their order is saved.</p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </CardContent>
       </Card>
     );

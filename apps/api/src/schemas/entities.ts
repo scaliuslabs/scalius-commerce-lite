@@ -506,7 +506,7 @@ export const collectionSchema = z
   .object({
     id: z.string(),
     name: z.string(),
-    type: z.enum(["manual", "dynamic"]),
+    presentation: z.enum(["grid", "carousel"]),
     config: z.string(),
     sortOrder: z.number(),
     isActive: z.boolean(),

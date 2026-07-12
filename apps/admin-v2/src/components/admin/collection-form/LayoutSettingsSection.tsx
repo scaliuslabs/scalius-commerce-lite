@@ -27,14 +27,14 @@ import { Switch } from "../../ui/switch";
 import { X } from "lucide-react";
 import { ResourceDiscoveryReadiness } from "~/components/admin/shared/ResourceDiscoveryReadiness";
 import type { CollectionFormValues, Product } from "./types";
-import { collectionTypes } from "./types";
+import { collectionPresentations } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
 
 const PENDING_PRODUCT_LABEL = "Loading product label...";
 
 interface LayoutSettingsSectionProps {
   form: UseFormReturn<CollectionFormValues>;
-  selectedType: "manual" | "dynamic";
+  selectedPresentation: "grid" | "carousel";
   knownProducts: Product[];
   selectedCategoryIds: string[];
   onProductDiscovered: (product: Product) => void;
@@ -43,7 +43,7 @@ interface LayoutSettingsSectionProps {
 export const LayoutSettingsSection = React.memo(
   function LayoutSettingsSection({
     form,
-    selectedType,
+    selectedPresentation,
     knownProducts,
     selectedCategoryIds,
     onProductDiscovered,
@@ -176,7 +176,7 @@ export const LayoutSettingsSection = React.memo(
             {/* Display Style */}
             <FormField
               control={form.control}
-              name="type"
+              name="presentation"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">
@@ -186,7 +186,7 @@ export const LayoutSettingsSection = React.memo(
                     onValueChange={(value) => {
                       field.onChange(value);
                     }}
-                    defaultValue={field.value}
+                    value={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -194,23 +194,22 @@ export const LayoutSettingsSection = React.memo(
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="rounded-xl bg-background">
-                      {collectionTypes.map((type) => (
+                      {collectionPresentations.map((presentation) => (
                         <SelectItem
-                          key={type.value}
-                          value={type.value}
+                          key={presentation.value}
+                          value={presentation.value}
                           className="flex flex-col items-start py-2"
                         >
-                          <div className="font-medium">{type.label}</div>
+                          <div className="font-medium">{presentation.label}</div>
                           <div className="text-xs text-gray-500">
-                            {type.description}
+                            {presentation.description}
                           </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <FormDescription className="text-xs">
-                    This only affects how products are displayed on the
-                    storefront
+                    Content source and display style are independent.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -229,6 +228,7 @@ export const LayoutSettingsSection = React.memo(
                   <FormControl>
                     <Input
                       placeholder="Enter display title"
+                      maxLength={120}
                       {...field}
                       value={field.value || ""}
                     />
@@ -250,6 +250,7 @@ export const LayoutSettingsSection = React.memo(
                   <FormControl>
                     <Input
                       placeholder="Enter display subtitle"
+                      maxLength={240}
                       {...field}
                       value={field.value || ""}
                     />
@@ -259,8 +260,8 @@ export const LayoutSettingsSection = React.memo(
               )}
             />
 
-            {/* Featured Product (conditional on manual type) */}
-            {selectedType === "manual" && (
+            {/* Featured product is available only in the grid presentation. */}
+            {selectedPresentation === "grid" && (
               <FormField
                 control={form.control}
                 name="config.featuredProductId"
@@ -301,7 +302,7 @@ export const LayoutSettingsSection = React.memo(
                       </div>
                     </FormControl>
                     <FormDescription className="text-xs">
-                      Displayed prominently in Collection Style 1
+                      Displayed prominently in the featured-grid homepage section.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -316,7 +317,7 @@ export const LayoutSettingsSection = React.memo(
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-sm font-medium">
-                    Maximum Products
+                    Homepage product limit
                   </FormLabel>
                   <FormControl>
                     <Input
@@ -330,7 +331,7 @@ export const LayoutSettingsSection = React.memo(
                     />
                   </FormControl>
                   <FormDescription className="text-xs">
-                    Maximum number of products to display (1-24)
+                    Products shown in this homepage section (1-24). The collection page remains paginated.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
