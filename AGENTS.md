@@ -22,6 +22,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 - `@scalius/database` and `@scalius/shared` use subpath imports such as `@scalius/database/schema`; avoid root imports.
 - Storefront code may import shared/api-client packages, but must not import `@scalius/core` or `@scalius/database` without an explicit architecture decision.
 - Cloudflare D1 permits at most 100 bound parameters per query and six simultaneous connections per Worker invocation. Chunk ID enrichment reads at 90 or fewer, keep chunk waves sequential/bounded, and use a bound `json_each()` lookup set when the same public tokens must match several indexed fields.
+- Remote D1 migrations reject trigger bodies that embed `SELECT CASE WHEN`; put the guard expression in the trigger `WHEN` clause and keep the body to one statement so normal `wrangler d1 migrations apply` remains deployable.
 
 ## High-Risk Landmines
 

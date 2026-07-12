@@ -33,4 +33,18 @@ describe("item-level return lifecycle migration", () => {
     expect(migration).toContain("im.created_by IS NEW.actor_id");
     expect(migration).toContain("return restock disposition lacks matching inventory movement evidence");
   });
+
+  it("keeps remote-D1 guard expressions in WHEN clauses with one-statement bodies", () => {
+    expect(migration).not.toContain("SELECT CASE WHEN");
+
+    const triggerBodies = migration
+      .split("--> statement-breakpoint")
+      .filter((statement) => statement.includes("CREATE TRIGGER"))
+      .map((statement) => statement.slice(statement.indexOf("BEGIN") + "BEGIN".length));
+
+    expect(triggerBodies.length).toBeGreaterThan(0);
+    for (const body of triggerBodies) {
+      expect(body.match(/;/g)).toHaveLength(2);
+    }
+  });
 });
