@@ -1,8 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { DiscountType, DiscountValueType } from "@scalius/database/schema";
-import { ForbiddenError } from "@scalius/core/errors";
-import { createDiscount, updateDiscount } from "./discounts.service";
+import { ConflictError, ForbiddenError } from "@scalius/core/errors";
+import {
+  bulkDeleteDiscounts,
+  createDiscount,
+  deleteDiscount,
+  permanentlyDeleteDiscount,
+  restoreDiscounts,
+  updateDiscount,
+} from "./discounts.service";
 
 const activeDiscount = {
   id: "disc_1",
@@ -47,5 +54,89 @@ describe("discount lifecycle authority", () => {
       updateDiscount(db as never, "disc_1", activeDiscount),
     ).rejects.toBeInstanceOf(ForbiddenError);
     expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("chunks association inserts below the D1 parameter ceiling", async () => {
+    const insertedValueCounts: number[] = [];
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({ get: vi.fn(async () => null) })),
+        })),
+      })),
+      insert: vi.fn(() => ({
+        values: vi.fn((values: unknown | unknown[]) => {
+          insertedValueCounts.push(Array.isArray(values) ? values.length : 1);
+          return { kind: "insert" };
+        }),
+      })),
+      batch: vi.fn(async () => undefined),
+    };
+
+    await createDiscount(db as never, {
+      ...activeDiscount,
+      isActive: false,
+      type: DiscountType.AMOUNT_OFF_PRODUCTS,
+      appliesToProducts: Array.from({ length: 45 }, (_, index) => `prod_${index}`),
+    });
+
+    expect(insertedValueCounts).toEqual([1, 20, 20, 5]);
+  });
+});
+
+function createLifecycleDb(selectResults: unknown[] = []) {
+  const updateSets: Array<Record<string, unknown>> = [];
+  const deleteWhere = vi.fn(async () => undefined);
+  const db = {
+    select: vi.fn(() => {
+      const result = selectResults.shift();
+      const chain: Record<string, unknown> = {};
+      chain.from = vi.fn(() => chain);
+      chain.where = vi.fn(() => chain);
+      chain.limit = vi.fn(() => chain);
+      chain.get = vi.fn(async () => result);
+      return chain;
+    }),
+    update: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => {
+        updateSets.push(values);
+        return { where: vi.fn(async () => undefined) };
+      }),
+    })),
+    delete: vi.fn(() => ({ where: deleteWhere })),
+  };
+  return { db: db as never, updateSets, deleteWhere };
+}
+
+describe("discount destructive lifecycle", () => {
+  it("deactivates discounts when moving them to trash", async () => {
+    const { db, updateSets } = createLifecycleDb();
+    await deleteDiscount(db, "disc_1");
+    expect(updateSets[0]).toMatchObject({ isActive: false });
+    expect(updateSets[0]?.deletedAt).toBeDefined();
+  });
+
+  it("restores discounts as inactive drafts", async () => {
+    const { db, updateSets } = createLifecycleDb();
+    await restoreDiscounts(db, ["disc_1"]);
+    expect(updateSets[0]).toMatchObject({ isActive: false, deletedAt: null });
+  });
+
+  it("blocks permanent deletion when order usage history exists", async () => {
+    const { db, deleteWhere } = createLifecycleDb([
+      { id: "disc_1", deletedAt: new Date("2026-01-01T00:00:00.000Z") },
+      { id: "usage_1" },
+    ]);
+
+    await expect(permanentlyDeleteDiscount(db, "disc_1"))
+      .rejects.toBeInstanceOf(ConflictError);
+    expect(deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("requires bulk permanent deletes to target trash", async () => {
+    const { db, deleteWhere } = createLifecycleDb([{ id: "disc_active" }]);
+    await expect(bulkDeleteDiscounts(db, ["disc_active"], true))
+      .rejects.toThrow(/Move discounts to trash/);
+    expect(deleteWhere).not.toHaveBeenCalled();
   });
 });

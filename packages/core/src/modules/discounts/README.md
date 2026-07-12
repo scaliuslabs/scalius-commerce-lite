@@ -39,15 +39,15 @@ Three types defined in `@scalius/database/schema`:
 | `updateDiscount` | `(db, id, data, authority?)` | Ordinary edit may preserve status but changing it requires verified `discounts.toggle_status` authority. Atomically updates the discount and associations. |
 | `setDiscountActiveStatus` | `(db, id, isActive)` | Dedicated active/inactive command used only by the toggle-permission route. |
 | `deleteDiscount` | `(db, id)` | Soft-delete: sets `deletedAt = unixepoch()`. |
-| `bulkDeleteDiscounts` | `(db, discountIds, permanent?)` | Soft-delete or hard-delete array of IDs. |
-| `restoreDiscounts` | `(db, discountIds)` | Checks for code conflicts before restoring: throws `ConflictError` if an active discount already uses any of the codes being restored. Sets `deletedAt = null`. |
-| `permanentlyDeleteDiscount` | `(db, id)` | Hard-delete from DB. |
+| `bulkDeleteDiscounts` | `(db, discountIds, permanent?)` | Soft-delete deactivates; hard-delete is trash-only and blocks any usage history. |
+| `restoreDiscounts` | `(db, discountIds)` | Restores trashed discounts as inactive drafts. Codes stay reserved in trash. |
+| `permanentlyDeleteDiscount` | `(db, id)` | Trash-only hard-delete blocked when order usage history exists. |
 
 ## Eligibility Functions (`discounts.eligibility.ts`)
 
 | Function | Signature | Notes |
 |----------|-----------|-------|
-| `isDiscountValid` | `(db, code, total?, cartItems?, customerPhone?, currencySymbol?)` | Validates a discount code against cart context. Returns `{ valid, discount?, applicableProductIds?, error? }`. |
+| `isDiscountValid` | `(db, code, total?, cartItems?, customerPhone?, currencySymbol?, currencyCode?)` | Validates a discount code against cart context. Returns `{ valid, discount?, applicableProductIds?, error? }`. |
 | `calculateDiscountAmount` | `(db, discount, total, cartItems, shippingCost?, precomputedProductIds?)` | Calculates the actual discount amount. Accepts optional `precomputedProductIds` to skip re-querying when called after `isDiscountValid`. |
 
 ### Validation Checks (`isDiscountValid`)
@@ -55,11 +55,11 @@ Three types defined in `@scalius/database/schema`:
 Checks performed in order:
 
 1. Code exists, is active, not soft-deleted, within date window
-2. Minimum purchase amount met
-3. Minimum quantity met (sum of cart item quantities)
-4. Total usage limit not exceeded (`maxUses` vs `discountUsage` count; advisory before checkout commit)
-5. Per-customer limit (`limitOnePerCustomer` via `discountUsage` joined with `orders.customerPhone`; advisory before checkout commit)
-6. Product applicability: for `amount_off_products`, cart must contain at least one product from linked products or collections
+2. Product/collection scope resolves fail-closed when any restriction exists
+3. Minimum purchase amount met (merchandise subtotal; eligible lines only for product scope)
+4. Minimum quantity met (eligible lines only for product scope)
+5. Total usage limit not exceeded (`maxUses` vs `discountUsage` count; advisory before checkout commit)
+6. Per-customer limit via immutable `discountCustomerRedemptions` phone claim (advisory before checkout commit)
 
 Returns `applicableProductIds` set for downstream use by `calculateDiscountAmount`.
 
@@ -86,7 +86,7 @@ Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 
 ## Validation Schemas (`discounts.validation.ts`)
 
-**`createDiscountSchema`**: Validates all discount fields and defaults `isActive` to false. Date handling accepts `Date`, `string`, or `number` (auto-detects seconds vs milliseconds). `appliesToProducts` and `appliesToCollections` are optional string arrays. Includes a refine check: percentage discounts cannot exceed 100%.
+**`createDiscountSchema`**: Validates all discount fields and defaults `isActive` to false. Date handling accepts valid `Date`, string, or numeric seconds/milliseconds, requires end after start, and rejects invalid dates. Product/collection targets are deduplicated and bounded to 90 total. Type/value semantics must agree, percentage discounts cannot exceed 100%, and unsupported segments/combination behavior is rejected.
 
 **`updateDiscountSchema`**: Same as create with required `id` field. Same percentage cap.
 
@@ -94,16 +94,16 @@ Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 
 ## Stacking / Combination Flags
 
-Three boolean flags on each discount:
+Three legacy boolean columns remain on each discount:
 - `combineWithProductDiscounts`
 - `combineWithOrderDiscounts`
 - `combineWithShippingDiscounts`
 
-These flags are stored and returned in validation responses but NOT enforced at checkout. Only one discount code per order is supported.
+Checkout supports one discount code per order, so these flags are forced false and are not exposed as working admin/public controls. `maxUsesPerOrder` is likewise fixed to one. Multi-code support requires a separate allocation and concurrency design.
 
 ## Dependencies
 
-- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage`, `discountCustomerRedemptions`, `orders`, `collections`, `products` tables, `DiscountType`, `DiscountValueType` enums
+- `@scalius/database` -- `discounts`, `discountProducts`, `discountCollections`, `discountUsage`, `discountCustomerRedemptions`, `collections`, `products` tables, `DiscountType`, `DiscountValueType` enums
 - `@scalius/core/search` -- `ftsMatch()` for FTS5 search
 - `@scalius/core/errors` -- `NotFoundError`, `ConflictError`
 - `@scalius/shared/price-utils` -- `roundPrice()`

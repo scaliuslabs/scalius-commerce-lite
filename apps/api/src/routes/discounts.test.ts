@@ -84,6 +84,7 @@ describe("public discount routes", () => {
       cartItems,
       "+8801711111111",
       "৳",
+      "BDT",
     );
     expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
       db,
@@ -93,6 +94,7 @@ describe("public discount routes", () => {
       80,
       ["prod_1"],
       "BDT",
+      undefined,
     );
     await expect(response.json()).resolves.toMatchObject({
       success: true,
@@ -102,11 +104,6 @@ describe("public discount routes", () => {
         discount: {
           id: "disc_1",
           code: "SAVE10",
-          combinable: {
-            withProductDiscounts: false,
-            withOrderDiscounts: false,
-            withShippingDiscounts: true,
-          },
         },
       },
     });

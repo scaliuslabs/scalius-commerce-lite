@@ -7,7 +7,7 @@ import {
     discountProducts,
     discountCollections,
     discountUsage,
-    orders,
+    discountCustomerRedemptions,
     collections,
     products,
     DiscountType,
@@ -32,64 +32,60 @@ async function expandCollectionsToProductIds(
         return productIds;
     }
 
-    try {
-        // Get all collections
-        const collectionsData = await db
-            .select()
-            .from(collections)
+    // Only an active, non-deleted collection can grant eligibility. A stale
+    // relation remains a restriction and must never turn into a cart-wide
+    // fallback.
+    const collectionsData = await db
+        .select()
+        .from(collections)
+        .where(
+            and(
+                inArray(collections.id, collectionIds),
+                eq(collections.isActive, true),
+                isNull(collections.deletedAt),
+            ),
+        )
+        .all();
+
+    // Extract all category IDs and product IDs from configs.
+    const allCategoryIds = new Set<string>();
+    const allProductIds = new Set<string>();
+
+    for (const collection of collectionsData) {
+        try {
+            const config = JSON.parse(collection.config);
+
+            if (Array.isArray(config.categoryIds)) {
+                config.categoryIds.forEach((id: string) => allCategoryIds.add(id));
+            }
+
+            if (Array.isArray(config.productIds)) {
+                config.productIds.forEach((id: string) => allProductIds.add(id));
+            }
+        } catch {
+            // Invalid persisted collection config grants no eligibility. The
+            // caller still knows the discount was restricted and fails closed.
+        }
+    }
+
+    // Add directly specified product IDs.
+    allProductIds.forEach((id) => productIds.add(id));
+
+    // Get all active products from the specified categories.
+    if (allCategoryIds.size > 0) {
+        const productsFromCategories = await db
+            .select({ id: products.id })
+            .from(products)
             .where(
                 and(
-                    inArray(collections.id, collectionIds),
-                    eq(collections.isActive, true),
-                    isNull(collections.deletedAt),
+                    inArray(products.categoryId, Array.from(allCategoryIds)),
+                    eq(products.isActive, true),
+                    isNull(products.deletedAt),
                 ),
             )
             .all();
 
-        // Extract all category IDs and product IDs from configs
-        const allCategoryIds = new Set<string>();
-        const allProductIds = new Set<string>();
-
-        for (const collection of collectionsData) {
-            try {
-                const config = JSON.parse(collection.config);
-
-                if (Array.isArray(config.categoryIds)) {
-                    config.categoryIds.forEach((id: string) => allCategoryIds.add(id));
-                }
-
-                if (Array.isArray(config.productIds)) {
-                    config.productIds.forEach((id: string) => allProductIds.add(id));
-                }
-            } catch (error: unknown) {
-                console.error(
-                    `Error parsing collection config for ${collection.id}:`,
-                    error,
-                );
-            }
-        }
-
-        // Add directly specified product IDs
-        allProductIds.forEach((id) => productIds.add(id));
-
-        // Get all products from the specified categories
-        if (allCategoryIds.size > 0) {
-            const productsFromCategories = await db
-                .select({ id: products.id })
-                .from(products)
-                .where(
-                    and(
-                        inArray(products.categoryId, Array.from(allCategoryIds)),
-                        eq(products.isActive, true),
-                        isNull(products.deletedAt),
-                    ),
-                )
-                .all();
-
-            productsFromCategories.forEach((p) => productIds.add(p.id));
-        }
-    } catch (error: unknown) {
-        console.error("Error expanding collections to product IDs:", error);
+        productsFromCategories.forEach((p) => productIds.add(p.id));
     }
 
     return productIds;
@@ -107,13 +103,19 @@ export async function isDiscountValid(
     cartItems: Array<{ id: string; price: number; quantity: number; variantId?: string }> = [],
     customerPhone?: string,
     currencySymbol: string = "",
+    currencyCode?: string | null,
 ) {
     // Normalize code to uppercase — codes are stored uppercase (Shopify convention),
     // but customers may type lowercase on the storefront.
-    const normalizedCode = code.toUpperCase();
+    const normalizedCode = code.trim().toUpperCase();
+    if (!normalizedCode) {
+        return { valid: false, error: "Invalid discount code" };
+    }
 
     // Get current timestamp
     const currentTime = Math.floor(Date.now() / 1000);
+    const effectiveCurrencyCode =
+        normalizeSupportedCurrencyCode(currencyCode) ?? DEFAULT_CURRENCY.code;
 
     // Query the discount code
     const discount = await db
@@ -134,22 +136,84 @@ export async function isDiscountValid(
         return { valid: false, error: "Invalid discount code" };
     }
 
-    // Check if minimum purchase amount is met
+    let applicableProductIds: Set<string> | undefined;
+    let hasProductRestrictions = false;
+
+    if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
+        try {
+            applicableProductIds = new Set<string>();
+
+            const discountProductsResult = await db
+                .select({ productId: discountProducts.productId })
+                .from(discountProducts)
+                .where(eq(discountProducts.discountId, discount.id))
+                .all();
+            hasProductRestrictions ||= discountProductsResult.length > 0;
+            discountProductsResult.forEach((relation) =>
+                applicableProductIds!.add(relation.productId),
+            );
+
+            const discountCollectionsResult = await db
+                .select({ collectionId: discountCollections.collectionId })
+                .from(discountCollections)
+                .where(eq(discountCollections.discountId, discount.id))
+                .all();
+            hasProductRestrictions ||= discountCollectionsResult.length > 0;
+
+            if (discountCollectionsResult.length > 0) {
+                const collectionIds = discountCollectionsResult.map(
+                    (relation) => relation.collectionId,
+                );
+                const productIdsFromCollections = await expandCollectionsToProductIds(
+                    db,
+                    collectionIds,
+                );
+                productIdsFromCollections.forEach((id) => applicableProductIds!.add(id));
+            }
+        } catch {
+            return { valid: false, error: "Unable to validate discount at this time" };
+        }
+
+        if (
+            hasProductRestrictions &&
+            !cartItems.some((item) => applicableProductIds!.has(item.id))
+        ) {
+            return {
+                valid: false,
+                error: "Discount code is not applicable to the items in your cart",
+            };
+        }
+    }
+
+    const requirementItems =
+        discount.type === DiscountType.AMOUNT_OFF_PRODUCTS && hasProductRestrictions
+            ? cartItems.filter((item) => applicableProductIds!.has(item.id))
+            : cartItems;
+    const requirementSubtotal =
+        discount.type === DiscountType.AMOUNT_OFF_PRODUCTS && cartItems.length > 0
+            ? roundPrice(
+                requirementItems.reduce(
+                    (sum, item) => sum + item.price * item.quantity,
+                    0,
+                ),
+                effectiveCurrencyCode,
+            )
+            : total;
+
     if (
         discount.minPurchaseAmount &&
-        total !== undefined &&
-        total < discount.minPurchaseAmount
+        requirementSubtotal !== undefined &&
+        requirementSubtotal < discount.minPurchaseAmount
     ) {
         return {
             valid: false,
             error: `Minimum purchase amount of ${currencySymbol}${discount.minPurchaseAmount} not met`,
-            minPurchaseAmount: discount.minPurchaseAmount
+            minPurchaseAmount: discount.minPurchaseAmount,
         };
     }
 
-    // Check minimum quantity
     if (discount.minQuantity) {
-        const totalQuantity = cartItems.reduce(
+        const totalQuantity = requirementItems.reduce(
             (sum, item) => sum + item.quantity,
             0,
         );
@@ -157,7 +221,7 @@ export async function isDiscountValid(
             return {
                 valid: false,
                 error: `Minimum quantity of ${discount.minQuantity} items not met`,
-                minQuantity: discount.minQuantity
+                minQuantity: discount.minQuantity,
             };
         }
     }
@@ -179,8 +243,7 @@ export async function isDiscountValid(
                     error: "Discount code has reached its usage limit"
                 };
             }
-        } catch (error: unknown) {
-            console.error("Error checking discount usage count:", error);
+        } catch {
             return { valid: false, error: "Unable to validate discount at this time" };
         }
     }
@@ -189,16 +252,15 @@ export async function isDiscountValid(
     if (discount.limitOnePerCustomer && customerPhone) {
         try {
             const customerUsageResult = await db
-                .select({ id: discountUsage.id })
-                .from(discountUsage)
-                .leftJoin(
-                    orders,
-                    eq(discountUsage.orderId, orders.id),
-                )
+                .select({ orderId: discountCustomerRedemptions.orderId })
+                .from(discountCustomerRedemptions)
                 .where(
                     and(
-                        eq(discountUsage.discountId, discount.id),
-                        eq(orders.customerPhone, customerPhone),
+                        eq(discountCustomerRedemptions.discountId, discount.id),
+                        eq(
+                            discountCustomerRedemptions.customerKey,
+                            `phone:${customerPhone.trim()}`,
+                        ),
                     ),
                 )
                 .limit(1)
@@ -210,61 +272,8 @@ export async function isDiscountValid(
                     error: "This discount code can only be used once per customer"
                 };
             }
-        } catch (error: unknown) {
-            console.error("Error checking customer discount usage:", error);
+        } catch {
             return { valid: false, error: "Unable to validate discount at this time" };
-        }
-    } else if (discount.limitOnePerCustomer && !customerPhone) {
-        console.log(
-            "One-use-per-customer discount, but no phone provided - validation will happen at checkout",
-        );
-    }
-
-    // For product-specific discounts, check if applicable products/collections are in cart.
-    // We also capture the expanded product IDs so the caller can pass them to
-    // calculateDiscountAmount() without re-querying the same data.
-    let applicableProductIds: Set<string> | undefined;
-
-    if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-        applicableProductIds = new Set<string>();
-
-        // Get directly linked product IDs
-        const discountProductsResult = await db
-            .select({ productId: discountProducts.productId })
-            .from(discountProducts)
-            .where(eq(discountProducts.discountId, discount.id))
-            .all();
-        discountProductsResult.forEach((dp) =>
-            applicableProductIds!.add(dp.productId),
-        );
-
-        // Get product IDs from linked collections
-        const discountCollectionsResult = await db
-            .select({ collectionId: discountCollections.collectionId })
-            .from(discountCollections)
-            .where(eq(discountCollections.discountId, discount.id))
-            .all();
-
-        if (discountCollectionsResult.length > 0) {
-            const collectionIds = discountCollectionsResult.map(
-                (dc) => dc.collectionId,
-            );
-            const productIdsFromCollections = await expandCollectionsToProductIds(
-                db,
-                collectionIds,
-            );
-            productIdsFromCollections.forEach((id) => applicableProductIds!.add(id));
-        }
-
-        // If we have specific product/collection restrictions and none of the cart items match
-        if (
-            applicableProductIds.size > 0 &&
-            !cartItems.some((item) => applicableProductIds!.has(item.id))
-        ) {
-            return {
-                valid: false,
-                error: "Discount code is not applicable to the items in your cart"
-            };
         }
     }
 
@@ -278,11 +287,9 @@ export async function isDiscountValid(
             valueType: discount.valueType,
             discountValue: discount.discountValue,
             minPurchaseAmount: discount.minPurchaseAmount,
-            combineWithProductDiscounts: discount.combineWithProductDiscounts,
-            combineWithOrderDiscounts: discount.combineWithOrderDiscounts,
-            combineWithShippingDiscounts: discount.combineWithShippingDiscounts
         },
         applicableProductIds,
+        hasProductRestrictions,
     };
 }
 
@@ -305,6 +312,7 @@ export async function calculateDiscountAmount(
     shippingCost: number = 0,
     precomputedProductIds?: Set<string>,
     currencyCode?: string | null,
+    precomputedHasProductRestrictions?: boolean,
 ): Promise<number> {
     const effectiveCurrencyCode = normalizeSupportedCurrencyCode(currencyCode) ?? DEFAULT_CURRENCY.code;
 
@@ -333,6 +341,7 @@ export async function calculateDiscountAmount(
         const subTotal = roundPrice(total - shippingCost, effectiveCurrencyCode);
 
         if (!cartItems || cartItems.length === 0) {
+            if (precomputedHasProductRestrictions) return 0;
             if (discount.valueType === DiscountValueType.PERCENTAGE) {
                 const calculatedDiscount = roundPrice(
                     (subTotal * discount.discountValue) / 100,
@@ -351,6 +360,7 @@ export async function calculateDiscountAmount(
         // Use pre-computed product IDs if available (avoids duplicate DB queries
         // when the caller already expanded them during validation).
         let applicableProductIds: Set<string>;
+        let hasProductRestrictions = precomputedHasProductRestrictions ?? false;
         if (precomputedProductIds) {
             applicableProductIds = precomputedProductIds;
         } else {
@@ -361,6 +371,7 @@ export async function calculateDiscountAmount(
                 .from(discountProducts)
                 .where(eq(discountProducts.discountId, discount.id))
                 .all();
+            hasProductRestrictions ||= discountProductsResult.length > 0;
             discountProductsResult.forEach((dp) =>
                 applicableProductIds.add(dp.productId),
             );
@@ -370,6 +381,7 @@ export async function calculateDiscountAmount(
                 .from(discountCollections)
                 .where(eq(discountCollections.discountId, discount.id))
                 .all();
+            hasProductRestrictions ||= discountCollectionsResult.length > 0;
 
             if (discountCollectionsResult.length > 0) {
                 const collectionIds = discountCollectionsResult.map(
@@ -393,7 +405,7 @@ export async function calculateDiscountAmount(
 
         // If products are specified but none match the cart, no discount applies.
         // Only fall back to subtotal when no product/collection restrictions exist.
-        if (applicableProductIds.size === 0) {
+        if (!hasProductRestrictions) {
             applicableProductsTotal = subTotal;
         } else if (applicableProductsTotal === 0) {
             return 0;
