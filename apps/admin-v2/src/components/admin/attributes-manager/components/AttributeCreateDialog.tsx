@@ -32,8 +32,9 @@ export function AttributeCreateDialog({
   const handleAddOption = () => {
     if (!newOption.trim()) return;
     const current = newAttribute.options || [];
-    if (!current.includes(newOption.trim())) {
-      onOptionsChange?.([...current, newOption.trim()]);
+    const nextOption = newOption.trim();
+    if (!current.some((option) => option.toLowerCase() === nextOption.toLowerCase())) {
+      onOptionsChange?.([...current, nextOption]);
     }
     setNewOption("");
   };
@@ -60,14 +61,14 @@ export function AttributeCreateDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="attr-name">
                 Attribute Name <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="attr-name"
-                placeholder="e.g., Brand, Color, Size"
+                placeholder="e.g., Material, Finish, Warranty"
                 value={newAttribute.name}
                 onChange={onNameChange}
                 autoFocus
@@ -79,7 +80,7 @@ export function AttributeCreateDialog({
               </Label>
               <Input
                 id="attr-slug"
-                placeholder="e.g., brand, color"
+                placeholder="e.g., material, finish"
                 value={newAttribute.slug}
                 onChange={(e) => onSlugChange(e.target.value)}
                 className="font-mono text-sm"
@@ -102,6 +103,7 @@ export function AttributeCreateDialog({
                 variant="outline"
                 onClick={handleAddOption}
                 disabled={!newOption.trim()}
+                aria-label="Add predefined value"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -119,6 +121,7 @@ export function AttributeCreateDialog({
                       type="button"
                       onClick={() => handleRemoveOption(option)}
                       className="ml-1 hover:bg-muted rounded-full p-0.5"
+                      aria-label={`Remove ${option}`}
                     >
                       <X className="h-3 w-3" />
                     </button>

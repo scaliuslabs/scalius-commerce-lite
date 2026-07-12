@@ -4,6 +4,7 @@ import {
     isValidResourceCanonicalPath,
     normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
+import { isCatalogDiscoveryImageSource } from "@scalius/shared/catalog-discovery-media";
 
 const canonicalPathSchema = z
     .string()
@@ -17,7 +18,9 @@ const canonicalPathSchema = z
 const imageSchema = z
     .object({
         id: z.string(),
-        url: z.string(),
+        url: z.string().refine(isCatalogDiscoveryImageSource, {
+            message: "Category image must be a relative path or an absolute HTTP(S) URL.",
+        }),
         filename: z.string(),
         size: z.number(),
         createdAt: z
@@ -27,7 +30,7 @@ const imageSchema = z
     })
     .nullable();
 
-export const createCategorySchema = z.object({
+const categorySchema = z.object({
     name: z.string().min(3).max(100),
     description: z.string().nullable(),
     slug: z
@@ -43,7 +46,21 @@ export const createCategorySchema = z.object({
     image: imageSchema,
 });
 
-export const updateCategorySchema = createCategorySchema;
+function requireCanonicalCategoryHandle(
+    value: { slug: string; canonicalPath?: string | null },
+    context: z.RefinementCtx,
+): void {
+    if (value.canonicalPath !== null && value.canonicalPath !== `/categories/${value.slug}`) {
+        context.addIssue({
+            code: "custom",
+            path: ["canonicalPath"],
+            message: "Canonical path must use this category's current slug until URL aliases are supported.",
+        });
+    }
+}
+
+export const createCategorySchema = categorySchema.superRefine(requireCanonicalCategoryHandle);
+export const updateCategorySchema = categorySchema.superRefine(requireCanonicalCategoryHandle);
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

@@ -2,10 +2,11 @@
 // Public/storefront attribute queries for use by API routes.
 
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
-import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { publicProductHasBuyerResolvableSku } from "../products/products.public-eligibility";
 import { ValidationError } from "@scalius/core/errors";
+import { ftsMatch } from "../../search/fts5";
 
 export interface PublicAttributeFilter {
     id: string;
@@ -139,7 +140,7 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
         return { filters: [] };
     }
 
-    const attributeIds = filterableAttributes.map((attr) => attr.id);
+    const attributeIdsJson = JSON.stringify(filterableAttributes.map((attr) => attr.id));
     const uniqueValues = await db
         .selectDistinct({
             attributeId: productAttributeValues.attributeId,
@@ -155,7 +156,9 @@ export async function getPublicFilterableAttributes(db: Database): Promise<{ fil
                 publicProductHasBuyerResolvableSku(),
             ),
         )
-        .where(inArray(productAttributeValues.attributeId, attributeIds));
+        .where(sql`${productAttributeValues.attributeId} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${attributeIdsJson})
+        )`);
 
     const filters = filterableAttributes
         .map((attr) => ({
@@ -220,6 +223,7 @@ export async function getPublicAttributesByProductIds(
 ): Promise<{ filters: PublicAttributeFilter[] }> {
     if (productIds.length === 0) return { filters: [] };
 
+    const productIdsJson = JSON.stringify([...new Set(productIds)]);
     const attrs = await db
         .selectDistinct({
             attributeId: productAttributeValues.attributeId,
@@ -245,7 +249,57 @@ export async function getPublicAttributesByProductIds(
                 publicProductHasBuyerResolvableSku(),
             ),
         )
-        .where(inArray(productAttributeValues.productId, productIds));
+        .where(sql`${productAttributeValues.productId} IN (
+            SELECT CAST(value AS TEXT) FROM json_each(${productIdsJson})
+        )`);
+
+    return { filters: groupAttributeValues(attrs) };
+}
+
+/**
+ * Returns facets from the exact buyer-visible product set matched by search.
+ * This deliberately keeps the FTS predicate in the attribute query: expanding
+ * from matching category IDs would advertise values that produce zero results.
+ */
+export async function getPublicAttributesForSearch(
+    db: Database,
+    search: string,
+    categoryId?: string,
+): Promise<{ filters: PublicAttributeFilter[] }> {
+    const searchCondition = ftsMatch("products_fts", "products", search);
+    if (!searchCondition) return { filters: [] };
+
+    const productConditions: SQL[] = [
+        eq(products.isActive, true),
+        isNull(products.deletedAt),
+        publicProductHasBuyerResolvableSku(),
+        searchCondition,
+    ];
+    if (categoryId) productConditions.push(eq(products.categoryId, categoryId));
+
+    const attrs = await db
+        .selectDistinct({
+            attributeId: productAttributeValues.attributeId,
+            attributeName: productAttributes.name,
+            attributeSlug: productAttributes.slug,
+            value: productAttributeValues.value,
+        })
+        .from(productAttributeValues)
+        .innerJoin(
+            productAttributes,
+            and(
+                eq(productAttributeValues.attributeId, productAttributes.id),
+                eq(productAttributes.filterable, true),
+                isNull(productAttributes.deletedAt),
+            ),
+        )
+        .innerJoin(
+            products,
+            and(
+                eq(productAttributeValues.productId, products.id),
+                ...productConditions,
+            ),
+        );
 
     return { filters: groupAttributeValues(attrs) };
 }

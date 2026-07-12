@@ -88,6 +88,15 @@ describe("category permanent delete integrity", () => {
     expect(source).toContain("await bulkDeleteCategories(db, [id], true)");
   });
 
+  it("routes single soft delete through the same atomic bulk guard", () => {
+    const source = readFileSync(
+      new URL("./categories.service.ts", import.meta.url),
+      "utf8",
+    );
+    expect(source).toContain("await bulkDeleteCategories(db, [id], false)");
+    expect(source).toContain("categoryDeleteUsageGuard(db, uniqueCategoryIds)");
+  });
+
   it("fails closed when a product is assigned after the initial usage read", async () => {
     let selectCount = 0;
     const db = {
