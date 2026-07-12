@@ -2,7 +2,8 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getInventoryOverview, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema } from "@scalius/core/modules/inventory";
+import { stream } from "hono/streaming";
+import { getInventoryOverview, listInventoryMovements, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -10,8 +11,11 @@ import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import { invalidateProductAvailabilityCaches } from "../../utils/cache-invalidation";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
+import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const INVENTORY_MOVEMENT_EXPORT_MAX_ROWS = 5_000;
+const INVENTORY_MOVEMENT_EXPORT_PAGE_SIZE = 100;
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
@@ -66,7 +70,15 @@ const inventoryMovementSchema = z.object({
     createdAt: z.union([z.string(), z.number()]),
     variantSku: z.string().nullable(),
     productName: z.string().nullable(),
+    actorName: z.string(),
+    actorType: z.enum(["system", "admin", "former_admin"]),
 }).passthrough();
+
+const inventoryMovementPageInfoSchema = z.object({
+    limit: z.number().int().min(1).max(100),
+    hasMore: z.boolean(),
+    nextCursor: z.string().nullable(),
+});
 
 const inventoryLedgerHealthSchema = z.object({
     legacyRows: z.number().int().nonnegative(),
@@ -100,7 +112,46 @@ const inventoryOverviewSchema = z.object({
     pagination: paginationSchema.optional(),
     stats: inventoryStatsSchema.optional(),
     ledgerHealth: inventoryLedgerHealthSchema.optional(),
+    pageInfo: inventoryMovementPageInfoSchema.optional(),
 }).passthrough();
+
+function movementCsvCell(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    let text = String(value);
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+}
+
+function movementTimestampIso(value: string | number | Date): string {
+    const date = value instanceof Date
+        ? value
+        : new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1_000 : value);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : "";
+}
+
+function inventoryMovementCsvRow(movement: Awaited<ReturnType<typeof listInventoryMovements>>["movements"][number]): string {
+    return [
+        movementTimestampIso(movement.createdAt),
+        movement.id,
+        movement.type,
+        movement.variantSku,
+        movement.productName,
+        movement.orderId,
+        movement.actorName,
+        movement.pool,
+        movement.reservationGeneration,
+        movement.stockDelta,
+        movement.previousStock,
+        movement.newStock,
+        movement.reservedStockDelta,
+        movement.previousReservedStock,
+        movement.newReservedStock,
+        movement.preorderStockDelta,
+        movement.previousPreorderStock,
+        movement.newPreorderStock,
+        movement.notes,
+    ].map(movementCsvCell).join(",");
+}
 
 const adjustResultSchema = z.object({
     variantId: z.string(),
@@ -149,12 +200,19 @@ const listRoute = createRoute({
     request: {
         query: z.object({
             section: z.enum(["variants", "movements", "alerts"]).optional().default("variants").openapi({ description: "Section type" }),
-            search: z.string().trim().max(120).optional().default("").openapi({ description: "Product, SKU, or order search term" }),
+            search: z.string().trim().max(120).optional().default("").openapi({ description: "Product or SKU search term" }),
             status: z.enum(["all", "low", "out", "reserved"]).optional().default("all").openapi({ description: "Variant stock status filter" }),
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(100).default(50).openapi({ description: "Items per page" }),
             alertStatus: z.enum(["active", "acknowledged", "resolved", "all"]).optional().openapi({ description: "Alert status filter" }),
             movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all").openapi({ description: "Movement type filter" }),
+            movementOrderId: z.string().trim().max(100).optional().openapi({ description: "Exact order ID filter for movements" }),
+            movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement start date (YYYY-MM-DD, Bangladesh calendar day)" }),
+            movementEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement end date (YYYY-MM-DD, Bangladesh calendar day)" }),
+            movementCursor: z.string().max(512).optional().openapi({ description: "Opaque cursor for the next movement page" }),
+            movementHealthOnly: z.enum(["true"]).optional().openapi({ description: "Return only ledger health diagnostics" }),
+            format: z.enum(["json", "csv"]).optional().default("json").openapi({ description: "Response format; CSV is supported for movement history" }),
+            maxRows: z.coerce.number().int().min(1).max(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS).optional().default(1_000).openapi({ description: "Maximum CSV rows, hard-capped at 5000" }),
             sort: z.enum(["productName", "sku", "available"]).optional().default("available").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
         })
@@ -162,7 +220,10 @@ const listRoute = createRoute({
     responses: {
         200: {
             description: "Inventory overview",
-            content: { "application/json": { schema: successEnvelope(inventoryOverviewSchema) } },
+            content: {
+                "application/json": { schema: successEnvelope(inventoryOverviewSchema) },
+                "text/csv": { schema: z.string() },
+            },
         },
     }
 });
@@ -171,6 +232,53 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     try {
+        const movementStartDate = parseBangladeshDateOnlyBoundary(query.movementStartDate, "start");
+        const movementEndDate = parseBangladeshDateOnlyBoundary(query.movementEndDate, "end");
+        if (query.movementStartDate && !movementStartDate) throw new ValidationError("Invalid movement start date");
+        if (query.movementEndDate && !movementEndDate) throw new ValidationError("Invalid movement end date");
+        if (movementStartDate && movementEndDate && movementStartDate > movementEndDate) {
+            throw new ValidationError("Movement start date must not be after end date");
+        }
+
+        if (query.format === "csv") {
+            if (query.section !== "movements") {
+                throw new ValidationError("CSV export is available only for inventory movements");
+            }
+            const filename = `inventory-movements-${new Date().toISOString().slice(0, 10)}.csv`;
+            c.header("Content-Disposition", `attachment; filename="${filename}"`);
+            c.header("Content-Type", "text/csv; charset=utf-8");
+            c.header("Cache-Control", "private, no-store");
+            c.header("X-Content-Type-Options", "nosniff");
+            c.header("X-Export-Max-Rows", String(query.maxRows));
+            return stream(c, async (stream) => {
+                await stream.write([
+                    "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order ID", "Actor",
+                    "Pool", "Generation", "Stock delta", "Stock before", "Stock after",
+                    "Reserved delta", "Reserved before", "Reserved after", "Preorder delta",
+                    "Preorder before", "Preorder after", "Notes",
+                ].map(movementCsvCell).join(",") + "\n");
+
+                let cursor: string | undefined;
+                let written = 0;
+                while (!stream.aborted && written < query.maxRows) {
+                    const result = await listInventoryMovements(db, {
+                        search: query.search,
+                        movementType: query.movementType,
+                        orderId: query.movementOrderId,
+                        startDate: movementStartDate,
+                        endDate: movementEndDate,
+                        cursor,
+                        limit: Math.min(INVENTORY_MOVEMENT_EXPORT_PAGE_SIZE, query.maxRows - written),
+                    });
+                    if (result.movements.length === 0) break;
+                    await stream.write(result.movements.map(inventoryMovementCsvRow).join("\n") + "\n");
+                    written += result.movements.length;
+                    if (!result.pageInfo.hasMore || !result.pageInfo.nextCursor) break;
+                    cursor = result.pageInfo.nextCursor;
+                }
+            });
+        }
+
         const result = await getInventoryOverview(db, {
             section: query.section,
             search: query.search,
@@ -179,6 +287,11 @@ app.openapi(listRoute, async (c) => {
             limit: query.limit,
             alertStatus: query.alertStatus,
             movementType: query.movementType,
+            movementOrderId: query.movementOrderId,
+            movementStartDate,
+            movementEndDate,
+            movementCursor: query.movementCursor,
+            movementHealthOnly: query.movementHealthOnly === "true",
             sort: query.sort,
             order: query.order,
         });

@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown, Check } from "lucide-react";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown, Check, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -50,7 +50,7 @@ import {
   stockSet,
   type InventoryAlert,
   type InventoryMovement,
-  type InventoryLedgerHealth,
+  type InventoryMovementPageInfo,
   type InventoryPagination,
   type InventoryStats,
   type InventoryVariant,
@@ -153,10 +153,26 @@ function getMovementCounterChanges(movement: InventoryMovement): MovementCounter
   }];
 }
 
+function movementDate(dateValue: string | number): Date {
+  return new Date(
+    typeof dateValue === "number" && dateValue < 10_000_000_000
+      ? dateValue * 1000
+      : dateValue,
+  );
+}
+
+function formatMovementTimestamp(dateValue: string | number): string {
+  const date = movementDate(dateValue);
+  if (!Number.isFinite(date.getTime())) return "Invalid timestamp";
+  return new Intl.DateTimeFormat("en-BD", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+    timeZone: "Asia/Dhaka",
+  }).format(date);
+}
+
 function timeAgo(dateValue: string | number) {
-  const dateStr =
-    typeof dateValue === "number" ? dateValue * 1000 : dateValue;
-  const date = new Date(dateStr);
+  const date = movementDate(dateValue);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -214,9 +230,12 @@ export function InventoryManager() {
   const [activeTab, setActiveTab] = useState<Tab>("variants");
   const [requestedPage, setRequestedPage] = useState(1);
   const [requestedLimit, setRequestedLimit] = useState(50);
-  const [movementsRequestedPage, setMovementsRequestedPage] = useState(1);
   const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
+  const [movementCursorHistory, setMovementCursorHistory] = useState<string[]>([""]);
   const [movementLocalSearch, setMovementLocalSearch] = useState("");
+  const [movementOrderId, setMovementOrderId] = useState("");
+  const [movementStartDate, setMovementStartDate] = useState("");
+  const [movementEndDate, setMovementEndDate] = useState("");
   const [movementType, setMovementType] = useState<MovementTypeFilter>("all");
   const [alertsRequestedPage, setAlertsRequestedPage] = useState(1);
   const [alertsRequestedLimit, setAlertsRequestedLimit] = useState(20);
@@ -230,6 +249,7 @@ export function InventoryManager() {
   const queryClient = useQueryClient();
   const search = useDebounce(localSearch, 300);
   const movementSearch = useDebounce(movementLocalSearch, 300);
+  const debouncedMovementOrderId = useDebounce(movementOrderId, 300);
   const alertSearch = useDebounce(alertLocalSearch, 300);
 
   // TanStack Query — variants
@@ -253,10 +273,24 @@ export function InventoryManager() {
       section: "movements",
       search: movementSearch || undefined,
       movementType,
-      page: movementsRequestedPage,
+      movementOrderId: debouncedMovementOrderId.trim() || undefined,
+      movementStartDate: movementStartDate || undefined,
+      movementEndDate: movementEndDate || undefined,
+      movementCursor: movementCursorHistory.at(-1) || undefined,
       limit: movementsRequestedLimit,
     }),
     placeholderData: keepPreviousData,
+    enabled: activeTab === "movements",
+  });
+
+  const movementHealthQuery = useQuery({
+    ...inventoryQueryOptions({
+      section: "movements",
+      movementHealthOnly: true,
+      page: 1,
+      limit: 1,
+    }),
+    staleTime: 5 * 60 * 1000,
     enabled: activeTab === "movements",
   });
 
@@ -298,13 +332,11 @@ export function InventoryManager() {
     const raw = movementsQuery.data;
     if (!raw) return {
       movements: [] as InventoryMovement[],
-      pagination: null as InventoryPagination | null,
-      ledgerHealth: null as InventoryLedgerHealth | null,
+      pageInfo: null as InventoryMovementPageInfo | null,
     };
     return {
       movements: raw.movements || [],
-      pagination: raw.pagination || null,
-      ledgerHealth: raw.ledgerHealth || null,
+      pageInfo: raw.pageInfo || null,
     };
   }, [movementsQuery.data]);
 
@@ -321,7 +353,8 @@ export function InventoryManager() {
   }, [alertsQuery.data]);
 
   const { variants, stats, pagination } = variantsData;
-  const { movements, pagination: movementsPagination, ledgerHealth } = movementsData;
+  const { movements, pageInfo: movementsPageInfo } = movementsData;
+  const ledgerHealth = movementHealthQuery.data?.ledgerHealth || null;
   const { alerts, pagination: alertsPagination } = alertsData;
 
   const loading = activeTab === "variants"
@@ -350,7 +383,27 @@ export function InventoryManager() {
   }, []);
 
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
-  const hasMovementFilters = movementLocalSearch.trim() || movementType !== "all";
+  const hasMovementFilters = Boolean(
+    movementLocalSearch.trim()
+    || movementOrderId.trim()
+    || movementStartDate
+    || movementEndDate
+    || movementType !== "all",
+  );
+
+  const movementExportHref = useMemo(() => {
+    const params = new URLSearchParams({
+      section: "movements",
+      format: "csv",
+      maxRows: "5000",
+      movementType,
+    });
+    if (movementSearch) params.set("search", movementSearch);
+    if (debouncedMovementOrderId.trim()) params.set("movementOrderId", debouncedMovementOrderId.trim());
+    if (movementStartDate) params.set("movementStartDate", movementStartDate);
+    if (movementEndDate) params.set("movementEndDate", movementEndDate);
+    return `/api/v1/admin/inventory?${params.toString()}`;
+  }, [debouncedMovementOrderId, movementEndDate, movementSearch, movementStartDate, movementType]);
 
   const reviewAlertSku = useCallback((alert: InventoryAlert) => {
     setLocalSearch(alert.variantSku || alert.variantId);
@@ -716,26 +769,37 @@ export function InventoryManager() {
             aria-busy={movementsQuery.isFetching}
             className="p-2 sm:p-3 space-y-2"
           >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative flex-1 sm:max-w-xs">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(180px,.8fr)_160px_150px_150px_auto]">
+              <div className="relative">
                 <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   type="search"
-                  aria-label="Search movements by product, SKU, or order"
-                  placeholder="Search product, SKU, or order..."
+                  aria-label="Search movements by product or SKU"
+                  placeholder="Search product or SKU..."
                   value={movementLocalSearch}
                   onChange={(event) => {
                     setMovementLocalSearch(event.target.value);
-                    setMovementsRequestedPage(1);
+                    setMovementCursorHistory([""]);
                   }}
                   className="h-8 pl-7 text-sm"
                 />
               </div>
+              <Input
+                type="search"
+                aria-label="Filter movements by exact order ID"
+                placeholder="Exact order ID"
+                value={movementOrderId}
+                onChange={(event) => {
+                  setMovementOrderId(event.target.value);
+                  setMovementCursorHistory([""]);
+                }}
+                className="h-8 text-sm"
+              />
               <Select value={movementType} onValueChange={(value: MovementTypeFilter) => {
                 setMovementType(value);
-                setMovementsRequestedPage(1);
+                setMovementCursorHistory([""]);
               }}>
-                <SelectTrigger className="h-8 w-[160px] text-sm" aria-label="Filter movement type">
+                <SelectTrigger className="h-8 w-full text-sm" aria-label="Filter movement type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -749,21 +813,53 @@ export function InventoryManager() {
                   <SelectItem value="preorder_deducted">Preorder deducted</SelectItem>
                 </SelectContent>
               </Select>
-              {hasMovementFilters ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-1.5 text-sm text-muted-foreground"
-                  onClick={() => {
-                    setMovementLocalSearch("");
-                    setMovementType("all");
-                    setMovementsRequestedPage(1);
-                  }}
-                >
-                  <X className="mr-1 h-3.5 w-3.5" /> Clear
+              <Input
+                type="date"
+                aria-label="Movement start date"
+                max={movementEndDate || undefined}
+                value={movementStartDate}
+                onChange={(event) => {
+                  setMovementStartDate(event.target.value);
+                  setMovementCursorHistory([""]);
+                }}
+                className="h-8 text-sm"
+              />
+              <Input
+                type="date"
+                aria-label="Movement end date"
+                min={movementStartDate || undefined}
+                value={movementEndDate}
+                onChange={(event) => {
+                  setMovementEndDate(event.target.value);
+                  setMovementCursorHistory([""]);
+                }}
+                className="h-8 text-sm"
+              />
+              <div className="flex items-center justify-end gap-1">
+                {hasMovementFilters ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-1.5 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setMovementLocalSearch("");
+                      setMovementOrderId("");
+                      setMovementStartDate("");
+                      setMovementEndDate("");
+                      setMovementType("all");
+                      setMovementCursorHistory([""]);
+                    }}
+                  >
+                    <X className="mr-1 h-3.5 w-3.5" /> Clear
+                  </Button>
+                ) : null}
+                <Button asChild type="button" variant="outline" size="sm" className="h-8 px-2 text-xs">
+                  <a href={movementExportHref} download>
+                    <Download className="mr-1 h-3.5 w-3.5" /> Export CSV
+                  </a>
                 </Button>
-              ) : null}
+              </div>
             </div>
             {ledgerHealth ? (
               <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -807,7 +903,7 @@ export function InventoryManager() {
                   ) : movementsQuery.isLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center"><RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : movements.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-xs text-muted-foreground">No movements recorded yet.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="h-24 text-center text-xs text-muted-foreground">{hasMovementFilters ? "No movements match these filters." : "No movements recorded yet."}</TableCell></TableRow>
                   ) : (
                     movements.map((m) => {
                       const badge = getMovementBadge(m.type);
@@ -837,7 +933,10 @@ export function InventoryManager() {
                             ) : null}
                           </TableCell>
                           <TableCell className="py-2 text-xs text-muted-foreground truncate max-w-[200px]">
-                            {m.notes || "\u2014"}
+                            <div className="truncate">{m.notes || "\u2014"}</div>
+                            <div className="mt-0.5 truncate text-[11px] text-muted-foreground/80">
+                              {m.actorType === "system" ? "System" : `By ${m.actorName}`}
+                            </div>
                           </TableCell>
                           <TableCell className="py-2 text-right">
                             <div className="space-y-0.5">
@@ -852,7 +951,10 @@ export function InventoryManager() {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap py-2 pr-3 text-right text-xs text-muted-foreground">
+                          <TableCell
+                            className="whitespace-nowrap py-2 pr-3 text-right text-xs text-muted-foreground"
+                            title={formatMovementTimestamp(m.createdAt)}
+                          >
                             {timeAgo(m.createdAt)}
                           </TableCell>
                         </TableRow>
@@ -862,11 +964,22 @@ export function InventoryManager() {
                 </TableBody>
               </Table>
             </div>
-            <PaginationControls
-              pagination={movementsPagination}
-              onPageChange={(page) => setMovementsRequestedPage(page)}
-              onLimitChange={(limit) => { setMovementsRequestedLimit(limit); setMovementsRequestedPage(1); }}
-              itemName="movements"
+            <MovementCursorControls
+              page={movementCursorHistory.length}
+              limit={movementsRequestedLimit}
+              canGoBack={movementCursorHistory.length > 1}
+              canGoForward={Boolean(movementsPageInfo?.hasMore && movementsPageInfo.nextCursor)}
+              loading={movementsQuery.isFetching}
+              onBack={() => setMovementCursorHistory((history) => history.length > 1 ? history.slice(0, -1) : history)}
+              onForward={() => {
+                const nextCursor = movementsPageInfo?.nextCursor;
+                if (!nextCursor) return;
+                setMovementCursorHistory((history) => history.at(-1) === nextCursor ? history : [...history, nextCursor]);
+              }}
+              onLimitChange={(limit) => {
+                setMovementsRequestedLimit(limit);
+                setMovementCursorHistory([""]);
+              }}
             />
           </div>
         )}
@@ -907,6 +1020,66 @@ function PaginationControls({
       onLimitChange={onLimitChange}
       pageSizeOptions={[10, 20, 50, 100]}
     />
+  );
+}
+
+function MovementCursorControls({
+  page,
+  limit,
+  canGoBack,
+  canGoForward,
+  loading,
+  onBack,
+  onForward,
+  onLimitChange,
+}: {
+  page: number;
+  limit: number;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  loading: boolean;
+  onBack: () => void;
+  onForward: () => void;
+  onLimitChange: (limit: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 px-0.5 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2">
+        <span>Page {page}</span>
+        <Select value={String(limit)} onValueChange={(value) => onLimitChange(Number(value))}>
+          <SelectTrigger className="h-7 w-[116px] text-xs" aria-label="Movement rows per page">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[20, 50, 100].map((size) => (
+              <SelectItem key={size} value={String(size)}>{size} per page</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={!canGoBack || loading}
+          onClick={onBack}
+        >
+          <ChevronLeft className="mr-1 h-3.5 w-3.5" /> Previous
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={!canGoForward || loading}
+          onClick={onForward}
+        >
+          Next <ChevronRight className="ml-1 h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
   );
 }
 
