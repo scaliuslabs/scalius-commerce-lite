@@ -15,3 +15,4 @@ export * from "./order-support-requests";
 export * from "./order-returns";
 export * from "./order-returns.validation";
 export * from "./admin-status-policy";
+export * from "./abandoned-checkout-snapshot";

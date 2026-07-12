@@ -63,6 +63,27 @@ describe("abandoned checkout cleanup", () => {
             customerPhone: null,
         })).toBe(false);
         expect(isAbandonedCheckoutEmpty({
+            checkoutData: JSON.stringify({
+                cart: { items: [{ id: "variant_1" }], totalAmount: 1200 },
+            }),
+            customerPhone: null,
+        })).toBe(false);
+        expect(isAbandonedCheckoutEmpty({
+            checkoutData: JSON.stringify({
+                cart: { items: [], totalAmount: 0 },
+                customerEmail: "buyer@example.com",
+            }),
+            customerPhone: null,
+        })).toBe(false);
+        expect(isAbandonedCheckoutEmpty({
+            checkoutData: JSON.stringify({
+                id: "order_1",
+                paymentMethod: "sslcommerz",
+                paymentStatus: "failed",
+            }),
+            customerPhone: null,
+        })).toBe(false);
+        expect(isAbandonedCheckoutEmpty({
             checkoutData: JSON.stringify({ items: [], customerInfo: { name: "Buyer" } }),
             customerPhone: null,
         })).toBe(false);

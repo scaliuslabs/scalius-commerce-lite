@@ -47,6 +47,7 @@ import {
   ArrowUpDown,
   Eye,
   Mail,
+  MessageSquareText,
   MapPin,
   Package,
   X,
@@ -132,7 +133,7 @@ const CheckoutRow = React.memo(
     );
 
     return (
-      <TableRow data-state={isSelected ? "selected" : undefined}>
+      <TableRow className="h-11" data-state={isSelected ? "selected" : undefined}>
         <TableCell className="w-10">
           {canDelete && (
             <Checkbox
@@ -216,17 +217,19 @@ const DetailsModal = ({
 
   return (
     <Dialog open={!!checkout} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-2xl gap-0 p-0 overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Checkout Details</DialogTitle>
-          <DialogDescription>
-            Full data for checkout{" "}
-            <span className="font-mono text-xs">
-              {getCheckoutDisplayId(checkout)}
-            </span>
-          </DialogDescription>
+          <div className="border-b px-5 py-4">
+            <DialogTitle>Incomplete checkout</DialogTitle>
+            <DialogDescription>
+              Saved recovery context for{" "}
+              <span className="font-mono text-xs">
+                {getCheckoutDisplayId(checkout)}
+              </span>
+            </DialogDescription>
+          </div>
         </DialogHeader>
-        <div className="grid md:grid-cols-2 gap-x-8 gap-y-6 py-4 max-h-[60vh] overflow-y-auto p-2">
+        <div className="grid max-h-[65vh] gap-5 overflow-y-auto p-5 md:grid-cols-2">
           {display.kind === "stale_hosted_payment_order" && (
             <div className="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -256,7 +259,7 @@ const DetailsModal = ({
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <User className="h-5 w-5 text-primary" /> Customer Information
             </h3>
-            <div className="space-y-3 text-sm p-4 bg-muted/50 rounded-lg border">
+            <div className="space-y-2.5 rounded-md border bg-muted/30 p-3 text-sm">
               <p className="flex items-start gap-3">
                 <User className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
                 <span>
@@ -276,12 +279,22 @@ const DetailsModal = ({
                   <strong>Address:</strong> {customerInfo.address || "N/A"}
                 </span>
               </p>
-              <p className="flex items-start gap-3">
-                <Mail className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
-                <span>
-                  <strong>Notes:</strong> {customerInfo.notes || "N/A"}
-                </span>
-              </p>
+              {customerInfo.email && (
+                <p className="flex items-start gap-3">
+                  <Mail className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
+                  <span className="break-all">
+                    <strong>Email:</strong> {customerInfo.email}
+                  </span>
+                </p>
+              )}
+              {customerInfo.notes && (
+                <p className="flex items-start gap-3">
+                  <MessageSquareText className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
+                  <span>
+                    <strong>Notes:</strong> {customerInfo.notes}
+                  </span>
+                </p>
+              )}
             </div>
           </div>
           <div className="space-y-4">
@@ -306,9 +319,14 @@ const DetailsModal = ({
                           Qty: {item.quantity} &times;{" "}
                           {formatCurrency(item.price, symbol)}
                         </p>
+                        {item.options && item.options.length > 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {item.options.map((option) => `${option.name}: ${option.value}`).join(" · ")}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <p className="font-mono text-sm font-semibold">
+                    <p className="font-mono text-sm font-semibold" title="Saved cart estimate; checkout will revalidate price and availability">
                       {formatCurrency(item.price * item.quantity, symbol)}
                     </p>
                   </div>
@@ -321,13 +339,13 @@ const DetailsModal = ({
             </div>
             {items.length > 0 && (
               <div className="flex justify-between font-bold text-lg border-t pt-3 mt-3">
-                <span>Total</span>
+                <span>Saved cart estimate</span>
                 <span>{formatCurrency(total, symbol)}</span>
               </div>
             )}
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t px-5 py-3">
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
@@ -476,7 +494,7 @@ export function AbandonedCheckoutsManager() {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -484,13 +502,14 @@ export function AbandonedCheckoutsManager() {
               placeholder="Search by phone, ID, or cart items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 pr-8"
+              className="h-9 pl-8 pr-8"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear incomplete checkout search"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -513,6 +532,7 @@ export function AbandonedCheckoutsManager() {
               onClick={refresh}
               disabled={isFetching}
               variant="outline"
+              size="sm"
             >
               {isFetching ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -524,18 +544,18 @@ export function AbandonedCheckoutsManager() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
-          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
-          <p className="text-xs text-blue-700 dark:text-blue-300">
+        <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+          <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
             Showing active checkout sessions and archived hosted-payment orders
             that need recovery context. Empty sessions older than 1 hour and any
             session older than 30 days are automatically cleared.
           </p>
         </div>
 
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="p-0">
-            <div className="border rounded-lg overflow-hidden relative">
+            <div className="relative">
               {isFetching && checkouts.length > 0 && (
                 <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
               )}
@@ -550,28 +570,38 @@ export function AbandonedCheckoutsManager() {
                             checkouts.length > 0 &&
                             selectedIds.size === checkouts.length
                           }
+                          aria-label="Select all incomplete checkouts on this page"
                         />
                       )}
                     </TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none"
-                      onClick={() => handleSort("checkoutId")}
-                    >
-                      ID {renderSortArrow("checkoutId")}
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center font-medium hover:text-foreground"
+                        onClick={() => handleSort("checkoutId")}
+                      >
+                        ID {renderSortArrow("checkoutId")}
+                      </button>
                     </TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none"
-                      onClick={() => handleSort("customerPhone")}
-                    >
-                      Customer {renderSortArrow("customerPhone")}
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center font-medium hover:text-foreground"
+                        onClick={() => handleSort("customerPhone")}
+                      >
+                        Customer {renderSortArrow("customerPhone")}
+                      </button>
                     </TableHead>
                     <TableHead>Stage</TableHead>
-                    <TableHead>Cart</TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none"
-                      onClick={() => handleSort("updatedAt")}
-                    >
-                      Last Updated {renderSortArrow("updatedAt")}
+                    <TableHead>Saved cart</TableHead>
+                    <TableHead>
+                      <button
+                        type="button"
+                        className="flex items-center font-medium hover:text-foreground"
+                        onClick={() => handleSort("updatedAt")}
+                      >
+                        Last updated {renderSortArrow("updatedAt")}
+                      </button>
                     </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>

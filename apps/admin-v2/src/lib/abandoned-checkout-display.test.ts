@@ -13,7 +13,13 @@ describe("abandoned checkout display parsing", () => {
         cart: {
           totalAmount: 1200,
           items: [
-            { id: "item_1", name: "Shoe", quantity: 2, price: 600 },
+            {
+              id: "item_1",
+              name: "Shoe",
+              quantity: 2,
+              price: 600,
+              options: [{ name: "Color", value: "Sand" }],
+            },
           ],
         },
       }),
@@ -30,6 +36,27 @@ describe("abandoned checkout display parsing", () => {
       },
     });
     expect(display.items).toHaveLength(1);
+    expect(display.items[0]?.options).toEqual([{ name: "Color", value: "Sand" }]);
+  });
+
+  it("drops malformed or non-finite cart rows from the recovery snapshot", () => {
+    const display = parseAbandonedCheckoutDisplay({
+      id: "ab_bad_rows",
+      checkoutId: "chk_1",
+      customerPhone: null,
+      checkoutData: JSON.stringify({
+        cart: {
+          totalAmount: 500,
+          items: [
+            { id: "valid", name: "Valid", quantity: 1, price: 500 },
+            { id: "negative", name: "Negative", quantity: 1, price: -1 },
+            { id: "zero", name: "Zero quantity", quantity: 0, price: 20 },
+          ],
+        },
+      }),
+    });
+
+    expect(display.items.map((item) => item.id)).toEqual(["valid"]);
   });
 
   it("normalizes stale hosted-payment order snapshots instead of rendering an empty cart", () => {

@@ -5,8 +5,9 @@ import { eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { authMiddleware } from "../middleware/auth";
 import { rateLimit, getClientIp } from "@scalius/shared/rate-limit";
-import { RateLimitError } from "../utils/api-error";
+import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
+import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/orders";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -52,8 +53,14 @@ app.openapi(saveAbandonedCheckoutRoute, async (c) => {
   }
 
   const db = c.get("db");
-  const { checkoutId, customerPhone, checkoutData } = c.req.valid("json");
-  const checkoutDataString = JSON.stringify(checkoutData);
+  const input = c.req.valid("json");
+  let snapshot: ReturnType<typeof normalizeAbandonedCheckoutSnapshot>;
+  try {
+    snapshot = normalizeAbandonedCheckoutSnapshot(input);
+  } catch (error) {
+    throw new ValidationError(error instanceof Error ? error.message : "Invalid checkout snapshot");
+  }
+  const { checkoutId, customerPhone, checkoutDataString } = snapshot;
 
   const existingCheckout = await db
     .select({ id: abandonedCheckouts.id })
