@@ -293,12 +293,17 @@ const collectionJsonLd =
                         class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
                         aria-label="Previous page"
                       >
-                        <ChevronLeft className="h-4 w-4" />
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                       </a>
                     ) : (
-                      <span class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300" aria-hidden="true">
-                        <ChevronLeft className="h-4 w-4" />
-                      </span>
+                      <button
+                        type="button"
+                        disabled
+                        aria-label="Previous page"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+                      >
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                      </button>
                     )}
                     <span class="px-3 text-sm font-medium text-gray-700">
                       Page {pagination.page} of {pagination.totalPages}
@@ -309,12 +314,17 @@ const collectionJsonLd =
                         class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
                         aria-label="Next page"
                       >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
                       </a>
                     ) : (
-                      <span class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300" aria-hidden="true">
-                        <ChevronRight className="h-4 w-4" />
-                      </span>
+                      <button
+                        type="button"
+                        disabled
+                        aria-label="Next page"
+                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+                      >
+                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
                     )}
                   </div>
                 </nav>
