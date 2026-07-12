@@ -29,4 +29,14 @@ describe("price filter URL serialization", () => {
   it("preserves valid fractional prices", () => {
     expect(parsePriceFilterValue("19.95", 0)).toBe(19.95);
   });
+
+  it("uses the API price boundary when a URL filter is absent or blank", () => {
+    expect(parsePriceFilterValue(undefined, 7_055)).toBe(7_055);
+    expect(parsePriceFilterValue("", 7_055)).toBe(7_055);
+    expect(parsePriceFilterValue("   ", 50)).toBe(50);
+  });
+
+  it("keeps an explicit zero instead of treating it as absent", () => {
+    expect(parsePriceFilterValue("0", 7_055)).toBe(0);
+  });
 });

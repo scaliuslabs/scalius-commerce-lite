@@ -5,7 +5,9 @@ export function parsePriceFilterValue(
   value: string | undefined,
   fallback: number,
 ): number {
-  const parsed = Number(value ?? "");
+  if (typeof value !== "string" || value.trim() === "") return fallback;
+
+  const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
