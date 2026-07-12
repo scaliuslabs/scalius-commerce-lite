@@ -67,7 +67,7 @@ function NewProductPage() {
         optionMatrixDraft={optionMatrixDraft}
         optionMatrixIssue={optionMatrixIssue}
         optionMatrixDirty={optionMatrixDirty}
-        optionManager={({ skuImages, productName, productPrice }) => (
+        optionManager={({ skuImages, productName, productPrice, requestSave, productSaving }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               productName={productName}
@@ -76,6 +76,8 @@ function NewProductPage() {
               onDraftChange={setOptionMatrixDraft}
               onDraftIssueChange={setOptionMatrixIssue}
               onDirtyChange={setOptionMatrixDirty}
+              onSaveRequest={requestSave}
+              productSaving={productSaving}
             />
           </Suspense>
         )}

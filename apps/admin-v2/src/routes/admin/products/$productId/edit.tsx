@@ -183,7 +183,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixDirty={matrixDirty}
         optionMatrixSaving={matrixSaving}
         onOptionMatrixSave={() => matrixRef.current?.save()}
-        optionManager={({ skuImages, productName, productPrice }) => (
+        optionManager={({ skuImages, productName, productPrice, requestSave, productSaving }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               ref={matrixRef}
@@ -199,6 +199,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
               onDirtyChange={setMatrixDirty}
               onDraftIssueChange={setMatrixIssue}
               onSavingChange={setMatrixSaving}
+              onSaveRequest={requestSave}
+              productSaving={productSaving}
               onRevisionConflict={(conflict) => {
                 setRevisionConflict(conflict);
                 setIsConflictOpen(true);
