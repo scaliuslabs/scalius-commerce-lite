@@ -249,6 +249,8 @@ export const collections = sqliteTable("collections", {
     config: text("config").notNull(),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+    /** Optimistic concurrency token for every admin collection mutation. */
+    version: integer("version").notNull().default(1),
     canonicalPath: text("canonical_path"),
     noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
     excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
@@ -261,6 +263,7 @@ export const collections = sqliteTable("collections", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("collections_deleted_at_idx").on(table.deletedAt),
+    check("collections_version_positive", sql`${table.version} >= 1`),
 ]);
 
 export const productAttributes = sqliteTable("product_attributes", {

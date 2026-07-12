@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
     createCollection,
+    listCollections,
     listCollectionProductOptions,
     resolveCollectionProducts,
     resolveCollectionProductsBatch,
@@ -134,15 +135,41 @@ describe("resolveCollectionProducts", () => {
 
     it("rejects edit-time collection canonical overrides that do not match the collection ID", async () => {
         const existing = createQueryChain();
-        existing.get.mockResolvedValue({ id: "V1StGXR8_Z5jdHi6B-myT" });
+        existing.get.mockResolvedValue({
+            id: "V1StGXR8_Z5jdHi6B-myT",
+            version: 1,
+            isActive: false,
+            config: JSON.stringify({ source: "manual", productIds: [], categoryIds: [] }),
+        });
         const db = {
             select: vi.fn(() => existing),
             update: vi.fn(),
         } as unknown as Database;
 
         await expect(updateCollection(db, "V1StGXR8_Z5jdHi6B-myT", {
+            expectedVersion: 1,
             canonicalPath: "/collections/Z9StGXR8_Z5jdHi6B-myT",
         })).rejects.toThrow(/must match this collection's ID route/);
+        expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects an edit made from a stale collection version", async () => {
+        const existing = createQueryChain();
+        existing.get.mockResolvedValue({
+            id: "col_1",
+            version: 4,
+            isActive: false,
+            config: JSON.stringify({ source: "manual", productIds: [], categoryIds: [] }),
+        });
+        const db = {
+            select: vi.fn(() => existing),
+            update: vi.fn(),
+        } as unknown as Database;
+
+        await expect(updateCollection(db, "col_1", {
+            expectedVersion: 3,
+            name: "Updated name",
+        })).rejects.toThrow(/changed while you were editing/);
         expect(db.update).not.toHaveBeenCalled();
     });
 
@@ -232,6 +259,23 @@ describe("listCollectionProductOptions", () => {
         expect(statements).toHaveLength(2);
         expect(statements[1]?.limit).toHaveBeenCalledWith(10);
         expect(statements[1]?.offset).toHaveBeenCalledWith(10);
+    });
+});
+
+describe("listCollections", () => {
+    it("normalizes pagination and reads count plus rows in one bounded batch", async () => {
+        const rows = [{ id: "col_1", name: "One", version: 1 }];
+        const db = createDb([[{ count: 1 }], rows]);
+
+        const result = await listCollections(db, { page: -5, limit: 500 });
+
+        expect(result.pagination).toEqual({ page: 1, limit: 100, total: 1, totalPages: 1 });
+        expect(result.collections).toEqual(rows);
+        expect(db.batch).toHaveBeenCalledTimes(1);
+        const statements = db.batch.mock.calls[0]?.[0] as QueryChain[];
+        expect(statements).toHaveLength(2);
+        expect(statements[1]?.limit).toHaveBeenCalledWith(100);
+        expect(statements[1]?.offset).toHaveBeenCalledWith(0);
     });
 });
 

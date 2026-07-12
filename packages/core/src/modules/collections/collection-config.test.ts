@@ -4,6 +4,7 @@ import {
     collectionMembershipForConfig,
     collectionProductIdsForLookup,
     normalizeCollectionConfig,
+    publicCollectionConfig,
     stringifyCollectionConfig,
 } from "./collection-config";
 
@@ -105,5 +106,21 @@ describe("collection config normalization", () => {
         expect(config.productIds).toHaveLength(COLLECTION_CONFIG_ID_LIMIT);
         expect(config.categoryIds.at(-1)).toBe("cat_89");
         expect(config.productIds.at(-1)).toBe("prod_89");
+    });
+
+    it("projects display settings without exposing internal membership IDs", () => {
+        expect(publicCollectionConfig({
+            source: "dynamic",
+            categoryIds: ["cat_private"],
+            productIds: ["prod_stale"],
+            featuredProductId: "prod_lead",
+            maxProducts: 12,
+            title: "Summer",
+            subtitle: "Fresh arrivals",
+        })).toEqual({
+            maxProducts: 12,
+            title: "Summer",
+            subtitle: "Fresh arrivals",
+        });
     });
 });

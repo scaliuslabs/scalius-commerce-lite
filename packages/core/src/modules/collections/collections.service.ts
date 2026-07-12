@@ -6,7 +6,7 @@ import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQ
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
@@ -45,13 +45,14 @@ export async function listCollections(
     } = {},
 ) {
     const {
-        page = 1,
+        page: rawPage = 1,
         limit: rawLimit = 20,
         search = "",
         showTrashed = false,
         order = "asc",
     } = options;
-    const limit = Math.min(Math.max(rawLimit, 1), 100);
+    const page = Math.max(1, Math.trunc(rawPage));
+    const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 100);
     const sort: CollectionSortField = ALLOWED_COLLECTION_SORT_FIELDS.includes(options.sort as CollectionSortField)
         ? (options.sort as CollectionSortField)
         : "sortOrder";
@@ -69,12 +70,6 @@ export async function listCollections(
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
     const offset = (page - 1) * limit;
 
-    const total = await db
-        .select({ count: sql`count(*)` })
-        .from(collections)
-        .where(whereClause)
-        .then((rows: { count: unknown }[]) => Number(rows[0]?.count || 0));
-
     const sortColumn = (() => {
         switch (sort) {
             case "name": return collections.name;
@@ -85,16 +80,21 @@ export async function listCollections(
         }
     })();
 
-    const items = await db
-        .select()
-        .from(collections)
-        .where(whereClause)
-        .orderBy(
-            order === "desc" ? desc(sortColumn) : asc(sortColumn),
-            asc(collections.id),
-        )
-        .limit(limit)
-        .offset(offset);
+    const [countRows, items] = await safeBatch(db, [
+        db.select({ count: sql<number>`count(*)` })
+            .from(collections)
+            .where(whereClause),
+        db.select()
+            .from(collections)
+            .where(whereClause)
+            .orderBy(
+                order === "desc" ? desc(sortColumn) : asc(sortColumn),
+                asc(collections.id),
+            )
+            .limit(limit)
+            .offset(offset),
+    ]);
+    const total = Number(countRows[0]?.count || 0);
 
     return {
         collections: items,
@@ -136,6 +136,48 @@ function assertCollectionPublishReady(isActive: boolean, rawConfig: unknown): vo
     }
     if (membership.source === "dynamic" && membership.categoryIds.length === 0) {
         throw new ValidationError("Select at least one category before publishing a dynamic collection.");
+    }
+}
+
+async function assertCollectionReferencesExist(
+    db: Database,
+    isActive: boolean,
+    rawConfig: unknown,
+): Promise<void> {
+    const config = normalizeCollectionConfig(rawConfig);
+    const membership = collectionMembershipForConfig(config);
+    const productIds = Array.from(new Set([
+        ...(isActive ? membership.productIds : []),
+        ...(config.featuredProductId ? [config.featuredProductId] : []),
+    ]));
+    const categoryIds = isActive ? membership.categoryIds : [];
+    const [productRows, categoryRows] = await Promise.all([
+        productIds.length > 0
+            ? db.select({ id: products.id }).from(products).where(and(
+                sql`${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(productIds)})
+                )`,
+                isNull(products.deletedAt),
+            )).all()
+            : Promise.resolve([]),
+        categoryIds.length > 0
+            ? db.select({ id: categories.id }).from(categories).where(and(
+                sql`${categories.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)})
+                )`,
+                isNull(categories.deletedAt),
+            )).all()
+            : Promise.resolve([]),
+    ]);
+    const foundProductIds = new Set(productRows.map((row) => row.id));
+    const foundCategoryIds = new Set(categoryRows.map((row) => row.id));
+    const missingProductIds = productIds.filter((id) => !foundProductIds.has(id));
+    const missingCategoryIds = categoryIds.filter((id) => !foundCategoryIds.has(id));
+    if (missingProductIds.length > 0 || missingCategoryIds.length > 0) {
+        throw new ValidationError(
+            "Collection membership references products or categories that no longer exist.",
+            { missingProductIds, missingCategoryIds },
+        );
     }
 }
 
@@ -263,6 +305,7 @@ export async function createCollection(
         throw new ValidationError("Collection canonical path should be blank until the collection has a saved ID route.");
     }
     assertCollectionPublishReady(data.isActive, data.config);
+    await assertCollectionReferencesExist(db, data.isActive, data.config);
 
     const maxSortOrder = await db
         .select({ max: max(collections.sortOrder) })
@@ -296,12 +339,16 @@ export async function updateCollection(
         .select({
             id: collections.id,
             isActive: collections.isActive,
+            version: collections.version,
             config: collections.config,
         })
         .from(collections)
         .where(and(eq(collections.id, id), isNull(collections.deletedAt)))
         .get();
     if (!existing) throw new NotFoundError("Collection not found");
+    if (existing.version !== data.expectedVersion) {
+        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+    }
 
     if (
         data.canonicalPath &&
@@ -318,8 +365,14 @@ export async function updateCollection(
     if (data.isActive === true || data.config !== undefined) {
         assertCollectionPublishReady(nextIsActive, nextConfig);
     }
+    if (data.isActive === true || data.config !== undefined) {
+        await assertCollectionReferencesExist(db, nextIsActive, nextConfig);
+    }
 
-    const updateData: Record<string, unknown> = { updatedAt: sql`(unixepoch())` };
+    const updateData: Record<string, unknown> = {
+        version: existing.version + 1,
+        updatedAt: sql`(unixepoch())`,
+    };
     if (data.name !== undefined) updateData.name = data.name;
     if (data.presentation !== undefined) updateData.presentation = data.presentation;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -328,12 +381,20 @@ export async function updateCollection(
     if (data.excludeFromSitemap !== undefined) updateData.excludeFromSitemap = data.excludeFromSitemap;
     if (data.config !== undefined) updateData.config = stringifyCollectionConfig(nextConfig);
 
-    return db
+    const updated = await db
         .update(collections)
         .set(updateData)
-        .where(eq(collections.id, id))
+        .where(and(
+            eq(collections.id, id),
+            eq(collections.version, data.expectedVersion),
+            isNull(collections.deletedAt),
+        ))
         .returning()
         .get();
+    if (!updated) {
+        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+    }
+    return updated;
 }
 
 export async function deleteCollection(db: Database, id: string): Promise<void> {
@@ -342,7 +403,11 @@ export async function deleteCollection(db: Database, id: string): Promise<void> 
 
     await db
         .update(collections)
-        .set({ deletedAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
+        .set({
+            deletedAt: sql`(unixepoch())`,
+            version: sql`${collections.version} + 1`,
+            updatedAt: sql`(unixepoch())`,
+        })
         .where(eq(collections.id, id));
 }
 
@@ -362,7 +427,11 @@ export async function bulkDeleteCollections(
     } else {
         await db
             .update(collections)
-            .set({ deletedAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
+            .set({
+                deletedAt: sql`(unixepoch())`,
+                version: sql`${collections.version} + 1`,
+                updatedAt: sql`(unixepoch())`,
+            })
             .where(and(
                 inArray(collections.id, normalizedIds),
                 isNull(collections.deletedAt),
@@ -375,16 +444,27 @@ export async function bulkActivateCollections(db: Database, ids: string[]): Prom
     if (normalizedIds.length === 0) return;
 
     const rows = await db
-        .select({ id: collections.id, config: collections.config })
+        .select({ id: collections.id, config: collections.config, version: collections.version })
         .from(collections)
         .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)))
         .all();
-    for (const row of rows) assertCollectionPublishReady(true, row.config);
-
-    await db
-        .update(collections)
-        .set({ isActive: true, updatedAt: sql`(unixepoch())` })
-        .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
+    if (rows.length !== normalizedIds.length) throw new NotFoundError("One or more collections were not found.");
+    for (const row of rows) {
+        assertCollectionPublishReady(true, row.config);
+        await assertCollectionReferencesExist(db, true, row.config);
+    }
+    const results = await safeBatch(db, rows.map((row) => db.update(collections).set({
+        isActive: true,
+        version: row.version + 1,
+        updatedAt: sql`(unixepoch())`,
+    }).where(and(
+        eq(collections.id, row.id),
+        eq(collections.version, row.version),
+        isNull(collections.deletedAt),
+    )).returning({ id: collections.id })));
+    if (results.some((result) => !result?.length)) {
+        throw new ConflictError("A collection changed while activation was being committed. Reload and try again.");
+    }
 }
 
 export async function bulkDeactivateCollections(db: Database, ids: string[]): Promise<void> {
@@ -393,7 +473,11 @@ export async function bulkDeactivateCollections(db: Database, ids: string[]): Pr
 
     await db
         .update(collections)
-        .set({ isActive: false, updatedAt: sql`(unixepoch())` })
+        .set({
+            isActive: false,
+            version: sql`${collections.version} + 1`,
+            updatedAt: sql`(unixepoch())`,
+        })
         .where(and(inArray(collections.id, normalizedIds), isNull(collections.deletedAt)));
 }
 
@@ -401,15 +485,42 @@ export async function restoreCollections(db: Database, ids: string[]): Promise<v
     const normalizedIds = normalizeMutationIds(ids);
     if (normalizedIds.length === 0) return;
 
-    await db
-        .update(collections)
-        .set({ deletedAt: null, updatedAt: sql`(unixepoch())` })
-        .where(and(inArray(collections.id, normalizedIds), isNotNull(collections.deletedAt)));
+    const [trashedRows, maxRows] = await Promise.all([
+        db.select({ id: collections.id, version: collections.version })
+            .from(collections)
+            .where(and(inArray(collections.id, normalizedIds), isNotNull(collections.deletedAt)))
+            .all(),
+        db.select({ max: max(collections.sortOrder) })
+            .from(collections)
+            .where(isNull(collections.deletedAt))
+            .all(),
+    ]);
+    if (trashedRows.length !== normalizedIds.length) {
+        throw new NotFoundError("One or more trashed collections were not found.");
+    }
+    const byId = new Map(trashedRows.map((row) => [row.id, row]));
+    const nextSortOrder = Number(maxRows[0]?.max ?? -1) + 1;
+    const results = await safeBatch(db, normalizedIds.map((id, index) => {
+        const row = byId.get(id)!;
+        return db.update(collections).set({
+            deletedAt: null,
+            sortOrder: nextSortOrder + index,
+            version: row.version + 1,
+            updatedAt: sql`(unixepoch())`,
+        }).where(and(
+            eq(collections.id, id),
+            eq(collections.version, row.version),
+            isNotNull(collections.deletedAt),
+        )).returning({ id: collections.id });
+    }));
+    if (results.some((result) => !result?.length)) {
+        throw new ConflictError("A collection changed while restore was being committed. Reload and try again.");
+    }
 }
 
 export async function reorderCollections(
     db: Database,
-    items: { id: string; sortOrder: number }[],
+    items: { id: string; sortOrder: number; expectedVersion: number }[],
 ): Promise<void> {
     if (items.length === 0) return;
     if (items.length > COLLECTION_MUTATION_ID_LIMIT) {
@@ -422,15 +533,48 @@ export async function reorderCollections(
     if (items.some((item) => !Number.isInteger(item.sortOrder) || item.sortOrder < 0)) {
         throw new ValidationError("Collection sort order must be a non-negative integer.");
     }
+    const sortedPositions = items.map((item) => item.sortOrder).sort((a, b) => a - b);
+    if (sortedPositions.some((position, index) => position !== index)) {
+        throw new ValidationError("Collection reorder must use every contiguous position from 0 once.");
+    }
+    if (items.some((item) => !Number.isInteger(item.expectedVersion) || item.expectedVersion < 1)) {
+        throw new ValidationError("Collection reorder items require a positive expected version.");
+    }
+    const existingRows = await db.select({ id: collections.id, version: collections.version })
+        .from(collections)
+        .where(isNull(collections.deletedAt))
+        .all();
+    if (
+        existingRows.length !== items.length ||
+        existingRows.some((row) => !ids.includes(row.id))
+    ) {
+        throw new ConflictError("Reorder requires the complete current collection list. Reload and try again.");
+    }
+    const versionById = new Map(existingRows.map((row) => [row.id, row.version]));
+    if (items.some((item) => versionById.get(item.id) !== item.expectedVersion)) {
+        throw new ConflictError("A collection changed while you were reordering. Reload and try again.");
+    }
 
-    await safeBatch(
+    const results = await safeBatch(
         db,
         items.map((item) =>
             db.update(collections)
-                .set({ sortOrder: item.sortOrder, updatedAt: sql`(unixepoch())` })
-                .where(and(eq(collections.id, item.id.trim()), isNull(collections.deletedAt)))
+                .set({
+                    sortOrder: item.sortOrder,
+                    version: item.expectedVersion + 1,
+                    updatedAt: sql`(unixepoch())`,
+                })
+                .where(and(
+                    eq(collections.id, item.id.trim()),
+                    eq(collections.version, item.expectedVersion),
+                    isNull(collections.deletedAt),
+                ))
+                .returning({ id: collections.id })
         )
     );
+    if (results.some((result) => !result?.length)) {
+        throw new ConflictError("A collection changed while reorder was being committed. Reload and try again.");
+    }
 }
 
 // ─────────────────────────────────────────

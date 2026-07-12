@@ -25,7 +25,7 @@ import {
 } from "../../integrations/analytics";
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
-import { normalizeCollectionConfig } from "../collections/collection-config";
+import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
@@ -207,15 +207,7 @@ export async function getHomepageData(db: Database) {
         id: col.id,
         name: col.name,
         presentation: col.presentation,
-        config: {
-          source: cfg.source,
-          categoryIds: cfg.categoryIds,
-          productIds: cfg.productIds,
-          featuredProductId: cfg.featuredProductId,
-          maxProducts: cfg.maxProducts,
-          title: cfg.title,
-          subtitle: cfg.subtitle,
-        },
+        config: publicCollectionConfig(cfg),
         sortOrder: col.sortOrder,
         isActive: col.isActive,
         categories: resolved.categories,

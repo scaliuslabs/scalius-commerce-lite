@@ -8,6 +8,13 @@ export interface NormalizedCollectionConfig {
     subtitle: string;
 }
 
+/** Public display settings. Membership IDs stay server-side after resolution. */
+export interface PublicCollectionConfig {
+    maxProducts: number;
+    title: string;
+    subtitle: string;
+}
+
 export type CollectionContentSource = "manual" | "dynamic";
 
 // Leave room below D1's 100-bound-parameter ceiling for surrounding predicates.
@@ -105,6 +112,15 @@ export function normalizeCollectionConfig(value: unknown): NormalizedCollectionC
         maxProducts: normalizeMaxProducts(config.maxProducts),
         title: textValue(config.title, 120),
         subtitle: textValue(config.subtitle, 240),
+    };
+}
+
+export function publicCollectionConfig(value: unknown): PublicCollectionConfig {
+    const config = normalizeCollectionConfig(value);
+    return {
+        maxProducts: config.maxProducts,
+        title: config.title,
+        subtitle: config.subtitle,
     };
 }
 

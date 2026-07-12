@@ -81,6 +81,7 @@ export const createCollectionSchema = z.object({
 }).superRefine(validatePublishReadiness);
 
 export const updateCollectionSchema = z.object({
+    expectedVersion: z.number().int().min(1),
     name: z.string().min(3).max(100).optional(),
     presentation: z.enum(["grid", "carousel"]).optional(),
     isActive: z.boolean().optional(),
