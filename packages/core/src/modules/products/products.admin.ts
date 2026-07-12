@@ -15,7 +15,7 @@ import {
     productOptionValues,
     productVariantOptionValues,
 } from "@scalius/database/schema";
-import { and, sql, desc, eq, asc, inArray, isNull, or, notInArray } from "drizzle-orm";
+import { and, sql, desc, eq, asc, inArray, isNull, or } from "drizzle-orm";
 import { sanitizeFtsQuery } from "../../search/fts5";
 import type { CreateProductInput, UpdateProductInput } from "./products.validation";
 import { nanoid } from "nanoid";
@@ -37,12 +37,16 @@ import {
 import { productVariantBarcodeIdentityEquals } from "./products.variant-identity";
 import { normalizeOptionIdentity } from "./products.option-model";
 import {
-    normalizeVariantBarcode,
+    resolveNewVariantBarcode,
     rethrowProductVariantIdentityConstraint,
 } from "./products.variants";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
+
+// Each D1 statement accepts at most 100 bound parameters. Keep multi-row
+// product aggregate inserts comfortably below that boundary.
+const PRODUCT_AGGREGATE_INSERT_CHUNK = 18;
 
 function requireProductTimestamp(
     value: Date | number | string | null | undefined,
@@ -678,7 +682,11 @@ export async function createProduct(
             if (matrixVariant.imageId && !imageId) {
                 throw new ValidationError("A selected SKU image is not in this product media set.");
             }
-            const barcode = normalizeVariantBarcode(matrixVariant.barcode, matrixVariant.barcodeType);
+            const barcode = resolveNewVariantBarcode(
+                variantId,
+                matrixVariant.barcode,
+                matrixVariant.barcodeType,
+            );
             const variantFields = {
                 id: variantId,
                 productId,
@@ -741,17 +749,18 @@ export async function createProduct(
     }
 
     if (data.additionalInfo && data.additionalInfo.length > 0) {
-        batchOps.push(
-            db.insert(productRichContent).values(
-                data.additionalInfo.map((item) => ({
+        const richContentRows = data.additionalInfo.map((item) => ({
                     id: `prc_${nanoid()}`,
                     productId,
                     title: item.title,
                     content: item.content,
                     sortOrder: item.sortOrder,
-                })),
-            ),
-        );
+                }));
+        for (let index = 0; index < richContentRows.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
+            batchOps.push(db.insert(productRichContent).values(
+                richContentRows.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
+            ));
+        }
     }
 
     if (data.attributes && data.attributes.length > 0) {
@@ -764,7 +773,11 @@ export async function createProduct(
                 value: attr.value,
             }));
         if (attributeValuesToInsert.length > 0) {
-            batchOps.push(db.insert(productAttributeValues).values(attributeValuesToInsert));
+            for (let index = 0; index < attributeValuesToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
+                batchOps.push(db.insert(productAttributeValues).values(
+                    attributeValuesToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
+                ));
+            }
         }
     }
 
@@ -857,6 +870,7 @@ export async function updateProduct(
         }
     }
     const submittedImageIds = preparedImages.rows.map((image) => image.id);
+    const submittedImageIdSet = JSON.stringify(submittedImageIds);
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
@@ -888,7 +902,9 @@ export async function updateProduct(
         submittedImageIds.length > 0
             ? db.delete(productImages).where(and(
                 eq(productImages.productId, id),
-                notInArray(productImages.id, submittedImageIds),
+                sql`${productImages.id} NOT IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${submittedImageIdSet})
+                )`,
             ))
             : db.delete(productImages).where(eq(productImages.productId, id)),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
@@ -910,11 +926,19 @@ export async function updateProduct(
     }
 
     if (attributeValuesToInsert.length > 0) {
-        batchOps.push(db.insert(productAttributeValues).values(attributeValuesToInsert));
+        for (let index = 0; index < attributeValuesToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
+            batchOps.push(db.insert(productAttributeValues).values(
+                attributeValuesToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
+            ));
+        }
     }
 
     if (contentToInsert.length > 0) {
-        batchOps.push(db.insert(productRichContent).values(contentToInsert));
+        for (let index = 0; index < contentToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
+            batchOps.push(db.insert(productRichContent).values(
+                contentToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
+            ));
+        }
     }
 
     if (data.isActive && activeVariants.length === 0) {

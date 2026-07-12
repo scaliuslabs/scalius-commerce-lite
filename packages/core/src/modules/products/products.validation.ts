@@ -12,6 +12,7 @@ import {
 } from "@scalius/shared/product-condition";
 import { MAX_PRODUCT_PRICE } from "./products.types";
 import { createProductOptionMatrixSchema } from "./products.option-matrix";
+import { isCatalogDiscoveryImageSource } from "@scalius/shared/catalog-discovery-media";
 
 const canonicalPathSchema = z
     .string()
@@ -27,7 +28,9 @@ const productConditionSchema = z.enum(PRODUCT_CONDITION_VALUES);
 /** Shared image schema used in create and update */
 const productImageSchema = z.object({
     id: z.string(),
-    url: z.string(),
+    url: z.string().refine(isCatalogDiscoveryImageSource, {
+        message: "Product image must be a relative path or an absolute HTTP(S) URL.",
+    }),
     filename: z.string(),
     size: z.number(),
     createdAt: z
@@ -85,16 +88,33 @@ const productBaseSchema = z.object({
     additionalInfo: productAdditionalInfoSchema,
 });
 
+function requireCanonicalProductHandle(
+    value: { slug: string; canonicalPath?: string | null },
+    context: z.RefinementCtx,
+): void {
+    if (value.canonicalPath !== null && value.canonicalPath !== `/products/${value.slug}`) {
+        context.addIssue({
+            code: "custom",
+            path: ["canonicalPath"],
+            message: "Canonical path must use this product's current slug until URL aliases are supported.",
+        });
+    }
+}
+
 /** Schema for creating a new product (POST /api/products) */
-export const createProductSchema = productBaseSchema.extend({
-    optionMatrix: createProductOptionMatrixSchema.optional(),
-});
+export const createProductSchema = productBaseSchema
+    .extend({
+        optionMatrix: createProductOptionMatrixSchema.optional(),
+    })
+    .superRefine(requireCanonicalProductHandle);
 
 /** Schema for updating an existing product (PUT /api/products/[id]) */
-export const updateProductSchema = productBaseSchema.extend({
-    id: z.string(),
-    expectedAggregateRevision: z.number().int().min(1),
-});
+export const updateProductSchema = productBaseSchema
+    .extend({
+        id: z.string(),
+        expectedAggregateRevision: z.number().int().min(1),
+    })
+    .superRefine(requireCanonicalProductHandle);
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BARCODE_TYPES,
+  generateInternalCode128Barcode,
   getBarcodeIdentityKey,
   getBarcodeValidationError,
   normalizeBarcodeValue,
@@ -26,7 +27,18 @@ describe("barcode identity", () => {
 
 describe("barcode validation", () => {
   it("exports a stable supported type list", () => {
-    expect(BARCODE_TYPES).toEqual(["ean13", "upc", "isbn", "gtin", "custom"]);
+    expect(BARCODE_TYPES).toEqual(["ean13", "upc", "isbn", "gtin", "code128", "custom"]);
+  });
+
+  it("generates a deterministic internal Code 128 identity outside the ordinary SKU alphabet", () => {
+    expect(generateInternalCode128Barcode("var_abc-123")).toBe(
+      "SCALIUS:C128:abc-123",
+    );
+    expect(generateInternalCode128Barcode("var_abc-123")).toContain(":");
+    expect(getBarcodeValidationError(
+      generateInternalCode128Barcode("var_abc-123"),
+      "code128",
+    )).toBeNull();
   });
 
   it("requires barcode and type together while allowing both to be absent", () => {
@@ -97,6 +109,17 @@ describe("barcode validation", () => {
     );
     expect(getBarcodeValidationError("   ", "custom")).toBe(
       "Barcode and barcode type must be provided together.",
+    );
+  });
+
+  it("accepts printable Code 128B text but rejects non-ASCII and oversized values", () => {
+    expect(getBarcodeValidationError("SCALIUS:C128:var_123", "code128")).toBeNull();
+    expect(getBarcodeValidationError("SKU 123", "code128")).toBeNull();
+    expect(getBarcodeValidationError("পণ্য-১", "code128")).toBe(
+      "Code 128 must be 50 printable ASCII characters or fewer.",
+    );
+    expect(getBarcodeValidationError("x".repeat(51), "code128")).toBe(
+      "Code 128 must be 50 printable ASCII characters or fewer.",
     );
   });
 });

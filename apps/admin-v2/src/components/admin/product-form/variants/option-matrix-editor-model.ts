@@ -31,11 +31,11 @@ function slugPart(value: string) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24);
 }
 
-function keyOf(valueIds: readonly string[]) {
-  return [...valueIds].join("|");
+export function combinationKey(valueIds: readonly string[]) {
+  return [...valueIds].sort().join("|");
 }
 
-function cartesian(options: DraftOption[]): string[][] {
+export function optionCombinations(options: DraftOption[]): string[][] {
   return options.reduce<string[][]>(
     (rows, option) => rows.flatMap((row) => option.values.map((value) => [...row, value.id])),
     [[]],
@@ -80,11 +80,11 @@ export function materializeVariants(
   productPrice: number,
   simpleStock: number,
 ): DraftVariant[] {
-  const previousByKey = new Map(previous.map((variant) => [keyOf(variant.selectedOptionValueIds), variant]));
+  const previousByKey = new Map(previous.map((variant) => [combinationKey(variant.selectedOptionValueIds), variant]));
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   const projectedUseCount = new Map<string, number>();
-  return cartesian(options).map((selectedOptionValueIds, index) => {
-    const exact = previousByKey.get(keyOf(selectedOptionValueIds));
+  return optionCombinations(options).map((selectedOptionValueIds, index) => {
+    const exact = previousByKey.get(combinationKey(selectedOptionValueIds));
     if (exact) return { ...exact, selectedOptionValueIds };
     const expandingFrom = previous.filter((variant) =>
       variant.selectedOptionValueIds.every((valueId) => selectedOptionValueIds.includes(valueId)),
@@ -129,6 +129,47 @@ export function materializeVariants(
   });
 }
 
+export function missingOptionCombinations(
+  options: DraftOption[],
+  variants: DraftVariant[],
+): string[][] {
+  if (options.length === 0 || options.some((option) => option.values.length === 0)) return [];
+  const active = new Set(variants.map((variant) => combinationKey(variant.selectedOptionValueIds)));
+  return optionCombinations(options).filter((valueIds) => !active.has(combinationKey(valueIds)));
+}
+
+export function materializeVariantsExcluding(
+  options: DraftOption[],
+  previous: DraftVariant[],
+  productName: string,
+  productPrice: number,
+  simpleStock: number,
+  excludedCombinationKeys: ReadonlySet<string>,
+): DraftVariant[] {
+  const excludedValueSets = [...excludedCombinationKeys]
+    .map((key) => new Set(key.split("|").filter(Boolean)));
+  return materializeVariants(options, previous, productName, productPrice, simpleStock)
+    .filter((variant) => !excludedValueSets.some((excluded) =>
+      [...excluded].every((valueId) => variant.selectedOptionValueIds.includes(valueId)),
+    ));
+}
+
+export function materializeCombination(
+  options: DraftOption[],
+  previous: DraftVariant[],
+  selectedOptionValueIds: readonly string[],
+  productName: string,
+  productPrice: number,
+): DraftVariant {
+  const wanted = combinationKey(selectedOptionValueIds);
+  const existing = previous.find((variant) => combinationKey(variant.selectedOptionValueIds) === wanted);
+  if (existing) return existing;
+  const generated = materializeVariants(options, previous, productName, productPrice, 0)
+    .find((variant) => combinationKey(variant.selectedOptionValueIds) === wanted);
+  if (!generated) throw new Error("The combination no longer belongs to the current option set.");
+  return generated;
+}
+
 export function normalized(value: string) {
   return value.trim().toLocaleLowerCase("en-US");
 }
@@ -160,7 +201,23 @@ export function getOptionMatrixIssue(
   const combinationCount = options.reduce((total, option) => total * option.values.length, 1);
   if (combinationCount > MAX_PRODUCT_OPTION_COMBINATIONS) return `Reduce the option set to ${MAX_PRODUCT_OPTION_COMBINATIONS} combinations or fewer.`;
   if (combinationsPending) return "Update combinations to apply the option changes to the SKU matrix.";
-  if (variants.length !== combinationCount) return "The SKU matrix does not match the current option set.";
+  if (variants.length === 0) return "Keep at least one sellable SKU combination.";
+  const validValueIdsByOption = options.map((option) => new Set(option.values.map((value) => value.id)));
+  const combinationKeys = new Set<string>();
+  const usedValueIds = new Set<string>();
+  for (const variant of variants) {
+    if (
+      variant.selectedOptionValueIds.length !== options.length
+      || validValueIdsByOption.some((ids, index) => !ids.has(variant.selectedOptionValueIds[index]!))
+    ) return "Every SKU must select one current value from every option.";
+    const key = combinationKey(variant.selectedOptionValueIds);
+    if (combinationKeys.has(key)) return "Every option combination must be unique.";
+    combinationKeys.add(key);
+    variant.selectedOptionValueIds.forEach((id) => usedValueIds.add(id));
+  }
+  if (options.some((option) => option.values.some((value) => !usedValueIds.has(value.id)))) {
+    return "Every option value needs at least one sellable SKU. Remove any unused option values.";
+  }
   const skuKeys = variants.map((variant) => normalized(variant.sku));
   if (skuKeys.some((sku) => sku.length < 3)) return "Every combination needs a SKU of at least 3 characters.";
   if (new Set(skuKeys).size !== skuKeys.length) return "Every SKU must be unique.";
