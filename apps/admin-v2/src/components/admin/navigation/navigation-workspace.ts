@@ -1,5 +1,10 @@
 import type { NavigationItem } from "./types";
-import { canIndentNavigationItem, MAX_NAV_DEPTH } from "./types";
+import {
+  canIndentNavigationItem,
+  getNavigationItemHref,
+  getNavigationItemLabel,
+  MAX_NAV_DEPTH,
+} from "./types";
 
 export interface NavigationLocation {
   item: NavigationItem;
@@ -18,14 +23,32 @@ export interface NavigationOutlineRow extends NavigationLocation {
 
 export const NAVIGATION_TREE_INDENT = 24;
 
-export type NavigationDropEdge = "before" | "after";
+export type NavigationDropOperation = "before" | "inside" | "after";
+
+export function getNavigationDropOperationAtPoint({
+  pointerY,
+  top,
+  height,
+}: {
+  pointerY: number;
+  top: number;
+  height: number;
+}): NavigationDropOperation {
+  if (!Number.isFinite(pointerY) || !Number.isFinite(top) || height <= 0) {
+    return "before";
+  }
+  const offset = pointerY - top;
+  if (offset <= height * 0.25) return "before";
+  if (offset >= height * 0.75) return "after";
+  return "inside";
+}
 
 export type NavigationDragIntent =
   | {
       type: "move";
       activeId: string;
       overId: string;
-      edge: NavigationDropEdge;
+      operation: NavigationDropOperation;
       depth: number;
       targetIndex: number;
       parentId: string | null;
@@ -110,7 +133,7 @@ export function navigationItemMatchesQuery(
   normalizedQuery: string,
 ): boolean {
   if (!normalizedQuery) return true;
-  const ownText = `${item.title} ${item.href ?? ""}`.toLocaleLowerCase();
+  const ownText = `${getNavigationItemLabel(item)} ${getNavigationItemHref(item) ?? ""}`.toLocaleLowerCase();
   return (
     ownText.includes(normalizedQuery) ||
     (item.subMenu ?? []).some((child) =>
@@ -140,7 +163,7 @@ export function flattenNavigationOutline(
       let branchMatches = false;
 
       for (const item of currentItems) {
-        const ownText = `${item.title} ${item.href ?? ""}`.toLocaleLowerCase();
+        const ownText = `${getNavigationItemLabel(item)} ${getNavigationItemHref(item) ?? ""}`.toLocaleLowerCase();
         const ownMatch = ownText.includes(normalizedQuery);
         const childMatch = collectSearchVisibility(item.subMenu ?? [], [
           ...ancestorIds,
@@ -335,6 +358,52 @@ export function moveNavigationItemToParentById(
   );
 }
 
+/**
+ * Move one complete branch to an exact parent and sibling index in a single
+ * immutable operation. `targetIndex` is measured against the destination
+ * siblings after the moving branch has been removed.
+ */
+export function moveNavigationItemToParentAtIndexById(
+  items: NavigationItem[],
+  id: string,
+  newParentId: string | null,
+  targetIndex: number,
+  maxDepth = MAX_NAV_DEPTH,
+): NavigationItem[] {
+  const source = findNavigationLocation(items, id);
+  if (!source) return items;
+
+  if (newParentId) {
+    if (
+      newParentId === id ||
+      findNavigationLocation(source.item.subMenu ?? [], newParentId)
+    ) {
+      return items;
+    }
+
+    const parent = findNavigationLocation(items, newParentId);
+    if (
+      !parent ||
+      parent.depth + 1 + getNavigationDepth([source.item]) > maxDepth
+    ) {
+      return items;
+    }
+  } else if (getNavigationDepth([source.item]) > maxDepth) {
+    return items;
+  }
+
+  const stripped = removeNavigationItemById(items, id);
+  const siblings = getNavigationSiblings(stripped, newParentId);
+  if (!siblings) return items;
+
+  return insertNavigationItemAt(
+    stripped,
+    newParentId,
+    Math.min(Math.max(targetIndex, 0), siblings.length),
+    source.item,
+  );
+}
+
 export function indentNavigationItemById(
   items: NavigationItem[],
   id: string,
@@ -456,23 +525,6 @@ function getDescendantIds(item: NavigationItem): Set<string> {
   return result;
 }
 
-function getProjectedParentId(
-  rows: NavigationOutlineRow[],
-  insertionIndex: number,
-  depth: number,
-): string | null {
-  if (depth === 0) return null;
-  const previous = rows[insertionIndex - 1];
-  if (!previous) return null;
-  if (previous.depth === depth) return previous.parentId;
-  if (previous.depth < depth) return previous.item.id;
-
-  for (let index = insertionIndex - 1; index >= 0; index -= 1) {
-    if (rows[index].depth === depth) return rows[index].parentId;
-  }
-  return null;
-}
-
 function hasSameNavigationStructure(
   first: NavigationItem[],
   second: NavigationItem[],
@@ -485,18 +537,17 @@ function hasSameNavigationStructure(
 }
 
 /**
- * Project one flat visible-outline insertion back into the nested menu. The
- * pointer chooses a vertical edge while horizontal movement selects a visible
- * depth lane. The active item's hidden/expanded descendants are deliberately
- * removed from the projection because the complete branch moves atomically.
+ * Convert an explicit target-row operation back into the nested menu. The top
+ * and bottom hitboxes preserve the target's parent; the middle hitbox is the
+ * only operation that creates a child. Hierarchy does not depend on horizontal
+ * drag distance.
  */
 export function getNavigationDragIntent(
   items: NavigationItem[],
   visibleRows: NavigationOutlineRow[],
   activeId: string,
   overId: string | null,
-  horizontalDelta: number,
-  edge: NavigationDropEdge,
+  operation: NavigationDropOperation,
   maxDepth = MAX_NAV_DEPTH,
 ): NavigationDragIntent {
   const source = findNavigationLocation(items, activeId);
@@ -532,11 +583,7 @@ export function getNavigationDragIntent(
     };
   }
 
-  const projectionRows = visibleRows.filter((row) => (
-    row.item.id !== activeId && !descendantIds.has(row.item.id)
-  ));
-  const overIndex = projectionRows.findIndex((row) => row.item.id === overId);
-  if (overIndex < 0) {
+  if (!visibleRows.some((row) => row.item.id === overId)) {
     return {
       type: "invalid",
       activeId,
@@ -545,18 +592,9 @@ export function getNavigationDragIntent(
     };
   }
 
-  const insertionIndex = overIndex + (edge === "after" ? 1 : 0);
-  const previous = projectionRows[insertionIndex - 1];
-  const next = projectionRows[insertionIndex];
   const subtreeDepth = getNavigationDepth([source.item]);
-  const deepestAllowedRoot = maxDepth - subtreeDepth;
-  const shallowestProjection = next?.depth ?? 0;
-  const deepestProjection = Math.min(
-    previous ? previous.depth + 1 : 0,
-    deepestAllowedRoot,
-  );
-
-  if (deepestAllowedRoot < 0 || shallowestProjection > deepestProjection) {
+  const depth = operation === "inside" ? target.depth + 1 : target.depth;
+  if (depth + subtreeDepth > maxDepth) {
     return {
       type: "invalid",
       activeId,
@@ -565,25 +603,8 @@ export function getNavigationDragIntent(
     };
   }
 
-  const desiredDepth = Math.round(
-    (source.depth * NAVIGATION_TREE_INDENT + horizontalDelta) /
-      NAVIGATION_TREE_INDENT,
-  );
-  const depth = Math.min(
-    deepestProjection,
-    Math.max(shallowestProjection, desiredDepth),
-  );
-  const parentId = getProjectedParentId(projectionRows, insertionIndex, depth);
-  if (depth > 0 && !parentId) {
-    return {
-      type: "invalid",
-      activeId,
-      overId,
-      message: "That nested position has no valid parent.",
-    };
-  }
-
   const strippedItems = removeNavigationItemById(items, activeId);
+  const parentId = operation === "inside" ? overId : target.parentId;
   const siblings = getNavigationSiblings(strippedItems, parentId);
   if (!siblings) {
     return {
@@ -594,39 +615,34 @@ export function getNavigationDragIntent(
     };
   }
 
-  let nextSiblingId: string | null = null;
-  for (let index = insertionIndex; index < projectionRows.length; index += 1) {
-    const row = projectionRows[index];
-    if (row.depth < depth) break;
-    if (row.depth === depth) {
-      if (row.parentId === parentId) nextSiblingId = row.item.id;
-      break;
-    }
+  const strippedTarget = findNavigationLocation(strippedItems, overId);
+  if (!strippedTarget) {
+    return {
+      type: "invalid",
+      activeId,
+      overId,
+      message: "That menu item is no longer available.",
+    };
   }
-  const nextSiblingIndex = nextSiblingId
-    ? siblings.findIndex((item) => item.id === nextSiblingId)
-    : -1;
-  const startsParentChildren = Boolean(
-    parentId && previous?.item.id === parentId && previous.depth + 1 === depth,
-  );
-  const targetIndex = nextSiblingIndex >= 0
-    ? nextSiblingIndex
-    : startsParentChildren
-      ? 0
-      : siblings.length;
-  const parentTitle = parentId
-    ? findNavigationLocation(strippedItems, parentId)?.item.title.trim()
-    : "";
+  const targetIndex = operation === "inside"
+    ? siblings.length
+    : strippedTarget.index + (operation === "after" ? 1 : 0);
+  const parentItem = parentId
+    ? findNavigationLocation(strippedItems, parentId)?.item
+    : undefined;
+  const parentTitle = parentItem ? getNavigationItemLabel(parentItem) : "";
 
   return {
     type: "move",
     activeId,
     overId,
-    edge,
+    operation,
     depth,
     targetIndex,
     parentId,
-    message: `Place ${source.item.title || "item"} at level ${depth + 1}, position ${targetIndex + 1}${parentTitle ? ` under ${parentTitle}` : ""}.`,
+    message: operation === "inside"
+      ? `Place ${getNavigationItemLabel(source.item)} inside ${getNavigationItemLabel(target.item)}.`
+      : `Place ${getNavigationItemLabel(source.item)} ${operation} ${getNavigationItemLabel(target.item)}${parentTitle ? ` under ${parentTitle}` : " at top level"}.`,
   };
 }
 
@@ -635,8 +651,7 @@ export function applyNavigationDrag(
   visibleRows: NavigationOutlineRow[],
   activeId: string,
   overId: string | null,
-  horizontalDelta: number,
-  edge: NavigationDropEdge,
+  operation: NavigationDropOperation,
   maxDepth = MAX_NAV_DEPTH,
 ): NavigationDragResult {
   const intent = getNavigationDragIntent(
@@ -644,8 +659,7 @@ export function applyNavigationDrag(
     visibleRows,
     activeId,
     overId,
-    horizontalDelta,
-    edge,
+    operation,
     maxDepth,
   );
 

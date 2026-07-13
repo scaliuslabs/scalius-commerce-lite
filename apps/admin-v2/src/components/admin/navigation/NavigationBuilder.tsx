@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   type Announcements,
@@ -12,7 +13,7 @@ import {
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
-  type KeyboardCoordinateGetter,
+  type CollisionDetection,
   type ScreenReaderInstructions,
 } from "@dnd-kit/core";
 import {
@@ -21,11 +22,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
   ExternalLink,
   FolderTree,
   GripVertical,
@@ -58,6 +54,7 @@ import {
 } from "~/components/ui/tooltip";
 import { AddNavItemDialog } from "./AddNavItemDialog";
 import { NavigationMap } from "./NavigationMap";
+import { NavigationMoveDialog } from "./NavigationMoveDialog";
 import {
   applyNavigationDrag,
   appendNavigationItems,
@@ -66,24 +63,20 @@ import {
   findNavigationLocation,
   flattenNavigationOutline,
   getNavigationDragIntent,
+  getNavigationDropOperationAtPoint,
   getNavigationDepth,
-  indentNavigationItemById,
-  moveNavigationItemById,
-  moveNavigationItemToIndexById,
-  moveNavigationItemToParentById,
-  NAVIGATION_TREE_INDENT,
-  outdentNavigationItemById,
+  moveNavigationItemToParentAtIndexById,
   removeNavigationItemById,
   updateNavigationItemById,
   type NavigationOutlineRow,
   type NavigationDragIntent,
-  type NavigationDropEdge,
+  type NavigationDropOperation,
 } from "./navigation-workspace";
 import { openNavigationPreview } from "./navigation-preview";
 import type { NavigationBuilderProps, NavigationItem } from "./types";
 import {
-  canIndentNavigationItem,
-  getNavigationSubtreeDepth,
+  getNavigationItemHref,
+  getNavigationItemLabel,
   MAX_NAV_DEPTH,
   MAX_NAV_ITEMS,
 } from "./types";
@@ -91,35 +84,52 @@ import {
 export const NAVIGATION_RENDER_BATCH_SIZE = 80;
 const AUTO_EXPAND_ALL_THRESHOLD = 40;
 
+const navigationCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args);
+};
+
+function itemLabel(item: NavigationItem | undefined, fallback = "menu item"): string {
+  return item ? getNavigationItemLabel(item) : fallback;
+}
+
 const navigationScreenReaderInstructions: ScreenReaderInstructions = {
   draggable:
-    "Press Space to pick up a menu branch. Use Up and Down to choose a before or after position and Left or Right to change its projected level. Press Space to drop or Escape to cancel. Placement options provides precise Parent, Position, and move controls.",
+    "Press Space to pick up a menu branch. Use Up and Down to choose a sibling position, then Space to drop or Escape to cancel. Use the Move action for an exact parent and position.",
 };
 
-const navigationKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
-  if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
-    event.preventDefault();
-    return {
-      ...args.currentCoordinates,
-      x: args.currentCoordinates.x + (
-        event.code === "ArrowRight"
-          ? NAVIGATION_TREE_INDENT
-          : -NAVIGATION_TREE_INDENT
-      ),
-    };
+function getActivatorClientY(event: Event): number | null {
+  if ("clientY" in event && typeof event.clientY === "number") {
+    return event.clientY;
   }
-  return sortableKeyboardCoordinates(event, args);
-};
+  if ("touches" in event) {
+    const touches = event.touches;
+    if (touches && typeof touches === "object" && "length" in touches) {
+      const first = (touches as TouchList).item(0);
+      return first?.clientY ?? null;
+    }
+  }
+  return null;
+}
 
-function getNavigationDropEdge(
+function getNavigationDropOperation(
   event: DragMoveEvent | DragEndEvent,
-): NavigationDropEdge {
-  const activeRect = event.active.rect.current.translated;
+): NavigationDropOperation {
   const overRect = event.over?.rect;
-  if (!activeRect || !overRect) return "before";
-  return activeRect.top + activeRect.height / 2 >= overRect.top + overRect.height / 2
-    ? "after"
-    : "before";
+  if (!overRect) return "before";
+  const startY = getActivatorClientY(event.activatorEvent);
+  if (startY == null) {
+    const activeRect = event.active.rect.current.translated;
+    if (!activeRect) return "before";
+    return activeRect.top + activeRect.height / 2 >= overRect.top + overRect.height / 2
+      ? "after"
+      : "before";
+  }
+  return getNavigationDropOperationAtPoint({
+    pointerY: startY + event.delta.y,
+    top: overRect.top,
+    height: overRect.height,
+  });
 }
 
 function getInitialExpandedIds(items: NavigationItem[]): Set<string> {
@@ -150,13 +160,16 @@ export function NavigationBuilder({
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [dragIntent, setDragIntent] = useState<NavigationDragIntent | null>(null);
   const [dragStatus, setDragStatus] = useState("");
+  const [moveItemId, setMoveItemId] = useState<string | null>(null);
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const autoExpandTimerRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: navigationKeyboardCoordinates,
+      coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
 
@@ -168,13 +181,6 @@ export function NavigationBuilder({
     () => flattenNavigationOutline(navigation, expandedIds, normalizedQuery),
     [expandedIds, navigation, normalizedQuery],
   );
-  const allOutlineRows = useMemo(
-    () => flattenNavigationOutline(
-      navigation,
-      collectNavigationParentIds(navigation),
-    ),
-    [navigation],
-  );
   const matchingItems = useMemo(
     () => normalizedQuery
       ? outlineRows.filter((row) => row.matchesQuery).length
@@ -185,9 +191,21 @@ export function NavigationBuilder({
     () => outlineRows.slice(0, renderLimit),
     [outlineRows, renderLimit],
   );
+  const dragRows = useMemo(() => {
+    if (!activeDragId) return renderedRows;
+    const source = findNavigationLocation(navigation, activeDragId)?.item;
+    if (!source?.subMenu?.length) return renderedRows;
+    const descendantIds = new Set(
+      flattenNavigationOutline(
+        source.subMenu,
+        collectNavigationParentIds(source.subMenu),
+      ).map((row) => row.item.id),
+    );
+    return renderedRows.filter((row) => !descendantIds.has(row.item.id));
+  }, [activeDragId, navigation, renderedRows]);
   const renderedRowIds = useMemo(
-    () => renderedRows.map((row) => row.item.id),
-    [renderedRows],
+    () => dragRows.map((row) => row.item.id),
+    [dragRows],
   );
   const hiddenVisibleRows = Math.max(0, outlineRows.length - renderedRows.length);
   const selected = useMemo(
@@ -201,27 +219,27 @@ export function NavigationBuilder({
   const dragAnnouncements = useMemo<Announcements>(() => ({
     onDragStart({ active }) {
       const location = findNavigationLocation(navigation, String(active.id));
-      return `Picked up ${location?.item.title || "menu item"}.`;
+      return `Picked up ${itemLabel(location?.item)}.`;
     },
     onDragOver({ active, over }) {
       const activeLocation = findNavigationLocation(navigation, String(active.id));
       const overLocation = over
         ? findNavigationLocation(navigation, String(over.id))
         : null;
-      if (!overLocation) return `${activeLocation?.item.title || "Menu item"} is not over a drop target.`;
-      return `${activeLocation?.item.title || "Menu item"} is over ${overLocation.item.title || "menu item"}.`;
+      if (!overLocation) return `${itemLabel(activeLocation?.item, "Menu item")} is not over a drop target.`;
+      return `${itemLabel(activeLocation?.item, "Menu item")} is over ${itemLabel(overLocation.item)}.`;
     },
     onDragEnd({ active, over }) {
       const activeLocation = findNavigationLocation(navigation, String(active.id));
       const overLocation = over
         ? findNavigationLocation(navigation, String(over.id))
         : null;
-      if (!overLocation) return `Cancelled moving ${activeLocation?.item.title || "menu item"}.`;
-      return `Dropped ${activeLocation?.item.title || "menu item"} near ${overLocation.item.title || "menu item"}.`;
+      if (!overLocation) return `Cancelled moving ${itemLabel(activeLocation?.item)}.`;
+      return `Dropped ${itemLabel(activeLocation?.item)} near ${itemLabel(overLocation.item)}.`;
     },
     onDragCancel({ active }) {
       const location = findNavigationLocation(navigation, String(active.id));
-      return `Cancelled moving ${location?.item.title || "menu item"}.`;
+      return `Cancelled moving ${itemLabel(location?.item)}.`;
     },
   }), [navigation]);
   const dragAccessibility = useMemo(() => ({
@@ -234,8 +252,24 @@ export function NavigationBuilder({
   }, [selected, selectedId]);
 
   useEffect(() => {
+    if (!pendingFocusId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const row = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-navigation-row-id]"),
+      ).find((candidate) => candidate.dataset.navigationRowId === pendingFocusId);
+      const moveButton = row?.querySelector<HTMLButtonElement>(
+        "[data-navigation-move-action]",
+      );
+      row?.scrollIntoView?.({ block: "nearest" });
+      moveButton?.focus();
+      setPendingFocusId(null);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [navigation, pendingFocusId]);
+
+  useEffect(() => {
     setRenderLimit(NAVIGATION_RENDER_BATCH_SIZE);
-  }, [expandedIds, normalizedQuery]);
+  }, [normalizedQuery]);
 
   useEffect(() => {
     if (normalizedQuery) {
@@ -250,6 +284,34 @@ export function NavigationBuilder({
     const timeout = window.setTimeout(() => setDragStatus(""), 3500);
     return () => window.clearTimeout(timeout);
   }, [activeDragId, dragStatus, normalizedQuery]);
+
+  useEffect(() => {
+    if (autoExpandTimerRef.current != null) {
+      window.clearTimeout(autoExpandTimerRef.current);
+      autoExpandTimerRef.current = null;
+    }
+    if (
+      !activeDragId ||
+      dragIntent?.type !== "move" ||
+      dragIntent.operation !== "inside" ||
+      expandedIds.has(dragIntent.overId)
+    ) {
+      return;
+    }
+    const target = findNavigationLocation(navigation, dragIntent.overId)?.item;
+    if (!target?.subMenu?.length) return;
+
+    autoExpandTimerRef.current = window.setTimeout(() => {
+      setExpandedIds((current) => new Set(current).add(dragIntent.overId));
+      autoExpandTimerRef.current = null;
+    }, 500);
+    return () => {
+      if (autoExpandTimerRef.current != null) {
+        window.clearTimeout(autoExpandTimerRef.current);
+        autoExpandTimerRef.current = null;
+      }
+    };
+  }, [activeDragId, dragIntent, expandedIds, navigation]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId((current) => current === id ? null : id);
@@ -287,42 +349,37 @@ export function NavigationBuilder({
     [navigation, onChange],
   );
 
-  const moveItem = useCallback(
-    (id: string, direction: -1 | 1) => {
-      onChange(moveNavigationItemById(navigation, id, direction));
-    },
-    [navigation, onChange],
-  );
+  const handleExactMove = useCallback(
+    (id: string, parentId: string | null, index: number) => {
+      const next = moveNavigationItemToParentAtIndexById(
+        navigation,
+        id,
+        parentId,
+        index,
+      );
+      if (next === navigation) return;
 
-  const moveItemToIndex = useCallback(
-    (id: string, index: number) => {
-      onChange(moveNavigationItemToIndexById(navigation, id, index));
-    },
-    [navigation, onChange],
-  );
-
-  const moveItemToParent = useCallback(
-    (id: string, parentId: string | null) => {
-      onChange(moveNavigationItemToParentById(navigation, id, parentId));
+      const nextExpanded = new Set(expandedIds);
       if (parentId) {
-        setExpandedIds((current) => new Set(current).add(parentId));
+        const parent = findNavigationLocation(next, parentId);
+        parent?.ancestors.forEach((ancestor) => nextExpanded.add(ancestor.id));
+        nextExpanded.add(parentId);
       }
-    },
-    [navigation, onChange],
-  );
+      const nextRows = flattenNavigationOutline(next, nextExpanded);
+      const movedRowIndex = nextRows.findIndex((row) => row.item.id === id);
 
-  const indentItem = useCallback(
-    (id: string) => {
-      onChange(indentNavigationItemById(navigation, id));
+      setExpandedIds(nextExpanded);
+      if (movedRowIndex >= 0) {
+        const requiredBatch = Math.ceil(
+          (movedRowIndex + 1) / NAVIGATION_RENDER_BATCH_SIZE,
+        ) * NAVIGATION_RENDER_BATCH_SIZE;
+        setRenderLimit((current) => Math.max(current, requiredBatch));
+      }
+      setSelectedId(id);
+      setPendingFocusId(id);
+      onChange(next);
     },
-    [navigation, onChange],
-  );
-
-  const outdentItem = useCallback(
-    (id: string) => {
-      onChange(outdentNavigationItemById(navigation, id));
-    },
-    [navigation, onChange],
+    [expandedIds, navigation, onChange],
   );
 
   const handleAdd = useCallback(
@@ -342,49 +399,39 @@ export function NavigationBuilder({
     const location = findNavigationLocation(navigation, id);
     setActiveDragId(id);
     setDragIntent(null);
-    setDragStatus(`Moving ${location?.item.title || "menu item"}.`);
+    setDragStatus(`Moving ${itemLabel(location?.item)}.`);
   }, [navigation, normalizedQuery]);
 
   const handleDragMove = useCallback((event: DragMoveEvent) => {
     if (normalizedQuery) return;
     const intent = getNavigationDragIntent(
       navigation,
-      renderedRows,
+      dragRows,
       String(event.active.id),
       event.over ? String(event.over.id) : null,
-      event.delta.x,
-      getNavigationDropEdge(event),
+      getNavigationDropOperation(event),
     );
     setDragIntent((current) => (
       current?.type === intent.type &&
       current.overId === intent.overId &&
+      (current.type !== "move" || intent.type !== "move" ||
+        current.operation === intent.operation) &&
       current.message === intent.message
         ? current
         : intent
     ));
     setDragStatus((current) => current === intent.message ? current : intent.message);
-    if (intent.type === "move" && intent.parentId) {
-      const parentId = intent.parentId;
-      const parent = findNavigationLocation(navigation, parentId)?.item;
-      if (parent?.subMenu?.length) {
-        setExpandedIds((current) => {
-          if (current.has(parentId)) return current;
-          return new Set(current).add(parentId);
-        });
-      }
-    }
-  }, [navigation, normalizedQuery, renderedRows]);
+  }, [dragRows, navigation, normalizedQuery]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
     const result = applyNavigationDrag(
       navigation,
-      renderedRows,
+      dragRows,
       activeId,
       overId,
-      event.delta.x,
-      getNavigationDropEdge(event),
+      getNavigationDropOperation(event),
     );
 
     if (result.changed) {
@@ -400,7 +447,7 @@ export function NavigationBuilder({
 
     setActiveDragId(null);
     setDragIntent(null);
-  }, [navigation, onChange, renderedRows]);
+  }, [dragRows, navigation, onChange]);
 
   const handleDragCancel = useCallback((_event: DragCancelEvent) => {
     setActiveDragId(null);
@@ -410,28 +457,20 @@ export function NavigationBuilder({
 
   const renderInlineEditor = useCallback(
     (row: NavigationOutlineRow) => {
-      const hrefResult = parseNavigationHref(row.item.href);
+      const resourceTarget = row.item.target.type === "resource";
+      const editableDestination = row.item.target.type === "internal_path"
+        ? row.item.target.path
+        : row.item.target.type === "external_url"
+          ? row.item.target.url
+          : "";
+      const hrefResult = resourceTarget
+        ? parseNavigationHref(row.item.resolution?.href)
+        : parseNavigationHref(editableDestination);
+      const previewHref = getNavigationItemHref(row.item);
       const canAddChild = row.depth + 1 < MAX_NAV_DEPTH;
-      const canIndent = row.index > 0 && canIndentNavigationItem(
-        row.item,
-        row.depth,
-        MAX_NAV_DEPTH,
-      );
       const descendantCount = countNavigationItems(row.item.subMenu ?? []);
-      const descendantIds = new Set(
-        flattenNavigationOutline(
-          row.item.subMenu ?? [],
-          collectNavigationParentIds(row.item.subMenu ?? []),
-        ).map((item) => item.item.id),
-      );
-      const subtreeDepth = getNavigationSubtreeDepth(row.item);
-      const parentOptions = allOutlineRows.filter((option) => (
-        option.item.id !== row.item.id &&
-        !descendantIds.has(option.item.id) &&
-        option.depth + 1 + subtreeDepth <= MAX_NAV_DEPTH
-      ));
-      const label = row.item.title.trim() || "Untitled item";
-      const trail = [...row.ancestors.map((item) => item.title), row.item.title]
+      const label = getNavigationItemLabel(row.item);
+      const trail = [...row.ancestors.map(getNavigationItemLabel), label]
         .filter(Boolean)
         .join(" / ");
 
@@ -453,11 +492,34 @@ export function NavigationBuilder({
 
           <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.2fr)]">
             <div className="grid min-w-0 gap-1.5">
-              <Label htmlFor={`nav-${row.item.id}-label`}>Label</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor={`nav-${row.item.id}-label`}>Label</Label>
+                {resourceTarget ? (
+                  <select
+                    value={row.item.labelMode}
+                    onChange={(event) => updateItem(row.item.id, {
+                      labelMode: event.target.value as "resource" | "custom",
+                      ...(event.target.value === "custom" && !row.item.customLabel
+                        ? { customLabel: label }
+                        : {}),
+                    })}
+                    className="h-7 rounded-md border bg-background px-1.5 text-[11px] text-foreground"
+                    aria-label={`Label source for ${label}`}
+                  >
+                    <option value="resource">Follow resource</option>
+                    <option value="custom">Custom label</option>
+                  </select>
+                ) : null}
+              </div>
               <Input
                 id={`nav-${row.item.id}-label`}
-                value={row.item.title}
-                onChange={(event) => updateItem(row.item.id, { title: event.target.value })}
+                value={row.item.labelMode === "resource"
+                  ? row.item.resolution?.title ?? row.item.lastKnownLabel ?? ""
+                  : row.item.customLabel ?? ""}
+                disabled={row.item.labelMode === "resource"}
+                onChange={(event) => updateItem(row.item.id, {
+                  customLabel: event.target.value,
+                })}
                 className="h-9"
                 placeholder="Menu label"
               />
@@ -467,40 +529,58 @@ export function NavigationBuilder({
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor={`nav-${row.item.id}-destination`}>Destination</Label>
                 <span className="text-[11px] text-muted-foreground">
-                  Empty creates a label
+                  {resourceTarget
+                    ? row.item.resolution?.readiness.replaceAll("_", " ") ?? "Checking resource"
+                    : row.item.target.type === "label"
+                      ? "Non-clickable group"
+                      : "Custom destination"}
                 </span>
               </div>
               <div className="flex min-w-0 gap-1.5">
                 <Input
                   id={`nav-${row.item.id}-destination`}
-                  value={row.item.href ?? ""}
-                  onChange={(event) => updateItem(row.item.id, {
-                    href: event.target.value || undefined,
-                  })}
+                  value={resourceTarget ? row.item.resolution?.href ?? "" : editableDestination}
+                  disabled={resourceTarget || row.item.target.type === "label"}
+                  onChange={(event) => {
+                    if (row.item.target.type === "internal_path") {
+                      updateItem(row.item.id, {
+                        target: { type: "internal_path", path: event.target.value },
+                      });
+                    } else if (row.item.target.type === "external_url") {
+                      updateItem(row.item.id, {
+                        target: { type: "external_url", url: event.target.value },
+                      });
+                    }
+                  }}
                   className={cn(
                     "h-9 min-w-0 font-mono text-xs",
-                    !hrefResult.ok && "border-destructive focus-visible:ring-destructive",
+                    !resourceTarget && row.item.target.type !== "label" &&
+                      !hrefResult.ok && "border-destructive focus-visible:ring-destructive",
                   )}
-                  placeholder="/products or https://example.com"
-                  aria-invalid={!hrefResult.ok}
+                  placeholder={row.item.target.type === "label"
+                    ? "No destination"
+                    : "/products or https://example.com"}
+                  aria-invalid={!resourceTarget && row.item.target.type !== "label" && !hrefResult.ok}
                   aria-describedby={
-                    !hrefResult.ok ? `nav-${row.item.id}-destination-error` : undefined
+                    !resourceTarget && row.item.target.type !== "label" && !hrefResult.ok
+                      ? `nav-${row.item.id}-destination-error`
+                      : undefined
                   }
                 />
-                {hrefResult.ok && hrefResult.href ? (
+                {previewHref ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="h-9 w-9 shrink-0"
-                    onClick={() => openNavigationPreview(hrefResult.href, getStorefrontPath)}
+                    onClick={() => openNavigationPreview(previewHref, getStorefrontPath)}
                     aria-label={`Preview ${label}`}
                   >
                     <ExternalLink />
                   </Button>
                 ) : null}
               </div>
-              {!hrefResult.ok ? (
+              {!resourceTarget && row.item.target.type !== "label" && !hrefResult.ok ? (
                 <p
                   id={`nav-${row.item.id}-destination-error`}
                   className="text-xs text-destructive"
@@ -512,152 +592,38 @@ export function NavigationBuilder({
             </div>
           </div>
 
-          <div className="mt-3 flex min-w-0 flex-col gap-2 border-t pt-2.5 sm:flex-row sm:items-start sm:justify-between">
-            <details className="group min-w-0 flex-1">
-              <summary className="flex min-h-10 max-w-xl cursor-pointer list-none items-center gap-2 rounded-md border bg-muted/20 px-2.5 text-sm font-medium text-foreground hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-                <FolderTree className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span>Placement options</span>
-                <span className="hidden truncate text-xs font-normal text-muted-foreground min-[520px]:inline">
-                  Parent, position, and keyboard moves
-                </span>
-                <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
-
-              <div className="mt-2 grid min-w-0 gap-2 rounded-md border bg-muted/15 p-2.5">
-                <div className="flex min-w-0 flex-wrap items-end gap-2">
-                  <label className="grid min-w-40 gap-1 text-[11px] font-medium text-muted-foreground">
-                    Parent
-                    <select
-                      value={row.parentId ?? "__root__"}
-                      onChange={(event) => moveItemToParent(
-                        row.item.id,
-                        event.target.value === "__root__" ? null : event.target.value,
-                      )}
-                      className="h-9 max-w-64 rounded-md border bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`Parent for ${label}`}
-                    >
-                      <option value="__root__">Top level</option>
-                      {parentOptions.map((option) => (
-                        <option key={option.item.id} value={option.item.id}>
-                          {`${"— ".repeat(option.depth)}${option.item.title.trim() || "Untitled item"}`}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid w-24 gap-1 text-[11px] font-medium text-muted-foreground">
-                    Position
-                    <Input
-                      key={`${row.item.id}-${row.index}-${row.siblingCount}`}
-                      type="number"
-                      min={1}
-                      max={row.siblingCount}
-                      defaultValue={row.index + 1}
-                      className="h-9 tabular-nums"
-                      aria-label={`Position for ${label}`}
-                      onBlur={(event) => {
-                        const nextPosition = Number.parseInt(event.target.value, 10);
-                        if (Number.isFinite(nextPosition)) {
-                          moveItemToIndex(
-                            row.item.id,
-                            Math.min(row.siblingCount, Math.max(1, nextPosition)) - 1,
-                          );
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") event.currentTarget.blur();
-                      }}
-                    />
-                  </label>
-                </div>
-
-                <div
-                  className="flex flex-wrap items-center gap-1"
-                  role="group"
-                  aria-label={`Arrange ${label}`}
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2"
-                    disabled={row.index === 0}
-                    onClick={() => moveItem(row.item.id, -1)}
-                  >
-                    <ArrowUp /> Earlier
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2"
-                    disabled={row.index === row.siblingCount - 1}
-                    onClick={() => moveItem(row.item.id, 1)}
-                  >
-                    <ArrowDown /> Later
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2"
-                    disabled={!canIndent}
-                    onClick={() => indentItem(row.item.id)}
-                  >
-                    <ArrowRight /> Make child
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9 px-2"
-                    disabled={row.depth === 0}
-                    onClick={() => outdentItem(row.item.id)}
-                  >
-                    <ArrowLeft /> Up a level
-                  </Button>
-                </div>
-              </div>
-            </details>
-
-            <div className="flex shrink-0 items-center justify-end gap-1">
-              {canAddChild ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-10 px-2.5"
-                  disabled={availableItemSlots <= 0}
-                  onClick={() => {
-                    setAddToParentId(row.item.id);
-                    setIsDialogOpen(true);
-                  }}
-                >
-                  <Plus /> Add child
-                </Button>
-              ) : null}
+          <div className="mt-3 flex min-w-0 items-center justify-end gap-1 border-t pt-2.5">
+            {canAddChild ? (
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-10 px-2.5 text-destructive hover:text-destructive"
-                onClick={() => removeItem(row.item.id, row.parentId)}
+                className="h-10 px-2.5"
+                disabled={availableItemSlots <= 0}
+                onClick={() => {
+                  setAddToParentId(row.item.id);
+                  setIsDialogOpen(true);
+                }}
               >
-                <Trash2 /> Remove{descendantCount > 0 ? ` ${descendantCount + 1} items` : ""}
+                <Plus /> Add child
               </Button>
-            </div>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-10 px-2.5 text-destructive hover:text-destructive"
+              onClick={() => removeItem(row.item.id, row.parentId)}
+            >
+              <Trash2 /> Remove{descendantCount > 0 ? ` ${descendantCount + 1} items` : ""}
+            </Button>
           </div>
         </section>
       );
     },
     [
-      allOutlineRows,
       availableItemSlots,
       getStorefrontPath,
-      indentItem,
-      moveItem,
-      moveItemToIndex,
-      moveItemToParent,
-      outdentItem,
       removeItem,
       updateItem,
     ],
@@ -687,9 +653,8 @@ export function NavigationBuilder({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs leading-relaxed">
-                Drag to a visible insertion line. Move horizontally to preview a
-                different level. Placement options keeps precise keyboard and touch
-                controls available.
+                Use the top or bottom of a row to place beside it, or the middle
+                to place inside it. Use Move for an exact parent and position.
               </TooltipContent>
             </Tooltip>
           </div>
@@ -823,7 +788,7 @@ export function NavigationBuilder({
 
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={navigationCollisionDetection}
             accessibility={dragAccessibility}
             onDragStart={handleDragStart}
             onDragMove={handleDragMove}
@@ -842,7 +807,7 @@ export function NavigationBuilder({
                   strategy={verticalListSortingStrategy}
                 >
                   <NavigationMap
-                    rows={renderedRows}
+                    rows={dragRows}
                     selectedId={selectedId}
                     normalizedQuery={normalizedQuery}
                     activeDragId={activeDragId}
@@ -850,6 +815,7 @@ export function NavigationBuilder({
                     dragDisabled={Boolean(normalizedQuery)}
                     onSelect={handleSelect}
                     onToggle={handleToggle}
+                    onMove={setMoveItemId}
                     renderEditor={renderInlineEditor}
                   />
                 </SortableContext>
@@ -881,10 +847,10 @@ export function NavigationBuilder({
                   <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {activeDrag.item.title.trim() || "Untitled item"}
+                      {getNavigationItemLabel(activeDrag.item)}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {activeDrag.item.href || "Label only"}
+                      {getNavigationItemHref(activeDrag.item) || "Label only"}
                     </p>
                   </div>
                   {activeDrag.item.subMenu?.length ? (
@@ -909,10 +875,20 @@ export function NavigationBuilder({
         availableSlots={availableItemSlots}
         parentLabel={
           addToParentId
-            ? findNavigationLocation(navigation, addToParentId)?.item.title
+            ? itemLabel(findNavigationLocation(navigation, addToParentId)?.item)
             : undefined
         }
         getStorefrontPath={getStorefrontPath}
+      />
+
+      <NavigationMoveDialog
+        open={Boolean(moveItemId)}
+        itemId={moveItemId ?? ""}
+        items={navigation}
+        onOpenChange={(open) => {
+          if (!open) setMoveItemId(null);
+        }}
+        onMove={handleExactMove}
       />
 
       {!focusedSurface ? (

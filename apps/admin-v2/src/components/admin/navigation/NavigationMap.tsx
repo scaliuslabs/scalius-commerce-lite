@@ -5,17 +5,20 @@ import {
   ChevronRight,
   GripVertical,
   Link2,
+  Move,
   Pencil,
   Type,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { getSortableStyle } from "~/components/admin/shared/sortable-style";
 import type {
   NavigationDragIntent,
   NavigationOutlineRow,
 } from "./navigation-workspace";
 import { NAVIGATION_TREE_INDENT } from "./navigation-workspace";
+import { getNavigationItemHref, getNavigationItemLabel } from "./types";
 
 interface NavigationMapProps {
   rows: NavigationOutlineRow[];
@@ -26,6 +29,7 @@ interface NavigationMapProps {
   dragDisabled: boolean;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
+  onMove: (id: string) => void;
   renderEditor: (row: NavigationOutlineRow) => ReactNode;
 }
 
@@ -42,14 +46,23 @@ function SortableNavigationRow({
   dragDisabled,
   onSelect,
   onToggle,
+  onMove,
   renderEditor,
 }: SortableNavigationRowProps) {
   const { item, depth, hasChildren, isExpanded, matchesQuery } = row;
   const isSelected = selectedId === item.id;
   const isActiveDrag = activeDragId === item.id;
-  const label = item.title.trim() || "Untitled item";
+  const label = getNavigationItemLabel(item);
+  const href = getNavigationItemHref(item);
   const isDropTarget = dragIntent?.overId === item.id;
-  const { attributes, listeners, setNodeRef, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+    transform,
+    transition,
+  } = useSortable({
     id: item.id,
     disabled: dragDisabled,
     data: {
@@ -58,30 +71,38 @@ function SortableNavigationRow({
       depth: row.depth,
     },
   });
-  const isDragPlaceholder = isDragging || isActiveDrag;
+  const isDragSource = isDragging || isActiveDrag;
+  const sortableStyle = getSortableStyle(isDragSource ? null : transform, transition, {
+    paddingLeft: `${Math.min(depth, 3) * NAVIGATION_TREE_INDENT + 2}px`,
+  });
 
   return (
-    <li className={cn(isSelected && "bg-muted/20")}>
+    <li
+      data-navigation-row-id={item.id}
+      className={cn(isSelected && "bg-muted/20")}
+    >
       <div
         ref={setNodeRef}
-        style={{ paddingLeft: `${Math.min(depth, 3) * NAVIGATION_TREE_INDENT + 2}px` }}
+        style={sortableStyle}
         data-drag-intent={isDropTarget ? dragIntent.type : undefined}
         className={cn(
-          "group relative flex min-h-11 min-w-0 items-center gap-0.5 bg-background px-1 transition-[background-color,box-shadow] hover:bg-muted/45 sm:gap-1 sm:px-1.5",
+          "group relative flex min-h-11 min-w-0 items-center gap-0.5 bg-background px-1 transition-[background-color,box-shadow,opacity] hover:bg-muted/45 sm:gap-1 sm:px-1.5",
           isSelected && "bg-muted/45",
-          isDragPlaceholder && "border-y border-dashed border-primary/50 bg-primary/5 hover:bg-primary/5",
+          isDragSource && "opacity-40",
+          isDropTarget && dragIntent.type === "move" && dragIntent.operation === "inside" &&
+            "bg-primary/10 ring-2 ring-inset ring-primary/55 hover:bg-primary/10",
           isDropTarget && dragIntent.type === "invalid" && "ring-2 ring-inset ring-destructive/35",
         )}
       >
-        {isDropTarget && dragIntent.type === "move" ? (
+        {isDropTarget && dragIntent.type === "move" && dragIntent.operation !== "inside" ? (
           <span
             data-navigation-insertion-line
-            data-edge={dragIntent.edge}
+            data-edge={dragIntent.operation}
             data-depth={dragIntent.depth}
             aria-hidden="true"
             className={cn(
               "pointer-events-none absolute right-2 z-30 h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]",
-              dragIntent.edge === "before" ? "top-0" : "bottom-0",
+              dragIntent.operation === "before" ? "top-0" : "bottom-0",
             )}
             style={{ left: `${dragIntent.depth * NAVIGATION_TREE_INDENT + 10}px` }}
           >
@@ -89,16 +110,17 @@ function SortableNavigationRow({
           </span>
         ) : null}
 
-        {isDragPlaceholder ? (
-          <div
-            data-navigation-drag-placeholder
-            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-2 text-xs font-medium text-primary"
+        {isDropTarget && dragIntent.type === "move" && dragIntent.operation === "inside" ? (
+          <span
+            data-navigation-inside-target
+            aria-hidden="true"
+            className="pointer-events-none absolute right-3 top-1/2 z-30 -translate-y-1/2 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-sm"
           >
-            <GripVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">Original position · {label}</span>
-          </div>
-        ) : (
-          <>
+            Place inside
+          </span>
+        ) : null}
+
+        <>
             <button
               type="button"
               {...attributes}
@@ -141,7 +163,7 @@ function SortableNavigationRow({
               aria-expanded={isSelected}
               aria-label={`Edit ${label}, level ${depth + 1}`}
             >
-              {item.href ? (
+              {href ? (
                 <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               ) : (
                 <Type className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -149,7 +171,7 @@ function SortableNavigationRow({
               <span className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
                 <span className="block truncate text-sm font-medium">{label}</span>
                 <span className="block truncate text-xs text-muted-foreground sm:flex-1">
-                  {item.href || "Label only"}
+                  {href || "Label only"}
                 </span>
               </span>
               {normalizedQuery && !matchesQuery ? (
@@ -166,20 +188,34 @@ function SortableNavigationRow({
 
             <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              className={cn("h-10 w-10 shrink-0", activeDragId && "invisible")}
+              data-navigation-move-action
+              onClick={() => onMove(item.id)}
+              aria-label={`Move ${label}`}
+              title={`Move ${label} to an exact parent and position`}
+              tabIndex={activeDragId ? -1 : undefined}
+            >
+              <Move />
+            </Button>
+
+            <Button
+              type="button"
               variant={isSelected ? "secondary" : "ghost"}
               size="sm"
-              className="h-10 shrink-0 px-2"
+              className={cn("h-10 shrink-0 px-2", activeDragId && "invisible")}
               onClick={() => onSelect(item.id)}
               aria-label={`${isSelected ? "Close editor for" : "Edit"} ${label}`}
+              tabIndex={activeDragId ? -1 : undefined}
             >
               <Pencil />
               <span className="hidden sm:inline">{isSelected ? "Done" : "Edit"}</span>
             </Button>
           </>
-        )}
       </div>
 
-      {isSelected && !isDragPlaceholder ? renderEditor(row) : null}
+      {isSelected && !isDragSource ? renderEditor(row) : null}
     </li>
   );
 }
@@ -198,6 +234,7 @@ export const NavigationMap = memo(function NavigationMap({
   dragDisabled,
   onSelect,
   onToggle,
+  onMove,
   renderEditor,
 }: NavigationMapProps) {
   return (
@@ -213,6 +250,7 @@ export const NavigationMap = memo(function NavigationMap({
           dragDisabled={dragDisabled}
           onSelect={onSelect}
           onToggle={onToggle}
+          onMove={onMove}
           renderEditor={renderEditor}
         />
       ))}
