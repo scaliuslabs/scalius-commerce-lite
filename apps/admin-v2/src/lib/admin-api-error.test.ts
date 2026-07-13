@@ -3,6 +3,7 @@ import {
   AdminApiResponseError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
+  readDiscountRevisionConflict,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
   readHeroSliderRevisionConflict,
@@ -70,6 +71,28 @@ describe("admin API detail-loader errors", () => {
         ),
       ),
     ).toBeNull();
+  });
+
+  it("extracts only a typed discount revision conflict with valid details", () => {
+    expect(readDiscountRevisionConflict(new AdminApiResponseError(
+      "Discount changed",
+      409,
+      "DISCOUNT_REVISION_CONFLICT",
+      { expectedRevision: 2, currentRevision: 3 },
+    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
+
+    expect(readDiscountRevisionConflict(new AdminApiResponseError(
+      "Wrong conflict",
+      409,
+      "CONFLICT",
+      { expectedRevision: 2, currentRevision: 3 },
+    ))).toBeNull();
+    expect(readDiscountRevisionConflict(new AdminApiResponseError(
+      "Bad revision",
+      409,
+      "DISCOUNT_REVISION_CONFLICT",
+      { expectedRevision: 0, currentRevision: "3" },
+    ))).toBeNull();
   });
 
   it("fails closed for cyclic causes", () => {

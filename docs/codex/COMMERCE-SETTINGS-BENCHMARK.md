@@ -143,7 +143,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
-| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons | Still code-only and one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, revision/CAS, allocation ledger, or exact cart preview. |
+| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; revision/CAS for rule edits and status; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons | Still code-only and one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, allocation ledger, or exact cart preview. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator | Five equally weighted tabs, merchant-facing priority field, no overlap diagnostics, no bulk classification, no customer exemption workflow, weak region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
@@ -190,8 +190,10 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 - `customerSegment` and `maxUsesPerOrder` are stored, but segments are rejected
   and max uses is capped at one. These are schema promises without product
   behavior.
-- Update replaces target relations but has no aggregate revision/CAS. Two
-  merchant tabs can silently overwrite promotion rules.
+- Current code-rule updates and activation commands require the loaded positive
+  revision. A D1 batch guard covers the parent row and every scope replacement,
+  advances exactly once, and returns a typed conflict rather than allowing two
+  merchant tabs to silently overwrite promotion rules.
 - The legacy list reported redemption totals but hid combined requirements and
   called a usage-exhausted code active. The current code surface now explains
   both saved minimums, reached usage limits, and persisted rule states checkout
@@ -276,9 +278,10 @@ Explicit Scalius decisions:
    legacy segment/combination/per-order states for review instead of silently
    presenting unsupported saved intent as live capability.
 8. This code-builder cleanup is not the target promotion system. Automatic
-   rules, priority, combination, budgets, conflict/CAS, immutable allocations,
-   test-cart explanation, and refunds remain blocked on the typed promotion
-   evaluator and schema below.
+   rules, priority, combination, budgets, immutable allocations, test-cart
+   explanation, and refunds remain blocked on the typed promotion evaluator and
+   schema below. That future aggregate needs its own revision semantics; current
+   customer-entered code rules already reject stale admin writes.
 
 ### Target domain model
 

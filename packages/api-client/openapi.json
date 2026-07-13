@@ -39051,6 +39051,10 @@
                               "code": {
                                 "type": "string"
                               },
+                              "revision": {
+                                "type": "integer",
+                                "minimum": 1
+                              },
                               "type": {
                                 "type": "string"
                               },
@@ -39142,6 +39146,7 @@
                             "required": [
                               "id",
                               "code",
+                              "revision",
                               "type",
                               "valueType",
                               "discountValue",
@@ -39611,115 +39616,14 @@
                         "id": {
                           "type": "string"
                         },
-                        "code": {
-                          "type": "string"
-                        },
-                        "type": {
-                          "type": "string"
-                        },
-                        "valueType": {
-                          "type": "string"
-                        },
-                        "discountValue": {
-                          "type": "number"
-                        },
-                        "minPurchaseAmount": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "minQuantity": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUsesPerOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUses": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "limitOnePerCustomer": {
-                          "type": "boolean"
-                        },
-                        "customerSegment": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "startDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "endDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
                         "id",
-                        "code",
-                        "type",
-                        "valueType",
-                        "discountValue",
-                        "minPurchaseAmount",
-                        "minQuantity",
-                        "maxUsesPerOrder",
-                        "maxUses",
-                        "limitOnePerCustomer",
-                        "customerSegment",
-                        "startDate",
-                        "endDate",
-                        "isActive",
-                        "createdAt",
-                        "updatedAt",
-                        "deletedAt"
+                        "revision"
                       ]
                     }
                   },
@@ -40418,6 +40322,10 @@
                         "code": {
                           "type": "string"
                         },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "type": {
                           "type": "string"
                         },
@@ -40509,6 +40417,7 @@
                       "required": [
                         "id",
                         "code",
+                        "revision",
                         "type",
                         "valueType",
                         "discountValue",
@@ -40929,6 +40838,10 @@
                   "id": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
@@ -40937,7 +40850,8 @@
                   "valueType",
                   "discountValue",
                   "startDate",
-                  "id"
+                  "id",
+                  "expectedRevision"
                 ]
               }
             }
@@ -40963,115 +40877,14 @@
                         "id": {
                           "type": "string"
                         },
-                        "code": {
-                          "type": "string"
-                        },
-                        "type": {
-                          "type": "string"
-                        },
-                        "valueType": {
-                          "type": "string"
-                        },
-                        "discountValue": {
-                          "type": "number"
-                        },
-                        "minPurchaseAmount": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "minQuantity": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUsesPerOrder": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "maxUses": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "limitOnePerCustomer": {
-                          "type": "boolean"
-                        },
-                        "customerSegment": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "startDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "endDate": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
-                        },
-                        "isActive": {
-                          "type": "boolean"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "updatedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ]
-                        },
-                        "deletedAt": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "number"
-                            }
-                          ],
-                          "nullable": true
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
                         "id",
-                        "code",
-                        "type",
-                        "valueType",
-                        "discountValue",
-                        "minPurchaseAmount",
-                        "minQuantity",
-                        "maxUsesPerOrder",
-                        "maxUses",
-                        "limitOnePerCustomer",
-                        "customerSegment",
-                        "startDate",
-                        "endDate",
-                        "isActive",
-                        "createdAt",
-                        "updatedAt",
-                        "deletedAt"
+                        "revision"
                       ]
                     }
                   },
@@ -41609,10 +41422,15 @@
                 "properties": {
                   "isActive": {
                     "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 1
                   }
                 },
                 "required": [
-                  "isActive"
+                  "isActive",
+                  "expectedRevision"
                 ]
               }
             }
@@ -41638,12 +41456,17 @@
                         "id": {
                           "type": "string"
                         },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
                         "isActive": {
                           "type": "boolean"
                         }
                       },
                       "required": [
                         "id",
+                        "revision",
                         "isActive"
                       ]
                     }
@@ -41816,48 +41639,8 @@
               }
             }
           },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        false
-                      ]
-                    },
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "details": {
-                          "nullable": true
-                        }
-                      },
-                      "required": [
-                        "code",
-                        "message"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

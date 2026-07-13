@@ -30,6 +30,7 @@ const activeDiscount = {
   startDate: new Date("2026-01-01T00:00:00.000Z"),
   endDate: null,
   isActive: true,
+  expectedRevision: 1,
 };
 
 describe("discount lifecycle authority", () => {
@@ -44,7 +45,7 @@ describe("discount lifecycle authority", () => {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           where: vi.fn(() => ({
-            get: vi.fn(async () => ({ id: "disc_1", isActive: false })),
+            get: vi.fn(async () => ({ id: "disc_1", isActive: false, revision: 1 })),
           })),
         })),
       })),
@@ -54,6 +55,31 @@ describe("discount lifecycle authority", () => {
     await expect(
       updateDiscount(db as never, "disc_1", activeDiscount),
     ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(db.batch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale full-rule update before preparing relation replacements", async () => {
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => ({ id: "disc_1", isActive: true, revision: 2 })),
+          })),
+        })),
+      })),
+      batch: vi.fn(),
+    };
+
+    await expect(updateDiscount(db as never, "disc_1", activeDiscount))
+      .rejects.toMatchObject({
+        status: 409,
+        code: "DISCOUNT_REVISION_CONFLICT",
+        details: {
+          discountId: "disc_1",
+          expectedRevision: 1,
+          currentRevision: 2,
+        },
+      });
     expect(db.batch).not.toHaveBeenCalled();
   });
 
@@ -89,13 +115,13 @@ describe("discount lifecycle authority", () => {
     try {
       const endDate = new Date(1_800_000_000_000);
       vi.setSystemTime(new Date(1_800_000_000_500));
-      const activeBoundary = createLifecycleDb([{ id: "disc_1", endDate }]);
-      await expect(setDiscountActiveStatus(activeBoundary.db, "disc_1", true))
-        .resolves.toEqual({ id: "disc_1", isActive: true });
+      const activeBoundary = createLifecycleDb([{ id: "disc_1", endDate, revision: 1 }]);
+      await expect(setDiscountActiveStatus(activeBoundary.db, "disc_1", true, 1))
+        .resolves.toMatchObject({ id: "disc_1", isActive: true });
 
       vi.setSystemTime(new Date(1_800_000_001_000));
-      const expired = createLifecycleDb([{ id: "disc_1", endDate }]);
-      await expect(setDiscountActiveStatus(expired.db, "disc_1", true))
+      const expired = createLifecycleDb([{ id: "disc_1", endDate, revision: 1 }]);
+      await expect(setDiscountActiveStatus(expired.db, "disc_1", true, 1))
         .rejects.toThrow(/Expired discounts cannot be activated/u);
     } finally {
       vi.useRealTimers();
@@ -109,7 +135,7 @@ function createLifecycleDb(selectResults: unknown[] = []) {
   const db = {
     select: vi.fn(() => {
       const result = selectResults.shift();
-      const chain: Record<string, unknown> = {};
+      const chain: Record<string, unknown> = { kind: "guard" };
       chain.from = vi.fn(() => chain);
       chain.where = vi.fn(() => chain);
       chain.limit = vi.fn(() => chain);
@@ -119,10 +145,21 @@ function createLifecycleDb(selectResults: unknown[] = []) {
     update: vi.fn(() => ({
       set: vi.fn((values: Record<string, unknown>) => {
         updateSets.push(values);
-        return { where: vi.fn(async () => undefined) };
+        const statement: Record<string, unknown> = { kind: "mutation" };
+        statement.where = vi.fn(() => statement);
+        statement.returning = vi.fn(() => {
+          statement.kind = "revision";
+          return statement;
+        });
+        return statement;
       }),
     })),
     delete: vi.fn(() => ({ where: deleteWhere })),
+    batch: vi.fn(async (statements: Array<{ kind?: string }>) => (
+      statements.map((statement) => (
+        statement.kind === "revision" ? [{ revision: 2 }] : [{ ok: 1 }]
+      ))
+    )),
   };
   return { db: db as never, updateSets, deleteWhere };
 }

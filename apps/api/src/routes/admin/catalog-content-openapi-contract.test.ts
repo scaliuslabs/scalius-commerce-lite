@@ -190,6 +190,7 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
             "401",
             "403",
             "404",
+            "409",
         ]);
         expectResponseStatuses(spec, "/api/v1/admin/discounts/{id}/restore", "post", [
             "200",

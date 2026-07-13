@@ -27,6 +27,7 @@ import {
 
 export interface DiscountItem {
   id: string;
+  revision: number;
   code: string;
   type: string;
   valueType: string;
@@ -61,7 +62,7 @@ interface DiscountColumnOptions {
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
   onPermanentDelete: (id: string) => void;
-  onToggleStatus: (id: string, currentStatus: boolean) => void;
+  onToggleStatus: (id: string, currentStatus: boolean, expectedRevision: number) => void;
 }
 
 function DiscountStatusCell({
@@ -72,7 +73,7 @@ function DiscountStatusCell({
 }: {
   discount: DiscountItem;
   showTrashed: boolean;
-  onToggleStatus: (id: string, currentStatus: boolean) => void;
+  onToggleStatus: (id: string, currentStatus: boolean, expectedRevision: number) => void;
   canToggleStatus: boolean;
 }) {
   if (showTrashed) {
@@ -91,7 +92,7 @@ function DiscountStatusCell({
       variant="ghost"
       size="sm"
       className="p-0 h-auto hover:bg-transparent"
-      onClick={() => onToggleStatus(discount.id, discount.isActive)}
+      onClick={() => onToggleStatus(discount.id, discount.isActive, discount.revision)}
     >
       {statusBadge}
     </Button>
@@ -306,7 +307,7 @@ export function getDiscountColumns(
               ...(opts.canToggleStatus ? [{
                 label: d.isActive ? "Deactivate" : "Activate",
                 icon: d.isActive ? X : Check,
-                onClick: () => opts.onToggleStatus(d.id, d.isActive),
+                onClick: () => opts.onToggleStatus(d.id, d.isActive, d.revision),
               }] : []),
             ]
           : undefined,

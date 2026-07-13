@@ -31,6 +31,11 @@ const discountConflictMutationErrorResponses = {
     409: conflictResponse,
 } as const;
 
+const discountMutationResultSchema = z.object({
+    id: z.string(),
+    revision: z.number().int().min(1),
+});
+
 // ── List Discounts ──
 
 const listRoute = createRoute({
@@ -85,7 +90,7 @@ const createDiscountRoute = createRoute({
         body: { content: { "application/json": { schema: createDiscountSchema } } }
     },
     responses: {
-        201: { description: "Discount created", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        201: { description: "Discount created", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema) } } },
         ...errorResponses,
         409: conflictResponse,
     }
@@ -204,7 +209,7 @@ const updateDiscountRoute = createRoute({
         body: { content: { "application/json": { schema: updateDiscountSchema } } }
     },
     responses: {
-        200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountSchema) } } },
+        200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema) } } },
         ...errorResponses,
         409: conflictResponse,
     }
@@ -284,23 +289,25 @@ const toggleStatusRoute = createRoute({
             content: {
                 "application/json": {
                     schema: z.object({
-                        isActive: z.boolean()
+                        isActive: z.boolean(),
+                        expectedRevision: z.number().int().min(1),
                     })
                 }
             }
         }
     },
     responses: {
-        200: { description: "Discount status toggled", content: { "application/json": { schema: successEnvelope(z.object({ id: z.string(), isActive: z.boolean() })) } } },
-        ...errorResponses,
+        200: { description: "Discount status toggled", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema.extend({ isActive: z.boolean() })) } } },
+        ...discountConflictMutationErrorResponses,
+        404: errorResponses[404],
     }
 });
 
 app.openapi(toggleStatusRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { isActive } = c.req.valid("json");
-    const result = await setDiscountActiveStatus(db, id, isActive);
+    const { isActive, expectedRevision } = c.req.valid("json");
+    const result = await setDiscountActiveStatus(db, id, isActive, expectedRevision);
     await invalidateCatalogCaches("discounts", c);
     return ok(c, result);
 });

@@ -51,6 +51,15 @@ describe("unified discount builder workflow", () => {
     expect(builder).not.toContain("bg-white");
   });
 
+  it("claims the loaded revision and preserves input when a newer rule wins", () => {
+    expect(builder).toContain("discountRevision");
+    expect(builder).toContain("expectedRevision: discountRevision");
+    expect(builder).toContain("readDiscountRevisionConflict");
+    expect(builder).toContain("Another session changed this rule");
+    expect(builder).toContain("Reload latest");
+    expect(editRoute).toContain("discountRevision={duplicate ? undefined : discount.revision}");
+  });
+
   it("keeps edit read failures local instead of redirecting them as missing records", () => {
     expect(editRoute).toContain("RouteErrorComponent");
     expect(editRoute).not.toContain(".catch(() => null)");

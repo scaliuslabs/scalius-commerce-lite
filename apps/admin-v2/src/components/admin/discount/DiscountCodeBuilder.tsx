@@ -12,6 +12,10 @@ import {
 } from "lucide-react";
 
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import {
+  readDiscountRevisionConflict,
+  type DiscountRevisionConflict,
+} from "~/lib/admin-api-error";
 import { useCreateDiscount, useUpdateDiscount } from "~/lib/api-mutations/discounts";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -61,6 +65,7 @@ import {
 interface DiscountCodeBuilderProps {
   type: DiscountEditorType;
   discountId?: string;
+  discountRevision?: number;
   defaultValues?: DiscountEditorDefaults;
   initialSelectedProducts?: DiscountProductOption[];
   initialSelectedCollections?: DiscountCollectionOption[];
@@ -145,6 +150,7 @@ function OptionalNumberField({
 export function DiscountCodeBuilder({
   type,
   discountId,
+  discountRevision,
   defaultValues,
   initialSelectedProducts = [],
   initialSelectedCollections = [],
@@ -156,6 +162,8 @@ export function DiscountCodeBuilder({
   const createMutation = useCreateDiscount();
   const updateMutation = useUpdateDiscount();
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [revisionConflict, setRevisionConflict] =
+    useState<DiscountRevisionConflict | null>(null);
   const [selectedProducts, setSelectedProducts] = useState(initialSelectedProducts);
   const [selectedCollections, setSelectedCollections] = useState(initialSelectedCollections);
   const initialProductsRef = useRef(initialSelectedProducts);
@@ -251,13 +259,26 @@ export function DiscountCodeBuilder({
     try {
       const payload = toDiscountWritePayload(valuesToSave);
       if (discountId) {
-        await updateMutation.mutateAsync({ id: discountId, ...payload });
+        if (!discountRevision || discountRevision < 1) {
+          setSaveError("The discount version is missing. Reload the latest rule before saving.");
+          return;
+        }
+        await updateMutation.mutateAsync({
+          id: discountId,
+          expectedRevision: discountRevision,
+          ...payload,
+        });
       } else {
         await createMutation.mutateAsync(payload);
       }
       form.reset(valuesToSave);
       void navigate({ to: "/admin/discounts" });
     } catch (error) {
+      const conflict = readDiscountRevisionConflict(error);
+      if (conflict) {
+        setRevisionConflict(conflict);
+        return;
+      }
       setSaveError(
         error instanceof Error
           ? error.message
@@ -314,6 +335,28 @@ export function DiscountCodeBuilder({
             <AlertCircle aria-hidden="true" />
             <AlertTitle>Discount not saved</AlertTitle>
             <AlertDescription>{saveError}</AlertDescription>
+          </Alert>
+        ) : null}
+
+        {revisionConflict ? (
+          <Alert>
+            <RefreshCw aria-hidden="true" />
+            <AlertTitle>Newer discount version found</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Another session changed this rule. Your input is still here; copy anything you need,
+                then reload before editing the latest version.
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => window.location.reload()}
+              >
+                Reload latest
+              </Button>
+            </AlertDescription>
           </Alert>
         ) : null}
 
@@ -734,7 +777,11 @@ export function DiscountCodeBuilder({
               </Button>
               <Button
                 type="submit"
-                disabled={isSubmitting || !form.formState.isDirty}
+                disabled={
+                  isSubmitting ||
+                  revisionConflict !== null ||
+                  !form.formState.isDirty
+                }
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
                 {discountId ? "Save changes" : "Create discount"}

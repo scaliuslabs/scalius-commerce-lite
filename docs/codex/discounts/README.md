@@ -31,10 +31,10 @@ Source, focused tests, and deployed behavior remain authoritative.
 - Percentage results are capped at the eligible amount and rounded with the
   configured currency precision. Fixed discounts cannot make an eligible amount
   negative. Free delivery discounts waive only the authoritative delivery charge.
-- A product discount with no saved product/collection relations intentionally
-  means all products. Once any relation exists, resolution is fail-closed: an
-  inactive/deleted collection, malformed collection config, stale membership, or
-  empty resolved scope never falls back to the whole cart.
+- A product discount must save at least one product or collection target. Scope
+  resolution is fail-closed: an inactive/deleted collection, malformed
+  collection config, stale membership, or empty resolved scope never falls back
+  to the whole cart.
 - Product and collection scope is deduplicated and bounded to 90 saved targets.
   Association inserts are chunked to stay below D1's 100-bound-parameter limit.
 - Date eligibility is `[start, end)`. The date-only admin editor serializes the
@@ -58,6 +58,10 @@ Source, focused tests, and deployed behavior remain authoritative.
 - Trash always deactivates. Restore always returns an inactive draft.
 - Permanent delete is trash-only and is blocked when any order usage history
   exists. This preserves promotion audit evidence.
+- Every current code rule has a positive `revision`. Full edits and activation
+  commands submit the loaded revision, guard the complete D1 batch before any
+  parent/scope write, and increment exactly once. Trash and restore also advance
+  the revision so a lifecycle round trip cannot make an old editor current.
 
 ## Admin UX decisions
 
@@ -70,6 +74,10 @@ Source, focused tests, and deployed behavior remain authoritative.
   values.
 - Percentage inputs reject values above 100 before submission. Code, date, and
   end-of-day normalization match core validation.
+- A typed `DISCOUNT_REVISION_CONFLICT` preserves the merchant's unsaved editor
+  values and requires an explicit latest-version reload. A stale one-click
+  activation rolls back its optimistic state, explains the refresh, and reloads
+  the authoritative row.
 
 ## Deliberate remaining gaps
 
@@ -93,7 +101,9 @@ Focused coverage lives in:
 - `packages/core/src/modules/discounts/discounts.validation.test.ts`
 - `packages/core/src/modules/discounts/discounts.eligibility.test.ts`
 - `packages/core/src/modules/discounts/discounts.service.test.ts`
+- `packages/core/src/modules/discounts/discounts.revision.test.ts`
+- `packages/database/__tests__/discount-revision-migration.test.ts`
 - `apps/api/src/routes/discounts.test.ts`
+- `apps/api/src/routes/admin/discounts.test.ts`
 - `apps/api/src/routes/orders-create.test.ts`
 - `apps/admin-v2/src/components/admin/discount/shared-validation.test.ts`
-

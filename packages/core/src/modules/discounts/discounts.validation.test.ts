@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DiscountType, DiscountValueType } from "@scalius/database/schema";
-import { createDiscountSchema } from "./discounts.validation";
+import { createDiscountSchema, updateDiscountSchema } from "./discounts.validation";
 
 describe("discount validation", () => {
   it("creates discounts as inactive drafts by default", () => {
@@ -14,6 +14,28 @@ describe("discount validation", () => {
     });
 
     expect(parsed.isActive).toBe(false);
+  });
+
+  it("requires a positive revision claim for every rule update", () => {
+    const update = {
+      id: "disc_1",
+      expectedRevision: 3,
+      code: "WELCOME10",
+      type: DiscountType.AMOUNT_OFF_ORDER,
+      valueType: DiscountValueType.PERCENTAGE,
+      discountValue: 10,
+      startDate: "2026-01-01T00:00:00.000Z",
+    };
+
+    expect(updateDiscountSchema.parse(update).expectedRevision).toBe(3);
+    expect(() => updateDiscountSchema.parse({
+      ...update,
+      expectedRevision: 0,
+    })).toThrow();
+    expect(() => updateDiscountSchema.parse({
+      ...update,
+      expectedRevision: undefined,
+    })).toThrow();
   });
 
   it("normalizes safe codes and rejects ambiguous code characters", () => {

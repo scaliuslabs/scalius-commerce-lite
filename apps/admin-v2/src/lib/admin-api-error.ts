@@ -23,6 +23,11 @@ export interface ProductRevisionConflict {
   currentRevision: number | null;
 }
 
+export interface DiscountRevisionConflict {
+  expectedRevision: number;
+  currentRevision: number | null;
+}
+
 export interface CategoryRevisionConflict {
   expectedRevision: number;
   currentRevision: number | null;
@@ -108,6 +113,43 @@ export function readProductRevisionConflict(
   if (
     parsed?.status !== 409 ||
     parsed.code !== "PRODUCT_REVISION_CONFLICT" ||
+    !parsed.details ||
+    typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+
+  const details = parsed.details as {
+    expectedRevision?: unknown;
+    currentRevision?: unknown;
+  };
+  if (
+    typeof details.expectedRevision !== "number" ||
+    !Number.isInteger(details.expectedRevision) ||
+    details.expectedRevision < 1 ||
+    !(
+      details.currentRevision === null ||
+      (typeof details.currentRevision === "number" &&
+        Number.isInteger(details.currentRevision) &&
+        details.currentRevision >= 1)
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    expectedRevision: details.expectedRevision,
+    currentRevision: details.currentRevision,
+  };
+}
+
+export function readDiscountRevisionConflict(
+  error: unknown,
+): DiscountRevisionConflict | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 409 ||
+    parsed.code !== "DISCOUNT_REVISION_CONFLICT" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {

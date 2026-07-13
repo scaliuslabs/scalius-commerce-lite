@@ -166,7 +166,11 @@ function refineDiscountSemantics<Shape extends z.ZodRawShape>(schema: z.ZodObjec
 export const createDiscountSchema = refineDiscountSemantics(z.object(baseDiscountFields));
 
 export const updateDiscountSchema = refineDiscountSemantics(
-    z.object({ ...baseDiscountFields, id: z.string().trim().min(1) }),
+    z.object({
+        ...baseDiscountFields,
+        id: z.string().trim().min(1),
+        expectedRevision: z.number().int().min(1),
+    }),
 );
 
 export type CreateDiscountInput = z.infer<typeof createDiscountSchema>;

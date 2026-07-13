@@ -11609,6 +11609,7 @@ export type GetApiV1AdminDiscountsResponses = {
             discounts: Array<{
                 id: string;
                 code: string;
+                revision: number;
                 type: string;
                 valueType: string;
                 discountValue: number;
@@ -11753,22 +11754,7 @@ export type PostApiV1AdminDiscountsResponses = {
         success: true;
         data: {
             id: string;
-            code: string;
-            type: string;
-            valueType: string;
-            discountValue: number;
-            minPurchaseAmount: number | null;
-            minQuantity: number | null;
-            maxUsesPerOrder: number | null;
-            maxUses: number | null;
-            limitOnePerCustomer: boolean;
-            customerSegment: string | null;
-            startDate: string | number;
-            endDate: string | number | null;
-            isActive: boolean;
-            createdAt: string | number;
-            updatedAt: string | number;
-            deletedAt: string | number | null;
+            revision: number;
         };
     };
 };
@@ -12033,6 +12019,7 @@ export type GetApiV1AdminDiscountsByIdResponses = {
         data: {
             id: string;
             code: string;
+            revision: number;
             type: string;
             valueType: string;
             discountValue: number;
@@ -12075,6 +12062,7 @@ export type PutApiV1AdminDiscountsByIdData = {
         appliesToProducts?: Array<string>;
         appliesToCollections?: Array<string>;
         id: string;
+        expectedRevision: number;
     };
     path: {
         id: string;
@@ -12173,22 +12161,7 @@ export type PutApiV1AdminDiscountsByIdResponses = {
         success: true;
         data: {
             id: string;
-            code: string;
-            type: string;
-            valueType: string;
-            discountValue: number;
-            minPurchaseAmount: number | null;
-            minQuantity: number | null;
-            maxUsesPerOrder: number | null;
-            maxUses: number | null;
-            limitOnePerCustomer: boolean;
-            customerSegment: string | null;
-            startDate: string | number;
-            endDate: string | number | null;
-            isActive: boolean;
-            createdAt: string | number;
-            updatedAt: string | number;
-            deletedAt: string | number | null;
+            revision: number;
         };
     };
 };
@@ -12243,6 +12216,7 @@ export type DeleteApiV1AdminDiscountsByIdPermanentResponse = DeleteApiV1AdminDis
 export type PostApiV1AdminDiscountsByIdToggleStatusData = {
     body?: {
         isActive: boolean;
+        expectedRevision: number;
     };
     path: {
         id: string;
@@ -12297,20 +12271,9 @@ export type PostApiV1AdminDiscountsByIdToggleStatusErrors = {
         };
     };
     /**
-     * Rate limit exceeded
+     * Conflict
      */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
+    409: {
         success: false;
         error: {
             code: string;
@@ -12330,6 +12293,7 @@ export type PostApiV1AdminDiscountsByIdToggleStatusResponses = {
         success: true;
         data: {
             id: string;
+            revision: number;
             isActive: boolean;
         };
     };
