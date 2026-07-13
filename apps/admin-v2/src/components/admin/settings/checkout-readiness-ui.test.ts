@@ -87,5 +87,10 @@ describe("checkout settings status presentation", () => {
     expect(requestsSource).toContain(
       "Approval and payment processing stay with the order.",
     );
+    expect(requestsSource).toContain("Unsaved customer request changes");
+    expect(requestsSource).toContain("Customer request policy is up to date");
+    expect(requestsSource).toContain("<UnsavedChangesGuard");
+    expect(requestsSource).toContain("disabled={!canManage || !dirty || saveMutation.isPending}");
+    expect(requestsSource).toContain("Save policy");
   });
 });
