@@ -33863,6 +33863,330 @@ export type PostApiV1AdminAuth2FaVerifyResponses = {
 
 export type PostApiV1AdminAuth2FaVerifyResponse = PostApiV1AdminAuth2FaVerifyResponses[keyof PostApiV1AdminAuth2FaVerifyResponses];
 
+export type DeleteApiV1AdminAuthSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/sessions';
+};
+
+export type DeleteApiV1AdminAuthSessionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAuthSessionsError = DeleteApiV1AdminAuthSessionsErrors[keyof DeleteApiV1AdminAuthSessionsErrors];
+
+export type DeleteApiV1AdminAuthSessionsResponses = {
+    /**
+     * Other sessions revoked
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revokedCount: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAuthSessionsResponse = DeleteApiV1AdminAuthSessionsResponses[keyof DeleteApiV1AdminAuthSessionsResponses];
+
+export type GetApiV1AdminAuthSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/sessions';
+};
+
+export type GetApiV1AdminAuthSessionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthSessionsError = GetApiV1AdminAuthSessionsErrors[keyof GetApiV1AdminAuthSessionsErrors];
+
+export type GetApiV1AdminAuthSessionsResponses = {
+    /**
+     * Current user session list
+     */
+    200: {
+        success: true;
+        data: {
+            sessions: Array<{
+                commandId: string;
+                current: boolean;
+                deviceLabel: string;
+                deviceType: 'desktop' | 'mobile' | 'tablet' | 'unknown';
+                networkHint: string | null;
+                twoFactorVerified: boolean;
+                impersonated: boolean;
+                createdAt: string;
+                lastActiveAt: string;
+                expiresAt: string;
+            }>;
+            hasMore: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthSessionsResponse = GetApiV1AdminAuthSessionsResponses[keyof GetApiV1AdminAuthSessionsResponses];
+
+export type DeleteApiV1AdminAuthSessionsByCommandIdData = {
+    body?: never;
+    path: {
+        commandId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/auth/sessions/{commandId}';
+};
+
+export type DeleteApiV1AdminAuthSessionsByCommandIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAuthSessionsByCommandIdError = DeleteApiV1AdminAuthSessionsByCommandIdErrors[keyof DeleteApiV1AdminAuthSessionsByCommandIdErrors];
+
+export type DeleteApiV1AdminAuthSessionsByCommandIdResponses = {
+    /**
+     * Session revoked
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminAuthSessionsByCommandIdResponse = DeleteApiV1AdminAuthSessionsByCommandIdResponses[keyof DeleteApiV1AdminAuthSessionsByCommandIdResponses];
+
 export type GetApiV1AdminAuthAccountSecurityData = {
     body?: never;
     path?: never;
