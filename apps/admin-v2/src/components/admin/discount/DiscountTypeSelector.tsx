@@ -8,16 +8,17 @@ import {
 } from "../../ui/card";
 import { Button } from "../../ui/button";
 import { ChevronRight, Tag, Percent, Truck } from "lucide-react";
+import type { DiscountEditorType } from "./discount-editor-model";
 
 interface DiscountType {
-  id: string;
+  id: DiscountEditorType;
   name: string;
   description: string;
   icon: React.ReactNode;
 }
 
 interface DiscountTypeSelectorProps {
-  onSelect?: (typeId: string) => void;
+  onSelect?: (typeId: DiscountEditorType) => void;
 }
 
 export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
@@ -42,7 +43,7 @@ export function DiscountTypeSelector({ onSelect }: DiscountTypeSelectorProps) {
     },
   ];
 
-  const handleSelect = (typeId: string) => {
+  const handleSelect = (typeId: DiscountEditorType) => {
     if (onSelect) {
       onSelect(typeId);
     }

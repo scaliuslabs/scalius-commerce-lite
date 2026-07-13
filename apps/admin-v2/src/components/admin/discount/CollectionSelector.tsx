@@ -16,7 +16,7 @@ import { Badge } from "../../ui/badge";
 import { getCollections, getCollectionsByIds } from "~/lib/api-functions/collections";
 
 // Collection interface
-interface Collection {
+export interface DiscountCollectionOption {
   id: string;
   name: string;
   description: string | null;
@@ -25,8 +25,8 @@ interface Collection {
 }
 
 interface CollectionSelectorProps {
-  selectedCollections: Collection[];
-  onChange: (collections: Collection[]) => void;
+  selectedCollections: DiscountCollectionOption[];
+  onChange: (collections: DiscountCollectionOption[]) => void;
   buttonLabel?: string;
   className?: string;
   isLoading?: boolean;
@@ -36,7 +36,7 @@ interface CollectionSelectorProps {
 const PAGE_SIZE = 10;
 
 export function CollectionSelector({
-  selectedCollections = [] as Collection[],
+  selectedCollections = [] as DiscountCollectionOption[],
   onChange,
   buttonLabel = "Select Collections",
   className,
@@ -46,24 +46,28 @@ export function CollectionSelector({
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [displayedCollections, setDisplayedCollections] = useState<
-    Collection[]
+    DiscountCollectionOption[]
   >([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCollections, setTotalCollections] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestSearchTermRef = useRef(searchTerm);
   const lastResolutionSignatureRef = useRef("");
   const skipNextSearchLoadRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
   useEffect(() => {
     latestSearchTermRef.current = searchTerm;
   }, [searchTerm]);
 
   const loadCollections = useCallback(async (page = 1, search = "") => {
+    const requestId = ++loadRequestRef.current;
     try {
+      setLoadError(null);
       if (page === 1) {
         setIsSearching(true);
       } else {
@@ -78,8 +82,10 @@ export function CollectionSelector({
         },
       });
 
+      if (requestId !== loadRequestRef.current) return;
+
       const collectionsArray = data.collections;
-      const mapped: Collection[] = collectionsArray.map((c) => ({
+      const mapped: DiscountCollectionOption[] = collectionsArray.map((c) => ({
         id: c.id,
         name: c.name,
         description: null,
@@ -98,9 +104,14 @@ export function CollectionSelector({
       setCurrentPage(page);
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error("Error loading collections:", error);
+      if (requestId === loadRequestRef.current) {
+        setLoadError("Collections could not be loaded.");
+      }
     } finally {
-      setIsSearching(false);
-      setIsLoadingMore(false);
+      if (requestId === loadRequestRef.current) {
+        setIsSearching(false);
+        setIsLoadingMore(false);
+      }
     }
   }, []);
 
@@ -147,6 +158,7 @@ export function CollectionSelector({
         }
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error resolving collection names:", error);
+        if (!cancelled) lastResolutionSignatureRef.current = "";
       }
     };
 
@@ -200,7 +212,7 @@ export function CollectionSelector({
     }
   };
 
-  const handleSelectCollection = (collection: Collection) => {
+  const handleSelectCollection = (collection: DiscountCollectionOption) => {
     // Check if collection is already selected
     const isSelected = selectedCollections.some((c) => c.id === collection.id);
 
@@ -252,6 +264,7 @@ export function CollectionSelector({
       >
         <PopoverTrigger asChild>
           <Button
+            type="button"
             variant="outline"
             role="combobox"
             aria-expanded={open}
@@ -269,7 +282,11 @@ export function CollectionSelector({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
+        <PopoverContent
+          align="start"
+          collisionPadding={16}
+          className="w-[min(22rem,calc(100vw-2rem))] p-0"
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search collections..."
@@ -277,6 +294,20 @@ export function CollectionSelector({
               onValueChange={setSearchTerm}
             />
             <CommandList>
+              {loadError ? (
+                <div role="alert" className="m-2 rounded-md border border-destructive/30 p-3 text-sm">
+                  <p className="text-destructive">{loadError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 h-8"
+                    onClick={() => void loadCollections(1, searchTerm)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
               <CommandEmpty>
                 {isSearching ? (
                   <div className="flex items-center justify-center py-6">
@@ -325,6 +356,7 @@ export function CollectionSelector({
               {currentPage < totalPages && (
                 <div className="py-2 px-2 border-t">
                   <Button
+                    type="button"
                     variant="outline"
                     className="w-full"
                     size="sm"
@@ -371,13 +403,15 @@ export function CollectionSelector({
                 </Badge>
               )}
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="h-4 w-4 p-0 ml-1"
+                aria-label={`Remove ${collection.name}`}
                 onClick={() => handleRemoveCollection(collection.id)}
               >
                 <X className="h-3 w-3" />
-                <span className="sr-only">Remove</span>
+                <span className="sr-only">Remove {collection.name}</span>
               </Button>
             </Badge>
           ))}

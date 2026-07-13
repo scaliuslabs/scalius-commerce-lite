@@ -367,6 +367,26 @@ describe("createStorefrontOrder tax discount parity", () => {
       calculatedDiscountAmount: 50,
     })).rejects.toThrow("product discount scope could not be verified");
   });
+
+  it("preserves the evaluator's buyer-safe rejection reason at final checkout", async () => {
+    await expect(placeOrder({
+      inputOverrides: { discountCode: "SAVE20" },
+      discountValidation: {
+        valid: false,
+        error: "Minimum purchase amount of ৳500 not met",
+      },
+    })).rejects.toThrow("Minimum purchase amount of ৳500 not met");
+  });
+
+  it("falls back to a bounded generic discount error for malformed evaluator output", async () => {
+    await expect(placeOrder({
+      inputOverrides: { discountCode: "SAVE20" },
+      discountValidation: {
+        valid: false,
+        error: "x".repeat(201),
+      },
+    })).rejects.toThrow("Discount code SAVE20 is invalid or expired");
+  });
 });
 
 describe("createStorefrontOrder product availability verification", () => {

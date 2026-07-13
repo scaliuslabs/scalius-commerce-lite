@@ -6,6 +6,21 @@ Discount code CRUD, eligibility validation, and discount amount calculation. Sup
 
 - The list names the customer outcome, code method, eligibility minimum,
   lifecycle, schedule, and usage instead of relying on a code tooltip.
+- Create, edit, and duplicate use one `DiscountCodeBuilder` for all three
+  supported outcomes. The builder keeps method, outcome, scope, requirements,
+  schedule, limits, activation, readiness, and the natural-language rule in
+  one model instead of three independently validated forms.
+- Product discounts require at least one explicit product or collection.
+  Order and delivery discounts reject stray product scope. This prevents a
+  targetless product discount from silently becoming an order-wide discount.
+- The builder states that the method is a checkout code and that it is used
+  alone. Unsupported automatic and stacking controls are not rendered.
+- Optional purchase amount and item-quantity requirements can be combined;
+  product discounts count only eligible lines, while order and delivery codes
+  count the complete merchandise cart.
+- Native local-date inputs preserve the authored calendar day. Duplicates are
+  always drafts, read failures remain retryable on the edit route, save errors
+  preserve input, and dirty navigation uses the shared guard.
 - Mobile uses purpose-built cards with the same selection, edit, duplicate,
   activation, trash, restore, and permanent-delete actions as desktop.
 - List failures remain visible and retryable; they must not be rendered as an
@@ -93,7 +108,7 @@ Cart and API validation are buyer-friendly prechecks, not the concurrency author
 | `amount_off_order` | `min(subtotal, subtotal * value / 100)` | `min(subtotal, fixedAmount)` |
 | `amount_off_products` | Sums applicable product totals, then `min(total, total * value / 100)` | `min(applicableTotal, fixedAmount)` |
 
-For `amount_off_products`, collection expansion resolves collections to product IDs by parsing each collection's `config` JSON (`categoryIds` and `productIds`). If no product/collection restrictions exist, falls back to full subtotal. If restrictions exist but no cart items match, returns 0.
+For `amount_off_products`, collection expansion resolves collections to product IDs by parsing each collection's `config` JSON (`categoryIds` and `productIds`). A missing, empty, inactive, deleted, or unreadable saved scope fails closed. It never falls back to the order subtotal. If no cart items match, calculation returns 0.
 
 Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 

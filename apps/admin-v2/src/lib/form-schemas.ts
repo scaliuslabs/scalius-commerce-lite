@@ -235,6 +235,6 @@ export {
 } from "@/components/admin/discount/shared-validation";
 
 export {
-  formSchema as amountOffProductsFormSchema,
-  type FormValues as AmountOffProductsFormValues,
-} from "@/components/admin/discount/amount-off-products/types";
+  discountEditorSchema,
+  type DiscountEditorValues,
+} from "@/components/admin/discount/discount-editor-model";

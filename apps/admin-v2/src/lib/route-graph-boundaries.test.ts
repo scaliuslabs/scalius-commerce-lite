@@ -587,7 +587,17 @@ describe("admin route graph boundaries", () => {
         "components",
         "admin",
         "discount",
-        "FreeShippingForm.tsx",
+        "DiscountCodeBuilder.tsx",
+      ),
+      "utf8",
+    );
+    const discountModel = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "discount",
+        "discount-editor-model.ts",
       ),
       "utf8",
     );
@@ -602,7 +612,7 @@ describe("admin route graph boundaries", () => {
     expect(pageForm).toContain("isPublished: false");
     expect(pageForm).toContain("PERMISSIONS.PAGES_PUBLISH");
     expect(pageForm).toContain("disabled={!canPublish}");
-    expect(discountForm).toContain("isActive: false");
+    expect(discountModel).toContain("isActive: Boolean(defaults.isActive)");
     expect(discountForm).toContain("disabled={!canToggleStatus}");
     expect(permissionsSource).toContain(
       'DISCOUNTS_TOGGLE_STATUS: "discounts.toggle_status"',
@@ -927,9 +937,7 @@ describe("admin route graph boundaries", () => {
     ];
 
     expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={setSelectedType} />");
-    expect(newRouteSource).toContain("const AmountOffProductsContainer = lazy(");
-    expect(newRouteSource).toContain("const AmountOffOrderForm = lazy(");
-    expect(newRouteSource).toContain("const FreeShippingForm = lazy(");
+    expect(newRouteSource).toContain("const DiscountCodeBuilder = lazy(");
     for (const marker of forbiddenMarkers) {
       expect(combinedSource).not.toContain(marker);
     }
@@ -937,16 +945,7 @@ describe("admin route graph boundaries", () => {
 
   it("keeps admin discount form values out of native GET submissions", () => {
     const discountForms = [
-      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "AmountOffOrderForm.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "FreeShippingForm.tsx"),
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "discount",
-        "amount-off-products",
-        "AmountOffProductsContainer.tsx",
-      ),
+      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "DiscountCodeBuilder.tsx"),
     ];
 
     for (const path of discountForms) {

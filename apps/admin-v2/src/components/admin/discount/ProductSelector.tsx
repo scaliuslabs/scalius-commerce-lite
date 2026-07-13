@@ -17,7 +17,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
 
 // Product interface based on what's used in OrderForm
-interface Product {
+export interface DiscountProductOption {
   id: string;
   name: string;
   price: number;
@@ -32,8 +32,8 @@ interface Product {
 }
 
 interface ProductSelectorProps {
-  selectedProducts: Product[];
-  onChange: (products: Product[]) => void;
+  selectedProducts: DiscountProductOption[];
+  onChange: (products: DiscountProductOption[]) => void;
   buttonLabel?: string;
   className?: string;
   isLoading?: boolean;
@@ -41,7 +41,7 @@ interface ProductSelectorProps {
 }
 
 export function ProductSelector({
-  selectedProducts = [] as Product[],
+  selectedProducts = [] as DiscountProductOption[],
   onChange,
   buttonLabel = "Select Products",
   className,
@@ -51,19 +51,23 @@ export function ProductSelector({
   const { symbol } = useCurrency();
   const [open, setOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [displayedProducts, setDisplayedProducts] = useState<DiscountProductOption[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResolutionSignatureRef = useRef("");
   const skipNextSearchLoadRef = useRef(false);
+  const loadRequestRef = useRef(0);
 
   // Main function to load products
   const loadProducts = useCallback(async (page = 1, search = "") => {
+    const requestId = ++loadRequestRef.current;
     try {
+      setLoadError(null);
       if (page === 1) {
         setIsSearching(true);
       } else {
@@ -77,6 +81,8 @@ export function ProductSelector({
           search: search.trim() || undefined,
         },
       });
+
+      if (requestId !== loadRequestRef.current) return;
 
       if (data.products) {
         if (page === 1) {
@@ -93,9 +99,14 @@ export function ProductSelector({
       }
     } catch (error: unknown) {
       if (import.meta.env.DEV) console.error("Error loading products:", error);
+      if (requestId === loadRequestRef.current) {
+        setLoadError("Products could not be loaded.");
+      }
     } finally {
-      setIsSearching(false);
-      setIsLoadingMore(false);
+      if (requestId === loadRequestRef.current) {
+        setIsSearching(false);
+        setIsLoadingMore(false);
+      }
     }
   }, []);
 
@@ -160,6 +171,7 @@ export function ProductSelector({
         }
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error resolving product names:", error);
+        if (!cancelled) lastResolutionSignatureRef.current = "";
       }
     };
 
@@ -177,7 +189,7 @@ export function ProductSelector({
   };
 
   // Handle product selection
-  const handleSelectProduct = (product: Product) => {
+  const handleSelectProduct = (product: DiscountProductOption) => {
     // Check if product is already selected
     const isSelected = selectedProducts.some((p) => p.id === product.id);
 
@@ -218,6 +230,7 @@ export function ProductSelector({
       >
         <PopoverTrigger asChild>
           <Button
+            type="button"
             variant="outline"
             role="combobox"
             aria-expanded={open}
@@ -235,7 +248,11 @@ export function ProductSelector({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
+        <PopoverContent
+          align="start"
+          collisionPadding={16}
+          className="w-[min(22rem,calc(100vw-2rem))] p-0"
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search products..."
@@ -243,6 +260,20 @@ export function ProductSelector({
               onValueChange={setSearchTerm}
             />
             <CommandList>
+              {loadError ? (
+                <div role="alert" className="m-2 rounded-md border border-destructive/30 p-3 text-sm">
+                  <p className="text-destructive">{loadError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 h-8"
+                    onClick={() => void loadProducts(1, searchTerm)}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
               <CommandEmpty>
                 {isSearching ? (
                   <div className="flex items-center justify-center py-6">
@@ -295,6 +326,7 @@ export function ProductSelector({
               {currentPage < totalPages && (
                 <div className="py-2 px-2 border-t">
                   <Button
+                    type="button"
                     variant="outline"
                     className="w-full"
                     size="sm"
@@ -331,15 +363,17 @@ export function ProductSelector({
             >
               <span className="truncate max-w-[180px]">{product.name}</span>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="h-4 w-4 p-0 ml-1"
+                aria-label={`Remove ${product.name}`}
                 onClick={() =>
                   onChange(selectedProducts.filter((p) => p.id !== product.id))
                 }
               >
                 <X className="h-3 w-3" />
-                <span className="sr-only">Remove</span>
+                <span className="sr-only">Remove {product.name}</span>
               </Button>
             </Badge>
           ))}
