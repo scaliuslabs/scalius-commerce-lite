@@ -109,10 +109,12 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - The order editor regression on `FWW6XI` was reproduced and fixed at its API contract boundary. Order form-data now supplies every SKU's `selectedOptions` array, the generated contract requires it, and the admin keeps a defensive empty-array adapter for legacy cached responses. After deployment, `/admin/orders/FWW6XI/edit` remained on the edit route and rendered the Rider line item as `Size: 40, Color: Sand` with no route error fallback. The authenticated read smoke now validates that exact nested array contract before opening browser routes.
 - A separate authenticated live-browser sweep passed ten representative production documents after that fix: new order, new product, Rider edit, guest-customer history, Media, Discounts, Analytics, Account, Checkout, and Taxes. Every path retained its expected route/document, no route-owned error copy was found, and the isolated tab reported no console errors. This is bounded representative evidence, not a claim that every mutation has been exercised.
 - Product editing was rechecked against the live Rider product. The merchant-defined Size and Color axes showed all six active combinations, every SKU row exposed an exact image selector, unassigned rows explicitly used the automatic product-image fallback, every row exposed an `Omit <combination>` action, and the reserved row disclosed `13 available to sell; 1 committed from 14 on hand` through a compact accessible control instead of permanent inline copy.
-- The settings follow-up was verified again after deployment in fresh authenticated tabs. The SEO return-policy editor reserves a fixed 20 rem outcome rail, keeps all six controls inside a shrink-safe two-column region, reported no intersecting field rectangles, and produced no page-level horizontal overflow at 1280 px. The Media picker exposed one Close control rather than an overlapping text/X pair. The Header Navigation tab loaded the new searchable `Menu workspace`, 3/150 capacity indicator, collapse/expand controls, selected-item inspector, and native earlier/later/indent/outdent actions without console errors or page overflow.
+- The settings follow-up was verified again after deployment in fresh authenticated tabs. The SEO return-policy editor reserves a fixed 20 rem outcome rail, keeps all six controls inside a shrink-safe two-column region, reported no intersecting field rectangles, and produced no page-level horizontal overflow at 1280 px. The Media picker exposed one Close control rather than an overlapping text/X pair. The first Header Navigation workspace's permanent split map/inspector was subsequently rejected after live Shopify and current WordPress benchmarking. The deployed correction is one full-width compact hierarchy with a single inline row editor, ancestor-aware search, collapse/expand, Focus mode, and native parent/position/earlier/later/indent controls. The current persisted authority remains explicitly limited to 150 items and three levels until the accepted named-menu/placement architecture is implemented.
 - A fresh product-detail tab no longer reproduced the React hydration error previously isolated to the updated-at text boundary. The Rider document retained its route, rendered the product and six SKU rows, and produced no browser console entry.
 - Official first-party-sourced marks are now bundled locally for Stripe, SSLCommerz, Polar, Cloudflare, and Resend. The live Payment and Email settings rendered every expected asset with non-zero intrinsic dimensions while preserving provider names and readiness as real text. This is the first provider slice, not evidence that every remaining delivery, analytics, fraud, social, and messaging integration has been converted.
 - Settings cache effects now have an explicit dependency matrix and focused tests. Email and SMS saves invalidate public checkout readiness; shipping lifecycle writes invalidate checkout and Product/Offer shipping schema projections; and the dependency map covers email, SMS, tax, and shipping-schema consumers. SMS queue dispatch no longer keeps a five-minute per-isolate credential object and instead reads/decrypts authoritative D1 settings for every send, removing the cross-isolate stale-save gap.
+- The second provider-identity slice bundles 19 hash-verified first-party marks across payments, analytics, Meta CAPI, Firebase, WhatsApp, delivery, fraud, and SMS. SSLCommerz's source PNG was cropped only to its transparent alpha bounds and records both source and derivative hashes. FraudGuard remains a neutral shield because the configured `fraudguard.slope.com.bd` identity cannot be tied to the similarly named `fraudguard.shop`; no lookalike mark was shipped.
+- The complete settings cache audit now records 32 mutation surfaces. Storefront URL saves clear both `gw:site_settings` and the separately read `gw:storefront_url`, and Firebase access-token KV keys include a credential fingerprint so private-key rotation cannot reuse an old project-scoped token. The known Partytown KV eventual-consistency/outbox boundary remains documented.
 
 ## Cleanup decisions and state
 
@@ -127,6 +129,21 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Header social links were normalized to explicit HTTPS URLs and nonblank labels (`Facebook`, `X`, `LinkedIn`, `GitHub`, `YouTube`, and `WhatsApp`) before the strict navigation validator release.
 
 ## Release proof
+
+- Latest navigation/provider/cache correction: API
+  `6fa538e5-2b3d-4728-8e3f-dbc35e283e80` and admin
+  `1c93bdeb-59cf-4c1b-bbf8-523cee26b447`. Storefront was not redeployed because
+  this slice changed only API, Core, and Admin code. Twelve focused files / 124
+  tests, focused ESLint, and Admin/Core/API TypeScript checks passed
+  sequentially. `pnpm release:check` exited successfully and
+  `pnpm ops:check --queues` passed four of four readiness samples, 294 OpenAPI
+  paths, current API at 100%, and the inspected queue topology; the only
+  operations warning remains the documented logs-only alert-email channel.
+  Authenticated production browser proof covered the inline Header Navigation
+  editor, Meta CAPI, Analytics, Fraud Checker chooser, Firebase Admin Push,
+  Delivery, and Payment Gateways. All expected adopted marks loaded with
+  non-zero intrinsic dimensions and the inspected tab reported no console
+  errors.
 
 - Latest settings resilience release: API
   `9530f5ef-a87a-4410-8e0e-5c9b37bc28a1` and admin
