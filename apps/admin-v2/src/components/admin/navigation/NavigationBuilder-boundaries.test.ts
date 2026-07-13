@@ -8,6 +8,9 @@ const NAVIGATION_BUILDER_SOURCE = fileURLToPath(
 const NAVIGATION_TREE_ROWS_SOURCE = fileURLToPath(
   new URL("./NavigationTreeRows.tsx", import.meta.url),
 );
+const MOBILE_NAVIGATION_TREE_SOURCE = fileURLToPath(
+  new URL("./MobileNavigationTree.tsx", import.meta.url),
+);
 const SORTABLE_NAVIGATION_EDITOR_SOURCE = fileURLToPath(
   new URL("./SortableNavigationEditor.tsx", import.meta.url),
 );
@@ -58,6 +61,20 @@ describe("NavigationBuilder bundle boundaries", () => {
 
     expect(typesSource).toContain("MAX_NAV_DEPTH = 3");
     expect(typesSource).not.toContain("MAX_NAV_DEPTH = 10");
+  });
+
+  it("uses a native-control mobile tree instead of squeezing the desktop table", () => {
+    const builderSource = readFileSync(NAVIGATION_BUILDER_SOURCE, "utf8");
+    const mobileSource = readFileSync(MOBILE_NAVIGATION_TREE_SOURCE, "utf8");
+
+    expect(builderSource).toContain("useIsMobile");
+    expect(builderSource).toContain("renderMobileNavigation");
+    expect(builderSource).toContain("<MobileNavigationTree");
+    expect(mobileSource).not.toContain("<Table");
+    expect(mobileSource).toContain('aria-expanded={expanded}');
+    expect(mobileSource).toContain('role="group"');
+    expect(mobileSource).toContain("Move ${label} earlier");
+    expect(mobileSource).toContain("Move ${label} up one level");
   });
 
   it("uses public page sources and the shared safe-link policy", () => {
