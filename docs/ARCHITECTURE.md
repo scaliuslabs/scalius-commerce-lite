@@ -24,18 +24,20 @@ Browser (Customer/Admin)
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │  @scalius/core (Domain Services)                     │
-│  20 modules + auth + integrations + search           │
+│  Commerce modules + auth + integrations + search     │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │  @scalius/database (Drizzle + D1)                    │
-│  53 table declarations, 13 schema files, 42 migrations│
+│  Versioned schema, migrations, and D1 invariants      │
 └─────────────────────────────────────────────────────┘
 ```
 
 ## Layer Rules
 
-Dependencies flow **downward only**. No layer violations detected in the codebase.
+Dependencies are expected to flow **downward only**. Boundary tests and current
+package checks are the authority for whether that remains true; this document
+does not certify a clean tree by itself.
 
 | Layer | May Import | Never Imports |
 |-------|-----------|---------------|
@@ -326,17 +328,16 @@ If status changed:
 
 ---
 
-## Architectural Quality Scores
+## Release posture
 
-| Dimension | Score | Evidence |
-|-----------|-------|---------|
-| Modularity | 9.5/10 | 20 focused modules, clean boundaries, zero unwanted coupling |
-| Layering | 9.8/10 | Strict routes→services→schema→DB, no violations |
-| Coupling | 9.2/10 | Intentional tight coupling in payment/inventory/orders triangle, loose elsewhere |
-| Cohesion | 9.7/10 | Each module owns its complete domain |
-| Scalability | 9.3/10 | Adding providers/modules requires zero changes to existing code |
-| Idempotency | 9.4/10 | 4-layer payment dedup, CAS locking, atomic batches |
-| Overall | **9.2/10** | Production-ready with excellent separation of concerns |
+Numeric architecture scores and blanket “production-ready” claims are not used.
+They hide the difference between a sensible module boundary and a verified
+commerce lifecycle. Stable-release confidence comes from the release bar in
+`docs/codex/PLATFORM-GOAL.md`, focused invariant tests, the sequential package
+gates, deployed Cloudflare smokes, and current operational evidence. The
+orders/payments/inventory triangle remains intentionally coupled at its atomic
+D1 commit boundary; every other dependency should be justified by current code
+and boundary tests.
 
 ---
 
@@ -365,7 +366,8 @@ If status changed:
 1. Create `packages/core/src/modules/{domain}/` with service + validation + types + index
 2. Create route at `apps/api/src/routes/admin/{domain}.ts`
 3. Create admin component at `apps/admin-v2/src/components/admin/{domain}/`
-4. Zero changes to existing code
+4. Register the module only at the explicit route/composition and permission
+   boundaries that consume it; avoid unrelated cross-domain edits
 
 ---
 
