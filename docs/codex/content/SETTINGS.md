@@ -32,6 +32,46 @@ Currency, Media delivery, Business identity, Security policy, and Allowed
 Countries fail closed on read failure. These are shared-shell checkpoints, not
 proof that each domain below is complete.
 
+## Interface consistency audit — 2026-07-13
+
+The remaining settings work is not an open-ended visual refresh. The current
+source audit found these concrete shared-contract violations:
+
+- Cache uses decorative gradient overview cards, a rainbow per-group style map,
+  oversized headings, and explanatory architecture copy before the operator's
+  actual queue failures and invalidation actions. Rebuild it around health,
+  failed work, bounded group actions, and a dependency drawer using semantic
+  surfaces; preserve the existing permission and DLQ authorities.
+- Fraud Checker and Meta CAPI still use oversized route headers and large local
+  cards. Both need the same provider outcome model as payments: setup,
+  enablement, environment, health, runtime consequence, and last verified
+  evidence must remain distinct. A successful form save is not provider health.
+- Email status still uses one-off success styling and provider setup copy. Move
+  it to the same semantic outcome and test-delivery vocabulary without exposing
+  masked credentials as editable values.
+- Scanner's white QR backing is intentional scan contrast, not a theme surface;
+  the surrounding card, expiry, copy, regeneration, replay, and error states
+  still need independent mobile/dark verification.
+- Tax now keeps its validated `section` in the URL. Customer-request policy now
+  exposes Saved/Unsaved, Reset, permission-aware read-only state, navigation
+  protection, and a sticky mobile-safe save bar. Refund requests remain review
+  requests and never trigger payment mutation automatically.
+- Theme now owns one versioned semantic presentation document for type, scale,
+  corners, density, content width, button/field/card style, and allowlisted
+  colors. Default storefront presentation remains stable and product-detail
+  composition stays protected. Real route/device draft preview, durable drafts,
+  history, and rollback remain separate work rather than synthetic preview
+  claims.
+- Media now keeps a five-column desktop cap, zero-selected entry into bulk mode,
+  explicit bulk outcomes, a mobile folder rail, and guarded metadata drafts.
+  Adaptive transcoding and timed caption tracks remain platform work, not UI
+  labels.
+
+Implementation order after the current promotion/payment/account cutovers:
+Cache operations, Fraud providers, Meta CAPI, Email/notification delivery, then
+Scanner/security proof. Each slice must include mobile/dark/error states and the
+actual operational or buyer projection before it can be called complete.
+
 ## General settings authorities
 
 | Section | Current authority / buyer consequence | Remaining release proof |
@@ -73,4 +113,3 @@ proof that each domain below is complete.
 3. Verify cache invalidation/warming and rollback or repair behavior.
 4. Run focused tests, sequential package checks, deployment, and authenticated
    desktop/mobile smoke; append exact evidence to `catalog/LIVE-DEMO-RUN.md`.
-
