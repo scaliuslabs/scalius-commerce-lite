@@ -32,7 +32,7 @@ export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFi
     <section aria-label="Upload queue" className="border-b bg-muted/20 px-3 py-2">
       <p className="sr-only" aria-live="polite">{activeCount ? `${activeCount} uploads in progress.` : "No uploads in progress."} {completeCount ? `${completeCount} uploads ready.` : ""} {attentionCount ? `${attentionCount} uploads need attention.` : ""}</p>
       <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· 5 MiB resumable parts</span></p>
+        <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· 5 MiB parts · keep this tab open to resume</span></p>
         {finished && <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onClearFinished}>Clear finished</Button>}
       </div>
       <div className="grid gap-1.5 lg:grid-cols-2">
