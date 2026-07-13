@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
 
 function getEmailRuntimeContext(env?: Env | NodeJS.ProcessEnv) {
   const source = (env ?? process.env) as Record<string, unknown>;
@@ -206,7 +207,8 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
         },
         backupCodeOptions: {
           length: 10,
-          count: 10,
+          amount: 10,
+          storeBackupCodes: createTwoFactorRecoveryCodeStorage(secret),
         },
         // Email OTP configuration for 2FA verification
         otpOptions: {

@@ -75,12 +75,13 @@ describe("theme and account settings workspace", () => {
     expect(twoFactorSource).toContain('role="group"');
     expect(twoFactorSource).toContain("aria-pressed");
     expect(twoFactorSource).toContain("handleSetupEmailForChange");
-    expect(twoFactorSource).toContain("verifyCurrentPassword(password)");
+    expect(twoFactorSource).toContain('data: { method: "email", password }');
     const emailChangeHandler = twoFactorSource.slice(
       twoFactorSource.indexOf("const handleSetupEmailForChange"),
       twoFactorSource.indexOf("const handleDisable2FA"),
     );
     expect(emailChangeHandler).not.toContain("twoFactor.enable");
+    expect(emailChangeHandler).toContain("startTwoFactorMethodChallenge");
     expect(emailChangeHandler).toContain("setBackupCodes([])");
     expect(twoFactorSource).toContain(
       "Turn off two-factor authentication?",

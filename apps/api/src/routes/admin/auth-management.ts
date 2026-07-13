@@ -4,8 +4,21 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { and, desc, eq, gt, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
-import type { Database } from "@scalius/database/client";
-import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
+import {
+    buildBatchGuard,
+    safeBatch,
+    type Database,
+} from "@scalius/database/client";
+import {
+    permissions,
+    roles,
+    session as sessionTable,
+    twoFactor as twoFactorTable,
+    user,
+    userPermissions,
+    userRoles,
+    verification,
+} from "@scalius/database/schema";
 import {
     adminPrincipalExists,
     type AdminPrincipalExistsDb,
@@ -17,6 +30,11 @@ import {
     enforceAdminSetupRateLimit,
     markAdminSetupClaimCompleted,
     markAdminSetupClaimFailed,
+    createPendingEmailMethodChallenge,
+    createPendingTotpMethodChallenge,
+    getTwoFactorMethodChallengeIdentifier,
+    readPendingTwoFactorMethodChallenge,
+    verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
 import { assignRoleToUser } from "@scalius/core/auth/rbac/helpers";
@@ -559,14 +577,130 @@ app.openapi(complete2faVerificationRoute, async (c) => {
     return ok(c, { message: "Two-factor authentication verified" });
 });
 
-const update2faMethodSchema = z.object({
-    method: z.enum(["totp", "email"]),
-    code: z.string().min(1).optional(),
-    sessionToken: z.string().min(32).optional(),
-}).refine((data) => Boolean(data.code) !== Boolean(data.sessionToken), {
-    message: "Provide either a verification code or a session proof",
-    path: ["code"],
+const start2faMethodChallengeRoute = createRoute({
+    method: "post",
+    path: "/2fa/method-challenge",
+    tags: ["Admin - Auth Management"],
+    summary: "Start a staged two-factor method change",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        method: z.enum(["totp", "email"]),
+                        password: z.string().min(1),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Staged method challenge created",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        challengeId: z.string(),
+                        totpUri: z.string().nullable(),
+                        expiresAt: z.string(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
 });
+
+app.openapi(start2faMethodChallengeRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const session = c.get("session");
+    const { method, password } = c.req.valid("json");
+
+    if (!session) {
+        throw new UnauthorizedError("No active session found");
+    }
+    if (!sessionUser.twoFactorEnabled) {
+        throw new ConflictError("Two-factor setup must be completed before changing its method");
+    }
+
+    const authSecret = c.env.BETTER_AUTH_SECRET?.trim();
+    if (!authSecret) {
+        throw new ServiceUnavailableError("Two-factor method changes are unavailable");
+    }
+
+    const auth = createAuth(c.env);
+    const passwordProof = await (async () => {
+        try {
+            return await auth.api.verifyPassword({
+                headers: c.req.raw.headers,
+                body: { password },
+            });
+        } catch {
+            throw new ValidationError("Password confirmation failed");
+        }
+    })();
+    if (passwordProof.status !== true) {
+        throw new ValidationError("Password confirmation failed");
+    }
+
+    const staged = method === "totp"
+        ? await createPendingTotpMethodChallenge({
+            authSecret,
+            userId: sessionUser.id,
+            sessionId: session.id,
+            email: sessionUser.email,
+        })
+        : await createPendingEmailMethodChallenge({
+            authSecret,
+            userId: sessionUser.id,
+            sessionId: session.id,
+        });
+    const now = new Date();
+    await db.batch([
+        db.delete(verification).where(
+            eq(verification.identifier, staged.identifier),
+        ),
+        db.insert(verification).values({
+            id: staged.challengeId,
+            identifier: staged.identifier,
+            value: staged.encryptedValue,
+            expiresAt: staged.expiresAt,
+            createdAt: now,
+            updatedAt: now,
+        }),
+    ]);
+
+    const totpUri = "totpUri" in staged && typeof staged.totpUri === "string"
+        ? staged.totpUri
+        : null;
+    return ok(c, {
+        challengeId: staged.challengeId,
+        totpUri,
+        expiresAt: staged.expiresAt.toISOString(),
+    });
+});
+
+const update2faMethodSchema = z.union([
+    z.object({
+        method: z.literal("totp"),
+        challengeId: z.string().regex(/^tfmc_[a-f0-9]{32}$/),
+        code: z.string().regex(/^\d{6}$/),
+    }),
+    z.object({
+        method: z.literal("email"),
+        challengeId: z.string().regex(/^tfmc_[a-f0-9]{32}$/),
+        sessionToken: z.string().min(32),
+    }),
+    z.object({
+        method: z.enum(["totp", "email"]),
+        code: z.string().min(1),
+    }),
+    z.object({
+        method: z.enum(["totp", "email"]),
+        sessionToken: z.string().min(32),
+    }),
+]);
 
 const update2faMethodRoute = createRoute({
     method: "post",
@@ -583,7 +717,16 @@ const update2faMethodRoute = createRoute({
         },
     },
     responses: {
-        200: { description: "Method updated", content: { "application/json": { schema: successEnvelope(z.object({})) } } },
+        200: {
+            description: "Method updated",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        backupCodes: z.array(z.string()).optional(),
+                    })),
+                },
+            },
+        },
         ...errorResponses,
     }
 });
@@ -592,14 +735,222 @@ app.openapi(update2faMethodRoute, async (c) => {
     const db = c.get("db");
     const sessionUser = c.get("user");
     const session = c.get("session");
-    const { method, code, sessionToken: provenSessionToken } = c.req.valid("json");
+    const methodInput = c.req.valid("json");
+    const { method } = methodInput;
 
     if (!session) {
         throw new UnauthorizedError("No active session found");
     }
 
+    if ("challengeId" in methodInput) {
+        if (!sessionUser.twoFactorEnabled) {
+            throw new ConflictError("Two-factor setup must be completed before changing its method");
+        }
+
+        const authSecret = c.env.BETTER_AUTH_SECRET?.trim();
+        if (!authSecret) {
+            throw new ServiceUnavailableError("Two-factor method changes are unavailable");
+        }
+
+        const now = new Date();
+        const identifier = getTwoFactorMethodChallengeIdentifier(
+            sessionUser.id,
+            session.id,
+        );
+        const challengeRow = await db
+            .select({ value: verification.value })
+            .from(verification)
+            .where(and(
+                eq(verification.id, methodInput.challengeId),
+                eq(verification.identifier, identifier),
+                gt(verification.expiresAt, now),
+            ))
+            .get();
+        if (!challengeRow) {
+            throw new ValidationError("The authenticator setup expired or was already used");
+        }
+
+        const pending = await readPendingTwoFactorMethodChallenge({
+            authSecret,
+            encryptedValue: challengeRow.value,
+            userId: sessionUser.id,
+            sessionId: session.id,
+            expectedMethod: method,
+            now,
+        });
+        if (!pending) {
+            throw new ValidationError("The verification method change expired or is invalid");
+        }
+
+        const existingTwoFactorRows = await db
+            .select({ id: twoFactorTable.id })
+            .from(twoFactorTable)
+            .where(eq(twoFactorTable.userId, sessionUser.id))
+            .limit(2);
+        if (existingTwoFactorRows.length !== 1) {
+            throw new ConflictError("The existing two-factor authority is unavailable");
+        }
+        const existingTwoFactor = existingTwoFactorRows[0]!;
+
+        if (pending.method === "email") {
+            if (!("sessionToken" in methodInput)) {
+                throw new ValidationError("A verified email-session proof is required");
+            }
+            const proofSession = await db
+                .select({ id: sessionTable.id })
+                .from(sessionTable)
+                .where(and(
+                    eq(sessionTable.id, session.id),
+                    eq(sessionTable.userId, sessionUser.id),
+                    eq(sessionTable.token, methodInput.sessionToken),
+                ))
+                .get();
+            if (!proofSession) {
+                throw new UnauthorizedError("Two-factor method proof is invalid");
+            }
+
+            const claimedAt = new Date();
+            const emailGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+                SELECT 1 FROM ${verification}
+                WHERE ${verification.id} = ${methodInput.challengeId}
+                  AND ${verification.identifier} = ${identifier}
+                  AND ${verification.expiresAt} > ${now}
+            ) AND EXISTS (
+                SELECT 1 FROM ${user}
+                WHERE ${user.id} = ${sessionUser.id}
+                  AND ${user.twoFactorEnabled} = ${true}
+            ) AND EXISTS (
+                SELECT 1 FROM ${sessionTable}
+                WHERE ${sessionTable.id} = ${session.id}
+                  AND ${sessionTable.userId} = ${sessionUser.id}
+                  AND ${sessionTable.token} = ${methodInput.sessionToken}
+            ) AND EXISTS (
+                SELECT 1 FROM ${twoFactorTable}
+                WHERE ${twoFactorTable.id} = ${existingTwoFactor.id}
+                  AND ${twoFactorTable.userId} = ${sessionUser.id}
+            ) THEN 1 ELSE json_extract('TWO_FACTOR_METHOD_CHALLENGE_CONFLICT', '$') END`);
+            try {
+                await safeBatch(db, [
+                    emailGuard,
+                    db.update(user)
+                        .set({
+                            twoFactorEnabled: true,
+                            twoFactorMethod: "email",
+                            mustEnrollTwoFactor: false,
+                            updatedAt: claimedAt,
+                        })
+                        .where(eq(user.id, sessionUser.id)),
+                    db.update(sessionTable)
+                        .set({ twoFactorVerified: true, updatedAt: claimedAt })
+                        .where(and(
+                            eq(sessionTable.id, session.id),
+                            eq(sessionTable.userId, sessionUser.id),
+                            eq(sessionTable.token, methodInput.sessionToken),
+                        )),
+                    db.delete(verification).where(and(
+                        eq(verification.id, methodInput.challengeId),
+                        eq(verification.identifier, identifier),
+                    )),
+                ]);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (/TWO_FACTOR_METHOD_CHALLENGE_CONFLICT|malformed json/iu.test(message)) {
+                    throw new ConflictError("The email method change was already used or became stale");
+                }
+                throw error;
+            }
+
+            return ok(c, {});
+        }
+
+        if (!("code" in methodInput) || !(await verifyPendingTotpCode(
+            pending.secret,
+            methodInput.code,
+        ))) {
+            throw new ValidationError("The verification code is invalid or expired");
+        }
+
+        const authorityGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+            SELECT 1 FROM ${verification}
+            WHERE ${verification.id} = ${methodInput.challengeId}
+              AND ${verification.identifier} = ${identifier}
+              AND ${verification.expiresAt} > ${now}
+        ) AND EXISTS (
+            SELECT 1 FROM ${user}
+            WHERE ${user.id} = ${sessionUser.id}
+              AND ${user.twoFactorEnabled} = ${true}
+        ) AND EXISTS (
+            SELECT 1 FROM ${sessionTable}
+            WHERE ${sessionTable.id} = ${session.id}
+              AND ${sessionTable.userId} = ${sessionUser.id}
+        ) AND EXISTS (
+            SELECT 1 FROM ${twoFactorTable}
+            WHERE ${twoFactorTable.id} = ${existingTwoFactor.id}
+              AND ${twoFactorTable.userId} = ${sessionUser.id}
+        ) THEN 1 ELSE json_extract('TWO_FACTOR_METHOD_CHALLENGE_CONFLICT', '$') END`);
+        const claimedAt = new Date();
+        try {
+            await safeBatch(db, [
+                authorityGuard,
+                db.update(twoFactorTable)
+                    .set({
+                        secret: pending.encryptedSecret,
+                        backupCodes: pending.storedBackupCodes,
+                        verified: true,
+                        updatedAt: claimedAt,
+                    })
+                    .where(and(
+                        eq(twoFactorTable.id, existingTwoFactor.id),
+                        eq(twoFactorTable.userId, sessionUser.id),
+                    )),
+                db.update(user)
+                    .set({
+                        twoFactorEnabled: true,
+                        twoFactorMethod: "totp",
+                        mustEnrollTwoFactor: false,
+                        updatedAt: claimedAt,
+                    })
+                    .where(eq(user.id, sessionUser.id)),
+                db.update(sessionTable)
+                    .set({ twoFactorVerified: true, updatedAt: claimedAt })
+                    .where(and(
+                        eq(sessionTable.id, session.id),
+                        eq(sessionTable.userId, sessionUser.id),
+                    )),
+                db.delete(verification).where(and(
+                    eq(verification.id, methodInput.challengeId),
+                    eq(verification.identifier, identifier),
+                )),
+            ]);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (/TWO_FACTOR_METHOD_CHALLENGE_CONFLICT|malformed json/iu.test(message)) {
+                throw new ConflictError("The authenticator setup changed before it could be committed");
+            }
+            throw error;
+        }
+
+        return ok(c, { backupCodes: pending.backupCodes });
+    }
+
+    const currentMethod = sessionUser.twoFactorMethod === "totp" ||
+        sessionUser.twoFactorMethod === "email"
+        ? sessionUser.twoFactorMethod
+        : null;
+    const hasEstablishedMethod = sessionUser.twoFactorEnabled === true &&
+        sessionUser.mustEnrollTwoFactor !== true &&
+        currentMethod !== null;
+    if (hasEstablishedMethod && currentMethod !== method) {
+        throw new ConflictError(
+            "Changing an established two-factor method requires a password-bound challenge",
+        );
+    }
+
     let verifiedSessionId = session.id;
-    const sessionToken = provenSessionToken;
+    const sessionToken = "sessionToken" in methodInput
+        ? methodInput.sessionToken
+        : undefined;
+    const code = "code" in methodInput ? methodInput.code : undefined;
     if (sessionToken) {
         const sessionByToken = await db
             .select({ id: sessionTable.id })

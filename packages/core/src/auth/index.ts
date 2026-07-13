@@ -19,3 +19,22 @@ export type {
   ConsumedScannerTokenClaim,
   ScannerTokenCleanupResult,
 } from "./scanner-token-claims";
+export {
+  buildTotpUri,
+  createPendingEmailMethodChallenge,
+  createPendingTotpMethodChallenge,
+  createTwoFactorRecoveryCodeStorage,
+  getTwoFactorMethodChallengeIdentifier,
+  readPendingTotpMethodChallenge,
+  readPendingTwoFactorMethodChallenge,
+  TWO_FACTOR_METHOD_CHALLENGE_PREFIX,
+  TWO_FACTOR_METHOD_CHALLENGE_TTL_MS,
+  verifyPendingTotpCode,
+} from "./two-factor-method-challenge";
+export type {
+  CreatedEmailMethodChallenge,
+  CreatedTotpMethodChallenge,
+  PendingEmailMethodChallenge,
+  PendingTotpMethodChallenge,
+  PendingTwoFactorMethodChallenge,
+} from "./two-factor-method-challenge";

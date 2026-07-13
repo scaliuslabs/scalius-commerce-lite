@@ -98,8 +98,25 @@ export interface RevokeOtherAccountSessionsResponse extends MessageResponse {
 }
 
 export type SetTwoFactorMethodInput =
+  | { method: "totp"; challengeId: string; code: string; sessionToken?: never }
+  | { method: "email"; challengeId: string; sessionToken: string; code?: never }
   | { method: TwoFactorMethod; code: string; sessionToken?: never }
   | { method: TwoFactorMethod; sessionToken: string; code?: never };
+
+export interface SetTwoFactorMethodResponse {
+  backupCodes?: string[];
+}
+
+export interface StartTwoFactorMethodChallengeInput {
+  method: TwoFactorMethod;
+  password: string;
+}
+
+export interface StartTwoFactorMethodChallengeResponse {
+  challengeId: string;
+  totpUri: string | null;
+  expiresAt: string;
+}
 
 export interface VerifyTwoFactorInput {
   code: string;
@@ -191,7 +208,16 @@ export const revokeOtherAccountSessions = createServerFn({ method: "POST" }).han
 export const set2faMethod = createServerFn({ method: "POST" })
   .validator((data: SetTwoFactorMethodInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<Record<string, never>>("/auth/2fa/method", data);
+    return apiPost<SetTwoFactorMethodResponse>("/auth/2fa/method", data);
+  });
+
+export const startTwoFactorMethodChallenge = createServerFn({ method: "POST" })
+  .validator((data: StartTwoFactorMethodChallengeInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<StartTwoFactorMethodChallengeResponse>(
+      "/auth/2fa/method-challenge",
+      data,
+    );
   });
 
 export const verify2fa = createServerFn({ method: "POST" })
