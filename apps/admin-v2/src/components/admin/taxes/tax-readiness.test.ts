@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
-import { getTaxReadiness } from "./tax-readiness";
+import { getRequiredTaxRateRoles, getTaxReadiness } from "./tax-readiness";
 
 function configuration(
   overrides: Partial<TaxConfigurationPayload> = {},
@@ -128,5 +128,62 @@ describe("tax workspace readiness", () => {
       id: "shipping-rates",
       ready: false,
     }));
+  });
+
+  it("identifies only the last live rate that protects default and shipping coverage", () => {
+    const config = configuration({
+      rates: [{
+        id: "rate_1",
+        taxClassId: "class_standard",
+        name: "Standard rate",
+        rateBps: 1500,
+        jurisdictionType: "all",
+        jurisdictionId: null,
+        jurisdictionLabel: null,
+        priority: 0,
+        isCompound: false,
+        isActive: true,
+        version: 1,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+    });
+    config.settings.enabled = true;
+    config.settings.taxShipping = true;
+
+    expect(getRequiredTaxRateRoles(config, config.rates[0]!)).toEqual([
+      "default products",
+      "shipping",
+    ]);
+
+    config.rates.push({ ...config.rates[0]!, id: "rate_2" });
+    expect(getRequiredTaxRateRoles(config, config.rates[0]!)).toEqual([]);
+  });
+
+  it("does not protect rates while calculation is disabled or the class is exempt", () => {
+    const config = configuration({
+      rates: [{
+        id: "rate_1",
+        taxClassId: "class_standard",
+        name: "Standard rate",
+        rateBps: 1500,
+        jurisdictionType: "all",
+        jurisdictionId: null,
+        jurisdictionLabel: null,
+        priority: 0,
+        isCompound: false,
+        isActive: true,
+        version: 1,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+    });
+
+    expect(getRequiredTaxRateRoles(config, config.rates[0]!)).toEqual([]);
+    config.settings.enabled = true;
+    config.classes[0]!.isExempt = true;
+    expect(getRequiredTaxRateRoles(config, config.rates[0]!)).toEqual([]);
   });
 });

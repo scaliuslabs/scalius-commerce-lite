@@ -4,8 +4,10 @@ import { products } from "@scalius/database/schema";
 import {
   createTaxClass,
   createTaxRate,
+  deleteTaxRate,
   updateTaxClass,
   updateTaxClassification,
+  updateTaxRate,
   updateTaxSettings,
 } from "./tax-admin.service";
 
@@ -37,7 +39,58 @@ function createSettingsDb(getResults: unknown[]) {
   const where = vi.fn(() => ({ returning }));
   const set = vi.fn(() => ({ where }));
   const update = vi.fn(() => ({ set }));
-  return { db: { select, update }, select, update };
+  const batch = vi.fn(async ([mutation]: [Promise<unknown>]) => [
+    await mutation,
+    [{ batchGuard: 1 }],
+  ]);
+  return { db: { select, update, batch }, select, update, batch };
+}
+
+function createRateMutationDb({
+  currentIsActive = true,
+  guardError,
+}: {
+  currentIsActive?: boolean;
+  guardError?: Error;
+} = {}) {
+  const current = {
+    id: "taxr_1",
+    taxClassId: "taxc_standard",
+    name: "Standard rate",
+    rateBps: 1_500,
+    jurisdictionType: "all" as const,
+    jurisdictionId: null,
+    jurisdictionLabel: null,
+    priority: 0,
+    isCompound: false,
+    isActive: currentIsActive,
+    version: 1,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+    deletedAt: null,
+  };
+  const getResults = [
+    current,
+    { id: "taxc_standard", name: "Standard", isExempt: false },
+  ];
+  const select = vi.fn(() => {
+    const query = {
+      from: vi.fn(() => query),
+      where: vi.fn(() => query),
+      get: vi.fn(async () => getResults.shift() ?? null),
+    };
+    return query;
+  });
+  const updated = { ...current, isActive: false, version: 2 };
+  const returning = vi.fn(async () => [updated]);
+  const where = vi.fn(() => ({ returning }));
+  const set = vi.fn(() => ({ where }));
+  const update = vi.fn(() => ({ set }));
+  const batch = vi.fn(async ([mutation]: [Promise<unknown>]) => {
+    if (guardError) throw guardError;
+    return [await mutation, [{ batchGuard: 1 }]];
+  });
+  return { db: { select, update, batch }, batch, set, update };
 }
 
 function createRateDb(location: { id: string; name: string } | null) {
@@ -113,15 +166,59 @@ describe("tax Admin jurisdiction authority", () => {
   });
 
   it("allows activation after the taxable default class has an active rate", async () => {
-    const { db, select, update } = createSettingsDb([
+    const { db, select, update, batch } = createSettingsDb([
       { id: "taxc_standard", name: "Standard", isExempt: false },
       { id: "taxr_standard" },
     ]);
 
     await expect(updateTaxSettings(db as never, taxSettingsInput))
       .resolves.toMatchObject({ version: 2 });
-    expect(select).toHaveBeenCalledTimes(2);
+    expect(select).toHaveBeenCalledTimes(3);
     expect(update).toHaveBeenCalledTimes(1);
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back activation when coverage changes after the friendly readiness reads", async () => {
+    const { db, batch } = createSettingsDb([
+      { id: "taxc_standard", name: "Standard", isExempt: false },
+      { id: "taxr_standard" },
+    ]);
+    batch.mockRejectedValueOnce(new Error("D1_ERROR: malformed JSON"));
+
+    await expect(updateTaxSettings(db as never, taxSettingsInput))
+      .rejects.toThrow("Tax is enabled. Keep an active rate on each taxable default or shipping class");
+  });
+
+  it("rolls back last-rate deactivation when the atomic post-mutation guard fails", async () => {
+    const { db, batch } = createRateMutationDb({
+      guardError: new Error("D1_ERROR: malformed JSON"),
+    });
+
+    await expect(updateTaxRate(db as never, "taxr_1", {
+      expectedVersion: 1,
+      isActive: false,
+    })).rejects.toBeInstanceOf(ConflictError);
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls back last-rate deletion when the atomic post-mutation guard fails", async () => {
+    const { db, batch } = createRateMutationDb({
+      guardError: new Error("TAX_CONFIGURATION_READINESS_CONFLICT"),
+    });
+
+    await expect(deleteTaxRate(db as never, "taxr_1", 1))
+      .rejects.toThrow("Tax is enabled. Keep an active rate");
+    expect(batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows an active rate to be removed when the authoritative guard says tax stays ready", async () => {
+    const { db, batch } = createRateMutationDb();
+
+    await expect(updateTaxRate(db as never, "taxr_1", {
+      expectedVersion: 1,
+      isActive: false,
+    })).resolves.toMatchObject({ isActive: false, version: 2 });
+    expect(batch).toHaveBeenCalledTimes(1);
   });
 
   it("persists the authoritative D1 location label instead of client text", async () => {
@@ -191,6 +288,42 @@ describe("tax Admin jurisdiction authority", () => {
       description: "Saved description",
       isExempt: true,
     }));
+  });
+
+  it("rolls back making an effective exempt class taxable without active coverage", async () => {
+    const current = {
+      id: "taxc_exempt",
+      name: "Exempt",
+      description: null,
+      isExempt: true,
+      version: 2,
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+      deletedAt: null,
+    };
+    const getResults = [current, null];
+    const select = vi.fn(() => {
+      const query = {
+        from: vi.fn(() => query),
+        where: vi.fn(() => query),
+        get: vi.fn(async () => getResults.shift() ?? null),
+      };
+      return query;
+    });
+    const returning = vi.fn(async () => [{ ...current, isExempt: false, version: 3 }]);
+    const where = vi.fn(() => ({ returning }));
+    const set = vi.fn(() => ({ where }));
+    const update = vi.fn(() => ({ set }));
+    const batch = vi.fn(async () => {
+      throw new Error("D1_ERROR: malformed JSON");
+    });
+
+    await expect(updateTaxClass({ select, update, batch } as never, "taxc_exempt", {
+      expectedVersion: 2,
+      name: "Exempt",
+      isExempt: false,
+    })).rejects.toBeInstanceOf(ConflictError);
+    expect(batch).toHaveBeenCalledTimes(1);
   });
 
   it("maps a concurrent case-insensitive active-name race to a conflict", async () => {

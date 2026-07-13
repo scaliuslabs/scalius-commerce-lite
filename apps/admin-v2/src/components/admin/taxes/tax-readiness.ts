@@ -1,4 +1,4 @@
-import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
+import type { TaxConfigurationPayload, TaxRateRecord } from "@/lib/api-functions/taxes";
 
 export type TaxWorkspaceTab = "policy" | "classes" | "rates" | "classification" | "preview";
 
@@ -16,6 +16,35 @@ export interface TaxReadiness {
   nextTab: TaxWorkspaceTab;
   nextAction: string;
   steps: TaxReadinessStep[];
+}
+
+export type RequiredTaxRateRole = "default products" | "shipping";
+
+export function getRequiredTaxRateRoles(
+  configuration: TaxConfigurationPayload,
+  rate: TaxRateRecord | null,
+): RequiredTaxRateRole[] {
+  if (!configuration.settings.enabled || !rate?.isActive) return [];
+
+  const taxClass = configuration.classes.find(
+    (candidate) => candidate.id === rate.taxClassId,
+  );
+  if (!taxClass || taxClass.isExempt) return [];
+
+  const activeClassRates = configuration.rates.filter(
+    (candidate) => candidate.isActive && candidate.taxClassId === rate.taxClassId,
+  );
+  if (activeClassRates.length !== 1 || activeClassRates[0]?.id !== rate.id) return [];
+
+  const roles: RequiredTaxRateRole[] = [];
+  if (configuration.settings.defaultTaxClassId === rate.taxClassId) {
+    roles.push("default products");
+  }
+  const effectiveShippingClassId = configuration.settings.taxShipping
+    ? configuration.settings.shippingTaxClassId ?? configuration.settings.defaultTaxClassId
+    : null;
+  if (effectiveShippingClassId === rate.taxClassId) roles.push("shipping");
+  return roles;
 }
 
 export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxReadiness {
