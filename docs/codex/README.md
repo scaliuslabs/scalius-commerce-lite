@@ -8,6 +8,7 @@ This folder contains concise engineering context. Treat source code, tests, depl
 
 - `PLATFORM-GOAL.md` - product, architecture, and stable-release bar.
 - `catalog/README.md` - current catalog hardening audit, evidence, decisions, and implementation order.
+- `catalog/RICH-DEMO-STORE-BLUEPRINT.md` - exact rich-demo assortment and API-safe population/verification plan.
 - `content/README.md` - Pages, Media, navigation/presentation, Theme, Analytics, Tax, and remaining settings hardening program.
 - `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
 - `ORDER-OPERATIONS-AUDIT.md` - code-backed order-admin workflow, domain, RBAC, failure-state, and implementation audit.

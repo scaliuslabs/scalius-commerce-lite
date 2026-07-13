@@ -28,6 +28,7 @@ This is the durable working record for the Products, Categories, Attributes, Col
 - [DECISIONS.md](DECISIONS.md) — accepted decisions, implementation order, verification requirements, and deferred model work.
 - [PROGRESS.md](PROGRESS.md) — landed fixes, regression evidence, known remaining gaps, and the next implementation slice.
 - [LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) — disposable production demo dataset, browser checkout/order/inventory proof, retained audit rows, and cleanup state.
+- [RICH-DEMO-STORE-BLUEPRINT.md](RICH-DEMO-STORE-BLUEPRINT.md) — implementation-ready five-category/fifty-product assortment, copy, variants, exact SKU media, rights-aware asset plan, API-only importer, and end-to-end acceptance evidence.
 
 ## Competitive principles adopted
 
