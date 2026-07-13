@@ -36,3 +36,13 @@ export const ADMIN_USER_STATUS_COPY: Record<
     description: "This administrator must enable two-factor authentication.",
   },
 };
+
+export function isAdminUserAuthorityReady({
+  isLoading,
+  error,
+}: {
+  isLoading: boolean;
+  error: string | null;
+}): boolean {
+  return !isLoading && error === null;
+}

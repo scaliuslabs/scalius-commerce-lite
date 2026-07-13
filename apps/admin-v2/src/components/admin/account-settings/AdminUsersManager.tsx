@@ -45,6 +45,7 @@ import { useHydrated } from "~/hooks/use-hydrated";
 import {
   ADMIN_USER_STATUS_COPY,
   getAdminUserStatus,
+  isAdminUserAuthorityReady,
   type AdminUserStatus,
 } from "./admin-user-status";
 
@@ -81,6 +82,10 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
   const isHydrated = useHydrated();
+  const userAuthorityReady = isAdminUserAuthorityReady({
+    isLoading,
+    error: usersError,
+  });
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return adminUsers;
@@ -138,7 +143,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               size="sm"
               className="min-h-11 sm:min-h-9"
               onClick={() => setShowAddForm(true)}
-              disabled={showAddForm}
+              disabled={showAddForm || !userAuthorityReady}
             >
               <UserPlus className="mr-2 h-4 w-4" />
               Invite administrator
@@ -199,7 +204,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <Select
                 value={selectedRoleId}
                 onValueChange={setSelectedRoleId}
-                disabled={!isHydrated || isAdding || isLoadingRoles || Boolean(rolesError)}
+                disabled={!isHydrated || isAdding || !userAuthorityReady || isLoadingRoles || Boolean(rolesError)}
               >
                 <SelectTrigger id="roleSelect">
                   <SelectValue placeholder={isLoadingRoles ? "Loading roles…" : "Select a role"} />
@@ -247,7 +252,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               </Button>
               <Button
                 type="submit"
-                disabled={!isHydrated || isAdding || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
+                disabled={!isHydrated || isAdding || !userAuthorityReady || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
                 className="min-h-10"
               >
                 {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -375,6 +380,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       size="sm"
                       className="min-h-11 text-xs sm:min-h-9"
                       onClick={() => setEditingUser(adminUser)}
+                      disabled={!userAuthorityReady}
                     >
                       <Shield className="h-3 w-3 mr-1" />
                       Permissions
@@ -383,7 +389,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Remove ${adminUser.name}`}>
+                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Remove ${adminUser.name}`} disabled={!userAuthorityReady}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -413,7 +419,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
           </div>
         )}
 
-        {editingUser && (
+        {editingUser && userAuthorityReady && (
           <UserPermissionEditor
             user={editingUser}
             isOpen={!!editingUser}

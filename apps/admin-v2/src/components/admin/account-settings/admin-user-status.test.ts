@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getAdminUserStatus } from "./admin-user-status";
+import { getAdminUserStatus, isAdminUserAuthorityReady } from "./admin-user-status";
 
 describe("administrator readiness status", () => {
   it("prioritizes unfinished password setup", () => {
@@ -31,5 +31,11 @@ describe("administrator readiness status", () => {
         mustEnrollTwoFactor: false,
       }),
     ).toBe("ready");
+  });
+
+  it("keeps administrator mutations fail-closed while authority is stale", () => {
+    expect(isAdminUserAuthorityReady({ isLoading: true, error: null })).toBe(false);
+    expect(isAdminUserAuthorityReady({ isLoading: false, error: "offline" })).toBe(false);
+    expect(isAdminUserAuthorityReady({ isLoading: false, error: null })).toBe(true);
   });
 });
