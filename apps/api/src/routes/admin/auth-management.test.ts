@@ -37,7 +37,23 @@ vi.mock("@scalius/core/auth/rbac/helpers", () => ({
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { ConflictError } from "../../utils/api-error";
+import { createAccountSessionCommandIdFactory } from "./account-session-presentation";
 import { adminAuthManagementRoutes, authSetupRoutes } from "./auth-management";
+
+const TEST_ACCOUNT_SESSION_COMMAND_SECRET =
+  "test-account-session-command-secret";
+const testAccountSessionCommandIdFactory = createAccountSessionCommandIdFactory(
+  TEST_ACCOUNT_SESSION_COMMAND_SECRET,
+);
+
+async function getTestAccountSessionCommandId(sessionId: string) {
+  const createCommandId = await testAccountSessionCommandIdFactory;
+  return createCommandId(sessionId);
+}
+
+const TEST_ACCOUNT_SESSION_ENV = {
+  BETTER_AUTH_SECRET: TEST_ACCOUNT_SESSION_COMMAND_SECRET,
+} as Env;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -241,6 +257,69 @@ function createAdminInviteDbMock() {
       })),
     })),
     update: vi.fn(() => ({ set: updateSet })),
+  };
+}
+
+function createAccountSessionsDbMock(options: {
+  currentSession?: Record<string, unknown> | null;
+  otherSessions?: Array<Record<string, unknown>>;
+  revokedSessionIds?: string[];
+} = {}) {
+  const baseSession = {
+    id: "session_1",
+    token: "raw_session_token_must_never_leave_the_api",
+    ipAddress: "203.0.113.42",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/126.0.0.0 Safari/537.36",
+    impersonatedBy: null,
+    twoFactorVerified: true,
+    createdAt: new Date("2026-07-01T10:00:00.000Z"),
+    updatedAt: new Date("2026-07-13T10:00:00.000Z"),
+    expiresAt: new Date("2026-07-20T10:00:00.000Z"),
+  };
+  const currentSession = Object.prototype.hasOwnProperty.call(
+    options,
+    "currentSession",
+  )
+    ? options.currentSession
+    : baseSession;
+  const otherSessions = options.otherSessions ?? [
+    {
+      ...baseSession,
+      id: "session_2",
+      ipAddress: "2001:db8:abcd:0012::1",
+      userAgent:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Version/17.5 Mobile/15E148 Safari/604.1",
+      twoFactorVerified: false,
+    },
+  ];
+  const revokedSessionIds = options.revokedSessionIds ?? ["session_2"];
+  const deleteReturning = vi.fn(async () =>
+    revokedSessionIds.map((id) => ({ id })),
+  );
+  const deleteWhere = vi.fn(() => ({ returning: deleteReturning }));
+  let selectIndex = 0;
+
+  return {
+    __deleteReturning: deleteReturning,
+    __deleteWhere: deleteWhere,
+    delete: vi.fn(() => ({ where: deleteWhere })),
+    select: vi.fn(() => {
+      const currentSelectIndex = selectIndex++;
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() =>
+            currentSelectIndex === 0
+              ? { get: vi.fn(async () => currentSession) }
+              : {
+                  orderBy: vi.fn(() => ({
+                    limit: vi.fn(async () => otherSessions),
+                  })),
+                },
+          ),
+        })),
+      };
+    }),
   };
 }
 
@@ -750,6 +829,208 @@ describe("admin auth management 2FA method changes", () => {
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("VALIDATION_ERROR");
     expect(db.__updateSet).not.toHaveBeenCalledWith(expect.objectContaining({ twoFactorMethod: "totp" }));
+  });
+});
+
+describe("admin account session lifecycle", () => {
+  it("lists only sanitized session presentation data and identifies the current session", async () => {
+    const db = createAccountSessionsDbMock();
+    const app = createTestApp(db);
+    const currentCommandId = await getTestAccountSessionCommandId("session_1");
+    const otherCommandId = await getTestAccountSessionCommandId("session_2");
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "GET",
+    }, TEST_ACCOUNT_SESSION_ENV);
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      data?: {
+        sessions?: Array<Record<string, unknown>>;
+        hasMore?: boolean;
+      };
+    };
+    expect(body.data?.sessions).toEqual([
+      expect.objectContaining({
+        commandId: currentCommandId,
+        current: true,
+        deviceLabel: "Chrome on macOS",
+        networkHint: "203.0.113.x",
+      }),
+      expect.objectContaining({
+        commandId: otherCommandId,
+        current: false,
+        deviceLabel: "Safari on iPhone",
+        networkHint: "2001:db8:abcd:…",
+      }),
+    ]);
+    expect(body.data?.hasMore).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("Mozilla");
+    expect(JSON.stringify(body)).not.toContain("203.0.113.42");
+    expect(JSON.stringify(body)).not.toContain("raw_session_token");
+    expect(JSON.stringify(body)).not.toContain("session_1");
+    expect(JSON.stringify(body)).not.toContain("session_2");
+  });
+
+  it("bounds the visible list while reporting hidden active sessions", async () => {
+    const otherSessions = Array.from({ length: 25 }, (_, index) => ({
+      id: `session_${index + 2}`,
+      token: `token_${index + 2}`,
+      ipAddress: null,
+      userAgent: null,
+      impersonatedBy: null,
+      twoFactorVerified: true,
+      createdAt: new Date("2026-07-01T10:00:00.000Z"),
+      updatedAt: new Date("2026-07-13T10:00:00.000Z"),
+      expiresAt: new Date("2026-07-20T10:00:00.000Z"),
+    }));
+    const db = createAccountSessionsDbMock({ otherSessions });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "GET",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    const body = (await response.json()) as {
+      data?: { sessions?: unknown[]; hasMore?: boolean };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.sessions).toHaveLength(25);
+    expect(body.data?.hasMore).toBe(true);
+    expect(JSON.stringify(body)).not.toContain("token_");
+  });
+
+  it("fails closed when the middleware session is no longer active in D1", async () => {
+    const db = createAccountSessionsDbMock({ currentSession: null });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "GET",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+  });
+
+  it("revokes an owned non-current session", async () => {
+    const db = createAccountSessionsDbMock({
+      revokedSessionIds: ["session_2"],
+    });
+    const app = createTestApp(db);
+    const commandId = await getTestAccountSessionCommandId("session_2");
+
+    const response = await app.request(
+      `/api/v1/admin/auth/sessions/${commandId}`,
+      { method: "DELETE" },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.__deleteReturning).toHaveBeenCalledOnce();
+  });
+
+  it("cannot revoke the current session through device management", async () => {
+    const db = createAccountSessionsDbMock();
+    const app = createTestApp(db);
+    const commandId = await getTestAccountSessionCommandId("session_1");
+
+    const response = await app.request(
+      `/api/v1/admin/auth/sessions/${commandId}`,
+      { method: "DELETE" },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("VALIDATION_ERROR");
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("does not reveal whether a session belongs to another account", async () => {
+    const db = createAccountSessionsDbMock({ revokedSessionIds: [] });
+    const app = createTestApp(db);
+    const commandId = await getTestAccountSessionCommandId(
+      "session_from_another_user",
+    );
+
+    const response = await app.request(
+      `/api/v1/admin/auth/sessions/${commandId}`,
+      { method: "DELETE" },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(404);
+    expect(body.error?.code).toBe("NOT_FOUND");
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before revocation when the current D1 session is gone", async () => {
+    const db = createAccountSessionsDbMock({ currentSession: null });
+    const app = createTestApp(db);
+    const commandId = await getTestAccountSessionCommandId("session_2");
+
+    const response = await app.request(
+      `/api/v1/admin/auth/sessions/${commandId}`,
+      { method: "DELETE" },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("revokes every other owned session while preserving the current session", async () => {
+    const db = createAccountSessionsDbMock({
+      revokedSessionIds: ["session_2", "session_3"],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "DELETE",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = (await response.json()) as {
+      data?: { revokedCount?: number };
+    };
+
+    expect(body.data?.revokedCount).toBe(2);
+    expect(db.__deleteReturning).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the last active current session", async () => {
+    const db = createAccountSessionsDbMock({
+      otherSessions: [],
+      revokedSessionIds: [],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "DELETE",
+    }, TEST_ACCOUNT_SESSION_ENV);
+    const body = (await response.json()) as {
+      data?: { revokedCount?: number; message?: string };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.revokedCount).toBe(0);
+    expect(body.data?.message).toBe("No other active sessions were found");
+  });
+
+  it("fails closed when the command identity secret is unavailable", async () => {
+    const db = createAccountSessionsDbMock();
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/sessions", {
+      method: "GET",
+    });
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error?.code).toBe("SERVICE_UNAVAILABLE");
   });
 });
 

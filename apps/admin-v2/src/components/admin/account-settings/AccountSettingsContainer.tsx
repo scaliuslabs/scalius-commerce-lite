@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Shield, KeyRound, Users, ShieldPlus } from "lucide-react";
+import { Shield, KeyRound, MonitorSmartphone, Users, ShieldPlus } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { RolesManagement } from "../RolesManagement";
@@ -8,6 +8,7 @@ import { ProfileHeader } from "./ProfileHeader";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { TwoFactorSetup } from "./TwoFactorSetup";
 import { AdminUsersManager } from "./AdminUsersManager";
+import { AccountSessions } from "./AccountSessions";
 import type { AccountSection } from "./account-sections";
 
 export interface User {
@@ -70,7 +71,7 @@ export function AccountSettings({
               <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Personal
               </p>
-              <div className="grid grid-cols-2 gap-1" role="presentation">
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-3" role="presentation">
                 <TabsTrigger value="security" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
                   <Shield className="h-4 w-4" />
                   Two-factor
@@ -78,6 +79,10 @@ export function AccountSettings({
                 <TabsTrigger value="password" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
                   <KeyRound className="h-4 w-4" />
                   Password
+                </TabsTrigger>
+                <TabsTrigger value="sessions" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
+                  <MonitorSmartphone className="h-4 w-4" />
+                  Sessions
                 </TabsTrigger>
               </div>
             </div>
@@ -111,6 +116,10 @@ export function AccountSettings({
 
         <TabsContent value="password" className="mt-0 max-w-3xl space-y-4">
           <ChangePasswordForm />
+        </TabsContent>
+
+        <TabsContent value="sessions" className="mt-0 space-y-4">
+          <AccountSessions />
         </TabsContent>
 
         {canViewTeam && (

@@ -36,6 +36,8 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("Personal");
     expect(source).toContain("Store access");
     expect(source).toContain("Administrators");
+    expect(source).toContain("Sessions");
+    expect(source).toContain("AccountSessions");
     expect(source).toContain("grid-cols-1");
     expect(source).toContain("min-h-11");
     expect(source).toContain("value={activeSection}");
@@ -50,5 +52,16 @@ describe("theme and account settings workspace", () => {
     expect(usersSource).toContain("Administrators are unavailable");
     expect(usersSource).toContain("Find administrators");
     expect(usersSource).toContain("getAdminUserStatus");
+
+    const sessionsSource = readSource(
+      "components/admin/account-settings/AccountSessions.tsx",
+    );
+    expect(sessionsSource).toContain("Active sessions");
+    expect(sessionsSource).toContain("Sign out other devices");
+    expect(sessionsSource).toContain("session.current");
+    expect(sessionsSource).toContain("session.commandId");
+    expect(sessionsSource).not.toContain("session.id");
+    expect(sessionsSource).toContain("sessionsQuery.error");
+    expect(sessionsSource).toContain("min-h-11");
   });
 });

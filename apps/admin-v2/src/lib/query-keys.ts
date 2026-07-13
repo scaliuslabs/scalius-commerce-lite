@@ -175,6 +175,7 @@ export const queryKeys = {
   auth: {
     all: ["auth"] as const,
     accountSecurity: () => ["auth", "account-security"] as const,
+    sessions: () => ["auth", "sessions"] as const,
     twoFaInfo: () => ["auth", "2fa-info"] as const,
   },
 
