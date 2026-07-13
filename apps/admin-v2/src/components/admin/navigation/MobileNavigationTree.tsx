@@ -17,7 +17,12 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { NavigationItem } from "./types";
-import { getDepthColor, MAX_NAV_DEPTH } from "./types";
+import {
+  canIndentNavigationItem,
+  getDepthColor,
+  MAX_NAV_DEPTH,
+} from "./types";
+import { openNavigationPreview } from "./navigation-preview";
 
 interface MobileNavigationTreeProps {
   navigation: NavigationItem[];
@@ -38,23 +43,6 @@ interface MobileNavigationItemProps extends Omit<MobileNavigationTreeProps, "nav
   siblingCount: number;
   depth: number;
   parentPath: string;
-}
-
-function previewDestination(
-  href: string,
-  getStorefrontPath: (path: string) => string,
-) {
-  const result = parseNavigationHref(href);
-  if (!result.ok || !result.href) return;
-
-  let destination = result.href;
-  if (result.kind === "internal") {
-    if (!destination.startsWith("/")) destination = `/${destination}`;
-    destination = getStorefrontPath(destination);
-  }
-
-  const preview = window.open(destination, "_blank", "noopener,noreferrer");
-  if (preview) preview.opener = null;
 }
 
 const MobileNavigationItem = memo(function MobileNavigationItem({
@@ -82,7 +70,7 @@ const MobileNavigationItem = memo(function MobileNavigationItem({
   const fieldId = `mobile-nav-${item.id}`;
   const childrenId = `${fieldId}-children`;
   const canAddChildren = depth + 1 < maxDepth;
-  const canIndent = index > 0 && depth + 1 < maxDepth;
+  const canIndent = index > 0 && canIndentNavigationItem(item, depth, maxDepth);
   const canOutdent = depth > 0;
 
   return (
@@ -172,7 +160,7 @@ const MobileNavigationItem = memo(function MobileNavigationItem({
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 shrink-0"
-                  onClick={() => previewDestination(hrefResult.href!, getStorefrontPath)}
+                  onClick={() => openNavigationPreview(hrefResult.href, getStorefrontPath)}
                   aria-label={`Preview ${label}`}
                 >
                   <ExternalLink />

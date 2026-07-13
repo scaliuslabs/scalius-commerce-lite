@@ -557,8 +557,12 @@ export default function CheckoutFlowSettings() {
                                     placeholder="e.g. 200"
                                     value={partialPaymentAmount}
                                     onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
+                                    aria-invalid={Boolean(partialPaymentAmountIssue)}
+                                    aria-describedby={partialPaymentAmountIssue
+                                        ? "partial-payment-amount-help partial-payment-amount-error"
+                                        : "partial-payment-amount-help"}
                                 />
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p id="partial-payment-amount-help" className="text-xs text-muted-foreground mt-1">
                                     Carts at or below this amount are charged in full online. {sslCommerzEnabled
                                         ? `Because SSLCommerz is enabled, the amount must stay between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`
                                         : "The amount uses your store currency."}
@@ -568,7 +572,10 @@ export default function CheckoutFlowSettings() {
                             {partialPaymentAmountIssue && (
                                 <Alert className="border-amber-500/30 bg-amber-500/5">
                                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                                    <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+                                    <AlertDescription
+                                        id="partial-payment-amount-error"
+                                        className="text-sm text-amber-700 dark:text-amber-400"
+                                    >
                                         {partialPaymentAmountIssue}
                                     </AlertDescription>
                                 </Alert>
