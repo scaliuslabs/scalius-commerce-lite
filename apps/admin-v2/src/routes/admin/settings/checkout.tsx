@@ -1,9 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useCallback } from "react";
 import CheckoutSettingsPage from "~/components/admin/settings/CheckoutSettingsPage";
+import {
+  normalizeCheckoutSettingsSection,
+  type CheckoutSettingsSection,
+} from "~/components/admin/settings/checkout-settings-sections";
 import { checkoutFlowSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { RouteErrorComponent } from "~/lib/route-error";
 
+export function validateCheckoutSettingsSearch(
+  search: Record<string, unknown>,
+) {
+  return { section: normalizeCheckoutSettingsSection(search.section) };
+}
+
 export const Route = createFileRoute("/admin/settings/checkout")({
+  validateSearch: validateCheckoutSettingsSearch,
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(checkoutFlowSettingsQueryOptions());
   },
@@ -13,5 +25,24 @@ export const Route = createFileRoute("/admin/settings/checkout")({
 });
 
 function CheckoutPage() {
-  return <CheckoutSettingsPage />;
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const handleSectionChange = useCallback(
+    (section: CheckoutSettingsSection) => {
+      void navigate({
+        search: ((previous: Record<string, unknown>) => ({
+          ...previous,
+          section,
+        })) as never,
+      });
+    },
+    [navigate],
+  );
+
+  return (
+    <CheckoutSettingsPage
+      section={search.section}
+      onSectionChange={handleSectionChange}
+    />
+  );
 }
