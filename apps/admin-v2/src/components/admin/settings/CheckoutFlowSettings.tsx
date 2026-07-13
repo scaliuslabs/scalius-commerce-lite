@@ -12,18 +12,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    RadioGroup,
+    RadioGroupItem,
+} from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, MapPinned, Save, Truck, AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, MapPinned, RotateCcw, Save, ShieldCheck, Truck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
 import {
     updateAuthSettings,
+    type AuthSettingsPayload,
     type CheckoutReadinessPayload,
     type PaymentMethodsPayload,
 } from "@/lib/api-functions/settings";
@@ -40,6 +38,43 @@ import {
     getCheckoutFlowPreviewIssues,
 } from "./checkout-flow-policy";
 
+type CheckoutMode = "all" | "guest_cod_only" | "gateways_only";
+
+const checkoutModes: Array<{
+    value: CheckoutMode;
+    label: string;
+    description: string;
+}> = [
+    {
+        value: "all",
+        label: "Standard",
+        description: "Offer every compatible COD and online method.",
+    },
+    {
+        value: "guest_cod_only",
+        label: "COD only",
+        description: "Skip online payment and place the order directly.",
+    },
+    {
+        value: "gateways_only",
+        label: "Online only",
+        description: "Require an enabled online gateway and hide COD.",
+    },
+];
+
+function normalizeCheckoutMode(value: unknown): CheckoutMode {
+    return value === "guest_cod_only" || value === "gateways_only" ? value : "all";
+}
+
+function readSavedFlow(settings: AuthSettingsPayload | undefined) {
+    return {
+        guestCheckoutEnabled: settings?.guestCheckoutEnabled !== false,
+        checkoutMode: normalizeCheckoutMode(settings?.checkoutMode),
+        partialPaymentEnabled: settings?.partialPaymentEnabled === true,
+        partialPaymentAmount: Number(settings?.partialPaymentAmount ?? 0),
+    };
+}
+
 function buildCheckoutFlowSummary(options: {
     guestCheckoutEnabled: boolean;
     checkoutMode: string;
@@ -47,7 +82,10 @@ function buildCheckoutFlowSummary(options: {
     partialPaymentAmount: number;
 }): string {
     if (options.partialPaymentEnabled) {
-        return `Customers pay ৳${options.partialPaymentAmount || 0} online first. COD is hidden at checkout while this is on.`;
+        const amount = Number.isFinite(options.partialPaymentAmount)
+            ? options.partialPaymentAmount.toLocaleString("en-US", { maximumFractionDigits: 2 })
+            : "0";
+        return `Customers pay ${amount} in your store currency online first. The remaining balance is due on delivery.`;
     }
     if (options.checkoutMode === "guest_cod_only") {
         return options.guestCheckoutEnabled
@@ -128,16 +166,17 @@ export default function CheckoutFlowSettings() {
     const [saving, setSaving] = useState(false);
 
     const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
-    const [checkoutMode, setCheckoutMode] = useState<string>("all");
+    const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>("all");
     const [partialPaymentEnabled, setPartialPaymentEnabled] = useState(false);
     const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
 
     useEffect(() => {
         if (!authSettings) return;
-        setGuestCheckoutEnabled(authSettings.guestCheckoutEnabled !== false);
-        setCheckoutMode(authSettings.checkoutMode || "all");
-        setPartialPaymentEnabled(!!authSettings.partialPaymentEnabled);
-        setPartialPaymentAmount(authSettings.partialPaymentAmount || 0);
+        const saved = readSavedFlow(authSettings);
+        setGuestCheckoutEnabled(saved.guestCheckoutEnabled);
+        setCheckoutMode(saved.checkoutMode);
+        setPartialPaymentEnabled(saved.partialPaymentEnabled);
+        setPartialPaymentAmount(saved.partialPaymentAmount);
     }, [authSettings]);
 
     const activeOnlineMethods = useMemo(() => {
@@ -155,6 +194,7 @@ export default function CheckoutFlowSettings() {
             methodsPayload.gatewayStatus?.cod?.enabled === true &&
             (methodsPayload.gatewayStatus?.cod?.usable ?? methodsPayload.gatewayStatus?.cod?.configured === true);
     }, [paymentMethods]);
+    const sslCommerzEnabled = activeOnlineMethods.includes("sslcommerz");
     const paymentMethodsPending = !paymentMethods && !paymentMethodsError;
     const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError;
 
@@ -167,8 +207,9 @@ export default function CheckoutFlowSettings() {
             paymentMethodsLoaded: Boolean(paymentMethods),
             codEnabled,
             activeOnlineMethodCount: activeOnlineMethods.length,
+            sslCommerzEnabled,
         });
-    }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods, paymentMethodsUnavailable]);
+    }, [activeOnlineMethods.length, checkoutMode, codEnabled, partialPaymentAmount, partialPaymentEnabled, paymentMethods, paymentMethodsUnavailable, sslCommerzEnabled]);
 
     const flowSummary = buildCheckoutFlowSummary({
         guestCheckoutEnabled,
@@ -177,8 +218,15 @@ export default function CheckoutFlowSettings() {
         partialPaymentAmount,
     });
     const partialPaymentAmountIssue = partialPaymentEnabled
-        ? getCheckoutAdvancePaymentAmountIssue(partialPaymentAmount)
+        ? getCheckoutAdvancePaymentAmountIssue(partialPaymentAmount, { sslCommerzEnabled })
         : null;
+    const savedFlow = readSavedFlow(authSettings);
+    const isDirty = Boolean(authSettings) && (
+        guestCheckoutEnabled !== savedFlow.guestCheckoutEnabled ||
+        checkoutMode !== savedFlow.checkoutMode ||
+        partialPaymentEnabled !== savedFlow.partialPaymentEnabled ||
+        partialPaymentAmount !== savedFlow.partialPaymentAmount
+    );
     const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
@@ -200,7 +248,14 @@ export default function CheckoutFlowSettings() {
         : paymentMethodsUnavailable || readinessCheckUnavailable
             ? "border-amber-500/30 bg-amber-500/5"
             : "border-emerald-500/30 bg-emerald-500/5";
-    const saveBlocked = paymentMethodsPending || flowIssues.length > 0;
+    const saveBlocked = !isDirty || paymentMethodsPending || flowIssues.length > 0;
+
+    const resetFlow = () => {
+        setGuestCheckoutEnabled(savedFlow.guestCheckoutEnabled);
+        setCheckoutMode(savedFlow.checkoutMode);
+        setPartialPaymentEnabled(savedFlow.partialPaymentEnabled);
+        setPartialPaymentAmount(savedFlow.partialPaymentAmount);
+    };
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
@@ -231,7 +286,7 @@ export default function CheckoutFlowSettings() {
             );
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() });
-            toast.success("Checkout flow settings saved successfully!");
+            toast.success("Checkout flow saved");
         } catch (err) {
             toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
         } finally {
@@ -251,7 +306,7 @@ export default function CheckoutFlowSettings() {
         return (
             <Alert className="max-w-2xl border-destructive/30 bg-destructive/5">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
-                <AlertDescription className="flex items-center justify-between gap-4 text-sm">
+                <AlertDescription className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <span>Failed to load checkout flow settings.</span>
                     <Button
                         type="button"
@@ -267,32 +322,43 @@ export default function CheckoutFlowSettings() {
     }
 
     return (
-        <div className="space-y-5 max-w-2xl">
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Guest Checkout</CardTitle>
+        <form
+            method="post"
+            onSubmit={handleSubmit}
+            className="grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
+            noValidate
+        >
+            <Card className="lg:col-start-1 lg:row-start-1">
+                <CardHeader className="p-4 pb-3">
+                    <CardTitle className="text-base">Customer access</CardTitle>
                     <CardDescription>
-                        Allow customers to place orders without creating an account.
+                        Decide whether an account is required. Every order still collects a valid delivery phone number.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <Label>Enable Guest Checkout</Label>
+                <CardContent className="space-y-3 px-4 pb-4">
+                    <div className="flex items-start justify-between gap-4 rounded-md border border-border/70 p-3">
+                        <div className="min-w-0 space-y-0.5">
+                            <Label htmlFor="guest-checkout">Allow checkout without an account</Label>
                             <p className="text-xs text-muted-foreground">
-                                When enabled, customers can checkout without logging in (subject to the Checkout Mode below).
+                                Guest buyers provide their name, phone, and delivery details without creating a password.
                             </p>
                         </div>
                         <Switch
+                            id="guest-checkout"
+                            className="shrink-0"
                             checked={guestCheckoutEnabled}
                             onCheckedChange={setGuestCheckoutEnabled}
                         />
                     </div>
+                    <div className="flex items-start gap-2.5 rounded-md bg-muted/45 px-3 py-2.5 text-xs text-muted-foreground">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden="true" />
+                        <p><span className="font-medium text-foreground">Phone number is always required.</span> Phone collection for checkout identity and delivery cannot be disabled.</p>
+                    </div>
                 </CardContent>
             </Card>
 
-            <Card className={previewCardClass}>
-                <CardHeader className="pb-3">
+            <Card className={`${previewCardClass} lg:sticky lg:top-4 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:self-start`}>
+                <CardHeader className="p-4 pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
                         {previewLoading ? (
                             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -307,7 +373,7 @@ export default function CheckoutFlowSettings() {
                     </CardTitle>
                     <CardDescription>{flowSummary}</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-0">
+                <CardContent className="space-y-3 px-4 pb-4 pt-0">
                     <div className="grid gap-2">
                         <ReadinessRow
                             label="Payment flow"
@@ -391,69 +457,87 @@ export default function CheckoutFlowSettings() {
                                 <p className="text-xs text-muted-foreground">Checking checkout readiness...</p>
                             )}
                             {previewIssues.length > 0 && (
-                            <ul
-                                className={`space-y-1 text-sm ${
-                                    paymentMethodsUnavailable ? "text-amber-700 dark:text-amber-400" : "text-destructive"
-                                }`}
-                            >
-                                {previewIssues.map((issue) => (
-                                    <li key={issue}>{issue}</li>
-                                ))}
-                            </ul>
+                                <ul
+                                    className={`space-y-1 text-sm ${
+                                        paymentMethodsUnavailable
+                                            ? "text-amber-700 dark:text-amber-400"
+                                            : "text-destructive"
+                                    }`}
+                                >
+                                    {previewIssues.map((issue) => (
+                                        <li key={issue}>{issue}</li>
+                                    ))}
+                                </ul>
                             )}
                         </>
                     )}
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Checkout Mode</CardTitle>
+            <Card className="lg:col-start-1 lg:row-start-2">
+                <CardHeader className="p-4 pb-3">
+                    <CardTitle className="text-base">Payment flow</CardTitle>
                     <CardDescription>
-                        Determine which payment flows and methods are available to customers at checkout.
+                        Choose which configured payment methods buyers may use.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4">
                     <div className="space-y-1.5">
-                        <Label>Available Payment Flows</Label>
-                        <p className="text-xs text-muted-foreground mb-1.5">
-                            Controls which payment options customers see during checkout.
-                        </p>
-                        <Select
+                        <Label>Available methods</Label>
+                        <RadioGroup
                             value={checkoutMode}
-                            onValueChange={(val) => setCheckoutMode(val)}
+                            onValueChange={(value) => setCheckoutMode(normalizeCheckoutMode(value))}
+                            className="grid gap-2 sm:grid-cols-3"
+                            aria-label="Available payment methods"
                         >
-                            <SelectTrigger className="w-full max-w-xs">
-                                <SelectValue placeholder="Select checkout mode" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Standard (COD and online methods allowed)</SelectItem>
-                                <SelectItem value="guest_cod_only">
-                                    {guestCheckoutEnabled ? "Fast COD Only (Direct from Cart)" : "Authenticated COD Only (No online payment)"}
-                                </SelectItem>
-                                <SelectItem value="gateways_only">Online Gateways Only (No COD)</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            {checkoutModes.map((option) => (
+                                <Label
+                                    key={option.value}
+                                    htmlFor={`checkout-mode-${option.value}`}
+                                    className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 transition-colors ${
+                                        checkoutMode === option.value
+                                            ? "border-primary bg-primary/5"
+                                            : "border-border/70 hover:bg-muted/40"
+                                    }`}
+                                >
+                                    <RadioGroupItem
+                                        id={`checkout-mode-${option.value}`}
+                                        value={option.value}
+                                        className="mt-0.5"
+                                    />
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-medium text-foreground">{option.label}</span>
+                                        <span className="mt-0.5 block text-xs font-normal leading-4 text-muted-foreground">
+                                            {option.value === "guest_cod_only" && !guestCheckoutEnabled
+                                                ? "Require sign-in, then place a COD order directly."
+                                                : option.description}
+                                        </span>
+                                    </span>
+                                </Label>
+                            ))}
+                        </RadioGroup>
                     </div>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Partial Payment / Advance Deposit</CardTitle>
+            <Card className="lg:col-start-1 lg:row-start-3">
+                <CardHeader className="p-4 pb-3">
+                    <CardTitle className="text-base">Advance collection</CardTitle>
                     <CardDescription>
-                        Collect a fixed online advance payment before order confirmation. COD is hidden at checkout while this is on.
+                        Collect a fixed amount online and leave the remaining balance due on delivery.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <Label>Enable Partial Payment</Label>
+                <CardContent className="space-y-4 px-4 pb-4">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-0.5">
+                            <Label htmlFor="advance-payment">Require an online advance</Label>
                             <p className="text-xs text-muted-foreground">
-                                When enabled, customers must pay a flat advance amount via an online gateway before their order is confirmed.
+                                Buyers choose an online gateway. COD is hidden as a checkout method, while the balance remains due on delivery.
                             </p>
                         </div>
                         <Switch
+                            id="advance-payment"
+                            className="shrink-0"
                             checked={partialPaymentEnabled}
                             onCheckedChange={setPartialPaymentEnabled}
                         />
@@ -466,16 +550,18 @@ export default function CheckoutFlowSettings() {
                                 <Input
                                     id="partial-payment-amount"
                                     type="number"
-                                    min={CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min}
-                                    max={CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max}
-                                    step="1"
-                                    className="max-w-xs"
+                                    min={sslCommerzEnabled ? CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min : 0.01}
+                                    max={sslCommerzEnabled ? CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max : undefined}
+                                    step="0.01"
+                                    className="w-full sm:max-w-xs"
                                     placeholder="e.g. 200"
                                     value={partialPaymentAmount}
                                     onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
                                 />
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Must be between {CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL} and charged through an online gateway. Carts at or below this amount pay the full total online.
+                                    Carts at or below this amount are charged in full online. {sslCommerzEnabled
+                                        ? `Because SSLCommerz is enabled, the amount must stay between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`
+                                        : "The amount uses your store currency."}
                                 </p>
                             </div>
 
@@ -492,17 +578,35 @@ export default function CheckoutFlowSettings() {
                 </CardContent>
             </Card>
 
-            <div className="flex justify-end pt-4 border-t border-border">
-                <Button
-                    onClick={() => handleSubmit()}
-                    disabled={saving || saveBlocked}
-                    className="min-w-[140px]"
-                >
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    <Save className="mr-2 h-4 w-4" />
-                    Save checkout flow
-                </Button>
+            <div className="sticky bottom-3 z-10 flex flex-col-reverse gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
+                <p className="text-xs text-muted-foreground" aria-live="polite">
+                    {isDirty ? "Unsaved checkout changes" : "Checkout flow is saved"}
+                </p>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!isDirty || saving}
+                        onClick={resetFlow}
+                        className="w-full sm:w-auto"
+                    >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Reset
+                    </Button>
+                    <Button
+                        type="submit"
+                        disabled={saving || saveBlocked}
+                        className="w-full sm:w-auto sm:min-w-[164px]"
+                    >
+                        {saving ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save checkout flow
+                    </Button>
+                </div>
             </div>
-        </div>
+        </form>
     );
 }

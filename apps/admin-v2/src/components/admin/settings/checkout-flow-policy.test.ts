@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
 
 import {
     CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
@@ -14,6 +15,7 @@ const baseOptions: CheckoutFlowPreviewOptions = {
     paymentMethodsLoaded: true,
     codEnabled: true,
     activeOnlineMethodCount: 0,
+    sslCommerzEnabled: false,
 };
 
 function issues(overrides: Partial<CheckoutFlowPreviewOptions>): string[] {
@@ -65,7 +67,7 @@ describe("checkout flow preview policy", () => {
             codEnabled: true,
             activeOnlineMethodCount: 0,
         })).toEqual(expect.arrayContaining([
-            `Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`,
+            "Set an advance amount greater than zero.",
             "Advance payments need at least one enabled and configured online gateway.",
         ]));
     });
@@ -80,7 +82,19 @@ describe("checkout flow preview policy", () => {
             partialPaymentAmount: amount,
             codEnabled: true,
             activeOnlineMethodCount: 1,
-        })).toContain(`Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`);
+            sslCommerzEnabled: true,
+        })).toContain(`SSLCommerz requires an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`);
+    });
+
+    it.each([5, 500001])("does not apply SSLCommerz's BDT range to other online gateways (%s)", (amount) => {
+        expect(issues({
+            checkoutMode: "all",
+            partialPaymentEnabled: true,
+            partialPaymentAmount: amount,
+            codEnabled: false,
+            activeOnlineMethodCount: 1,
+            sslCommerzEnabled: false,
+        })).toEqual([]);
     });
 
     it("allows the preview when the advance amount is inside the provider range", () => {
@@ -102,5 +116,31 @@ describe("checkout flow preview policy", () => {
         })).toEqual([
             "Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.",
         ]);
+    });
+
+    it.each([
+        { mode: "all", partial: false, amount: 0, methods: ["cod"] },
+        { mode: "gateways_only", partial: false, amount: 0, methods: ["stripe"] },
+        { mode: "guest_cod_only", partial: false, amount: 0, methods: ["cod"] },
+        { mode: "all", partial: true, amount: 5, methods: ["stripe"] },
+        { mode: "all", partial: true, amount: 5, methods: ["sslcommerz"] },
+        { mode: "guest_cod_only", partial: true, amount: 200, methods: ["cod"] },
+    ])("matches server acceptance for $mode / $methods", ({ mode, partial, amount, methods }) => {
+        const serverIssues = getCheckoutFlowValidationIssues({
+            checkoutMode: mode,
+            partialPaymentEnabled: partial,
+            partialPaymentAmount: amount,
+            availablePaymentMethods: methods,
+        });
+        const adminIssues = issues({
+            checkoutMode: mode,
+            partialPaymentEnabled: partial,
+            partialPaymentAmount: amount,
+            codEnabled: methods.includes("cod"),
+            activeOnlineMethodCount: methods.filter((method) => method !== "cod").length,
+            sslCommerzEnabled: methods.includes("sslcommerz"),
+        });
+
+        expect(adminIssues.length === 0).toBe(serverIssues.length === 0);
     });
 });

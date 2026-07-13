@@ -18,6 +18,9 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `TAX-LIFECYCLE-INVARIANTS.md` - authoritative enabled-tax readiness and the
   atomic D1 mutation boundary that preserves it across settings, class, and
   rate changes.
+- `CHECKOUT-FLOW-CONTRACT.md` - checkout-setting authority, buyer/runtime
+  effects, mandatory-phone and fail-closed invariants, admin interaction
+  contract, and remaining release gaps.
 - `COMMERCE-SETTINGS-BENCHMARK.md` - benchmark-backed replacement decisions,
   edge cases, UI information architecture, migration stance, and implementation
   order for Promotions, Tax, Checkout/Payments, Theme, and Account/Users.
