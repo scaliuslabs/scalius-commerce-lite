@@ -213,6 +213,27 @@ function categoryCommands(manifest, current) {
   });
 }
 
+function attributeCommands(current) {
+  const brands = (current.attributes ?? []).filter((attribute) => attribute.slug === "brand");
+  if (brands.length > 1) throw new Error("Brand attribute identity is ambiguous.");
+  const existing = brands[0];
+  if (existing) {
+    if (existing.name !== "Brand" || existing.filterable !== true) {
+      throw new Error("Brand attribute exists but is not the exact filterable Brand definition; unversioned attribute updates remain blocked.");
+    }
+    return [];
+  }
+  return [command("attribute:brand", "vocabulary", "POST", `${API}/attributes`, {
+    name: "Brand",
+    slug: "brand",
+    filterable: true,
+    options: [],
+  }, {
+    preconditions: { exactSlugAbsent: "brand" },
+    produces: { id: stableDraftId("draft_attribute", "attribute:brand") },
+  })];
+}
+
 function productCommands(manifest, current) {
   const details = currentBy(current.productDetails, "slug");
   const commands = [];
@@ -452,12 +473,13 @@ export function compileDemoStoreAdminCommands(manifest, { current = {} } = {}) {
     attributes: current.attributes ?? [],
     resumeSimpleSlugs: current.resumeSimpleSlugs ?? [],
   };
+  const attributes = attributeCommands(normalizedCurrent);
   const categories = categoryCommands(manifest, normalizedCurrent);
   const products = productCommands(manifest, normalizedCurrent);
   const collections = collectionCommands(manifest, normalizedCurrent);
   const heroes = heroCommands(manifest, normalizedCurrent);
   const publication = publicationCommands(manifest, categories);
-  const commands = [...categories, ...products, ...publication, ...collections, ...heroes];
+  const commands = [...attributes, ...categories, ...products, ...publication, ...collections, ...heroes];
   return {
     mode: "compile",
     writesEnabled: false,
@@ -474,4 +496,22 @@ export function compileDemoStoreAdminCommands(manifest, { current = {} } = {}) {
       preservationRequired: true,
     })),
   };
+}
+
+export function formatDemoStoreCompile(result) {
+  const orderedPhases = [
+    "vocabulary", "categories", "products", "activation",
+    "publication", "collections", "presentation",
+  ];
+  const phases = orderedPhases
+    .filter((phase) => result.summary.byPhase[phase])
+    .map((phase) => `${phase} ${result.summary.byPhase[phase]}`)
+    .join(" · ");
+  return [
+    "Scalius Market compiled admin intent",
+    "Writes: disabled",
+    `Commands: ${result.summary.total} · ${phases}`,
+    `Retained boundaries: ${result.retainedResources.length}`,
+    "Execution: unavailable from this command",
+  ].join("\n");
 }

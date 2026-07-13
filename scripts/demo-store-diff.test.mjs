@@ -131,6 +131,18 @@ describe("demo-store diff and evidence", () => {
     expect(diff.summary.products).toMatchObject({ conflict: 1, create: 49 });
   });
 
+  it("treats a drifting unversioned Brand definition as a pre-write conflict", () => {
+    const snapshot = emptySnapshot();
+    snapshot.attributes = [{ id: "attr_brand", slug: "brand", name: "Maker", filterable: false }];
+    const diff = buildDemoStoreDiff(demoStoreManifest, snapshot);
+    expect(diff.resources.attributes[0]).toMatchObject({
+      logicalKey: "attribute:brand",
+      action: "conflict",
+      fields: ["name", "filterable"],
+    });
+    expect(diff.summary.conflicts).toBe(1);
+  });
+
   it("writes a private evidence bundle and a whitelisted resume journal", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-demo-evidence-"));
     temporaryDirectories.push(directory);
@@ -176,7 +188,7 @@ describe("demo-store diff and evidence", () => {
 describe("demo-store diff CLI", () => {
   it("rejects credentials in arguments and keeps apply mode unavailable", async () => {
     expect(() => parseDemoStoreArgs(["--diff", "--password", "private"])).toThrow("interactive terminal");
-    expect(() => parseDemoStoreArgs(["--plan", "--diff"])).toThrow("either --plan or --diff");
+    expect(() => parseDemoStoreArgs(["--plan", "--diff"])).toThrow("exactly one");
     await expect(main(["--apply"], { log: vi.fn() })).rejects.toThrow("Unknown option");
   });
 

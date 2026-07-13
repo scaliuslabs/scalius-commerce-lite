@@ -21,11 +21,31 @@ describe("demo-store admin command compiler", () => {
 
     expect(first).toEqual(second);
     expect(first.writesEnabled).toBe(false);
+    expect(first.summary.byPhase.vocabulary).toBe(1);
     expect(first.summary.byPhase.categories).toBe(5);
     expect(first.summary.byPhase.collections).toBe(5);
     expect(first.summary.byPhase.presentation).toBe(2);
     expect(first.retainedResources).toHaveLength(2);
     expect(new Set(first.commands.map((item) => item.id)).size).toBe(first.commands.length);
+  });
+
+  it("creates only a missing exact Brand vocabulary definition and blocks unsafe unversioned drift", () => {
+    const missing = compileDemoStoreAdminCommands(demoStoreManifest);
+    expect(findCommand(missing, "attribute:brand")).toMatchObject({
+      phase: "vocabulary",
+      method: "POST",
+      path: "/api/v1/admin/attributes",
+      body: { name: "Brand", slug: "brand", filterable: true, options: [] },
+    });
+
+    const matching = compileDemoStoreAdminCommands(demoStoreManifest, {
+      current: { attributes: [{ id: "attr_brand", name: "Brand", slug: "brand", filterable: true }] },
+    });
+    expect(matching.commands.some((command) => command.logicalKey === "attribute:brand")).toBe(false);
+
+    expect(() => compileDemoStoreAdminCommands(demoStoreManifest, {
+      current: { attributes: [{ id: "attr_brand", name: "Brand", slug: "brand", filterable: false }] },
+    })).toThrow(/unversioned attribute updates remain blocked/);
   });
 
   it("uses stable draft identities, exact SKU image references, omitted combinations, and null auto-barcodes", () => {

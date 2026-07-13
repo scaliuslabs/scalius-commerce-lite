@@ -104,6 +104,9 @@ describe("safe lifecycle phase model", () => {
   it("models the full dependency order and resumes inactive existing products", () => {
     const plan = lifecycle();
     expect(plan.phases.map((phase) => phase.name)).toEqual(DEMO_APPLY_PHASE_ORDER);
+    expect(plan.phases.find((phase) => phase.name === "stage_vocabulary").commands).toEqual([
+      expect.objectContaining({ logicalKey: "attribute:brand", method: "POST" }),
+    ]);
     const activate = plan.phases
       .find((phase) => phase.name === "activate_products")
       .commands.find((command) => command.logicalKey === "product:vale-everyday-runners:activate");

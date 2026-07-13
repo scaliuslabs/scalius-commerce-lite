@@ -15,6 +15,12 @@ The command has no implicit write mode; omitting `--plan` fails closed. Stable
 phase resume keys are present for the later authenticated API reconciler, but
 they do not claim that any live resource has been created or updated.
 
+`pnpm demo:store --compile` is the parallel network-free inspection gate for
+the deterministic admin API command intent. It is also write-disabled. The
+compiled vocabulary step creates the exact filterable Brand definition only
+when its slug is absent; a drifting existing Brand is a pre-write conflict
+because Attribute updates do not yet have a monotonic revision claim.
+
 `pnpm demo:store --diff` is the next read-only gate. It asks for the admin email
 and a non-echoed password in an interactive terminal, creates a short-lived
 session, verifies authenticated access, and reads bounded category, product,
@@ -45,8 +51,9 @@ have revision claims. The public `pnpm demo:store` command still rejects
 
 The internal executor consumes one pure compiler authority and binds its
 references from fresh snapshots and verified staged assets; it does not rebuild
-request payloads in the apply layer. It runs sequential category, product,
-inactive collection, and desktop/mobile hero commands through admin APIs only.
+request payloads in the apply layer. It runs sequential create-only vocabulary,
+category, product, inactive collection, and desktop/mobile hero commands
+through admin APIs only.
 Theme intent remains outside this milestone. Creates are resolved
 again by exact slug/name/type after success, timeout, or conflict; updates carry
 the current category revision, product aggregate revision, collection version,
@@ -62,6 +69,11 @@ must not reset operational inventory. A newly created simple product may receive
 its one initial stock update only when the current run or a safe resume journal
 proves creation provenance. Otherwise the executor refuses to guess whether a
 zero/changed quantity is seed state or real commerce activity.
+
+Media readiness fingerprints include every asset's exact owner, role,
+crop/profile, caption, and alt-text intent. Apply authorization separately
+fingerprints the complete catalog intent, including copy, prices, offers, and
+merchandising, so a media-ready report cannot authorize changed product data.
 
 Rider and Halo are stronger boundaries: exact retained IDs and option topology
 must match the fresh snapshot, all stock/reservation/version facts must be

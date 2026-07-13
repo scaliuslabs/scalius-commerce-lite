@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { buildDemoStorePlan, formatDemoStorePlan } from "./demo-store/plan.mjs";
+import { compileDemoStoreAdminCommands, formatDemoStoreCompile } from "./demo-store/compile.mjs";
+import { demoStoreManifest } from "./demo-store/manifest.mjs";
 import { formatDemoStoreDiff } from "./demo-store/diff.mjs";
 import { readAdminCredentials } from "./demo-store/credentials.mjs";
 import { runDemoStoreDiff } from "./demo-store/run-diff.mjs";
@@ -8,15 +10,16 @@ import { normalizeAdminOrigin } from "./demo-store/session.mjs";
 function usage() {
   return `Usage:
   pnpm demo:store --plan [--json]
+  pnpm demo:store --compile [--json]
   pnpm demo:store --diff [--admin-url <origin>] [--evidence-dir <path>] [--timeout-ms <ms>] [--json]
 
-Plan mode is network-free. Diff mode prompts for admin email and a hidden
+Plan and compile modes are network-free and write-disabled. Diff mode prompts for admin email and a hidden
 password, performs bounded authenticated GETs, writes local evidence under
 .wrangler by default, signs out, and never enables catalog writes.`;
 }
 
 export function parseDemoStoreArgs(argv) {
-  const result = { help: false, plan: false, diff: false, json: false };
+  const result = { help: false, plan: false, compile: false, diff: false, json: false };
   const valueOptions = new Map([
     ["--admin-url", "adminUrl"], ["--evidence-dir", "evidenceDir"], ["--timeout-ms", "timeoutMs"],
   ]);
@@ -24,6 +27,7 @@ export function parseDemoStoreArgs(argv) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") result.help = true;
     else if (argument === "--plan") result.plan = true;
+    else if (argument === "--compile") result.compile = true;
     else if (argument === "--diff") result.diff = true;
     else if (argument === "--json") result.json = true;
     else if (argument === "--email" || argument === "--password" || argument.startsWith("--email=") || argument.startsWith("--password=")) {
@@ -39,7 +43,9 @@ export function parseDemoStoreArgs(argv) {
       result[matched[1]] = argument.slice(matched[0].length + 1);
     }
   }
-  if (result.plan && result.diff) throw new Error("Choose either --plan or --diff, not both.");
+  if ([result.plan, result.compile, result.diff].filter(Boolean).length > 1) {
+    throw new Error("Choose exactly one of --plan, --compile, or --diff.");
+  }
   return result;
 }
 
@@ -60,10 +66,15 @@ export async function main(argv = process.argv.slice(2), {
     log(usage());
     return 0;
   }
-  if (!args.plan && !args.diff) throw new Error(`Write mode is not implemented. Choose --plan or read-only --diff.\n${usage()}`);
+  if (!args.plan && !args.compile && !args.diff) throw new Error(`Write mode is not implemented. Choose --plan, --compile, or read-only --diff.\n${usage()}`);
   if (args.plan) {
     const plan = buildDemoStorePlan();
     log(args.json ? JSON.stringify(plan, null, 2) : formatDemoStorePlan(plan));
+    return 0;
+  }
+  if (args.compile) {
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest);
+    log(args.json ? JSON.stringify(compiled, null, 2) : formatDemoStoreCompile(compiled));
     return 0;
   }
   const adminOrigin = normalizeAdminOrigin(args.adminUrl ?? "https://dashboard.scalius.com");

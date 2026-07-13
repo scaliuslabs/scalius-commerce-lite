@@ -36,7 +36,18 @@ try {
   const sourceManifest = JSON.parse(await readFile(options.manifest, "utf8"));
   const report = await assessAndStageAssets({ sourceManifest, ...options });
   await writeReadinessReport(options.report, report);
-  process.stdout.write(`${JSON.stringify({ ready: report.ready, summary: report.summary, report: options.report }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({
+    ready: report.ready,
+    summary: report.summary,
+    progress: {
+      assets: report.progress.assets,
+      products: report.progress.products,
+      categories: report.progress.categories,
+      heroes: report.progress.heroes,
+      remainingOwners: report.progress.remainingByOwner.length,
+    },
+    report: options.report,
+  }, null, 2)}\n`);
   if (!report.ready) process.exitCode = 2;
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

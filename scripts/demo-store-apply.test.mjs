@@ -7,16 +7,15 @@ import {
   manifestReadinessFingerprint,
   validateStagedAssetReadiness,
 } from "./demo-store/apply-readiness.mjs";
+import { buildExpectedAssets } from "./demo-store/assets/expected-assets.mjs";
+import { ASSET_PROFILES } from "./demo-store/assets/profiles.mjs";
+import { demoApplyIntentFingerprint } from "./demo-store/apply/authorization.mjs";
 import { compileDemoStoreAdminCommands } from "./demo-store/compile.mjs";
 import { demoStoreManifest } from "./demo-store/manifest.mjs";
 import { assertRetainedProductAuthority, runRevisionSafeApply } from "./demo-store/run-apply.mjs";
 
 function readinessReport() {
-  const media = [
-    ...demoStoreManifest.categories.flatMap((category) => category.media),
-    ...demoStoreManifest.products.flatMap((product) => product.media),
-    ...demoStoreManifest.heroes.flatMap((hero) => hero.media),
-  ];
+  const media = buildExpectedAssets(demoStoreManifest);
   return {
     schemaVersion: 1,
     status: "complete",
@@ -26,14 +25,14 @@ function readinessReport() {
       logicalKey: item.logicalKey,
       mediaId: `media_demo_${String(index).padStart(4, "0")}`,
       status: "ready",
-      kind: item.kind ?? "image",
+      kind: item.kind,
       sha256: index.toString(16).padStart(64, "0"),
       url: `https://media.example.test/demo-${index}.webp`,
       filename: `demo-${index}.${item.kind === "video" ? "mp4" : "webp"}`,
       size: 200_000 + index,
       createdAt: "2026-07-13T02:00:00.000Z",
-      width: item.kind === "video" ? 1920 : 1600,
-      height: item.kind === "video" ? 1080 : 1600,
+      width: item.kind === "video" ? 1920 : ASSET_PROFILES[item.profile].width,
+      height: item.kind === "video" ? 1080 : ASSET_PROFILES[item.profile].height,
     })),
     presentation: {},
   };
@@ -108,9 +107,39 @@ describe("staged asset apply gate", () => {
       expect.stringContaining("missing staged asset"),
     ]));
   });
+
+  it("fingerprints crop/profile intent and rejects wrong normalized presentation dimensions", () => {
+    const changed = structuredClone(demoStoreManifest);
+    changed.products[1].media.find((media) => media.slot === "P").intendedCrop = "cover";
+    expect(manifestReadinessFingerprint(changed)).not.toBe(manifestReadinessFingerprint(demoStoreManifest));
+
+    const report = readinessReport();
+    const category = report.assets.find((asset) => asset.logicalKey === "category:footwear:image");
+    category.height = 1600;
+    expect(validateStagedAssetReadiness(demoStoreManifest, report).errors).toContain(
+      "category:footwear:image dimensions do not match category",
+    );
+  });
 });
 
 describe("revision-safe product commands", () => {
+  it("binds a missing Brand definition as a create-only vocabulary prerequisite", () => {
+    const report = readinessReport();
+    const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
+    const snapshot = completeSnapshot(report);
+    snapshot.attributes = [];
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: snapshot });
+    const intent = compiled.commands.find((command) => command.logicalKey === "attribute:brand");
+    const bound = createApplyBinder({ manifest: demoStoreManifest, readiness, snapshot }).bind(intent);
+    expect(bound).toMatchObject({
+      action: "create",
+      path: "/api/v1/admin/attributes",
+      identity: { slug: "brand" },
+      desired: { name: "Brand", slug: "brand", filterable: true },
+      body: { name: "Brand", slug: "brand", filterable: true, options: [] },
+    });
+  });
+
   it("binds retained Rider through the compiler without option or stock mutations", () => {
     const report = readinessReport();
     const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
@@ -205,6 +234,21 @@ describe("idempotent command execution", () => {
 });
 
 describe("apply orchestration", () => {
+  it("authorizes the complete product intent rather than the media-only readiness fingerprint", async () => {
+    const report = readinessReport();
+    const changed = structuredClone(demoStoreManifest);
+    changed.products[0].price += 1;
+    const readSnapshot = vi.fn();
+    await expect(runRevisionSafeApply({
+      manifest: changed,
+      readinessReport: { ...report, manifestFingerprint: manifestReadinessFingerprint(changed) },
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
+      readSnapshot,
+      executeCommand: vi.fn(),
+    })).rejects.toThrow(/complete validated demo-store intent/);
+    expect(readSnapshot).not.toHaveBeenCalled();
+  });
+
   it("blocks before reading or writing when staged readiness is incomplete", async () => {
     const report = readinessReport();
     report.status = "partial";
@@ -213,7 +257,7 @@ describe("apply orchestration", () => {
     await expect(runRevisionSafeApply({
       manifest: demoStoreManifest,
       readinessReport: report,
-      authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
       readSnapshot,
       executeCommand,
     })).rejects.toThrow("readiness is incomplete");
@@ -229,7 +273,7 @@ describe("apply orchestration", () => {
     await expect(runRevisionSafeApply({
       manifest: demoStoreManifest,
       readinessReport: report,
-      authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
       readSnapshot: vi.fn().mockResolvedValue(snapshot),
       executeCommand,
       now: () => new Date("2026-07-13T03:01:00.000Z"),
@@ -264,7 +308,7 @@ describe("apply orchestration", () => {
     const result = await runRevisionSafeApply({
       manifest: demoStoreManifest,
       readinessReport: report,
-      authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
       readSnapshot: vi.fn().mockResolvedValue(snapshot),
       executeCommand,
       now: () => new Date("2026-07-13T03:01:00.000Z"),
