@@ -26,15 +26,15 @@ type StatusBadgeConfig<TStatus extends string> = Record<
 >;
 
 const browserStatusConfig: StatusBadgeConfig<AnalyticsProviderBrowserStatus> = {
-  ready: { label: "Browser ready", icon: CheckCircle2, className: "text-emerald-700" },
-  draft: { label: "Draft", icon: CircleDashed, className: "text-sky-700" },
+  ready: { label: "Browser ready", icon: CheckCircle2, className: "text-emerald-700 dark:text-emerald-300" },
+  draft: { label: "Draft", icon: CircleDashed, className: "text-sky-700 dark:text-sky-300" },
   blocked: { label: "Blocked", icon: AlertTriangle, className: "text-destructive" },
   not_configured: { label: "Not configured", icon: MinusCircle, className: "text-muted-foreground" },
 };
 const serverStatusConfig: StatusBadgeConfig<AnalyticsProviderServerStatus> = {
-  ready: { label: "Server ready", icon: Server, className: "text-emerald-700" },
+  ready: { label: "Server ready", icon: Server, className: "text-emerald-700 dark:text-emerald-300" },
   blocked: { label: "Server blocked", icon: AlertTriangle, className: "text-destructive" },
-  not_configured: { label: "Server not configured", icon: Server, className: "text-amber-800" },
+  not_configured: { label: "Server not configured", icon: Server, className: "text-amber-800 dark:text-amber-300" },
   not_applicable: { label: "Browser only", icon: Monitor, className: "text-muted-foreground" },
 };
 
@@ -71,7 +71,7 @@ export function AnalyticsProviderHealth({ health }: AnalyticsProviderHealthProps
           )} />
           <div className="min-w-0">
             <p className="text-sm font-semibold">Provider readiness</p>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="line-clamp-2 text-xs text-muted-foreground sm:line-clamp-1">
               {summary.blockedProviders > 0
                 ? `${summary.blockedProviders} provider${summary.blockedProviders === 1 ? "" : "s"} need attention before reliable tracking.`
                 : `${summary.browserReadyProviders} browser and ${summary.serverReadyProviders} server integrations are ready.`}
@@ -79,7 +79,7 @@ export function AnalyticsProviderHealth({ health }: AnalyticsProviderHealthProps
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="gap-1 text-emerald-700">
+          <Badge variant="outline" className="gap-1 text-emerald-700 dark:text-emerald-300">
             <CheckCircle2 className="h-3 w-3" />
             {summary.browserReadyProviders} ready
           </Badge>

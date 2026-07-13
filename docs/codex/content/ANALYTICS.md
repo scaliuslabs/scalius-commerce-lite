@@ -69,6 +69,15 @@ Executable source belongs only in the edit workflow.
 - Integration rows use a dense five-column grammar: integration identity,
   delivery, readiness, update time, and actions. Draft activation is explicit;
   deactivation remains one click.
+- At 390 px, the list switches to compact integration cards rather than
+  clipping the five-column table. Each card keeps provider/public identifier,
+  readiness, visible repair context, placement, execution mode, update time,
+  and permission-gated lifecycle actions in one scan. Desktop keeps the dense
+  table. Readiness and provider-health states use explicit dark-mode colors.
+- Loading uses shape-matched desktop/mobile skeletons. A failed list or health
+  read fails closed with a retry state and does not present assumed status.
+  Empty accounts offer draft creation; filtered zero-results offer one clear
+  filter reset; trash explains recovery and permanent deletion truthfully.
 - Create/edit begins with provider choice, then asks for the smallest honest
   input. Cloudflare uses a token field; other first-class providers accept the
   official base snippet; custom code alone is framed as advanced trusted code.
