@@ -209,19 +209,19 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
             {adminUsers.map((adminUser) => (
               <div
                 key={adminUser.id}
-                className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
+                className="flex flex-col gap-3 p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:p-4"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
                     {adminUser.image ? (
                       <img src={adminUser.image} alt={adminUser.name} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
                     )}
                   </div>
-                  <div>
-                    <p className="font-medium flex items-center gap-2">
-                      {adminUser.name}
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                      <span className="truncate">{adminUser.name}</span>
                       {adminUser.id === currentUserId && (
                         <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                           You
@@ -233,7 +233,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-muted-foreground">{adminUser.email}</p>
+                    <p className="break-all text-sm text-muted-foreground">{adminUser.email}</p>
                     {adminUser.roles && adminUser.roles.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {adminUser.roles.map((role) => (
@@ -248,7 +248,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   {adminUser.twoFactorEnabled ? (
                     <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">
                       <ShieldCheck className="h-3 w-3" />

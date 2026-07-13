@@ -493,6 +493,27 @@ retained. What changes is lifecycle visibility and operational control.
 | Role changed in another tab | Revision conflict; permission cache invalidates immediately after commit. |
 | Mobile team management | Identity/status first; actions in an accessible menu; no horizontal row overflow. |
 
+### Implemented Theme and Account interface slice (2026-07-13)
+
+- Theme now presents the existing color authority honestly: five accessible
+  starting palettes, paired background/foreground rows, compact native color
+  inputs, field-level sanitizer errors, and 4.5:1 contrast results for opaque
+  hex pairs. A failing scored pair blocks publish.
+- The old synthetic “Summer Collection” product preview and hard-coded white
+  picker were removed. A semantic token map replaces it and explicitly defers
+  real route/device preview to the versioned presentation editor.
+- Account removed the decorative cover treatment and oversized avatar. The
+  compact identity row keeps profile actions reachable at mobile touch sizes,
+  while navigation now distinguishes **Personal** security from **Store
+  access** administration.
+- Administrator rows stack identity, status, and actions on narrow viewports;
+  long email addresses wrap instead of widening the page.
+
+This is an honest workflow improvement, not completion of the target account
+or presentation architecture. URL-owned account routes, sessions/devices,
+invite lifecycle, suspension, theme drafts/history/rollback, shared semantic
+presentation settings, and real storefront previews remain required.
+
 ## Shared UI contract
 
 These settings must look like one product, not five isolated component demos.

@@ -9,7 +9,7 @@ export const Route = createFileRoute("/admin/settings/account")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(accountSecurityQueryOptions());
   },
-  head: () => ({ meta: [{ title: "Account Settings | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "My account | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: AccountSettingsPage,
 });
@@ -26,11 +26,11 @@ function AccountSettingsPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage your account security and administrator access
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold tracking-tight">My account</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Manage your profile, sign-in security, and store access.
         </p>
       </div>
 
