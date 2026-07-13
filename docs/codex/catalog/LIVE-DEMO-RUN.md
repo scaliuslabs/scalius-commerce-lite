@@ -75,6 +75,35 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Guest CRM linkage remained healthy after the transient order read: the
   `cust_guest_FWW6XI` history route rendered the unified buyer profile, one
   pending BDT 9,100 order, zero paid spend, and the link back to order detail.
+- The inventory and order-recovery follow-up is now deployed. API version
+  `a20cd391-8c7a-4a28-a9b2-a2cd9f9c4e69` and admin version
+  `a079b096-6634-44aa-8588-a09492ca10e6` include migration
+  `0028_cute_ghost_rider.sql`, the purpose-built mobile inventory workflow,
+  guarded transient order-detail retry, account session controls, explicit
+  Media selection commands, and the payment-readiness outcome model.
+- A fresh authenticated iPhone 14 Pro Max emulation at 430 x 932 proved that
+  Inventory no longer exposes the desktop table or a page-level horizontal
+  scroller. It renders compact SKU cards with product/SKU/options, status,
+  On hand, Committed, Available, and the same Adjust action as desktop. The
+  live summary was 9 SKUs, 84 on hand, 1 committed, and 83 available.
+- The same phone viewport proved the Checkout workspace renders its customer
+  access policy, mandatory-phone explanation, buyer-flow readiness, payment
+  mode controls, and sticky save action without widening the page. No settings
+  were changed during this read-only verification.
+- Account Sessions was also re-read against current authority: two bounded
+  sessions were shown, the current Chrome session was protected, one other
+  session exposed a targeted sign-out action, and the global command was
+  explicitly limited to other devices. No session was revoked during smoke.
+- The Media library re-confirmed five complete `contain` thumbnails per row at
+  1440 px. Entering Select showed `0 selected`, `Select all shown`, and
+  `Cancel`; cancelling returned focus to the Select trigger. All nine assets,
+  including the 23.56 MB MP4, remained available.
+- Sequential verification for this checkpoint passed the promotion/migration,
+  Media, Account, payment-readiness, Inventory, Tax, and order-recovery focused
+  suites; Database, Core, API client, API, and Admin typechecks; SDK generation;
+  schema generation; binding checks; remote migration; deployment health;
+  `pnpm release:check`; and `pnpm ops:check --queues`. The only operations
+  warning remains the documented logs-only alert-email configuration.
 
 ## Cleanup decisions and state
 
@@ -90,6 +119,14 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 ## Release proof
 
+- Latest inventory/account/payment-readiness and promotion-foundation release:
+  API `a20cd391-8c7a-4a28-a9b2-a2cd9f9c4e69`, admin
+  `a079b096-6634-44aa-8588-a09492ca10e6`. Migration
+  `0028_cute_ghost_rider.sql` applied through the normal remote D1 path before
+  the API deploy. Storefront was not redeployed because this checkpoint did
+  not change storefront code. The typed promotion tables/evaluator remain
+  dormant and legacy discount codes remain buyer authority until the atomic
+  checkout/admin cutover is complete.
 - Latest coordinated settings and commerce-authority release: API
   `cc745e67-945f-4485-abbe-3c5f45d3084d`, admin
   `e19e3d87-af93-439f-ab8a-46b026a118c0`, and storefront
