@@ -19,7 +19,7 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("getThemeColorPairStatus");
     expect(source).toContain("publishBlocked");
     expect(source).toContain("loadError");
-    expect(source).toContain("rebaseThemeColorDraft");
+    expect(source).toContain("rebaseThemeSettingsDraft");
     expect(source).toContain("UnsavedChangesGuard");
     expect(source).toContain("Advanced controls");
     expect(source).toContain("Semantic map");
@@ -38,9 +38,12 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("Administrators");
     expect(source).toContain("Sessions");
     expect(source).toContain("AccountSessions");
-    expect(source).toContain("grid-cols-1");
+    expect(source).toContain('aria-label="Account settings"');
+    expect(source).toContain('aria-current={active ? "page" : undefined}');
+    expect(source).toContain("overflow-x-auto");
     expect(source).toContain("min-h-11");
-    expect(source).toContain("value={activeSection}");
+    expect(source).toContain("renderSection");
+    expect(source).not.toContain("TabsList");
 
     const routeSource = readSource("routes/admin/settings/account.tsx");
     expect(routeSource).toContain("validateAccountSearch");
@@ -62,6 +65,31 @@ describe("theme and account settings workspace", () => {
     expect(sessionsSource).toContain("session.commandId");
     expect(sessionsSource).not.toContain("session.id");
     expect(sessionsSource).toContain("sessionsQuery.error");
+    expect(sessionsSource).toContain("Protected");
+    expect(sessionsSource).toContain("Device access cannot be changed");
     expect(sessionsSource).toContain("min-h-11");
+
+    const twoFactorSource = readSource(
+      "components/admin/account-settings/TwoFactorSetup.tsx",
+    );
+    expect(twoFactorSource).toContain('role="group"');
+    expect(twoFactorSource).toContain("aria-pressed");
+    expect(twoFactorSource).toContain("handleSetupEmailForChange");
+    expect(twoFactorSource).toContain(
+      "Turn off two-factor authentication?",
+    );
+    expect(twoFactorSource).toContain("AlertDialogAction");
+    expect(twoFactorSource).toContain("min-h-11");
+    expect(twoFactorSource).not.toContain("More secure. Works offline.");
+    expect(twoFactorSource).not.toContain("More convenient. No app needed.");
+
+    const passwordSource = readSource(
+      "components/admin/account-settings/ChangePasswordForm.tsx",
+    );
+    expect(passwordSource).toContain('role="progressbar"');
+    expect(passwordSource).toContain("Show confirmed password");
+    expect(passwordSource).toContain("min-h-11");
+    expect(passwordSource).not.toContain("bg-red-500");
+    expect(passwordSource).not.toContain("bg-green-500");
   });
 });

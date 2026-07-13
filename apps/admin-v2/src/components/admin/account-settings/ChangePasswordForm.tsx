@@ -16,7 +16,7 @@ import { changePassword } from "~/lib/api-functions/auth-management";
 import { useHydrated } from "~/hooks/use-hydrated";
 
 function getPasswordStrength(password: string) {
-  if (!password) return { strength: 0, label: "", color: "" };
+  if (!password) return { strength: 0, label: "", tone: "bg-muted" };
   let strength = 0;
   if (password.length >= 8) strength++;
   if (password.length >= 12) strength++;
@@ -24,10 +24,10 @@ function getPasswordStrength(password: string) {
   if (/[0-9]/.test(password)) strength++;
   if (/[^A-Za-z0-9]/.test(password)) strength++;
 
-  if (strength <= 2) return { strength, label: "Weak", color: "bg-red-500" };
-  if (strength <= 3) return { strength, label: "Fair", color: "bg-yellow-500" };
-  if (strength <= 4) return { strength, label: "Good", color: "bg-blue-500" };
-  return { strength, label: "Strong", color: "bg-green-500" };
+  if (strength <= 2) return { strength, label: "Weak", tone: "bg-destructive" };
+  if (strength <= 3) return { strength, label: "Fair", tone: "bg-foreground/55" };
+  if (strength <= 4) return { strength, label: "Good", tone: "bg-foreground/75" };
+  return { strength, label: "Strong", tone: "bg-primary" };
 }
 
 export function ChangePasswordForm() {
@@ -38,6 +38,7 @@ export function ChangePasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const isHydrated = useHydrated();
 
   const passwordStrength = getPasswordStrength(newPassword);
@@ -60,10 +61,13 @@ export function ChangePasswordForm() {
 
     try {
       await changePassword({ data: { currentPassword, newPassword } });
-      toast.success("Password changed successfully");
+      toast.success("Password updated");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     } catch (err) {
       setError(getServerFnError(err, "Failed to change password"));
     } finally {
@@ -79,7 +83,7 @@ export function ChangePasswordForm() {
           Change password
         </CardTitle>
         <CardDescription>
-          Use at least 12 characters. Changing it does not weaken your 2FA requirement.
+          Use at least 12 characters. Two-factor authentication remains required.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-4 pt-0">
@@ -91,7 +95,7 @@ export function ChangePasswordForm() {
           noValidate
         >
           {error && (
-            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -108,13 +112,13 @@ export function ChangePasswordForm() {
                 required
                 autoComplete="current-password"
                 disabled={!isHydrated || isLoading}
-                className="pr-10"
+                className="min-h-11 pr-11 sm:min-h-9"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
                 onClick={() => setShowCurrentPassword((s) => !s)}
                 aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
               >
@@ -139,13 +143,13 @@ export function ChangePasswordForm() {
                 autoComplete="new-password"
                 disabled={!isHydrated || isLoading}
                 minLength={12}
-                className="pr-10"
+                className="min-h-11 pr-11 sm:min-h-9"
               />
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
                 onClick={() => setShowNewPassword((s) => !s)}
                 aria-label={showNewPassword ? "Hide new password" : "Show new password"}
               >
@@ -158,12 +162,19 @@ export function ChangePasswordForm() {
             </div>
             {newPassword && (
               <div className="space-y-1.5">
-                <div className="flex gap-1">
+                <div
+                  className="flex gap-1"
+                  role="progressbar"
+                  aria-label={`Password strength: ${passwordStrength.label}`}
+                  aria-valuemin={0}
+                  aria-valuemax={5}
+                  aria-valuenow={passwordStrength.strength}
+                >
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div
                       key={i}
                       className={`h-1 flex-1 rounded-full transition-colors ${i <= passwordStrength.strength
-                        ? passwordStrength.color
+                        ? passwordStrength.tone
                         : "bg-muted"
                         }`}
                     />
@@ -178,16 +189,33 @@ export function ChangePasswordForm() {
 
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              disabled={!isHydrated || isLoading}
-              minLength={12}
-            />
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                disabled={!isHydrated || isLoading}
+                minLength={12}
+                className="min-h-11 pr-11 sm:min-h-9"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full min-w-11 px-3 hover:bg-transparent sm:min-w-9"
+                onClick={() => setShowConfirmPassword((shown) => !shown)}
+                aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                )}
+              </Button>
+            </div>
             {confirmPassword && newPassword !== confirmPassword && (
               <p className="text-xs text-destructive">Passwords do not match</p>
             )}
@@ -202,7 +230,7 @@ export function ChangePasswordForm() {
               !newPassword ||
               newPassword !== confirmPassword
             }
-            className="min-h-10 w-full sm:w-auto"
+            className="min-h-11 w-full sm:min-h-9 sm:w-auto"
           >
             {isLoading ? (
               <>

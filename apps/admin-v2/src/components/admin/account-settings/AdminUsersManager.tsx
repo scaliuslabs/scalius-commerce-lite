@@ -116,7 +116,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
       await addUser(newUserName, newUserEmail, selectedRoleId);
       resetInviteForm();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      setError(err instanceof Error ? err.message : "Could not send this invitation");
     } finally {
       setIsAdding(false);
     }
@@ -183,6 +183,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   autoComplete="name"
                   required
                   disabled={!isHydrated || isAdding}
+                  className="min-h-11 sm:min-h-9"
                 />
               </div>
               <div className="space-y-2">
@@ -196,6 +197,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   autoComplete="email"
                   required
                   disabled={!isHydrated || isAdding}
+                  className="min-h-11 sm:min-h-9"
                 />
               </div>
             </div>
@@ -206,7 +208,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                 onValueChange={setSelectedRoleId}
                 disabled={!isHydrated || isAdding || !userAuthorityReady || isLoadingRoles || Boolean(rolesError)}
               >
-                <SelectTrigger id="roleSelect">
+                <SelectTrigger id="roleSelect" className="min-h-11 sm:min-h-9">
                   <SelectValue placeholder={isLoadingRoles ? "Loading roles…" : "Select a role"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -225,7 +227,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               {rolesError ? (
                 <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-background p-2 text-xs">
                   <span className="text-destructive">{rolesError}</span>
-                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => void refetchRoles()}>
+                  <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetchRoles()}>
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                     Retry
                   </Button>
@@ -246,14 +248,14 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                 variant="ghost"
                 onClick={resetInviteForm}
                 disabled={isAdding}
-                className="min-h-10"
+                className="min-h-11 sm:min-h-9"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={!isHydrated || isAdding || !userAuthorityReady || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
-                className="min-h-10"
+                className="min-h-11 sm:min-h-9"
               >
                 {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Send invite
@@ -265,7 +267,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
         {usersError && adminUsers.length > 0 && (
           <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <span className="text-destructive">{usersError} Showing the last loaded list.</span>
-            <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => void refetch()}>
+            <Button type="button" variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void refetch()}>
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
               Retry
             </Button>
@@ -281,7 +283,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Find name, email, or role…"
               aria-label="Find administrators"
-              className="h-10 pl-9"
+              className="min-h-11 pl-9 sm:min-h-9"
             />
           </div>
         )}
@@ -299,7 +301,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <div>
                 <p className="text-sm font-semibold">Administrators are unavailable</p>
                 <p className="mt-1 text-sm text-muted-foreground">{usersError}</p>
-                <Button type="button" size="sm" className="mt-3 min-h-9" onClick={() => void refetch()}>
+                <Button type="button" size="sm" className="mt-3 min-h-11 sm:min-h-9" onClick={() => void refetch()}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Retry
                 </Button>

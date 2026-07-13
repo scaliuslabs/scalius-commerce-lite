@@ -713,6 +713,14 @@ retained. What changes is lifecycle visibility and operational control.
   compact identity row keeps profile actions reachable at mobile touch sizes,
   while navigation now distinguishes **Personal** security from **Store
   access** administration.
+- The account subsection control is URL navigation rather than a simulated tab
+  demo: it uses a compact desktop rail, a non-clipping mobile rail, direct
+  `aria-current` state, and permission-denied deep links still fall back to
+  personal security.
+- Identity now states administrator and 2FA readiness explicitly. Password
+  controls use semantic dark-mode-safe strength states and consistent reveal
+  controls; 2FA method choices are compact pressed-choice semantics, and turning 2FA
+  off requires password proof plus a destructive confirmation.
 - Administrator rows stack identity, status, and actions on narrow viewports;
   long email addresses wrap instead of widening the page.
 - Account subsections now survive refresh/back/forward through a validated URL
@@ -728,7 +736,9 @@ retained. What changes is lifecycle visibility and operational control.
   foreign, current-session, and missing-secret cases fail closed.
 - The session workspace uses stacked mobile rows, 44 px personal/action targets,
   local retry/error states, fresh-on-mount reads, and authority refresh after
-  every revoke attempt. Hidden rows remain covered by revoke-all.
+  every revoke attempt. The current device is explicitly marked protected,
+  empty and failed reads keep all revoke actions locked, and hidden rows remain
+  covered by revoke-all.
 
 This is an honest workflow improvement, not completion of the target account
 or presentation architecture. URL-owned account routes, invite lifecycle,

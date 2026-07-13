@@ -171,7 +171,7 @@ describe("ProfileHeader display-name editing", () => {
     );
     expect(
       saveButton.closest("[data-profile-edit-actions]")?.className,
-    ).toContain("min-h-10");
+    ).toContain("min-h-11");
   });
 
   it("restores the prior display name on cancel without saving", () => {
@@ -227,9 +227,7 @@ describe("ProfileHeader display-name editing", () => {
     expect(host.querySelector("h2")?.textContent).toBe("Arobi Owner");
     expect(queryButtonNamed("Save changes")).toBeNull();
     expect(buttonNamed("Edit profile")).toBeTruthy();
-    expect(toastMock.success).toHaveBeenCalledWith(
-      "Profile updated successfully",
-    );
+    expect(toastMock.success).toHaveBeenCalledWith("Profile saved");
     expect(refreshAdminRouteContextMock).toHaveBeenCalledWith(routerMock);
   });
 });
