@@ -13,6 +13,7 @@ Root agent context is intentionally small. Treat this file as a router, not a co
 ## Non-Negotiables
 
 - Use `pnpm` from the repo root. Deploy through `pnpm run deploy*`, not pnpm's package deploy behavior.
+- This development host has 16 GB RAM. Never run workspace typechecks or `pnpm run deploy*` scripts in parallel; run them sequentially and reuse Turbo cache to avoid concurrent multi-gigabyte `tsc` processes.
 - Use `pnpm ops:check` for read-only production API ops smokes; add `--queues` when queue metadata matters. It intentionally runs Wrangler through `pnpm --dir apps/api`, so do not rely on root-level `pnpm exec wrangler`.
 - Use `pnpm release:check` for the compact read-only release smoke across tracker/docs, API ops, dashboard auth gate, storefront pages, discovery XML/feed, and UCP catalog discovery. It reads the public `/api/v1/seo` policy first, skips intentionally disabled sitemap/feed surfaces, verifies child sitemaps according to the enabled sections, validates every non-empty feed item for link/image/availability/direct item-level positive price and requires any sale price to be same-currency, positive, and lower than the original price, allows truthful empty catalog XML/feed output, proves the UCP profile is HTTPS/catalog-only, opportunistically smoke-tests UCP search/lookup when a product candidate exists, and skips Product JSON-LD smoke only when the public Product schema switch is off.
 - Never hand-edit generated files: `apps/admin-v2/src/routeTree.gen.ts` and `packages/api-client/src/generated/**`.
