@@ -37,6 +37,25 @@ const legacySchema = `
     discount_id TEXT NOT NULL REFERENCES discounts(id) ON DELETE CASCADE,
     product_id TEXT NOT NULL
   );
+  CREATE VIRTUAL TABLE discounts_fts USING fts5(
+    code,
+    content='discounts',
+    content_rowid='rowid'
+  );
+  CREATE TRIGGER discounts_fts_after_insert AFTER INSERT ON discounts BEGIN
+    INSERT INTO discounts_fts(rowid, code) VALUES (new.rowid, new.code);
+  END;
+  CREATE TRIGGER discounts_fts_after_update AFTER UPDATE ON discounts BEGIN
+    INSERT INTO discounts_fts(rowid, code) VALUES (new.rowid, new.code);
+  END;
+  CREATE TRIGGER discounts_fts_before_delete BEFORE DELETE ON discounts BEGIN
+    INSERT INTO discounts_fts(discounts_fts, rowid, code)
+    VALUES('delete', old.rowid, old.code);
+  END;
+  CREATE TRIGGER discounts_fts_before_update BEFORE UPDATE ON discounts BEGIN
+    INSERT INTO discounts_fts(discounts_fts, rowid, code)
+    VALUES('delete', old.rowid, old.code);
+  END;
 `;
 
 describe("discount revision migration", () => {
@@ -49,14 +68,45 @@ describe("discount revision migration", () => {
           id, code, type, value_type, discount_value, start_date,
           is_active, created_at, updated_at
         ) VALUES (
+          'disc_removed', 'REMOVED', 'amount_off_order', 'percentage', 10,
+          1700000000, true, 1700000000, 1700000000
+        );
+        INSERT INTO discounts (
+          id, code, type, value_type, discount_value, start_date,
+          is_active, created_at, updated_at
+        ) VALUES (
           'disc_legacy', 'WELCOME10', 'amount_off_order', 'percentage', 10,
           1700000000, true, 1700000000, 1700000000
         );
+        DELETE FROM discounts WHERE id = 'disc_removed';
         INSERT INTO discount_products (id, discount_id, product_id)
         VALUES ('dp_legacy', 'disc_legacy', 'prod_1');
         ${migration}
         SELECT code || ':' || revision FROM discounts;
         SELECT discount_id FROM discount_products;
+        SELECT d.code
+        FROM discounts AS d
+        JOIN discounts_fts AS f ON f.rowid = d.rowid
+        WHERE discounts_fts MATCH 'WELCOME10';
+        INSERT INTO discounts (
+          id, code, type, value_type, discount_value, start_date,
+          is_active, created_at, updated_at
+        ) VALUES (
+          'disc_new', 'SUMMER20', 'amount_off_order', 'percentage', 20,
+          1700000000, true, 1700000000, 1700000000
+        );
+        SELECT d.code
+        FROM discounts AS d
+        JOIN discounts_fts AS f ON f.rowid = d.rowid
+        WHERE discounts_fts MATCH 'SUMMER20';
+        UPDATE discounts SET code = 'MONSOON20' WHERE id = 'disc_new';
+        SELECT count(*) FROM discounts_fts WHERE discounts_fts MATCH 'SUMMER20';
+        SELECT d.code
+        FROM discounts AS d
+        JOIN discounts_fts AS f ON f.rowid = d.rowid
+        WHERE discounts_fts MATCH 'MONSOON20';
+        DELETE FROM discounts WHERE id = 'disc_new';
+        SELECT count(*) FROM discounts_fts WHERE discounts_fts MATCH 'MONSOON20';
         PRAGMA foreign_key_check;
       `,
       encoding: "utf8",
@@ -66,6 +116,11 @@ describe("discount revision migration", () => {
     expect(result.stdout.trim().split("\n")).toEqual([
       "WELCOME10:1",
       "disc_legacy",
+      "WELCOME10",
+      "SUMMER20",
+      "0",
+      "MONSOON20",
+      "0",
     ]);
   });
 
