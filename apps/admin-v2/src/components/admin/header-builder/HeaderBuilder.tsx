@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveHeaderConfig } from "~/lib/api-functions/settings";
@@ -104,10 +105,14 @@ export function HeaderBuilder({
 
     setIsLoading(true);
     try {
+      const storedConfig: HeaderConfig = {
+        ...config,
+        navigation: config.navigation.map(stripNavigationResolution),
+      };
       if (typeof onSave === "function") {
-        await onSave(config);
+        await onSave(storedConfig);
       } else {
-        await saveHeaderConfig({ data: config });
+        await saveHeaderConfig({ data: storedConfig });
       }
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });

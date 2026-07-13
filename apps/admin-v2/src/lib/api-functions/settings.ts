@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
+import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
 import type {
   CustomerRequestPolicy,
   CustomerRequestPreviewState,
@@ -54,12 +55,7 @@ export interface FaviconConfig {
   alt: string;
 }
 
-export interface NavigationItemConfig {
-  id: string;
-  title: string;
-  href?: string;
-  subMenu?: NavigationItemConfig[];
-}
+export type NavigationItemConfig = NavigationTargetItem;
 
 export interface HeaderConfigInput {
   topBar: {
