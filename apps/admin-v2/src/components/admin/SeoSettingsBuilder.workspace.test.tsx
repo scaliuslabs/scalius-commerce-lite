@@ -35,4 +35,20 @@ describe("SEO outcome-first workspace", () => {
     }
     expect(builderSource).toContain("Save discovery settings");
   });
+
+  it("keeps the nested return-policy editor shrink-safe beside the outcome rail", () => {
+    expect(builderSource).toContain(
+      'xl:grid-cols-[minmax(0,1fr)_20rem]',
+    );
+    expect(builderSource).toContain(
+      'className="mt-4 grid min-w-0 gap-3 md:grid-cols-2"',
+    );
+    expect(builderSource).not.toContain(
+      'md:grid-cols-2 xl:grid-cols-4',
+    );
+    expect(builderSource).toContain(
+      'className="grid min-w-0 gap-2 md:col-span-2"',
+    );
+    expect(builderSource.match(/SelectTrigger[^>]+className="min-w-0"/g)).toHaveLength(3);
+  });
 });

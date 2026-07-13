@@ -298,7 +298,7 @@ export function SeoSettingsBuilder() {
   }
 
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <aside className="order-first min-w-0 xl:order-last xl:sticky xl:top-4">
         <SeoDiscoveryStatusCard
           discovery={values.discovery}
@@ -650,8 +650,8 @@ export function SeoSettingsBuilder() {
               </label>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="grid gap-2">
+            <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor="return-policy-country" className="text-xs">
                   Country
                 </Label>
@@ -672,7 +672,7 @@ export function SeoSettingsBuilder() {
                 />
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor="return-policy-category" className="text-xs">
                   Return category
                 </Label>
@@ -690,7 +690,10 @@ export function SeoSettingsBuilder() {
                     });
                   }}
                 >
-                  <SelectTrigger id="return-policy-category">
+                  <SelectTrigger
+                    id="return-policy-category"
+                    className="min-w-0"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -702,7 +705,7 @@ export function SeoSettingsBuilder() {
               </div>
 
               {isFiniteReturnPolicy ? (
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   <Label htmlFor="return-window-days" className="text-xs">
                     Return window days
                   </Label>
@@ -726,7 +729,7 @@ export function SeoSettingsBuilder() {
                 </div>
               ) : null}
 
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor="return-policy-fees" className="text-xs">
                   Return fees
                 </Label>
@@ -739,7 +742,7 @@ export function SeoSettingsBuilder() {
                   }
                   disabled={isNoReturnsPolicy}
                 >
-                  <SelectTrigger id="return-policy-fees">
+                  <SelectTrigger id="return-policy-fees" className="min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -751,7 +754,7 @@ export function SeoSettingsBuilder() {
                 </Select>
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor="return-policy-method" className="text-xs">
                   Return method
                 </Label>
@@ -764,7 +767,7 @@ export function SeoSettingsBuilder() {
                   }
                   disabled={isNoReturnsPolicy}
                 >
-                  <SelectTrigger id="return-policy-method">
+                  <SelectTrigger id="return-policy-method" className="min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -777,7 +780,7 @@ export function SeoSettingsBuilder() {
                 </Select>
               </div>
 
-              <div className="grid gap-2 md:col-span-2 xl:col-span-3">
+              <div className="grid min-w-0 gap-2 md:col-span-2">
                 <Label htmlFor="return-policy-url" className="text-xs">
                   Policy URL
                 </Label>

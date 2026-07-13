@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const manager = readFileSync(new URL("./MediaManager.tsx", import.meta.url), "utf8");
 const workspace = readFileSync(new URL("./MediaWorkspace.tsx", import.meta.url), "utf8");
 const managerHook = readFileSync(new URL("./hooks/useMediaManager.ts", import.meta.url), "utf8");
+const dialog = readFileSync(new URL("../../ui/dialog.tsx", import.meta.url), "utf8");
 
 describe("MediaManager picker selection boundary", () => {
   it("does not turn a single picker into toggle mode when it has a current value", () => {
@@ -21,5 +22,13 @@ describe("MediaManager picker selection boundary", () => {
     expect(workspace).toContain('event.key !== "Escape"');
     expect(workspace).toContain("cancelSelection()");
     expect(workspace).toContain("onCancelSelection={!picker ? mm.cancelSelection : undefined}");
+  });
+
+  it("uses the workspace Close action without rendering a second dialog X", () => {
+    expect(manager).toContain("showCloseButton={false}");
+    expect(manager).toContain("onClose={() => setOpen(false)}");
+    expect(workspace).toContain(">Close</Button>");
+    expect(dialog).toContain("showCloseButton = true");
+    expect(dialog).toContain("{showCloseButton ? (");
   });
 });
