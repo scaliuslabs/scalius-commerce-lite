@@ -4,11 +4,27 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleAlert,
+  History,
   Loader2,
+  MonitorSmartphone,
   Palette,
   RotateCcw,
   Save,
+  Type,
 } from "lucide-react";
+import {
+  DEFAULT_STOREFRONT_THEME_SETTINGS,
+  STOREFRONT_THEME_BODY_FONTS,
+  STOREFRONT_THEME_BUTTON_STYLES,
+  STOREFRONT_THEME_CARD_STYLES,
+  STOREFRONT_THEME_CONTAINER_WIDTHS,
+  STOREFRONT_THEME_CORNER_STYLES,
+  STOREFRONT_THEME_DENSITIES,
+  STOREFRONT_THEME_HEADING_FONTS,
+  STOREFRONT_THEME_INPUT_STYLES,
+  STOREFRONT_THEME_TYPE_SCALES,
+  type StorefrontThemeSettings,
+} from "@scalius/shared/storefront-theme";
 
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -19,6 +35,7 @@ import {
 import { usePermissions } from "~/contexts/PermissionContext";
 import {
   getThemeColorError,
+  getThemeColorPickerHex,
   getThemeColorPairStatus,
 } from "./theme-color-accessibility";
 import {
@@ -29,9 +46,9 @@ import {
   THEME_SURFACE_CONTRAST_PAIRS,
 } from "./theme-color-presets";
 import {
-  normalizeThemeColors,
-  rebaseThemeColorDraft,
-  themeColorRecordsEqual,
+  normalizeThemeSettingsDraft,
+  rebaseThemeSettingsDraft,
+  themeSettingsDraftsEqual,
 } from "./theme-draft";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
@@ -79,16 +96,19 @@ const COLOR_GROUPS: Array<{
 ];
 
 const CONTROL_KEYS: ColorKey[] = ["border", "input", "ring"];
-const isPickerHex = (value: string) => /^#[\da-f]{6}$/i.test(value);
 
 export default function ThemeSettingsPage() {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
-  const [colors, setColors] = useState<Record<string, string>>({});
-  const [savedColors, setSavedColors] = useState<Record<string, string>>({});
+  const [theme, setTheme] = useState<StorefrontThemeSettings>(
+    DEFAULT_STOREFRONT_THEME_SETTINGS,
+  );
+  const [savedTheme, setSavedTheme] = useState<StorefrontThemeSettings>(
+    DEFAULT_STOREFRONT_THEME_SETTINGS,
+  );
   const [revision, setRevision] = useState(0);
   const [conflict, setConflict] = useState<{
-    colors: Record<string, string>;
+    theme: StorefrontThemeSettings;
     revision: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,13 +124,13 @@ export default function ThemeSettingsPage() {
       setLoading(true);
       setLoadError(null);
       const data = await getThemeSettings();
-      setColors(data.colors);
-      setSavedColors(data.colors);
+      setTheme(data.theme);
+      setSavedTheme(data.theme);
       setRevision(data.revision);
       setConflict(null);
       setMessage(null);
     } catch {
-      setLoadError("Theme colors could not be loaded. No values have been assumed.");
+      setLoadError("Storefront style could not be loaded. No values have been assumed.");
     } finally {
       setLoading(false);
     }
@@ -121,22 +141,23 @@ export default function ThemeSettingsPage() {
   }, [fetchColors]);
 
   const effectiveColors = useMemo(
-    () => ({ ...DEFAULT_THEME_COLORS, ...colors }),
-    [colors],
+    () => ({ ...DEFAULT_THEME_COLORS, ...theme.colors }),
+    [theme.colors],
   );
   const dirty = useMemo(
-    () => !themeColorRecordsEqual(colors, savedColors),
-    [colors, savedColors],
+    () => !themeSettingsDraftsEqual(theme, savedTheme),
+    [theme, savedTheme],
   );
   const invalidKeys = useMemo(
     () =>
-      COLOR_FIELDS.filter((field) => getThemeColorError(colors[field.key] ?? ""))
+      COLOR_FIELDS.filter((field) => getThemeColorError(theme.colors[field.key] ?? ""))
         .map((field) => field.key),
-    [colors],
+    [theme.colors],
   );
   const contrastFailures = useMemo(
     () =>
       THEME_CONTRAST_PAIRS.filter(({ background, foreground }) =>
+        (background in theme.colors || foreground in theme.colors) &&
         getThemeColorPairStatus(
           effectiveColors[foreground] ?? "",
           effectiveColors[background] ?? "",
@@ -147,41 +168,58 @@ export default function ThemeSettingsPage() {
   const publishBlocked = invalidKeys.length > 0 || contrastFailures.length > 0;
 
   const handleChange = (key: ColorKey, value: string) => {
-    setColors((previous) => ({ ...previous, [key]: value }));
+    setTheme((previous) => ({
+      ...previous,
+      colors: { ...previous.colors, [key]: value },
+    }));
+    setMessage(null);
+  };
+
+  const updateTheme = <Key extends keyof StorefrontThemeSettings>(
+    key: Key,
+    value: StorefrontThemeSettings[Key],
+  ) => {
+    setTheme((previous) => ({ ...previous, [key]: value }));
     setMessage(null);
   };
 
   const applyPalette = (paletteName: string) => {
     const palette = THEME_COLOR_PALETTES[paletteName];
     if (!palette) return;
-    setColors((previous) => ({ ...previous, ...palette.colors }));
+    setTheme((previous) => ({
+      ...previous,
+      colors:
+        paletteName === "Current"
+          ? {}
+          : { ...previous.colors, ...palette.colors },
+    }));
     setMessage(null);
   };
 
   const handleReset = () => {
-    setColors({});
+    setTheme(DEFAULT_STOREFRONT_THEME_SETTINGS);
     setMessage(null);
   };
 
   const handleDiscard = () => {
     if (conflict) {
-      setColors(conflict.colors);
-      setSavedColors(conflict.colors);
+      setTheme(conflict.theme);
+      setSavedTheme(conflict.theme);
       setRevision(conflict.revision);
       setConflict(null);
       setMessage(null);
       return;
     }
 
-    setColors(savedColors);
+    setTheme(savedTheme);
     setConflict(null);
     setMessage(null);
   };
 
   const loadConflictingVersion = () => {
     if (!conflict) return;
-    setColors(conflict.colors);
-    setSavedColors(conflict.colors);
+    setTheme(conflict.theme);
+    setSavedTheme(conflict.theme);
     setRevision(conflict.revision);
     setConflict(null);
     setMessage(null);
@@ -190,14 +228,14 @@ export default function ThemeSettingsPage() {
   const rebaseLocalChanges = () => {
     if (!conflict) return;
 
-    setColors(
-      rebaseThemeColorDraft({
-        base: savedColors,
-        local: colors,
-        latest: conflict.colors,
+    setTheme(
+      rebaseThemeSettingsDraft({
+        base: savedTheme,
+        local: theme,
+        latest: conflict.theme,
       }),
     );
-    setSavedColors(conflict.colors);
+    setSavedTheme(conflict.theme);
     setRevision(conflict.revision);
     setConflict(null);
     setMessage(null);
@@ -226,15 +264,15 @@ export default function ThemeSettingsPage() {
     try {
       setSaving(true);
       setMessage(null);
-      const cleaned = normalizeThemeColors(colors);
+      const cleaned = normalizeThemeSettingsDraft(theme);
       const saved = await updateThemeSettings({
-        data: { colors: cleaned, expectedRevision: revision },
+        data: { theme: cleaned, expectedRevision: revision },
       });
-      setColors(saved.colors);
-      setSavedColors(saved.colors);
+      setTheme(saved.theme);
+      setSavedTheme(saved.theme);
       setRevision(saved.revision);
       setConflict(null);
-      setMessage({ type: "success", text: "Theme colors published." });
+      setMessage({ type: "success", text: "Storefront style published." });
     } catch (error) {
       if (isAdminApiConflictError(error)) {
         try {
@@ -250,7 +288,7 @@ export default function ThemeSettingsPage() {
       } else {
         setMessage({
           type: "error",
-          text: "Theme colors could not be published. Your changes remain in this tab.",
+          text: "Storefront style could not be published. Your changes remain in this tab.",
         });
       }
     } finally {
@@ -274,9 +312,9 @@ export default function ThemeSettingsPage() {
     return (
       <div className="mx-auto max-w-6xl space-y-4">
         <header>
-          <h1 className="text-xl font-semibold tracking-tight">Theme colors</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Set the colors buyers see across storefront pages and checkout.
+            Set the visual system buyers see across the storefront.
           </p>
         </header>
         <section
@@ -287,7 +325,7 @@ export default function ThemeSettingsPage() {
             <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
             <div className="space-y-3">
               <div>
-                <h2 className="text-sm font-semibold">Published colors are unavailable</h2>
+                <h2 className="text-sm font-semibold">Published style is unavailable</h2>
                 <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
               </div>
               <button
@@ -308,9 +346,9 @@ export default function ThemeSettingsPage() {
     <div className="mx-auto max-w-6xl space-y-4 pb-28">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Theme colors</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Set the colors buyers see across storefront pages and checkout.
+            Set type, shape, spacing, and colors from one published system.
           </p>
         </div>
         <span className="w-fit rounded-full border bg-card px-2.5 py-1 text-xs text-muted-foreground">
@@ -320,7 +358,7 @@ export default function ThemeSettingsPage() {
 
       {!canManage && (
         <InlineNotice>
-          Your role can review theme colors, but cannot publish changes.
+          Your role can review storefront style, but cannot publish changes.
         </InlineNotice>
       )}
 
@@ -371,11 +409,90 @@ export default function ThemeSettingsPage() {
       )}
 
       <section className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-start gap-2 border-b px-4 py-3">
+          <Type className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <h2 className="text-sm font-semibold">Presentation</h2>
+            <p className="text-xs text-muted-foreground">
+              Semantic choices stay consistent across supported storefront components.
+            </p>
+          </div>
+        </div>
+        <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
+          <SelectControl
+            label="Headings"
+            value={theme.typography.heading}
+            options={STOREFRONT_THEME_HEADING_FONTS}
+            disabled={!canManage}
+            onChange={(heading) => updateTheme("typography", { ...theme.typography, heading })}
+          />
+          <SelectControl
+            label="Body text"
+            value={theme.typography.body}
+            options={STOREFRONT_THEME_BODY_FONTS}
+            disabled={!canManage}
+            onChange={(body) => updateTheme("typography", { ...theme.typography, body })}
+          />
+          <SelectControl
+            label="Type scale"
+            value={theme.typography.scale}
+            options={STOREFRONT_THEME_TYPE_SCALES}
+            disabled={!canManage}
+            onChange={(scale) => updateTheme("typography", { ...theme.typography, scale })}
+          />
+          <SelectControl
+            label="Content width"
+            value={theme.containerWidth}
+            options={STOREFRONT_THEME_CONTAINER_WIDTHS}
+            disabled={!canManage}
+            onChange={(containerWidth) => updateTheme("containerWidth", containerWidth)}
+          />
+        </div>
+        <div className="grid gap-px border-t bg-border sm:grid-cols-2 xl:grid-cols-5">
+          <SelectControl
+            label="Corners"
+            value={theme.cornerStyle}
+            options={STOREFRONT_THEME_CORNER_STYLES}
+            disabled={!canManage}
+            onChange={(cornerStyle) => updateTheme("cornerStyle", cornerStyle)}
+          />
+          <SelectControl
+            label="Density"
+            value={theme.density}
+            options={STOREFRONT_THEME_DENSITIES}
+            disabled={!canManage}
+            onChange={(density) => updateTheme("density", density)}
+          />
+          <SelectControl
+            label="Buttons"
+            value={theme.components.buttons}
+            options={STOREFRONT_THEME_BUTTON_STYLES}
+            disabled={!canManage}
+            onChange={(buttons) => updateTheme("components", { ...theme.components, buttons })}
+          />
+          <SelectControl
+            label="Fields"
+            value={theme.components.inputs}
+            options={STOREFRONT_THEME_INPUT_STYLES}
+            disabled={!canManage}
+            onChange={(inputs) => updateTheme("components", { ...theme.components, inputs })}
+          />
+          <SelectControl
+            label="Product cards"
+            value={theme.components.cards}
+            options={STOREFRONT_THEME_CARD_STYLES}
+            disabled={!canManage}
+            onChange={(cards) => updateTheme("components", { ...theme.components, cards })}
+          />
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border bg-card">
         <div className="border-b px-4 py-3">
           <h2 className="text-sm font-semibold">Starting palette</h2>
           <p className="text-xs text-muted-foreground">Apply a complete accessible palette, then adjust individual pairs.</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-6">
           {Object.entries(THEME_COLOR_PALETTES).map(([key, palette]) => (
             <button
               key={key}
@@ -413,7 +530,7 @@ export default function ThemeSettingsPage() {
                     key={background}
                     background={background}
                     foreground={foreground}
-                    colors={colors}
+                    colors={theme.colors}
                     effectiveColors={effectiveColors}
                     disabled={!canManage}
                     onChange={handleChange}
@@ -436,7 +553,7 @@ export default function ThemeSettingsPage() {
                 <ColorControl
                   key={key}
                   colorKey={key}
-                  value={colors[key] ?? ""}
+                  value={theme.colors[key] ?? ""}
                   effectiveValue={effectiveColors[key] ?? ""}
                   disabled={!canManage}
                   onChange={handleChange}
@@ -447,6 +564,15 @@ export default function ThemeSettingsPage() {
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20">
+          <section className="rounded-xl border bg-card p-3">
+            <h2 className="text-sm font-semibold">Published scope</h2>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <SummaryFact label="Type" value={`${labelize(theme.typography.heading)} / ${labelize(theme.typography.body)}`} />
+              <SummaryFact label="Density" value={labelize(theme.density)} />
+              <SummaryFact label="Corners" value={labelize(theme.cornerStyle)} />
+              <SummaryFact label="Width" value={labelize(theme.containerWidth)} />
+            </dl>
+          </section>
           <ColorPreview colors={effectiveColors} />
           <section className="rounded-xl border bg-card p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -456,8 +582,18 @@ export default function ThemeSettingsPage() {
               </span>
             </div>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Essential hex color pairs must reach a 4.5:1 contrast ratio. Functional CSS colors are validated but cannot be scored here.
+              Essential opaque hex and OKLCH text pairs must reach a 4.5:1 contrast ratio. Other functional colors remain unscored.
             </p>
+          </section>
+          <section className="space-y-2 rounded-xl border bg-card p-3 text-xs text-muted-foreground">
+            <div className="flex gap-2">
+              <MonitorSmartphone className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>Real route and device preview is not available yet. Review the live store after publishing.</p>
+            </div>
+            <div className="flex gap-2">
+              <History className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>Published revision {revision}; history and rollback are not available yet.</p>
+            </div>
           </section>
         </aside>
       </div>
@@ -465,7 +601,7 @@ export default function ThemeSettingsPage() {
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            {dirty ? "Unpublished changes in this tab" : "Published colors are up to date"}
+            {dirty ? "Unpublished changes in this tab" : "Published style is up to date"}
           </p>
           <div className="grid grid-cols-3 gap-2 sm:flex">
             <button
@@ -521,6 +657,7 @@ function ColorPairRow({
     effectiveColors[foreground] ?? "",
     effectiveColors[background] ?? "",
   );
+  const usesOverride = background in colors || foreground in colors;
 
   return (
     <div className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.5rem] sm:items-center">
@@ -540,7 +677,7 @@ function ColorPairRow({
       />
       <div className="flex items-center justify-between gap-2 sm:justify-end">
         <span className="text-xs text-muted-foreground sm:hidden">Contrast</span>
-        <ContrastBadge status={status} />
+        <ContrastBadge status={status} usesOverride={usesOverride} />
       </div>
     </div>
   );
@@ -571,7 +708,7 @@ function ColorControl({
       <span className={`flex min-h-10 items-center gap-2 rounded-md border bg-background px-2 focus-within:ring-2 focus-within:ring-ring ${error ? "border-destructive" : "border-input"}`}>
         <input
           type="color"
-          value={isPickerHex(effectiveValue) ? effectiveValue : "#000000"}
+          value={getThemeColorPickerHex(effectiveValue) ?? "#000000"}
           onChange={(event) => onChange(colorKey, event.target.value)}
           disabled={disabled}
           aria-label={`Pick ${field.label.toLowerCase()} color`}
@@ -595,9 +732,14 @@ function ColorControl({
 
 function ContrastBadge({
   status,
+  usesOverride,
 }: {
   status: ReturnType<typeof getThemeColorPairStatus>;
+  usesOverride: boolean;
 }) {
+  if (!usesOverride) {
+    return <span className="rounded-full border px-2 py-1 text-[11px] text-muted-foreground">Store default</span>;
+  }
   if (status.passes === null) {
     return <span className="rounded-full border px-2 py-1 text-[11px] text-muted-foreground">Unscored</span>;
   }
@@ -626,7 +768,7 @@ function ColorPreview({ colors }: { colors: Record<string, string> }) {
       </div>
       <div className="space-y-2 p-3">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          A token-level check only. Storefront layout and device previews belong in the versioned presentation editor.
+          Token-level output only. This does not imitate a storefront route.
         </p>
         {swatches.map((swatch) => (
           <div
@@ -645,6 +787,54 @@ function ColorPreview({ colors }: { colors: Record<string, string> }) {
       </div>
     </section>
   );
+}
+
+function SelectControl<Value extends string>({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: Value;
+  options: readonly Value[];
+  disabled: boolean;
+  onChange: (value: Value) => void;
+}) {
+  return (
+    <label className="flex min-h-14 min-w-0 items-center justify-between gap-3 bg-card px-3 py-2">
+      <span className="min-w-0 text-xs font-medium">{label}</span>
+      <select
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value as Value)}
+        className="min-h-10 min-w-0 max-w-36 rounded-md border border-input bg-background px-2.5 text-sm capitalize text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {labelize(option)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SummaryFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="truncate font-medium text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function labelize(value: string): string {
+  return value
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function InlineNotice({ children }: { children: ReactNode }) {

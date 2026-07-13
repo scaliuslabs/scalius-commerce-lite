@@ -27,10 +27,11 @@ export const settings = sqliteTable(
 /**
  * Published storefront theme document.
  *
- * Theme colors affect every buyer-facing route, so they need an explicit
+ * Presentation settings affect every buyer-facing route, so they need an explicit
  * revision instead of the generic settings row's second-granularity timestamp.
  * The singleton shape also leaves room for future semantic theme controls
- * without scattering more presentation authority across generic keys.
+ * without scattering presentation authority across generic keys. The legacy
+ * `colors` column name now stores the complete sanitized JSON document.
  */
 export const themeSettings = sqliteTable("theme_settings", {
     id: text("id").primaryKey().default("default"),

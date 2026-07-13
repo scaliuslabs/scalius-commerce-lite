@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
 import {
   normalizeThemeColors,
+  rebaseThemeSettingsDraft,
   rebaseThemeColorDraft,
+  themeSettingsDraftsEqual,
   themeColorRecordsEqual,
 } from "./theme-draft";
 
@@ -38,6 +41,39 @@ describe("theme color draft", () => {
       primary: "#aaaaaa",
       border: "#cccccc",
       ring: "#dddddd",
+    });
+  });
+
+  it("compares the complete semantic document", () => {
+    const base = DEFAULT_STOREFRONT_THEME_SETTINGS;
+    expect(themeSettingsDraftsEqual(base, { ...base, colors: {} })).toBe(true);
+    expect(
+      themeSettingsDraftsEqual(base, {
+        ...base,
+        density: "compact",
+      }),
+    ).toBe(false);
+  });
+
+  it("rebases semantic leaves without erasing unrelated published changes", () => {
+    const base = DEFAULT_STOREFRONT_THEME_SETTINGS;
+    expect(
+      rebaseThemeSettingsDraft({
+        base,
+        local: {
+          ...base,
+          typography: { ...base.typography, heading: "editorial" },
+        },
+        latest: {
+          ...base,
+          density: "compact",
+          components: { ...base.components, cards: "elevated" },
+        },
+      }),
+    ).toMatchObject({
+      typography: { heading: "editorial" },
+      density: "compact",
+      components: { cards: "elevated" },
     });
   });
 });

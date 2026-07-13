@@ -113,12 +113,18 @@ classification, route-backed state, and the full refund matrix remain open.
 
 ## Theme: verified current scope
 
-- The saved value is one sanitized `storefront_colors` object. The storefront
-  injects approved CSS custom-property overrides; unsafe keys/values are
-  rejected and relevant caches invalidate.
-- The admin exposes five palettes and the 17 allowlisted tokens through paired
-  semantic rows. It tracks dirty state locally and shows a token map without
-  pretending that admin markup is a storefront preview.
+- The existing singleton `theme_settings.colors` column is the versioned JSON
+  authority. Its legacy column name now contains one shared semantic document:
+  explicit color overrides, typography, type scale, corner style, density,
+  container width, and bounded button/input/listing-card styles.
+- Shared code owns the defaults, enum vocabulary, legacy flat-color upgrade,
+  sanitizer, palettes, and CSS-token generation. The default document mirrors
+  the pre-existing storefront exactly; merely upgrading or reading a store does
+  not select a new visual style.
+- The admin exposes six palettes (including a true reset to store defaults),
+  paired semantic color rows, and compact presentation controls. It tracks the
+  complete document as one dirty/CAS unit and does not pretend token swatches
+  are a storefront preview.
 - Theme and Hero remain separate authorities. Theme controls allowlisted color
   tokens; Hero controls viewport media, alternative text, destination, order,
   and visibility through its own revision. Carousel overlay contrast is not
@@ -126,18 +132,18 @@ classification, route-backed state, and the full refund matrix remain open.
 
 ## Theme: P1/P2 gaps
 
-1. “Theme” controls colors only. Typography, type scale, radius, container
-   width, button/input density, card treatment, product-card choices, and
-   header/footer presentation are scattered or hard-coded.
+1. Header/footer composition and many legacy hard-coded storefront surfaces do
+   not yet consume the shared presentation contract. Supported semantics now
+   reach global type/radius/page width, shared controls, and listing cards;
+   page width deliberately excludes product-detail main composition.
 2. Seventeen raw tokens remain too low-level for most merchants, even though
    paired semantic rows now make the current authority more understandable.
    The real storefront preview still requires a durable presentation draft.
 3. Reset stages an empty object without a before/after diff. A local draft is
    protected from navigation, but it is not durable across devices or browser
    storage loss.
-4. Presets and default values are still not one storefront/admin schema
-   authority. They can drift until both runtimes generate tokens from shared
-   semantic settings.
+4. A complete real-route preview is still missing, so component coverage and
+   asset transforms cannot yet be verified before publish in the editor.
 5. There is no published history, rollback, or isolated shareable preview.
    Conflict rebase is field-level and explicit, but cannot replace durable
    presentation revisions and a real route preview.
@@ -195,10 +201,46 @@ classification, route-backed state, and the full refund matrix remain open.
   stay disabled until a current authoritative read succeeds. Role selection
   separately remains fail-closed while the assignable-role read is unavailable.
 
-This slice deliberately does not claim the larger semantic theme system is
-finished. Typography, density, radius, real-route isolated previews, full
-functional-color contrast normalization, publish history, and rollback remain
-follow-up work.
+That color-authority checkpoint did not claim a semantic theme system. The next
+slice below adds the shared semantic foundation while keeping preview/history as
+explicit follow-up work.
+
+## Implemented semantic presentation foundation (2026-07-13)
+
+- The same versioned JSON row now stores one sanitized presentation document;
+  no database migration or second settings authority was added. Old flat color
+  JSON upgrades on read and is rewritten as the semantic shape on the next
+  successful CAS publish.
+- `@scalius/shared/storefront-theme` owns the actual buyer defaults and palette
+  definitions. Typography, corner, density, width, and component values are
+  enum-only; merchant text never becomes a font URL, selector, or arbitrary CSS.
+- Token generation emits safe font stacks, type scale, radius, density, and
+  container width alongside allowlisted color overrides. The layout projects
+  the document as body attributes and custom properties. Global type and shared
+  token radii apply consistently; page width applies to header/footer and normal
+  route content while the product-detail main composition stays unchanged.
+- Shared storefront buttons, fields, and textareas opt into density and safe
+  style variants. Product listing cards opt into card treatment. This is a
+  deliberate bounded rollout, not a claim that every legacy hard-coded card or
+  raw button is already tokenized.
+- The editor is a compact responsive workspace with semantic controls first,
+  palette/color detail second, shared default truth, full-document dirty state,
+  field-level CAS rebase, dark-mode-safe native controls, and a sticky publish
+  bar. It explicitly says real route/device preview and history/rollback are not
+  available instead of showing a synthetic storefront.
+- Essential explicit opaque hex and OKLCH pairs are scored at 4.5:1. Existing
+  untouched defaults are displayed as store defaults and are not silently
+  rewritten merely to publish an unrelated semantic choice; selecting a color
+  palette or editing either member makes that pair an explicit publish gate.
+- Invalid semantic values in an authoritative versioned document fail the admin
+  read closed. Buyer projection sanitizes/falls back to the known defaults so a
+  corrupt presentation row cannot inject CSS or blank the store.
+
+Remaining P2 work is durable drafts, real-route desktop/mobile preview,
+published history/rollback, broader legacy-component adoption, and visual
+coverage proving every supported semantic choice across storefront routes. The
+protected product-detail composition remains out of scope for structural theme
+changes.
 
 ## Shared UI direction
 

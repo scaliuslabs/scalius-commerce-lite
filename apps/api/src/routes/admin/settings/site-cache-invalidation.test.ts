@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "@scalius/core/errors";
+import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -106,9 +107,15 @@ function createTestApp() {
   });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
-  mocks.getThemeSettings.mockResolvedValue({ colors: {}, revision: 1 });
+  mocks.getThemeSettings.mockResolvedValue({
+    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    revision: 1,
+  });
   mocks.saveThemeSettings.mockResolvedValue({
-    colors: { primary: "#000000" },
+    theme: {
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      colors: { primary: "#000000" },
+    },
     revision: 2,
   });
   mocks.isValidMediaHostInput.mockReturnValue(true);
@@ -471,7 +478,13 @@ describe("site settings cache invalidation", () => {
     {
       path: "/theme",
       method: "POST" as const,
-      body: { expectedRevision: 1, colors: { primary: "#000000" } },
+      body: {
+        expectedRevision: 1,
+        theme: {
+          ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+          colors: { primary: "#000000" },
+        },
+      },
       groups: ["layout"],
     },
     {
@@ -669,10 +682,13 @@ describe("site settings cache invalidation", () => {
 
     const response = await requestJson(app, env, "POST", "/theme", {
       expectedRevision: 1,
-      colors: {
-        primary: "#059669",
-        background: "#fff; color: red",
-        unsafe: "#000",
+      theme: {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: {
+          primary: "#059669",
+          background: "#fff; color: red",
+          unsafe: "#000",
+        },
       },
     });
 
@@ -691,13 +707,19 @@ describe("site settings cache invalidation", () => {
 
     const response = await requestJson(app, env, "POST", "/theme", {
       expectedRevision: 1,
-      colors: { primary: "#2563eb" },
+      theme: {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: { primary: "#2563eb" },
+      },
     });
 
     expect(response.status).toBe(409);
     expect(mocks.saveThemeSettings).toHaveBeenCalledWith(
       { id: "db" },
-      { primary: "#2563eb" },
+      {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: { primary: "#2563eb" },
+      },
       1,
     );
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();

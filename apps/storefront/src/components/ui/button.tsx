@@ -48,6 +48,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
+        data-theme-component="button"
+        data-theme-variant={variant ?? "default"}
+        data-theme-size={size ?? "default"}
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
