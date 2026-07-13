@@ -99,3 +99,59 @@ Normalized images are rechecked as exact-size WebP files below 20 MiB.
 Public-source records additionally require HTTPS `sourcePageUrl` and
 `originalFileUrl`. Generated-original records require `generation.prompt` and
 `generation.model`; this milestone does not generate any assets.
+
+## Wikimedia Commons candidate discovery
+
+`commons/cli.mjs` is a read-only research helper, not a downloader or approval
+tool. Put at most ten targeted searches in a private or reviewed plan:
+
+```json
+{
+  "schemaVersion": 1,
+  "queries": [
+    {
+      "logicalKey": "category:home-living:image",
+      "query": "calm neutral home interior objects no people",
+      "limit": 5
+    }
+  ]
+}
+```
+
+Then create a private review queue:
+
+```sh
+node scripts/demo-store/assets/commons/cli.mjs \
+  --plan /absolute/path/to/commons-queries.json
+```
+
+The tool issues sequential, identified requests to the Commons Action API with
+`generator=search`, namespace 6, `filetype:bitmap`, `maxlag=5`, and no more than
+eight candidates per query. It requests one current `imageinfo` record with
+URL, description page, size, MIME, SHA-1, and only the creator/license/
+attribution/description extended-metadata fields needed for review. Extended
+metadata is expensive, so continuation is deliberately ignored and requests
+are separated by one second. HTTP 429/503 receives one bounded retry only.
+
+The output under `.wrangler/demo-store-assets/commons-review.json` is always a
+manual-review queue:
+
+- CC0, Public Domain Mark, and CC BY 4.0 candidates may enter manual review;
+- CC BY-SA, GFDL, unknown licenses, PDFs, and unsupported image MIME types are
+  rejected automatically;
+- watermark, visible-brand, trademarked-character, identifiable-endorser,
+  option-appearance, and source-page-license checks remain explicit `null`
+  fields until a person reviews the original file page and full-resolution
+  image. `applyCommonsManualReview()` converts any explicit failed flag into a
+  rejection reason; even an all-pass review becomes `manual-review-complete`,
+  never approved;
+- every candidate has `approval.eligible: false`. Discovery output cannot be
+  passed to staging as an approved record;
+- the original image URL is preserved for later manual download, but this tool
+  never fetches it. A later approved staging record must compute SHA-256 from
+  downloaded bytes; Commons SHA-1 is provenance evidence, not the staging hash.
+
+This follows the official [Imageinfo API](https://www.mediawiki.org/wiki/API:Imageinfo)
+warning to request expensive extended metadata for only a few results and the
+Commons requirement for an identifiable User-Agent and considerate request
+rates.
