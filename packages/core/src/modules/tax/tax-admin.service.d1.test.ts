@@ -1,4 +1,9 @@
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import {
+  DatabaseSync,
+  type SQLInputValue,
+  type SQLOutputValue,
+  type StatementSync,
+} from "node:sqlite";
 
 import * as schema from "@scalius/database/schema";
 import { drizzle } from "drizzle-orm/d1";
@@ -8,28 +13,31 @@ import { ConflictError } from "@scalius/core/errors";
 import { deleteTaxRate, updateTaxRate } from "./tax-admin.service";
 
 interface SqliteD1Result {
-  results: Record<string, unknown>[];
+  results: Record<string, SQLOutputValue>[];
   success: true;
   meta: Record<string, never>;
 }
 
 interface SqliteD1Statement {
-  bind(...values: unknown[]): SqliteD1Statement;
+  bind(...values: SQLInputValue[]): SqliteD1Statement;
   run(): Promise<SqliteD1Result>;
   all(): Promise<SqliteD1Result>;
-  raw(): Promise<unknown[][]>;
+  raw(): Promise<SQLOutputValue[][]>;
   first(column?: string): Promise<unknown>;
   execute(): SqliteD1Result;
 }
 
-function resultRows(statement: StatementSync, values: unknown[]): Record<string, unknown>[] {
-  return statement.all(...values) as Record<string, unknown>[];
+function resultRows(
+  statement: StatementSync,
+  values: SQLInputValue[],
+): Record<string, SQLOutputValue>[] {
+  return statement.all(...values);
 }
 
 function createD1Statement(
   sqlite: DatabaseSync,
   query: string,
-  values: unknown[] = [],
+  values: SQLInputValue[] = [],
 ): SqliteD1Statement {
   const execute = (): SqliteD1Result => ({
     results: resultRows(sqlite.prepare(query), values),
@@ -44,7 +52,7 @@ function createD1Statement(
     raw: async () => {
       const statement = sqlite.prepare(query);
       statement.setReturnArrays(true);
-      return statement.all(...values) as unknown[][];
+      return statement.all(...values) as unknown as SQLOutputValue[][];
     },
     first: async (column) => {
       const row = resultRows(sqlite.prepare(query), values)[0];
