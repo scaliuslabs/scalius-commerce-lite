@@ -71,6 +71,32 @@ export interface AccountSecurityResponse {
   isSuperAdmin: boolean;
 }
 
+export interface AccountSession {
+  commandId: string;
+  current: boolean;
+  deviceLabel: string;
+  deviceType: "desktop" | "mobile" | "tablet" | "unknown";
+  networkHint: string | null;
+  twoFactorVerified: boolean;
+  impersonated: boolean;
+  createdAt: string;
+  lastActiveAt: string;
+  expiresAt: string;
+}
+
+export interface AccountSessionsResponse {
+  sessions: AccountSession[];
+  hasMore: boolean;
+}
+
+export interface RevokeAccountSessionInput {
+  commandId: string;
+}
+
+export interface RevokeOtherAccountSessionsResponse extends MessageResponse {
+  revokedCount: number;
+}
+
 export type SetTwoFactorMethodInput =
   | { method: TwoFactorMethod; code: string; sessionToken?: never }
   | { method: TwoFactorMethod; sessionToken: string; code?: never };
@@ -139,6 +165,26 @@ export const changePassword = createServerFn({ method: "POST" })
 export const getAccountSecurity = createServerFn({ method: "GET" }).handler(
   async () => {
     return apiGet<AccountSecurityResponse>("/auth/account-security");
+  },
+);
+
+export const getAccountSessions = createServerFn({ method: "GET" }).handler(
+  async () => {
+    return apiGet<AccountSessionsResponse>("/auth/sessions");
+  },
+);
+
+export const revokeAccountSession = createServerFn({ method: "POST" })
+  .validator((data: RevokeAccountSessionInput) => data)
+  .handler(async ({ data }) => {
+    return apiDelete<MessageResponse>(
+      `/auth/sessions/${encodeURIComponent(data.commandId)}`,
+    );
+  });
+
+export const revokeOtherAccountSessions = createServerFn({ method: "POST" }).handler(
+  async () => {
+    return apiDelete<RevokeOtherAccountSessionsResponse>("/auth/sessions");
   },
 );
 

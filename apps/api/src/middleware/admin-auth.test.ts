@@ -337,6 +337,24 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ["/api/v1/admin/auth/sessions", "GET"],
+    ["/api/v1/admin/auth/sessions", "DELETE"],
+    ["/api/v1/admin/auth/sessions/session_2", "DELETE"],
+  ])("allows own session management at %s %s", async (pathname, method) => {
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.PRODUCTS_VIEW]),
+    );
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await adminAuthMiddleware(
+      createContext(pathname, method) as never,
+      next,
+    );
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it("allows team viewing separately from team mutation", async () => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.TEAM_VIEW]),

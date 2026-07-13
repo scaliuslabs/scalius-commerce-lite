@@ -147,7 +147,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
-| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset link, RBAC roles/overrides, permission checks | Personal and organization settings mixed; local-state tabs; no pending-invite workspace/resend/revoke; no suspend/reactivate; no session/device list or revoke controls; no user search/filter/bulk; decorative profile treatment consumes space; team rows/actions are not a deliberate mobile layout. |
+| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset link, RBAC roles/overrides, permission checks, and bounded personal session/device list plus revocation | Personal and organization settings remain mixed in local-state tabs; no pending-invite workspace/resend/revoke; no suspend/reactivate; no recent security event history; no user bulk operations; account sections are not yet separate authority-owned routes. |
 
 ### Code evidence
 
@@ -636,11 +636,22 @@ retained. What changes is lifecycle visibility and operational control.
   value. The administrator workspace has searchable compact rows, one honest
   onboarding-readiness status, shape-preserving loading, retryable user/role
   failures, and a role-read failure cannot silently become an empty selector.
+- Active sessions now load from current D1 authority, cap visible presentation
+  at 25 rows, derive bounded device and masked-network hints, and expose only an
+  HMAC-derived `acs_` command identity rather than Better Auth tokens or D1
+  session row IDs. Any authenticated administrator may revoke their own
+  non-current device or every other device without a team-management grant.
+  Both commands revalidate and preserve the current active session; stale,
+  foreign, current-session, and missing-secret cases fail closed.
+- The session workspace uses stacked mobile rows, 44 px personal/action targets,
+  local retry/error states, fresh-on-mount reads, and authority refresh after
+  every revoke attempt. Hidden rows remain covered by revoke-all.
 
 This is an honest workflow improvement, not completion of the target account
-or presentation architecture. URL-owned account routes, sessions/devices,
-invite lifecycle, suspension, theme drafts/history/rollback, shared semantic
-presentation settings, and real storefront previews remain required.
+or presentation architecture. URL-owned account routes, invite lifecycle,
+suspension, account security-event history, theme drafts/history/rollback,
+shared semantic presentation settings, and real storefront previews remain
+required.
 
 ## Shared UI contract
 

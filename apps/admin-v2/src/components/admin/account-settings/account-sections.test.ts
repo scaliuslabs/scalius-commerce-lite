@@ -4,6 +4,7 @@ import { normalizeAccountSection } from "./account-sections";
 
 describe("account section search state", () => {
   it("keeps supported deep links", () => {
+    expect(normalizeAccountSection("sessions")).toBe("sessions");
     expect(normalizeAccountSection("team")).toBe("team");
     expect(normalizeAccountSection("roles")).toBe("roles");
   });

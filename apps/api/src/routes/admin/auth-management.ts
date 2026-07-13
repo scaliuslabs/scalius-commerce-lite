@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for auth management (users, profile, 2FA, setup).
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { and, eq, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import type { Database } from "@scalius/database/client";
 import { user, roles, userRoles, userPermissions, permissions, session as sessionTable } from "@scalius/database/schema";
@@ -30,6 +30,10 @@ import {
     serviceUnavailableResponse,
     successEnvelope,
 } from "../../schemas/responses";
+import {
+    createAccountSessionCommandIdFactory,
+    presentAccountSession,
+} from "./account-session-presentation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type BetterAuthHeaders = Headers & { getSetCookie?: () => string[] };
@@ -753,6 +757,300 @@ app.openapi(verify2faRoute, async (c) => {
 // ─────────────────────────────────────────
 // Account Security
 // ─────────────────────────────────────────
+
+const accountSessionSchema = z.object({
+    commandId: z.string().regex(/^acs_[A-Za-z0-9_-]{43}$/),
+    current: z.boolean(),
+    deviceLabel: z.string(),
+    deviceType: z.enum(["desktop", "mobile", "tablet", "unknown"]),
+    networkHint: z.string().nullable(),
+    twoFactorVerified: z.boolean(),
+    impersonated: z.boolean(),
+    createdAt: z.string().datetime(),
+    lastActiveAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+});
+
+const accountSessionProjection = {
+    id: sessionTable.id,
+    ipAddress: sessionTable.ipAddress,
+    userAgent: sessionTable.userAgent,
+    impersonatedBy: sessionTable.impersonatedBy,
+    twoFactorVerified: sessionTable.twoFactorVerified,
+    createdAt: sessionTable.createdAt,
+    updatedAt: sessionTable.updatedAt,
+    expiresAt: sessionTable.expiresAt,
+};
+
+const MAX_VISIBLE_ACCOUNT_SESSIONS = 25;
+
+function getAccountSessionCommandSecret(env: Env | undefined): string {
+    const secret = env?.BETTER_AUTH_SECRET?.trim();
+    if (!secret) {
+        throw new ServiceUnavailableError("Account session management is unavailable");
+    }
+    return secret;
+}
+
+async function loadActiveCurrentAccountSession(
+    db: Database,
+    userId: string,
+    currentSessionId: string,
+    now: Date,
+) {
+    return db
+        .select(accountSessionProjection)
+        .from(sessionTable)
+        .where(and(
+            eq(sessionTable.id, currentSessionId),
+            eq(sessionTable.userId, userId),
+            gt(sessionTable.expiresAt, now),
+        ))
+        .get();
+}
+
+async function loadVisibleOtherAccountSessions(
+    db: Database,
+    userId: string,
+    currentSessionId: string,
+    now: Date,
+) {
+    return db
+        .select(accountSessionProjection)
+        .from(sessionTable)
+        .where(and(
+            eq(sessionTable.userId, userId),
+            ne(sessionTable.id, currentSessionId),
+            gt(sessionTable.expiresAt, now),
+        ))
+        .orderBy(desc(sessionTable.updatedAt))
+        .limit(MAX_VISIBLE_ACCOUNT_SESSIONS);
+}
+
+function activeCurrentAccountSessionGuard(
+    userId: string,
+    currentSessionId: string,
+) {
+    return sql`EXISTS (
+        SELECT 1
+        FROM "session" AS "current_account_session"
+        WHERE "current_account_session"."id" = ${currentSessionId}
+          AND "current_account_session"."user_id" = ${userId}
+          AND "current_account_session"."expires_at" > unixepoch()
+    )`;
+}
+
+const listAccountSessionsRoute = createRoute({
+    method: "get",
+    path: "/sessions",
+    tags: ["Admin - Auth Management"],
+    summary: "List active sessions for the current user",
+    responses: {
+        200: {
+            description: "Current user session list",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        sessions: z.array(accountSessionSchema),
+                        hasMore: z.boolean(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(listAccountSessionsRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const currentSession = c.get("session");
+
+    if (!currentSession) {
+        throw new UnauthorizedError("No active session found");
+    }
+
+    const now = new Date();
+    const current = await loadActiveCurrentAccountSession(
+        db,
+        sessionUser.id,
+        currentSession.id,
+        now,
+    );
+
+    if (!current) {
+        throw new UnauthorizedError("The current session is no longer active");
+    }
+
+    const otherSessions = await loadVisibleOtherAccountSessions(
+        db,
+        sessionUser.id,
+        currentSession.id,
+        now,
+    );
+    const visibleOtherSessions = otherSessions.slice(
+        0,
+        MAX_VISIBLE_ACCOUNT_SESSIONS - 1,
+    );
+    const createCommandId = await createAccountSessionCommandIdFactory(
+        getAccountSessionCommandSecret(c.env),
+    );
+    const visibleSessions = [current, ...visibleOtherSessions];
+    const presentedSessions = await Promise.all(
+        visibleSessions.map(async (row) =>
+            presentAccountSession(
+                row,
+                currentSession.id,
+                await createCommandId(row.id),
+            )
+        ),
+    );
+
+    return ok(c, {
+        sessions: presentedSessions,
+        hasMore: otherSessions.length > visibleOtherSessions.length,
+    });
+});
+
+const revokeAccountSessionRoute = createRoute({
+    method: "delete",
+    path: "/sessions/{commandId}",
+    tags: ["Admin - Auth Management"],
+    summary: "Revoke another session for the current user",
+    request: {
+        params: z.object({
+            commandId: z.string().regex(/^acs_[A-Za-z0-9_-]{43}$/),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Session revoked",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(revokeAccountSessionRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const currentSession = c.get("session");
+    const { commandId } = c.req.valid("param");
+
+    if (!currentSession) {
+        throw new UnauthorizedError("No active session found");
+    }
+    const now = new Date();
+    const current = await loadActiveCurrentAccountSession(
+        db,
+        sessionUser.id,
+        currentSession.id,
+        now,
+    );
+    if (!current) {
+        throw new UnauthorizedError("The current session is no longer active");
+    }
+
+    const createCommandId = await createAccountSessionCommandIdFactory(
+        getAccountSessionCommandSecret(c.env),
+    );
+    if (commandId === await createCommandId(current.id)) {
+        throw new ValidationError(
+            "The current session cannot be revoked here. Use Sign out instead.",
+        );
+    }
+
+    const otherSessions = await loadVisibleOtherAccountSessions(
+        db,
+        sessionUser.id,
+        currentSession.id,
+        now,
+    );
+    const candidates = otherSessions.slice(0, MAX_VISIBLE_ACCOUNT_SESSIONS - 1);
+    const candidateCommandIds = await Promise.all(
+        candidates.map((candidate) => createCommandId(candidate.id)),
+    );
+    const targetIndex = candidateCommandIds.indexOf(commandId);
+    const targetSessionId = candidates[targetIndex]?.id;
+    if (targetIndex < 0 || !targetSessionId) {
+        throw new NotFoundError("Session not found");
+    }
+
+    const revoked = await db
+        .delete(sessionTable)
+        .where(and(
+            eq(sessionTable.id, targetSessionId),
+            eq(sessionTable.userId, sessionUser.id),
+            ne(sessionTable.id, currentSession.id),
+            activeCurrentAccountSessionGuard(sessionUser.id, currentSession.id),
+        ))
+        .returning({ id: sessionTable.id });
+
+    if (revoked.length === 0) {
+        throw new NotFoundError("Session not found");
+    }
+
+    return ok(c, { message: "Session signed out successfully" });
+});
+
+const revokeOtherAccountSessionsRoute = createRoute({
+    method: "delete",
+    path: "/sessions",
+    tags: ["Admin - Auth Management"],
+    summary: "Revoke all other sessions for the current user",
+    responses: {
+        200: {
+            description: "Other sessions revoked",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        message: z.string(),
+                        revokedCount: z.number().int().nonnegative(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(revokeOtherAccountSessionsRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const currentSession = c.get("session");
+
+    if (!currentSession) {
+        throw new UnauthorizedError("No active session found");
+    }
+    const current = await loadActiveCurrentAccountSession(
+        db,
+        sessionUser.id,
+        currentSession.id,
+        new Date(),
+    );
+    if (!current) {
+        throw new UnauthorizedError("The current session is no longer active");
+    }
+
+    const revoked = await db
+        .delete(sessionTable)
+        .where(and(
+            eq(sessionTable.userId, sessionUser.id),
+            ne(sessionTable.id, currentSession.id),
+            activeCurrentAccountSessionGuard(sessionUser.id, currentSession.id),
+        ))
+        .returning({ id: sessionTable.id });
+
+    return ok(c, {
+        message: revoked.length === 0
+            ? "No other active sessions were found"
+            : "Other sessions signed out successfully",
+        revokedCount: revoked.length,
+    });
+});
 
 const getAccountSecurityRoute = createRoute({
     method: "get",

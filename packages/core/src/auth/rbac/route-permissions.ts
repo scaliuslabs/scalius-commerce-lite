@@ -1033,6 +1033,13 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/auth/account-security": {
     GET: { allowAnyAdmin: true },
   },
+  "/api/v1/admin/auth/sessions": {
+    GET: { allowAnyAdmin: true },
+    DELETE: { allowAnyAdmin: true },
+  },
+  "/api/v1/admin/auth/sessions/*": {
+    DELETE: { allowAnyAdmin: true },
+  },
 
 };
 

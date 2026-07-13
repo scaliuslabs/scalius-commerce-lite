@@ -1,6 +1,7 @@
 export const ACCOUNT_SECTIONS = [
   "security",
   "password",
+  "sessions",
   "team",
   "roles",
 ] as const;
