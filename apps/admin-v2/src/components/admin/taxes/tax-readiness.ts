@@ -3,8 +3,9 @@ import {
   getTaxRateDiagnostics,
   type TaxClassCoverageDiagnostic,
 } from "./tax-rate-diagnostics";
+import type { TaxWorkspaceSection } from "./tax-workspace-sections";
 
-export type TaxWorkspaceTab = "policy" | "classes" | "rates" | "classification" | "preview";
+export type TaxWorkspaceTab = TaxWorkspaceSection;
 
 export interface TaxReadinessStep {
   id: "default-class" | "rates" | "shipping-rates" | "calculation";
