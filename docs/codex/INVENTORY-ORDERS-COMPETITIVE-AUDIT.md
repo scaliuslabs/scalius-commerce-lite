@@ -1,6 +1,6 @@
 # Inventory and Order Operations Competitive Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
 ## Scope and evidence rules
 
@@ -51,8 +51,16 @@ support the domain facts; the live observation is only UX evidence.
   domain in the current schema or admin.
 - Admin inventory offers server-backed SKU/product search, stock-state filters,
   sorting, stats, adjustment/stocktake, and paginated movement history. The
-  durable audit records the remaining alert-inbox, actor/date/order filtering,
-  export, and atomic import work.
+  durable audit records the remaining saved-view, configurable-column,
+  location-aware filtering, and atomic import work.
+- The sellable-SKU view keeps its dense desktop table and now renders a
+  purpose-built card list below the desktop breakpoint. Both projections consume
+  the same server-backed result and stock-status helper; mobile preserves product,
+  SKU, merchant option labels, on-hand, committed, available, status, filtering,
+  pagination, explicit sort context, and the same permission-gated Adjust action.
+  Focused responsive source tests and targeted lint pass. Deployment and an
+  authenticated 320/360/390/430 px browser check remain release evidence, not a
+  locally verified claim.
 - Orders have separate order, payment, fulfillment, item-fulfillment, shipment,
   inventory-action, refund-attempt, support-request, and notification evidence.
   Shipment and refund provider recovery are deliberately fail-closed. See the
@@ -248,7 +256,8 @@ support the domain facts; the live observation is only UX evidence.
 9. **Finish expert inventory UX.** Saved views, configurable columns, server-side
    actor/date/location/order filters, low-stock inbox/acknowledgement, streaming
    CSV export, and validate-all-before-commit stocktake import. Keep the current
-   dense table; do not turn every state into dashboard cards.
+   dense table for desktop operators and its focused narrow-screen SKU projection;
+   do not turn every state into dashboard cards.
 
 ## Recommended implementation sequence
 

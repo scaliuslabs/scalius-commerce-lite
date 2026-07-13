@@ -1,6 +1,6 @@
 # Inventory and Catalog Settings Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
 ## Authority and architecture
 
@@ -56,6 +56,13 @@ Last reviewed: 2026-07-12
   stock. Acknowledgement is conditional: the API returns not-found when the
   alert was already acknowledged or resolved instead of claiming a write that
   did not happen.
+- The sellable-SKU view uses mutually exclusive responsive projections: the
+  existing dense table remains at desktop widths, while narrow screens receive a
+  semantic card list with product/SKU/merchant-option identity, on-hand,
+  committed, available, stock status, and the same permission-gated Adjust
+  control. Search, stock-state filtering, pagination, and sorting continue to use
+  the one existing query state; mobile adds an explicit sort selector because its
+  projection intentionally has no table headers.
 
 ## Catalog settings truth
 
@@ -81,6 +88,10 @@ Last reviewed: 2026-07-12
 3. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
    diagnostics may report them, but reconciliation must not invent missing
    counter edges.
+4. The narrow-screen SKU projection is locally source-tested and linted, but the
+   deployed authenticated 320/360/390/430 px browser flow still needs verification.
+   Low-stock alerts and movement-history responsive behavior were not redesigned
+   in this slice and remain separate browser-audit targets.
 
 ## Verification for this slice
 
@@ -90,6 +101,10 @@ Last reviewed: 2026-07-12
   atomic batch composition, cache invalidation, bounded query validation,
   movement cursor/filter bounds, streamed formula-safe CSV, and migration
   registration.
+- The responsive admin source test proves that the desktop table and mobile list
+  are mutually exclusive, the mobile list contains every required SKU identity
+  and stock fact, and both projections reuse the existing query result, sort
+  state, stock-status helper, and accessible Adjust action.
 - The generated OpenAPI client, repository typecheck, API/admin production
   builds, migration metadata, and focused core/API/admin/database tests pass
   from the clean inventory release commit.
