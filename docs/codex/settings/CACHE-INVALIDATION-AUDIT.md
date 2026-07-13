@@ -51,7 +51,7 @@ It does not mean the setting has no consequence.
 | Checkout flow `/settings/checkout-flow` | checkout mode, guest/account requirement, advance payment | `checkout`; legacy site-settings cache cleanup | `checkout_config` generation | none | `system-cache-invalidation.test.ts` |
 | Customer auth + WhatsApp `/settings/auth` | checkout readiness, OTP policy/provider configuration | `checkout`; legacy site-settings cache cleanup | `checkout_config` generation | none | `system-cache-invalidation.test.ts` |
 | Email provider `/settings/email` | notification dispatch and customer-sign-in checkout readiness | `checkout` after any committed field update | `checkout_config` generation | none | `system-cache-invalidation.test.ts` |
-| SMS provider `/settings/sms` | SMS dispatch and customer-sign-in checkout readiness | runtime SMS memory cache + `checkout` | `checkout_config` generation | none | `sms-cache-invalidation.test.ts` |
+| SMS provider `/settings/sms` | SMS dispatch and customer-sign-in checkout readiness | dispatch reads authoritative D1 settings for every send; save invalidates `checkout` | `checkout_config` generation | none | `sms-settings.test.ts`, `sms-cache-invalidation.test.ts` |
 | Firebase `/settings/firebase` | admin push dispatch and public `/auth/firebase-config` | —; public config and service account are direct D1 reads. The local `layoutCache` key is compatibility cleanup only | — | none | `system-cache-invalidation.test.ts`, Firebase integration tests |
 | Customer/admin notification channels `/settings/notification-channels/**` | order notification outbox/dispatch | —; dispatch reads D1 policy and provider-health rows | — | none | `notification-channels.test.ts` |
 | Payment methods + Stripe/SSLCommerz/Polar `/settings/{payment-methods,stripe,sslcommerz,polar}` | public checkout gateways/readiness and payment runtime | provider-specific cache invalidator + `checkout` | `checkout_config` generation | none | `payments.test.ts`, `cache-invalidation.test.ts` |
@@ -90,5 +90,10 @@ It does not mean the setting has no consequence.
 3. The operator-facing admin-path dependency map now includes email, SMS, tax,
    and the shipping Product-schema dependency, matching the route-owned write
    behavior.
+4. SMS dispatch previously cached a decrypted provider instance for five
+   minutes in each Worker isolate. A credential rotation could clear only the
+   isolate handling the save while a warm queue consumer kept the old provider.
+   Dispatch now reads and decrypts authoritative D1 settings for every send;
+   the regression test proves two sends perform two reads.
 
 No API response contract or database schema changed in this audit.

@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   saveSmsSettings: vi.fn(),
-  invalidateSmsCache: vi.fn(),
   clearNotificationProviderBlocks: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
 }));
@@ -12,7 +11,6 @@ vi.mock("@scalius/core/integrations/sms", () => ({
   SMS_PROVIDER_IDS: ["bdbulksms"],
   getSmsSettings: vi.fn(),
   saveSmsSettings: mocks.saveSmsSettings,
-  invalidateSmsCache: mocks.invalidateSmsCache,
 }));
 
 vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
@@ -31,7 +29,7 @@ describe("SMS settings cache invalidation", () => {
     vi.clearAllMocks();
   });
 
-  it("invalidates runtime and public checkout readiness after a provider save", async () => {
+  it("invalidates public checkout readiness after a provider save", async () => {
     const env = {
       CACHE: { id: "api-cache-kv" },
       PURGE_URL: "https://storefront.example.com/api/purge-cache",
@@ -62,7 +60,6 @@ describe("SMS settings cache invalidation", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
-    expect(mocks.invalidateSmsCache).toHaveBeenCalledTimes(1);
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["checkout"],
       expect.objectContaining({ env }),

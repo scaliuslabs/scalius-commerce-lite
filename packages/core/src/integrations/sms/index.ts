@@ -18,7 +18,6 @@ export {
   getSmsProviderReadiness,
   getSmsSettings,
   saveSmsSettings,
-  invalidateSmsCache,
 } from "./sms-settings";
 export type { SmsProviderReadiness, SmsSettingsData } from "./sms-settings";
 

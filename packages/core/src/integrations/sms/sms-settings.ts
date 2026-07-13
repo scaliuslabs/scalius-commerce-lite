@@ -3,8 +3,9 @@
 // the `settings` table (category "sms"). Follows gateway-settings.ts pattern.
 //
 // SECURITY: Decrypted credentials are NEVER written to KV or any persistent
-// store. In-memory cache is scoped to the Worker isolate lifetime and is
-// automatically cleared on cold start.
+// store. Dispatch reads the authoritative settings row for every send so a
+// credential rotation cannot leave another warm Worker isolate using an old
+// provider instance.
 
 import { eq } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
@@ -18,29 +19,10 @@ import { ValidationError } from "@scalius/core/errors";
 import type { SmsProvider, SmsProviderId } from "./provider";
 
 // ---------------------------------------------------------------------------
-// In-memory credential cache (per-isolate, lost on cold start)
-// ---------------------------------------------------------------------------
-
-const credentialCache = new Map<string, { data: unknown; expiry: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCachedCredential<T>(key: string): T | null {
-  const entry = credentialCache.get(key);
-  if (entry && Date.now() < entry.expiry) return entry.data as T;
-  credentialCache.delete(key);
-  return null;
-}
-
-function setCachedCredential(key: string, data: unknown): void {
-  credentialCache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
-}
-
-// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const SMS_CATEGORY = "sms";
-const SMS_CACHE_KEY = "sms:active";
 const MASKED = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"; // 12 bullet chars
 const PLACEHOLDER_EXACT_VALUES = new Set([
   "000000",
@@ -440,7 +422,6 @@ export async function saveSmsSettings(
     );
 
   await Promise.all(ops);
-  invalidateSmsCache();
 }
 
 function validateSmsSettingsInput(
@@ -485,10 +466,6 @@ export async function getActiveSmsProvider(
   db: Database,
   encryptionKey?: string,
 ): Promise<SmsProvider | null> {
-  // Check in-memory cache
-  const cached = getCachedCredential<SmsProvider>(SMS_CACHE_KEY);
-  if (cached) return cached;
-
   const resolved = await instantiateSmsProvider(
     await readSmsSettingValues(db),
     encryptionKey,
@@ -501,18 +478,5 @@ export async function getActiveSmsProvider(
     return null;
   }
 
-  if (resolved.provider) {
-    setCachedCredential(SMS_CACHE_KEY, resolved.provider);
-  }
-
   return resolved.provider;
-}
-
-// ---------------------------------------------------------------------------
-// Cache invalidation
-// ---------------------------------------------------------------------------
-
-/** Invalidate the SMS provider cache (call after saving new settings). */
-export function invalidateSmsCache(): void {
-  credentialCache.delete(SMS_CACHE_KEY);
 }

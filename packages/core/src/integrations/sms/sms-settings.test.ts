@@ -1,8 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { encryptCredentials } from "../../utils/credential-encryption";
 import { ValidationError } from "../../errors";
-import { getSmsProviderReadiness, getSmsSettings, saveSmsSettings } from "./sms-settings";
+import {
+  getActiveSmsProvider,
+  getSmsProviderReadiness,
+  getSmsSettings,
+  saveSmsSettings,
+} from "./sms-settings";
 
 function createSmsSettingsDb(rows: Array<{ key: string; value: string }>) {
   return {
@@ -126,5 +131,23 @@ describe("SMS settings readiness", () => {
       configured: false,
       error: "SMS.net.bd API key could not be decrypted with the configured credential key.",
     });
+  });
+
+  it("reads authoritative provider settings for every dispatch", async () => {
+    const all = vi.fn().mockResolvedValue([
+      { key: "active_provider", value: "bdbulksms" },
+      { key: "bdbulksms_token", value: "live-token-123" },
+    ]);
+    const db = {
+      select: () => ({
+        from: () => ({
+          where: () => ({ all }),
+        }),
+      }),
+    };
+
+    await expect(getActiveSmsProvider(db as never)).resolves.not.toBeNull();
+    await expect(getActiveSmsProvider(db as never)).resolves.not.toBeNull();
+    expect(all).toHaveBeenCalledTimes(2);
   });
 });
