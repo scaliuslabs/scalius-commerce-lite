@@ -209,9 +209,21 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 
 ## Order Ownership
 
-Customer account order history is scoped by `orders.customerId`, not by mutable phone/email contact fields. Storefront checkout attaches `orders.customerId` only when the API has resolved an active `customer_sessions` row and the session phone matches the checkout phone. True guest checkout orders keep `orders.customerId = null`; the submitted phone remains delivery/fraud/contact data, not account ownership proof.
+`orders.customerId` is the merchant-facing CRM link. Both guest and
+authenticated storefront checkout create or reuse a buyer profile so the
+unified Customers directory can show legitimate order, paid-spend, contact,
+and delivery context. Guest checkout may reuse and refresh only an unclaimed
+profile selected by canonical phone; it cannot overwrite a claimed account
+profile. `customers.accountClaimedAt` distinguishes account and guest buyers.
 
-Guest orders are recoverable through the private receipt token/link, not by later matching phone or email. Receipt-token order support uses the public order receipt API plus the shared support-request ledger, stores a nullable `customerId`, and never grants account ownership or direct order/payment/shipment mutation. A future guest-to-account claim flow must require the receipt token plus immutable contact proof and an active session; do not attach historical guest orders to accounts by mutable contact matching alone.
+`orders.accountOwnerCustomerId` is the separate private account-ownership link.
+Only checkout with an active claimed customer session whose canonical phone
+matches the submitted checkout phone may populate it. Account order history and
+account-owned support requests authorize through this field, never the broader
+CRM link. Guest orders remain recoverable through private receipt proof; later
+phone/email matching does not grant account ownership. A future guest-order
+claim flow must require receipt proof plus immutable contact proof and an active
+session.
 
 ## Known Gaps
 
@@ -223,6 +235,6 @@ Guest orders are recoverable through the private receipt token/link, not by late
 
 4. **No email update for existing customers**: `verifyOtp()` fills in `resolvedEmail` from the existing customer record but never updates it if the customer authenticates with a new email address.
 
-5. **Guest support requests are receipt-token-only**: Account-owned and receipt-token guest order details both expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins resolve submitted requests on order detail, submitted requests enqueue merchant/admin notifications, and admin status changes enqueue customer notifications through the order notification outbox. Guest requests stay tied to the private receipt proof and do not create customer accounts or attach historical orders by mutable phone/email matching.
+5. **Guest support requests are receipt-token-only**: Account-owned and receipt-token guest order details both expose eligible pre-shipment cancellation, return, and refund request actions through the order support-request ledger. Admins resolve submitted requests on order detail, submitted requests enqueue merchant/admin notifications, and admin status changes enqueue customer notifications through the order notification outbox. Guest requests stay tied to private receipt proof and do not claim an account or attach the order to account history by mutable phone/email matching. The broader CRM profile remains visible to merchants.
 
 6. **No guest-order account claim flow yet**: True guest orders remain receipt-token-only and are intentionally absent from account history until a receipt-token-backed claim model exists.
