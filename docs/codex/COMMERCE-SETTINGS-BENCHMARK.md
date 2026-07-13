@@ -453,6 +453,21 @@ and a separate checkout visibility save without a single resulting preview.
 | No active shipping method/location | Block order placement and show merchant readiness, not a guessed fallback. |
 | Gateway/notification provider dummy credential | Treat as not configured; no paid calls or retry storms. |
 
+### Implemented payment-environment checkpoint (2026-07-13)
+
+- Stripe readiness now rejects a recognizable test secret key paired with a
+  live publishable key, or the reverse. The save path validates partially
+  edited credentials against decrypted retained values, so a masked stored key
+  cannot hide an environment mismatch.
+- Public gateway configuration now emits one provider-neutral `testMode` fact
+  for Stripe, SSLCommerz, and Polar. Checkout labels every test gateway with
+  “Test mode · no real charge”; a temporary `sandbox` fallback keeps cached
+  SSLCommerz/Polar responses truthful during rollout.
+- This closes environment-pair correctness and buyer disclosure only. A stable
+  release still needs provider connection tests, verified webhook health,
+  credential rotation/cutover, and a release gate that rejects any effective
+  test-mode gateway on a production storefront.
+
 ### Verification scenarios for every gateway
 
 Each gateway must have a documented sandbox run for: successful authorization,

@@ -17,6 +17,8 @@ import {
   invalidateStripeCache,
   upsertEncryptedSetting,
 } from "./gateway-settings";
+import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
+import { getGatewayMeta } from "./gateway-registry";
 import { decryptCredentials, encryptCredentials } from "../../utils/credential-encryption";
 
 function createRejectingDeleteKv(): KVNamespace {
@@ -414,6 +416,38 @@ describe("payment gateway settings cache cleanup", () => {
       usable: true,
       credentialErrors: [],
     });
+  });
+
+  it("rejects a mixed Stripe test/live key pair", () => {
+    expect(getStripeCredentialEnvironment({
+      secretKey: "sk_test_51_realishValue",
+      publishableKey: "pk_live_realishValue",
+    })).toBe("mixed");
+    expect(getStripeCheckoutReadiness({
+      secretKey: "sk_test_51_realishValue",
+      publishableKey: "pk_live_realishValue",
+      webhookSecret: "whsec_realishValue",
+      enabled: true,
+    })).toMatchObject({
+      configured: false,
+      usable: false,
+      blockedReason: "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair.",
+    });
+  });
+
+  it("publishes one test-mode fact for every online gateway", () => {
+    expect(getGatewayMeta("stripe")?.getPublicConfig?.({
+      secretKey: "sk_test_realishValue",
+      publishableKey: "pk_test_realishValue",
+    })).toMatchObject({ testMode: true });
+    expect(getGatewayMeta("stripe")?.getPublicConfig?.({
+      secretKey: "sk_live_realishValue",
+      publishableKey: "pk_live_realishValue",
+    })).toMatchObject({ testMode: false });
+    expect(getGatewayMeta("sslcommerz")?.getPublicConfig?.({ sandbox: true }))
+      .toMatchObject({ testMode: true });
+    expect(getGatewayMeta("polar")?.getPublicConfig?.({ sandbox: false }))
+      .toMatchObject({ testMode: false });
   });
 
   it("blocks Stripe checkout readiness when credentials are placeholders", () => {

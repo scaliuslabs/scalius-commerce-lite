@@ -23,6 +23,7 @@ import { getCheckoutStatusErrorMessage } from "./error-messages";
 import { fetchAuthoritativeTaxQuote } from "./tax-quote-client";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
+import { isGatewayTestMode } from "./gateway-environment";
 
 // Register all built-in gateway handlers
 registerGateway(codHandler);
@@ -463,7 +464,7 @@ function renderGateways(): void {
       <div class="flex-1">
         <p class="font-semibold text-sm text-foreground">${label}</p>
         <p class="text-[11px] text-muted-foreground leading-tight mt-0.5">${meta.desc}</p>
-        ${gw.id === "sslcommerz" && (gw as { sandbox?: boolean }).sandbox ? '<span class="text-[10px] bg-muted text-foreground px-1.5 py-0.5 rounded font-medium border border-border">Sandbox</span>' : ""}
+        ${isGatewayTestMode(gw) ? '<span class="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Test mode · no real charge</span>' : ""}
       </div>
       <div class="method-check w-5 h-5 rounded-full border-2 border-input flex items-center justify-center shrink-0">
         <div class="check-dot w-2.5 h-2.5 rounded-full bg-primary hidden"></div>
