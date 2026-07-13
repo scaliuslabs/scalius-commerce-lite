@@ -206,7 +206,10 @@ const updateDiscountRoute = createRoute({
     summary: "Update a discount",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateDiscountSchema } } }
+        body: {
+            required: true,
+            content: { "application/json": { schema: updateDiscountSchema } },
+        }
     },
     responses: {
         200: { description: "Discount updated", content: { "application/json": { schema: successEnvelope(discountMutationResultSchema) } } },
@@ -286,6 +289,7 @@ const toggleStatusRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
         body: {
+            required: true,
             content: {
                 "application/json": {
                     schema: z.object({

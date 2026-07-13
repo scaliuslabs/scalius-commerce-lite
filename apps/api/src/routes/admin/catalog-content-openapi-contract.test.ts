@@ -8,6 +8,7 @@ import { adminPageRoutes } from "./pages";
 
 type OperationDoc = {
     responses?: Record<string, unknown>;
+    requestBody?: { required?: boolean };
 };
 
 type TestOpenApiDocument = {
@@ -198,5 +199,9 @@ describe("admin catalog/content mutation OpenAPI responses", () => {
             "403",
             "409",
         ]);
+        expect(spec.paths?.["/api/v1/admin/discounts/{id}"]?.put?.requestBody)
+            .toMatchObject({ required: true });
+        expect(spec.paths?.["/api/v1/admin/discounts/{id}/toggle-status"]?.post?.requestBody)
+            .toMatchObject({ required: true });
     });
 });
