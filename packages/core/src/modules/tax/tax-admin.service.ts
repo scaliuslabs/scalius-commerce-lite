@@ -1,4 +1,4 @@
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
     deliveryLocations,
     productVariants,
@@ -9,6 +9,7 @@ import {
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import type { TaxJurisdictionType } from "./types";
 import {
@@ -28,6 +29,10 @@ const DEFAULT_SETTINGS = {
     createdAt: null,
     updatedAt: null,
 };
+
+const TAX_CONFIGURATION_READINESS_CONFLICT = "TAX_CONFIGURATION_READINESS_CONFLICT";
+const TAX_CONFIGURATION_READINESS_MESSAGE =
+    "Tax is enabled. Keep an active rate on each taxable default or shipping class, or mark the class exempt, before saving this change.";
 
 export interface UpdateTaxSettingsInput {
     expectedVersion: number;
@@ -151,6 +156,81 @@ async function assertClassCanCalculateTax(
     }
 }
 
+function buildTaxConfigurationReadinessGuard(db: Database) {
+    return buildBatchGuard(db, sql`
+        CASE
+            WHEN NOT EXISTS (
+                SELECT 1 FROM ${taxSettings}
+                WHERE ${taxSettings.id} = 'default'
+                  AND ${taxSettings.enabled} = 1
+            ) THEN 1
+            WHEN EXISTS (
+                SELECT 1 FROM ${taxSettings}
+                WHERE ${taxSettings.id} = 'default'
+                  AND ${taxSettings.enabled} = 1
+                  AND EXISTS (
+                      SELECT 1 FROM ${taxClasses}
+                      WHERE ${taxClasses.id} = ${taxSettings.defaultTaxClassId}
+                        AND ${taxClasses.deletedAt} IS NULL
+                        AND (
+                            ${taxClasses.isExempt} = 1
+                            OR EXISTS (
+                                SELECT 1 FROM ${taxRates}
+                                WHERE ${taxRates.taxClassId} = ${taxClasses.id}
+                                  AND ${taxRates.isActive} = 1
+                                  AND ${taxRates.deletedAt} IS NULL
+                            )
+                        )
+                  )
+                  AND (
+                      ${taxSettings.taxShipping} = 0
+                      OR EXISTS (
+                          SELECT 1 FROM ${taxClasses}
+                          WHERE ${taxClasses.id} = COALESCE(
+                              ${taxSettings.shippingTaxClassId},
+                              ${taxSettings.defaultTaxClassId}
+                          )
+                            AND ${taxClasses.deletedAt} IS NULL
+                            AND (
+                                ${taxClasses.isExempt} = 1
+                                OR EXISTS (
+                                    SELECT 1 FROM ${taxRates}
+                                    WHERE ${taxRates.taxClassId} = ${taxClasses.id}
+                                      AND ${taxRates.isActive} = 1
+                                      AND ${taxRates.deletedAt} IS NULL
+                                )
+                            )
+                      )
+                  )
+            ) THEN 1
+            ELSE json_extract(${TAX_CONFIGURATION_READINESS_CONFLICT}, '$')
+        END
+    `);
+}
+
+function isTaxConfigurationReadinessConflict(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /TAX_CONFIGURATION_READINESS_CONFLICT|malformed json/i.test(message);
+}
+
+async function executeTaxConfigurationGuardedMutation<TMutation extends BatchItem<"sqlite">>(
+    db: Database,
+    mutation: TMutation,
+): Promise<TMutation["_"]["result"]> {
+    try {
+        const [result] = await safeBatch(db, [
+            mutation,
+            buildTaxConfigurationReadinessGuard(db),
+        ] as const);
+        return result;
+    } catch (error) {
+        if (isTaxConfigurationReadinessConflict(error)) {
+            throw new ConflictError(TAX_CONFIGURATION_READINESS_MESSAGE);
+        }
+        throw error;
+    }
+}
+
 export async function getTaxConfiguration(db: Database) {
     const [settings, classes, rates, jurisdictions] = await db.batch([
         db.select().from(taxSettings).where(eq(taxSettings.id, "default")),
@@ -201,7 +281,7 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
     }
 
     if (input.expectedVersion === 0) {
-        const inserted = await db.insert(taxSettings).values({
+        const insert = db.insert(taxSettings).values({
             id: "default",
             enabled: input.enabled,
             pricesIncludeTax: input.pricesIncludeTax,
@@ -213,11 +293,14 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }).onConflictDoNothing().returning();
+        const inserted = input.enabled
+            ? await executeTaxConfigurationGuardedMutation(db, insert)
+            : await insert;
         if (inserted[0]) return inserted[0];
         throw new ConflictError("Tax settings were created by another request. Reload and try again.");
     }
 
-    const updated = await db.update(taxSettings).set({
+    const update = db.update(taxSettings).set({
         enabled: input.enabled,
         pricesIncludeTax: input.pricesIncludeTax,
         taxShipping: input.taxShipping,
@@ -230,6 +313,9 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
         eq(taxSettings.id, "default"),
         eq(taxSettings.version, input.expectedVersion),
     )).returning();
+    const updated = input.enabled
+        ? await executeTaxConfigurationGuardedMutation(db, update)
+        : await update;
     if (!updated[0]) throw new ConflictError("Tax settings changed. Reload and try again.");
     return updated[0];
 }
@@ -277,9 +363,10 @@ export async function updateTaxClass(db: Database, id: string, input: UpdateTaxC
             isNull(taxClasses.deletedAt),
         )).get();
     if (conflict) throw new ConflictError("A tax class with this name already exists.");
+    const makesExemptClassTaxable = current.isExempt && input.isExempt === false;
     let rows: typeof current[];
     try {
-        rows = await db.update(taxClasses).set({
+        const update = db.update(taxClasses).set({
             name,
             description: input.description === undefined
                 ? current.description
@@ -292,6 +379,9 @@ export async function updateTaxClass(db: Database, id: string, input: UpdateTaxC
             isNull(taxClasses.deletedAt),
             eq(taxClasses.version, input.expectedVersion),
         )).returning();
+        rows = makesExemptClassTaxable
+            ? await executeTaxConfigurationGuardedMutation(db, update)
+            : await update;
     } catch (error) {
         if (isTaxClassNameConstraint(error)) {
             throw new ConflictError("A tax class with this name already exists.");
@@ -355,7 +445,11 @@ export async function updateTaxRate(db: Database, id: string, input: UpdateTaxRa
         jurisdictionId: input.jurisdictionId === undefined ? current.jurisdictionId : input.jurisdictionId,
         jurisdictionLabel: input.jurisdictionLabel === undefined ? current.jurisdictionLabel : input.jurisdictionLabel,
     });
-    const rows = await db.update(taxRates).set({
+    const nextIsActive = input.isActive ?? current.isActive;
+    const removesActiveCoverage = current.isActive && (
+        !nextIsActive || taxClassId !== current.taxClassId
+    );
+    const update = db.update(taxRates).set({
         taxClassId,
         name: input.name === undefined ? current.name : normalizeName(input.name, "Rate name"),
         rateBps: input.rateBps ?? current.rateBps,
@@ -367,12 +461,27 @@ export async function updateTaxRate(db: Database, id: string, input: UpdateTaxRa
         version: sql`${taxRates.version} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(and(eq(taxRates.id, id), eq(taxRates.version, input.expectedVersion), isNull(taxRates.deletedAt))).returning();
+    const rows = removesActiveCoverage
+        ? await executeTaxConfigurationGuardedMutation(db, update)
+        : await update;
     if (!rows[0]) throw new ConflictError("Tax rate changed. Reload and try again.");
     return rows[0];
 }
 
 export async function deleteTaxRate(db: Database, id: string, expectedVersion: number) {
-    const rows = await db.update(taxRates).set({
+    const current = await db.select().from(taxRates).where(and(
+        eq(taxRates.id, id),
+        isNull(taxRates.deletedAt),
+    )).get();
+    if (!current) {
+        const exists = await db.select({ id: taxRates.id }).from(taxRates).where(eq(taxRates.id, id)).get();
+        if (!exists) throw new NotFoundError("Tax rate not found.");
+        throw new ConflictError("Tax rate changed. Reload and try again.");
+    }
+    if (current.version !== expectedVersion) {
+        throw new ConflictError("Tax rate changed. Reload and try again.");
+    }
+    const update = db.update(taxRates).set({
         deletedAt: sql`unixepoch()`,
         isActive: false,
         version: sql`${taxRates.version} + 1`,
@@ -382,9 +491,10 @@ export async function deleteTaxRate(db: Database, id: string, expectedVersion: n
         eq(taxRates.version, expectedVersion),
         isNull(taxRates.deletedAt),
     )).returning();
+    const rows = current.isActive
+        ? await executeTaxConfigurationGuardedMutation(db, update)
+        : await update;
     if (rows[0]) return rows[0];
-    const exists = await db.select({ id: taxRates.id }).from(taxRates).where(eq(taxRates.id, id)).get();
-    if (!exists) throw new NotFoundError("Tax rate not found.");
     throw new ConflictError("Tax rate changed. Reload and try again.");
 }
 

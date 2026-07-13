@@ -36,6 +36,7 @@ import {
   percentToBasisPoints,
   resolveJurisdictionSelection,
 } from "./tax-form";
+import { getRequiredTaxRateRoles } from "./tax-readiness";
 
 interface RateDraft {
   taxClassId: string;
@@ -81,13 +82,21 @@ export function TaxRatesPanel({
     draft.jurisdictionId,
     configuration.jurisdictions,
   );
+  const editingRequiredRoles = getRequiredTaxRateRoles(configuration, editing);
+  const deletingRequiredRoles = getRequiredTaxRateRoles(configuration, deleting);
+  const removesRequiredCoverage = Boolean(
+    editing && editingRequiredRoles.length > 0 && (
+      !draft.isActive || draft.taxClassId !== editing.taxClassId
+    ),
+  );
   const canSave = Boolean(
     draft.taxClassId &&
     draft.name.trim() &&
     parsedRateBps !== null &&
     parsedPriority >= 0 &&
     parsedPriority <= 1000 &&
-    jurisdiction,
+    jurisdiction &&
+    !removesRequiredCoverage,
   );
 
   const refresh = async () => {
@@ -241,6 +250,11 @@ export function TaxRatesPanel({
               <ToggleField label="Active" checked={draft.isActive} disabled={!canManage} onCheckedChange={(isActive) => setDraft((current) => ({ ...current, isActive }))} />
               <ToggleField label="Compound" checked={draft.isCompound} disabled={!canManage} onCheckedChange={(isCompound) => setDraft((current) => ({ ...current, isCompound }))} />
             </div>
+            {removesRequiredCoverage ? (
+              <p role="alert" className="text-xs leading-5 text-destructive">
+                This is the only active rate for {editingRequiredRoles.join(" and ")}. Add a replacement rate before deactivating it or moving it to another class.
+              </p>
+            ) : null}
             <div className="flex gap-2">
               <Button className="flex-1" disabled={!canManage || !canSave || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? <Edit3 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -291,8 +305,23 @@ export function TaxRatesPanel({
 
       <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle><AlertDialogDescription>The rule will stop participating in future quotes. Existing order tax snapshots do not change.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction disabled={deleteMutation.isPending} onClick={() => deleting && deleteMutation.mutate(deleting)}>Delete rate</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingRequiredRoles.length > 0
+                ? `This is the only active rate for ${deletingRequiredRoles.join(" and ")}. Add a replacement before deleting it while tax calculation is enabled.`
+                : "The rule will stop participating in future quotes. Existing order tax snapshots do not change."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteMutation.isPending || deletingRequiredRoles.length > 0}
+              onClick={() => deleting && deletingRequiredRoles.length === 0 && deleteMutation.mutate(deleting)}
+            >
+              Delete rate
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
