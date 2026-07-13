@@ -12,12 +12,13 @@ import {
   getHeroSliders,
   updateHeroSlider,
 } from "~/lib/api-functions/hero-sliders";
+import type { HeroSliderWorkspaceSection } from "./hero-slider-workspace";
 
 const SliderTab = lazy(() =>
   import("./SliderTab").then((module) => ({ default: module.SliderTab })),
 );
 
-type SliderType = "desktop" | "mobile";
+type SliderType = HeroSliderWorkspaceSection;
 type SliderState = Record<SliderType, HeroSlider | null>;
 type FlagState = Record<SliderType, boolean>;
 
@@ -35,13 +36,20 @@ function sliderChanged(
   return JSON.stringify(saved) !== JSON.stringify(draft);
 }
 
-export function HeroSliderContainer() {
+interface HeroSliderContainerProps {
+  section: HeroSliderWorkspaceSection;
+  onSectionChange: (section: HeroSliderWorkspaceSection) => void;
+}
+
+export function HeroSliderContainer({
+  section: activeTab,
+  onSectionChange,
+}: HeroSliderContainerProps) {
   const [saved, setSaved] = useState<SliderState>(EMPTY_SLIDERS);
   const [drafts, setDrafts] = useState<SliderState>(EMPTY_SLIDERS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<FlagState>(EMPTY_FLAGS);
   const [conflicts, setConflicts] = useState<FlagState>(EMPTY_FLAGS);
-  const [activeTab, setActiveTab] = useState<SliderType>("desktop");
 
   const dirty = useMemo<FlagState>(() => ({
     desktop: sliderChanged(saved.desktop, drafts.desktop),
@@ -193,7 +201,7 @@ export function HeroSliderContainer() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SliderType)}>
+      <Tabs value={activeTab} onValueChange={(value) => onSectionChange(value as SliderType)}>
         <TabsList className="h-9 w-full justify-start gap-1 rounded-lg border bg-muted/20 p-1 sm:w-auto">
           <TabsTrigger value="desktop" className="h-7 gap-2 px-3">
             <ImageIcon className="h-3.5 w-3.5" />

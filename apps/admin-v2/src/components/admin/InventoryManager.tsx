@@ -58,10 +58,10 @@ import {
 } from "@/lib/api-functions/inventory";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
+import type { InventoryWorkspaceSection } from "./inventory-workspace";
 
 // ---------- Types ----------
 
-type Tab = "variants" | "alerts" | "movements";
 type StockFilter = "all" | "low" | "out" | "reserved";
 type AlertStatusFilter = "active" | "acknowledged" | "resolved" | "all";
 type SortField = "productName" | "sku" | "available";
@@ -225,10 +225,17 @@ function InventorySummaryStrip({ stats }: { stats: InventoryStats }) {
 
 // ---------- Main Component ----------
 
-export function InventoryManager() {
+interface InventoryManagerProps {
+  section: InventoryWorkspaceSection;
+  onSectionChange: (section: InventoryWorkspaceSection) => void;
+}
+
+export function InventoryManager({
+  section: activeTab,
+  onSectionChange,
+}: InventoryManagerProps) {
   const { inventory: inventoryActions } = useCatalogActionPermissions();
   // Local UI state
-  const [activeTab, setActiveTab] = useState<Tab>("variants");
   const [requestedPage, setRequestedPage] = useState(1);
   const [requestedLimit, setRequestedLimit] = useState(50);
   const [movementsRequestedLimit, setMovementsRequestedLimit] = useState(50);
@@ -416,8 +423,8 @@ export function InventoryManager() {
     setLocalSearch(alert.variantSku || alert.variantId);
     setStockFilter("all");
     setRequestedPage(1);
-    setActiveTab("variants");
-  }, []);
+    onSectionChange("variants");
+  }, [onSectionChange]);
 
   return (
     <Card className="border-none shadow-none bg-transparent sm:bg-card">
@@ -455,7 +462,7 @@ export function InventoryManager() {
               role="tab"
               aria-selected={activeTab === "variants"}
               aria-controls="inventory-variants-panel"
-              onClick={() => setActiveTab("variants")}
+              onClick={() => onSectionChange("variants")}
               className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "variants" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <Package className="h-3.5 w-3.5" /> All Variants
@@ -466,7 +473,7 @@ export function InventoryManager() {
               role="tab"
               aria-selected={activeTab === "alerts"}
               aria-controls="inventory-alerts-panel"
-              onClick={() => setActiveTab("alerts")}
+              onClick={() => onSectionChange("alerts")}
               className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "alerts" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <AlertTriangle className="h-3.5 w-3.5" /> Low-stock alerts
@@ -477,7 +484,7 @@ export function InventoryManager() {
               role="tab"
               aria-selected={activeTab === "movements"}
               aria-controls="inventory-movements-panel"
-              onClick={() => setActiveTab("movements")}
+              onClick={() => onSectionChange("movements")}
               className={cn("flex items-center gap-2 py-2 text-sm font-medium border-b-2 transition-colors", activeTab === "movements" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}
             >
               <History className="h-3.5 w-3.5" /> Recent Movements

@@ -13,10 +13,14 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `content/NAVIGATION-AUTHORITY.md` - accepted reusable-menu, placement,
   publication, lifecycle, cache, migration, and rollback architecture for
   large-store navigation; this is not yet implemented.
+- `content/NAVIGATION-DRAG-INTERACTION.md` - accepted tree hitboxes, visual
+  feedback, outdent/root behavior, exact Move dialog, and verification matrix.
 - `INTERFACE-COPY-DENSITY.md` - accepted admin copy hierarchy, progressive
   disclosure, tooltip, helper-text, and density review contract.
 - `ADMIN-ROUTE-STATE.md` - canonical URL-state, refresh/share/back-forward,
   sensitive-state exclusion, and global-search destination contract.
+- `ADMIN-ROUTE-AUDIT.md` - adoption inventory for route-backed admin
+  workspaces, deliberate transient-state exclusions, and remaining gaps.
 - `GLOBAL-ADMIN-SEARCH.md` - research gate, deterministic local/API search
   architecture, ranking, performance, accessibility, and prototype criteria.
 - `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
