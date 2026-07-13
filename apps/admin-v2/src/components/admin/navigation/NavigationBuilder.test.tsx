@@ -106,7 +106,7 @@ describe("NavigationBuilder", () => {
       '[aria-label="Drag Item 239"]',
     ) as HTMLButtonElement;
     expect(filteredHandle.disabled).toBe(true);
-    expect(host.textContent).toContain("Clear search to arrange items");
+    expect(host.textContent).toContain("Search active · clear to arrange.");
   });
 
   it("renders one accessible drag handle per visible row without replacing native controls", async () => {
@@ -128,7 +128,9 @@ describe("NavigationBuilder", () => {
     expect(host.querySelectorAll('button[aria-label^="Drag "]')).toHaveLength(2);
     expect((host.querySelector('[aria-label="Drag Home"]') as HTMLButtonElement).disabled)
       .toBe(false);
-    expect(host.textContent).toContain("Drag vertically to reorder siblings");
+    expect(host.querySelector('[aria-label="How to arrange menu items"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("Drag vertically to reorder siblings");
+    expect(host.querySelector("[data-navigation-drag-status]")).toBeNull();
 
     act(() =>
       (host.querySelector('[aria-label="Edit Shop, level 1"]') as HTMLButtonElement).click(),

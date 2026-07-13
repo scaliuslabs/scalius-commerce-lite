@@ -49,16 +49,29 @@ formula without making drag the only way to arrange a menu:
   behind one native `Placement options` disclosure, avoiding permanent control
   clutter while still preventing 98 repeated clicks across a long sibling
   list. Add child and Remove stay immediately visible.
-- Every visible row now also has a 40 px drag handle. A vertical drop reorders
-  siblings only; a deliberate move right nests the complete branch and a move
-  left outdents it one level. Cross-parent vertical drops, cycles, and moves
-  beyond three levels fail without mutating the tree. The active inline editor
-  follows its stable item ID after the move.
+- Every visible row now also has a 40 px drag handle. Dragging uses one
+  sortable-tree projection instead of a hidden horizontal threshold: the
+  pointer chooses a visible before/after insertion edge, horizontal movement
+  continuously projects the destination level, and an indented insertion line
+  previews the exact result. Cross-parent moves are therefore direct rather
+  than rejected. The complete branch moves atomically, collapsed targets
+  expand when needed, cycles remain impossible, and projected depth is clamped
+  to the three-level public contract. The active inline editor follows its
+  stable item ID after the move.
 - Pointer and keyboard sensors share the same sortable context and dnd-kit live
-  announcements/instructions. Drag never replaces the native placement
-  fallbacks; it keeps them collapsed until needed. Search disables every handle
-  with an explicit explanation because arranging a filtered projection could
-  move the wrong branch.
+  announcements/instructions. Arrow movement follows the same projected edge
+  and level model. Drag never replaces the native placement fallbacks; it keeps
+  them collapsed until needed. Search disables every handle with a concise
+  explanation because arranging a filtered projection could move the wrong
+  branch.
+- Sortable rows deliberately do not use `content-visibility` or visual
+  translation transforms. Both caused browser-specific disappearing/fading
+  rows while dragging. All non-active rows now remain fully rendered, the
+  source position becomes a clear dashed placeholder, and the moving branch is
+  represented by the drag overlay plus insertion line.
+- Resting UI is quiet: the card keeps only a short title/subtitle, arrangement
+  guidance lives behind an accessible info tooltip, and the status strip mounts
+  only for search lock, active drag feedback, or the brief post-drop result.
 - The render projection is flattened in one traversal. At most 80 currently
   visible rows mount at once; merchants explicitly reveal the next batch.
   Search runs against the complete hierarchy, so a match beyond the first batch

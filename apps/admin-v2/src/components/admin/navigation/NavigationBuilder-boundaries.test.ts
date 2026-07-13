@@ -19,7 +19,8 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("<NavigationMap");
     expect(mapSource).toContain('aria-label="Menu items"');
     expect(mapSource).toContain("renderEditor(row)");
-    expect(mapSource).toContain("[content-visibility:auto]");
+    expect(mapSource).not.toContain("content-visibility");
+    expect(mapSource).not.toContain("CSS.Transform");
     expect(source).not.toContain("lg:grid-cols-[minmax(270px");
     expect(source).not.toContain("<Table");
   });
@@ -32,6 +33,9 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("PointerSensor");
     expect(source).toContain("KeyboardSensor");
     expect(source).toContain("sortableKeyboardCoordinates");
+    expect(source).toContain("navigationKeyboardCoordinates");
+    expect(source).toContain('event.code === "ArrowRight"');
+    expect(source).toContain("NAVIGATION_TREE_INDENT");
     expect(source).toContain("navigationScreenReaderInstructions");
     expect(source).toContain("DragOverlay");
     expect(source).toContain("applyNavigationDrag");
@@ -39,6 +43,11 @@ describe("navigation workspace boundaries", () => {
     expect(mapSource).toContain("touch-none");
     expect(mapSource).toContain("h-10 w-10");
     expect(mapSource).toContain("Clear search to arrange menu items");
+    expect(mapSource).toContain("data-navigation-drag-placeholder");
+    expect(mapSource).toContain("data-navigation-insertion-line");
+    expect(mapSource).toContain("dragIntent.depth * NAVIGATION_TREE_INDENT");
+    expect(source).toContain("getNavigationDropEdge");
+    expect(source).toContain('getNavigationDropEdge(event)');
     expect(source).toContain("<details");
     expect(source).toContain("Placement options");
     expect(source).toContain("Parent, position, and keyboard moves");
@@ -55,12 +64,22 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("moveNavigationItemToParentById");
   });
 
+  it("keeps static drag guidance behind help and shows status only when relevant", () => {
+    const source = readSource("./NavigationBuilder.tsx");
+
+    expect(source).toContain('aria-label="How to arrange menu items"');
+    expect(source).toContain("Drag to a visible insertion line");
+    expect(source).toContain("normalizedQuery || activeDragId || dragStatus");
+    expect(source).toContain('window.setTimeout(() => setDragStatus(""), 3500)');
+    expect(source).toContain("Arrange and edit storefront links.");
+    expect(source).not.toContain("Drag vertically to reorder siblings");
+  });
+
   it("disables drag during filtered views and keeps the 80-row projection", () => {
     const source = readSource("./NavigationBuilder.tsx");
 
     expect(source).toContain("dragDisabled={Boolean(normalizedQuery)}");
-    expect(source).toContain("Clear search to arrange items");
-    expect(source).toContain("filtered rows cannot change the wrong branch");
+    expect(source).toContain("Search active · clear to arrange.");
     expect(source).toContain("items={renderedRowIds}");
   });
 

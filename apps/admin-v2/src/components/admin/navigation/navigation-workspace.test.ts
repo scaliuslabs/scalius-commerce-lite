@@ -35,6 +35,11 @@ const menu: NavigationItem[] = [
   { id: "about", title: "About", href: "/about" },
 ];
 
+const expandedMenuRows = flattenNavigationOutline(
+  menu,
+  collectNavigationParentIds(menu),
+);
+
 describe("navigation workspace model", () => {
   it("summarizes and locates a bounded hierarchy", () => {
     expect(countNavigationItems(menu)).toBe(5);
@@ -118,55 +123,146 @@ describe("navigation workspace model", () => {
     expect(unchanged).toEqual(menu[0].subMenu);
   });
 
-  it("reorders sibling branches by drag without changing stable IDs or descendants", () => {
-    const result = applyNavigationDrag(menu, "about", "shop", 0);
+  it("projects explicit before/after insertions without changing stable IDs or descendants", () => {
+    const result = applyNavigationDrag(
+      menu,
+      expandedMenuRows,
+      "about",
+      "shop",
+      0,
+      "before",
+    );
 
     expect(result.changed).toBe(true);
-    expect(result.intent.type).toBe("reorder");
+    expect(result.intent).toMatchObject({
+      type: "move",
+      edge: "before",
+      depth: 0,
+      parentId: null,
+      targetIndex: 0,
+    });
     expect(result.items.map((item) => item.id)).toEqual(["about", "shop"]);
     expect(findNavigationLocation(result.items, "shirts")?.ancestors.map((item) => item.id))
       .toEqual(["shop", "clothing"]);
     expect(countNavigationItems(result.items)).toBe(countNavigationItems(menu));
   });
 
-  it("nests and outdents complete branches only after an explicit horizontal drag", () => {
-    const nested = applyNavigationDrag(menu, "clothing", "about", 40);
+  it("uses projected depth lanes to nest and outdent complete branches atomically", () => {
+    const nested = applyNavigationDrag(
+      menu,
+      expandedMenuRows,
+      "about",
+      "shop",
+      24,
+      "after",
+    );
 
     expect(nested.changed).toBe(true);
-    expect(nested.intent.type).toBe("nest");
-    expect(findNavigationLocation(nested.items, "clothing")).toMatchObject({
-      parentId: "about",
+    expect(nested.intent).toMatchObject({ type: "move", depth: 1, parentId: "shop" });
+    expect(findNavigationLocation(nested.items, "about")).toMatchObject({
+      parentId: "shop",
       depth: 1,
     });
-    expect(findNavigationLocation(nested.items, "shirts")).toMatchObject({
-      parentId: "clothing",
-      depth: 2,
-    });
 
-    const outdented = applyNavigationDrag(nested.items, "clothing", "shop", -40);
+    const outdented = applyNavigationDrag(
+      menu,
+      expandedMenuRows,
+      "clothing",
+      "about",
+      -24,
+      "before",
+    );
     expect(outdented.changed).toBe(true);
-    expect(outdented.intent.type).toBe("outdent");
+    expect(outdented.intent).toMatchObject({ type: "move", depth: 0, parentId: null });
     expect(findNavigationLocation(outdented.items, "clothing")?.depth).toBe(0);
     expect(findNavigationLocation(outdented.items, "shirts")?.depth).toBe(1);
   });
 
-  it("rejects ambiguous cross-parent drops, cycles, and branches beyond level three", () => {
-    const ambiguous = applyNavigationDrag(menu, "new", "shirts", 0);
-    expect(ambiguous.changed).toBe(false);
-    expect(ambiguous.items).toBe(menu);
-    expect(ambiguous.intent).toMatchObject({ type: "invalid" });
+  it("supports cross-parent vertical insertion and safely expands collapsed targets", () => {
+    const crossParent = applyNavigationDrag(
+      menu,
+      expandedMenuRows,
+      "new",
+      "about",
+      -24,
+      "after",
+    );
+    expect(crossParent.changed).toBe(true);
+    expect(crossParent.intent).toMatchObject({
+      type: "move",
+      depth: 0,
+      parentId: null,
+      targetIndex: 2,
+    });
+    expect(crossParent.items.map((item) => item.id)).toEqual(["shop", "about", "new"]);
 
-    const cycle = getNavigationDragIntent(menu, "shop", "shirts", 40);
+    const collapsedRows = flattenNavigationOutline(menu, new Set());
+    const intoCollapsed = applyNavigationDrag(
+      menu,
+      collapsedRows,
+      "about",
+      "shop",
+      24,
+      "after",
+    );
+    expect(intoCollapsed.intent).toMatchObject({
+      type: "move",
+      depth: 1,
+      parentId: "shop",
+      targetIndex: 0,
+    });
+    expect(findNavigationLocation(intoCollapsed.items, "about")?.parentId).toBe("shop");
+    expect(findNavigationLocation(intoCollapsed.items, "about")?.index).toBe(0);
+  });
+
+  it("rejects cycles and projections where a complete branch cannot fit", () => {
+    const cycle = getNavigationDragIntent(
+      menu,
+      expandedMenuRows,
+      "shop",
+      "shirts",
+      48,
+      "after",
+    );
     expect(cycle).toMatchObject({
       type: "invalid",
-      message: "A menu item cannot be nested inside its own branch.",
+      message: "A menu item cannot be placed inside its own branch.",
     });
 
-    const tooDeep = applyNavigationDrag(menu, "about", "shirts", 40);
+    const depthLimitedMenu: NavigationItem[] = [
+      {
+        id: "services",
+        title: "Services",
+        subMenu: [
+          {
+            id: "design",
+            title: "Design",
+            subMenu: [{ id: "logos", title: "Logos" }],
+          },
+        ],
+      },
+      {
+        id: "catalog",
+        title: "Catalog",
+        subMenu: [{ id: "catalog-child", title: "Catalog child" }],
+      },
+    ];
+    const depthLimitedRows = flattenNavigationOutline(
+      depthLimitedMenu,
+      collectNavigationParentIds(depthLimitedMenu),
+    );
+    const tooDeep = applyNavigationDrag(
+      depthLimitedMenu,
+      depthLimitedRows,
+      "catalog",
+      "logos",
+      48,
+      "before",
+    );
     expect(tooDeep.changed).toBe(false);
     expect(tooDeep.intent.type).toBe("invalid");
     if (tooDeep.intent.type === "invalid") {
-      expect(tooDeep.intent.message).toContain("3-level menu limit");
+      expect(tooDeep.intent.message).toContain("cannot fit");
     }
   });
 });
