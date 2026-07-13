@@ -4,8 +4,26 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NavigationBuilder } from "./NavigationBuilder";
+import type { NavigationItem } from "./types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+function menuItem(
+  id: string,
+  label: string,
+  path?: string,
+  subMenu?: NavigationItem[],
+): NavigationItem {
+  return {
+    id,
+    target: path
+      ? { type: "internal_path", path }
+      : { type: "label" },
+    labelMode: "custom",
+    customLabel: label,
+    ...(subMenu?.length ? { subMenu } : {}),
+  };
+}
 
 describe("NavigationBuilder", () => {
   let host: HTMLDivElement;
@@ -25,12 +43,10 @@ describe("NavigationBuilder", () => {
   it("opens one inline editor under the chosen row and changes by stable identity", async () => {
     const onChange = vi.fn();
     const navigation = [
-      {
-        id: "shop",
-        title: "Shop",
-        subMenu: [{ id: "new", title: "New arrivals", href: "/new" }],
-      },
-      { id: "about", title: "About", href: "/about" },
+      menuItem("shop", "Shop", undefined, [
+        menuItem("new", "New arrivals", "/new"),
+      ]),
+      menuItem("about", "About", "/about"),
     ];
 
     await act(async () =>
@@ -63,19 +79,21 @@ describe("NavigationBuilder", () => {
     expect(onChange).toHaveBeenCalledWith([
       {
         id: "shop",
-        title: "Catalog",
-        subMenu: [{ id: "new", title: "New arrivals", href: "/new" }],
+        target: { type: "label" },
+        labelMode: "custom",
+        customLabel: "Catalog",
+        subMenu: [menuItem("new", "New arrivals", "/new")],
       },
-      { id: "about", title: "About", href: "/about" },
+      menuItem("about", "About", "/about"),
     ]);
   });
 
   it("progressively renders a large outline and can search beyond the first batch", async () => {
-    const navigation = Array.from({ length: 240 }, (_, index) => ({
-      id: `item-${index + 1}`,
-      title: `Item ${index + 1}`,
-      href: `/item-${index + 1}`,
-    }));
+    const navigation = Array.from({ length: 240 }, (_, index) => menuItem(
+      `item-${index + 1}`,
+      `Item ${index + 1}`,
+      `/item-${index + 1}`,
+    ));
 
     await act(async () =>
       root.render(
@@ -109,10 +127,10 @@ describe("NavigationBuilder", () => {
     expect(host.textContent).toContain("Search active · clear to arrange.");
   });
 
-  it("renders one accessible drag handle per visible row without replacing native controls", async () => {
+  it("keeps drag feedback and offers exact placement from every visible row", async () => {
     const navigation = [
-      { id: "home", title: "Home", href: "/" },
-      { id: "shop", title: "Shop", href: "/products" },
+      menuItem("home", "Home", "/"),
+      menuItem("shop", "Shop", "/products"),
     ];
 
     await act(async () =>
@@ -129,25 +147,15 @@ describe("NavigationBuilder", () => {
     expect((host.querySelector('[aria-label="Drag Home"]') as HTMLButtonElement).disabled)
       .toBe(false);
     expect(host.querySelector('[aria-label="How to arrange menu items"]')).not.toBeNull();
+    expect(host.querySelectorAll("[data-navigation-move-action]")).toHaveLength(2);
     expect(host.textContent).not.toContain("Drag vertically to reorder siblings");
     expect(host.querySelector("[data-navigation-drag-status]")).toBeNull();
 
-    act(() =>
-      (host.querySelector('[aria-label="Edit Shop, level 1"]') as HTMLButtonElement).click(),
-    );
-    const placementDetails = host.querySelector("details") as HTMLDetailsElement;
-    expect(placementDetails.open).toBe(false);
-    expect(placementDetails.querySelector("summary")?.textContent).toContain(
-      "Placement options",
-    );
-    expect(host.textContent).toContain("Add child");
-    expect(host.textContent).toContain("Remove");
-
-    act(() => (placementDetails.querySelector("summary") as HTMLElement).click());
-    expect(placementDetails.open).toBe(true);
-    expect(host.textContent).toContain("Earlier");
-    expect(host.textContent).toContain("Make child");
-    expect(host.querySelector('[aria-label="Parent for Shop"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="Position for Shop"]')).not.toBeNull();
+    act(() => (host.querySelector('[aria-label="Move Shop"]') as HTMLButtonElement).click());
+    expect(document.body.textContent).toContain("Move Shop");
+    expect(document.body.querySelector('[aria-label="Parent for Shop"]')).not.toBeNull();
+    expect(document.body.querySelector('[aria-label="Position for Shop"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("Top level · Level 1 · Position 2 of 2");
+    expect(host.querySelector("details")).toBeNull();
   });
 });

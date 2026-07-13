@@ -9,9 +9,11 @@ import {
   flattenNavigationOutline,
   getNavigationDepth,
   getNavigationDragIntent,
+  getNavigationDropOperationAtPoint,
   indentNavigationItemById,
   moveNavigationItemById,
   moveNavigationItemToIndexById,
+  moveNavigationItemToParentAtIndexById,
   moveNavigationItemToParentById,
   navigationItemMatchesQuery,
   outdentNavigationItemById,
@@ -19,20 +21,29 @@ import {
   updateNavigationItemById,
 } from "./navigation-workspace";
 
+function item(
+  id: string,
+  label: string,
+  path?: string,
+  subMenu?: NavigationItem[],
+): NavigationItem {
+  return {
+    id,
+    target: path ? { type: "internal_path", path } : { type: "label" },
+    labelMode: "custom",
+    customLabel: label,
+    ...(subMenu?.length ? { subMenu } : {}),
+  };
+}
+
 const menu: NavigationItem[] = [
-  {
-    id: "shop",
-    title: "Shop",
-    subMenu: [
-      { id: "new", title: "New arrivals", href: "/new" },
-      {
-        id: "clothing",
-        title: "Clothing",
-        subMenu: [{ id: "shirts", title: "Shirts", href: "/shirts" }],
-      },
-    ],
-  },
-  { id: "about", title: "About", href: "/about" },
+  item("shop", "Shop", undefined, [
+    item("new", "New arrivals", "/new"),
+    item("clothing", "Clothing", undefined, [
+      item("shirts", "Shirts", "/shirts"),
+    ]),
+  ]),
+  item("about", "About", "/about"),
 ];
 
 const expandedMenuRows = flattenNavigationOutline(
@@ -51,10 +62,8 @@ describe("navigation workspace model", () => {
       siblingCount: 1,
       parentId: "clothing",
     });
-    expect(findNavigationLocation(menu, "shirts")?.ancestors.map((item) => item.id)).toEqual([
-      "shop",
-      "clothing",
-    ]);
+    expect(findNavigationLocation(menu, "shirts")?.ancestors.map((entry) => entry.id))
+      .toEqual(["shop", "clothing"]);
   });
 
   it("keeps matching ancestors visible while searching labels and destinations", () => {
@@ -64,188 +73,120 @@ describe("navigation workspace model", () => {
   });
 
   it("flattens only expanded branches and keeps search ancestors as context", () => {
-    expect(flattenNavigationOutline(menu, new Set()).map((row) => row.item.id)).toEqual([
-      "shop",
-      "about",
-    ]);
-    expect(
-      flattenNavigationOutline(menu, new Set(["shop"])).map((row) => row.item.id),
-    ).toEqual(["shop", "new", "clothing", "about"]);
+    expect(flattenNavigationOutline(menu, new Set()).map((row) => row.item.id))
+      .toEqual(["shop", "about"]);
+    expect(flattenNavigationOutline(menu, new Set(["shop"])).map((row) => row.item.id))
+      .toEqual(["shop", "new", "clothing", "about"]);
 
     const searchRows = flattenNavigationOutline(menu, new Set(), "shirts");
     expect(searchRows.map((row) => row.item.id)).toEqual(["shop", "clothing", "shirts"]);
     expect(searchRows.map((row) => row.matchesQuery)).toEqual([false, false, true]);
   });
 
-  it("updates, appends, and removes by stable identity rather than filtered row index", () => {
-    const updated = updateNavigationItemById(menu, "new", { title: "Latest" });
-    expect(findNavigationLocation(updated, "new")?.item.title).toBe("Latest");
-    expect(findNavigationLocation(menu, "new")?.item.title).toBe("New arrivals");
+  it("updates, appends, and removes by stable identity", () => {
+    const updated = updateNavigationItemById(menu, "new", { customLabel: "Latest" });
+    expect(findNavigationLocation(updated, "new")?.item.customLabel).toBe("Latest");
+    expect(findNavigationLocation(menu, "new")?.item.customLabel).toBe("New arrivals");
 
     const appended = appendNavigationItems(menu, "clothing", [
-      { id: "trousers", title: "Trousers", href: "/trousers" },
+      item("trousers", "Trousers", "/trousers"),
     ]);
     expect(findNavigationLocation(appended, "trousers")?.depth).toBe(2);
-
-    const removed = removeNavigationItemById(appended, "clothing");
-    expect(findNavigationLocation(removed, "clothing")).toBeNull();
-    expect(findNavigationLocation(removed, "trousers")).toBeNull();
+    expect(findNavigationLocation(removeNavigationItemById(appended, "clothing"), "trousers"))
+      .toBeNull();
   });
 
-  it("moves siblings and supports deterministic indent and outdent", () => {
-    const moved = moveNavigationItemById(menu, "about", -1);
-    expect(moved.map((item) => item.id)).toEqual(["about", "shop"]);
+  it("supports sibling, indent, outdent, and exact parent-position moves", () => {
+    expect(moveNavigationItemById(menu, "about", -1).map((entry) => entry.id))
+      .toEqual(["about", "shop"]);
+    expect(moveNavigationItemToIndexById(menu, "about", 0).map((entry) => entry.id))
+      .toEqual(["about", "shop"]);
 
     const indented = indentNavigationItemById(menu, "about");
-    expect(indented.map((item) => item.id)).toEqual(["shop"]);
     expect(findNavigationLocation(indented, "about")?.parentId).toBe("shop");
-
-    const outdented = outdentNavigationItemById(menu, "new");
-    expect(outdented.map((item) => item.id)).toEqual(["shop", "new", "about"]);
-    expect(findNavigationLocation(outdented, "new")?.depth).toBe(0);
-  });
-
-  it("jumps directly to a sibling position or valid parent", () => {
-    const movedToStart = moveNavigationItemToIndexById(menu, "about", 0);
-    expect(movedToStart.map((item) => item.id)).toEqual(["about", "shop"]);
+    expect(findNavigationLocation(outdentNavigationItemById(menu, "new"), "new")?.depth)
+      .toBe(0);
 
     const movedToParent = moveNavigationItemToParentById(menu, "about", "clothing");
     expect(findNavigationLocation(movedToParent, "about")).toMatchObject({
       parentId: "clothing",
       depth: 2,
     });
-
     expect(moveNavigationItemToParentById(menu, "shop", "shirts")).toBe(menu);
+
+    const exact = moveNavigationItemToParentAtIndexById(menu, "new", null, 1);
+    expect(exact.map((entry) => entry.id)).toEqual(["shop", "new", "about"]);
+    expect(findNavigationLocation(exact, "new")?.depth).toBe(0);
   });
 
-  it("refuses an indent that would push descendants beyond three public levels", () => {
-    const unchanged = indentNavigationItemById(menu[0].subMenu ?? [], "clothing", 2, 0);
-    expect(unchanged).toEqual(menu[0].subMenu);
+  it("maps generous row hitboxes to before, inside, and after", () => {
+    expect(getNavigationDropOperationAtPoint({ pointerY: 105, top: 100, height: 40 }))
+      .toBe("before");
+    expect(getNavigationDropOperationAtPoint({ pointerY: 120, top: 100, height: 40 }))
+      .toBe("inside");
+    expect(getNavigationDropOperationAtPoint({ pointerY: 137, top: 100, height: 40 }))
+      .toBe("after");
   });
 
-  it("projects explicit before/after insertions without changing stable IDs or descendants", () => {
-    const result = applyNavigationDrag(
-      menu,
-      expandedMenuRows,
-      "about",
-      "shop",
-      0,
-      "before",
-    );
-
+  it("reorders siblings without changing stable IDs or descendants", () => {
+    const result = applyNavigationDrag(menu, expandedMenuRows, "about", "shop", "before");
     expect(result.changed).toBe(true);
     expect(result.intent).toMatchObject({
       type: "move",
-      edge: "before",
+      operation: "before",
       depth: 0,
       parentId: null,
       targetIndex: 0,
     });
-    expect(result.items.map((item) => item.id)).toEqual(["about", "shop"]);
-    expect(findNavigationLocation(result.items, "shirts")?.ancestors.map((item) => item.id))
+    expect(result.items.map((entry) => entry.id)).toEqual(["about", "shop"]);
+    expect(findNavigationLocation(result.items, "shirts")?.ancestors.map((entry) => entry.id))
       .toEqual(["shop", "clothing"]);
     expect(countNavigationItems(result.items)).toBe(countNavigationItems(menu));
   });
 
-  it("uses projected depth lanes to nest and outdent complete branches atomically", () => {
-    const nested = applyNavigationDrag(
-      menu,
-      expandedMenuRows,
-      "about",
-      "shop",
-      24,
-      "after",
-    );
-
-    expect(nested.changed).toBe(true);
-    expect(nested.intent).toMatchObject({ type: "move", depth: 1, parentId: "shop" });
-    expect(findNavigationLocation(nested.items, "about")).toMatchObject({
-      parentId: "shop",
+  it("makes inside the only nesting operation and outdents against a shallow row", () => {
+    const nested = applyNavigationDrag(menu, expandedMenuRows, "about", "shop", "inside");
+    expect(nested.intent).toMatchObject({
+      type: "move",
+      operation: "inside",
       depth: 1,
+      parentId: "shop",
     });
+    expect(findNavigationLocation(nested.items, "about")?.parentId).toBe("shop");
 
     const outdented = applyNavigationDrag(
       menu,
       expandedMenuRows,
       "clothing",
       "about",
-      -24,
       "before",
     );
-    expect(outdented.changed).toBe(true);
     expect(outdented.intent).toMatchObject({ type: "move", depth: 0, parentId: null });
     expect(findNavigationLocation(outdented.items, "clothing")?.depth).toBe(0);
     expect(findNavigationLocation(outdented.items, "shirts")?.depth).toBe(1);
   });
 
-  it("supports cross-parent vertical insertion and safely expands collapsed targets", () => {
-    const crossParent = applyNavigationDrag(
-      menu,
-      expandedMenuRows,
-      "new",
-      "about",
-      -24,
-      "after",
-    );
-    expect(crossParent.changed).toBe(true);
-    expect(crossParent.intent).toMatchObject({
-      type: "move",
-      depth: 0,
-      parentId: null,
-      targetIndex: 2,
-    });
-    expect(crossParent.items.map((item) => item.id)).toEqual(["shop", "about", "new"]);
-
+  it("nests into a collapsed target and rejects cycles and excessive depth", () => {
     const collapsedRows = flattenNavigationOutline(menu, new Set());
-    const intoCollapsed = applyNavigationDrag(
-      menu,
-      collapsedRows,
-      "about",
-      "shop",
-      24,
-      "after",
-    );
+    const intoCollapsed = applyNavigationDrag(menu, collapsedRows, "about", "shop", "inside");
     expect(intoCollapsed.intent).toMatchObject({
       type: "move",
-      depth: 1,
+      operation: "inside",
       parentId: "shop",
-      targetIndex: 0,
-    });
-    expect(findNavigationLocation(intoCollapsed.items, "about")?.parentId).toBe("shop");
-    expect(findNavigationLocation(intoCollapsed.items, "about")?.index).toBe(0);
-  });
-
-  it("rejects cycles and projections where a complete branch cannot fit", () => {
-    const cycle = getNavigationDragIntent(
-      menu,
-      expandedMenuRows,
-      "shop",
-      "shirts",
-      48,
-      "after",
-    );
-    expect(cycle).toMatchObject({
-      type: "invalid",
-      message: "A menu item cannot be placed inside its own branch.",
+      targetIndex: 2,
     });
 
-    const depthLimitedMenu: NavigationItem[] = [
-      {
-        id: "services",
-        title: "Services",
-        subMenu: [
-          {
-            id: "design",
-            title: "Design",
-            subMenu: [{ id: "logos", title: "Logos" }],
-          },
-        ],
-      },
-      {
-        id: "catalog",
-        title: "Catalog",
-        subMenu: [{ id: "catalog-child", title: "Catalog child" }],
-      },
+    expect(getNavigationDragIntent(menu, expandedMenuRows, "shop", "shirts", "inside"))
+      .toMatchObject({
+        type: "invalid",
+        message: "A menu item cannot be placed inside its own branch.",
+      });
+
+    const depthLimitedMenu = [
+      item("services", "Services", undefined, [
+        item("design", "Design", undefined, [item("logos", "Logos")]),
+      ]),
+      item("catalog", "Catalog", undefined, [item("catalog-child", "Catalog child")]),
     ];
     const depthLimitedRows = flattenNavigationOutline(
       depthLimitedMenu,
@@ -256,8 +197,7 @@ describe("navigation workspace model", () => {
       depthLimitedRows,
       "catalog",
       "logos",
-      48,
-      "before",
+      "inside",
     );
     expect(tooDeep.changed).toBe(false);
     expect(tooDeep.intent.type).toBe("invalid");
