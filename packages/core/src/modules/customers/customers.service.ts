@@ -276,24 +276,9 @@ export function summarizeCustomerAccountOrders(rows: CustomerOrderMoneyState[]):
 
 export function buildCustomerOrderMetricsProjection() {
     return {
-        totalOrders: sql<number>`CAST(COALESCE((
-            SELECT count(*)
-            FROM orders AS customer_orders
-            WHERE customer_orders.customer_id = ${customers.id}
-              AND customer_orders.deleted_at IS NULL
-        ), 0) AS INTEGER)`,
-        totalSpent: sql<number>`COALESCE((
-            SELECT sum(CASE WHEN customer_orders.paid_amount > 0 THEN customer_orders.paid_amount ELSE 0 END)
-            FROM orders AS customer_orders
-            WHERE customer_orders.customer_id = ${customers.id}
-              AND customer_orders.deleted_at IS NULL
-        ), 0)`,
-        lastOrderAt: sql<number | null>`(
-            SELECT max(CAST(customer_orders.created_at AS INTEGER))
-            FROM orders AS customer_orders
-            WHERE customer_orders.customer_id = ${customers.id}
-              AND customer_orders.deleted_at IS NULL
-        )`,
+        totalOrders: sql<number>`CAST(count(${orders.id}) AS INTEGER)`,
+        totalSpent: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END), 0)`,
+        lastOrderAt: sql<number | null>`max(CAST(${orders.createdAt} AS INTEGER))`,
     };
 }
 
@@ -447,7 +432,12 @@ export async function listCustomers(
             updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
         })
         .from(customers)
+        .leftJoin(orders, and(
+            eq(orders.customerId, customers.id),
+            isNull(orders.deletedAt),
+        ))
         .where(whereClause)
+        .groupBy(customers.id)
         .limit(limit)
         .offset(offset)
         .orderBy(order === "asc" ? asc(sortField) : desc(sortField));

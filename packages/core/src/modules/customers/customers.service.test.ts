@@ -25,12 +25,10 @@ describe("admin customer commerce metrics", () => {
     const totalOrders = dialect.sqlToQuery(metrics.totalOrders);
     const totalSpent = dialect.sqlToQuery(metrics.totalSpent);
 
-    expect(totalOrders.sql).toContain("count(*)");
-    expect(totalOrders.sql).toContain("customer_orders.customer_id");
-    expect(totalSpent.sql).toContain("customer_orders.paid_amount");
-    expect(totalSpent.sql).not.toContain("customer_orders.total_amount");
+    expect(totalOrders.sql).toContain('count("orders"."id")');
+    expect(totalSpent.sql).toContain('"orders"."paid_amount"');
+    expect(totalSpent.sql).not.toContain('"orders"."total_amount"');
     expect(totalSpent.sql).not.toContain("partially_refunded");
-    expect(totalSpent.sql).toContain("customer_orders.deleted_at IS NULL");
   });
 
   it("filters private account history and detail reads by verified ownership", () => {
