@@ -33,6 +33,34 @@ lower rendering limit, but it must never silently truncate a published menu.
 Search, editing, and public projection are paged; no admin or storefront request
 loads every menu in the store.
 
+### Accepted demo-era bridge
+
+If stable resource links must ship before the normalized authority in this
+document, the only accepted bridge is a single typed target inside each current
+JSON item. It is a cutover, not a compatibility layer:
+
+- `resource` target: `resourceType`, stable `resourceId`, and an optional safe
+  query projection;
+- `internal_path`, `external_url`, or `label` target: one validated value;
+- `labelMode: resource | custom`, with optional `customLabel` and diagnostic-only
+  `lastKnownLabel`.
+
+Do not keep copied `href` as a second mutable authority. Regenerate the demo
+menus, resolve resource targets centrally in batches of at most 90 IDs, and use
+the same resolver for admin preview, header, footer, and layout reads. Resource
+mode follows the current title and route; custom mode preserves merchant copy.
+An unavailable leaf is omitted publicly, while an unavailable parent with ready
+children becomes a label group. `noIndex` and sitemap exclusion do not make a
+target unavailable.
+
+The bridge must add first-class product and collection pickers, resource-change
+cache invalidation, and tests for rename, slug/canonical change, custom label,
+draft/internal, trash/delete/restore, parent fallback, and slug reuse. Until page
+canonical aliases are routed, a page resource resolves only to its live
+`/<slug>` route. This bridge may be wiped with the rest of the demo data when
+the normalized menu tables replace it; it must never become permanent dual
+authority.
+
 ## Verified benchmark, not visual imitation
 
 - Shopify's current Help Center documents reusable menus, a maximum of 10,000
