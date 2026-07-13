@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import { buildExpectedAssets } from "./expected-assets.mjs";
+import { inspectLocalAsset } from "./inspect-local-asset.mjs";
 import {
   ASSET_PROFILES,
   deterministicAssetFilename,
@@ -20,74 +19,23 @@ const requireFromStorefront = createRequire(
   new URL("../../../apps/storefront/package.json", import.meta.url),
 );
 const sharp = requireFromStorefront("sharp");
-const execFileAsync = promisify(execFile);
-
-const FORMAT_TO_MIME = Object.freeze({
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  avif: "image/avif",
-});
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function inspectVideo(filePath, mime) {
-  const prefix = await readFile(filePath).then((bytes) => bytes.subarray(0, 16));
-  const detected = prefix.subarray(4, 8).toString("ascii") === "ftyp"
-    ? "video/mp4"
-    : prefix.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))
-      ? "video/webm"
-      : null;
-  if (detected !== mime) throw new Error(`Detected ${detected ?? "unknown video"}, declared ${mime}`);
-
-  let stdout;
-  try {
-    ({ stdout } = await execFileAsync("ffprobe", [
-      "-v", "error", "-select_streams", "v:0",
-      "-show_entries", "stream=width,height",
-      "-of", "json", filePath,
-    ]));
-  } catch {
-    throw new Error("ffprobe is required to verify video dimensions");
-  }
-  const stream = JSON.parse(stdout).streams?.[0];
-  if (!Number.isInteger(stream?.width) || !Number.isInteger(stream?.height)) {
-    throw new Error("Video has no readable visual dimensions");
-  }
-  return { mime: detected, width: stream.width, height: stream.height };
-}
-
 async function validateSourceFile(filePath, record, expected) {
-  const info = await stat(filePath);
-  const limit = expected.kind === "video" ? VIDEO_MIME_LIMIT_BYTES : IMAGE_MIME_LIMIT_BYTES;
-  if (info.size > limit) throw new Error(`Source exceeds ${limit} bytes`);
-  if (info.size !== record.original.bytes) throw new Error(`Byte size is ${info.size}; manifest declares ${record.original.bytes}`);
-
-  const bytes = await readFile(filePath);
-  const digest = sha256(bytes);
-  if (digest !== record.sha256) throw new Error(`SHA-256 mismatch: received ${digest}`);
-
-  let inspected;
-  if (expected.kind === "video") {
-    if (!VIDEO_MIMES.has(record.original.mime)) throw new Error(`Unsupported video MIME ${record.original.mime}`);
-    inspected = await inspectVideo(filePath, record.original.mime);
-  } else {
-    if (!IMAGE_MIMES.has(record.original.mime)) throw new Error(`Unsupported image MIME ${record.original.mime}`);
-    const metadata = await sharp(bytes, { animated: false, failOn: "error" }).metadata();
-    inspected = {
-      mime: FORMAT_TO_MIME[metadata.format] ?? null,
-      width: metadata.width,
-      height: metadata.height,
-    };
-  }
-  if (inspected.mime !== record.original.mime) throw new Error(`Detected ${inspected.mime ?? "unknown"}, declared ${record.original.mime}`);
+  const inspected = await inspectLocalAsset(filePath);
+  if (inspected.kind !== expected.kind) throw new Error(`Detected ${inspected.kind}, expected ${expected.kind}`);
+  const supportedMimes = expected.kind === "video" ? VIDEO_MIMES : IMAGE_MIMES;
+  if (!supportedMimes.has(record.original.mime)) throw new Error(`Unsupported ${expected.kind} MIME ${record.original.mime}`);
+  if (inspected.bytes.length !== record.original.bytes) throw new Error(`Byte size is ${inspected.bytes.length}; manifest declares ${record.original.bytes}`);
+  if (inspected.sha256 !== record.sha256) throw new Error(`SHA-256 mismatch: received ${inspected.sha256}`);
+  if (inspected.mime !== record.original.mime) throw new Error(`Detected ${inspected.mime}, declared ${record.original.mime}`);
   if (inspected.width !== record.original.width || inspected.height !== record.original.height) {
     throw new Error(`Dimensions are ${inspected.width}x${inspected.height}; manifest declares ${record.original.width}x${record.original.height}`);
   }
-  return { bytes, digest, ...inspected };
+  return { ...inspected, digest: inspected.sha256 };
 }
 
 async function normalizeImage(sourceBytes, profile, cropPosition) {

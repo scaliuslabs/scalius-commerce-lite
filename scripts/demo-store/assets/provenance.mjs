@@ -15,8 +15,14 @@ const ALLOWED_LICENSES = new Set([
   "Proprietary-Merchant-Owned",
   "Generated-Original",
 ]);
+const SOURCE_KIND_LICENSES = Object.freeze({
+  "merchant-owned": new Set(["Proprietary-Merchant-Owned"]),
+  pexels: new Set(["Pexels"]),
+  "wikimedia-commons": new Set(["CC0-1.0", "PDM-1.0", "CC-BY-4.0"]),
+  "openverse-verified": new Set(["CC0-1.0", "PDM-1.0", "CC-BY-4.0"]),
+  "generated-original": new Set(["Generated-Original"]),
+});
 const SHA256 = /^[a-f0-9]{64}$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const MIME = /^(?:image\/(?:jpeg|png|gif|webp|avif)|video\/(?:mp4|webm))$/;
 const POSITIONS = new Set([
   "centre", "north", "northeast", "east", "southeast",
@@ -31,8 +37,34 @@ function isHttps(value) {
   }
 }
 
-export function validateSourceManifest(manifest, expectedAssets) {
+export function parseIsoCalendarDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return null;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day > daysInMonth[month - 1]) return null;
+  return year * 10_000 + month * 100 + day;
+}
+
+function currentIsoCalendarDate(now) {
+  const year = String(now.getFullYear()).padStart(4, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function validateSourceManifest(
+  manifest,
+  expectedAssets,
+  { today = currentIsoCalendarDate(new Date()) } = {},
+) {
   const errors = [];
+  const todayValue = parseIsoCalendarDate(today);
+  if (todayValue === null) throw new Error("today must be a real ISO calendar date");
   if (manifest?.schemaVersion !== 1 || !Array.isArray(manifest?.assets)) {
     return { errors: ["Source manifest must use schemaVersion 1 and an assets array"], records: new Map() };
   }
@@ -55,9 +87,20 @@ export function validateSourceManifest(manifest, expectedAssets) {
       errors.push(`${prefix}.sourceFile must be a relative path without traversal`);
     }
     if (!SHA256.test(record.sha256 ?? "")) errors.push(`${prefix}.sha256 must be a lowercase SHA-256 digest`);
-    if (!DATE.test(record.acquiredAt ?? "") || !DATE.test(record.verifiedAt ?? "")) errors.push(`${prefix} needs acquiredAt and verifiedAt ISO dates`);
+    const acquiredAt = parseIsoCalendarDate(record.acquiredAt);
+    const verifiedAt = parseIsoCalendarDate(record.verifiedAt);
+    if (acquiredAt === null) errors.push(`${prefix}.acquiredAt must be a real ISO calendar date`);
+    if (verifiedAt === null) errors.push(`${prefix}.verifiedAt must be a real ISO calendar date`);
+    if (acquiredAt !== null && verifiedAt !== null && acquiredAt > verifiedAt) {
+      errors.push(`${prefix}.acquiredAt must be on or before verifiedAt`);
+    }
+    if (verifiedAt !== null && verifiedAt > todayValue) errors.push(`${prefix}.verifiedAt cannot be in the future`);
     if (!record.creator?.trim()) errors.push(`${prefix}.creator is required`);
     if (!ALLOWED_LICENSES.has(record.license?.code)) errors.push(`${prefix}.license.code is not approved`);
+    const pairedLicenses = SOURCE_KIND_LICENSES[record.sourceKind];
+    if (pairedLicenses && !pairedLicenses.has(record.license?.code)) {
+      errors.push(`${prefix}.license.code does not match sourceKind ${record.sourceKind}`);
+    }
     if (!isHttps(record.license?.url)) errors.push(`${prefix}.license.url must be HTTPS`);
     if (record.license?.code === "CC-BY-4.0" && !record.license?.attribution?.trim()) errors.push(`${prefix}.license.attribution is required for CC BY`);
     if (["pexels", "wikimedia-commons", "openverse-verified"].includes(record.sourceKind)) {
