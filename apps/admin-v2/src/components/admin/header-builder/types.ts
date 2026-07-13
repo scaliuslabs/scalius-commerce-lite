@@ -43,11 +43,22 @@ export interface HeaderConfig {
   navigation: NavigationItem[];
 }
 
+export const HEADER_BUILDER_PANELS = [
+  "branding",
+  "announcement",
+  "contact-social",
+  "navigation",
+] as const;
+
+export type HeaderBuilderPanel = (typeof HEADER_BUILDER_PANELS)[number];
+
 /**
  * Props for the main HeaderBuilder component
  */
 export interface HeaderBuilderProps {
+  activePanel?: HeaderBuilderPanel;
   initialConfig?: HeaderConfig | null;
+  onPanelChange?: (panel: HeaderBuilderPanel) => void;
   onSave?: string | ((config: HeaderConfig) => Promise<void>);
 }
 

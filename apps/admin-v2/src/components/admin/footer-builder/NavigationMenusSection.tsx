@@ -18,6 +18,7 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 const MAX_FOOTER_MENUS = 4;
 
 interface NavigationMenusSectionProps {
+  editorEpoch: number;
   menus: FooterMenu[];
   onChange: (menus: FooterMenu[]) => void;
 }
@@ -32,6 +33,7 @@ function moveMenu(menus: FooterMenu[], index: number, direction: -1 | 1) {
 }
 
 export function NavigationMenusSection({
+  editorEpoch,
   menus,
   onChange,
 }: NavigationMenusSectionProps) {
@@ -209,6 +211,7 @@ export function NavigationMenusSection({
               </div>
 
               <NavigationBuilder
+                key={`${editorEpoch}:${selectedMenu.id}`}
                 navigation={selectedMenu.links}
                 onChange={updateLinks}
                 getStorefrontPath={getStorefrontPath}

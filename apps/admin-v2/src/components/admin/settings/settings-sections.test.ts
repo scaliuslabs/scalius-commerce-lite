@@ -5,6 +5,7 @@ import {
 } from "./checkout-settings-sections";
 import {
   DEFAULT_GENERAL_SETTINGS_SECTION,
+  normalizeGeneralSettingsPanel,
   normalizeGeneralSettingsSection,
 } from "./general-settings-sections";
 import {
@@ -30,6 +31,17 @@ describe("settings section normalization", () => {
         DEFAULT_GENERAL_SETTINGS_SECTION,
       );
     }
+  });
+
+  it("normalizes nested header and footer panels for deep links", () => {
+    expect(normalizeGeneralSettingsPanel("header", "navigation")).toBe(
+      "navigation",
+    );
+    expect(normalizeGeneralSettingsPanel("footer", "social")).toBe("social");
+    expect(normalizeGeneralSettingsPanel("header", "unknown")).toBe(
+      "branding",
+    );
+    expect(normalizeGeneralSettingsPanel("seo", "navigation")).toBeUndefined();
   });
 
   it("keeps every supported checkout settings deep link", () => {

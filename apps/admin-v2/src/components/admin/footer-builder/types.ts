@@ -27,11 +27,21 @@ export interface FooterConfig {
   social: SocialLink[];
 }
 
+export const FOOTER_BUILDER_PANELS = [
+  "branding",
+  "navigation",
+  "social",
+] as const;
+
+export type FooterBuilderPanel = (typeof FOOTER_BUILDER_PANELS)[number];
+
 /**
  * Props for the main FooterBuilder component
  */
 export interface FooterBuilderProps {
+  activePanel?: FooterBuilderPanel;
   initialConfig?: FooterConfig | null;
+  onPanelChange?: (panel: FooterBuilderPanel) => void;
   onSave?: string | ((config: FooterConfig) => Promise<void>);
 }
 

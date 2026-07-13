@@ -7,12 +7,16 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import type { HeaderConfig } from "~/components/admin/header-builder/types";
 import type { FooterConfig } from "~/components/admin/footer-builder/types";
 import {
+  normalizeGeneralSettingsPanel,
   normalizeGeneralSettingsSection,
+  type GeneralSettingsPanel,
   type GeneralSettingsSection,
 } from "~/components/admin/settings/general-settings-sections";
 
 export function validateGeneralSettingsSearch(search: Record<string, unknown>) {
-  return { section: normalizeGeneralSettingsSection(search.section) };
+  const section = normalizeGeneralSettingsSection(search.section);
+  const panel = normalizeGeneralSettingsPanel(section, search.panel);
+  return panel ? { section, panel } : { section };
 }
 
 export const Route = createFileRoute("/admin/settings/")({
@@ -39,6 +43,18 @@ function SettingsPage() {
         search: ((previous: Record<string, unknown>) => ({
           ...previous,
           section,
+          panel: normalizeGeneralSettingsPanel(section, undefined),
+        })) as never,
+      });
+    },
+    [navigate],
+  );
+  const handlePanelChange = useCallback(
+    (panel: GeneralSettingsPanel) => {
+      void navigate({
+        search: ((previous: Record<string, unknown>) => ({
+          ...previous,
+          panel,
         })) as never,
       });
     },
@@ -49,7 +65,9 @@ function SettingsPage() {
     <GeneralSettingsPage
       headerConfig={result.headerConfig ?? null}
       footerConfig={result.footerConfig ?? null}
+      panel={search.panel}
       section={search.section}
+      onPanelChange={handlePanelChange}
       onSectionChange={handleSectionChange}
     />
   );
