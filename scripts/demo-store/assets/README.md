@@ -155,3 +155,43 @@ This follows the official [Imageinfo API](https://www.mediawiki.org/wiki/API:Ima
 warning to request expensive extended metadata for only a few results and the
 Commons requirement for an identifiable User-Agent and considerate request
 rates.
+
+## Openverse candidate discovery
+
+`openverse/cli.mjs` is the parallel metadata-only research path for Openverse's
+official anonymous image API. Its plan has the same shape and ten-query/eight-
+result limits as the Commons plan. It always requests page 1 with:
+
+- `mature=false` and `filter_dead=true`;
+- `extension=jpg,jpeg,png,webp`;
+- `license=cc0,pdm,by`;
+- `license_type=commercial,modification`.
+
+```sh
+node scripts/demo-store/assets/openverse/cli.mjs \
+  --plan /absolute/path/to/openverse-queries.json
+```
+
+The private `.wrangler/demo-store-assets/openverse-review.json` queue preserves
+`foreign_landing_url`, original URL, creator/creator URL, Openverse attribution,
+license code/version/URL, provider, source, file type/size, and dimensions. The
+client identifies itself, waits one second between queries, has a 15-second
+timeout and 1 MB response ceiling, and performs only one bounded retry for 429
+or transient 5xx responses. It never requests thumbnails, original image bytes,
+related results, or later pages.
+
+Search filters are not rights authority. Returned CC BY versions other than 4.0,
+unexpected licenses, unsupported extensions, mature results, missing creators,
+or missing HTTPS landing/original URLs are rejected locally. Every otherwise
+eligible record still starts at `manual-review-required`; the reviewer must
+open the foreign landing page, verify its exact license, inspect the original
+for watermarks/brands/trademarks/identifiable endorsers and option accuracy,
+and confirm the original URL remains reachable. Failed flags reject the
+candidate. All-pass review remains `manual-review-complete` with
+`approval.eligible: false`; only a separate downloaded-byte SHA-256 staging
+record can later become approved.
+
+The request and response fields follow the official
+[Openverse image API](https://api.openverse.org/), which explicitly describes
+anonymous access, pagination limits, search filters, and image provenance
+fields.
