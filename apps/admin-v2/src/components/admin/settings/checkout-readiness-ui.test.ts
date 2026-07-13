@@ -40,6 +40,10 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Provider</dt>");
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Checkout</dt>");
+    expect(gatewaysSource).toContain("Key environment");
+    expect(gatewaysSource).toContain("Key mismatch");
+    expect(gatewaysSource).toContain("@scalius/shared/payment-gateway-environment");
+    expect(gatewaysSource).not.toContain("@scalius/core/modules/payments/gateway-settings");
   });
 
   it("keeps the tab strip mobile-safe and explains that refund requests are not automatic refunds", () => {

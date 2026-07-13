@@ -182,16 +182,42 @@ function effectivePlainValue(submitted: string | undefined, stored: string | und
     return submitted.trim();
 }
 
-function getEffectiveStripeCheckoutSettings(map: StripeSettingsMap, body: SaveStripeInput) {
+function getEffectiveStripeCheckoutSettings(
+    map: StripeSettingsMap,
+    body: SaveStripeInput,
+    storedSettings?: Awaited<ReturnType<typeof getStripeSettings>>,
+) {
     const existingEnabled = map.enabled !== undefined
         ? map.enabled !== "false"
         : Boolean(map.secret_key && map.webhook_secret && map.publishable_key);
+    const submittedSecretKey = body.secretKey && body.secretKey !== MASKED
+        ? body.secretKey.trim()
+        : "";
+    const submittedWebhookSecret = body.webhookSecret && body.webhookSecret !== MASKED
+        ? body.webhookSecret.trim()
+        : "";
 
     return {
-        secretKey: effectivePlaceholderAwareSecretValue(body.secretKey, map.secret_key, isStripePlaceholderCredential),
-        publishableKey: effectivePlainValue(body.publishableKey, map.publishable_key),
-        webhookSecret: effectivePlaceholderAwareSecretValue(body.webhookSecret, map.webhook_secret, isStripePlaceholderCredential),
+        secretKey: submittedSecretKey
+            ? submittedSecretKey
+            : (storedSettings?.secretKey ?? effectivePlaceholderAwareSecretValue(
+                body.secretKey,
+                map.secret_key,
+                isStripePlaceholderCredential,
+            )),
+        publishableKey: effectivePlainValue(
+            body.publishableKey,
+            storedSettings?.publishableKey ?? map.publishable_key,
+        ),
+        webhookSecret: submittedWebhookSecret
+            ? submittedWebhookSecret
+            : (storedSettings?.webhookSecret ?? effectivePlaceholderAwareSecretValue(
+                body.webhookSecret,
+                map.webhook_secret,
+                isStripePlaceholderCredential,
+            )),
         enabled: body.enabled ?? existingEnabled,
+        credentialErrors: storedSettings?.credentialErrors,
     };
 }
 
@@ -533,8 +559,13 @@ app.openapi(saveStripeRoute, async (c) => {
     const db = c.get("db");
         const body = c.req.valid("json");
         const ops: Promise<void>[] = [];
-        const existingMap = await readStripeSettingsMap(db);
-        const effectiveSettings = getEffectiveStripeCheckoutSettings(existingMap, body);
+        const kv = getKv();
+        const configuredEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+        const [existingMap, storedSettings] = await Promise.all([
+            readStripeSettingsMap(db),
+            getStripeSettings(db, kv, configuredEncryptionKey, { bypassMemoryCache: true }),
+        ]);
+        const effectiveSettings = getEffectiveStripeCheckoutSettings(existingMap, body, storedSettings);
         const stripeReadiness = getStripeCheckoutReadiness(effectiveSettings);
         if (stripeReadiness.enabled && !stripeReadiness.configured) {
             throw new ValidationError(stripeReadiness.blockedReason ?? "Stripe is not ready for checkout.");
@@ -558,7 +589,6 @@ app.openapi(saveStripeRoute, async (c) => {
 
         await Promise.all(ops);
 
-        const kv = getKv();
         await Promise.all([
             invalidateStripeCache(kv),
             invalidatePaymentMethodsCache(kv),

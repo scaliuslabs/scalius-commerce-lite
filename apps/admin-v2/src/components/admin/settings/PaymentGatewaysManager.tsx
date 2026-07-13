@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import {
-    MASKED,
     type MethodKey,
     type PaymentMethodsData,
     type StripeData,
@@ -472,6 +472,14 @@ function StripeForm({ s, set, conf, saving, onSave }: {
     s: StripeData; set: React.Dispatch<React.SetStateAction<StripeData>>;
     conf: { secret: boolean; webhook: boolean }; saving: boolean; onSave: () => void;
 }) {
+    const keyEnvironment = getStripeCredentialEnvironment(s);
+    const environmentLabel = keyEnvironment === "mixed"
+        ? "Key mismatch"
+        : keyEnvironment === "test"
+            ? "Test mode"
+            : keyEnvironment === "live"
+                ? "Live mode"
+                : "Not detected";
     return (
         <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
@@ -497,6 +505,15 @@ function StripeForm({ s, set, conf, saving, onSave }: {
                 <Label htmlFor="stripe-pub" className="text-sm">Publishable Key</Label>
                 <Input id="stripe-pub" type="text" value={s.publishableKey} className="font-mono"
                     onChange={(e) => set((p) => ({ ...p, publishableKey: e.target.value }))} placeholder="pk_live_... or pk_test_..." />
+                <div className="flex min-h-6 items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Key environment</span>
+                    <Badge
+                        variant={keyEnvironment === "mixed" ? "destructive" : "outline"}
+                        className="h-5 rounded px-1.5 text-xs font-medium"
+                    >
+                        {environmentLabel}
+                    </Badge>
+                </div>
             </div>
             <div className="space-y-1.5">
                 <Label htmlFor="stripe-wh" className="flex items-center gap-1.5 text-sm">
@@ -506,8 +523,8 @@ function StripeForm({ s, set, conf, saving, onSave }: {
                     placeholder="whsec_..." configured={conf.webhook} />
                 <p className="text-xs text-muted-foreground">Add endpoint <code className="text-xs bg-muted px-1 rounded">/api/v1/webhooks/stripe</code> in Stripe webhooks.</p>
             </div>
-            {s.secretKey && s.secretKey !== MASKED && s.secretKey.startsWith("sk_live_") && s.enabled && (
-                <LiveWarning message="Live key detected. Real cards will be charged." />
+            {keyEnvironment === "live" && s.enabled && (
+                <LiveWarning message="Live mode enabled. Real cards will be charged." />
             )}
             <SaveBtn saving={saving} label="Save Stripe" />
         </form>

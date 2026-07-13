@@ -23,6 +23,13 @@ const mocks = vi.hoisted(() => {
     ]);
     const isStripePlaceholder = (value: unknown) =>
         typeof value === "string" && stripePlaceholders.has(value.trim().toLowerCase());
+    const stripeKeyEnvironment = (value: unknown, prefix: "sk" | "pk") => {
+        if (typeof value !== "string") return "unknown";
+        const normalized = value.trim().toLowerCase();
+        if (normalized === `${prefix}_test` || normalized.startsWith(`${prefix}_test_`)) return "test";
+        if (normalized === `${prefix}_live` || normalized.startsWith(`${prefix}_live_`)) return "live";
+        return "unknown";
+    };
     const sslPlaceholders = new Set([
         "dummy",
         "test",
@@ -82,6 +89,11 @@ const mocks = vi.hoisted(() => {
                 !settings?.publishableKey?.trim() ? "publishableKey" : null,
                 !settings?.webhookSecret?.trim() ? "webhookSecret" : null,
             ].filter((field): field is string => Boolean(field));
+            const secretEnvironment = stripeKeyEnvironment(settings?.secretKey, "sk");
+            const publishableEnvironment = stripeKeyEnvironment(settings?.publishableKey, "pk");
+            const environmentMismatch = secretEnvironment !== "unknown"
+                && publishableEnvironment !== "unknown"
+                && secretEnvironment !== publishableEnvironment;
             const credentialErrors = [
                 isStripePlaceholder(settings?.secretKey)
                     ? "Stripe secret key looks like a placeholder. Enter the real Stripe secret key from your merchant account."
@@ -91,6 +103,9 @@ const mocks = vi.hoisted(() => {
                     : null,
                 isStripePlaceholder(settings?.webhookSecret)
                     ? "Stripe webhook secret looks like a placeholder. Enter the real Stripe webhook secret from your merchant account."
+                    : null,
+                environmentMismatch
+                    ? "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair."
                     : null,
             ].filter((error): error is string => Boolean(error));
             const labels: Record<string, string> = {
@@ -645,6 +660,37 @@ describe("payment settings cache invalidation", () => {
         expect(mocks.requireEncryptionKey).not.toHaveBeenCalled();
         expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.upsertEncryptedSetting).not.toHaveBeenCalled();
+        expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
+    });
+
+    it("rejects a new live publishable key paired with a retained test secret", async () => {
+        const { app, env } = createTestApp({}, [
+            { key: "secret_key", value: "encrypted-secret" },
+            { key: "publishable_key", value: "pk_test_existing" },
+            { key: "webhook_secret", value: "encrypted-webhook" },
+            { key: "enabled", value: "true" },
+        ]);
+        mocks.getStripeSettings.mockResolvedValueOnce({
+            secretKey: "sk_test_existing",
+            publishableKey: "pk_test_existing",
+            webhookSecret: "whsec_existing",
+            enabled: true,
+        });
+
+        const response = await postJson(app, env, "/stripe", {
+            publishableKey: "pk_live_replacement",
+            enabled: true,
+        });
+
+        expect(response.status, await response.clone().text()).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            success: false,
+            error: {
+                code: "VALIDATION_ERROR",
+                message: "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair.",
+            },
+        });
+        expect(mocks.upsertSetting).not.toHaveBeenCalled();
         expect(mocks.invalidateStripeCache).not.toHaveBeenCalled();
     });
 

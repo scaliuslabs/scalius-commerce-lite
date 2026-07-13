@@ -15,7 +15,9 @@ export interface GatewayConfig {
   name: string;
   publishableKey?: string;   // Stripe only
   currencies?: string[];
-  sandbox?: boolean;         // SSLCommerz only
+  testMode?: boolean;
+  /** @deprecated Transitional fallback for cached SSLCommerz/Polar config. */
+  sandbox?: boolean;
 }
 
 export interface CheckoutConfig {

@@ -11,6 +11,7 @@
 import { eq, sql } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import type { GatewaySettingsReadOptions } from "./gateway-registry";
 import { registerGateway } from "./gateway-registry";
 import {
@@ -249,9 +250,13 @@ export function getStripeCheckoutReadiness(
   settings: Partial<StripeSettings> | null | undefined,
 ): StripeCheckoutReadiness {
   const missingFields = getStripeCheckoutMissingFields(settings);
+  const environment = getStripeCredentialEnvironment(settings);
   const credentialErrors = compactErrors([
     ...(settings?.credentialErrors ?? []),
     ...getStripePlaceholderCredentialErrors(settings),
+    environment === "mixed"
+      ? "Stripe secret and publishable keys use different test/live environments. Choose a matching key pair."
+      : null,
   ]);
   const enabled = settings?.enabled === true;
   const configured = missingFields.length === 0 && credentialErrors.length === 0;
@@ -791,6 +796,7 @@ registerGateway({
   },
   getPublicConfig: (s) => ({
     publishableKey: typeof s.publishableKey === "string" ? s.publishableKey.trim() : "",
+    testMode: getStripeCredentialEnvironment(s) === "test",
   }),
   getCurrencies: (localCurrency) => [localCurrency, "usd", "eur", "gbp"],
 });
@@ -805,6 +811,7 @@ registerGateway({
   },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
+    testMode: s.sandbox === true,
   }),
   getCurrencies: (localCurrency) => [localCurrency],
 });
@@ -819,6 +826,7 @@ registerGateway({
   },
   getPublicConfig: (s) => ({
     sandbox: s.sandbox,
+    testMode: s.sandbox === true,
   }),
   getCurrencies: (localCurrency) => [localCurrency, "usd"],
 });

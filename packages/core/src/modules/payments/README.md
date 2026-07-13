@@ -307,7 +307,7 @@ Settings are cached in memory only (`gw:stripe`, `gw:sslcommerz`, `gw:polar`, `g
 ### Checkout Config Response
 
 The `GET /checkout/config` endpoint returns:
-- `gateways[]` -- buyer-visible gateways after raw allowlist, provider readiness, checkout mode, and partial-payment filtering, with public config only (publishableKey for Stripe, sandbox flag for SSLCommerz/Polar)
+- `gateways[]` -- buyer-visible gateways after raw allowlist, provider readiness, checkout mode, and partial-payment filtering, with public config only (publishable key for Stripe, provider-neutral `testMode`, and the transitional `sandbox` flag for SSLCommerz/Polar)
 - `currency` -- `{ code, symbol, decimalPlaces }` using `getDecimalPlaces()` for ISO 4217 lookup
 - `allowedCountries` + `allowedCountriesMode` -- phone number country restrictions (include/exclude list)
 - `guestCheckoutEnabled`, `authVerificationMethod`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount`
