@@ -41,3 +41,38 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   derived artifact. Permanent deletion requires dependency evidence and must
   never silently break a live page, product, navigation, order, or discovery
   asset.
+
+## Active stable-release intake (2026-07-13)
+
+The current rich-demo merchant run must prove these reported surfaces before a
+stable release. This is an execution checklist, not evidence that the work is
+already complete.
+
+- **Media:** wide workspaces show at most five complete, uncropped assets per
+  row. Entering selection mode starts empty; selecting every visible result is
+  a separate explicit action. Verify gallery, list, filters, folders, bulk
+  lifecycle, picker confirmation, image/video metadata, posters, upload retry,
+  and touch/keyboard behavior on desktop and mobile.
+- **Theme:** replace the current color-token utility with the versioned
+  presentation workflow described in `THEME-TAX.md`: semantic brand controls,
+  real storefront desktop/mobile preview, contrast diagnostics, draft/publish,
+  history, and rollback. Keep the owner-approved product-page composition.
+- **Account and users:** personal profile/security/sessions and store-level
+  users/roles/invitations are separate authority-owned workflows. Remove
+  decorative profile-card presentation, prove responsive tables/cards, and
+  keep every security mutation fail-closed.
+- **Discounts:** complete the typed promotion replacement in
+  `../COMMERCE-SETTINGS-BENCHMARK.md`. The builder must explain automatic/code
+  method, conditions, effects, targets, allocation, combinations, budgets,
+  eligibility, schedule, and exact cart outcomes without exposing evaluator
+  behavior checkout cannot honor.
+- **Tax, checkout, and payments:** exercise every saved configuration against
+  the production calculation/readiness path. Payment setup, provider health,
+  test/live mode, buyer eligibility, authorization/capture/refund, and
+  deactivation are distinct facts. Tax UI must lead with readiness and exact
+  checkout examples while preserving the basis-point, destination, class,
+  compound-layer, revision, and historical snapshot authority.
+- **All remaining Settings:** compare list, view, edit, empty, loading, failure,
+  permission, dirty, conflict, and mobile states against the same dense,
+  outcome-led standard. A visually cleaner card is not completion when the
+  underlying lifecycle or buyer projection is unproven.
