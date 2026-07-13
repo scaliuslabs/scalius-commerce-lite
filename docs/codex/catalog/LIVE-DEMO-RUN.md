@@ -53,12 +53,13 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 ## Release proof
 
-- Current coordinated release: API `9f27a2f6-a2a3-4fe3-91c9-195a38f1d08d`, admin `474f2ca9-903a-457f-85be-168a5c1de6b6`, storefront `fa2799cf-29d9-4ba4-8793-ce2885cf356c`, ops monitor `a2aed446-5e1b-4588-a568-1c0f93da3cc3`.
+- Current coordinated release: API `54b33b46-c5ed-45ea-a528-df5aeccebb5d`, admin `cfd24714-499c-462c-a9ee-d0e3d95ed614`, storefront `0ffea68c-cf5c-4ac8-810c-e5c1bf7ceba2`, ops monitor `a2aed446-5e1b-4588-a568-1c0f93da3cc3`.
 - CMS page migration `0021_eminent_slayback.sql` applied successfully; the Pages admin loads without a route or API error.
 - Latest API after the live D1 and media-key fixes: `6c0c3abc-01a9-4b2c-91f9-c1eefe2121a2`.
 - Migrations `0022` (analytics lifecycle), `0023` (hero slider revisions), and `0024` (theme revisions) applied successfully before the current release.
 - Full local release gate before deployment: 540 test files and 3,779 tests passed; TypeScript/Astro diagnostics, lint, SDK generation, and Worker binding checks passed.
 - Production ops and release checks passed after all four current deployments. Discovery proof covered six sitemap checks, Google and Meta feeds with nine valid variant rows, UCP search/lookup, product JSON-LD, storefront cache headers, and auth gates. All eight queue bindings had only the intended API/ops-monitor producers and API consumers.
+- The final storefront pass opened the cart in a fresh Chrome tab and exposed its screen-reader description with no console warning. The deployed Taxes rate editor also showed the deterministic priority-layer explanation and loaded without an error.
 - The obsolete `storefront-test` -> `testdash` Worker chain was removed after dependency inspection. This also removed `testdash` from the payment-events, order-notifications, and auth-otp production producer lists; a subsequent queue topology check showed only the source-owned API and ops-monitor producers.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
