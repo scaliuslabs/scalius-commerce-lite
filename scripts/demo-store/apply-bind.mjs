@@ -38,7 +38,9 @@ function fieldValue(value, field) {
 
 export function createApplyBinder({ manifest, readiness, snapshot, outputs = new Map() }) {
   const context = productContext(manifest, snapshot);
-  const brand = (snapshot.attributes ?? []).find((attribute) => attribute.slug === "brand" && attribute.filterable === true);
+  const brands = (snapshot.attributes ?? []).filter((attribute) => attribute.slug === "brand");
+  if (brands.length > 1) throw new Error("Brand attribute identity is ambiguous.");
+  const brand = brands.find((attribute) => attribute.name === "Brand" && attribute.filterable === true);
 
   function resolveReference(reference) {
     const key = reference.$ref;
@@ -155,6 +157,13 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
   }
 
   function executionMetadata(command, body) {
+    if (command.logicalKey === "attribute:brand") {
+      const current = brands[0];
+      return {
+        identity: { slug: "brand", ...(current?.id ? { id: current.id } : {}) },
+        desired: { name: "Brand", slug: "brand", filterable: true },
+      };
+    }
     if (command.logicalKey.startsWith("category:")) {
       const slug = command.logicalKey.slice("category:".length).replace(/:publish$/u, "");
       const current = context.categoriesBySlug.get(slug);
@@ -173,13 +182,16 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
       };
     }
     if (command.logicalKey.startsWith("collection:")) {
-      const collection = manifest.collections.find((item) => item.logicalKey === command.logicalKey);
+      const logicalKey = command.logicalKey.replace(/:(?:quarantine|activate)$/u, "");
+      const collection = manifest.collections.find((item) => item.logicalKey === logicalKey);
       if (!collection) throw new Error(`Collection command identity is unresolved: ${command.logicalKey}.`);
       const current = context.collectionsByName.get(collection.name);
       return { identity: { name: collection.name, ...(current?.id ? { id: current.id } : {}) }, desired: { name: collection.name } };
     }
     if (command.logicalKey.startsWith("hero-slider:")) {
-      const type = command.logicalKey.slice("hero-slider:".length);
+      const type = command.logicalKey
+        .slice("hero-slider:".length)
+        .replace(/:(?:quarantine|activate)$/u, "");
       const current = (snapshot.presentation?.heroes ?? snapshot.heroes ?? []).find((hero) => hero.type === type);
       return { identity: { type, ...(current?.id ? { id: current.id } : {}) }, desired: { type } };
     }

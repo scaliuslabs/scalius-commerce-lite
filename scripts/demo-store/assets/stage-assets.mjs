@@ -84,6 +84,57 @@ async function writeAtomic(filePath, bytes) {
   await rename(temporary, filePath);
 }
 
+function ownerKind(owner) {
+  if (owner.startsWith("product:")) return "products";
+  if (owner.startsWith("category:")) return "categories";
+  if (owner.startsWith("hero:")) return "heroes";
+  return "other";
+}
+
+export function summarizeAssetProgress(expectedAssets, assessedAssets, readyStatus) {
+  const assessedByKey = new Map(assessedAssets.map((asset) => [asset.logicalKey, asset]));
+  const owners = new Map();
+  for (const expected of expectedAssets) {
+    const owner = owners.get(expected.owner) ?? {
+      owner: expected.owner,
+      kind: ownerKind(expected.owner),
+      ready: 0,
+      total: 0,
+      missing: [],
+    };
+    owner.total += 1;
+    if (assessedByKey.get(expected.logicalKey)?.status === readyStatus) owner.ready += 1;
+    else owner.missing.push(expected.logicalKey);
+    owners.set(expected.owner, owner);
+  }
+
+  const ownerRows = [...owners.values()].sort((left, right) => left.owner.localeCompare(right.owner));
+  const byKind = Object.fromEntries(["products", "categories", "heroes"].map((kind) => {
+    const rows = ownerRows.filter((owner) => owner.kind === kind);
+    const ready = rows.filter((owner) => owner.ready === owner.total).length;
+    return [kind, { ready, total: rows.length, remaining: rows.length - ready }];
+  }));
+  const readyAssets = assessedAssets.filter((asset) => asset.status === readyStatus).length;
+  return {
+    assets: {
+      ready: readyAssets,
+      total: expectedAssets.length,
+      remaining: expectedAssets.length - readyAssets,
+    },
+    ...byKind,
+    remainingByOwner: ownerRows
+      .filter((owner) => owner.ready !== owner.total)
+      .map((owner) => ({
+        owner: owner.owner,
+        kind: owner.kind,
+        ready: owner.ready,
+        total: owner.total,
+        remaining: owner.total - owner.ready,
+        missing: owner.missing,
+      })),
+  };
+}
+
 export async function assessAndStageAssets({
   sourceManifest,
   sourceDir,
@@ -184,6 +235,11 @@ export async function assessAndStageAssets({
     { total: 0 },
   );
   report.summary.manifestErrors = report.manifestErrors.length;
+  report.progress = summarizeAssetProgress(
+    expectedAssets,
+    report.assets,
+    stage ? "staged" : "ready-to-stage",
+  );
   report.ready = report.manifestErrors.length === 0 && report.assets.every((asset) =>
     stage ? asset.status === "staged" : asset.status === "ready-to-stage",
   );

@@ -1,8 +1,9 @@
 import { createApplyBinder } from "./apply-bind.mjs";
-import { assertStagedAssetReadiness, manifestReadinessFingerprint } from "./apply-readiness.mjs";
+import { assertStagedAssetReadiness } from "./apply-readiness.mjs";
+import { demoApplyIntentFingerprint } from "./apply/authorization.mjs";
 import { compileDemoStoreAdminCommands } from "./compile.mjs";
 
-const STAGED_PHASES = ["categories", "products", "collections", "presentation"];
+const STAGED_PHASES = ["vocabulary", "categories", "products", "collections", "presentation"];
 
 function exactMap(rows, field, label) {
   const result = new Map();
@@ -77,8 +78,9 @@ export async function runRevisionSafeApply({
   now = () => new Date(),
 }) {
   const readiness = assertStagedAssetReadiness(manifest, readinessReport);
-  if (authorization?.confirmed !== true || authorization.manifestFingerprint !== manifestReadinessFingerprint(manifest)) {
-    throw new Error("Apply authorization does not match the validated manifest.");
+  if (authorization?.confirmed !== true
+    || authorization.intentFingerprint !== demoApplyIntentFingerprint(manifest)) {
+    throw new Error("Apply authorization does not match the complete validated demo-store intent.");
   }
   if (typeof executeCommand !== "function") throw new Error("Apply requires an authenticated command executor.");
   assertUnversionedSettingsExcluded(readinessReport.presentation);

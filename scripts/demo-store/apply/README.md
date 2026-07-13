@@ -6,7 +6,8 @@ public `pnpm demo:store` command remains plan/diff-only.
 
 ## Phase contract
 
-The fixed order is quarantine, category/product/collection/hero staging,
+The fixed order is quarantine, create-only vocabulary reconciliation,
+category/product/collection/hero staging,
 product activation, category publication, collection activation, promotion
 activation, Theme publication, Header/Footer navigation publication, and hero
 activation. A phase may be `ready`, `skipped`, or `blocked`; a blocked phase is
@@ -25,6 +26,9 @@ never bypassed by the orchestrator.
 - Theme may publish only with its saved revision. Header/Footer navigation is
   an explicit blocked phase until each document has a monotonic revision and
   every write requires `expectedRevision`.
+- Brand vocabulary is created only when the exact slug is absent. An existing
+  non-filterable or renamed Brand is a blocked unversioned conflict, never an
+  automatic overwrite.
 - Heroes activate last because every category/collection destination must
   already resolve publicly.
 

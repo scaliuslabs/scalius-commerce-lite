@@ -5,6 +5,9 @@ the later authenticated apply phase. It performs no reads, writes, asset work,
 or network calls. Its output is a serializable ordered list of admin API
 command intents.
 
+`pnpm demo:store --compile` exposes that deterministic intent as a network-free,
+write-disabled inspection gate. It never enables execution.
+
 ## References and identities
 
 - `{ "$ref": "logical-key", "field": "id" }` is an unresolved authority
@@ -46,12 +49,18 @@ blind-retry.
 
 ## Command order
 
-Commands are grouped into category reconciliation, product base/matrix/simple
+Commands are grouped into create-only vocabulary reconciliation, category
+reconciliation, product base/matrix/simple
 SKU work, activation, category publication, collections, and desktop/mobile
 hero documents. Manual collection membership is explicit and ordered. Dynamic
 collections contain explicit category references. New categories publish only
 after a first product dependency; new products start inactive and activate only
 after their SKU/media/content payload is complete.
+
+The reusable filterable `Brand` attribute is a create-only automated vocabulary
+command. An exact existing definition is adopted. Because the Attribute update
+API has no monotonic revision claim, a drifting name/filterable definition is a
+pre-write conflict rather than an unsafe update.
 
 `apply-bind.mjs` is resolution-only: it binds compiler references from a fresh
 authenticated snapshot, verified staged assets, or safe prerequisite command

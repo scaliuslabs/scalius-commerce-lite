@@ -2,6 +2,7 @@ const API = "/api/v1/admin";
 
 export const DEMO_APPLY_PHASE_ORDER = Object.freeze([
   "quarantine",
+  "stage_vocabulary",
   "stage_categories",
   "stage_products",
   "stage_collections",
@@ -127,6 +128,10 @@ export function buildDemoApplyLifecycle({
   const currentProducts = exactBy(snapshot.productDetails, "slug", "Product");
   const currentCollections = exactBy(snapshot.collections, "name", "Collection");
   const currentHeroes = exactBy(snapshot.presentation?.heroes ?? snapshot.heroes, "type", "Hero slider");
+
+  for (const command of compiled.commands.filter((item) => item.phase === "vocabulary")) {
+    phases.get("stage_vocabulary").commands.push(cloneCommand(command, { phase: "stage_vocabulary" }));
+  }
 
   for (const command of compiled.commands.filter((item) => item.phase === "categories")) {
     phases.get("stage_categories").commands.push(cloneCommand(command, { phase: "stage_categories" }));

@@ -124,7 +124,7 @@ export function buildDemoStoreDiff(manifest, snapshot) {
     logicalKey: "attribute:brand",
     slug: "brand",
     resourceId: brand?.id ?? null,
-    action: !brand ? "create" : brand.name === "Brand" && brand.filterable === true ? "match" : "update",
+    action: !brand ? "create" : brand.name === "Brand" && brand.filterable === true ? "match" : "conflict",
     fields: !brand ? [] : [brand.name !== "Brand" ? "name" : null, brand.filterable !== true ? "filterable" : null].filter(Boolean),
   }];
 
@@ -156,7 +156,12 @@ export function buildDemoStoreDiff(manifest, snapshot) {
       unexpectedCategories: unexpected.categorySlugs.length,
       unexpectedProducts: unexpected.productSlugs.length,
       unexpectedCollections: unexpected.collectionNames.length,
-      conflicts: conflicts.length + productResources.filter((resource) => resource.action === "conflict").length,
+      conflicts: conflicts.length + [
+        ...categoryResources,
+        ...productResources,
+        ...attributeResources,
+        ...collectionResources,
+      ].filter((resource) => resource.action === "conflict").length,
     },
     unexpected,
     conflicts,
@@ -178,4 +183,3 @@ export function formatDemoStoreDiff(result) {
     `Conflicts: ${s.conflicts}`,
   ].join("\n");
 }
-

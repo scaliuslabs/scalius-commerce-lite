@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildExpectedAssets } from "./expected-assets.mjs";
 import { ASSET_PROFILES, deterministicAssetFilename } from "./profiles.mjs";
 import { validateSourceManifest } from "./provenance.mjs";
-import { assessAndStageAssets, normalizeImage } from "./stage-assets.mjs";
+import { assessAndStageAssets, normalizeImage, summarizeAssetProgress } from "./stage-assets.mjs";
 
 const requireFromStorefront = createRequire(
   new URL("../../../apps/storefront/package.json", import.meta.url),
@@ -133,6 +133,56 @@ describe("demo asset staging", () => {
     expect(ASSET_PROFILES.category).toMatchObject({ width: 1600, height: 1000 });
     expect(ASSET_PROFILES["hero-desktop"]).toMatchObject({ width: 2400, height: 900 });
     expect(ASSET_PROFILES["hero-mobile"]).toMatchObject({ width: 1080, height: 1350 });
+  });
+
+  it("reports exact asset and complete-owner readiness without treating partial products as ready", () => {
+    const expected = [
+      expectedProduct(),
+      { ...expectedProduct(), logicalKey: "product:test:detail", role: "detail", profile: "product-cover" },
+      { ...expectedProduct(), logicalKey: "product:other:primary", owner: "product:other" },
+      { ...expectedProduct(), logicalKey: "category:test:image", owner: "category:test", role: "category", profile: "category" },
+      { ...expectedProduct(), logicalKey: "hero:test:desktop", owner: "hero:test", role: "hero-desktop", profile: "hero-desktop" },
+      { ...expectedProduct(), logicalKey: "hero:test:mobile", owner: "hero:test", role: "hero-mobile", profile: "hero-mobile" },
+    ];
+    const assessed = expected.map((asset) => ({
+      logicalKey: asset.logicalKey,
+      status: ["product:test:primary", "product:other:primary", "hero:test:desktop"].includes(asset.logicalKey)
+        ? "ready-to-stage"
+        : "missing-source-record",
+    }));
+
+    expect(summarizeAssetProgress(expected, assessed, "ready-to-stage")).toEqual({
+      assets: { ready: 3, total: 6, remaining: 3 },
+      products: { ready: 1, total: 2, remaining: 1 },
+      categories: { ready: 0, total: 1, remaining: 1 },
+      heroes: { ready: 0, total: 1, remaining: 1 },
+      remainingByOwner: [
+        {
+          owner: "category:test",
+          kind: "categories",
+          ready: 0,
+          total: 1,
+          remaining: 1,
+          missing: ["category:test:image"],
+        },
+        {
+          owner: "hero:test",
+          kind: "heroes",
+          ready: 1,
+          total: 2,
+          remaining: 1,
+          missing: ["hero:test:mobile"],
+        },
+        {
+          owner: "product:test",
+          kind: "products",
+          ready: 1,
+          total: 2,
+          remaining: 1,
+          missing: ["product:test:detail"],
+        },
+      ],
+    });
   });
 
   it("fails closed on incomplete rights and share-alike provenance", () => {

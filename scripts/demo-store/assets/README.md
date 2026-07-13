@@ -30,6 +30,12 @@ The default output and report are private local artifacts under
 filenames are deterministic from logical key, target profile, and source
 SHA-256. Replacing source bytes cannot silently reuse a filename.
 
+Every readiness report includes exact asset progress plus complete-owner
+progress for all 50 products, five category images, and three two-source hero
+stories. A product or hero counts as ready only when every one of its logical
+slots is ready; `remainingByOwner` retains the exact missing logical keys so a
+partial product cannot be mistaken for an uploadable one.
+
 ## Rights policy
 
 - Accepted public-source policies are CC0 1.0, Public Domain Mark 1.0, CC BY

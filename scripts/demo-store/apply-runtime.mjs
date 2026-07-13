@@ -18,7 +18,10 @@ export function createApplyRuntime(readClient) {
   }
   return {
     async resolveCurrent(command) {
-      if (command.phase === "categories") {
+      if (command.logicalKey === "attribute:brand") {
+        return exactFromList(command, "/api/v1/admin/attributes", "slug", "attributes");
+      }
+      if (command.logicalKey.startsWith("category:")) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/categories/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         return exactFromList(command, "/api/v1/admin/categories", "slug", "categories");
       }
@@ -27,7 +30,7 @@ export function createApplyRuntime(readClient) {
         const row = await exactFromList(command, "/api/v1/admin/products", "slug", "products");
         return row ? readClient.get(`/api/v1/admin/products/${encodeURIComponent(row.id)}`, command.logicalKey) : null;
       }
-      if (command.phase === "collections") {
+      if (command.logicalKey.startsWith("collection:")) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/collections/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         return exactFromList(command, "/api/v1/admin/collections", "name", "collections");
       }
@@ -38,7 +41,16 @@ export function createApplyRuntime(readClient) {
       throw new Error(`No resolver for ${command.logicalKey}.`);
     },
     async matchesDesired(command, current) {
-      if (command.phase === "categories") return current.slug === command.body.slug && current.name === command.body.name && current.description === command.body.description;
+      if (command.logicalKey === "attribute:brand") {
+        return current.slug === "brand" && current.name === "Brand" && current.filterable === true;
+      }
+      if (command.logicalKey.startsWith("category:")) {
+        if (command.logicalKey.endsWith(":publish")) return current.status === command.body.status;
+        return current.slug === command.body.slug
+          && current.name === command.body.name
+          && current.description === command.body.description
+          && (command.body.status === undefined || current.status === command.body.status);
+      }
       if (command.logicalKey.endsWith(":matrix")) {
         const desired = command.body.variants.map((variant) => variant.selectedOptionValueIds.join("|")).sort();
         const actual = (current.variants ?? []).map((variant) => variant.optionCombinationKey).filter(Boolean).sort();
@@ -50,8 +62,19 @@ export function createApplyRuntime(readClient) {
         return variant?.stock === command.desired.stock && variant.trackInventory === true;
       }
       if (command.logicalKey.startsWith("product:")) return current.slug === command.body.slug && current.name === command.body.name && current.price === command.body.price && current.description === command.body.description && current.categoryId === command.body.categoryId && current.isActive === command.body.isActive;
-      if (command.phase === "collections") return current.name === command.body.name && current.presentation === command.body.presentation && equal(unwrapConfig(current.config), command.body.config);
-      if (command.logicalKey.startsWith("hero-slider:")) return current.type === (command.body.type ?? command.desired.type) && equal(current.images, command.body.images) && current.isActive === command.body.isActive;
+      if (command.logicalKey.startsWith("collection:")) {
+        if (command.body.name === undefined) return current.isActive === command.body.isActive;
+        return current.name === command.body.name
+          && current.presentation === command.body.presentation
+          && equal(unwrapConfig(current.config), command.body.config)
+          && current.isActive === command.body.isActive;
+      }
+      if (command.logicalKey.startsWith("hero-slider:")) {
+        if (command.body.images === undefined) return current.isActive === command.body.isActive;
+        return current.type === (command.body.type ?? command.desired.type)
+          && equal(current.images, command.body.images)
+          && current.isActive === command.body.isActive;
+      }
       return false;
     },
   };

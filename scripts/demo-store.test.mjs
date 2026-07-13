@@ -117,8 +117,24 @@ describe("demo store plan command", () => {
     expect(new Set(first.phases.map((phase) => phase.resumeKey)).size).toBe(first.phases.length);
   });
 
+  it("compiles the complete deterministic API intent without network access or writes", async () => {
+    const fetchMock = vi.fn(() => {
+      throw new Error("Compile mode attempted network access");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const lines = [];
+
+    await expect(main(["--compile"], { log: (line) => lines.push(line) })).resolves.toBe(0);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(lines.join("\n")).toContain("compiled admin intent");
+    expect(lines.join("\n")).toContain("vocabulary 1");
+    expect(lines.join("\n")).toContain("Writes: disabled");
+    expect(lines.join("\n")).toContain("Execution: unavailable");
+  });
+
   it("rejects implicit write mode and unknown flags", async () => {
-    expect(parseDemoStoreArgs(["--plan", "--json"])).toEqual({ help: false, plan: true, diff: false, json: true });
+    expect(parseDemoStoreArgs(["--plan", "--json"])).toEqual({ help: false, plan: true, compile: false, diff: false, json: true });
     expect(() => parseDemoStoreArgs(["--apply"])).toThrow("Unknown option");
     await expect(main([], { log: vi.fn() })).rejects.toThrow("Write mode is not implemented");
   });
