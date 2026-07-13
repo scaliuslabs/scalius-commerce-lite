@@ -18,6 +18,7 @@ export interface DiscountRelationIds {
 
 export interface DiscountDto {
   id: string;
+  revision: number;
   code: string;
   type: DiscountType | string;
   valueType: DiscountValueType | string;
@@ -89,20 +90,26 @@ export interface DiscountWriteInput {
 }
 
 export type CreateDiscountInput = DiscountWriteInput;
-export type UpdateDiscountInput = { id: string } & DiscountWriteInput;
+export type UpdateDiscountInput = {
+  id: string;
+  expectedRevision: number;
+} & DiscountWriteInput;
 
 export interface DiscountIdPayload {
   id: string;
+  revision: number;
 }
 
 export interface ToggleDiscountStatusInput {
   id: string;
   isActive: boolean;
+  expectedRevision: number;
 }
 
 export interface ToggleDiscountStatusPayload {
   id: string;
   isActive: boolean;
+  revision: number;
 }
 
 function toDiscountsParams(input: DiscountsQueryInput): Record<string, string> {
@@ -164,7 +171,7 @@ export const toggleDiscountStatus = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ToggleDiscountStatusPayload> => {
     return apiPost<ToggleDiscountStatusPayload>(
       `/discounts/${data.id}/toggle-status`,
-      { isActive: data.isActive },
+      { isActive: data.isActive, expectedRevision: data.expectedRevision },
     );
   });
 

@@ -147,6 +147,7 @@ function EditDiscountPage() {
           key={`${discount.id}:${duplicate ? "copy" : "edit"}`}
           type={discount.type}
           discountId={duplicate ? undefined : discount.id}
+          discountRevision={duplicate ? undefined : discount.revision}
           defaultValues={{
             code: duplicate ? "" : discount.code,
             valueType: discount.valueType,

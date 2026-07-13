@@ -145,8 +145,8 @@ function DiscountsPage() {
   );
 
   const handleToggleStatus = useCallback(
-    (id: string, currentStatus: boolean) => {
-      toggleStatusMutation.mutate({ id, isActive: !currentStatus });
+    (id: string, currentStatus: boolean, expectedRevision: number) => {
+      toggleStatusMutation.mutate({ id, isActive: !currentStatus, expectedRevision });
     },
     [toggleStatusMutation],
   );
@@ -269,7 +269,11 @@ function DiscountsPage() {
           onDelete={() => handleDelete(discount.id)}
           onRestore={() => handleRestore(discount.id)}
           onPermanentDelete={() => handlePermanentDelete(discount.id)}
-          onToggleStatus={() => handleToggleStatus(discount.id, discount.isActive)}
+          onToggleStatus={() => handleToggleStatus(
+            discount.id,
+            discount.isActive,
+            discount.revision,
+          )}
         />
       );
     }, [

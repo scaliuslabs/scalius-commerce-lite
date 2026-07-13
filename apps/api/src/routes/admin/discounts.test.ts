@@ -80,7 +80,7 @@ describe("admin discount routes", () => {
     });
 
     it("passes lifecycle authority separately from ordinary create permission", async () => {
-        mocks.createDiscount.mockResolvedValue({ id: "disc_1" });
+        mocks.createDiscount.mockResolvedValue({ id: "disc_1", revision: 1 });
         const { app, db } = createTestApp(new Set());
 
         const response = await app.request("/api/v1/admin/discounts", {
@@ -101,6 +101,7 @@ describe("admin discount routes", () => {
         mocks.setDiscountActiveStatus.mockResolvedValue({
             id: "disc_1",
             isActive: true,
+            revision: 4,
         });
         const { app, db } = createTestApp();
 
@@ -109,7 +110,7 @@ describe("admin discount routes", () => {
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ isActive: true }),
+                body: JSON.stringify({ isActive: true, expectedRevision: 3 }),
             },
         );
 
@@ -118,6 +119,26 @@ describe("admin discount routes", () => {
             db,
             "disc_1",
             true,
+            3,
+        );
+    });
+
+    it("forwards the editor revision claim on full rule updates", async () => {
+        mocks.updateDiscount.mockResolvedValue({ id: "disc_1", revision: 6 });
+        const { app, db } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/discounts/disc_1", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ expectedRevision: 5, isActive: false }),
+        });
+
+        expect(response.status).toBe(200);
+        expect(mocks.updateDiscount).toHaveBeenCalledWith(
+            db,
+            "disc_1",
+            expect.objectContaining({ expectedRevision: 5 }),
+            { canToggleStatus: true },
         );
     });
 });

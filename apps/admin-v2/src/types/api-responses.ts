@@ -575,6 +575,7 @@ export interface CustomerHistoryData {
 
 export interface Discount {
   id: string;
+  revision: number;
   code: string;
   type: string;
   valueType: string;

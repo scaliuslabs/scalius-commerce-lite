@@ -14,6 +14,7 @@ import {
   type UpdateDiscountInput,
 } from "../api-functions/discounts";
 import { getServerFnError, queryKeys } from "./shared";
+import { readDiscountRevisionConflict } from "../admin-api-error";
 
 type DateTransportValue = string | number | Date;
 
@@ -25,7 +26,10 @@ type DiscountMutationInput = Omit<
   endDate?: DateTransportValue | null;
 };
 
-type UpdateDiscountMutationInput = { id: string } & DiscountMutationInput;
+type UpdateDiscountMutationInput = {
+  id: string;
+  expectedRevision: number;
+} & DiscountMutationInput;
 
 function serializeDateTransport(value: DateTransportValue): string | number {
   return value instanceof Date ? value.toISOString() : value;
@@ -83,8 +87,10 @@ export function useUpdateDiscount() {
       });
       toast.success("Discount updated");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update discount")),
+    onError: (err) => {
+      if (readDiscountRevisionConflict(err)) return;
+      toast.error(getServerFnError(err, "Failed to update discount"));
+    },
   });
 }
 
@@ -137,7 +143,11 @@ export function useRestoreDiscount() {
 export function useToggleDiscountStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { id: string; isActive: boolean }) =>
+    mutationFn: (data: {
+      id: string;
+      isActive: boolean;
+      expectedRevision: number;
+    }) =>
       toggleDiscountStatus({ data }),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({
@@ -152,8 +162,12 @@ export function useToggleDiscountStatus() {
       );
       return { previous };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
+      queryClient.setQueryData<DiscountDto | undefined>(
+        queryKeys.discounts.detail(result.id),
+        (old) => old ? { ...old, isActive: result.isActive, revision: result.revision } : old,
+      );
       toast.success("Discount status updated");
     },
     onError: (err, variables, context) => {
@@ -163,7 +177,11 @@ export function useToggleDiscountStatus() {
           context.previous,
         );
       }
-      toast.error(getServerFnError(err, "Failed to toggle discount status"));
+      if (readDiscountRevisionConflict(err)) {
+        toast.warning("Discount changed elsewhere. Loading the latest status.");
+      } else {
+        toast.error(getServerFnError(err, "Failed to toggle discount status"));
+      }
     },
     onSettled: (_data, _err, variables) => {
       queryClient.invalidateQueries({

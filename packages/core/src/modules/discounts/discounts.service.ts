@@ -12,6 +12,11 @@ import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from "@scalius/core/errors";
 import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
+import type { BatchItem } from "drizzle-orm/batch";
+import {
+    DiscountRevisionConflictError,
+    executeDiscountRuleMutationBatch,
+} from "./discounts.revision";
 
 export interface DiscountLifecycleAuthority {
     canToggleStatus?: boolean;
@@ -273,7 +278,7 @@ export async function createDiscount(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(batchOps as any);
-    return { id: discountId };
+    return { id: discountId, revision: 1 };
 }
 
 export async function updateDiscount(
@@ -283,12 +288,23 @@ export async function updateDiscount(
     authority: DiscountLifecycleAuthority = {},
 ) {
     const existingDiscount = await db
-        .select({ id: discounts.id, isActive: discounts.isActive })
+        .select({
+            id: discounts.id,
+            isActive: discounts.isActive,
+            revision: discounts.revision,
+        })
         .from(discounts)
         .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)))
         .get();
     if (!existingDiscount) {
         throw new NotFoundError("Discount not found");
+    }
+    if (existingDiscount.revision !== data.expectedRevision) {
+        throw new DiscountRevisionConflictError(
+            id,
+            data.expectedRevision,
+            existingDiscount.revision,
+        );
     }
 
     assertDiscountLifecycleAuthority(
@@ -356,7 +372,6 @@ export async function updateDiscount(
             startDate: sql`${startDateTimestamp}`,
             endDate: endDateTimestamp !== null ? sql`${endDateTimestamp}` : null,
             isActive: data.isActive as boolean,
-            updatedAt: sql`${currentTimestamp}`,
         }).where(and(eq(discounts.id, id), isNull(discounts.deletedAt))),
         db.delete(discountProducts).where(eq(discountProducts.discountId, id)),
         db.delete(discountCollections).where(eq(discountCollections.discountId, id)),
@@ -369,9 +384,13 @@ export async function updateDiscount(
         batchOps.push(db.insert(discountCollections).values(collectionChunk));
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(batchOps as any);
-    return { id };
+    const result = await executeDiscountRuleMutationBatch(
+        db,
+        id,
+        data.expectedRevision,
+        batchOps as BatchItem<"sqlite">[],
+    );
+    return { id, revision: result.revision };
 }
 
 export async function deleteDiscount(db: Database, id: string) {
@@ -381,6 +400,7 @@ export async function deleteDiscount(db: Database, id: string) {
             isActive: false,
             deletedAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
+            revision: sql`${discounts.revision} + 1`,
         })
         .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)));
 }
@@ -418,6 +438,7 @@ export async function bulkDeleteDiscounts(db: Database, discountIds: string[], p
                 isActive: false,
                 deletedAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
+                revision: sql`${discounts.revision} + 1`,
             })
             .where(and(inArray(discounts.id, normalizedIds), isNull(discounts.deletedAt)));
     }
@@ -431,6 +452,7 @@ export async function restoreDiscounts(db: Database, discountIds: string[]) {
             isActive: false,
             deletedAt: null,
             updatedAt: sql`unixepoch()`,
+            revision: sql`${discounts.revision} + 1`,
         })
         .where(and(inArray(discounts.id, normalizedIds), isNotNull(discounts.deletedAt)));
 }
@@ -465,14 +487,26 @@ export async function setDiscountActiveStatus(
     db: Database,
     id: string,
     isActive: boolean,
+    expectedRevision: number,
 ) {
     const discount = await db
-        .select({ id: discounts.id, endDate: discounts.endDate })
+        .select({
+            id: discounts.id,
+            endDate: discounts.endDate,
+            revision: discounts.revision,
+        })
         .from(discounts)
         .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)))
         .get();
     if (!discount) {
         throw new NotFoundError("Discount not found");
+    }
+    if (discount.revision !== expectedRevision) {
+        throw new DiscountRevisionConflictError(
+            id,
+            expectedRevision,
+            discount.revision,
+        );
     }
     if (
         isActive &&
@@ -482,10 +516,17 @@ export async function setDiscountActiveStatus(
         throw new ValidationError("Expired discounts cannot be activated; extend the end date first");
     }
 
-    await db
-        .update(discounts)
-        .set({ isActive, updatedAt: sql`unixepoch()` })
-        .where(and(eq(discounts.id, id), isNull(discounts.deletedAt)));
+    const result = await executeDiscountRuleMutationBatch(
+        db,
+        id,
+        expectedRevision,
+        [
+            db
+                .update(discounts)
+                .set({ isActive })
+                .where(and(eq(discounts.id, id), isNull(discounts.deletedAt))) as BatchItem<"sqlite">,
+        ],
+    );
 
-    return { id, isActive };
+    return { id, isActive, revision: result.revision };
 }

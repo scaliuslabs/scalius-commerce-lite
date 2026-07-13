@@ -2,8 +2,9 @@
 // Marketing domain tables: discounts, discountProducts, discountCollections,
 // discountUsage, metaConversionsSettings, metaConversionsLogs.
 
-import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { products } from "./products";
 import { collections } from "./products";
@@ -41,6 +42,7 @@ export const discounts = sqliteTable("discounts", {
     combineWithOrderDiscounts: integer("combine_with_order_discounts", { mode: "boolean" }).notNull().default(false),
     combineWithShippingDiscounts: integer("combine_with_shipping_discounts", { mode: "boolean" }).notNull().default(false),
     customerSegment: text("customer_segment"),
+    revision: integer("revision").notNull().default(1),
     startDate: integer("start_date", { mode: "timestamp" }).notNull(),
     endDate: integer("end_date", { mode: "timestamp" }),
     isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -54,6 +56,7 @@ export const discounts = sqliteTable("discounts", {
 }, (table) => [
     uniqueIndex("discounts_code_unique_idx").on(table.code),
     index("discounts_deleted_at_idx").on(table.deletedAt),
+    check("discounts_revision_positive", sql.raw(`"revision" >= 1`)),
 ]);
 
 export const discountProducts = sqliteTable("discount_products", {

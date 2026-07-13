@@ -553,6 +553,7 @@ export const discountSchema = z
   .object({
     id: z.string(),
     code: z.string(),
+    revision: z.number().int().min(1),
     type: z.string(),
     valueType: z.string(),
     discountValue: z.number(),

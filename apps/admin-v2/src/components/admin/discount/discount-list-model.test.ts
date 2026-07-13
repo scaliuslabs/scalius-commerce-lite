@@ -13,6 +13,7 @@ import {
 function discount(overrides: Partial<DiscountItem> = {}): DiscountItem {
   return {
     id: "disc_1",
+    revision: 1,
     code: "WELCOME10",
     type: "amount_off_products",
     valueType: "percentage",

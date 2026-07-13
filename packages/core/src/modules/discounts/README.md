@@ -28,6 +28,12 @@ Discount code CRUD, eligibility validation, and discount amount calculation. Sup
 - Native local-date inputs preserve the authored calendar day. Duplicates are
   always drafts, read failures remain retryable on the edit route, save errors
   preserve input, and dirty navigation uses the shared guard.
+- Edit and activation commands claim the loaded positive `revision`. D1 checks
+  that revision before any parent or scope statement, applies the complete
+  rule mutation, and advances the revision once in the same batch. A stale tab
+  receives `DISCOUNT_REVISION_CONFLICT` with the expected/current revisions;
+  the builder preserves its input and requires an explicit reload instead of
+  silently overwriting the newer rule.
 - Mobile uses purpose-built cards with the same selection, edit, duplicate,
   activation, trash, restore, and permanent-delete actions as desktop.
 - List failures remain visible and retryable; they must not be rendered as an
@@ -42,7 +48,8 @@ Discount code CRUD, eligibility validation, and discount amount calculation. Sup
 | File | Purpose |
 |------|---------|
 | `index.ts` | Barrel exports (re-exports service, validation, eligibility) |
-| `discounts.service.ts` | Standalone functions for admin CRUD: list, get, create, update, delete, bulk operations, restore |
+| `discounts.service.ts` | Standalone functions for admin CRUD: list, get, create, revision-guarded update/status, delete, bulk operations, restore |
+| `discounts.revision.ts` | Atomic D1 revision guard/bump and typed stale/state conflicts for rule mutations |
 | `discounts.eligibility.ts` | Standalone functions for discount validation (`isDiscountValid`) and amount calculation (`calculateDiscountAmount`) |
 | `discounts.validation.ts` | Zod schemas: `createDiscountSchema`, `updateDiscountSchema` with percentage cap refine |
 
@@ -71,8 +78,8 @@ Three types defined in `@scalius/database/schema`:
 | `listDiscounts` | `(db, { page, limit, search, showTrashed, sort, order, type? })` | Paginated with FTS5 search and optional discount-type filtering. Joins `discountProducts`, `discountCollections`, `discountUsage` to return `relatedProducts`, `relatedCollections`, `usageCount`, `totalDiscountAmount` per discount. Sortable by code/type/value/startDate/endDate/createdAt/updatedAt. |
 | `getDiscountById` | `(db, id)` | Single discount with `relatedProducts` and `relatedCollections` (each `{ buy: string[], get: string[] }`). Returns null if not found. |
 | `createDiscount` | `(db, data, authority?)` | Defaults inactive. Active create requires verified `discounts.toggle_status` authority. Validates unique code and atomically inserts discount + associations. |
-| `updateDiscount` | `(db, id, data, authority?)` | Ordinary edit may preserve status but changing it requires verified `discounts.toggle_status` authority. Atomically updates the discount and associations. |
-| `setDiscountActiveStatus` | `(db, id, isActive)` | Dedicated active/inactive command used only by the toggle-permission route. |
+| `updateDiscount` | `(db, id, data, authority?)` | Requires `data.expectedRevision`. Ordinary edit may preserve status but changing it requires verified `discounts.toggle_status` authority. Atomically guards, updates the discount and associations, and advances the revision once. |
+| `setDiscountActiveStatus` | `(db, id, isActive, expectedRevision)` | Dedicated revision-guarded active/inactive command used only by the toggle-permission route. |
 | `deleteDiscount` | `(db, id)` | Soft-delete: sets `deletedAt = unixepoch()`. |
 | `bulkDeleteDiscounts` | `(db, discountIds, permanent?)` | Soft-delete deactivates; hard-delete is trash-only and blocks any usage history. |
 | `restoreDiscounts` | `(db, discountIds)` | Restores trashed discounts as inactive drafts. Codes stay reserved in trash. |
@@ -133,7 +140,8 @@ Uses `roundPrice()` from `@scalius/shared/price-utils` for currency precision.
 
 **`createDiscountSchema`**: Validates all discount fields and defaults `isActive` to false. Date handling accepts valid `Date`, string, or numeric seconds/milliseconds, requires end after start, and rejects invalid dates. Product/collection targets are deduplicated and bounded to 90 total. Type/value semantics must agree, percentage discounts cannot exceed 100%, and unsupported segments/combination behavior is rejected.
 
-**`updateDiscountSchema`**: Same as create with required `id` field. Same percentage cap.
+**`updateDiscountSchema`**: Same as create with required `id` and positive
+`expectedRevision` fields. Same percentage cap.
 
 **Exported types:** `CreateDiscountInput`, `UpdateDiscountInput`
 
