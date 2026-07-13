@@ -76,3 +76,17 @@ already complete.
   permission, dirty, conflict, and mobile states against the same dense,
   outcome-led standard. A visually cleaner card is not completion when the
   underlying lifecycle or buyer projection is unproven.
+
+### Settings navigation checkpoint (2026-07-13)
+
+- General and Checkout sections now use validated `section` search state, so
+  refresh, browser history, and copied admin links restore the merchant's
+  current workspace instead of returning to the first local-only tab.
+- General uses one non-wrapping mobile rail and a compact sticky desktop rail;
+  the thirteen authorities no longer wrap into an unstable multi-line tab
+  cloud. Checkout retains its compact mobile strip while making the same URL
+  state authoritative.
+- Previously visited child workspaces remain mounted during in-app section
+  changes, preserving local input until the owning form's dirty/conflict
+  contract handles navigation. This checkpoint does not pretend the eventual
+  route split or every individual settings lifecycle is complete.

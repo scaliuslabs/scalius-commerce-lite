@@ -1,6 +1,7 @@
-import { useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
+import type { CheckoutSettingsSection } from "./checkout-settings-sections";
 
 const CheckoutFlowSettings = lazy(() =>
     import("./CheckoutFlowSettings")
@@ -44,36 +45,45 @@ const tabs = [
     { value: "customer-requests", label: "Customer Requests" },
 ] as const;
 
-export default function CheckoutSettingsPage() {
-    const [activeTab, setActiveTab] = useState("checkout-flow");
+interface CheckoutSettingsPageProps {
+    section: CheckoutSettingsSection;
+    onSectionChange: (section: CheckoutSettingsSection) => void;
+}
+
+export default function CheckoutSettingsPage({
+    section,
+    onSectionChange,
+}: CheckoutSettingsPageProps) {
     const [mountedTabs, setMountedTabs] = useState<Set<string>>(
-        () => new Set(["checkout-flow"])
+        () => new Set([section])
     );
 
-    const handleTabChange = (value: string) => {
-        setActiveTab(value);
+    useEffect(() => {
         setMountedTabs((prev) => {
-            if (prev.has(value)) return prev;
+            if (prev.has(section)) return prev;
             const next = new Set(prev);
-            next.add(value);
+            next.add(section);
             return next;
         });
+    }, [section]);
+
+    const handleTabChange = (value: string) => {
+        onSectionChange(value as CheckoutSettingsSection);
     };
 
     return (
-        <div className="max-w-5xl mx-auto">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">
+        <div className="mx-auto max-w-6xl">
+            <div className="mb-4">
+                <h1 className="text-xl font-semibold tracking-tight">
                     Checkout Settings
                 </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Checkout flow, payment gateways, languages, shipping methods, and delivery
-                    locations.
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                    Buyer access, payment, localization, shipping, delivery, and post-purchase requests.
                 </p>
             </div>
 
             <Tabs
-                value={activeTab}
+                value={section}
                 onValueChange={handleTabChange}
                 className="w-full"
             >

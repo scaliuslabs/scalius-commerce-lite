@@ -1,9 +1,10 @@
-import { useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
 import type { HeaderConfig } from "../header-builder/types";
 import type { FooterConfig } from "../footer-builder/types";
+import type { GeneralSettingsSection } from "./general-settings-sections";
 
 const HeaderBuilder = lazy(() =>
   import("../header-builder").then((m) => ({
@@ -56,6 +57,8 @@ function TabSpinner() {
 interface GeneralSettingsPageProps {
   headerConfig?: HeaderConfig | null;
   footerConfig?: FooterConfig | null;
+  section: GeneralSettingsSection;
+  onSectionChange: (section: GeneralSettingsSection) => void;
 }
 
 const tabs = [
@@ -77,20 +80,24 @@ const tabs = [
 export default function GeneralSettingsPage({
   headerConfig,
   footerConfig,
+  section,
+  onSectionChange,
 }: GeneralSettingsPageProps) {
-  const [activeTab, setActiveTab] = useState("header");
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(
-    () => new Set(["header"]),
+    () => new Set([section]),
   );
 
-  const handleTabChange = (value: string) => {
-    setActiveTab(value);
+  useEffect(() => {
     setMountedTabs((prev) => {
-      if (prev.has(value)) return prev;
+      if (prev.has(section)) return prev;
       const next = new Set(prev);
-      next.add(value);
+      next.add(section);
       return next;
     });
+  }, [section]);
+
+  const handleTabChange = (value: string) => {
+    onSectionChange(value as GeneralSettingsSection);
   };
 
   return (
@@ -107,35 +114,34 @@ export default function GeneralSettingsPage({
         </div>
       }
     >
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-4">
+          <h1 className="text-xl font-semibold tracking-tight">
             General Settings
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Appearance, SEO, storefront, email delivery, authentication, and
-            security.
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Store identity, presentation, discovery, communication, and access.
           </p>
         </div>
 
         <Tabs
-          value={activeTab}
+          value={section}
           onValueChange={handleTabChange}
-          className="w-full"
+          className="grid min-w-0 gap-4 lg:grid-cols-[12rem_minmax(0,1fr)]"
         >
-          <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto flex-wrap gap-0">
+          <TabsList className="h-auto min-w-0 justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin] lg:sticky lg:top-16 lg:flex-col lg:self-start lg:overflow-visible lg:rounded-md lg:border lg:bg-card lg:p-1">
             {tabs.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground"
+                className="h-10 shrink-0 justify-start rounded-none border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground transition-none hover:text-foreground data-[state=active]:border-b-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none lg:w-full lg:rounded-sm lg:border-b-0 lg:data-[state=active]:bg-muted"
               >
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          <div className="mt-6">
+          <div className="min-w-0">
             <TabsContent value="header" className="mt-0">
               {mountedTabs.has("header") && (
                 <Suspense fallback={<TabSpinner />}>

@@ -894,7 +894,7 @@ describe("admin route graph boundaries", () => {
 
     expect(source).toContain("const [methodsLoadError, setMethodsLoadError]");
     expect(source).toContain("if (!methods) {");
-    expect(source).toContain("Reload payment settings before saving checkout visibility.");
+    expect(source).toContain("Reload payment status before saving buyer payment methods.");
     expect(source).toContain("Payment settings could not be loaded");
     expect(source).toContain("Checkout visibility is locked until the saved payment-method settings load successfully.");
     expect(source).toContain("setMethods(null)");
