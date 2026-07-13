@@ -15,6 +15,24 @@ The command has no implicit write mode; omitting `--plan` fails closed. Stable
 phase resume keys are present for the later authenticated API reconciler, but
 they do not claim that any live resource has been created or updated.
 
+`pnpm demo:store --diff` is the next read-only gate. It asks for the admin email
+and a non-echoed password in an interactive terminal, creates a short-lived
+session, verifies authenticated access, and reads bounded category, product,
+product-detail, Media, attribute, collection, theme, header/footer, and hero
+projections through the dashboard's admin API proxy. Page reads stop after 20
+pages of 100 and Media cursors must be non-repeating and no longer than 2,000
+characters. Exact category/product slugs, retained product IDs, option
+topology, revisions, and exact collection names drive the diff; unexpected
+resources are reported, never implicitly trashed.
+
+Diff evidence is written with private file modes under the Git-ignored
+`.wrangler/demo-store-evidence/` directory by default. The resume journal uses
+a strict field allowlist and contains only phase/resource/revision/status
+metadata; credentials, cookies, buyer data, receipt proof, OTPs, and response
+error bodies are not recorded. The session is closed best-effort even when a
+read or evidence write fails. `--diff` does not enable any write phase, and
+credential flags are rejected so secrets cannot enter shell history.
+
 ## Target and acceptance contract
 
 The demo merchant is **Scalius Market**, a coherent multi-category lifestyle
