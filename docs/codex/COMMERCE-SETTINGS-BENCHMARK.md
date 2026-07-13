@@ -367,8 +367,15 @@ Explicit Scalius decisions:
 - Migration `0028_cute_ghost_rider` adds dormant promotion, code, condition,
   effect, and order-allocation tables alongside the legacy discount tables.
   D1 checks keep the first condition/effect arguments aligned with their kinds;
-  code ownership stays aligned with method, and normalized codes are globally
-  unique.
+  code ownership stays aligned with method, and normalized codes are unique
+  inside the typed promotion authority.
+- Migration `0029_messy_silver_surfer` makes used effects safely mutable at the
+  aggregate boundary. Replacing or removing an effect soft-retires its identity
+  behind partial active-target/position indexes, so restrictive allocation FKs
+  continue to preserve history. D1 triggers also reserve normalized code
+  identity across both legacy discounts and typed promotions in either write
+  order; application prechecks provide a useful conflict while the triggers
+  close concurrent races.
 - Evaluator version 1 separates `automatic | code` method from typed conditions
   and effects. Its deliberately bounded vocabulary is AND-ed merchandise
   subtotal/item-quantity conditions plus percentage/fixed line or order effects
@@ -381,13 +388,22 @@ Explicit Scalius decisions:
   without an order-item target. Insert guards bind snapshots to the promotion
   revision, effect, method, active normalized code when applicable, and the
   same order item; update/delete triggers make committed rows immutable.
-- This is storage and pure calculation only. No API, admin route, public
+- A revisioned aggregate service and `/api/v1/admin/promotions` API now create,
+  read, replace, list, archive, and preview code-promotion **drafts**. Parent,
+  code, condition, and effect writes share one D1 batch; replacements guard the
+  current positive revision and advance it exactly once. List enrichment uses
+  one bounded 90-ID wave rather than per-row fan-out. Preview claims the saved
+  revision and runs evaluator v1, explicitly reporting when draft status was
+  assumed active for simulation.
+- The merchant API deliberately rejects automatic authoring and exposes no
+  activation, combination, budget, targeting, or gift command. Public
   validation, checkout read/write, tax base, order detail, refund, invoice,
-  analytics, or feed path uses it, so no new capability is advertised. Legacy
-  discount codes remain production authority until one atomic cutover.
-- The next P0 work is transactional promotion CRUD/revision handling, catalog
-  selectors, campaign budget/redemption claim ledgers, and synchronous checkout
-  commit integration with tax and refund consumers. Buy X Get Y must keep
+  analytics, and feeds still use legacy discount authority, so these drafts
+  create no buyer-visible promise.
+- The next P0 work is catalog selectors, campaign budget/redemption claim
+  ledgers, a dedicated lifecycle command, and synchronous checkout commit
+  integration that writes allocations in the same batch consumed by tax and
+  refund authorities. Buy X Get Y must keep
   qualifying-buy and rewarded-get sets separate; combination must expose effect
   classes/same-target policy; and the admin builder/test cart must render the
   production evaluator's applied and rejected reasons before any automatic,

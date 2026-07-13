@@ -58,6 +58,8 @@ const cartSchema = z.object({
     }
 });
 
+export const promotionEvaluationCartSchema = cartSchema;
+
 const minimumSubtotalConditionSchema = z.object({
     id: z.string().trim().min(1).max(160),
     kind: z.literal("minimum_merchandise_subtotal"),

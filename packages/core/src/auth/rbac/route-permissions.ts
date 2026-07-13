@@ -359,6 +359,18 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/discounts/*/permanent": {
     DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
   },
+  "/api/v1/admin/promotions": {
+    GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
+    POST: { permission: PERMISSIONS.DISCOUNTS_CREATE },
+  },
+  "/api/v1/admin/promotions/*/preview": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_VIEW },
+  },
+  "/api/v1/admin/promotions/*": {
+    GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
+    PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+    DELETE: { permission: PERMISSIONS.DISCOUNTS_DELETE },
+  },
 
   // =============================================
   // Pages API

@@ -135,9 +135,19 @@ export const promotionEffects = sqliteTable("promotion_effects", {
     config: text("config").notNull(),
     position: integer("position").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    /**
+     * Effects are referenced by immutable order allocation rows. Retiring an
+     * effect therefore has to preserve its identity instead of deleting it.
+     * Only rows without a retirement timestamp participate in evaluation.
+     */
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
-    uniqueIndex("promotion_effects_target_unique").on(table.promotionId, table.target),
-    uniqueIndex("promotion_effects_position_unique").on(table.promotionId, table.position),
+    uniqueIndex("promotion_effects_target_unique")
+        .on(table.promotionId, table.target)
+        .where(sql`${table.deletedAt} IS NULL`),
+    uniqueIndex("promotion_effects_position_unique")
+        .on(table.promotionId, table.position)
+        .where(sql`${table.deletedAt} IS NULL`),
     index("promotion_effects_promotion_idx").on(table.promotionId, table.target),
     check(
         "promotion_effects_kind_valid",
