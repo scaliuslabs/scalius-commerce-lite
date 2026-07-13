@@ -23,6 +23,9 @@ This folder contains concise engineering context. Treat source code, tests, depl
   contract, and remaining release gaps.
 - `PAYMENT-METHOD-READINESS.md` - COD, Stripe, SSLCommerz, and Polar
   setup/provider/environment/selection/flow/health/buyer projection matrix.
+- `settings/PROVIDER-MARKS-AUDIT.md` - provider-by-provider official asset,
+  trademark constraint, neutral fallback, code location, and adoption contract
+  for payment, delivery, analytics, notification, SMS, and fraud settings.
 - `COMMERCE-SETTINGS-BENCHMARK.md` - benchmark-backed replacement decisions,
   edge cases, UI information architecture, migration stance, and implementation
   order for Promotions, Tax, Checkout/Payments, Theme, and Account/Users.
