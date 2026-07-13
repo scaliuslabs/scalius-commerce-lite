@@ -21,7 +21,6 @@ interface MediaFilterBarProps {
   selectedCount: number;
   visibleCount: number;
   selectionMode: boolean;
-  persistentSelection?: boolean;
   folders: MediaFolder[];
   isMutating: boolean;
   allowSelection?: boolean;
@@ -31,6 +30,7 @@ interface MediaFilterBarProps {
   onBeginSelection: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
+  onCancelSelection?: () => void;
   onMove: (folderId: string | null) => void;
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
   onAddSelected?: () => void;
@@ -38,6 +38,8 @@ interface MediaFilterBarProps {
 
 export function MediaFilterBar(props: MediaFilterBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasSelectingRef = useRef(props.selectionMode);
   const [search, setSearch] = useState(props.filters.search);
   const [targetFolder, setTargetFolder] = useState("");
   const sortValue = Object.entries(SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
@@ -45,6 +47,13 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
   useEffect(() => {
     if (props.selectedCount === 0) setTargetFolder("");
   }, [props.selectedCount]);
+
+  useEffect(() => {
+    if (wasSelectingRef.current && !props.selectionMode) {
+      selectTriggerRef.current?.focus();
+    }
+    wasSelectingRef.current = props.selectionMode;
+  }, [props.selectionMode]);
 
   return (
     <div className="border-b bg-background px-3 py-2">
@@ -71,7 +80,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
         </Select>
 
         {!props.selectionMode && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.visibleCount} shown</span>}
-        {props.allowSelection !== false && !props.selectionMode && <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onBeginSelection}>Select</Button>}
+        {props.allowSelection !== false && !props.selectionMode && <Button ref={selectTriggerRef} type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onBeginSelection}>Select</Button>}
       </div>
 
       {props.allowSelection !== false && props.selectionMode && (
@@ -79,11 +88,12 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           <div className="mr-auto flex min-h-7 items-center gap-2 px-1.5 text-xs" aria-live="polite" aria-atomic="true">
             <CheckSquare2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
             <span className="font-medium tabular-nums">{props.selectedCount} selected</span>
-            <span className="hidden text-muted-foreground sm:inline">Shift-click to select a range</span>
+            <span className="hidden text-muted-foreground sm:inline">Shift-click for a range{props.onCancelSelection ? " · Esc to cancel" : ""}</span>
           </div>
 
           {props.visibleCount > 0 && props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onSelectAll}>Select all shown</Button>}
-          {(props.selectedCount > 0 || !props.persistentSelection) && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />{props.selectedCount ? "Clear" : "Cancel"}</Button>}
+          {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
+          {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onCancelSelection}>Cancel</Button>}
 
           {props.selectedCount > 0 && props.view === "ready" && (
             <>

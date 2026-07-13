@@ -192,6 +192,19 @@ buffered in a Worker invocation.
 - This interaction change does not alter upload limits or video lifecycle
   architecture; those remain governed by the first-class media authority above.
 
+### Selection command follow-up (2026-07-13)
+
+- The standalone library now treats `Clear` and `Cancel` as different commands.
+  `Clear` removes the current checked assets while keeping selection mode open;
+  `Cancel` leaves selection mode and returns keyboard focus to the `Select`
+  trigger. Entering selection mode always starts at zero, even if an earlier
+  operation left stale local IDs.
+- Escape performs the same non-destructive cancellation in the standalone
+  workspace. It is disabled for picker dialogs, previews, alert dialogs, and
+  open menus so the closest transient surface keeps standard Escape behavior.
+  Multi-file pickers remain in their truthful persistent selection mode and use
+  the dialog's normal Close/Escape action instead.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)

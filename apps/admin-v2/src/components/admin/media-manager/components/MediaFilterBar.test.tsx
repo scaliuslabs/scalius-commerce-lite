@@ -37,7 +37,6 @@ describe("MediaFilterBar selection controls", () => {
         selectionMode={selectionMode}
         selectedCount={selectedCount}
         visibleCount={5}
-        persistentSelection={persistentSelection}
         folders={[]}
         isMutating={false}
         onSearch={vi.fn()}
@@ -50,7 +49,11 @@ describe("MediaFilterBar selection controls", () => {
         }}
         onClearSelection={() => {
           setSelectedCount(0);
-          setSelectionMode(persistentSelection);
+          setSelectionMode(true);
+        }}
+        onCancelSelection={persistentSelection ? undefined : () => {
+          setSelectedCount(0);
+          setSelectionMode(false);
         }}
         onMove={vi.fn()}
         onLifecycle={vi.fn()}
@@ -89,6 +92,22 @@ describe("MediaFilterBar selection controls", () => {
     expect(host.textContent).toContain("5 selected");
     expect(host.textContent).not.toContain("Select all shown");
     expect(buttonByName(host, "Clear")).toBeTruthy();
+    expect(buttonByName(host, "Cancel")).toBeTruthy();
+
+    act(() => buttonByName(host, "Clear").click());
+
+    expect(host.textContent).toContain("0 selected");
+    expect(buttonByName(host, "Select all shown")).toBeTruthy();
+    expect(buttonByName(host, "Cancel")).toBeTruthy();
+  });
+
+  it("leaves selection mode only through the explicit cancel action", () => {
+    act(() => buttonByName(host, "Select").click());
+    act(() => buttonByName(host, "Select all shown").click());
+    act(() => buttonByName(host, "Cancel").click());
+
+    expect(host.textContent).not.toContain("selected");
+    expect(buttonByName(host, "Select")).toBe(document.activeElement);
   });
 
   it("keeps multi-file pickers in truthful selection mode after clearing", () => {
@@ -112,7 +131,7 @@ describe("MediaFilterBar selection controls", () => {
 
     const toolbar = host.querySelector('[role="toolbar"][aria-label="Selected asset actions"]');
     expect(toolbar).toBeTruthy();
-    expect(toolbar?.textContent).toContain("Shift-click to select a range");
+    expect(toolbar?.textContent).toContain("Shift-click for a range · Esc to cancel");
     expect(toolbar?.textContent).toContain("0 selected");
   });
 });
