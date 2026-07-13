@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Loader2, Save, CheckCircle2, ExternalLink, Info, Cloud, KeyRound, Mail, Send } from "lucide-react";
+import { AlertCircle, Loader2, Save, CheckCircle2, ExternalLink, Info, Cloud, KeyRound, Mail } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   getSettingsLoadErrorMessage,
@@ -22,6 +22,7 @@ import {
   type SettingsPayload,
   updateEmailSettings,
 } from "@/lib/api-functions/settings";
+import { OfficialProviderMark } from "./provider-marks";
 
 const MASKED_VALUE = "••••••••••••";
 
@@ -108,8 +109,8 @@ export default function EmailSettingsForm() {
     <div className="space-y-5 max-w-2xl">
       <Card>
         <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-md bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-            {provider === "cloudflare" ? <Cloud className="h-6 w-6" /> : <Send className="h-6 w-6" />}
+          <div className="flex h-12 w-16 flex-shrink-0 items-center justify-center rounded-md border bg-background/70">
+            <OfficialProviderMark provider={provider === "cloudflare" ? "cloudflare" : "resend"} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -148,7 +149,7 @@ export default function EmailSettingsForm() {
               aria-pressed={provider === "cloudflare"}
               onClick={() => setValue("provider", "cloudflare")}
             >
-              <Cloud className="h-4 w-4" />
+              <OfficialProviderMark provider="cloudflare" />
               <span className="flex flex-col items-start">
                 <span>Cloudflare Email</span>
                 <span className="text-xs font-normal opacity-80">
@@ -163,7 +164,7 @@ export default function EmailSettingsForm() {
               aria-pressed={provider === "resend"}
               onClick={() => setValue("provider", "resend")}
             >
-              <Send className="h-4 w-4" />
+              <OfficialProviderMark provider="resend" />
               <span className="flex flex-col items-start">
                 <span>Resend</span>
                 <span className="text-xs font-normal opacity-80">

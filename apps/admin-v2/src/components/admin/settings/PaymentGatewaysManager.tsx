@@ -510,7 +510,7 @@ export default function PaymentGatewaysManager() {
                                 <div className={`p-3.5 ${meta.headerBg}`}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex min-w-0 items-start gap-3">
-                                            <meta.Logo className="h-8 w-8 shrink-0 rounded" />
+                                            <meta.Mark />
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <h3 className="text-sm font-medium">{meta.label}</h3>
