@@ -59,6 +59,18 @@ This is a calculation-authority fix, not completion of the tax workspace. Rate
 overlap diagnostics, bulk classification, configuration export, refund matrix
 coverage, and route-backed tab/search state remain follow-up work.
 
+## Implemented tax readiness slice (2026-07-13)
+
+- The workspace now leads with the actual setup sequence: default class, active
+  default-class rate, then checkout calculation. A disabled store explicitly
+  says checkout records zero tax and is not misreported as a runtime failure.
+- The next action opens the exact missing step. A non-exempt default with zero
+  active rates goes to Rates before the merchant is encouraged to enable tax;
+  exempt defaults correctly require no rate.
+- The decorative hero was replaced by a compact operational header. Tax tabs
+  are controlled, horizontally scrollable, and non-shrinking on mobile, so a
+  readiness action and narrow viewport preserve the active workspace.
+
 ## Theme: verified current scope
 
 - The saved value is one sanitized `storefront_colors` object. The storefront
