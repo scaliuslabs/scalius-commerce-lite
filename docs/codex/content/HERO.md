@@ -41,6 +41,14 @@ visibility. Hero controls deliberately retain image-overlay contrast rather
 than deriving navigation affordances from merchant colors. A future versioned
 Theme document must not absorb Hero content or its revision.
 
+Desktop and mobile source dimensions are one shared presentation contract:
+1300 × 500 and 640 × 300 respectively. The admin editor, image-optimizer
+request, and intrinsic storefront image dimensions consume that same authority;
+the editor no longer previews both viewports at an unrelated 16:5 ratio. Images
+remain center-cropped with `object-cover` to fill the live viewport. Per-slide
+focal-point control is not modeled yet and remains the next crop-specific
+improvement; do not imply that capability through a decorative positioning UI.
+
 ## Migration and verification
 
 - Migration `0023_bouncy_norman_osborn.sql` backfills revision `1`, retires any

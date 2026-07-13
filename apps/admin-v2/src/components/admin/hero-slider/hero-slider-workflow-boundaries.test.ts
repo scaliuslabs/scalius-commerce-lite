@@ -10,6 +10,10 @@ const tabSource = readFileSync(
   resolve(import.meta.dirname, "SliderTab.tsx"),
   "utf8",
 );
+const rowSource = readFileSync(
+  resolve(import.meta.dirname, "SlideRow.tsx"),
+  "utf8",
+);
 const carouselSource = readFileSync(
   resolve(
     import.meta.dirname,
@@ -33,5 +37,14 @@ describe("hero slider workflow boundaries", () => {
     expect(carouselSource).not.toContain('href={image.link || "#"}');
     expect(carouselSource).toContain('const SlideFrame = image.link ? "a" : "div"');
     expect(carouselSource).toContain("prefers-reduced-motion: reduce");
+  });
+
+  it("previews each viewport with the shared storefront source ratio", () => {
+    expect(tabSource).toContain("HERO_SLIDE_PRESENTATION[type]");
+    expect(rowSource).toContain("HERO_SLIDE_PRESENTATION[type]");
+    expect(rowSource).toContain("presentation.width} / ${presentation.height}");
+    expect(rowSource).not.toContain("aspect-16/5");
+    expect(carouselSource).toContain("HERO_SLIDE_PRESENTATION[type]");
+    expect(carouselSource).not.toContain('type === "desktop" ? 1300 : 640');
   });
 });

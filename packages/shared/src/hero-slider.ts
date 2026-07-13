@@ -3,6 +3,12 @@ import { parseNavigationHref } from "./navigation-href";
 export const HERO_SLIDE_LIMIT = 12;
 export const HERO_SLIDE_TITLE_LIMIT = 160;
 export const HERO_SLIDE_URL_LIMIT = 2_048;
+export const HERO_SLIDE_PRESENTATION = {
+  desktop: { width: 1_300, height: 500 },
+  mobile: { width: 640, height: 300 },
+} as const;
+
+export type HeroSlideViewport = keyof typeof HERO_SLIDE_PRESENTATION;
 
 export interface HeroSlide {
   id: string;
