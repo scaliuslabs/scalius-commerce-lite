@@ -10,6 +10,14 @@ import type { LibraryMediaFile, MediaCapability, UploadQueueItem } from "../type
 import { readIntrinsicMediaMetadata } from "../utils/intrinsic-metadata";
 
 const MAX_CONCURRENT_FILES = 2;
+const UNFINISHED_UPLOAD_STATUSES = new Set<UploadQueueItem["status"]>([
+  "queued",
+  "initiating",
+  "uploading",
+  "paused",
+  "completing",
+  "failed",
+]);
 
 interface UseMediaUploadOptions {
   capability: MediaCapability;
@@ -33,6 +41,21 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     mountedRef.current = false;
     controllersRef.current.forEach((controller) => controller.abort());
   }, []);
+
+  useEffect(() => {
+    if (!queue.some((item) => UNFINISHED_UPLOAD_STATUSES.has(item.status))) return;
+
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      // The server-side multipart session is durable, but a browser File cannot
+      // be recovered after this document closes. Keep the merchant from
+      // accidentally discarding the only client-side handle needed to resume.
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [queue]);
 
   const mutate = useCallback((id: string, update: Partial<UploadQueueItem>) => {
     queueRef.current = queueRef.current.map((item) => item.id === id ? { ...item, ...update } : item);

@@ -97,6 +97,30 @@ describe("useMediaUpload initiation races", () => {
     expect(latest.queue[0]).toMatchObject({ status: "paused", sessionId: "upload_session_2" });
   });
 
+  it("warns before the browser discards an unfinished resumable upload", async () => {
+    const initiation = deferred<MediaUploadSession>();
+    api.initiateUpload.mockReturnValue(initiation.promise);
+    const image = new File([new Uint8Array([1])], "photo.png", { type: "image/png" });
+
+    await act(async () => { await latest.uploadFiles([image]); });
+
+    const whileUploading = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(whileUploading);
+    expect(whileUploading.defaultPrevented).toBe(true);
+
+    act(() => latest.cancel(latest.queue[0]!.id));
+    initiation.resolve({
+      id: "upload_session_4", mediaId: "media_4", filename: "photo.png", kind: "image",
+      mimeType: "image/png", size: 1, expectedParts: 1, partSize: 5 * 1024 * 1024,
+      state: "initiated", version: 1, expiresAt: Date.now() + 60_000, uploadedParts: [],
+    });
+    await flush();
+
+    const afterCancel = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(afterCancel);
+    expect(afterCancel.defaultPrevented).toBe(false);
+  });
+
   it("persists intrinsic video dimensions and duration after multipart completion", async () => {
     metadata.readIntrinsicMediaMetadata.mockResolvedValue({
       width: 1920,

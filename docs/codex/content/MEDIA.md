@@ -1,27 +1,42 @@
 # Media Authority, Video, and Workflow Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
 ## Current truth
 
-The current UI suggests a general media library, but the implementation is an
-image-only uploader:
+Media is now a first-class image/video domain rather than an image uploader with
+a larger allowlist:
 
-- client defaults are `image/*`, 10 MB, and 20 files;
-- the API service separately caps 50 files at 10 MB;
-- R2 storage accepts only image MIME types/extensions and buffers the complete
-  object before `put`;
-- Media cards and preview always render `<img>` through the image optimizer;
-- product media rows contain URL/alt/primary/order only, without asset kind,
-  MIME, dimensions/duration, poster, or processing state;
-- product gallery, zoom, cards, cart, checkout, feeds, UCP, schema, and variant
-  image selection all assume an image URL.
+- the shared client/API/storage policy accepts JPEG, PNG, GIF, WebP, and AVIF up
+  to 20 MiB, plus MP4 and WebM up to 100 MiB, with at most 50 files per batch;
+- every asset uses a durable D1 upload session and 5 MiB R2 multipart parts, so
+  a complete video is never buffered in one Worker invocation;
+- bounded file signatures, MIME/extension coherence, exact part lengths,
+  idempotent completion, expiry, abort, repair, trash, and guarded permanent
+  deletion are implemented;
+- the admin library distinguishes images and videos, renders video playback,
+  supports optional image posters and captions, and preserves intrinsic
+  dimensions/duration when the browser can read them;
+- product media is an ordered image/video association. The protected storefront
+  gallery renders video in the existing stage with controls and poster
+  thumbnails, while image-only buyer/discovery surfaces resolve a real image or
+  poster and never pass a video URL through the image optimizer;
+- exact SKU media remains an optional image reference. `NULL` falls back to the
+  product's primary image representation, so partial SKU assignment is valid.
 
-Therefore a 23.56 MB MP4 is not merely over an arbitrary limit: video is not
-currently supported end to end. Raising the limit or MIME allowlist alone would
-create corrupt previews and buyer surfaces.
+The old 10 MB rejection was a superseded image-only path. A 23.56 MB MP4 is
+valid under the current policy. The remaining launch limitations are explicit:
+3D models are not supported, videos are direct MP4/WebM delivery rather than an
+adaptive transcoding pipeline, timed VTT caption tracks are not yet modeled,
+and browser upload resume requires the original tab/File to remain available.
+The upload queue therefore warns before the document closes and says to keep the
+tab open; server multipart state alone cannot reconstruct a browser `File`.
 
-## P0/P1 storage and lifecycle defects
+## Superseded P0/P1 audit findings
+
+The following findings describe the image-only system that migration 0017 and
+the implemented milestone below replaced. Keep them as architectural rationale,
+not as current operational defects.
 
 1. Upload commits R2 first and then inserts D1. A database failure can orphan
    the object; partial uploads do not have a durable reconciliation record.
@@ -76,9 +91,10 @@ create corrupt previews and buyer surfaces.
   they must never advertise a video URL as `image_link` or `<img src>`.
 - Exact SKU image selection remains image-only. Variant selection may change to
   a product image/poster; it must not unexpectedly autoplay a SKU video.
-- Videos use controls, playsInline, preload metadata/none, captions-track
-  support, keyboard semantics, reduced-motion/autoplay discipline, and do not
-  download offscreen. No autoplay with sound.
+- Videos use controls, playsInline, preload metadata/none, keyboard semantics,
+  reduced-motion/autoplay discipline, and do not download offscreen. No autoplay
+  with sound. Timed captions require a future first-class VTT-track model; the
+  current `caption` field is descriptive metadata, not a timed text track.
 - Page rich content and navigation/theme surfaces reference stable media IDs,
   not copied URL blobs, so dependency checks and replacements are possible.
 
