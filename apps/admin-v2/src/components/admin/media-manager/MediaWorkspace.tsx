@@ -57,7 +57,30 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <FolderBrowser folders={mm.folders} currentFolderId={mm.currentFolderId} onFolderSelect={mm.moveToFolder} onFolderCreate={mm.createFolder} onFolderRename={mm.renameFolder} onFolderDelete={mm.deleteFolder} />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MediaFilterBar capability={capability} filters={mm.filters} view={mm.view} selectedCount={mm.selectedFileIds.length} visibleCount={mm.files.length} folders={mm.folders} isMutating={mm.isMutating} allowSelection={!picker || multiple} onSearch={mm.applySearch} onFiltersChange={mm.applyFilters} onUpload={mm.uploadFiles} onSelectAll={() => { mm.setSelectionMode(true); mm.setSelectedFileIds(mm.files.map((file) => file.id)); }} onClearSelection={() => { mm.setSelectedFileIds([]); mm.setSelectionMode(false); }} onMove={(folderId) => void mm.moveSelected(folderId)} onLifecycle={bulkLifecycle} onAddSelected={picker && multiple && mm.selectedFileIds.length ? mm.addSelected : undefined} />
+          <MediaFilterBar
+            capability={capability}
+            filters={mm.filters}
+            view={mm.view}
+            selectedCount={mm.selectedFileIds.length}
+            visibleCount={mm.files.length}
+            selectionMode={mm.selectionMode}
+            persistentSelection={picker && multiple}
+            folders={mm.folders}
+            isMutating={mm.isMutating}
+            allowSelection={!picker || multiple}
+            onSearch={mm.applySearch}
+            onFiltersChange={mm.applyFilters}
+            onUpload={mm.uploadFiles}
+            onBeginSelection={() => mm.setSelectionMode(true)}
+            onSelectAll={() => mm.setSelectedFileIds(mm.files.map((file) => file.id))}
+            onClearSelection={() => {
+              mm.setSelectedFileIds([]);
+              mm.setSelectionMode(picker && multiple);
+            }}
+            onMove={(folderId) => void mm.moveSelected(folderId)}
+            onLifecycle={bulkLifecycle}
+            onAddSelected={picker && multiple && mm.selectedFileIds.length ? mm.addSelected : undefined}
+          />
           <div className="min-h-0 flex-1">
             <MediaGallery files={mm.files} selectedFileIds={mm.selectedFileIds} selectionMode={mm.selectionMode} view={mm.view} isLoading={mm.isLoading} isLoadingMore={mm.isLoadingMore} hasMore={mm.hasMore} loadError={mm.loadError} onFileSelect={mm.handleFileSelect} onFilePreview={(file, event) => { event.stopPropagation(); mm.setPreviewFile(file); mm.setShowPreview(true); }} onToggleSelection={mm.toggleSelection} onLifecycle={lifecycle} onLoadMore={mm.loadMore} onRetry={() => void mm.refresh()} />
           </div>

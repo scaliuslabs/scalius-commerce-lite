@@ -59,7 +59,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
             {row(null, "Unfiled", <Folder className="h-3.5 w-3.5 shrink-0" />)}
             {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100" aria-label={`Actions for ${folder.name}`}><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
+                <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label={`Actions for ${folder.name}`}><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => open({ mode: "rename", folder })}><Pencil className="mr-2 h-3.5 w-3.5" />Rename</DropdownMenuItem>
                   <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteFolder(folder)}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
