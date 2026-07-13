@@ -1,7 +1,7 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
+import { getSettingsLoadErrorMessage } from "~/hooks/use-settings-form";
 
 interface SettingsLoadFailureProps {
   title: string;
