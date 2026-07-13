@@ -102,7 +102,7 @@ describe("shipping settings cache invalidation", () => {
 
     expect(response.status).toBe(201);
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["checkout"],
+      ["checkout", "product-schema"],
       expect.objectContaining({ env }),
     );
   });

@@ -270,6 +270,14 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "global_checkout_language",
     ],
   },
+  "product-schema": {
+    label: "Product schema",
+    description:
+      "Product-page commerce facts sourced outside the product aggregate",
+    kvPrefixes: [],
+    bumpsHtml: true,
+    storefrontPrefixes: ["product_slug_"],
+  },
   search: {
     label: "Search",
     description: "Search index and filtering",
@@ -343,6 +351,8 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/media": ["media"],
   "/api/v1/admin/settings/currency": ["layout", "checkout"],
   "/api/v1/admin/settings/auth": ["checkout"],
+  "/api/v1/admin/settings/email": ["checkout"],
+  "/api/v1/admin/settings/sms": ["checkout"],
   "/api/v1/admin/settings/checkout-flow": ["checkout"],
   "/api/v1/admin/settings/allowed-countries": ["checkout"],
   "/api/v1/admin/settings/delivery-locations": ["checkout"],
@@ -351,9 +361,10 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/stripe": ["checkout"],
   "/api/v1/admin/settings/sslcommerz": ["checkout"],
   "/api/v1/admin/settings/polar": ["checkout"],
-  "/api/v1/admin/settings/shipping-methods": ["checkout"],
+  "/api/v1/admin/settings/shipping-methods": ["checkout", "product-schema"],
   "/api/v1/admin/settings/checkout-languages": ["checkout"],
   "/api/v1/admin/settings/meta-conversions": ["layout"],
+  "/api/v1/admin/taxes": ["checkout"],
   "/api/v1/admin/attributes": ["attributes", "products"],
   "/api/v1/admin/discounts": [...CATALOG_CACHE_GROUPS.discounts],
 };

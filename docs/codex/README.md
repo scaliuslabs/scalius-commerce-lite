@@ -26,6 +26,9 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `settings/PROVIDER-MARKS-AUDIT.md` - provider-by-provider official asset,
   trademark constraint, neutral fallback, code location, and adoption contract
   for payment, delivery, analytics, notification, SMS, and fraud settings.
+- `settings/CACHE-INVALIDATION-AUDIT.md` - settings mutation dependency matrix
+  for API/storefront cache groups, exact generations, HTML effects, warm paths,
+  and focused proof.
 - `COMMERCE-SETTINGS-BENCHMARK.md` - benchmark-backed replacement decisions,
   edge cases, UI information architecture, migration stance, and implementation
   order for Promotions, Tax, Checkout/Payments, Theme, and Account/Users.

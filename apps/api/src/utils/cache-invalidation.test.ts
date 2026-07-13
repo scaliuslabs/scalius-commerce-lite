@@ -58,6 +58,9 @@ describe("catalog cache groups", () => {
       "attributes",
       "products",
     ]);
+    expect(
+      getGroupsForPath("/api/v1/admin/settings/shipping-methods/sm_123"),
+    ).toEqual(["checkout", "product-schema"]);
 
     expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.products])).toEqual(
       expect.arrayContaining([
@@ -79,6 +82,10 @@ describe("catalog cache groups", () => {
         "storefront_layout_",
       ]),
     );
+    expect(getStorefrontPrefixesForGroups(["product-schema"])).toEqual([
+      "product_slug_",
+    ]);
+    expect(INVALIDATION_GROUPS["product-schema"]?.bumpsHtml).toBe(true);
   });
 
   it("builds bounded canonical storefront listing warm paths for catalog writes", () => {
@@ -434,6 +441,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
   it("maps settings and reference-data writes to their storefront cache groups", () => {
     expect(getGroupsForPath("/api/v1/admin/settings/shipping-methods")).toEqual([
       "checkout",
+      "product-schema",
     ]);
     expect(getGroupsForPath("/api/v1/admin/settings/delivery-locations")).toEqual([
       "checkout",
@@ -442,6 +450,15 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "checkout",
     ]);
     expect(getGroupsForPath("/api/v1/admin/settings/allowed-countries")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/email")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/sms")).toEqual([
+      "checkout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/taxes/rates/rate_1")).toEqual([
       "checkout",
     ]);
     expect(getGroupsForPath("/api/v1/admin/navigation")).toEqual(["layout"]);
@@ -500,6 +517,46 @@ describe("triggerStorefrontPurgeForGroups", () => {
       ],
       bumpVersion: false,
     });
+  });
+
+  it("advances product HTML when shipping settings change Offer schema facts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await purgeStorefrontForGroups(
+      ["checkout", "product-schema"],
+      {
+        PURGE_URL: "https://storefront.example.com/api/purge-cache",
+        PURGE_TOKEN: "secret-token",
+      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+    );
+
+    expect(result).toEqual({ attempted: true, ok: true, status: 200 });
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      groups: ["checkout", "product-schema"],
+      prefixes: [
+        "global_shipping_cities",
+        "shipping_zones_",
+        "shipping_areas_",
+        "global_shipping_methods",
+        "checkout_config",
+        "global_checkout_language",
+        "product_slug_",
+      ],
+      bumpVersion: true,
+    });
+    expect(
+      getStorefrontWarmPathsForPurge({
+        type: "storefront.cache_purge",
+        operationId: "shipping-settings-1",
+        groups: ["checkout", "product-schema"],
+        prefixes: ["global_shipping_methods", "product_slug_"],
+        bumpVersion: true,
+        source: "test",
+        requestedAt: 1,
+      }),
+    ).toEqual(["/"]);
   });
 
   it("invalidates API KV prefixes before awaiting the matching storefront purge", async () => {

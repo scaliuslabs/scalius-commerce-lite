@@ -7,21 +7,21 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+} from "~/components/ui/dialog";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
 
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "~/components/ui/checkbox";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "~/components/ui/select";
 import {
   FolderOpen,
   FileText,
@@ -86,6 +86,7 @@ interface AddNavItemDialogProps {
   open: boolean;
   onClose: () => void;
   onAdd: (items: NavigationItem[]) => void;
+  availableSlots?: number;
   parentLabel?: string; // If adding to a parent, show which one
   getStorefrontPath: (path: string) => string;
 }
@@ -94,6 +95,7 @@ export function AddNavItemDialog({
   open,
   onClose,
   onAdd,
+  availableSlots = Number.POSITIVE_INFINITY,
   parentLabel,
   getStorefrontPath,
 }: AddNavItemDialogProps) {
@@ -377,8 +379,10 @@ export function AddNavItemDialog({
       const next = new Map(prev);
       if (next.has(cat.id)) {
         next.delete(cat.id);
-      } else {
+      } else if (next.size < availableSlots) {
         next.set(cat.id, cat);
+      } else {
+        return prev;
       }
       return next;
     });
@@ -389,8 +393,10 @@ export function AddNavItemDialog({
       const next = new Map(prev);
       if (next.has(page.id)) {
         next.delete(page.id);
-      } else {
+      } else if (next.size < availableSlots) {
         next.set(page.id, page);
+      } else {
+        return prev;
       }
       return next;
     });
@@ -448,7 +454,7 @@ export function AddNavItemDialog({
       }
     }
 
-    if (newItems.length > 0) {
+    if (newItems.length > 0 && newItems.length <= availableSlots) {
       onAdd(newItems);
       onClose();
     }
@@ -456,11 +462,16 @@ export function AddNavItemDialog({
 
   // Check if can add
   const canAdd = () => {
-    if (activeType === "category") return selectedCategoryMap.size > 0;
-    if (activeType === "page") return selectedPageMap.size > 0;
-    if (activeType === "dynamic") return dynamicCategory && dynamicLabel.trim();
-    if (activeType === "custom") return customLabel.trim() && customUrlResult.ok;
-    if (activeType === "label") return customLabel.trim();
+    if (availableSlots < 1) return false;
+    if (activeType === "category") {
+      return selectedCategoryMap.size > 0 && selectedCategoryMap.size <= availableSlots;
+    }
+    if (activeType === "page") {
+      return selectedPageMap.size > 0 && selectedPageMap.size <= availableSlots;
+    }
+    if (activeType === "dynamic") return Boolean(dynamicCategory && dynamicLabel.trim());
+    if (activeType === "custom") return Boolean(customLabel.trim() && customUrlResult.ok);
+    if (activeType === "label") return Boolean(customLabel.trim());
     return false;
   };
 
@@ -490,7 +501,9 @@ export function AddNavItemDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            Choose the type of item and configure it
+            Choose what to add. {Number.isFinite(availableSlots)
+              ? `${availableSlots} ${availableSlots === 1 ? "space" : "spaces"} remaining in this menu.`
+              : "You can add several published resources at once."}
           </DialogDescription>
         </DialogHeader>
 
@@ -564,22 +577,29 @@ export function AddNavItemDialog({
                             <div
                               key={cat.id}
                               className={cn(
-                                "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                                "flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors",
                                 selectedCategoryMap.has(cat.id) &&
                                   "bg-primary/10",
                               )}
-                              onClick={() => toggleCategory(cat)}
                             >
                               <Checkbox
+                                id={`navigation-category-${cat.id}`}
                                 checked={selectedCategoryMap.has(cat.id)}
-                                onCheckedChange={() => {}}
+                                disabled={
+                                  !selectedCategoryMap.has(cat.id) &&
+                                  selectedCategoryMap.size >= availableSlots
+                                }
+                                onCheckedChange={() => toggleCategory(cat)}
                               />
-                              <div className="flex-1">
+                              <label
+                                htmlFor={`navigation-category-${cat.id}`}
+                                className="min-w-0 flex-1 cursor-pointer"
+                              >
                                 <div className="font-medium">{cat.name}</div>
                                 <div className="text-xs text-muted-foreground">
                                   {cat.url}
                                 </div>
-                              </div>
+                              </label>
                               {selectedCategoryMap.has(cat.id) && (
                                 <Check className="h-4 w-4 text-primary" />
                               )}
@@ -670,21 +690,28 @@ export function AddNavItemDialog({
                             <div
                               key={page.id}
                               className={cn(
-                                "flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors",
+                                "flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors",
                                 selectedPageMap.has(page.id) && "bg-primary/10",
                               )}
-                              onClick={() => togglePage(page)}
                             >
                               <Checkbox
+                                id={`navigation-page-${page.id}`}
                                 checked={selectedPageMap.has(page.id)}
-                                onCheckedChange={() => {}}
+                                disabled={
+                                  !selectedPageMap.has(page.id) &&
+                                  selectedPageMap.size >= availableSlots
+                                }
+                                onCheckedChange={() => togglePage(page)}
                               />
-                              <div className="flex-1">
+                              <label
+                                htmlFor={`navigation-page-${page.id}`}
+                                className="min-w-0 flex-1 cursor-pointer"
+                              >
                                 <div className="font-medium">{page.name}</div>
                                 <div className="text-xs text-muted-foreground">
                                   {page.url}
                                 </div>
-                              </div>
+                              </label>
                               {selectedPageMap.has(page.id) && (
                                 <Check className="h-4 w-4 text-primary" />
                               )}
