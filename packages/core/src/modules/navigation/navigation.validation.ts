@@ -7,6 +7,11 @@
 
 import { z } from "zod";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
+import {
+    NAVIGATION_RESOURCE_TYPES,
+    parseNavigationQuery,
+    type NavigationTargetItem,
+} from "@scalius/shared/navigation-target";
 import { ValidationError } from "@scalius/core/errors";
 
 export const MAX_NAVIGATION_DEPTH = 3;
@@ -33,28 +38,96 @@ const httpsUrlSchema = z.string().trim().max(2_048).transform((value, context) =
     }
 });
 
-const navigationHrefSchema = z.string().optional().transform((value, context) => {
+const resourceQuerySchema = z.string().optional().transform((value, context) => {
+    const result = parseNavigationQuery(value);
+    if (!result.ok) {
+        context.addIssue({ code: "custom", message: result.reason });
+        return z.NEVER;
+    }
+    return result.query;
+});
+
+const internalPathSchema = z.string().transform((value, context) => {
     const result = parseNavigationHref(value);
     if (!result.ok) {
         context.addIssue({ code: "custom", message: result.reason });
         return z.NEVER;
     }
+    if (result.kind !== "internal" || !result.href) {
+        context.addIssue({
+            code: "custom",
+            message: "Use a same-store path for an internal navigation target.",
+        });
+        return z.NEVER;
+    }
     return result.href;
 });
 
+const externalUrlTargetSchema = z.string().transform((value, context) => {
+    const result = parseNavigationHref(value);
+    if (!result.ok) {
+        context.addIssue({ code: "custom", message: result.reason });
+        return z.NEVER;
+    }
+    if (result.kind !== "external" || !result.href) {
+        context.addIssue({
+            code: "custom",
+            message: "Use a credential-free HTTPS URL for an external navigation target.",
+        });
+        return z.NEVER;
+    }
+    return result.href;
+});
+
+export const navigationTargetSchema = z.discriminatedUnion("type", [
+    z.object({
+        type: z.literal("resource"),
+        resourceType: z.enum(NAVIGATION_RESOURCE_TYPES),
+        resourceId: stableIdSchema,
+        query: resourceQuerySchema,
+    }).strict(),
+    z.object({
+        type: z.literal("internal_path"),
+        path: internalPathSchema,
+    }).strict(),
+    z.object({
+        type: z.literal("external_url"),
+        url: externalUrlTargetSchema,
+    }).strict(),
+    z.object({ type: z.literal("label") }).strict(),
+]);
+
 /** Recursive schema for a navigation item (supports nested subMenus) */
-export const navigationItemSchema: z.ZodType<{
-    id: string;
-    title: string;
-    href?: string;
-    subMenu?: unknown[];
-}> = z.lazy(() =>
+export const navigationItemSchema: z.ZodType<NavigationTargetItem> = z.lazy(() =>
     z.object({
         id: stableIdSchema,
-        title: navigationLabelSchema,
-        href: navigationHrefSchema,
+        target: navigationTargetSchema,
+        labelMode: z.enum(["resource", "custom"]),
+        customLabel: navigationLabelSchema.optional(),
+        lastKnownLabel: navigationLabelSchema.optional(),
         subMenu: z.array(navigationItemSchema).optional(),
+        // Admin reads include this derived preview. It is accepted only so the
+        // same document can be saved, then deliberately removed before storage.
+        resolution: z.unknown().optional(),
     })
+        .strict()
+        .superRefine((item, context) => {
+            if (item.labelMode === "custom" && !item.customLabel) {
+                context.addIssue({
+                    code: "custom",
+                    path: ["customLabel"],
+                    message: "Custom-label navigation items require a label.",
+                });
+            }
+            if (item.target.type !== "resource" && item.labelMode !== "custom") {
+                context.addIssue({
+                    code: "custom",
+                    path: ["labelMode"],
+                    message: "Only resource targets can follow a resource label.",
+                });
+            }
+        })
+        .transform(({ resolution: _resolution, ...item }) => item)
 );
 
 const logoSchema = z.object({

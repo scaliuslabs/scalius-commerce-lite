@@ -1,23 +1,27 @@
 // src/components/admin/navigation/types.ts
+import {
+  getNavigationItemHref,
+  getNavigationItemLabel,
+  type NavigationResourceType,
+  type NavigationTargetItem,
+} from "@scalius/shared/navigation-target";
 
-export interface NavigationItem {
-  id: string;
-  title: string;
-  href?: string; // Optional - can have both href AND subMenu for dropdown links
-  subMenu?: NavigationItem[];
-}
+export type NavigationItem = NavigationTargetItem;
+export { getNavigationItemHref, getNavigationItemLabel };
 
 export interface NavigationSource {
   id: string;
   name: string;
   slug: string;
-  type: string;
+  type: NavigationResourceType;
   url: string;
 }
 
 export interface NavigationSources {
   categories: NavigationSource[];
   pages: NavigationSource[];
+  products: NavigationSource[];
+  collections: NavigationSource[];
 }
 
 export interface NavigationBuilderProps {

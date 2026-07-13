@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { siteSettings } from "@scalius/database/schema";
+import { getNavigationMenus } from "@scalius/core/modules/navigation";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { NotFoundError, ValidationError } from "../utils/api-error";
+import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -41,6 +41,12 @@ interface HeaderData {
     facebook: string;
   };
   cartTotal?: string;
+  navigation: Array<{
+    id: string;
+    title: string;
+    href?: string;
+    subMenu?: unknown[];
+  }>;
 }
 
 // GET /header — get header data
@@ -60,6 +66,12 @@ const getHeaderRoute = createRoute({
           contact: z.object({ phone: z.string(), text: z.string() }),
           social: z.object({ facebook: z.string() }),
           cartTotal: z.string().optional(),
+          navigation: z.array(z.object({
+            id: z.string(),
+            title: z.string(),
+            href: z.string().optional(),
+            subMenu: z.array(z.unknown()).optional(),
+          })),
         }),
       })) } },
     },
@@ -70,45 +82,32 @@ const getHeaderRoute = createRoute({
 
 app.openapi(getHeaderRoute, async (c) => {
   const db = c.get("db");
-  // Get header config from database
-  const [settings] = await db.select().from(siteSettings).limit(1);
-
-  if (!settings) {
+  const { headerConfig } = await getNavigationMenus(db, "public");
+  if (Object.keys(headerConfig).length === 0) {
     throw new NotFoundError("Header configuration not found");
   }
-
-  // Parse header config
-  const headerConfig: Partial<HeaderData> | null = (() => {
-    try {
-      return settings.headerConfig
-        ? (JSON.parse(settings.headerConfig) as Partial<HeaderData>)
-        : null;
-    } catch {
-      return null;
-    }
-  })();
-
-  if (!headerConfig) {
-    throw new ValidationError("Invalid header configuration");
-  }
+  const typedHeaderConfig = headerConfig as Partial<HeaderData>;
 
   // Build response data
   const headerData: HeaderData = {
     topBar: {
-      text: headerConfig.topBar?.text || ""
+      text: typedHeaderConfig.topBar?.text || ""
     },
     logo: {
-      src: headerConfig.logo?.src || "",
-      alt: headerConfig.logo?.alt || "Store Logo"
+      src: typedHeaderConfig.logo?.src || "",
+      alt: typedHeaderConfig.logo?.alt || "Store Logo"
     },
-    favicon: headerConfig.favicon,
+    favicon: typedHeaderConfig.favicon,
     contact: {
-      phone: headerConfig.contact?.phone || "",
-      text: headerConfig.contact?.text || ""
+      phone: typedHeaderConfig.contact?.phone || "",
+      text: typedHeaderConfig.contact?.text || ""
     },
     social: {
-      facebook: headerConfig.social?.facebook || ""
-    }
+      facebook: typedHeaderConfig.social?.facebook || ""
+    },
+    navigation: Array.isArray(typedHeaderConfig.navigation)
+      ? typedHeaderConfig.navigation
+      : [],
   };
 
   return ok(c, { header: headerData });

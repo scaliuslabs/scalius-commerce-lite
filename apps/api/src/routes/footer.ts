@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { siteSettings } from "@scalius/database/schema";
+import { getNavigationMenus } from "@scalius/core/modules/navigation";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { NotFoundError, ValidationError } from "../utils/api-error";
+import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -78,42 +78,26 @@ const getFooterRoute = createRoute({
 
 app.openapi(getFooterRoute, async (c) => {
   const db = c.get("db");
-  // Get footer config from database
-  const [settings] = await db.select().from(siteSettings).limit(1);
-
-  if (!settings) {
+  const { footerConfig } = await getNavigationMenus(db, "public");
+  if (Object.keys(footerConfig).length === 0) {
     throw new NotFoundError("Footer configuration not found");
   }
-
-  // Parse footer config
-  const footerConfig: Partial<FooterData> | null = (() => {
-    try {
-      return settings.footerConfig
-        ? (JSON.parse(settings.footerConfig) as Partial<FooterData>)
-        : null;
-    } catch {
-      return null;
-    }
-  })();
-
-  if (!footerConfig) {
-    throw new ValidationError("Invalid footer configuration");
-  }
+  const typedFooterConfig = footerConfig as Partial<FooterData>;
 
   // Strict array usage for social links
-  const socialLinks: SocialLink[] = Array.isArray(footerConfig.social)
-    ? footerConfig.social
+  const socialLinks: SocialLink[] = Array.isArray(typedFooterConfig.social)
+    ? typedFooterConfig.social
     : [];
 
   // Build response data
   const footerData: FooterData = {
-    logo: footerConfig.logo || { src: "/logo.svg", alt: "Store Logo" },
-    tagline: footerConfig.tagline || "",
+    logo: typedFooterConfig.logo || { src: "/logo.svg", alt: "Store Logo" },
+    tagline: typedFooterConfig.tagline || "",
     copyrightText:
-      footerConfig.copyrightText || settings.siteName || "Your Store",
-    menus: footerConfig.menus || [],
+      typedFooterConfig.copyrightText || "Your Store",
+    menus: typedFooterConfig.menus || [],
     social: socialLinks,
-    description: footerConfig.description || ""
+    description: typedFooterConfig.description || ""
   };
 
   return ok(c, footerData);

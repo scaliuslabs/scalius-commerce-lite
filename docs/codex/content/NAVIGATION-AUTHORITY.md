@@ -2,8 +2,9 @@
 
 Last reviewed: 2026-07-14
 
-Status: accepted design proposal; no schema, API, storefront, or admin migration
-has been implemented from this document.
+Status: normalized named menus/placements remain an accepted future design.
+The demo-era typed-target bridge below is implemented in code but is not
+deployed; existing demo header/footer JSON must be regenerated before deploy.
 
 This document is the durable architecture decision for reusable navigation. It
 is intentionally separate from the current builder UI: changing row density or
@@ -60,6 +61,33 @@ canonical aliases are routed, a page resource resolves only to its live
 `/<slug>` route. This bridge may be wiped with the rest of the demo data when
 the normalized menu tables replace it; it must never become permanent dual
 authority.
+
+### Bridge implementation and regeneration gate
+
+The interim JSON item now persists exactly one `target` union plus
+`labelMode`, optional `customLabel`, and diagnostic-only `lastKnownLabel`.
+Admin resolution adds a transient `resolution` projection that is removed on
+save. Persisted `title`/`href` rows are deliberately rejected; no runtime
+legacy converter or copied fallback authority exists.
+
+One core resolver serves admin preview, public navigation, header, footer, and
+consolidated layout reads. It deduplicates resource IDs, reads each resource
+kind in awaited chunks of at most 90, and resolves current title, route, and
+lifecycle readiness. Public projection omits unavailable leaves and turns an
+unavailable parent with ready descendants into a label group. `noIndex` and
+sitemap/feed exclusion never participate in menu readiness. Pages intentionally
+resolve to `/<slug>` until page canonical aliases are routed.
+
+Product and collection pickers are first-class alongside page and category.
+Filtered category links persist the stable category ID plus a validated query
+projection. Product and collection writes invalidate layout/navigation as well
+as their catalog caches.
+
+Before deployment, regenerate `site_settings.header_config` and
+`site_settings.footer_config` so every navigation/link item uses the typed
+shape. A copied `{ id, title, href }` row must be replaced, not upgraded at
+runtime. This is a demo-data requirement, not a schema migration; this
+implementation performs no production write or deployment.
 
 ## Verified benchmark, not visual imitation
 

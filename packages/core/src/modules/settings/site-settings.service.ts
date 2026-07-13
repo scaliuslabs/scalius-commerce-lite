@@ -40,6 +40,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { parseNavigationConfig } from "../navigation/navigation.validation";
+import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -307,10 +308,12 @@ export async function getGeneralSettings(db: Database) {
       );
     }
   };
-  return {
-    headerConfig: parsePersistedConfig("header", row?.headerConfig),
-    footerConfig: parsePersistedConfig("footer", row?.footerConfig),
-  };
+  return resolveNavigationConfigs(
+    db,
+    parsePersistedConfig("header", row?.headerConfig),
+    parsePersistedConfig("footer", row?.footerConfig),
+    "admin",
+  );
 }
 
 export async function saveHeaderConfig(

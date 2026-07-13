@@ -9,6 +9,18 @@ import { successEnvelope, errorResponses } from "../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
+const publicNavigationLeafSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  href: z.string().optional(),
+});
+const publicNavigationChildSchema = publicNavigationLeafSchema.extend({
+  subMenu: z.array(publicNavigationLeafSchema).optional(),
+});
+const publicNavigationItemSchema = publicNavigationLeafSchema.extend({
+  subMenu: z.array(publicNavigationChildSchema).optional(),
+});
+
 // Apply cache middleware to all routes
 app.use(
   "*",
@@ -109,7 +121,7 @@ const getNavigationByIdRoute = createRoute({
         menu: z.object({
           id: z.string(),
           name: z.string(),
-          items: z.array(z.object({ id: z.string(), label: z.string(), url: z.string().nullable(), sortOrder: z.number() }).passthrough()),
+          items: z.array(publicNavigationItemSchema),
         }),
       })) } },
     },

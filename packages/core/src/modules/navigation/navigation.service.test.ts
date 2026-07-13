@@ -20,7 +20,6 @@ vi.mock("../products/products.storefront", () => ({
 }));
 
 import {
-    filterNavigationByPublishedCategories,
     getNavigationMenus,
     getNavigationPreviewProductCount,
     saveNavigationConfig,
@@ -28,14 +27,9 @@ import {
 
 function createNavigationMenusDb(headerConfig: string, footerConfig = "{}") {
     return {
-        batch: vi.fn(async () => [
-            [{ headerConfig, footerConfig }],
-            [{ slug: "shoes" }],
-        ]),
         select: vi.fn(() => ({
             from: vi.fn(() => ({
-                limit: vi.fn(() => ({})),
-                where: vi.fn(() => ({})),
+                limit: vi.fn(async () => [{ headerConfig, footerConfig }]),
             })),
         })),
     };
@@ -95,38 +89,20 @@ describe("navigation preview product count", () => {
     });
 });
 
-describe("published category navigation filtering", () => {
-    it("removes unpublished category links recursively without disturbing other links", () => {
-        expect(filterNavigationByPublishedCategories({
-            primary: [
-                { label: "Shoes", href: "/categories/shoes" },
-                { label: "Draft", url: "/categories/launch-preview" },
-                { label: "About", href: "/about" },
-            ],
-            nested: { items: [{ href: "/categories/internal-notes/" }] },
-        }, new Set(["shoes"]))).toEqual({
-            primary: [
-                { label: "Shoes", href: "/categories/shoes" },
-                { label: "About", href: "/about" },
-            ],
-            nested: { items: [] },
-        });
-    });
-});
-
 describe("stored navigation authority", () => {
-    it("returns normalized safe page links from persisted settings", async () => {
+    it("returns a resolved projection without persisting a copied href", async () => {
         const db = createNavigationMenusDb(JSON.stringify({
             navigation: [{
                 id: "returns",
-                title: "Returns",
-                href: "/pages/returns",
+                target: { type: "internal_path", path: "/returns" },
+                labelMode: "custom",
+                customLabel: "Returns",
             }],
         }));
 
         await expect(getNavigationMenus(db as never)).resolves.toMatchObject({
             headerConfig: {
-                navigation: [{ href: "/returns" }],
+                navigation: [{ title: "Returns", href: "/returns" }],
             },
         });
     });
@@ -144,8 +120,9 @@ describe("stored navigation authority", () => {
         await expect(saveNavigationConfig(db as never, "header", {
             navigation: [{
                 id: "unsafe",
-                title: "Unsafe",
-                href: "data:text/html,boom",
+                target: { type: "external_url", url: "data:text/html,boom" },
+                labelMode: "custom",
+                customLabel: "Unsafe",
             }],
         })).rejects.toBeInstanceOf(ValidationError);
         expect(db.select).not.toHaveBeenCalled();

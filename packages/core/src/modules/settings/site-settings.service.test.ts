@@ -23,7 +23,7 @@ import {
 } from "./site-settings.service";
 
 describe("general site settings", () => {
-  it("normalizes legacy CMS page links on read", async () => {
+  it("returns typed admin navigation with a derived preview", async () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
@@ -31,8 +31,9 @@ describe("general site settings", () => {
             headerConfig: JSON.stringify({
               navigation: [{
                 id: "returns",
-                title: "Returns",
-                href: "/pages/returns",
+                target: { type: "internal_path", path: "/returns" },
+                labelMode: "custom",
+                customLabel: "Returns",
               }],
             }),
             footerConfig: "{}",
@@ -42,8 +43,13 @@ describe("general site settings", () => {
     };
 
     await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
-      headerConfig: { navigation: [{ href: "/returns" }] },
-      footerConfig: {},
+      headerConfig: {
+        navigation: [{
+          target: { type: "internal_path", path: "/returns" },
+          resolution: { title: "Returns", href: "/returns" },
+        }],
+      },
+      footerConfig: { menus: [] },
     });
   });
 
@@ -69,8 +75,9 @@ describe("general site settings", () => {
     await expect(saveHeaderConfig(db as never, {
       navigation: [{
         id: "unsafe",
-        title: "Unsafe",
-        href: "javascript:alert(1)",
+        target: { type: "external_url", url: "javascript:alert(1)" },
+        labelMode: "custom",
+        customLabel: "Unsafe",
       }],
     })).rejects.toBeInstanceOf(ValidationError);
     expect(db.insert).not.toHaveBeenCalled();
