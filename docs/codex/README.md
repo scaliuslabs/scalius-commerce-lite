@@ -21,6 +21,8 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `CHECKOUT-FLOW-CONTRACT.md` - checkout-setting authority, buyer/runtime
   effects, mandatory-phone and fail-closed invariants, admin interaction
   contract, and remaining release gaps.
+- `PAYMENT-METHOD-READINESS.md` - COD, Stripe, SSLCommerz, and Polar
+  setup/provider/environment/selection/flow/health/buyer projection matrix.
 - `COMMERCE-SETTINGS-BENCHMARK.md` - benchmark-backed replacement decisions,
   edge cases, UI information architecture, migration stance, and implementation
   order for Promotions, Tax, Checkout/Payments, Theme, and Account/Users.
