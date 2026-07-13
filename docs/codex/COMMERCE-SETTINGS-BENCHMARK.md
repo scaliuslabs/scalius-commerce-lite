@@ -1,7 +1,7 @@
 # Commerce Settings Competitive Audit
 
 Last reviewed: 2026-07-13
-Code baseline inspected: `b99b524cf`
+Code baseline inspected: `26d3fc27d`
 
 This is the durable product and architecture decision record for Discounts,
 Taxes, Checkout and payment methods, Theme, and administrator Account settings.
