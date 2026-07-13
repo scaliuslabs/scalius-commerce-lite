@@ -64,7 +64,8 @@ legacy/future input, but it does not pretend a 240-node test can be saved throug
 today's 150-node API contract. Supporting genuinely larger stores without one
 huge storefront menu requires the accepted reusable named-menu/placement model,
 typed resource references, and a compact resolved public projection—not simply
-raising a constant.
+raising a constant. The accepted authority, migration, cache, and rollback
+design is recorded in [NAVIGATION-AUTHORITY.md](NAVIGATION-AUTHORITY.md).
 
 This remains a UI/workflow slice over the interim JSON authority. Version/CAS,
 typed resource dependencies, broken-resource diagnostics, publish lifecycle,
