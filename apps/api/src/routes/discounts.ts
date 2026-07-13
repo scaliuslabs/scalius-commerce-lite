@@ -20,7 +20,7 @@ const cartItemSchema = z.object({
 // Schema for validating discount code
 const validateDiscountSchema = z.object({
   code: z.string().trim().min(1).max(50).openapi({ description: "Discount code to validate" }),
-  total: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({ description: "Cart total" }),
+  total: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({ description: "Merchandise subtotal before delivery" }),
   items: z.array(cartItemSchema).max(250).optional().openapi({ description: "Cart items" }),
   shippingCost: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().default(0).openapi({ description: "Shipping cost" }),
   customerPhone: z.string().trim().max(64).optional().openapi({ description: "Customer phone for per-customer limits" })
@@ -82,7 +82,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     const discountAmount = await calculateDiscountAmount(
       db,
       validationResult.discount,
-      total || 0,
+      (total ?? 0) + shippingCost,
       cartItems,
       shippingCost || 0,
       validationResult.applicableProductIds,

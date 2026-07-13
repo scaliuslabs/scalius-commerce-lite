@@ -5272,7 +5272,7 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1000000000000,
-                    "description": "Cart total"
+                    "description": "Merchandise subtotal before delivery"
                   },
                   "items": {
                     "type": "array",

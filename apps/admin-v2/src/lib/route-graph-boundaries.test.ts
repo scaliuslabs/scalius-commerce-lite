@@ -786,7 +786,7 @@ describe("admin route graph boundaries", () => {
           "account-settings",
           "ChangePasswordForm.tsx",
         ),
-        action: 'action="/admin/account"',
+        action: 'action="/admin/settings/account"',
       },
       {
         path: join(
@@ -796,7 +796,7 @@ describe("admin route graph boundaries", () => {
           "account-settings",
           "AdminUsersManager.tsx",
         ),
-        action: 'action="/admin/account"',
+        action: 'action="/admin/settings/account"',
       },
     ];
 
@@ -837,8 +837,8 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(adminUsersSource).toContain("secure setup link");
-    expect(adminUsersSource).toContain("must choose a password and enable 2FA");
+    expect(adminUsersSource).toContain("one-use setup link");
+    expect(adminUsersSource).toContain("must configure a password and 2FA");
     expect(adminUsersSource).not.toContain("temporary password");
     expect(adminUsersSource).not.toContain("Temporary Password");
   });
@@ -907,7 +907,7 @@ describe("admin route graph boundaries", () => {
     );
 
     expect(source).toContain("isFetching: paymentMethodsFetching");
-    expect(source).toContain("const paymentMethodsUnavailable = !paymentMethodsPending && !paymentMethods");
+    expect(source).toContain("const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError");
     expect(source).toContain("Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.");
     expect(source).toContain("Checkout-flow saves are locked until Payment Gateways loads successfully.");
     expect(source).toContain("Retry payment check");

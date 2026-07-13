@@ -1632,7 +1632,7 @@ export type PostApiV1DiscountsValidateData = {
          */
         code: string;
         /**
-         * Cart total
+         * Merchandise subtotal before delivery
          */
         total?: number;
         /**

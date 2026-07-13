@@ -89,7 +89,7 @@ describe("public discount routes", () => {
     expect(mocks.calculateDiscountAmount).toHaveBeenCalledWith(
       db,
       discount,
-      2900,
+      2980,
       cartItems,
       80,
       ["prod_1"],
