@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import {
-  Activity,
   ArchiveRestore,
   Code2,
   Edit3,
@@ -15,8 +14,10 @@ import type { AnalyticsScriptSummary } from "~/types/api-responses";
 import {
   ANALYTICS_LOCATION_LABELS,
   ANALYTICS_PROVIDER_LABELS,
+  ANALYTICS_PROVIDER_MARKS,
   analyticsReadinessPresentation,
 } from "./analytics-list-presentation";
+import { OfficialProviderMark } from "./settings/provider-marks";
 
 interface AnalyticsMobileCardProps {
   script: AnalyticsScriptSummary;
@@ -49,9 +50,13 @@ export function AnalyticsMobileCard({
   return (
     <article className="rounded-md border bg-card">
       <div className="flex min-w-0 items-start gap-2.5 p-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border bg-muted/30">
-          {script.type === "custom" ? <Code2 aria-hidden="true" /> : <Activity aria-hidden="true" />}
-        </span>
+        {ANALYTICS_PROVIDER_MARKS[script.type] ? (
+          <OfficialProviderMark provider={ANALYTICS_PROVIDER_MARKS[script.type]!} />
+        ) : (
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md border bg-muted/30">
+            <Code2 aria-hidden="true" />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{script.name}</h2>
