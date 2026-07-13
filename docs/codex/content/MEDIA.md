@@ -163,7 +163,9 @@ buffered in a Worker invocation.
   that picker into multi-toggle mode or prevents the next click from choosing
   and closing with a replacement asset. Partial bulk lifecycle failures retain
   only the failed assets in the selection so the merchant can retry them
-  without repeating already successful mutations.
+  without repeating already successful mutations. A completed upload is
+  immediately resolvable by multi-picker confirmation while the library refresh
+  is still pending, so a visible `Add 1` action can never submit zero assets.
 - The gallery uses two, three, four, then five columns as viewport room grows
   and caps at five on wide screens. Loading skeletons use the same grid, avoiding
   layout shifts between the loading and ready states.

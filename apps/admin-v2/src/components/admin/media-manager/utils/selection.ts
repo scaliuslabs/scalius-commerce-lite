@@ -49,3 +49,20 @@ export function updateMediaSelection({
 export function selectAllVisibleMedia(visibleIds: readonly string[]): string[] {
   return [...new Set(visibleIds)];
 }
+
+/** Resolves selection IDs against ordered sources, keeping the first fresh row. */
+export function resolveSelectedMedia<T extends { id: string }>(
+  selectedIds: readonly string[],
+  ...sources: (readonly T[])[]
+): T[] {
+  const byId = new Map<string, T>();
+  for (const source of sources) {
+    for (const item of source) {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+  }
+  return selectedIds.flatMap((id) => {
+    const item = byId.get(id);
+    return item ? [item] : [];
+  });
+}

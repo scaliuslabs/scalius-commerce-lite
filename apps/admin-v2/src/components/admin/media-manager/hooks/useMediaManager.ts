@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
 import { capabilityKind, type LibraryMediaFile, type MediaCapability, type MediaFile, type MediaLibraryView } from "../types";
-import { selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
+import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
 
 interface UseMediaManagerOptions {
   autoLoad: boolean;
@@ -143,7 +143,8 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     }
   }, [onSelect, onSelectMultiple, selectionMode, toggleSelection]);
 
-  const selectedFiles = media.files.filter((file) => selectedFileIds.includes(file.id));
+  const completedUploads = upload.queue.flatMap((item) => item.result ? [item.result] : []);
+  const selectedFiles = resolveSelectedMedia(selectedFileIds, media.files, completedUploads);
 
   const mutateOne = useCallback(async (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
     setIsMutating(true);

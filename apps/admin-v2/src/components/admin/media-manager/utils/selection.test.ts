@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectAllVisibleMedia, updateMediaSelection } from "./selection";
+import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } from "./selection";
 
 const visibleIds = ["a", "b", "c", "d", "e"];
 
@@ -28,5 +28,15 @@ describe("media selection semantics", () => {
 
   it("selects each shown asset once only through the explicit command", () => {
     expect(selectAllVisibleMedia(["a", "b", "a", "c"])).toEqual(["a", "b", "c"]);
+  });
+
+  it("resolves a just-uploaded selection before the library refresh completes", () => {
+    const visible = [{ id: "a", version: 2 }];
+    const uploaded = [{ id: "b", version: 1 }, { id: "a", version: 1 }];
+
+    expect(resolveSelectedMedia(["b", "a", "missing"], visible, uploaded)).toEqual([
+      { id: "b", version: 1 },
+      { id: "a", version: 2 },
+    ]);
   });
 });
