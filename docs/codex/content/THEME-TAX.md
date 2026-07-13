@@ -165,6 +165,10 @@ coverage, and route-backed tab/search state remain follow-up work.
   The page fails closed with a local retry state and states that no values were
   assumed. Exact normalized dirty comparison and the shared navigation guard
   prevent false dirty state and accidental draft loss.
+- The Account administrator list may preserve its last successful rows during
+  refresh failure for diagnosis, but invitations, permission edits, and removals
+  stay disabled until a current authoritative read succeeds. Role selection
+  separately remains fail-closed while the assignable-role read is unavailable.
 
 This slice deliberately does not claim the larger semantic theme system is
 finished. Typography, density, radius, real-route isolated previews, full
