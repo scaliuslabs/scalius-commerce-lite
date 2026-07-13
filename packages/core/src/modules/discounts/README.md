@@ -4,8 +4,15 @@ Discount code CRUD, eligibility validation, and discount amount calculation. Sup
 
 ## Current admin workflow
 
-- The list names the customer outcome, code method, eligibility minimum,
-  lifecycle, schedule, and usage instead of relying on a code tooltip.
+- The list names the customer outcome, code method, every eligibility minimum,
+  lifecycle, schedule, and usage instead of relying on a code tooltip. Amount
+  and quantity minimums are joined with an explicit “both required” statement.
+  Codes whose total usage is exhausted say **Limit reached**, not **Active**.
+- Persisted demo/legacy rules that checkout cannot honor (missing or ignored
+  scope, mismatched value semantics, invalid schedule, segment/combination
+  flags, or a multi-use-per-order promise) display a visible review marker.
+  Editing and saving through the current builder normalizes those unsupported
+  fields instead of continuing to advertise them.
 - Create, edit, and duplicate use one `DiscountCodeBuilder` for all three
   supported outcomes. The builder keeps method, outcome, scope, requirements,
   schedule, limits, activation, readiness, and the natural-language rule in

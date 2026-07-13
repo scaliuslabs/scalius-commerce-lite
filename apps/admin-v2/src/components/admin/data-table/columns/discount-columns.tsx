@@ -1,5 +1,4 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
@@ -8,13 +7,12 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import {
-  Tag,
-  Percent,
-  Truck,
+  AlertTriangle,
   Copy,
   X,
   Check,
 } from "lucide-react";
+import { formatPrice } from "@scalius/shared/currency";
 import { cn } from "@scalius/shared/utils";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
@@ -22,8 +20,9 @@ import { createSelectColumn, createActionsColumn } from "./column-factories";
 import { DiscountStatusBadge } from "../../discount/DiscountStatusBadge";
 import {
   getDiscountLifecycle,
-  getDiscountTypeLabel,
-  getDiscountValueLabel,
+  getDiscountOutcome,
+  getDiscountReadinessIssues,
+  getDiscountRequirement,
 } from "../../discount/discount-list-model";
 
 export interface DiscountItem {
@@ -51,28 +50,6 @@ export interface DiscountItem {
   relatedCollections: { buy: string[]; get: string[] };
   usageCount?: number;
   totalDiscountAmount?: number;
-}
-
-function buildDiscountSummary(
-  discount: DiscountItem,
-  symbol: string,
-): string[] {
-  const lines: string[] = [];
-  lines.push(`Type: ${getDiscountTypeLabel(discount.type)}`);
-  lines.push(`Value: ${getDiscountValueLabel(discount, symbol)}`);
-  if (discount.minPurchaseAmount) {
-    lines.push(
-      `Min purchase: ${symbol}${discount.minPurchaseAmount.toLocaleString()}`,
-    );
-  }
-  if (discount.minQuantity) {
-    lines.push(`Min quantity: ${discount.minQuantity}`);
-  }
-  if (discount.limitOnePerCustomer) {
-    lines.push("Limit: 1 per customer");
-  }
-  lines.push("Stacking: one code per order");
-  return lines;
 }
 
 interface DiscountColumnOptions {
@@ -129,110 +106,90 @@ export function getDiscountColumns(
     {
       accessorKey: "code",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Code" />
+        <DataTableColumnHeader column={column} title="Discount" />
       ),
       cell: ({ row }) => {
         const discount = row.original;
-        const summaryLines = buildDiscountSummary(discount, opts.symbol);
+        const readinessIssues = getDiscountReadinessIssues(discount);
         return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-2 cursor-default">
-                  <Tag className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="truncate font-semibold text-foreground">
-                    {discount.code}
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-xs">
-                <div className="space-y-1 text-xs">
-                  <p className="font-semibold text-sm mb-1.5">
-                    {discount.code}
-                  </p>
-                  {summaryLines.map((line, i) => (
-                    <p key={i} className="text-muted-foreground">
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="min-w-0 py-0.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-mono text-sm font-semibold tracking-wide text-foreground">
+                {discount.code}
+              </span>
+              {readinessIssues.length > 0 ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span
+                        tabIndex={0}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-ring dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                        aria-label={`${readinessIssues.length} discount rule ${readinessIssues.length === 1 ? "issue" : "issues"}`}
+                      >
+                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                        Review
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-sm">
+                      <p className="mb-1.5 font-semibold">Rule needs review</p>
+                      <ul className="space-y-1 text-xs">
+                        {readinessIssues.map((issue) => (
+                          <li key={issue.code}>{issue.message}</li>
+                        ))}
+                      </ul>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
+            </div>
+            <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+              {getDiscountOutcome(discount, opts.symbol)}
+            </p>
+          </div>
         );
       },
-      size: 200,
+      size: 300,
     },
     {
-      accessorKey: "type",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Type" />
-      ),
+      id: "eligibility",
+      header: "Eligibility",
       cell: ({ row }) => {
         const discount = row.original;
         return (
-          <Badge
-            variant="outline"
-            className={cn(
-              "text-xs font-medium",
-              discount.type === "amount_off_products" &&
-                "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700",
-              discount.type === "amount_off_order" &&
-                "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-700",
-              discount.type === "free_shipping" &&
-                "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-700",
-            )}
-          >
-            {discount.type === "amount_off_products" ? (
-              <Tag className="h-3 w-3 mr-1" />
-            ) : discount.type === "amount_off_order" ? (
-              <Percent className="h-3 w-3 mr-1" />
-            ) : discount.type === "free_shipping" ? (
-              <Truck className="h-3 w-3 mr-1" />
-            ) : null}
-            {getDiscountTypeLabel(discount.type)}
-          </Badge>
+          <div className="py-0.5 text-xs">
+            <p className="font-medium text-foreground">
+              {getDiscountRequirement(discount, opts.symbol)}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              {discount.limitOnePerCustomer
+                ? "One use per customer"
+                : "No per-customer limit"}
+            </p>
+          </div>
         );
       },
-      size: 140,
-    },
-    {
-      accessorKey: "value",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Value" />
-      ),
-      cell: ({ row }) => (
-        <Badge variant="secondary">
-          {getDiscountValueLabel(row.original, opts.symbol)}
-        </Badge>
-      ),
-      size: 120,
+      enableSorting: false,
+      size: 230,
     },
     {
       accessorKey: "startDate",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Start" />
+        <DataTableColumnHeader column={column} title="Schedule" />
       ),
-      cell: ({ row }) => (
-        <span className="text-muted-foreground text-xs" suppressHydrationWarning>
-          {formatDate(row.original.startDate)}
-        </span>
-      ),
-      size: 110,
-    },
-    {
-      accessorKey: "endDate",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="End" />
-      ),
-      cell: ({ row }) => (
-        <span className="text-muted-foreground text-xs" suppressHydrationWarning>
-          {row.original.endDate
-            ? formatDate(row.original.endDate)
-            : "No end date"}
-        </span>
-      ),
-      size: 110,
+      cell: ({ row }) => {
+        const discount = row.original;
+        return (
+          <div className="py-0.5 text-xs" suppressHydrationWarning>
+            <p className="font-medium text-foreground">
+              {formatDate(discount.startDate)}
+            </p>
+            <p className="mt-0.5 text-muted-foreground">
+              {discount.endDate ? `Ends ${formatDate(discount.endDate)}` : "No end date"}
+            </p>
+          </div>
+        );
+      },
+      size: 145,
     },
     {
       id: "usage",
@@ -295,7 +252,7 @@ export function getDiscountColumns(
     },
     {
       id: "totalAmount",
-      header: "Amount",
+      header: "Savings",
       cell: ({ row }) => {
         const discount = row.original;
         return (
@@ -305,13 +262,15 @@ export function getDiscountColumns(
                 <div className="flex items-center gap-1">
                   <span className="font-medium">
                     {discount.totalDiscountAmount !== undefined
-                      ? `${opts.symbol}${discount.totalDiscountAmount.toLocaleString()}`
+                      ? formatPrice(discount.totalDiscountAmount, {
+                          symbol: opts.symbol,
+                        })
                       : "-"}
                   </span>
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Total discount amount given</p>
+                <p>Total savings issued by this code</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -354,5 +313,3 @@ export function getDiscountColumns(
     }),
   ];
 }
-
-export { getDiscountTypeLabel as getTypeLabel };

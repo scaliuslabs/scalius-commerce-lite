@@ -4,6 +4,7 @@ import type { DiscountItem } from "../data-table/columns/discount-columns";
 import {
   getDiscountLifecycle,
   getDiscountOutcome,
+  getDiscountReadinessIssues,
   getDiscountRequirement,
   getDiscountTypeLabel,
   getDiscountValueLabel,
@@ -76,6 +77,15 @@ describe("discount list presentation", () => {
         now,
       ),
     ).toBe("deleted");
+    expect(
+      getDiscountLifecycle(discount({ maxUses: 5, usageCount: 5 }), now),
+    ).toBe("exhausted");
+    expect(
+      getDiscountLifecycle(
+        discount({ maxUses: 5, usageCount: 5, startDate: "2026-07-14T00:00:00.000Z" }),
+        now,
+      ),
+    ).toBe("scheduled");
   });
 
   it("keeps labels and requirements concise and truthful", () => {
@@ -86,5 +96,61 @@ describe("discount list presentation", () => {
       "Minimum ৳1,500.00",
     );
     expect(getDiscountRequirement(discount({ minQuantity: 3 }), "৳")).toBe("Minimum 3 items");
+    expect(
+      getDiscountRequirement(
+        discount({ minPurchaseAmount: 1500, minQuantity: 3 }),
+        "৳",
+      ),
+    ).toBe("Minimum ৳1,500.00 and 3 items (both required)");
+  });
+
+  it("surfaces persisted rules that checkout cannot honor", () => {
+    expect(
+      getDiscountReadinessIssues(
+        discount({ relatedProducts: { buy: [], get: [] }, relatedCollections: { buy: [], get: [] } }),
+      ),
+    ).toEqual([
+      {
+        code: "missing_scope",
+        message: "Choose at least one product or collection before using this code.",
+      },
+    ]);
+
+    expect(
+      getDiscountReadinessIssues(
+        discount({
+          type: "amount_off_order",
+          relatedProducts: { buy: [], get: ["prod_1"] },
+          customerSegment: "vip",
+          combineWithShippingDiscounts: true,
+          maxUsesPerOrder: 2,
+        }),
+      ).map((issue) => issue.code),
+    ).toEqual([
+      "ignored_scope",
+      "unsupported_segment",
+      "unsupported_combination",
+      "unsupported_per_order_limit",
+    ]);
+  });
+
+  it("diagnoses invalid saved value and schedule semantics", () => {
+    expect(
+      getDiscountReadinessIssues(
+        discount({
+          type: "free_shipping",
+          valueType: "percentage",
+          discountValue: 120,
+          startDate: "2026-07-10T00:00:00.000Z",
+          endDate: "2026-07-09T00:00:00.000Z",
+        }),
+      ).map((issue) => issue.code),
+    ).toEqual(["invalid_value", "ignored_scope", "invalid_schedule"]);
+
+    expect(
+      getDiscountReadinessIssues(
+        discount({ minPurchaseAmount: -1, minQuantity: 1.5, maxUses: 0 }),
+      ).map((issue) => issue.code),
+    ).toEqual(["invalid_requirement"]);
   });
 });

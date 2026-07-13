@@ -1,7 +1,7 @@
 # Commerce Settings Competitive Audit
 
 Last reviewed: 2026-07-13
-Code baseline inspected: `0b310660`
+Code baseline inspected: `b99b524cf`
 
 This is the durable product and architecture decision record for Discounts,
 Taxes, Checkout and payment methods, Theme, and administrator Account settings.
@@ -192,9 +192,12 @@ Cloudflare state, and deployed browser behavior remain authoritative.
   behavior.
 - Update replaces target relations but has no aggregate revision/CAS. Two
   merchant tabs can silently overwrite promotion rules.
-- The list reports redemption totals but cannot explain why a promotion is not
-  applying, what it conflicts with, which cart lines received savings, or how
-  much budget remains.
+- The legacy list reported redemption totals but hid combined requirements and
+  called a usage-exhausted code active. The current code surface now explains
+  both saved minimums, reached usage limits, and persisted rule states checkout
+  cannot honor. It still cannot explain a specific cart, cross-rule conflicts,
+  line allocations, or campaign budget because those require the target
+  evaluator and allocation ledger.
 
 ### Documentation re-verification and Scalius decisions (2026-07-13)
 
@@ -212,6 +215,16 @@ The current documents still support these observations:
   product, then order, then shipping classes and documents many compatibility
   restrictions. Vendure requires every configured condition to pass before
   actions run.
+- Shopify currently permits up to 25 active automatic discounts and up to five
+  product/order codes plus one shipping code, but applies product effects before
+  evaluating order effects against the revised subtotal and selects the best
+  valid result when candidates conflict. A row of combination switches cannot
+  explain those consequences; the evaluator must return the basis, rejected
+  candidates, and winning allocation.
+- Vendure's separation remains a useful extension seam: common schedule, code,
+  and per-customer constraints wrap an all-conditions-must-pass set, followed
+  by one or more line, order, or shipping actions. Scalius should adopt that
+  boundary without adopting side effects that cannot be made idempotent.
 - Schedule, total usage, per-customer usage, target, and purchase requirements
   affect eligibility independently and must be previewed as one rule.
 
@@ -221,6 +234,17 @@ Shopify Community thread
 shows that merchants can enable combination-looking controls without
 understanding target overlap and class restrictions. This is directional
 problem evidence, not calculation authority.
+
+A more recent Shopify Developer Community report,
+[“Discount combinations: order discount with minimum subtotal”](https://community.shopify.dev/t/solved-confusion-discount-combinations-order-discount-with-minimum-subtotal/24636),
+initially looked like a platform bug to its author. The result was actually the
+best-value evaluator comparing an order tier against product discounts after
+the product discounts changed the qualifying subtotal. This reinforces a
+specific UI rule: show the exact minimum basis and AND/OR relationship, and
+eventually show why a candidate won or failed. Direct merchant requests for
+cheapest-item and multi-collection promotions also show the cost of workarounds
+when a system lacks separate qualifying and rewarded sets; see
+[this directional Shopify merchant discussion](https://www.reddit.com/r/shopify/comments/10wm9k8/cant_find_an_app_to_makes_the_kind_of_discounts_i/).
 
 Explicit Scalius decisions:
 
@@ -246,7 +270,12 @@ Explicit Scalius decisions:
    carries exact product scope into calculation, and ignores browser discount
    and shipping amounts. D1 triggers remain the concurrent authority for total
    usage and immutable canonical-phone redemption claims.
-7. This code-builder cleanup is not the target promotion system. Automatic
+7. The builder and list show the exact amount and quantity minimums together,
+   explicitly state that both are required, and never label a usage-exhausted
+   code active. The list marks targetless, mismatched, invalid-schedule, and
+   legacy segment/combination/per-order states for review instead of silently
+   presenting unsupported saved intent as live capability.
+8. This code-builder cleanup is not the target promotion system. Automatic
    rules, priority, combination, budgets, conflict/CAS, immutable allocations,
    test-cart explanation, and refunds remain blocked on the typed promotion
    evaluator and schema below.

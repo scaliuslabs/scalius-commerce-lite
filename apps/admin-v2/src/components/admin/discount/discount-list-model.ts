@@ -1,13 +1,37 @@
 import { formatPrice } from "@scalius/shared/currency";
 
 import type { DiscountItem } from "../data-table/columns/discount-columns";
+import { formatDiscountRequirement } from "./discount-rule-presentation";
 
 export type DiscountLifecycle =
   | "active"
   | "inactive"
   | "scheduled"
+  | "exhausted"
   | "expired"
   | "deleted";
+
+export type DiscountReadinessIssueCode =
+  | "invalid_type"
+  | "invalid_value"
+  | "missing_scope"
+  | "ignored_scope"
+  | "unsupported_segment"
+  | "unsupported_combination"
+  | "unsupported_per_order_limit"
+  | "invalid_requirement"
+  | "invalid_schedule";
+
+export interface DiscountReadinessIssue {
+  code: DiscountReadinessIssueCode;
+  message: string;
+}
+
+const supportedDiscountTypes = new Set([
+  "amount_off_products",
+  "amount_off_order",
+  "free_shipping",
+]);
 
 export function getDiscountTypeLabel(type: string): string {
   switch (type) {
@@ -64,7 +88,118 @@ export function getDiscountLifecycle(
     return "scheduled";
   }
 
+  if (
+    discount.isActive &&
+    discount.maxUses !== null &&
+    discount.maxUses > 0 &&
+    discount.usageCount !== undefined &&
+    discount.usageCount >= discount.maxUses
+  ) {
+    return "exhausted";
+  }
+
   return discount.isActive ? "active" : "inactive";
+}
+
+export function getDiscountReadinessIssues(
+  discount: DiscountItem,
+): DiscountReadinessIssue[] {
+  const issues: DiscountReadinessIssue[] = [];
+  const productCount = discount.relatedProducts.get.length;
+  const collectionCount = discount.relatedCollections.get.length;
+  const scopeCount = productCount + collectionCount;
+
+  if (!supportedDiscountTypes.has(discount.type)) {
+    issues.push({
+      code: "invalid_type",
+      message: "This discount type is not supported by checkout.",
+    });
+  }
+
+  const valueIsInvalid =
+    !Number.isFinite(discount.discountValue) ||
+    discount.discountValue <= 0 ||
+    (discount.valueType === "percentage" && discount.discountValue > 100) ||
+    (discount.type === "free_shipping" && discount.valueType !== "free") ||
+    (discount.type !== "free_shipping" &&
+      discount.valueType !== "percentage" &&
+      discount.valueType !== "fixed_amount");
+  if (valueIsInvalid) {
+    issues.push({
+      code: "invalid_value",
+      message: "The saved value does not match this discount type.",
+    });
+  }
+
+  if (discount.type === "amount_off_products" && scopeCount === 0) {
+    issues.push({
+      code: "missing_scope",
+      message: "Choose at least one product or collection before using this code.",
+    });
+  } else if (discount.type !== "amount_off_products" && scopeCount > 0) {
+    issues.push({
+      code: "ignored_scope",
+      message: "Saved product targets are ignored by this order-wide discount.",
+    });
+  }
+
+  if (discount.customerSegment?.trim()) {
+    issues.push({
+      code: "unsupported_segment",
+      message: "The saved customer segment is not enforced by checkout.",
+    });
+  }
+
+  if (
+    discount.combineWithProductDiscounts ||
+    discount.combineWithOrderDiscounts ||
+    discount.combineWithShippingDiscounts
+  ) {
+    issues.push({
+      code: "unsupported_combination",
+      message: "Saved combination settings are not enforced; checkout accepts one code.",
+    });
+  }
+
+  if (
+    discount.maxUsesPerOrder !== null &&
+    discount.maxUsesPerOrder !== 1
+  ) {
+    issues.push({
+      code: "unsupported_per_order_limit",
+      message: "Checkout supports one use of one discount code per order.",
+    });
+  }
+
+  const hasInvalidRequirement =
+    (discount.minPurchaseAmount !== null &&
+      (!Number.isFinite(discount.minPurchaseAmount) ||
+        discount.minPurchaseAmount <= 0)) ||
+    (discount.minQuantity !== null &&
+      (!Number.isInteger(discount.minQuantity) || discount.minQuantity <= 0)) ||
+    (discount.maxUses !== null &&
+      (!Number.isInteger(discount.maxUses) || discount.maxUses <= 0));
+  if (hasInvalidRequirement) {
+    issues.push({
+      code: "invalid_requirement",
+      message: "Saved minimums must be positive; quantity and usage limits must be whole numbers.",
+    });
+  }
+
+  const startTime = parseDate(discount.startDate);
+  const endTime = parseDate(discount.endDate);
+  if (
+    startTime === null ||
+    (discount.endDate !== null && endTime === null) ||
+    (endTime !== null && startTime !== null && endTime <= startTime)
+  ) {
+    issues.push({
+      code: "invalid_schedule",
+      message: "The saved schedule is invalid and must be reviewed.",
+    });
+  }
+
+  return issues;
 }
 
 export function getDiscountOutcome(
@@ -97,11 +232,9 @@ export function getDiscountOutcome(
 }
 
 export function getDiscountRequirement(discount: DiscountItem, symbol: string): string {
-  if (discount.minPurchaseAmount) {
-    return `Minimum ${formatPrice(discount.minPurchaseAmount, { symbol })}`;
-  }
-  if (discount.minQuantity) {
-    return `Minimum ${discount.minQuantity} ${discount.minQuantity === 1 ? "item" : "items"}`;
-  }
-  return "No minimum";
+  return formatDiscountRequirement({
+    minPurchaseAmount: discount.minPurchaseAmount,
+    minQuantity: discount.minQuantity,
+    symbol,
+  });
 }

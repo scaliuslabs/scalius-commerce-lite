@@ -38,6 +38,7 @@ import { Switch } from "../../ui/switch";
 import { CollectionSelector, type DiscountCollectionOption } from "./CollectionSelector";
 import { ProductSelector, type DiscountProductOption } from "./ProductSelector";
 import {
+  buildDiscountRequirementSummary,
   buildDiscountRuleSummary,
   createDiscountEditorDefaults,
   discountEditorSchema,
@@ -482,9 +483,7 @@ export function DiscountCodeBuilder({
                       <span>
                         <span className="block text-sm font-semibold">Purchase requirements</span>
                         <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
-                          {values.minPurchaseAmount || values.minQuantity
-                            ? "One or more minimums apply"
-                            : "No minimum purchase"}
+                          {buildDiscountRequirementSummary(values, symbol)}
                         </span>
                       </span>
                     </AccordionTrigger>
@@ -655,8 +654,8 @@ export function DiscountCodeBuilder({
                   <dt className="text-muted-foreground">Combines with</dt>
                   <dd className="font-medium">No other codes</dd>
                   <dt className="text-muted-foreground">Purchase minimums</dt>
-                  <dd className="text-right font-medium">
-                    {values.minPurchaseAmount || values.minQuantity ? "Configured" : "None"}
+                  <dd className="max-w-48 text-right font-medium">
+                    {buildDiscountRequirementSummary(values, symbol)}
                   </dd>
                   <dt className="text-muted-foreground">Customer limit</dt>
                   <dd className="text-right font-medium">
