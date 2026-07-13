@@ -75,21 +75,30 @@ function ReadinessRow({
     unknown?: boolean;
     icon: React.ComponentType<{ className?: string }>;
 }) {
+    const status = loading
+        ? { label: "Checking", className: "text-muted-foreground" }
+        : ready
+            ? { label: "Ready", className: "text-emerald-700 dark:text-emerald-300" }
+            : unknown
+                ? { label: "Unavailable", className: "text-amber-700 dark:text-amber-300" }
+                : { label: "Needs setup", className: "text-destructive" };
+
     return (
         <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
             <div className="flex min-w-0 items-center gap-2 text-sm">
                 <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{label}</span>
             </div>
-            {loading ? (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-            ) : ready ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-            ) : unknown ? (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-            ) : (
-                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
-            )}
+            <span className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium ${status.className}`}>
+                {loading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                ) : ready ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {status.label}
+            </span>
         </div>
     );
 }
@@ -104,7 +113,6 @@ export default function CheckoutFlowSettings() {
     } = useQuery(checkoutFlowSettingsQueryOptions());
     const {
         data: paymentMethods,
-        isLoading: paymentMethodsLoading,
         isFetching: paymentMethodsFetching,
         isError: paymentMethodsError,
         error: paymentMethodsQueryError,
@@ -112,7 +120,6 @@ export default function CheckoutFlowSettings() {
     } = useQuery(paymentMethodsQueryOptions());
     const {
         data: checkoutReadiness,
-        isLoading: checkoutReadinessLoading,
         isFetching: checkoutReadinessFetching,
         isError: checkoutReadinessError,
         error: checkoutReadinessQueryError,
@@ -148,8 +155,8 @@ export default function CheckoutFlowSettings() {
             methodsPayload.gatewayStatus?.cod?.enabled === true &&
             (methodsPayload.gatewayStatus?.cod?.usable ?? methodsPayload.gatewayStatus?.cod?.configured === true);
     }, [paymentMethods]);
-    const paymentMethodsPending = paymentMethodsLoading || (paymentMethodsFetching && !paymentMethods);
-    const paymentMethodsUnavailable = !paymentMethodsPending && !paymentMethods;
+    const paymentMethodsPending = !paymentMethods && !paymentMethodsError;
+    const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError;
 
     const flowIssues = useMemo(() => {
         return getCheckoutFlowPreviewIssues({
@@ -175,10 +182,10 @@ export default function CheckoutFlowSettings() {
     const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
     const readinessIssues = readiness?.issues ?? [];
     const previewIssues = [...flowIssues, ...readinessIssues];
-    const readinessPending = checkoutReadinessLoading || (checkoutReadinessFetching && !readiness);
+    const readinessPending = !readiness && !checkoutReadinessError;
     const previewLoading = paymentMethodsPending || readinessPending;
-    const readinessUnknown = !readiness && !readinessPending;
-    const readinessCheckUnavailable = !readinessPending && (checkoutReadinessError || readinessUnknown);
+    const readinessUnknown = !readiness && checkoutReadinessError;
+    const readinessCheckUnavailable = readinessUnknown;
     const readinessErrorMessage = checkoutReadinessQueryError instanceof Error
         ? checkoutReadinessQueryError.message
         : null;
@@ -186,7 +193,9 @@ export default function CheckoutFlowSettings() {
         ? paymentMethodsQueryError.message
         : null;
     const hasConfirmedPreviewIssue = previewIssues.length > 0 && !paymentMethodsUnavailable;
-    const previewCardClass = hasConfirmedPreviewIssue
+    const previewCardClass = previewLoading
+        ? "border-border bg-card"
+        : hasConfirmedPreviewIssue
         ? "border-destructive/40 bg-destructive/5"
         : paymentMethodsUnavailable || readinessCheckUnavailable
             ? "border-amber-500/30 bg-amber-500/5"
@@ -285,7 +294,9 @@ export default function CheckoutFlowSettings() {
             <Card className={previewCardClass}>
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base flex items-center gap-2">
-                        {hasConfirmedPreviewIssue ? (
+                        {previewLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : hasConfirmedPreviewIssue ? (
                             <AlertTriangle className="h-4 w-4 text-destructive" />
                         ) : paymentMethodsUnavailable || readinessCheckUnavailable ? (
                             <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -489,7 +500,7 @@ export default function CheckoutFlowSettings() {
                 >
                     {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <Save className="mr-2 h-4 w-4" />
-                    Save Settings
+                    Save checkout flow
                 </Button>
             </div>
         </div>

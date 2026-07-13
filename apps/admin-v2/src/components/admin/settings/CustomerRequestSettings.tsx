@@ -40,7 +40,7 @@ const ACTION_SWITCHES: Array<{
   {
     key: "refundEnabled",
     label: "Refund requests",
-    description: "For paid orders after fulfillment starts.",
+    description: "Let eligible buyers ask for money back. Approval and payment processing stay with the order.",
   },
 ];
 
