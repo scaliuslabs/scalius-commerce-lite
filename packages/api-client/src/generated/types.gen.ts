@@ -1161,6 +1161,12 @@ export type GetApiV1HeaderResponses = {
                     facebook: string;
                 };
                 cartTotal?: string;
+                navigation: Array<{
+                    id: string;
+                    title: string;
+                    href?: string;
+                    subMenu?: Array<unknown>;
+                }>;
             };
         };
     };
@@ -1271,10 +1277,18 @@ export type GetApiV1NavigationByIdResponses = {
                 name: string;
                 items: Array<{
                     id: string;
-                    label: string;
-                    url: string | null;
-                    sortOrder: number;
-                    [key: string]: unknown;
+                    title: string;
+                    href?: string;
+                    subMenu?: Array<{
+                        id: string;
+                        title: string;
+                        href?: string;
+                        subMenu?: Array<{
+                            id: string;
+                            title: string;
+                            href?: string;
+                        }>;
+                    }>;
                 }>;
             };
         };
@@ -15992,6 +16006,20 @@ export type GetApiV1AdminNavigationItemsResponses = {
                     type: string;
                     url: string;
                 }>;
+                products: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    type: string;
+                    url: string;
+                }>;
+                collections: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    type: string;
+                    url: string;
+                }>;
             };
         };
     };
@@ -20240,17 +20268,61 @@ export type PostApiV1AdminSettingsHeaderData = {
         }>;
         navigation: Array<{
             id: string;
-            title: string;
-            href?: string;
-            /**
-             * Nested navigation items
-             */
+            target: {
+                type: 'resource';
+                resourceType: 'page' | 'category' | 'collection' | 'product';
+                resourceId: string;
+                query?: string;
+            } | {
+                type: 'internal_path';
+                path: string;
+            } | {
+                type: 'external_url';
+                url: string;
+            } | {
+                type: 'label';
+            };
+            labelMode: 'resource' | 'custom';
+            customLabel?: string;
+            lastKnownLabel?: string;
             subMenu?: Array<{
-                id?: string;
-                title?: string;
-                href?: string;
+                id: string;
+                target: {
+                    type: 'resource';
+                    resourceType: 'page' | 'category' | 'collection' | 'product';
+                    resourceId: string;
+                    query?: string;
+                } | {
+                    type: 'internal_path';
+                    path: string;
+                } | {
+                    type: 'external_url';
+                    url: string;
+                } | {
+                    type: 'label';
+                };
+                labelMode: 'resource' | 'custom';
+                customLabel?: string;
+                lastKnownLabel?: string;
                 subMenu?: Array<{
-                    [key: string]: unknown;
+                    id: string;
+                    target: {
+                        type: 'resource';
+                        resourceType: 'page' | 'category' | 'collection' | 'product';
+                        resourceId: string;
+                        query?: string;
+                    } | {
+                        type: 'internal_path';
+                        path: string;
+                    } | {
+                        type: 'external_url';
+                        url: string;
+                    } | {
+                        type: 'label';
+                    };
+                    labelMode: 'resource' | 'custom';
+                    customLabel?: string;
+                    lastKnownLabel?: string;
                 }>;
             }>;
         }>;
@@ -20359,17 +20431,61 @@ export type PostApiV1AdminSettingsFooterData = {
             title: string;
             links: Array<{
                 id: string;
-                title: string;
-                href?: string;
-                /**
-                 * Nested navigation items
-                 */
+                target: {
+                    type: 'resource';
+                    resourceType: 'page' | 'category' | 'collection' | 'product';
+                    resourceId: string;
+                    query?: string;
+                } | {
+                    type: 'internal_path';
+                    path: string;
+                } | {
+                    type: 'external_url';
+                    url: string;
+                } | {
+                    type: 'label';
+                };
+                labelMode: 'resource' | 'custom';
+                customLabel?: string;
+                lastKnownLabel?: string;
                 subMenu?: Array<{
-                    id?: string;
-                    title?: string;
-                    href?: string;
+                    id: string;
+                    target: {
+                        type: 'resource';
+                        resourceType: 'page' | 'category' | 'collection' | 'product';
+                        resourceId: string;
+                        query?: string;
+                    } | {
+                        type: 'internal_path';
+                        path: string;
+                    } | {
+                        type: 'external_url';
+                        url: string;
+                    } | {
+                        type: 'label';
+                    };
+                    labelMode: 'resource' | 'custom';
+                    customLabel?: string;
+                    lastKnownLabel?: string;
                     subMenu?: Array<{
-                        [key: string]: unknown;
+                        id: string;
+                        target: {
+                            type: 'resource';
+                            resourceType: 'page' | 'category' | 'collection' | 'product';
+                            resourceId: string;
+                            query?: string;
+                        } | {
+                            type: 'internal_path';
+                            path: string;
+                        } | {
+                            type: 'external_url';
+                            url: string;
+                        } | {
+                            type: 'label';
+                        };
+                        labelMode: 'resource' | 'custom';
+                        customLabel?: string;
+                        lastKnownLabel?: string;
                     }>;
                 }>;
             }>;
