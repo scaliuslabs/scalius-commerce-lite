@@ -163,7 +163,6 @@ export function useToggleDiscountStatus() {
       return { previous };
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.discounts.list() });
       queryClient.setQueryData<DiscountDto | undefined>(
         queryKeys.discounts.detail(result.id),
         (old) => old ? { ...old, isActive: result.isActive, revision: result.revision } : old,
@@ -184,6 +183,9 @@ export function useToggleDiscountStatus() {
       }
     },
     onSettled: (_data, _err, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.discounts.list(),
+      });
       queryClient.invalidateQueries({
         queryKey: queryKeys.discounts.detail(variables.id),
       });
