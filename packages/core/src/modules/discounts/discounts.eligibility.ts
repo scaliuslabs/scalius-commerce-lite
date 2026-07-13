@@ -149,7 +149,9 @@ export async function isDiscountValid(
                 eq(discounts.isActive, true),
                 isNull(discounts.deletedAt),
                 sql`${discounts.startDate} <= ${currentTime}`,
-                sql`(${discounts.endDate} IS NULL OR ${discounts.endDate} > ${currentTime})`,
+                // Stored end timestamps are inclusive. Date-based admin rules
+                // therefore remain eligible through the final selected second.
+                sql`(${discounts.endDate} IS NULL OR ${discounts.endDate} >= ${currentTime})`,
             ),
         )
         .get();
@@ -384,7 +386,8 @@ export async function calculateDiscountAmount(
         // Use pre-computed product IDs if available (avoids duplicate DB queries
         // when the caller already expanded them during validation).
         let applicableProductIds: Set<string>;
-        let hasProductRestrictions = precomputedHasProductRestrictions ?? false;
+        let hasProductRestrictions =
+            precomputedHasProductRestrictions ?? precomputedProductIds !== undefined;
         if (precomputedProductIds) {
             applicableProductIds = precomputedProductIds;
         } else {

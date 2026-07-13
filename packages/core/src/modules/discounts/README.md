@@ -76,13 +76,13 @@ Three types defined in `@scalius/database/schema`:
 | Function | Signature | Notes |
 |----------|-----------|-------|
 | `isDiscountValid` | `(db, code, total?, cartItems?, customerPhone?, currencySymbol?, currencyCode?)` | Validates a discount code against cart context. Returns `{ valid, discount?, applicableProductIds?, error? }`. |
-| `calculateDiscountAmount` | `(db, discount, total, cartItems, shippingCost?, precomputedProductIds?)` | Calculates the actual discount amount. Accepts optional `precomputedProductIds` to skip re-querying when called after `isDiscountValid`. |
+| `calculateDiscountAmount` | `(db, discount, total, cartItems, shippingCost?, precomputedProductIds?, currencyCode?, precomputedHasProductRestrictions?)` | Calculates the actual discount amount. Accepts the validated product set and restriction fact to skip duplicate reads after `isDiscountValid`. Passing a product set also implies restricted scope and never enables subtotal fallback. |
 
 ### Validation Checks (`isDiscountValid`)
 
 Checks performed in order:
 
-1. Code exists, is active, not soft-deleted, within date window
+1. Code exists, is active, not soft-deleted, and within its inclusive saved end timestamp
 2. Product/collection scope resolves fail-closed when any restriction exists
 3. Minimum purchase amount met (merchandise subtotal; eligible lines only for product scope)
 4. Minimum quantity met (eligible lines only for product scope)
@@ -90,6 +90,11 @@ Checks performed in order:
 6. Per-customer limit via immutable `discountCustomerRedemptions` phone claim (advisory before checkout commit)
 
 Returns `applicableProductIds` set for downstream use by `calculateDiscountAmount`.
+
+The public validation endpoint is advisory. Final checkout calls the same
+validator again with the server-resolved merchandise subtotal, exact persisted
+SKU prices/quantities, canonical checkout phone, and resolved product scope. It
+does not trust the browser's discount amount, shipping amount, or earlier quote.
 
 ## Commit-Time Enforcement
 
@@ -99,6 +104,11 @@ Cart and API validation are buyer-friendly prechecks, not the concurrency author
 - `discount_usage_one_per_customer_guard` aborts with `DISCOUNT_ONE_PER_CUSTOMER_EXCEEDED` when the checkout phone proof already has an immutable redemption claim for that discount.
 - `discount_customer_redemptions` stores the immutable per-customer claim as `phone:{checkoutPhone}` at redemption time, so later admin corrections to `orders.customerPhone` do not reopen a one-per-customer coupon.
 - `commitStorefrontOrderPayload()` maps those trigger aborts back to normal checkout `ValidationError`s and releases reserved stock before returning the failure.
+
+The D1 triggers close concurrent total-usage and phone-redemption races. Other
+rule edits (schedule, scope, and minimum changes between final validation and
+the order batch) still require the planned revisioned promotion allocation
+model; public validation is not represented as a durable reservation.
 
 ### Discount Calculation (`calculateDiscountAmount`)
 

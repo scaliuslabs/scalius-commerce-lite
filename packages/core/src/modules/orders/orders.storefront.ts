@@ -11,7 +11,6 @@ import {
     type StorefrontDiscountType,
 } from "../tax";
 import {
-    discounts,
     siteSettings,
     shippingMethods,
     PaymentMethod,
@@ -170,6 +169,7 @@ export async function createStorefrontOrder(
         items: unknown[],
         shippingCost: number,
         applicableProductIds?: Set<string>,
+        hasProductRestrictions?: boolean,
     ) => number | Promise<number>,
     identity?: CreateStorefrontOrderIdentity,
     prevalidatedCart?: StorefrontCartValidationResult,
@@ -232,17 +232,6 @@ export async function createStorefrontOrder(
     // Drizzle D1 batch() requires specific tuple types
     const readBatch: unknown[] = [];
 
-    if (normalizedDiscountCode) {
-        readBatch.push(
-            storefrontDb
-                .select({ id: discounts.id })
-                .from(discounts)
-                .where(eq(discounts.code, normalizedDiscountCode)),
-        );
-    } else {
-        readBatch.push(storefrontDb.select().from(discounts).limit(0));
-    }
-
     readBatch.push(storefrontDb.select().from(siteSettings).limit(1));
 
     // Execute Read Batch
@@ -251,10 +240,7 @@ export async function createStorefrontOrder(
 
     const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
-    const discountList = data.discountCode ? (readResults[0] as { id: string }[]) : [];
-    const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
-
-    const settingsList = readResults[1] as Record<string, unknown>[];
+    const settingsList = readResults[0] as Record<string, unknown>[];
     const settings = settingsList.length > 0 ? settingsList[0] as Record<string, unknown> : null;
 
     const serverItemTotal = cartValidation.subtotal;
@@ -265,7 +251,7 @@ export async function createStorefrontOrder(
     // DISCOUNTS VERIFICATION
     // ------------------------------------------------------------------
     let verifiedDiscountAmount = 0;
-    let appliedDiscountId = appliedDiscount?.id ?? null;
+    let appliedDiscountId: string | null = null;
     let discountType: StorefrontDiscountType | null = null;
     let applicableProductIds: Set<string> | undefined;
     if (normalizedDiscountCode) {
@@ -278,7 +264,7 @@ export async function createStorefrontOrder(
         const validationResponse = await isDiscountValid(
             storefrontDb,
             normalizedDiscountCode,
-            serverItemTotal + verifiedShippingCharge,
+            serverItemTotal,
             discountItems,
             data.customerPhone,
         );
@@ -289,13 +275,24 @@ export async function createStorefrontOrder(
                 id?: string;
                 type?: StorefrontDiscountType;
             };
-            if (!validatedDiscount.type) {
+            if (
+                typeof validatedDiscount.id !== "string" ||
+                !validatedDiscount.id.trim() ||
+                !["amount_off_products", "amount_off_order", "free_shipping"].includes(
+                    validatedDiscount.type ?? "",
+                )
+            ) {
                 throw new ValidationError("The discount configuration is invalid.");
             }
-            appliedDiscountId = validatedDiscount.id ?? appliedDiscountId;
-            discountType = validatedDiscount.type;
+            appliedDiscountId = validatedDiscount.id;
+            discountType = validatedDiscount.type!;
+            let hasProductRestrictions = false;
             if (validatedDiscount.type === "amount_off_products") {
-                if (!(validResult.applicableProductIds instanceof Set)) {
+                hasProductRestrictions = validResult.hasProductRestrictions === true;
+                if (
+                    !hasProductRestrictions ||
+                    !(validResult.applicableProductIds instanceof Set)
+                ) {
                     throw new ValidationError("The product discount scope could not be verified.");
                 }
                 applicableProductIds = validResult.applicableProductIds as Set<string>;
@@ -307,6 +304,7 @@ export async function createStorefrontOrder(
                 discountItems,
                 verifiedShippingCharge,
                 applicableProductIds,
+                hasProductRestrictions,
             );
         } else {
             const rejectionReason =

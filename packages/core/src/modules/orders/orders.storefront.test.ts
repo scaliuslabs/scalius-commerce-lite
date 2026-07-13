@@ -248,6 +248,8 @@ async function placeOrder({
   shippingMethods = [createShippingMethod()],
   discountValidation = null,
   calculatedDiscountAmount = 0,
+  discountValidator,
+  discountCalculator,
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   customerIdentity?: CreateStorefrontOrderCustomerIdentity;
@@ -257,6 +259,8 @@ async function placeOrder({
   shippingMethods?: ShippingMethodRow[];
   discountValidation?: unknown;
   calculatedDiscountAmount?: number;
+  discountValidator?: Parameters<typeof createStorefrontOrder>[3];
+  discountCalculator?: Parameters<typeof createStorefrontOrder>[4];
 } = {}) {
   const validationProducts = products.filter((product) => product.isActive === true);
   const db = createDbMock(
@@ -272,8 +276,8 @@ async function placeOrder({
     db,
     createOrderInput(inputOverrides),
     "http://localhost:8787/api/v1/orders",
-    vi.fn(async () => discountValidation),
-    vi.fn(() => calculatedDiscountAmount),
+    discountValidator ?? vi.fn(async () => discountValidation),
+    discountCalculator ?? vi.fn(() => calculatedDiscountAmount),
     undefined,
     undefined,
     undefined,
@@ -338,6 +342,7 @@ describe("createStorefrontOrder tax discount parity", () => {
           discountValue: 50,
         },
         applicableProductIds: new Set(["prod_standard"]),
+        hasProductRestrictions: true,
       },
       calculatedDiscountAmount: 50,
     });
@@ -366,6 +371,68 @@ describe("createStorefrontOrder tax discount parity", () => {
       },
       calculatedDiscountAmount: 50,
     })).rejects.toThrow("product discount scope could not be verified");
+  });
+
+  it("revalidates the code against authoritative merchandise, phone, and scope at checkout", async () => {
+    const validator = vi.fn<Parameters<typeof createStorefrontOrder>[3]>(async () => ({
+      valid: true,
+      discount: {
+        id: "discount_1",
+        type: "amount_off_products",
+        valueType: "fixed_amount",
+        discountValue: 50,
+      },
+      applicableProductIds: new Set(["prod_standard"]),
+      hasProductRestrictions: true,
+    }));
+    const calculator = vi.fn<Parameters<typeof createStorefrontOrder>[4]>(async () => 50);
+
+    await placeOrder({
+      inputOverrides: {
+        discountCode: " product50 ",
+        discountAmount: 9_999,
+        shippingCharge: 9_999,
+      },
+      discountValidator: validator,
+      discountCalculator: calculator,
+    });
+
+    expect(validator).toHaveBeenCalledWith(
+      expect.anything(),
+      "PRODUCT50",
+      125,
+      [{
+        id: "prod_standard",
+        price: 125,
+        quantity: 1,
+        variantId: "var_standard",
+      }],
+      "+8801700000000",
+    );
+    expect(calculator).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: "discount_1", type: "amount_off_products" }),
+      185,
+      expect.any(Array),
+      60,
+      new Set(["prod_standard"]),
+      true,
+    );
+  });
+
+  it("fails closed when the evaluator omits the authoritative discount identity", async () => {
+    await expect(placeOrder({
+      inputOverrides: { discountCode: "SAVE20" },
+      discountValidation: {
+        valid: true,
+        discount: {
+          type: "amount_off_order",
+          valueType: "percentage",
+          discountValue: 20,
+        },
+      },
+      calculatedDiscountAmount: 20,
+    })).rejects.toThrow("discount configuration is invalid");
   });
 
   it("preserves the evaluator's buyer-safe rejection reason at final checkout", async () => {

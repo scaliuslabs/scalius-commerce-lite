@@ -52,7 +52,12 @@ export function getDiscountLifecycle(
 
   const currentTime = now.getTime();
   const endTime = parseDate(discount.endDate);
-  if (endTime !== null && endTime < currentTime) return "expired";
+  if (
+    endTime !== null &&
+    Math.floor(endTime / 1_000) < Math.floor(currentTime / 1_000)
+  ) {
+    return "expired";
+  }
 
   const startTime = parseDate(discount.startDate);
   if (discount.isActive && startTime !== null && startTime > currentTime) {

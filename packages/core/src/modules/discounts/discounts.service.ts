@@ -477,7 +477,7 @@ export async function setDiscountActiveStatus(
     if (
         isActive &&
         discount.endDate instanceof Date &&
-        discount.endDate.getTime() <= Date.now()
+        Math.floor(discount.endDate.getTime() / 1000) < Math.floor(Date.now() / 1000)
     ) {
         throw new ValidationError("Expired discounts cannot be activated; extend the end date first");
     }

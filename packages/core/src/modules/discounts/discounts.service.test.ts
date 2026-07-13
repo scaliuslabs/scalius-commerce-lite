@@ -8,6 +8,7 @@ import {
   deleteDiscount,
   permanentlyDeleteDiscount,
   restoreDiscounts,
+  setDiscountActiveStatus,
   updateDiscount,
 } from "./discounts.service";
 
@@ -81,6 +82,24 @@ describe("discount lifecycle authority", () => {
     });
 
     expect(insertedValueCounts).toEqual([1, 20, 20, 5]);
+  });
+
+  it("keeps activation status aligned with the inclusive end second", async () => {
+    vi.useFakeTimers();
+    try {
+      const endDate = new Date(1_800_000_000_000);
+      vi.setSystemTime(new Date(1_800_000_000_500));
+      const activeBoundary = createLifecycleDb([{ id: "disc_1", endDate }]);
+      await expect(setDiscountActiveStatus(activeBoundary.db, "disc_1", true))
+        .resolves.toEqual({ id: "disc_1", isActive: true });
+
+      vi.setSystemTime(new Date(1_800_000_001_000));
+      const expired = createLifecycleDb([{ id: "disc_1", endDate }]);
+      await expect(setDiscountActiveStatus(expired.db, "disc_1", true))
+        .rejects.toThrow(/Expired discounts cannot be activated/u);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
