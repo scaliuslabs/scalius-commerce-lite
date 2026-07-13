@@ -3,6 +3,7 @@ import {
   Sheet,
   SheetContent,
   SheetClose,
+  SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
@@ -184,6 +185,9 @@ export default function CartFlyout() {
         onMouseEnter={handleMeaningfulInteraction}
         onTouchStart={handleMeaningfulInteraction}
       >
+        <SheetDescription className="sr-only">
+          Review cart items, change quantities, or continue to checkout.
+        </SheetDescription>
         {/* 
           SWIPE ZONE (Mobile Only)
           Visible drag handle with animation to suggest pulling down
