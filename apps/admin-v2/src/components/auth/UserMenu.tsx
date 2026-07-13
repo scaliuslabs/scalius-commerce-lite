@@ -85,6 +85,7 @@ export function UserMenu({ user }: UserMenuProps) {
         <DropdownMenuItem className="cursor-pointer" asChild>
           <Link
             to="/admin/settings/account"
+            search={{ section: "security" }}
             className="flex items-center gap-2 w-full"
           >
             <User className="h-4 w-4" />
