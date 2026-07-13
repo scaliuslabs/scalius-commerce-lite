@@ -1,6 +1,6 @@
-// Admin navigation data — pure TypeScript, no DOM dependencies.
+// Admin navigation data and its shared icon contract.
 
-import type React from "react";
+import { createElement, type ComponentType } from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -17,16 +17,18 @@ import {
   BadgePercent,
   BarChart3,
   Users,
-  ShieldCheck,
-  Clock3,
+  ShieldAlert,
   Bell,
   UserCog,
-  CreditCard,
   Warehouse,
   Palette,
   Package,
-  PenTool,
   ReceiptText,
+  Boxes,
+  CircleDollarSign,
+  GalleryHorizontalEnd,
+  LibraryBig,
+  ShoppingBasket,
 } from "lucide-react";
 import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
 
@@ -52,10 +54,44 @@ export const NAV_PERMISSIONS = {
   TAXES_VIEW: ADMIN_PERMISSIONS.TAXES_VIEW,
 } as const;
 
+export interface NavIconProps {
+  className?: string;
+  strokeWidth?: number;
+  "aria-hidden"?: boolean;
+}
+
+export type NavIcon = ComponentType<NavIconProps>;
+
+/**
+ * The Meta CAPI route is a direct provider integration, so its official mark is
+ * more useful than another generic analytics glyph. A mask preserves the
+ * verified provider silhouette while allowing active, hover, and dark-theme
+ * colors to continue coming from the sidebar.
+ */
+export function MetaCapiNavIcon({ className }: NavIconProps) {
+  return createElement("span", {
+    "aria-hidden": true,
+    className: ["inline-block size-4 shrink-0", className]
+      .filter(Boolean)
+      .join(" "),
+    style: {
+      backgroundColor: "currentColor",
+      maskImage: "url(/provider-marks/meta.svg)",
+      maskPosition: "center",
+      maskRepeat: "no-repeat",
+      maskSize: "contain",
+      WebkitMaskImage: "url(/provider-marks/meta.svg)",
+      WebkitMaskPosition: "center",
+      WebkitMaskRepeat: "no-repeat",
+      WebkitMaskSize: "contain",
+    },
+  });
+}
+
 export interface NavSubItem {
   name: string;
   href: string;
-  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon?: NavIcon;
   requiredPermission?: string;
   anyOfPermissions?: string[];
 }
@@ -63,7 +99,7 @@ export interface NavSubItem {
 export interface NavItem {
   name: string;
   href: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: NavIcon;
   subItems?: NavSubItem[];
   defaultOpen?: boolean;
   requiredPermission?: string;
@@ -108,13 +144,13 @@ export const allNavSections: NavSection[] = [
       {
         name: "Catalog",
         href: "/admin/products",
-        icon: Package,
+        icon: Boxes,
         defaultOpen: true,
         subItems: [
           {
             name: "Products",
             href: "/admin/products",
-            icon: ShoppingCart,
+            icon: Package,
             requiredPermission: NAV_PERMISSIONS.PRODUCTS_VIEW,
           },
           {
@@ -147,7 +183,7 @@ export const allNavSections: NavSection[] = [
       {
         name: "Content",
         href: "/admin/pages",
-        icon: PenTool,
+        icon: LibraryBig,
         defaultOpen: true,
         subItems: [
           {
@@ -168,7 +204,7 @@ export const allNavSections: NavSection[] = [
       {
         name: "Sales",
         href: "/admin/orders",
-        icon: ShoppingBag,
+        icon: CircleDollarSign,
         defaultOpen: true,
         subItems: [
           {
@@ -180,7 +216,7 @@ export const allNavSections: NavSection[] = [
           {
             name: "Abandoned",
             href: "/admin/abandoned-checkouts",
-            icon: Clock3,
+            icon: ShoppingCart,
             requiredPermission: NAV_PERMISSIONS.ORDERS_VIEW,
           },
           {
@@ -235,13 +271,13 @@ export const allNavSections: NavSection[] = [
           {
             name: "Hero Sliders",
             href: "/admin/settings/hero-sliders",
-            icon: Images,
+            icon: GalleryHorizontalEnd,
             requiredPermission: NAV_PERMISSIONS.SETTINGS_HEADER_EDIT,
           },
           {
             name: "Checkout",
             href: "/admin/settings/checkout",
-            icon: CreditCard,
+            icon: ShoppingBasket,
             requiredPermission: NAV_PERMISSIONS.SETTINGS_GENERAL_VIEW,
           },
           {
@@ -259,13 +295,13 @@ export const allNavSections: NavSection[] = [
           {
             name: "Fraud Checker",
             href: "/admin/settings/fraud-checker",
-            icon: ShieldCheck,
+            icon: ShieldAlert,
             requiredPermission: NAV_PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
           },
           {
             name: "Meta CAPI",
             href: "/admin/settings/meta-conversion",
-            icon: BarChart3,
+            icon: MetaCapiNavIcon,
             requiredPermission: NAV_PERMISSIONS.ANALYTICS_VIEW,
           },
           {

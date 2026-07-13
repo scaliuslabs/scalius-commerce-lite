@@ -28,6 +28,9 @@ import faviconImg from "@/assets/favicon.png";
 import logoDarkImg from "@/assets/logo-dark.png";
 import logoLightImg from "@/assets/logo-light.png";
 
+const NAV_ICON_CLASSNAME = "size-4 shrink-0";
+const NAV_ICON_STROKE_WIDTH = 1.75;
+
 const StorefrontFooterLink = lazy(() =>
   import("./StorefrontFooterLink").then((module) => ({
     default: module.StorefrontFooterLink,
@@ -191,7 +194,11 @@ export function AppSidebar() {
                         className={isRouteActive(currentPath, item.href) ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}
                       >
                         <Link to={item.href} onClick={closeMobileSidebar}>
-                          <item.icon className="shrink-0" strokeWidth={1.8} />
+                          <item.icon
+                            aria-hidden
+                            className={NAV_ICON_CLASSNAME}
+                            strokeWidth={NAV_ICON_STROKE_WIDTH}
+                          />
                           <span>{item.name}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -229,7 +236,11 @@ function StorefrontFooterLinkFallback() {
       tooltip="Visit Storefront"
       className="opacity-70"
     >
-      <Globe className="shrink-0" strokeWidth={1.8} />
+      <Globe
+        aria-hidden
+        className={NAV_ICON_CLASSNAME}
+        strokeWidth={NAV_ICON_STROKE_WIDTH}
+      />
       <span className="flex-1 truncate">Visit Storefront</span>
     </SidebarMenuButton>
   );
@@ -268,9 +279,17 @@ function CollapsibleNavItem({
       <SidebarMenuItem data-nav-item={item.name}>
         <CollapsibleTrigger asChild>
           <SidebarMenuButton tooltip={item.name} isActive={isParentActive} className={isParentActive ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)] shadow-sm" : ""}>
-            <item.icon className="shrink-0" strokeWidth={1.8} />
+            <item.icon
+              aria-hidden
+              className={NAV_ICON_CLASSNAME}
+              strokeWidth={NAV_ICON_STROKE_WIDTH}
+            />
             <span>{item.name}</span>
-            <ChevronDown className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+            <ChevronDown
+              aria-hidden
+              className="ml-auto size-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180"
+              strokeWidth={NAV_ICON_STROKE_WIDTH}
+            />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -288,7 +307,11 @@ function CollapsibleNavItem({
                   >
                     <Link to={subItem.href} onClick={onNavigate}>
                       {subItem.icon && (
-                        <subItem.icon className="shrink-0" strokeWidth={1.8} />
+                        <subItem.icon
+                          aria-hidden
+                          className={NAV_ICON_CLASSNAME}
+                          strokeWidth={NAV_ICON_STROKE_WIDTH}
+                        />
                       )}
                       <span>{subItem.name}</span>
                     </Link>
