@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Separator } from "~/components/ui/separator";
 import { Loader2, KeyRound, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -73,33 +72,33 @@ export function ChangePasswordForm() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <KeyRound className="h-5 w-5" />
-          Change Password
+    <Card className="max-w-3xl rounded-xl shadow-none">
+      <CardHeader className="p-4 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <KeyRound className="h-4 w-4" />
+          Change password
         </CardTitle>
         <CardDescription>
-          Choose a strong password with at least 12 characters
+          Use at least 12 characters. Changing it does not weaken your 2FA requirement.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         <form
           method="post"
-          action="/admin/account"
+          action="/admin/settings/account"
           onSubmit={handleSubmit}
           className="space-y-4"
           noValidate
         >
           {error && (
-            <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
+            <Label htmlFor="currentPassword">Current password</Label>
             <div className="relative">
               <Input
                 id="currentPassword"
@@ -107,6 +106,7 @@ export function ChangePasswordForm() {
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 required
+                autoComplete="current-password"
                 disabled={!isHydrated || isLoading}
                 className="pr-10"
               />
@@ -116,6 +116,7 @@ export function ChangePasswordForm() {
                 size="icon"
                 className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                 onClick={() => setShowCurrentPassword((s) => !s)}
+                aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
               >
                 {showCurrentPassword ? (
                   <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -126,10 +127,8 @@ export function ChangePasswordForm() {
             </div>
           </div>
 
-          <Separator />
-
           <div className="space-y-2">
-            <Label htmlFor="newPassword">New Password</Label>
+            <Label htmlFor="newPassword">New password</Label>
             <div className="relative">
               <Input
                 id="newPassword"
@@ -137,6 +136,7 @@ export function ChangePasswordForm() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
+                autoComplete="new-password"
                 disabled={!isHydrated || isLoading}
                 minLength={12}
                 className="pr-10"
@@ -147,6 +147,7 @@ export function ChangePasswordForm() {
                 size="icon"
                 className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                 onClick={() => setShowNewPassword((s) => !s)}
+                aria-label={showNewPassword ? "Hide new password" : "Show new password"}
               >
                 {showNewPassword ? (
                   <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -176,13 +177,14 @@ export function ChangePasswordForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <Label htmlFor="confirmPassword">Confirm new password</Label>
             <Input
               id="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              autoComplete="new-password"
               disabled={!isHydrated || isLoading}
               minLength={12}
             />
@@ -200,15 +202,15 @@ export function ChangePasswordForm() {
               !newPassword ||
               newPassword !== confirmPassword
             }
-            className="w-full sm:w-auto"
+            className="min-h-10 w-full sm:w-auto"
           >
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
+                Updating…
               </>
             ) : (
-              "Update Password"
+              "Update password"
             )}
           </Button>
         </form>

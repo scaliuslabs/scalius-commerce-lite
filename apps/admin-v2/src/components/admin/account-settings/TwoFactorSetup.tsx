@@ -295,15 +295,15 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
   if (showSetup) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
+      <Card className="max-w-3xl rounded-xl shadow-none">
+        <CardHeader className="p-4 pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" />
             {setupMode === "disable"
-              ? "Disable Two-Factor Authentication"
+              ? "Disable two-factor authentication"
               : setupMode === "change"
-                ? "Change Verification Method"
-                : "Enable Two-Factor Authentication"}
+                ? "Change verification method"
+                : "Enable two-factor authentication"}
           </CardTitle>
           <CardDescription>
             {setupMode === "disable"
@@ -313,9 +313,9 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 : "Add an extra layer of security to your account"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           {error && (
-            <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
+            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -323,22 +323,22 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
           {step === "method" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("totp")}
-                  className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "totp"
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  className={`min-h-24 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "totp"
+                    ? "border-primary bg-primary/5"
                     : "hover:bg-muted/50 hover:border-muted-foreground/20"
                     }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
                       }`}>
-                      <Smartphone className={`h-6 w-6 ${selectedMethod === "totp" ? "text-primary" : "text-muted-foreground"}`} />
+                      <Smartphone className={`h-5 w-5 ${selectedMethod === "totp" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
-                      <p className="font-medium">Authenticator App</p>
+                      <p className="font-medium">Authenticator app</p>
                       <p className="text-xs text-muted-foreground">Google Authenticator, Authy</p>
                     </div>
                   </div>
@@ -349,15 +349,15 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("email")}
-                  className={`p-4 border rounded-xl text-left transition-all ${selectedMethod === "email"
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  className={`min-h-24 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "email"
+                    ? "border-primary bg-primary/5"
                     : "hover:bg-muted/50 hover:border-muted-foreground/20"
                     }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
                       }`}>
-                      <Mail className={`h-6 w-6 ${selectedMethod === "email" ? "text-primary" : "text-muted-foreground"}`} />
+                      <Mail className={`h-5 w-5 ${selectedMethod === "email" ? "text-primary" : "text-muted-foreground"}`} />
                     </div>
                     <div>
                       <p className="font-medium">Email</p>
@@ -369,7 +369,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   </p>
                 </button>
               </div>
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <Button
                   onClick={() => {
                     if (setupMode === "change" && selectedMethod === "email") {
@@ -379,7 +379,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                     }
                   }}
                   disabled={isLoading}
-                  className="flex-1"
+                  className="min-h-10 sm:order-2 sm:flex-none"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Continue
@@ -388,6 +388,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   variant="outline"
                   onClick={() => { setShowSetup(false); resetState(); }}
                   disabled={isLoading}
+                  className="min-h-10"
                 >
                   Cancel
                 </Button>
@@ -398,18 +399,19 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
           {step === "password" && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="2fa-password">Confirm Your Password</Label>
+                <Label htmlFor="2fa-password">Confirm your password</Label>
                 <Input
                   id="2fa-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
                   disabled={isLoading}
                   autoFocus
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button
                   onClick={() => {
                     if (setupMode === "disable") handleDisable2FA();
@@ -418,7 +420,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   }}
                   disabled={isLoading || !password}
                   variant={setupMode === "disable" ? "destructive" : "default"}
-                  className="flex-1"
+                  className="min-h-10 sm:order-2 sm:flex-none"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {setupMode === "disable" ? "Disable 2FA" : "Continue"}
@@ -430,6 +432,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                     else { setShowSetup(false); resetState(); }
                   }}
                   disabled={isLoading}
+                  className="min-h-10"
                 >
                   Back
                 </Button>
@@ -444,11 +447,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   Scan this QR code with your authenticator app
                 </p>
                 <div className="flex justify-center">
-                  <div className="bg-white p-4 rounded-xl shadow-sm">
+                  <div className="rounded-lg bg-white p-3 shadow-sm">
                     {qrDataUrl ? (
                       <img
                         src={qrDataUrl}
-                        alt="2FA QR Code"
+                        alt="Authenticator setup QR code"
                         className="w-48 h-48"
                       />
                     ) : (
@@ -459,8 +462,8 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => setStep("verify")} className="w-full">
-                I've Scanned the Code
+              <Button onClick={() => setStep("verify")} className="min-h-10 w-full">
+                I scanned the code
               </Button>
             </div>
           )}
@@ -481,18 +484,20 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   placeholder="000000"
                   className="text-center text-2xl tracking-[0.5em] font-mono h-14"
                   maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                   disabled={isLoading}
                   autoFocus
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button
                   onClick={() => {
                     if (setupMode === "change" && selectedMethod === "totp") handleVerifyTotpForChange();
                     else handleVerify2FA();
                   }}
                   disabled={isLoading || verificationCode.length !== 6}
-                  className="flex-1"
+                  className="min-h-10 sm:order-2 sm:flex-none"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Verify
@@ -500,6 +505,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 <Button
                   variant="outline"
                   onClick={() => setStep(selectedMethod === "totp" ? "qr" : "password")}
+                  className="min-h-10"
                 >
                   Back
                 </Button>
@@ -520,13 +526,13 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
           {step === "backup" && backupCodes.length > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 p-3 text-sm text-green-700 bg-green-50 dark:bg-green-950/30 dark:text-green-400 border border-green-200 dark:border-green-900 rounded-lg">
+              <div role="status" className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
                 <Check className="h-4 w-4 flex-shrink-0" />
-                <span>Two-factor authentication is now enabled!</span>
+                <span>Two-factor authentication is enabled.</span>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Recovery Codes</Label>
+                  <Label>Recovery codes</Label>
                   <Button variant="ghost" size="sm" onClick={copyBackupCodes}>
                     <Copy className="h-4 w-4 mr-1" />
                     Copy
@@ -536,16 +542,16 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   Save these codes securely. Each code can only be used once.
                 </p>
                 <div className="bg-muted/50 p-4 rounded-lg border">
-                  <div className="grid grid-cols-2 gap-2 font-mono text-sm">
-                    {backupCodes.map((code, index) => (
-                      <div key={index} className="text-center py-1 bg-background rounded">
+                  <div className="grid grid-cols-1 gap-2 font-mono text-sm min-[420px]:grid-cols-2">
+                    {backupCodes.map((code) => (
+                      <div key={code} className="break-all rounded bg-background py-1 text-center">
                         {code}
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <Button onClick={() => { setShowSetup(false); resetState(); }} className="w-full">
+              <Button onClick={() => { setShowSetup(false); resetState(); }} className="min-h-10 w-full">
                 Done
               </Button>
             </div>
@@ -556,15 +562,15 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="max-w-3xl rounded-xl shadow-none">
+      <CardHeader className="p-4 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
           {isEnabled ? (
-            <ShieldCheck className="h-5 w-5 text-green-500" />
+            <ShieldCheck className="h-4 w-4 text-primary" />
           ) : (
-            <ShieldOff className="h-5 w-5 text-muted-foreground" />
+            <ShieldOff className="h-4 w-4 text-muted-foreground" />
           )}
-          Two-Factor Authentication
+          Two-factor authentication
         </CardTitle>
         <CardDescription>
           {isEnabled
@@ -572,32 +578,32 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
             : "Protect your account with two-factor authentication"}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         {isEnabled ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-4 p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-xl">
-              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+            <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 {currentMethod === "totp" ? (
-                  <Smartphone className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <Smartphone className="h-5 w-5 text-primary" />
                 ) : (
-                  <Mail className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <Mail className="h-5 w-5 text-primary" />
                 )}
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-green-700 dark:text-green-400">
-                  {currentMethod === "totp" ? "Authenticator App" : "Email Verification"}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">
+                  {currentMethod === "totp" ? "Authenticator app" : "Email verification"}
                 </p>
-                <p className="text-sm text-green-600 dark:text-green-500">
+                <p className="break-words text-sm text-muted-foreground">
                   {currentMethod === "totp"
                     ? "Using authenticator app for verification"
                     : `Codes sent to ${user.email}`}
                 </p>
               </div>
-              <ShieldCheck className="h-6 w-6 text-green-500" />
+              <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => startSetup("change")} className="flex-1">
-                Change Method
+                Change method
               </Button>
               <Button
                 variant="outline"
@@ -609,19 +615,19 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl">
+          <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                <AlertCircle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="font-medium text-amber-700 dark:text-amber-400">2FA Required</p>
-                <p className="text-sm text-amber-600 dark:text-amber-500">
+                <p className="font-medium text-foreground">2FA required</p>
+                <p className="text-sm text-muted-foreground">
                   Two-factor authentication is required for admin accounts
                 </p>
               </div>
             </div>
-            <Button onClick={() => startSetup("enable")} className="shrink-0">
+            <Button onClick={() => startSetup("enable")} className="min-h-10 shrink-0">
               Enable 2FA
             </Button>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
@@ -23,31 +23,40 @@ export function useAdminUsers() {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [rolesError, setRolesError] = useState<string | null>(null);
 
-  const fetchAdminUsers = async () => {
+  const fetchAdminUsers = useCallback(async () => {
+    setIsLoading(true);
+    setUsersError(null);
     try {
       const result = await getAdminUsers();
       setAdminUsers(result.users);
-    } catch {
-      if (import.meta.env.DEV) console.error("Failed to fetch admin users");
+    } catch (error) {
+      setUsersError(getServerFnError(error, "Administrators could not be loaded."));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchRoles = async () => {
+  const fetchRoles = useCallback(async () => {
+    setIsLoadingRoles(true);
+    setRolesError(null);
     try {
       const result = await getRbacRoles();
       setAvailableRoles(result.roles.filter((r: Role) => r.name !== "super_admin"));
-    } catch {
-      if (import.meta.env.DEV) console.error("Failed to fetch roles");
+    } catch (error) {
+      setRolesError(getServerFnError(error, "Roles could not be loaded."));
+    } finally {
+      setIsLoadingRoles(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAdminUsers();
-    fetchRoles();
-  }, []);
+    void fetchAdminUsers();
+    void fetchRoles();
+  }, [fetchAdminUsers, fetchRoles]);
 
   const addUser = async (name: string, email: string, roleId: string): Promise<boolean> => {
     try {
@@ -64,7 +73,7 @@ export function useAdminUsers() {
       } else {
         toast.success(result.message);
       }
-      fetchAdminUsers();
+      await fetchAdminUsers();
       return true;
     } catch (err: unknown) {
       throw new Error(getServerFnError(err, "Failed to create admin user"));
@@ -75,7 +84,7 @@ export function useAdminUsers() {
     try {
       await deleteAdminUser({ data: { userId } });
       toast.success("Admin user deleted successfully");
-      fetchAdminUsers();
+      await fetchAdminUsers();
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to delete admin user"));
     }
@@ -85,8 +94,12 @@ export function useAdminUsers() {
     adminUsers,
     availableRoles,
     isLoading,
+    isLoadingRoles,
+    usersError,
+    rolesError,
     addUser,
     deleteUser,
     refetch: fetchAdminUsers,
+    refetchRoles: fetchRoles,
   };
 }

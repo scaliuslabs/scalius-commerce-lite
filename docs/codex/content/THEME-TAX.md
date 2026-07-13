@@ -86,18 +86,21 @@ coverage, and route-backed tab/search state remain follow-up work.
 
 ## Theme: P1/P2 gaps
 
-1. There is no version/CAS, so concurrent theme edits overwrite silently.
-2. “Theme” controls colors only. Typography, type scale, radius, container
+1. “Theme” controls colors only. Typography, type scale, radius, container
    width, button/input density, card treatment, product-card choices, and
    header/footer presentation are scattered or hard-coded.
-3. Seventeen raw tokens remain too low-level for most merchants, even though
+2. Seventeen raw tokens remain too low-level for most merchants, even though
    paired semantic rows now make the current authority more understandable.
    The real storefront preview still requires a durable presentation draft.
-4. Reset stages an empty object without explaining the effective defaults or
-   showing the before/after scope. Load/save errors are page-level text and do
-   not preserve/reconcile another editor's version.
-5. Presets and default values are duplicated in the React component and
-   storefront CSS. One shared theme schema/preset authority is required.
+3. Reset stages an empty object without a before/after diff. A local draft is
+   protected from navigation, but it is not durable across devices or browser
+   storage loss.
+4. Presets and default values are still not one storefront/admin schema
+   authority. They can drift until both runtimes generate tokens from shared
+   semantic settings.
+5. There is no published history, rollback, or isolated shareable preview.
+   Conflict rebase is field-level and explicit, but cannot replace durable
+   presentation revisions and a real route preview.
 
 ## Theme direction
 
@@ -128,8 +131,9 @@ coverage, and route-backed tab/search state remain follow-up work.
   to the legacy row only when the versioned document is absent. Published color
   values continue through the shared allowlist sanitizer.
 - A stale publish returns 409 before cache invalidation. The admin preserves the
-  local draft, fetches the latest revision, and lets the merchant explicitly
-  load that saved version or review and republish the retained draft.
+  local draft, fetches the latest revision, and blocks another publish until
+  the merchant explicitly uses the latest version or rebases only this tab's
+  changed fields onto it.
 - The color workspace is palette-first, groups background/foreground authority
   into dense semantic pairs, shows published revision/dirty state in a
   persistent publish bar, and disables all mutations without
@@ -142,6 +146,10 @@ coverage, and route-backed tab/search state remain follow-up work.
 - The misleading synthetic product preview and hard-coded light color-picker
   popover were removed. Native compact pickers work in light/dark mode, and a
   semantic token map makes the narrow scope of this editor explicit.
+- A failed authoritative read no longer falls through to editable defaults.
+  The page fails closed with a local retry state and states that no values were
+  assumed. Exact normalized dirty comparison and the shared navigation guard
+  prevent false dirty state and accidental draft loss.
 
 This slice deliberately does not claim the larger semantic theme system is
 finished. Typography, density, radius, real-route isolated previews, full
