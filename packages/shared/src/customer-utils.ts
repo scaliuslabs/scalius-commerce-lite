@@ -134,17 +134,23 @@ export const phoneNumberSchema = z
  */
 export function calculateCustomerStats(
   orders: {
-    totalAmount: number;
+    paidAmount: number;
     createdAt: Date | number;
   }[],
 ) {
   const totalOrders = orders.length;
-  const totalSpent = addPrices(...orders.map((order) => order.totalAmount));
+  const totalSpent = addPrices(
+    ...orders.map((order) => Math.max(0, Number(order.paidAmount) || 0)),
+  );
   const lastOrderAt =
     orders.length > 0
       ? Math.max(
           ...orders.map((o) =>
-            o.createdAt instanceof Date ? o.createdAt.getTime() : o.createdAt,
+            o.createdAt instanceof Date
+              ? o.createdAt.getTime()
+              : o.createdAt < 1_000_000_000_000
+                ? o.createdAt * 1000
+                : o.createdAt,
           ),
         )
       : null;

@@ -111,17 +111,17 @@ export function CustomerMobileCard({
 
       <dl className="mt-3 grid grid-cols-3 divide-x rounded-md border bg-muted/20 py-2 text-center">
         <div className="min-w-0 px-2">
-          <dt className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Orders</dt>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Orders</dt>
           <dd className="mt-0.5 text-xs font-semibold tabular-nums text-foreground">{customer.totalOrders}</dd>
         </div>
         <div className="min-w-0 px-2">
-          <dt className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Paid spend</dt>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Paid spend</dt>
           <dd className="mt-0.5 truncate text-xs font-semibold tabular-nums text-foreground">
             {symbol}{customer.totalSpent.toLocaleString()}
           </dd>
         </div>
         <div className="min-w-0 px-2">
-          <dt className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">Last order</dt>
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Last order</dt>
           <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground" suppressHydrationWarning>
             {customer.lastOrderAt ? formatDateShort(customer.lastOrderAt) : "No orders"}
           </dd>

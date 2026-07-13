@@ -29,7 +29,7 @@ describe("admin customer commerce metrics", () => {
     expect(totalOrders.sql).toContain("customer_orders.customer_id");
     expect(totalSpent.sql).toContain("customer_orders.paid_amount");
     expect(totalSpent.sql).not.toContain("customer_orders.total_amount");
-    expect(totalSpent.sql).toContain("partially_refunded");
+    expect(totalSpent.sql).not.toContain("partially_refunded");
     expect(totalSpent.sql).toContain("customer_orders.deleted_at IS NULL");
   });
 
@@ -198,12 +198,19 @@ describe("customer account order money projection", () => {
         paidAmount: 0,
         balanceDue: 300,
       },
+      {
+        status: OrderStatus.PARTIALLY_REFUNDED,
+        paymentStatus: PaymentStatus.PARTIAL,
+        totalAmount: 400,
+        paidAmount: 250,
+        balanceDue: 0,
+      },
     ];
 
     expect(visibleOrders.reduce((sum, order) => sum + getCustomerSpendContribution(order), 0)).toBe(0);
     expect(summarizeCustomerAccountOrders(allOrders)).toEqual({
-      totalOrders: 3,
-      totalSpent: 500,
+      totalOrders: 4,
+      totalSpent: 750,
       completedOrders: 1,
       pendingOrders: 1,
     });

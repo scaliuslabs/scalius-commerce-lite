@@ -1,9 +1,7 @@
-import type { Customer } from "~/types/api-responses";
+import type { CustomersListPayload } from "~/lib/api-functions/customers";
 
-/** Narrow bridge until the generated customer DTO includes this API field. */
-export type CustomerListBuyer = Customer & {
-  accountClaimedAt?: Date | string | number | null;
-};
+/** Customer row derived from the generated admin list contract. */
+export type CustomerListBuyer = CustomersListPayload["customers"][number];
 
 export function customerHasAccount(customer: CustomerListBuyer): boolean {
   return customer.accountClaimedAt != null;
