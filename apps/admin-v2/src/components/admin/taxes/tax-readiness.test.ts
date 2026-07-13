@@ -83,8 +83,113 @@ describe("tax workspace readiness", () => {
     configured.settings.enabled = true;
     expect(getTaxReadiness(configured)).toMatchObject({
       state: "ready",
+      title: "Tax has all-destination coverage",
       nextTab: "preview",
       nextAction: "Test calculation",
+    });
+  });
+
+  it("distinguishes lifecycle validity from exact destination coverage", () => {
+    const config = configuration({
+      rates: [{
+        id: "rate_city",
+        taxClassId: "class_standard",
+        name: "Dhaka city rate",
+        rateBps: 1_500,
+        jurisdictionType: "city",
+        jurisdictionId: "city_dhaka",
+        jurisdictionLabel: "Dhaka",
+        priority: 0,
+        isCompound: false,
+        isActive: true,
+        version: 1,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+    });
+    config.settings.enabled = true;
+
+    expect(getTaxReadiness(config)).toMatchObject({
+      state: "attention",
+      title: "Tax is live for selected destinations",
+      nextTab: "preview",
+      nextAction: "Test destinations",
+    });
+    expect(getTaxReadiness(config).description).toContain("Other destinations receive zero tax");
+    expect(getTaxReadiness(config).steps).toContainEqual(expect.objectContaining({
+      id: "rates",
+      ready: false,
+      detail: expect.stringContaining("1 exact saved destination"),
+    }));
+  });
+
+  it("explains cumulative all-destination and scoped rates", () => {
+    const allRate = {
+      id: "rate_all",
+      taxClassId: "class_standard",
+      name: "All destinations",
+      rateBps: 1_000,
+      jurisdictionType: "all" as const,
+      jurisdictionId: null,
+      jurisdictionLabel: null,
+      priority: 0,
+      isCompound: false,
+      isActive: true,
+      version: 1,
+      createdAt: null,
+      updatedAt: null,
+      deletedAt: null,
+    };
+    const config = configuration({
+      rates: [
+        allRate,
+        {
+          ...allRate,
+          id: "rate_zone",
+          name: "Dhaka zone surcharge",
+          jurisdictionType: "zone",
+          jurisdictionId: "zone_dhaka",
+          jurisdictionLabel: "Dhaka zone",
+        },
+      ],
+    });
+    config.settings.enabled = true;
+
+    const readiness = getTaxReadiness(config);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.steps).toContainEqual(expect.objectContaining({
+      id: "rates",
+      ready: true,
+      detail: expect.stringContaining("matching rates apply together"),
+    }));
+  });
+
+  it("does not describe a disabled scoped setup as globally ready", () => {
+    const config = configuration({
+      rates: [{
+        id: "rate_city",
+        taxClassId: "class_standard",
+        name: "Dhaka city rate",
+        rateBps: 1_500,
+        jurisdictionType: "city",
+        jurisdictionId: "city_dhaka",
+        jurisdictionLabel: "Dhaka",
+        priority: 0,
+        isCompound: false,
+        isActive: true,
+        version: 1,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+    });
+
+    expect(getTaxReadiness(config)).toMatchObject({
+      state: "off",
+      nextTab: "rates",
+      nextAction: "Review coverage",
+      description: expect.stringContaining("selected destinations only"),
     });
   });
 
