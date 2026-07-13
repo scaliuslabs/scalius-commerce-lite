@@ -65,6 +65,22 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 ## Release proof
 
+- Latest coordinated settings and commerce-authority release: API
+  `cc745e67-945f-4485-abbe-3c5f45d3084d`, admin
+  `e19e3d87-af93-439f-ab8a-46b026a118c0`, and storefront
+  `a3586c0a-b17f-4828-a470-5de7ed5f11fe`. Migrations
+  `0026_discount_revision.sql` and `0027_checkout_flow_revision.sql` applied
+  through the normal remote D1 migration path before deployment. Discount rule
+  and status writes plus checkout-flow settings now use monotonic revision/CAS
+  contracts; tax enabled-readiness is preserved atomically; and Navigation,
+  Analytics, Checkout, Discount, Tax, Theme, and Account surfaces include the
+  current compact/mobile workflow slices. Sequential focused tests,
+  package/Astro diagnostics, SDK and binding checks, production builds, remote
+  migration verification, deployment verification, `pnpm release:check`, and
+  `pnpm ops:check --queues` passed. Release discovery emitted nine valid
+  Google and Meta feed items, UCP search/lookup resolved a sellable SKU, all
+  eight production queues had the intended actors, and the only remaining ops
+  warning is the already-recorded logs-only alert-email configuration.
 - Current coordinated release: API `54b33b46-c5ed-45ea-a528-df5aeccebb5d`, admin `cfd24714-499c-462c-a9ee-d0e3d95ed614`, storefront `0ffea68c-cf5c-4ac8-810c-e5c1bf7ceba2`, ops monitor `a2aed446-5e1b-4588-a568-1c0f93da3cc3`.
 - Latest customer-authority release: API `f08cfa2a-5f4a-4711-9cce-eed66b377bad`, admin `936639af-1969-4d61-aa47-b2339bd237cf`; storefront and ops-monitor remain the coordinated versions above because this slice did not change either Worker.
 - Migration `0025_customer_order_ownership.sql` applied successfully before the customer-authority API deployment.
@@ -91,3 +107,10 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 2. Keep the demo collection dynamic unless a manual-membership workflow is intentionally needed; the manual picker is now safe and live-verified.
 3. Repeat `pnpm release:check` after any further catalog, checkout, discovery, or storefront deployment.
 4. Continue the broader release goal across Media, Pages, Orders, Abandoned, Customers, Discounts, Analytics, navigation, themes, taxes, and remaining settings without changing the protected product-page visual system.
+5. Exercise Media selection, five-column desktop density, picker capabilities,
+   upload continuation, Theme and Account authority, discount creation and
+   conflict recovery, every configured checkout/payment mode, tax lifecycle,
+   and the corresponding buyer outcomes at desktop and 320/360/390/430 px.
+   Treat any deceptive control, stale/default-on-read-failure state, page-level
+   overflow, or configuration that runtime cannot honor as a release defect,
+   not a cosmetic backlog item.
