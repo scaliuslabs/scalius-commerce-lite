@@ -405,7 +405,7 @@ describe("promotion evaluator", () => {
     });
 
     it("rejects duplicate cart-line IDs before allocation", () => {
-        const duplicateLine = cart().lines[0];
+        const duplicateLine = cart().lines[0]!;
         expect(() => evaluatePromotionCandidates({
             cart: cart({ lines: [duplicateLine, duplicateLine] }),
             candidates: [candidate()],
