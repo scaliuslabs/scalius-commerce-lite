@@ -67,6 +67,8 @@ export const orders = sqliteTable("orders", {
     expectedDelivery: text("expected_delivery"),
     version: integer("version").notNull().default(1),
     customerId: text("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    /** Verified storefront account ownership. Guest orders deliberately keep this null. */
+    accountOwnerCustomerId: text("account_owner_customer_id").references(() => customers.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -79,6 +81,7 @@ export const orders = sqliteTable("orders", {
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
     index("orders_customer_id_idx").on(table.customerId),
+    index("orders_account_owner_customer_id_idx").on(table.accountOwnerCustomerId),
     index("orders_created_at_idx").on(table.createdAt),
     index("orders_deleted_at_idx").on(table.deletedAt),
     index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),

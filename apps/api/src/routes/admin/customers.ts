@@ -12,7 +12,8 @@ import {
     deleteCustomer,
     permanentlyDeleteCustomer,
     restoreCustomer,
-    bulkDeleteCustomers
+    bulkDeleteCustomers,
+    buildCustomerOrderMetricsProjection,
 } from "@scalius/core/modules/customers";
 import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
@@ -285,6 +286,7 @@ const getHistoryRoute = createRoute({
 app.openapi(getHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const metrics = buildCustomerOrderMetricsProjection();
 
     const [customerResults, history, customerOrders] = await db.batch([
         db
@@ -297,9 +299,10 @@ app.openapi(getHistoryRoute, async (c) => {
                 city: customers.city,
                 zone: customers.zone,
                 area: customers.area,
-                totalOrders: customers.totalOrders,
-                totalSpent: customers.totalSpent,
-                lastOrderAt: sql<number>`CAST(${customers.lastOrderAt} AS INTEGER)`,
+                accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
+                totalOrders: metrics.totalOrders,
+                totalSpent: metrics.totalSpent,
+                lastOrderAt: metrics.lastOrderAt,
                 createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
             })
@@ -362,6 +365,7 @@ app.openapi(getHistoryRoute, async (c) => {
 
     const enrichedCustomer = {
         ...customer,
+        accountClaimedAt: customer.accountClaimedAt ? new Date(customer.accountClaimedAt * 1000) : null,
         lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
         createdAt: new Date(customer.createdAt * 1000),
         updatedAt: new Date(customer.updatedAt * 1000),

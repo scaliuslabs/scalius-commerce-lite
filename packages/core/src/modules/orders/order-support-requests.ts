@@ -578,6 +578,10 @@ type SupportRequestActorContext = {
   expectedCustomerId?: string;
 };
 
+export function customerAccountOwnershipCondition(customerId: string) {
+  return eq(orders.accountOwnerCustomerId, customerId);
+}
+
 async function createVerifiedOrderSupportRequest(
   db: Database,
   orderId: string,
@@ -701,7 +705,7 @@ async function selectSupportRequestOrderState(
     .where(expectedCustomerId
       ? and(
         eq(orders.id, orderId),
-        eq(orders.customerId, expectedCustomerId),
+        customerAccountOwnershipCondition(expectedCustomerId),
         isNull(orders.deletedAt),
       )
       : and(

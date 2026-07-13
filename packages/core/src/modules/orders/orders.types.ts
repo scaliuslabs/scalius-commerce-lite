@@ -208,6 +208,7 @@ export interface CreateStorefrontOrderResult {
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
 export interface StorefrontOrderCommitPayload {
     checkoutToken: string;
+    /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
     orderData: {
         id: string;

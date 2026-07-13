@@ -19,7 +19,7 @@ import {
     media,
     products,
 } from "@scalius/database/schema";
-import { sql, isNull, inArray, asc, desc, eq, and, type SQL } from "drizzle-orm";
+import { sql, isNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { addPrices, roundPrice } from "@scalius/shared/price-utils";
 import { ftsMatch } from "../../search/fts5";
@@ -35,6 +35,7 @@ import {
     getActiveSupportRequestTypes,
     getCustomerOrderSupportRequestActions,
     listOrderSupportRequests,
+    customerAccountOwnershipCondition,
 } from "../orders/order-support-requests";
 import {
     getCustomerRequestIntro,
@@ -280,6 +281,41 @@ export function summarizeCustomerAccountOrders(rows: CustomerOrderMoneyState[]):
     };
 }
 
+export function buildCustomerOrderMetricsProjection() {
+    return {
+        totalOrders: sql<number>`CAST(COALESCE((
+            SELECT count(*)
+            FROM orders AS customer_orders
+            WHERE customer_orders.customer_id = ${customers.id}
+              AND customer_orders.deleted_at IS NULL
+        ), 0) AS INTEGER)`,
+        totalSpent: sql<number>`COALESCE((
+            SELECT sum(CASE
+                WHEN customer_orders.status IN ('cancelled', 'refunded', 'returned', 'partially_refunded')
+                    OR customer_orders.payment_status IN ('failed', 'refunded')
+                THEN 0
+                ELSE CASE WHEN customer_orders.paid_amount > 0 THEN customer_orders.paid_amount ELSE 0 END
+            END)
+            FROM orders AS customer_orders
+            WHERE customer_orders.customer_id = ${customers.id}
+              AND customer_orders.deleted_at IS NULL
+        ), 0)`,
+        lastOrderAt: sql<number | null>`(
+            SELECT max(CAST(customer_orders.created_at AS INTEGER))
+            FROM orders AS customer_orders
+            WHERE customer_orders.customer_id = ${customers.id}
+              AND customer_orders.deleted_at IS NULL
+        )`,
+    };
+}
+
+export function customerAccountOrderVisibilityCondition(customerId: string) {
+    return and(
+        customerAccountOwnershipCondition(customerId),
+        isNull(orders.deletedAt),
+    );
+}
+
 export function buildCustomerOrderBaseTimelineEvents(order: {
     id: string;
     status: string;
@@ -388,12 +424,13 @@ export async function listCustomers(
 
     const offset = (page - 1) * limit;
 
+    const metrics = buildCustomerOrderMetricsProjection();
     const sortField = (() => {
         switch (sort) {
             case "name": return customers.name;
-            case "totalOrders": return customers.totalOrders;
-            case "totalSpent": return customers.totalSpent;
-            case "lastOrderAt": return customers.lastOrderAt;
+            case "totalOrders": return metrics.totalOrders;
+            case "totalSpent": return metrics.totalSpent;
+            case "lastOrderAt": return metrics.lastOrderAt;
             case "createdAt": return customers.createdAt;
             default: return customers.updatedAt;
         }
@@ -414,9 +451,10 @@ export async function listCustomers(
             city: customers.city,
             zone: customers.zone,
             area: customers.area,
-            totalOrders: customers.totalOrders,
-            totalSpent: customers.totalSpent,
-            lastOrderAt: sql<number>`CAST(${customers.lastOrderAt} AS INTEGER)`,
+            accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
+            totalOrders: metrics.totalOrders,
+            totalSpent: metrics.totalSpent,
+            lastOrderAt: metrics.lastOrderAt,
             createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
         })
@@ -438,7 +476,7 @@ export async function listCustomers(
         locationQuery,
     ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; totalOrders: number; totalSpent: number; lastOrderAt: number; createdAt: number; updatedAt: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; accountClaimedAt: number | null; totalOrders: number; totalSpent: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
         { id: string; name: string }[],
     ];
     const count = countArr[0]?.count ?? 0;
@@ -448,6 +486,7 @@ export async function listCustomers(
 
     const formattedCustomers = results.map((c) => ({
         ...c,
+        accountClaimedAt: c.accountClaimedAt ? new Date(c.accountClaimedAt * 1000).toISOString() : null,
         lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,
         createdAt: new Date(c.createdAt * 1000).toISOString(),
         updatedAt: new Date(c.updatedAt * 1000).toISOString(),
@@ -632,6 +671,15 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
 }
 
 export async function permanentlyDeleteCustomer(db: Database, id: string): Promise<void> {
+    const referencedOrder = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(or(eq(orders.customerId, id), eq(orders.accountOwnerCustomerId, id)))
+        .limit(1)
+        .get();
+    if (referencedOrder) {
+        throw new ValidationError("Customers with order history cannot be permanently deleted. Keep the customer archived.");
+    }
     await db.batch([
         db.delete(customerSessions).where(eq(customerSessions.customerId, id)),
         db.delete(customerHistory).where(eq(customerHistory.customerId, id)),
@@ -645,6 +693,18 @@ export async function restoreCustomer(db: Database, id: string): Promise<void> {
 
 export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {
     if (permanent) {
+        const referencedOrder = await db
+            .select({ id: orders.id })
+            .from(orders)
+            .where(or(
+                inArray(orders.customerId, ids),
+                inArray(orders.accountOwnerCustomerId, ids),
+            ))
+            .limit(1)
+            .get();
+        if (referencedOrder) {
+            throw new ValidationError("Customers with order history cannot be permanently deleted. Keep those customers archived.");
+        }
         await db.batch([
             db.delete(customerSessions).where(inArray(customerSessions.customerId, ids)),
             db.delete(customerHistory).where(inArray(customerHistory.customerId, ids)),
@@ -706,16 +766,12 @@ export async function getCustomerOrders(
             pendingOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_PENDING_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
         })
         .from(orders)
-        .where(and(
-            eq(orders.customerId, customerId),
-            isNull(orders.deletedAt),
-        ));
+        .where(customerAccountOrderVisibilityCondition(customerId));
 
     const orderListLimit = normalizeCustomerOrdersLimit(options.limit);
     const cursor = decodeCustomerOrdersCursor(options.cursor);
     const orderWhereConditions: SQL[] = [
-        eq(orders.customerId, customerId),
-        isNull(orders.deletedAt),
+        customerAccountOrderVisibilityCondition(customerId),
     ];
     if (cursor) {
         orderWhereConditions.push(sql`(
@@ -970,8 +1026,7 @@ export async function getCustomerOwnedOrderForDetail(
         .from(orders)
         .where(and(
             eq(orders.id, orderId),
-            eq(orders.customerId, customerId),
-            isNull(orders.deletedAt),
+            customerAccountOrderVisibilityCondition(customerId),
         ))
         .get();
 

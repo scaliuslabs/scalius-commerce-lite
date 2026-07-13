@@ -249,7 +249,7 @@ export async function createStorefrontOrder(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     const readResults = await storefrontDb.batch(readBatch as any);
 
-    const existingCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
+    const accountOwnerCustomer = customerIdentity ? { id: customerIdentity.customerId } : null;
 
     const discountList = data.discountCode ? (readResults[0] as { id: string }[]) : [];
     const appliedDiscount = discountList.length > 0 ? discountList[0] : null;
@@ -374,7 +374,7 @@ export async function createStorefrontOrder(
 
     const commitPayload = {
         checkoutToken,
-        existingCustomer,
+        existingCustomer: accountOwnerCustomer,
         orderData: {
             id: orderId,
             customerName: data.customerName,

@@ -128,19 +128,27 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
 }
 
 function createDbMock(options: {
-  activeCustomer?: { id: string } | null;
+  activeCustomer?: { id: string; accountClaimedAt: Date | null; deletedAt: Date | null } | null;
+  customerReads?: Array<{ id: string; accountClaimedAt: Date | null; deletedAt: Date | null } | undefined>;
 } = {}): Database & {
   insertValues: unknown[];
   conflictIgnoredInserts: unknown[];
 } {
   const insertValues: unknown[] = [];
   const conflictIgnoredInserts: unknown[] = [];
+  const customerReads = [...(options.customerReads ?? [])];
   const createReadQuery = (projection: Record<string, unknown>) => ({
     where: vi.fn(() => ({
       get: vi.fn(async () => {
         if ("customerId" in projection) return undefined;
         if ("maxUses" in projection) return { maxUses: null, limitOnePerCustomer: false };
-        if ("id" in projection) return options.activeCustomer === undefined ? { id: "cust_existing" } : options.activeCustomer;
+        if ("accountClaimedAt" in projection) {
+          if (customerReads.length > 0) return customerReads.shift();
+          return options.activeCustomer === undefined
+            ? { id: "cust_existing", accountClaimedAt: new Date(1_700_000_000_000), deletedAt: null }
+            : options.activeCustomer;
+        }
+        if ("id" in projection) return { id: "cust_existing" };
         return undefined;
       }),
       limit: vi.fn(() => ({
@@ -210,8 +218,8 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     );
   });
 
-  it("commits true guest checkout without attaching the order to a customer account", async () => {
-    const db = createDbMock();
+  it("creates a CRM profile for true guest checkout without granting account ownership", async () => {
+    const db = createDbMock({ customerReads: [undefined] });
     mocks.safeBatch.mockResolvedValue([]);
 
     const result = await commitStorefrontOrderPayload(
@@ -226,10 +234,68 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       }),
     );
 
-    expect(result.customerId).toBeNull();
+    expect(result.customerId).toMatch(/^cust_/);
+    expect(result.accountOwnerCustomerId).toBeNull();
     expect(db.update).not.toHaveBeenCalled();
     expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
     expect(mocks.safeBatch).toHaveBeenCalledOnce();
+    expect(db.insertValues).toContainEqual(expect.objectContaining({
+      phone: "+8801712345678",
+      totalOrders: 1,
+      totalSpent: 0,
+    }));
+    expect(db.insertValues).toContainEqual(expect.objectContaining({
+      id: "order_discount",
+      customerId: result.customerId,
+      accountOwnerCustomerId: null,
+      totalAmount: 200,
+    }));
+  });
+
+  it("keeps authenticated CRM and verified account ownership aligned", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockResolvedValue([]);
+
+    const result = await commitStorefrontOrderPayload(db, createPayload({
+      discountUsage: null,
+      orderData: { ...createPayload().orderData, inventoryAction: "none" },
+    }));
+
+    expect(result).toMatchObject({
+      customerId: "cust_existing",
+      accountOwnerCustomerId: "cust_existing",
+    });
+    expect(db.insertValues).toContainEqual(expect.objectContaining({
+      id: "order_discount",
+      customerId: "cust_existing",
+      accountOwnerCustomerId: "cust_existing",
+    }));
+  });
+
+  it("releases stock and retries one guest phone race without double CRM writes", async () => {
+    const db = createDbMock({
+      customerReads: [
+        undefined,
+        { id: "cust_race_winner", accountClaimedAt: null, deletedAt: null },
+      ],
+    });
+    mocks.safeBatch
+      .mockRejectedValueOnce(new Error("UNIQUE constraint failed: customers.phone"))
+      .mockResolvedValueOnce([]);
+
+    const result = await commitStorefrontOrderPayload(db, createPayload({
+      existingCustomer: null,
+      discountUsage: null,
+    }));
+
+    expect(result).toMatchObject({
+      customerId: "cust_race_winner",
+      accountOwnerCustomerId: null,
+      alreadyCommitted: false,
+    });
+    expect(mocks.reserveStockBatch).toHaveBeenCalledTimes(2);
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+    expect(mocks.safeBatch).toHaveBeenCalledTimes(2);
   });
 
   it("includes a durable Meta Purchase outbox claim in the order batch for final-at-create COD orders", async () => {

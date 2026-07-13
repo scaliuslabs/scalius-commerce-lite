@@ -4,6 +4,7 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
     customers,
+    customerHistory,
     discounts,
     discountUsage,
     orderItems,
@@ -47,6 +48,7 @@ export interface StorefrontOrderCommitRuntime {
 export interface StorefrontOrderCommitResult {
     orderId: string;
     customerId: string | null;
+    accountOwnerCustomerId: string | null;
     alreadyCommitted: boolean;
 }
 
@@ -63,38 +65,122 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const CHECKOUT_ROLLBACK_RELEASE_KEY = "checkout-rollback:v1";
 
+function isCustomerPhoneConstraintError(error: unknown): boolean {
+    let current = error;
+    for (let depth = 0; depth < 5 && current; depth += 1) {
+        const message = current instanceof Error
+            ? current.message
+            : typeof current === "string"
+                ? current
+                : "";
+        if (
+            message.includes("UNIQUE constraint failed: customers.phone")
+            || message.includes("customers.phone")
+        ) {
+            return true;
+        }
+        current = current instanceof Error
+            ? (current as Error & { cause?: unknown }).cause
+            : null;
+    }
+    return false;
+}
+
 async function loadExistingCommittedOrder(db: Database, orderId: string) {
     return db
         .select({
             id: orders.id,
             customerId: orders.customerId,
+            accountOwnerCustomerId: orders.accountOwnerCustomerId,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
         .get();
 }
 
-async function loadActiveCustomerById(db: Database, id: string): Promise<{ id: string } | undefined> {
+interface OrderCustomerRow {
+    id: string;
+    accountClaimedAt: Date | null;
+    deletedAt: Date | null;
+}
+
+interface ResolvedOrderCustomer extends OrderCustomerRow {
+    accountOwnerCustomerId: string | null;
+    createProfile: boolean;
+    updateGuestProfile: boolean;
+}
+
+async function loadActiveCustomerById(db: Database, id: string): Promise<OrderCustomerRow | undefined> {
     return db
-        .select({ id: customers.id })
+        .select({
+            id: customers.id,
+            accountClaimedAt: customers.accountClaimedAt,
+            deletedAt: customers.deletedAt,
+        })
         .from(customers)
         .where(and(eq(customers.id, id), isNull(customers.deletedAt)))
+        .get();
+}
+
+async function loadCustomerByPhone(db: Database, phone: string): Promise<OrderCustomerRow | undefined> {
+    return db
+        .select({
+            id: customers.id,
+            accountClaimedAt: customers.accountClaimedAt,
+            deletedAt: customers.deletedAt,
+        })
+        .from(customers)
+        .where(eq(customers.phone, phone))
         .get();
 }
 
 async function resolveCustomerForOrder(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-): Promise<{ id: string } | null> {
+): Promise<ResolvedOrderCustomer> {
     if (payload.existingCustomer?.id) {
         const authenticatedCustomer = await loadActiveCustomerById(db, payload.existingCustomer.id);
-        if (!authenticatedCustomer) {
+        if (!authenticatedCustomer?.accountClaimedAt) {
             throw new ValidationError("Customer account is no longer active. Please sign in again.");
         }
-        return { id: authenticatedCustomer.id };
+        return {
+            ...authenticatedCustomer,
+            accountOwnerCustomerId: authenticatedCustomer.id,
+            createProfile: false,
+            updateGuestProfile: false,
+        };
     }
 
-    return null;
+    const existingProfile = await loadCustomerByPhone(db, payload.orderData.customerPhone);
+    if (existingProfile) {
+        return {
+            ...existingProfile,
+            accountOwnerCustomerId: null,
+            createProfile: false,
+            updateGuestProfile: existingProfile.accountClaimedAt === null,
+        };
+    }
+
+    return {
+        id: "cust_" + nanoid(),
+        accountClaimedAt: null,
+        deletedAt: null,
+        accountOwnerCustomerId: null,
+        createProfile: true,
+        updateGuestProfile: false,
+    };
+}
+
+function getCustomerSpendContributionForCommittedOrder(
+    order: StorefrontOrderCommitPayload["orderData"],
+): number {
+    if (
+        ["cancelled", "refunded", "returned", "partially_refunded"].includes(order.status)
+        || ["failed", "refunded"].includes(order.paymentStatus)
+    ) {
+        return 0;
+    }
+    return Math.max(0, order.paidAmount);
 }
 
 async function assertDiscountUsageStillAvailable(
@@ -244,23 +330,98 @@ async function releaseReservedEntries(db: Database, entries: ReservationEntry[])
 function buildOrderWriteBatch(
     db: Database,
     payload: StorefrontOrderCommitPayload,
-    customerId: string | null,
+    customer: ResolvedOrderCustomer,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
+    const customerSpendContribution = getCustomerSpendContributionForCommittedOrder(od);
 
-    if (customerId) {
+    if (customer.createProfile) {
+        writes.push(
+            db.insert(customers).values({
+                id: customer.id,
+                name: od.customerName,
+                email: od.customerEmail,
+                phone: od.customerPhone,
+                address: od.shippingAddress,
+                city: od.city,
+                zone: od.zone,
+                area: od.area,
+                cityName: od.cityName,
+                zoneName: od.zoneName,
+                areaName: od.areaName,
+                totalOrders: 1,
+                totalSpent: customerSpendContribution,
+                lastOrderAt: sql`unixepoch()`,
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }),
+        );
+        writes.push(
+            db.insert(customerHistory).values({
+                id: "hist_" + nanoid(),
+                customerId: customer.id,
+                name: od.customerName,
+                email: od.customerEmail,
+                phone: od.customerPhone,
+                address: od.shippingAddress,
+                city: od.city,
+                zone: od.zone,
+                area: od.area,
+                cityName: od.cityName,
+                zoneName: od.zoneName,
+                areaName: od.areaName,
+                changeType: "created",
+                createdAt: sql`unixepoch()`,
+            }),
+        );
+    } else {
+        const guestProfileUpdates = customer.updateGuestProfile
+            ? {
+                name: od.customerName,
+                ...(od.customerEmail ? { email: od.customerEmail } : {}),
+                address: od.shippingAddress,
+                city: od.city,
+                zone: od.zone,
+                area: od.area,
+                cityName: od.cityName,
+                zoneName: od.zoneName,
+                areaName: od.areaName,
+            }
+            : {};
         writes.push(
             db
             .update(customers)
             .set({
+                ...guestProfileUpdates,
                 totalOrders: sql`${customers.totalOrders} + 1`,
-                totalSpent: sql`${customers.totalSpent} + ${od.totalAmount}`,
+                totalSpent: sql`${customers.totalSpent} + ${customerSpendContribution}`,
                 lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
+                deletedAt: null,
             })
-            .where(eq(customers.id, customerId)),
+            .where(eq(customers.id, customer.id)),
         );
+        if (customer.updateGuestProfile) {
+            writes.push(
+                db.insert(customerHistory).values({
+                    id: "hist_" + nanoid(),
+                    customerId: customer.id,
+                    name: od.customerName,
+                    email: od.customerEmail,
+                    phone: od.customerPhone,
+                    address: od.shippingAddress,
+                    city: od.city,
+                    zone: od.zone,
+                    area: od.area,
+                    cityName: od.cityName,
+                    zoneName: od.zoneName,
+                    areaName: od.areaName,
+                    changeType: "updated",
+                    createdAt: sql`unixepoch()`,
+                }),
+            );
+        }
     }
 
     writes.push(
@@ -297,7 +458,8 @@ function buildOrderWriteBatch(
             fulfillmentStatus: od.fulfillmentStatus,
             inventoryPool: od.inventoryPool,
             inventoryAction: od.inventoryAction,
-            customerId,
+            customerId: customer.id,
+            accountOwnerCustomerId: customer.accountOwnerCustomerId,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
@@ -404,14 +566,14 @@ function buildOrderWriteBatch(
                 id: "du_" + nanoid(),
                 discountId: payload.discountUsage.discountId,
                 orderId: od.id,
-                customerId,
+                customerId: customer.id,
                 amountDiscounted: payload.discountUsage.amountDiscounted,
                 createdAt: sql`unixepoch()`,
             }),
         );
     }
 
-    if (isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customerId)) {
+    if (isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customer.id)) {
         writes.push(buildMetaPurchaseOutboxClaimInsert(db, {
             orderId: od.id,
             source: "storefront-order",
@@ -446,12 +608,14 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
 export async function commitStorefrontOrderPayload(
     db: Database,
     payload: StorefrontOrderCommitPayload,
+    retryGuestProfileRace = true,
 ): Promise<StorefrontOrderCommitResult> {
     const existing = await loadExistingCommittedOrder(db, payload.orderData.id);
     if (existing) {
         return {
             orderId: existing.id,
             customerId: existing.customerId,
+            accountOwnerCustomerId: existing.accountOwnerCustomerId,
             alreadyCommitted: true,
         };
     }
@@ -461,17 +625,25 @@ export async function commitStorefrontOrderPayload(
     const reservedEntries = await reserveOrderInventory(db, payload);
 
     try {
-        const writes = buildOrderWriteBatch(db, payload, customer?.id ?? null);
+        const writes = buildOrderWriteBatch(db, payload, customer);
         await safeBatch(db, writes);
     } catch (error) {
         const discountConstraintError = getDiscountUsageConstraintError(error);
         await releaseReservedEntries(db, reservedEntries);
+        if (
+            retryGuestProfileRace
+            && customer.createProfile
+            && isCustomerPhoneConstraintError(error)
+        ) {
+            return commitStorefrontOrderPayload(db, payload, false);
+        }
         throw discountConstraintError ?? error;
     }
 
     return {
         orderId: payload.orderData.id,
-        customerId: customer?.id ?? null,
+        customerId: customer.id,
+        accountOwnerCustomerId: customer.accountOwnerCustomerId,
         alreadyCommitted: false,
     };
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
   FulfillmentStatus,
   OrderStatus,
@@ -9,8 +10,21 @@ import {
 import {
   getAdminOrderSupportRequestTransition,
   getCustomerOrderSupportRequestActions,
+  customerAccountOwnershipCondition,
   type CustomerOrderSupportRequestType,
 } from "./order-support-requests";
+
+describe("customer account order ownership", () => {
+  it("authorizes private account actions only through verified account ownership", () => {
+    const compiled = new SQLiteSyncDialect().sqlToQuery(
+      customerAccountOwnershipCondition("cust_account"),
+    );
+
+    expect(compiled.sql).toContain('"orders"."account_owner_customer_id" = ?');
+    expect(compiled.sql).not.toContain('"orders"."customer_id" = ?');
+    expect(compiled.params).toEqual(["cust_account"]);
+  });
+});
 
 const SUPPORT_REQUEST_SOURCE = fileURLToPath(
   new URL("./order-support-requests.ts", import.meta.url),
