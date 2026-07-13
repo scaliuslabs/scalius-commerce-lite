@@ -12,6 +12,7 @@ import {
   type DragEndEvent,
   type DragMoveEvent,
   type DragStartEvent,
+  type KeyboardCoordinateGetter,
   type ScreenReaderInstructions,
 } from "@dnd-kit/core";
 import {
@@ -28,6 +29,7 @@ import {
   ExternalLink,
   FolderTree,
   GripVertical,
+  Info,
   Maximize2,
   Menu,
   Plus,
@@ -49,6 +51,11 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { AddNavItemDialog } from "./AddNavItemDialog";
 import { NavigationMap } from "./NavigationMap";
 import {
@@ -64,11 +71,13 @@ import {
   moveNavigationItemById,
   moveNavigationItemToIndexById,
   moveNavigationItemToParentById,
+  NAVIGATION_TREE_INDENT,
   outdentNavigationItemById,
   removeNavigationItemById,
   updateNavigationItemById,
   type NavigationOutlineRow,
   type NavigationDragIntent,
+  type NavigationDropEdge,
 } from "./navigation-workspace";
 import { openNavigationPreview } from "./navigation-preview";
 import type { NavigationBuilderProps, NavigationItem } from "./types";
@@ -84,8 +93,34 @@ const AUTO_EXPAND_ALL_THRESHOLD = 40;
 
 const navigationScreenReaderInstructions: ScreenReaderInstructions = {
   draggable:
-    "Press Space to pick up a menu item. Use the Up and Down arrow keys to reorder it among items with the same parent, then press Space to drop or Escape to cancel. Use the Parent, Position, Make child, and Up a level controls for precise level changes.",
+    "Press Space to pick up a menu branch. Use Up and Down to choose a before or after position and Left or Right to change its projected level. Press Space to drop or Escape to cancel. Placement options provides precise Parent, Position, and move controls.",
 };
+
+const navigationKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+    event.preventDefault();
+    return {
+      ...args.currentCoordinates,
+      x: args.currentCoordinates.x + (
+        event.code === "ArrowRight"
+          ? NAVIGATION_TREE_INDENT
+          : -NAVIGATION_TREE_INDENT
+      ),
+    };
+  }
+  return sortableKeyboardCoordinates(event, args);
+};
+
+function getNavigationDropEdge(
+  event: DragMoveEvent | DragEndEvent,
+): NavigationDropEdge {
+  const activeRect = event.active.rect.current.translated;
+  const overRect = event.over?.rect;
+  if (!activeRect || !overRect) return "before";
+  return activeRect.top + activeRect.height / 2 >= overRect.top + overRect.height / 2
+    ? "after"
+    : "before";
+}
 
 function getInitialExpandedIds(items: NavigationItem[]): Set<string> {
   return countNavigationItems(items) <= AUTO_EXPAND_ALL_THRESHOLD
@@ -121,7 +156,7 @@ export function NavigationBuilder({
       activationConstraint: { distance: 6 },
     }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
+      coordinateGetter: navigationKeyboardCoordinates,
     }),
   );
 
@@ -206,13 +241,15 @@ export function NavigationBuilder({
     if (normalizedQuery) {
       setActiveDragId(null);
       setDragIntent(null);
-      setDragStatus("Drag is paused while search is active.");
-      return;
+      setDragStatus("");
     }
-    setDragStatus((current) => (
-      current === "Drag is paused while search is active." ? "" : current
-    ));
   }, [normalizedQuery]);
+
+  useEffect(() => {
+    if (!dragStatus || activeDragId || normalizedQuery) return;
+    const timeout = window.setTimeout(() => setDragStatus(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [activeDragId, dragStatus, normalizedQuery]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId((current) => current === id ? null : id);
@@ -305,18 +342,18 @@ export function NavigationBuilder({
     const location = findNavigationLocation(navigation, id);
     setActiveDragId(id);
     setDragIntent(null);
-    setDragStatus(
-      `Moving ${location?.item.title || "menu item"}. Drop vertically among siblings, right to nest, or left to move up a level.`,
-    );
+    setDragStatus(`Moving ${location?.item.title || "menu item"}.`);
   }, [navigation, normalizedQuery]);
 
   const handleDragMove = useCallback((event: DragMoveEvent) => {
     if (normalizedQuery) return;
     const intent = getNavigationDragIntent(
       navigation,
+      renderedRows,
       String(event.active.id),
       event.over ? String(event.over.id) : null,
       event.delta.x,
+      getNavigationDropEdge(event),
     );
     setDragIntent((current) => (
       current?.type === intent.type &&
@@ -326,21 +363,33 @@ export function NavigationBuilder({
         : intent
     ));
     setDragStatus((current) => current === intent.message ? current : intent.message);
-  }, [navigation, normalizedQuery]);
+    if (intent.type === "move" && intent.parentId) {
+      const parentId = intent.parentId;
+      const parent = findNavigationLocation(navigation, parentId)?.item;
+      if (parent?.subMenu?.length) {
+        setExpandedIds((current) => {
+          if (current.has(parentId)) return current;
+          return new Set(current).add(parentId);
+        });
+      }
+    }
+  }, [navigation, normalizedQuery, renderedRows]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const activeId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
     const result = applyNavigationDrag(
       navigation,
+      renderedRows,
       activeId,
       overId,
       event.delta.x,
+      getNavigationDropEdge(event),
     );
 
     if (result.changed) {
       onChange(result.items);
-      if (result.intent.type === "nest") {
+      if (result.intent.type === "move" && result.intent.parentId) {
         const parentId = result.intent.parentId;
         setExpandedIds((current) => new Set(current).add(parentId));
       }
@@ -351,7 +400,7 @@ export function NavigationBuilder({
 
     setActiveDragId(null);
     setDragIntent(null);
-  }, [navigation, onChange]);
+  }, [navigation, onChange, renderedRows]);
 
   const handleDragCancel = useCallback((_event: DragCancelEvent) => {
     setActiveDragId(null);
@@ -620,16 +669,32 @@ export function NavigationBuilder({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Menu className="h-4 w-4" />
-            <h3 className="text-sm font-semibold">Menu items</h3>
+            <h3 className="text-sm font-semibold">Navigation</h3>
             <Badge
               variant={totalItems > MAX_NAV_ITEMS ? "destructive" : "outline"}
               className="h-5 px-1.5 font-normal tabular-nums"
             >
               {totalItems}/{MAX_NAV_ITEMS}
             </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="How to arrange menu items"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs leading-relaxed">
+                Drag to a visible insertion line. Move horizontally to preview a
+                different level. Placement options keeps precise keyboard and touch
+                controls available.
+              </TooltipContent>
+            </Tooltip>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Open a row to edit. Drag to reorder; move right to nest or left to move up.
+            Arrange and edit storefront links.
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -732,28 +797,29 @@ export function NavigationBuilder({
             </div>
           </div>
 
-          <div
-            id={normalizedQuery ? "navigation-drag-search-help" : undefined}
-            className={cn(
-              "flex min-h-8 items-center gap-2 border-b px-3 py-1.5 text-xs",
-              normalizedQuery
-                ? "bg-muted/35 text-muted-foreground"
-                : activeDragId
-                  ? dragIntent?.type === "invalid"
+          {normalizedQuery || activeDragId || dragStatus ? (
+            <div
+              data-navigation-drag-status
+              id={normalizedQuery ? "navigation-drag-search-help" : undefined}
+              className={cn(
+                "flex min-h-8 items-center gap-2 border-b px-3 py-1.5 text-xs",
+                normalizedQuery
+                  ? "bg-muted/35 text-muted-foreground"
+                  : activeDragId && dragIntent?.type === "invalid"
                     ? "bg-destructive/5 text-destructive"
-                    : "bg-primary/5 text-foreground"
-                  : "text-muted-foreground",
-            )}
-            role="status"
-            aria-live="polite"
-          >
-            <GripVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>
-              {normalizedQuery
-                ? "Clear search to arrange items. Dragging is paused so filtered rows cannot change the wrong branch."
-                : dragStatus || "Drag vertically to reorder siblings. Move right to nest or left to move up a level; Parent and Position remain available."}
-            </span>
-          </div>
+                    : activeDragId
+                      ? "bg-primary/5 text-foreground"
+                      : "bg-muted/25 text-muted-foreground",
+              )}
+              role="status"
+              aria-live="polite"
+            >
+              <GripVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                {normalizedQuery ? "Search active · clear to arrange." : dragStatus}
+              </span>
+            </div>
+          ) : null}
 
           <DndContext
             sensors={sensors}
