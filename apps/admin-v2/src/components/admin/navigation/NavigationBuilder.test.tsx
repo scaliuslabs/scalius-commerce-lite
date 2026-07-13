@@ -102,5 +102,50 @@ describe("NavigationBuilder", () => {
     expect(host.querySelectorAll('ol[aria-label="Menu items"] > li')).toHaveLength(1);
     expect(host.textContent).toContain("1 match");
     expect(host.textContent).toContain("Item 239");
+    const filteredHandle = host.querySelector(
+      '[aria-label="Drag Item 239"]',
+    ) as HTMLButtonElement;
+    expect(filteredHandle.disabled).toBe(true);
+    expect(host.textContent).toContain("Clear search to arrange items");
+  });
+
+  it("renders one accessible drag handle per visible row without replacing native controls", async () => {
+    const navigation = [
+      { id: "home", title: "Home", href: "/" },
+      { id: "shop", title: "Shop", href: "/products" },
+    ];
+
+    await act(async () =>
+      root.render(
+        <NavigationBuilder
+          navigation={navigation}
+          onChange={vi.fn()}
+          getStorefrontPath={(path) => `https://store.example${path}`}
+        />,
+      ),
+    );
+
+    expect(host.querySelectorAll('button[aria-label^="Drag "]')).toHaveLength(2);
+    expect((host.querySelector('[aria-label="Drag Home"]') as HTMLButtonElement).disabled)
+      .toBe(false);
+    expect(host.textContent).toContain("Drag vertically to reorder siblings");
+
+    act(() =>
+      (host.querySelector('[aria-label="Edit Shop, level 1"]') as HTMLButtonElement).click(),
+    );
+    const placementDetails = host.querySelector("details") as HTMLDetailsElement;
+    expect(placementDetails.open).toBe(false);
+    expect(placementDetails.querySelector("summary")?.textContent).toContain(
+      "Placement options",
+    );
+    expect(host.textContent).toContain("Add child");
+    expect(host.textContent).toContain("Remove");
+
+    act(() => (placementDetails.querySelector("summary") as HTMLElement).click());
+    expect(placementDetails.open).toBe(true);
+    expect(host.textContent).toContain("Earlier");
+    expect(host.textContent).toContain("Make child");
+    expect(host.querySelector('[aria-label="Parent for Shop"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Position for Shop"]')).not.toBeNull();
   });
 });

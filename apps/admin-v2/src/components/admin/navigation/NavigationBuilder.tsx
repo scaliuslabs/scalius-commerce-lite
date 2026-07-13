@@ -1,11 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragCancelEvent,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+  type ScreenReaderInstructions,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ChevronDown,
   ExternalLink,
   FolderTree,
+  GripVertical,
   Maximize2,
   Menu,
   Plus,
@@ -30,11 +52,13 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { AddNavItemDialog } from "./AddNavItemDialog";
 import { NavigationMap } from "./NavigationMap";
 import {
+  applyNavigationDrag,
   appendNavigationItems,
   collectNavigationParentIds,
   countNavigationItems,
   findNavigationLocation,
   flattenNavigationOutline,
+  getNavigationDragIntent,
   getNavigationDepth,
   indentNavigationItemById,
   moveNavigationItemById,
@@ -44,6 +68,7 @@ import {
   removeNavigationItemById,
   updateNavigationItemById,
   type NavigationOutlineRow,
+  type NavigationDragIntent,
 } from "./navigation-workspace";
 import { openNavigationPreview } from "./navigation-preview";
 import type { NavigationBuilderProps, NavigationItem } from "./types";
@@ -56,6 +81,11 @@ import {
 
 export const NAVIGATION_RENDER_BATCH_SIZE = 80;
 const AUTO_EXPAND_ALL_THRESHOLD = 40;
+
+const navigationScreenReaderInstructions: ScreenReaderInstructions = {
+  draggable:
+    "Press Space to pick up a menu item. Use the Up and Down arrow keys to reorder it among items with the same parent, then press Space to drop or Escape to cancel. Use the Parent, Position, Make child, and Up a level controls for precise level changes.",
+};
 
 function getInitialExpandedIds(items: NavigationItem[]): Set<string> {
   return countNavigationItems(items) <= AUTO_EXPAND_ALL_THRESHOLD
@@ -82,6 +112,18 @@ export function NavigationBuilder({
     () => getInitialExpandedIds(navigation),
   );
   const [renderLimit, setRenderLimit] = useState(NAVIGATION_RENDER_BATCH_SIZE);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [dragIntent, setDragIntent] = useState<NavigationDragIntent | null>(null);
+  const [dragStatus, setDragStatus] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const totalItems = useMemo(() => countNavigationItems(navigation), [navigation]);
   const availableItemSlots = Math.max(0, MAX_NAV_ITEMS - totalItems);
@@ -104,12 +146,53 @@ export function NavigationBuilder({
       : totalItems,
     [normalizedQuery, outlineRows, totalItems],
   );
-  const renderedRows = outlineRows.slice(0, renderLimit);
+  const renderedRows = useMemo(
+    () => outlineRows.slice(0, renderLimit),
+    [outlineRows, renderLimit],
+  );
+  const renderedRowIds = useMemo(
+    () => renderedRows.map((row) => row.item.id),
+    [renderedRows],
+  );
   const hiddenVisibleRows = Math.max(0, outlineRows.length - renderedRows.length);
   const selected = useMemo(
     () => (selectedId ? findNavigationLocation(navigation, selectedId) : null),
     [navigation, selectedId],
   );
+  const activeDrag = useMemo(
+    () => (activeDragId ? findNavigationLocation(navigation, activeDragId) : null),
+    [activeDragId, navigation],
+  );
+  const dragAnnouncements = useMemo<Announcements>(() => ({
+    onDragStart({ active }) {
+      const location = findNavigationLocation(navigation, String(active.id));
+      return `Picked up ${location?.item.title || "menu item"}.`;
+    },
+    onDragOver({ active, over }) {
+      const activeLocation = findNavigationLocation(navigation, String(active.id));
+      const overLocation = over
+        ? findNavigationLocation(navigation, String(over.id))
+        : null;
+      if (!overLocation) return `${activeLocation?.item.title || "Menu item"} is not over a drop target.`;
+      return `${activeLocation?.item.title || "Menu item"} is over ${overLocation.item.title || "menu item"}.`;
+    },
+    onDragEnd({ active, over }) {
+      const activeLocation = findNavigationLocation(navigation, String(active.id));
+      const overLocation = over
+        ? findNavigationLocation(navigation, String(over.id))
+        : null;
+      if (!overLocation) return `Cancelled moving ${activeLocation?.item.title || "menu item"}.`;
+      return `Dropped ${activeLocation?.item.title || "menu item"} near ${overLocation.item.title || "menu item"}.`;
+    },
+    onDragCancel({ active }) {
+      const location = findNavigationLocation(navigation, String(active.id));
+      return `Cancelled moving ${location?.item.title || "menu item"}.`;
+    },
+  }), [navigation]);
+  const dragAccessibility = useMemo(() => ({
+    announcements: dragAnnouncements,
+    screenReaderInstructions: navigationScreenReaderInstructions,
+  }), [dragAnnouncements]);
 
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(null);
@@ -118,6 +201,18 @@ export function NavigationBuilder({
   useEffect(() => {
     setRenderLimit(NAVIGATION_RENDER_BATCH_SIZE);
   }, [expandedIds, normalizedQuery]);
+
+  useEffect(() => {
+    if (normalizedQuery) {
+      setActiveDragId(null);
+      setDragIntent(null);
+      setDragStatus("Drag is paused while search is active.");
+      return;
+    }
+    setDragStatus((current) => (
+      current === "Drag is paused while search is active." ? "" : current
+    ));
+  }, [normalizedQuery]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId((current) => current === id ? null : id);
@@ -203,6 +298,66 @@ export function NavigationBuilder({
     },
     [addToParentId, navigation, onChange, selectedId],
   );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    if (normalizedQuery) return;
+    const id = String(event.active.id);
+    const location = findNavigationLocation(navigation, id);
+    setActiveDragId(id);
+    setDragIntent(null);
+    setDragStatus(
+      `Moving ${location?.item.title || "menu item"}. Drop vertically among siblings, right to nest, or left to move up a level.`,
+    );
+  }, [navigation, normalizedQuery]);
+
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
+    if (normalizedQuery) return;
+    const intent = getNavigationDragIntent(
+      navigation,
+      String(event.active.id),
+      event.over ? String(event.over.id) : null,
+      event.delta.x,
+    );
+    setDragIntent((current) => (
+      current?.type === intent.type &&
+      current.overId === intent.overId &&
+      current.message === intent.message
+        ? current
+        : intent
+    ));
+    setDragStatus((current) => current === intent.message ? current : intent.message);
+  }, [navigation, normalizedQuery]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+    const result = applyNavigationDrag(
+      navigation,
+      activeId,
+      overId,
+      event.delta.x,
+    );
+
+    if (result.changed) {
+      onChange(result.items);
+      if (result.intent.type === "nest") {
+        const parentId = result.intent.parentId;
+        setExpandedIds((current) => new Set(current).add(parentId));
+      }
+      setDragStatus(`${result.intent.message} Menu updated.`);
+    } else {
+      setDragStatus(result.intent.message);
+    }
+
+    setActiveDragId(null);
+    setDragIntent(null);
+  }, [navigation, onChange]);
+
+  const handleDragCancel = useCallback((_event: DragCancelEvent) => {
+    setActiveDragId(null);
+    setDragIntent(null);
+    setDragStatus("Move cancelled. The menu was not changed.");
+  }, []);
 
   const renderInlineEditor = useCallback(
     (row: NavigationOutlineRow) => {
@@ -308,107 +463,120 @@ export function NavigationBuilder({
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-2 border-t pt-2.5">
-            <div className="flex min-w-0 flex-wrap items-end gap-2">
-              <label className="grid min-w-40 gap-1 text-[11px] font-medium text-muted-foreground">
-                Parent
-                <select
-                  value={row.parentId ?? "__root__"}
-                  onChange={(event) => moveItemToParent(
-                    row.item.id,
-                    event.target.value === "__root__" ? null : event.target.value,
-                  )}
-                  className="h-8 max-w-64 rounded-md border bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Parent for ${label}`}
-                >
-                  <option value="__root__">Top level</option>
-                  {parentOptions.map((option) => (
-                    <option key={option.item.id} value={option.item.id}>
-                      {`${"— ".repeat(option.depth)}${option.item.title.trim() || "Untitled item"}`}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid w-24 gap-1 text-[11px] font-medium text-muted-foreground">
-                Position
-                <Input
-                  key={`${row.item.id}-${row.index}-${row.siblingCount}`}
-                  type="number"
-                  min={1}
-                  max={row.siblingCount}
-                  defaultValue={row.index + 1}
-                  className="h-8 tabular-nums"
-                  aria-label={`Position for ${label}`}
-                  onBlur={(event) => {
-                    const nextPosition = Number.parseInt(event.target.value, 10);
-                    if (Number.isFinite(nextPosition)) {
-                      moveItemToIndex(
+          <div className="mt-3 flex min-w-0 flex-col gap-2 border-t pt-2.5 sm:flex-row sm:items-start sm:justify-between">
+            <details className="group min-w-0 flex-1">
+              <summary className="flex min-h-10 max-w-xl cursor-pointer list-none items-center gap-2 rounded-md border bg-muted/20 px-2.5 text-sm font-medium text-foreground hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                <FolderTree className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span>Placement options</span>
+                <span className="hidden truncate text-xs font-normal text-muted-foreground min-[520px]:inline">
+                  Parent, position, and keyboard moves
+                </span>
+                <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+
+              <div className="mt-2 grid min-w-0 gap-2 rounded-md border bg-muted/15 p-2.5">
+                <div className="flex min-w-0 flex-wrap items-end gap-2">
+                  <label className="grid min-w-40 gap-1 text-[11px] font-medium text-muted-foreground">
+                    Parent
+                    <select
+                      value={row.parentId ?? "__root__"}
+                      onChange={(event) => moveItemToParent(
                         row.item.id,
-                        Math.min(row.siblingCount, Math.max(1, nextPosition)) - 1,
-                      );
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") event.currentTarget.blur();
-                  }}
-                />
-              </label>
-            </div>
+                        event.target.value === "__root__" ? null : event.target.value,
+                      )}
+                      className="h-9 max-w-64 rounded-md border bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Parent for ${label}`}
+                    >
+                      <option value="__root__">Top level</option>
+                      {parentOptions.map((option) => (
+                        <option key={option.item.id} value={option.item.id}>
+                          {`${"— ".repeat(option.depth)}${option.item.title.trim() || "Untitled item"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid w-24 gap-1 text-[11px] font-medium text-muted-foreground">
+                    Position
+                    <Input
+                      key={`${row.item.id}-${row.index}-${row.siblingCount}`}
+                      type="number"
+                      min={1}
+                      max={row.siblingCount}
+                      defaultValue={row.index + 1}
+                      className="h-9 tabular-nums"
+                      aria-label={`Position for ${label}`}
+                      onBlur={(event) => {
+                        const nextPosition = Number.parseInt(event.target.value, 10);
+                        if (Number.isFinite(nextPosition)) {
+                          moveItemToIndex(
+                            row.item.id,
+                            Math.min(row.siblingCount, Math.max(1, nextPosition)) - 1,
+                          );
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                      }}
+                    />
+                  </label>
+                </div>
 
-            <div
-              className="flex flex-wrap items-center gap-1"
-              role="group"
-              aria-label={`Arrange ${label}`}
-            >
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                disabled={row.index === 0}
-                onClick={() => moveItem(row.item.id, -1)}
-              >
-                <ArrowUp /> Earlier
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                disabled={row.index === row.siblingCount - 1}
-                onClick={() => moveItem(row.item.id, 1)}
-              >
-                <ArrowDown /> Later
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                disabled={!canIndent}
-                onClick={() => indentItem(row.item.id)}
-              >
-                <ArrowRight /> Make child
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                disabled={row.depth === 0}
-                onClick={() => outdentItem(row.item.id)}
-              >
-                <ArrowLeft /> Up a level
-              </Button>
-            </div>
+                <div
+                  className="flex flex-wrap items-center gap-1"
+                  role="group"
+                  aria-label={`Arrange ${label}`}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2"
+                    disabled={row.index === 0}
+                    onClick={() => moveItem(row.item.id, -1)}
+                  >
+                    <ArrowUp /> Earlier
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2"
+                    disabled={row.index === row.siblingCount - 1}
+                    onClick={() => moveItem(row.item.id, 1)}
+                  >
+                    <ArrowDown /> Later
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2"
+                    disabled={!canIndent}
+                    onClick={() => indentItem(row.item.id)}
+                  >
+                    <ArrowRight /> Make child
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 px-2"
+                    disabled={row.depth === 0}
+                    onClick={() => outdentItem(row.item.id)}
+                  >
+                    <ArrowLeft /> Up a level
+                  </Button>
+                </div>
+              </div>
+            </details>
 
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center justify-end gap-1">
               {canAddChild ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-8 px-2"
+                  className="h-10 px-2.5"
                   disabled={availableItemSlots <= 0}
                   onClick={() => {
                     setAddToParentId(row.item.id);
@@ -422,7 +590,7 @@ export function NavigationBuilder({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2 text-destructive hover:text-destructive"
+                className="h-10 px-2.5 text-destructive hover:text-destructive"
                 onClick={() => removeItem(row.item.id, row.parentId)}
               >
                 <Trash2 /> Remove{descendantCount > 0 ? ` ${descendantCount + 1} items` : ""}
@@ -461,7 +629,7 @@ export function NavigationBuilder({
             </Badge>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Open a row to edit it in place. Nest up to {MAX_NAV_DEPTH} levels.
+            Open a row to edit. Drag to reorder; move right to nest or left to move up.
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -564,21 +732,61 @@ export function NavigationBuilder({
             </div>
           </div>
 
-          <ScrollArea className="h-[min(68vh,720px)] min-h-52">
+          <div
+            id={normalizedQuery ? "navigation-drag-search-help" : undefined}
+            className={cn(
+              "flex min-h-8 items-center gap-2 border-b px-3 py-1.5 text-xs",
+              normalizedQuery
+                ? "bg-muted/35 text-muted-foreground"
+                : activeDragId
+                  ? dragIntent?.type === "invalid"
+                    ? "bg-destructive/5 text-destructive"
+                    : "bg-primary/5 text-foreground"
+                  : "text-muted-foreground",
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <GripVertical className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              {normalizedQuery
+                ? "Clear search to arrange items. Dragging is paused so filtered rows cannot change the wrong branch."
+                : dragStatus || "Drag vertically to reorder siblings. Move right to nest or left to move up a level; Parent and Position remain available."}
+            </span>
+          </div>
+
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            accessibility={dragAccessibility}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <ScrollArea className="h-[min(68vh,720px)] min-h-52">
             {normalizedQuery && matchingItems === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
                 No menu items match “{query.trim()}”.
               </div>
             ) : (
               <>
-                <NavigationMap
-                  rows={renderedRows}
-                  selectedId={selectedId}
-                  normalizedQuery={normalizedQuery}
-                  onSelect={handleSelect}
-                  onToggle={handleToggle}
-                  renderEditor={renderInlineEditor}
-                />
+                <SortableContext
+                  items={renderedRowIds}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <NavigationMap
+                    rows={renderedRows}
+                    selectedId={selectedId}
+                    normalizedQuery={normalizedQuery}
+                    activeDragId={activeDragId}
+                    dragIntent={dragIntent}
+                    dragDisabled={Boolean(normalizedQuery)}
+                    onSelect={handleSelect}
+                    onToggle={handleToggle}
+                    renderEditor={renderInlineEditor}
+                  />
+                </SortableContext>
                 {hiddenVisibleRows > 0 ? (
                   <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t bg-background/95 px-3 py-2 backdrop-blur">
                     <span className="text-xs tabular-nums text-muted-foreground">
@@ -599,7 +807,29 @@ export function NavigationBuilder({
                 ) : null}
               </>
             )}
-          </ScrollArea>
+            </ScrollArea>
+
+            <DragOverlay dropAnimation={null}>
+              {activeDrag ? (
+                <div className="flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-2 rounded-md border bg-background px-3 py-2 shadow-lg">
+                  <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {activeDrag.item.title.trim() || "Untitled item"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {activeDrag.item.href || "Label only"}
+                    </p>
+                  </div>
+                  {activeDrag.item.subMenu?.length ? (
+                    <Badge variant="outline" className="shrink-0 font-normal">
+                      Branch · {countNavigationItems(activeDrag.item.subMenu) + 1} items
+                    </Badge>
+                  ) : null}
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </section>
       )}
 

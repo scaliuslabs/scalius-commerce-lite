@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { NavigationItem } from "./types";
 import {
+  applyNavigationDrag,
   appendNavigationItems,
   collectNavigationParentIds,
   countNavigationItems,
   findNavigationLocation,
   flattenNavigationOutline,
   getNavigationDepth,
+  getNavigationDragIntent,
   indentNavigationItemById,
   moveNavigationItemById,
   moveNavigationItemToIndexById,
@@ -114,5 +116,57 @@ describe("navigation workspace model", () => {
   it("refuses an indent that would push descendants beyond three public levels", () => {
     const unchanged = indentNavigationItemById(menu[0].subMenu ?? [], "clothing", 2, 0);
     expect(unchanged).toEqual(menu[0].subMenu);
+  });
+
+  it("reorders sibling branches by drag without changing stable IDs or descendants", () => {
+    const result = applyNavigationDrag(menu, "about", "shop", 0);
+
+    expect(result.changed).toBe(true);
+    expect(result.intent.type).toBe("reorder");
+    expect(result.items.map((item) => item.id)).toEqual(["about", "shop"]);
+    expect(findNavigationLocation(result.items, "shirts")?.ancestors.map((item) => item.id))
+      .toEqual(["shop", "clothing"]);
+    expect(countNavigationItems(result.items)).toBe(countNavigationItems(menu));
+  });
+
+  it("nests and outdents complete branches only after an explicit horizontal drag", () => {
+    const nested = applyNavigationDrag(menu, "clothing", "about", 40);
+
+    expect(nested.changed).toBe(true);
+    expect(nested.intent.type).toBe("nest");
+    expect(findNavigationLocation(nested.items, "clothing")).toMatchObject({
+      parentId: "about",
+      depth: 1,
+    });
+    expect(findNavigationLocation(nested.items, "shirts")).toMatchObject({
+      parentId: "clothing",
+      depth: 2,
+    });
+
+    const outdented = applyNavigationDrag(nested.items, "clothing", "shop", -40);
+    expect(outdented.changed).toBe(true);
+    expect(outdented.intent.type).toBe("outdent");
+    expect(findNavigationLocation(outdented.items, "clothing")?.depth).toBe(0);
+    expect(findNavigationLocation(outdented.items, "shirts")?.depth).toBe(1);
+  });
+
+  it("rejects ambiguous cross-parent drops, cycles, and branches beyond level three", () => {
+    const ambiguous = applyNavigationDrag(menu, "new", "shirts", 0);
+    expect(ambiguous.changed).toBe(false);
+    expect(ambiguous.items).toBe(menu);
+    expect(ambiguous.intent).toMatchObject({ type: "invalid" });
+
+    const cycle = getNavigationDragIntent(menu, "shop", "shirts", 40);
+    expect(cycle).toMatchObject({
+      type: "invalid",
+      message: "A menu item cannot be nested inside its own branch.",
+    });
+
+    const tooDeep = applyNavigationDrag(menu, "about", "shirts", 40);
+    expect(tooDeep.changed).toBe(false);
+    expect(tooDeep.intent.type).toBe("invalid");
+    if (tooDeep.intent.type === "invalid") {
+      expect(tooDeep.intent.message).toContain("3-level menu limit");
+    }
   });
 });

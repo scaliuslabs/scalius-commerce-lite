@@ -43,10 +43,22 @@ formula without making drag the only way to arrange a menu:
   ancestors marked as parent context. Collapse/expand works outside search.
   Small menus initially expand for speed; large menus initially collapse so the
   first paint remains an orientation view rather than hundreds of rows.
-- All mutations still address stable node IDs. Earlier/Later and
-  Make child/Up a level remain keyboard/touch-safe, while direct Parent and
-  Position controls avoid 98 repeated clicks when moving an item across a long
-  sibling list.
+- All mutations still address stable node IDs. Drag is the visually primary
+  placement control. The deterministic Parent/Position and
+  Earlier/Later/Make child/Up a level fallbacks remain keyboard/touch-safe
+  behind one native `Placement options` disclosure, avoiding permanent control
+  clutter while still preventing 98 repeated clicks across a long sibling
+  list. Add child and Remove stay immediately visible.
+- Every visible row now also has a 40 px drag handle. A vertical drop reorders
+  siblings only; a deliberate move right nests the complete branch and a move
+  left outdents it one level. Cross-parent vertical drops, cycles, and moves
+  beyond three levels fail without mutating the tree. The active inline editor
+  follows its stable item ID after the move.
+- Pointer and keyboard sensors share the same sortable context and dnd-kit live
+  announcements/instructions. Drag never replaces the native placement
+  fallbacks; it keeps them collapsed until needed. Search disables every handle
+  with an explicit explanation because arranging a filtered projection could
+  move the wrong branch.
 - The render projection is flattened in one traversal. At most 80 currently
   visible rows mount at once; merchants explicitly reveal the next batch.
   Search runs against the complete hierarchy, so a match beyond the first batch
@@ -93,9 +105,10 @@ model remains the architectural destination:
   credential-free HTTPS URLs. The editor exposes invalid destinations inline.
 - Footer menu previews now resolve against the real storefront origin rather
   than opening a fake `#` URL.
-- At mobile admin widths, the shared menu map and selected-item inspector avoid
-  squeezing a desktop table into 390 px. Native arrangement buttons mean touch
-  and keyboard merchants are never required to drag.
+- At mobile admin widths, the same inline list/editor avoids squeezing a desktop
+  table into 390 px. Drag handles meet a 40 px touch target and native
+  arrangement buttons mean touch and keyboard merchants are never required to
+  drag.
 - Copyright input is defined as the owner/business name. The storefront owns
   the current year and rights suffix exactly once, and no longer writes unused
   footer presentation data into `localStorage` on every page.

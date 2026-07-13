@@ -22,21 +22,46 @@ describe("navigation workspace boundaries", () => {
     expect(mapSource).toContain("[content-visibility:auto]");
     expect(source).not.toContain("lg:grid-cols-[minmax(270px");
     expect(source).not.toContain("<Table");
-    expect(source).not.toContain("@dnd-kit/");
   });
 
-  it("keeps deterministic keyboard and touch arrangement controls inline", () => {
+  it("adds accessible drag while keeping deterministic keyboard and touch fallbacks available", () => {
     const source = readSource("./NavigationBuilder.tsx");
+    const mapSource = readSource("./NavigationMap.tsx");
 
+    expect(source).toContain('from "@dnd-kit/core"');
+    expect(source).toContain("PointerSensor");
+    expect(source).toContain("KeyboardSensor");
+    expect(source).toContain("sortableKeyboardCoordinates");
+    expect(source).toContain("navigationScreenReaderInstructions");
+    expect(source).toContain("DragOverlay");
+    expect(source).toContain("applyNavigationDrag");
+    expect(mapSource).toContain("useSortable");
+    expect(mapSource).toContain("touch-none");
+    expect(mapSource).toContain("h-10 w-10");
+    expect(mapSource).toContain("Clear search to arrange menu items");
+    expect(source).toContain("<details");
+    expect(source).toContain("Placement options");
+    expect(source).toContain("Parent, position, and keyboard moves");
     expect(source).toContain("Earlier");
     expect(source).toContain("Later");
     expect(source).toContain("Make child");
     expect(source).toContain("Up a level");
+    expect(source).toContain("Add child");
+    expect(source).toContain("Remove{descendantCount");
     expect(source).toContain("canIndentNavigationItem");
     expect(source).toContain("MAX_NAV_DEPTH");
     expect(source).toContain("MAX_NAV_ITEMS");
     expect(source).toContain("moveNavigationItemToIndexById");
     expect(source).toContain("moveNavigationItemToParentById");
+  });
+
+  it("disables drag during filtered views and keeps the 80-row projection", () => {
+    const source = readSource("./NavigationBuilder.tsx");
+
+    expect(source).toContain("dragDisabled={Boolean(normalizedQuery)}");
+    expect(source).toContain("Clear search to arrange items");
+    expect(source).toContain("filtered rows cannot change the wrong branch");
+    expect(source).toContain("items={renderedRowIds}");
   });
 
   it("keeps one narrow-screen-safe editor without a second mobile implementation", () => {
