@@ -41,11 +41,16 @@ describe("catalog cache groups", () => {
       "search",
       "collections",
       "attributes",
+      "layout",
     ]);
     expect(getGroupsForPath("/api/v1/admin/categories/cat_123")).toEqual([
       "categories",
       "products",
       "search",
+      "collections",
+      "layout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/collections/col_123")).toEqual([
       "collections",
       "layout",
     ]);
@@ -957,7 +962,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const body = JSON.parse(String(init?.body));
 
     expect(body).toMatchObject({
-      groups: ["products", "search", "collections", "attributes"],
+      groups: ["products", "search", "collections", "attributes", "layout"],
       bumpVersion: true,
       htmlPaths: ["/search"],
     });

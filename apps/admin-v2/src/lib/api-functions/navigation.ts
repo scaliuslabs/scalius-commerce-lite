@@ -1,11 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { NavigationResourceType } from "@scalius/shared/navigation-target";
 import { apiGet } from "../api.server";
 
 export interface NavigationSource {
   id: string;
   name: string;
   slug: string;
-  type: string;
+  type: NavigationResourceType;
   url: string;
 }
 
@@ -13,6 +14,8 @@ export interface NavigationItemsPayload {
   items: {
     categories: NavigationSource[];
     pages: NavigationSource[];
+    products: NavigationSource[];
+    collections: NavigationSource[];
   };
 }
 

@@ -223,26 +223,29 @@ const socialLinkSchema = z.object({
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const navigationItemSchema: z.ZodType<unknown> = z.object({
+const navigationTargetSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("resource"),
+    resourceType: z.enum(["page", "category", "collection", "product"]),
+    resourceId: z.string(),
+    query: z.string().optional(),
+  }),
+  z.object({ type: z.literal("internal_path"), path: z.string() }),
+  z.object({ type: z.literal("external_url"), url: z.string() }),
+  z.object({ type: z.literal("label") }),
+]);
+const navigationLeafSchema = z.object({
   id: z.string(),
-  title: z.string(),
-  href: z.string().optional(),
-  subMenu: z
-    .array(z.record(z.string(), z.unknown()))
-    .optional()
-    .openapi({
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          title: { type: "string" },
-          href: { type: "string" },
-          subMenu: { type: "array", items: { type: "object" } },
-        },
-      },
-      description: "Nested navigation items",
-    }),
+  target: navigationTargetSchema,
+  labelMode: z.enum(["resource", "custom"]),
+  customLabel: z.string().optional(),
+  lastKnownLabel: z.string().optional(),
+});
+const navigationChildSchema = navigationLeafSchema.extend({
+  subMenu: z.array(navigationLeafSchema).optional(),
+});
+const navigationItemSchema = navigationLeafSchema.extend({
+  subMenu: z.array(navigationChildSchema).optional(),
 });
 const headerConfigSchema = z.object({
   topBar: z.object({

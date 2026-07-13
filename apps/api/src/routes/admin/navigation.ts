@@ -80,6 +80,8 @@ const listItemsRoute = createRoute({
                         items: z.object({
                             categories: z.array(navSourceItemSchema),
                             pages: z.array(navSourceItemSchema),
+                            products: z.array(navSourceItemSchema),
+                            collections: z.array(navSourceItemSchema),
                         }),
                     })),
                 },
@@ -185,7 +187,7 @@ const getConfigRoute = createRoute({
 
 app.openapi(getConfigRoute, async (c) => {
     const db = c.get("db");
-    const { headerConfig, footerConfig } = await getNavigationMenus(db);
+    const { headerConfig, footerConfig } = await getNavigationMenus(db, "admin");
     return ok(c, { headerConfig, footerConfig });
 });
 

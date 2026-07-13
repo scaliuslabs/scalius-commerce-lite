@@ -1,7 +1,7 @@
 // src/modules/navigation/navigation.service.ts
 // All DB queries and business logic for the navigation domain.
 
-import { categories, pages, siteSettings } from "@scalius/database/schema";
+import { categories, collections, pages, products, siteSettings } from "@scalius/database/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
@@ -10,17 +10,17 @@ import { getPublicCategoryById } from "../categories/categories.storefront";
 import { getStorefrontProducts } from "../products/products.storefront";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { parseNavigationConfig } from "./navigation.validation";
+import { resolveNavigationConfigs } from "./navigation.resolver";
+import type {
+    NavigationTargetItem,
+    ResolvedNavigationItem,
+} from "@scalius/shared/navigation-target";
 
 // ─────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────
 
-export interface NavigationItem {
-    id: string;
-    title: string;
-    href?: string;
-    subMenu?: NavigationItem[];
-}
+export type NavigationItem = ResolvedNavigationItem;
 
 export interface NavigationPreviewProductCountInput {
     categoryId: string;
@@ -30,33 +30,6 @@ export interface NavigationPreviewProductCountInput {
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     attributeFilters?: { slug: string; value: string }[];
-}
-
-function categorySlugFromNavigationUrl(value: unknown): string | null {
-    if (typeof value !== "string") return null;
-    const match = /^\/categories\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/.exec(value.trim());
-    return match?.[1] ?? null;
-}
-
-export function filterNavigationByPublishedCategories(
-    value: unknown,
-    publishedSlugs: ReadonlySet<string>,
-): unknown {
-    if (Array.isArray(value)) {
-        return value
-            .map((item) => filterNavigationByPublishedCategories(item, publishedSlugs))
-            .filter((item) => item !== null);
-    }
-    if (!value || typeof value !== "object") return value;
-
-    const source = value as Record<string, unknown>;
-    const categorySlug = categorySlugFromNavigationUrl(source.href ?? source.url);
-    if (categorySlug && !publishedSlugs.has(categorySlug)) return null;
-
-    return Object.fromEntries(Object.entries(source).map(([key, child]) => [
-        key,
-        filterNavigationByPublishedCategories(child, publishedSlugs),
-    ]));
 }
 
 // ─────────────────────────────────────────
@@ -75,7 +48,8 @@ export async function getNavigationItems(db: Database) {
         })
         .from(categories)
         .where(and(...publicCategoryConditions()))
-        .orderBy(categories.name);
+        .orderBy(categories.name)
+        .limit(100);
 
     const categoryItems = categoriesData.map((cat) => ({
         id: cat.id,
@@ -95,7 +69,8 @@ export async function getNavigationItems(db: Database) {
         })
         .from(pages)
         .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
-        .orderBy(pages.title);
+        .orderBy(pages.title)
+        .limit(100);
 
     const pageItems = pagesData.map((page) => ({
         id: page.id,
@@ -105,9 +80,37 @@ export async function getNavigationItems(db: Database) {
         url: `/${page.slug}`,
     }));
 
+    const productsData = await db
+        .select({ id: products.id, name: products.name, slug: products.slug })
+        .from(products)
+        .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = true`)
+        .orderBy(products.name)
+        .limit(100);
+
+    const collectionsData = await db
+        .select({ id: collections.id, name: collections.name })
+        .from(collections)
+        .where(sql`${collections.deletedAt} IS NULL AND ${collections.isActive} = true`)
+        .orderBy(collections.name)
+        .limit(100);
+
     return {
         categories: categoryItems,
         pages: pageItems,
+        products: productsData.map((product) => ({
+            id: product.id,
+            name: product.name,
+            slug: product.slug,
+            type: "product",
+            url: `/products/${product.slug}`,
+        })),
+        collections: collectionsData.map((collection) => ({
+            id: collection.id,
+            name: collection.name,
+            slug: collection.id,
+            type: "collection",
+            url: `/collections/${collection.id}`,
+        })),
     };
 }
 
@@ -146,19 +149,15 @@ export async function getNavigationPreviewProductCount(
  *  replacing the inline DB query + raw JSON.parse at lines 88-96.
  *  Swap: `const { headerConfig, footerConfig } = await getNavigationMenus(db);`
  *  then `return ok(c, { headerConfig, footerConfig });` */
-export async function getNavigationMenus(db: Database) {
-    const [settingsRows, categoryRows] = await db.batch([
-        db
-            .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
-            .from(siteSettings)
-            .limit(1),
-        db
-            .select({ slug: categories.slug })
-            .from(categories)
-            .where(and(...publicCategoryConditions())),
-    ]);
+export async function getNavigationMenus(
+    db: Database,
+    audience: "admin" | "public" = "public",
+) {
+    const settingsRows = await db
+        .select({ headerConfig: siteSettings.headerConfig, footerConfig: siteSettings.footerConfig })
+        .from(siteSettings)
+        .limit(1);
     const row = settingsRows[0];
-    const publishedSlugs = new Set(categoryRows.map((category) => category.slug));
 
     const parsePersistedConfig = (
         type: "header" | "footer",
@@ -176,10 +175,7 @@ export async function getNavigationMenus(db: Database) {
     const headerConfig = parsePersistedConfig("header", row?.headerConfig);
     const footerConfig = parsePersistedConfig("footer", row?.footerConfig);
 
-    return {
-        headerConfig: filterNavigationByPublishedCategories(headerConfig, publishedSlugs) as Record<string, unknown>,
-        footerConfig: filterNavigationByPublishedCategories(footerConfig, publishedSlugs) as Record<string, unknown>,
-    };
+    return resolveNavigationConfigs(db, headerConfig, footerConfig, audience);
 }
 
 /** Get a single navigation menu by type (header/footer/footer-menu-id).
@@ -324,31 +320,60 @@ export async function buildDefaultNavigation(db: Database): Promise<NavigationIt
         .select({ id: categories.id, name: categories.name, slug: categories.slug })
         .from(categories)
         .where(and(...publicCategoryConditions()))
-        .orderBy(categories.name);
+        .orderBy(categories.name)
+        .limit(90);
 
     const pagesData = await db
         .select({ id: pages.id, title: pages.title, slug: pages.slug })
         .from(pages)
         .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
-        .orderBy(pages.title);
+        .orderBy(pages.title)
+        .limit(58);
 
-    const nav: NavigationItem[] = [{ id: "home", title: "Home", href: "/" }];
+    const nav: NavigationTargetItem[] = [{
+        id: "home",
+        target: { type: "internal_path", path: "/" },
+        labelMode: "custom",
+        customLabel: "Home",
+    }];
 
     if (categoriesData.length > 0) {
         nav.push({
             id: "categories",
-            title: "Categories",
+            target: { type: "label" },
+            labelMode: "custom",
+            customLabel: "Categories",
             subMenu: categoriesData.map((cat) => ({
                 id: `cat_${cat.id}`,
-                title: cat.name,
-                href: `/categories/${cat.slug}`,
+                target: {
+                    type: "resource" as const,
+                    resourceType: "category" as const,
+                    resourceId: cat.id,
+                },
+                labelMode: "resource" as const,
+                lastKnownLabel: cat.name,
             })),
         });
     }
 
     pagesData.forEach((page) => {
-        nav.push({ id: `page_${page.id}`, title: page.title, href: `/${page.slug}` });
+        nav.push({
+            id: `page_${page.id}`,
+            target: {
+                type: "resource",
+                resourceType: "page",
+                resourceId: page.id,
+            },
+            labelMode: "resource",
+            lastKnownLabel: page.title,
+        });
     });
 
-    return nav;
+    const projected = await resolveNavigationConfigs(
+        db,
+        { navigation: nav },
+        {},
+        "public",
+    );
+    return (projected.headerConfig.navigation ?? []) as NavigationItem[];
 }

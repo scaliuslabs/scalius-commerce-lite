@@ -1,5 +1,12 @@
 // src/components/admin/navigation/AddNavItemDialog.tsx
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +41,7 @@ import {
   Plus,
   Trash2,
   Package,
+  Layers3,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
@@ -50,7 +58,14 @@ import {
   type NavigationPreviewProductsInput,
 } from "~/lib/api-functions/navigation";
 
-type NavItemType = "category" | "page" | "dynamic" | "custom" | "label";
+type NavItemType =
+  | "category"
+  | "page"
+  | "product"
+  | "collection"
+  | "dynamic"
+  | "custom"
+  | "label";
 
 const PAGE_SIZE = 10;
 
@@ -119,10 +134,20 @@ export function AddNavItemDialog({
   const [selectedPageMap, setSelectedPageMap] = useState<
     Map<string, NavigationSource>
   >(new Map());
+  const [selectedProductMap, setSelectedProductMap] = useState<
+    Map<string, NavigationSource>
+  >(new Map());
+  const [selectedCollectionMap, setSelectedCollectionMap] = useState<
+    Map<string, NavigationSource>
+  >(new Map());
+  const [productSources, setProductSources] = useState<NavigationSource[]>([]);
+  const [collectionSources, setCollectionSources] = useState<NavigationSource[]>([]);
 
   // Search input states (before debounce)
   const [catSearchInput, setCatSearchInput] = useState("");
   const [pageSearchInput, setPageSearchInput] = useState("");
+  const [productSearchInput, setProductSearchInput] = useState("");
+  const [collectionSearchInput, setCollectionSearchInput] = useState("");
 
   // Custom/Label states
   const [customLabel, setCustomLabel] = useState("");
@@ -262,6 +287,8 @@ export function AddNavItemDialog({
 
         const items = navData.items;
         setAllCategories(items?.categories || []);
+        setProductSources(items?.products || []);
+        setCollectionSources(items?.collections || []);
 
         const attrs = attrData.attributes || [];
         setAttributes(
@@ -284,8 +311,12 @@ export function AddNavItemDialog({
     if (!open) {
       setSelectedCategoryMap(new Map());
       setSelectedPageMap(new Map());
+      setSelectedProductMap(new Map());
+      setSelectedCollectionMap(new Map());
       setCatSearchInput("");
       setPageSearchInput("");
+      setProductSearchInput("");
+      setCollectionSearchInput("");
       setCatState(initialPaginatedState);
       setPageState(initialPaginatedState);
       setCustomLabel("");
@@ -402,6 +433,18 @@ export function AddNavItemDialog({
     });
   };
 
+  const toggleResource = (
+    resource: NavigationSource,
+    setter: Dispatch<SetStateAction<Map<string, NavigationSource>>>,
+  ) => {
+    setter((previous) => {
+      const next = new Map(previous);
+      if (next.has(resource.id)) next.delete(resource.id);
+      else if (next.size < availableSlots) next.set(resource.id, resource);
+      return next;
+    });
+  };
+
   // Handle add
   const handleAdd = () => {
     const newItems: NavigationItem[] = [];
@@ -410,8 +453,9 @@ export function AddNavItemDialog({
       selectedCategoryMap.forEach((cat) => {
         newItems.push({
           id: nanoid(),
-          title: cat.name,
-          href: cat.url,
+          target: { type: "resource", resourceType: "category", resourceId: cat.id },
+          labelMode: "resource",
+          lastKnownLabel: cat.name,
           subMenu: [],
         });
       });
@@ -419,27 +463,59 @@ export function AddNavItemDialog({
       selectedPageMap.forEach((page) => {
         newItems.push({
           id: nanoid(),
-          title: page.name,
-          href: page.url,
+          target: { type: "resource", resourceType: "page", resourceId: page.id },
+          labelMode: "resource",
+          lastKnownLabel: page.name,
+          subMenu: [],
+        });
+      });
+    } else if (activeType === "product" || activeType === "collection") {
+      const sourceMap = activeType === "product"
+        ? selectedProductMap
+        : selectedCollectionMap;
+      sourceMap.forEach((resource) => {
+        newItems.push({
+          id: nanoid(),
+          target: {
+            type: "resource",
+            resourceType: activeType,
+            resourceId: resource.id,
+          },
+          labelMode: "resource",
+          lastKnownLabel: resource.name,
           subMenu: [],
         });
       });
     } else if (activeType === "dynamic") {
-      const url = generateDynamicUrl();
-      if (url && dynamicLabel.trim()) {
+      const category = allCategories.find((item) => item.id === dynamicCategory);
+      const generatedUrl = generateDynamicUrl();
+      const query = generatedUrl.includes("?")
+        ? `?${generatedUrl.split("?")[1]}`
+        : undefined;
+      if (category && dynamicLabel.trim()) {
         newItems.push({
           id: nanoid(),
-          title: dynamicLabel.trim(),
-          href: url,
+          target: {
+            type: "resource",
+            resourceType: "category",
+            resourceId: category.id,
+            ...(query ? { query } : {}),
+          },
+          labelMode: "custom",
+          customLabel: dynamicLabel.trim(),
+          lastKnownLabel: category.name,
           subMenu: [],
         });
       }
     } else if (activeType === "custom") {
-      if (customLabel.trim() && customUrlResult.ok) {
+      if (customLabel.trim() && customUrlResult.ok && customUrlResult.href) {
         newItems.push({
           id: nanoid(),
-          title: customLabel.trim(),
-          href: customUrlResult.href,
+          target: customUrlResult.kind === "external"
+            ? { type: "external_url", url: customUrlResult.href! }
+            : { type: "internal_path", path: customUrlResult.href! },
+          labelMode: "custom",
+          customLabel: customLabel.trim(),
           subMenu: [],
         });
       }
@@ -447,8 +523,9 @@ export function AddNavItemDialog({
       if (customLabel.trim()) {
         newItems.push({
           id: nanoid(),
-          title: customLabel.trim(),
-          href: undefined,
+          target: { type: "label" },
+          labelMode: "custom",
+          customLabel: customLabel.trim(),
           subMenu: [],
         });
       }
@@ -469,8 +546,16 @@ export function AddNavItemDialog({
     if (activeType === "page") {
       return selectedPageMap.size > 0 && selectedPageMap.size <= availableSlots;
     }
+    if (activeType === "product") {
+      return selectedProductMap.size > 0 && selectedProductMap.size <= availableSlots;
+    }
+    if (activeType === "collection") {
+      return selectedCollectionMap.size > 0 && selectedCollectionMap.size <= availableSlots;
+    }
     if (activeType === "dynamic") return Boolean(dynamicCategory && dynamicLabel.trim());
-    if (activeType === "custom") return Boolean(customLabel.trim() && customUrlResult.ok);
+    if (activeType === "custom") {
+      return Boolean(customLabel.trim() && customUrlResult.ok && customUrlResult.href);
+    }
     if (activeType === "label") return Boolean(customLabel.trim());
     return false;
   };
@@ -482,10 +567,30 @@ export function AddNavItemDialog({
       color: "text-blue-500",
     },
     page: { icon: FileText, label: "Page", color: "text-green-500" },
+    product: { icon: Package, label: "Product", color: "text-rose-500" },
+    collection: { icon: Layers3, label: "Collection", color: "text-cyan-500" },
     dynamic: { icon: Sparkles, label: "Dynamic", color: "text-purple-500" },
     custom: { icon: Link2, label: "Custom Link", color: "text-orange-500" },
     label: { icon: Type, label: "Label Only", color: "text-gray-500" },
   };
+  const isCatalogResource = activeType === "product" || activeType === "collection";
+  const catalogSources = activeType === "product" ? productSources : collectionSources;
+  const catalogSearch = activeType === "product" ? productSearchInput : collectionSearchInput;
+  const setCatalogSearch = activeType === "product"
+    ? setProductSearchInput
+    : setCollectionSearchInput;
+  const selectedCatalogMap = activeType === "product"
+    ? selectedProductMap
+    : selectedCollectionMap;
+  const setSelectedCatalogMap = activeType === "product"
+    ? setSelectedProductMap
+    : setSelectedCollectionMap;
+  const normalizedCatalogSearch = catalogSearch.trim().toLocaleLowerCase();
+  const filteredCatalogSources = catalogSources.filter((source) => (
+    !normalizedCatalogSearch ||
+    source.name.toLocaleLowerCase().includes(normalizedCatalogSearch) ||
+    source.slug.toLocaleLowerCase().includes(normalizedCatalogSearch)
+  ));
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -762,6 +867,75 @@ export function AddNavItemDialog({
                       </Button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Products and collections are stable resource targets, not copied URLs. */}
+              {isCatalogResource && (
+                <div className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder={`Search ${activeType === "product" ? "products" : "collections"}...`}
+                      value={catalogSearch}
+                      onChange={(event) => setCatalogSearch(event.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    The menu will follow the current title and public route automatically.
+                  </p>
+                  <ScrollArea className="h-[300px] rounded-lg border">
+                    {filteredCatalogSources.length === 0 ? (
+                      <div className="grid h-48 place-items-center px-4 text-center text-sm text-muted-foreground">
+                        No {activeType === "product" ? "products" : "collections"} found
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {filteredCatalogSources.map((resource) => {
+                          const selected = selectedCatalogMap.has(resource.id);
+                          return (
+                            <label
+                              key={resource.id}
+                              htmlFor={`navigation-${activeType}-${resource.id}`}
+                              className={cn(
+                                "flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-muted/50",
+                                selected && "bg-primary/10",
+                              )}
+                            >
+                              <Checkbox
+                                id={`navigation-${activeType}-${resource.id}`}
+                                checked={selected}
+                                disabled={!selected && selectedCatalogMap.size >= availableSlots}
+                                onCheckedChange={() => toggleResource(resource, setSelectedCatalogMap)}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{resource.name}</span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {resource.url}
+                                </span>
+                              </span>
+                              {selected ? <Check className="h-4 w-4 text-primary" /> : null}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  {selectedCatalogMap.size > 0 ? (
+                    <div className="flex items-center justify-between rounded-lg bg-primary/10 p-2">
+                      <span className="text-sm font-medium">
+                        {selectedCatalogMap.size} selected
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedCatalogMap(new Map())}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               )}
 

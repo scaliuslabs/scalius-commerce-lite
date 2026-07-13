@@ -10,13 +10,11 @@ import {
   collections,
   heroSliders,
   analytics,
-  categories,
   metaConversionsSettings,
-  pages,
   settings,
   themeSettings,
 } from "@scalius/database/schema";
-import { eq, isNull, and, sql } from "drizzle-orm";
+import { eq, isNull, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -40,8 +38,8 @@ import {
 } from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { filterNavigationByPublishedCategories } from "../navigation/navigation.service";
+import { buildDefaultNavigation } from "../navigation/navigation.service";
+import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
 import { parseNavigationConfig } from "../navigation/navigation.validation";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 
@@ -262,38 +260,20 @@ export async function getLayoutData(
       .from(siteSettings)
       .limit(1),
 
-    // 2. Categories (for navigation fallback)
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-      })
-      .from(categories)
-      .where(and(...publicCategoryConditions()))
-      .orderBy(categories.name),
-
-    // 3. Published pages (for navigation fallback)
-    db
-      .select({ id: pages.id, title: pages.title, slug: pages.slug })
-      .from(pages)
-      .where(sql`${pages.deletedAt} IS NULL AND ${pages.isPublished} = true`)
-      .orderBy(pages.title),
-
-    // 4. Currency settings
+    // 2. Currency settings
     db
       .select({ key: settings.key, value: settings.value })
       .from(settings)
       .where(eq(settings.category, "currency")),
 
-    // 5. Versioned theme color overrides
+    // 3. Versioned theme color overrides
     db
       .select({ value: themeSettings.colors })
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
 
-    // 6. Legacy theme color fallback (used only when no versioned row exists)
+    // 4. Legacy theme color fallback (used only when no versioned row exists)
     db
       .select({ value: settings.value })
       .from(settings)
@@ -305,7 +285,7 @@ export async function getLayoutData(
       )
       .limit(1),
 
-    // 7. Media/image optimization settings
+    // 5. Media/image optimization settings
     db
       .select({ value: settings.value })
       .from(settings)
@@ -317,7 +297,7 @@ export async function getLayoutData(
       )
       .limit(1),
 
-    // 8. Meta CAPI browser dispatch readiness
+    // 6. Meta CAPI browser dispatch readiness
     db
       .select({
         isEnabled: metaConversionsSettings.isEnabled,
@@ -328,20 +308,20 @@ export async function getLayoutData(
       .where(eq(metaConversionsSettings.id, "singleton"))
       .limit(1),
 
-    // 9. SEO discovery policy
+    // 7. SEO discovery policy
     db
       .select({ value: settings.value })
       .from(settings)
       .where(and(eq(settings.category, "seo"), eq(settings.key, "discovery")))
       .limit(1),
 
-    // 10. Business identity for public OnlineStore JSON-LD
+    // 8. Business identity for public OnlineStore JSON-LD
     db
       .select({ key: settings.key, value: settings.value })
       .from(settings)
       .where(eq(settings.category, "business_info")),
 
-    // 11. Merchant return-policy schema settings
+    // 9. Merchant return-policy schema settings
     db
       .select({ value: settings.value })
       .from(settings)
@@ -357,8 +337,6 @@ export async function getLayoutData(
   const [
     analyticsResults,
     settingsResults,
-    categoriesData,
-    pagesData,
     currencyResults,
     themeResults,
     legacyThemeResults,
@@ -368,10 +346,6 @@ export async function getLayoutData(
     businessResults,
     seoReturnPolicyResults,
   ] = batchResults;
-  const publishedCategorySlugs = new Set(
-    (categoriesData as { slug: string }[]).map((category) => category.slug),
-  );
-
   // Process Analytics
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
@@ -392,14 +366,26 @@ export async function getLayoutData(
   const siteSettingsData = (settingsResults as Record<string, unknown>[])[0] as
     | Record<string, string | null>
     | undefined;
+  const storedHeaderConfig = siteSettingsData?.headerConfig
+    ? parsePersistedNavigationConfig("header", siteSettingsData.headerConfig)
+    : {};
+  const storedFooterConfig = siteSettingsData?.footerConfig
+    ? parsePersistedNavigationConfig("footer", siteSettingsData.footerConfig)
+    : {};
+  const {
+    headerConfig: resolvedHeaderConfig,
+    footerConfig: resolvedFooterConfig,
+  } = await resolveNavigationConfigs(
+    db,
+    storedHeaderConfig,
+    storedFooterConfig,
+    "public",
+  );
   let headerData: Record<string, unknown>;
   let navigationData: NestedNavigationItem[] = [];
 
   if (siteSettingsData?.headerConfig) {
-    const headerConfig = filterNavigationByPublishedCategories(
-      parsePersistedNavigationConfig("header", siteSettingsData.headerConfig),
-      publishedCategorySlugs,
-    ) as Record<string, unknown>;
+    const headerConfig = resolvedHeaderConfig;
     const topBarConfig = asRecord(headerConfig.topBar);
     const logoConfig = asRecord(headerConfig.logo);
     const faviconConfig = asRecord(headerConfig.favicon);
@@ -442,33 +428,10 @@ export async function getLayoutData(
       social: socialLinks,
     };
 
-    if (Array.isArray(headerConfig.navigation)) {
+    if (Array.isArray(headerConfig.navigation) && headerConfig.navigation.length > 0) {
       navigationData = headerConfig.navigation as NestedNavigationItem[];
     } else {
-      // Generate default navigation from categories + pages
-      navigationData = [{ id: "home", title: "Home", href: "/" }];
-      if ((categoriesData as unknown[]).length > 0) {
-        navigationData.push({
-          id: "categories",
-          title: "Categories",
-          subMenu: (
-            categoriesData as { id: string; name: string; slug: string }[]
-          ).map((cat) => ({
-            id: `cat_${cat.id}`,
-            title: cat.name,
-            href: `/categories/${cat.slug}`,
-          })),
-        });
-      }
-      (pagesData as { id: string; title: string; slug: string }[]).forEach(
-        (page) => {
-          navigationData.push({
-            id: `page_${page.id}`,
-            title: page.title,
-            href: `/${page.slug}`,
-          });
-        },
-      );
+      navigationData = await buildDefaultNavigation(db);
     }
   } else {
     headerData = {
@@ -483,10 +446,7 @@ export async function getLayoutData(
   // Process Footer
   let footerData: Record<string, unknown>;
   if (siteSettingsData?.footerConfig) {
-    const footerConfig = filterNavigationByPublishedCategories(
-      parsePersistedNavigationConfig("footer", siteSettingsData.footerConfig),
-      publishedCategorySlugs,
-    ) as Record<string, unknown>;
+    const footerConfig = resolvedFooterConfig;
     const footerLogoConfig = asRecord(footerConfig.logo);
     const footerFaviconConfig = asRecord(footerConfig.favicon);
 
@@ -497,7 +457,7 @@ export async function getLayoutData(
 
     const normalizedMenus = (Array.isArray(footerConfig.menus) ? footerConfig.menus : []).map(
       (menu: Record<string, unknown>) => ({
-        id: menu.id || nanoid(),
+        id: String(menu.id),
         title: menu.title || "",
         links: menu.links || [],
       }),

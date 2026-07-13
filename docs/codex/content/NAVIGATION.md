@@ -2,6 +2,26 @@
 
 Last reviewed: 2026-07-14
 
+## Typed resource target cutover (implemented, awaiting demo regeneration)
+
+The interim header/footer JSON no longer treats copied URLs as resource
+authority. Items persist one typed resource/internal/external/label target;
+resource mode follows the live title and route while custom mode preserves the
+merchant label. Products and collections are first-class picker sources, and
+filtered category links store a stable category ID plus safe query parameters.
+
+Admin preview and all public readers share one bounded resolver. It reads IDs
+sequentially in D1-safe chunks of at most 90, omits unavailable leaves, keeps a
+useful unavailable parent as a label group, and ignores `noIndex`/sitemap
+exclusion when deciding buyer readiness. Page resources use the routed
+`/<slug>` path; valid current canonical paths drive product, category, and
+collection links.
+
+This cutover is not deployed. Existing demo `header_config` and `footer_config`
+rows containing `{title, href}` items must be regenerated into the typed shape
+before deployment. Reads intentionally fail closed on old rows; there is no
+permanent compatibility branch or second URL authority.
+
 ## 2026-07-14 interaction correction and large-menu behavior
 
 ### Deployed proof
@@ -118,7 +138,7 @@ raising a constant. The accepted authority, migration, cache, and rollback
 design is recorded in [NAVIGATION-AUTHORITY.md](NAVIGATION-AUTHORITY.md).
 
 This remains a UI/workflow slice over the interim JSON authority. Version/CAS,
-typed resource dependencies, broken-resource diagnostics, publish lifecycle,
+normalized reverse dependencies, publish lifecycle,
 undo/confirmation for subtree deletion, and a real desktop/mobile storefront
 preview remain the architecture work below.
 
@@ -194,9 +214,9 @@ the proven editor in a separate live demo-data run.
 2. No revision/CAS exists. Header, footer, General Settings, or two open editors
    can overwrite the same singleton without conflict. Each builder saves a
    complete blob rather than a scoped command.
-3. Navigation items copy `href` strings instead of storing typed resource
-   references. Page/category slug or visibility changes can leave dead menu
-   links; dependency invalidation and deletion impact cannot be proven.
+3. Typed resource targets now follow current route and lifecycle state, but the
+   JSON bridge has no normalized reverse-dependency index. Impact queries and
+   per-menu invalidation still require the accepted named-menu model.
 4. Default navigation expands every visible category/page in an unbounded read.
    Large catalogs can still create unusable markup even though the Categories
    parent is now a truthful non-clickable label.

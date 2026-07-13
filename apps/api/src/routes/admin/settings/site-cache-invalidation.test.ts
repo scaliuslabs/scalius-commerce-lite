@@ -305,6 +305,36 @@ describe("site settings cache invalidation", () => {
     });
   });
 
+  it("preserves typed resource targets through the header request boundary", async () => {
+    const { app, env } = createTestApp();
+    const navigationItem = {
+      id: "featured-product",
+      target: {
+        type: "resource",
+        resourceType: "product",
+        resourceId: "prod_1",
+        query: "?color=blue",
+      },
+      labelMode: "resource",
+      lastKnownLabel: "Featured trainer",
+    };
+
+    const response = await requestJson(app, env, "POST", "/header", {
+      topBar: { text: "Hi", isEnabled: true },
+      logo: { src: "/logo.png", alt: "Logo" },
+      favicon: { src: "/favicon.png", alt: "Icon" },
+      contact: { phone: "123", text: "Call", isEnabled: true },
+      social: [],
+      navigation: [navigationItem],
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveHeaderConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ navigation: [navigationItem] }),
+    );
+  });
+
   it("accepts nested partial SEO discovery saves for safe merge semantics", async () => {
     const { app, env } = createTestApp();
 

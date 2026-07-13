@@ -4,33 +4,52 @@ import { ValidationError } from "@scalius/core/errors";
 import { parseNavigationConfig } from "./navigation.validation";
 
 describe("navigation configuration validation", () => {
-  it("normalizes CMS page links to the actual root-level public route", () => {
+  it("accepts stable resource authority and canonicalizes query projections", () => {
     expect(parseNavigationConfig("header", {
       navigation: [{
         id: "returns",
-        title: "Returns",
-        href: "/pages/returns?from=header",
+        target: {
+          type: "resource",
+          resourceType: "page",
+          resourceId: "page_returns",
+          query: "from=header",
+        },
+        labelMode: "resource",
+        lastKnownLabel: "Returns",
       }],
     })).toMatchObject({
-      navigation: [{ href: "/returns?from=header" }],
+      navigation: [{
+        target: { resourceId: "page_returns", query: "?from=header" },
+        labelMode: "resource",
+      }],
     });
   });
 
-  it("normalizes safe relative links and legacy label placeholders", () => {
+  it("normalizes safe custom links and represents labels explicitly", () => {
     expect(parseNavigationConfig("footer", {
       menus: [{
         id: "support",
         title: "Support",
         links: [
-          { id: "contact", title: "Contact", href: "contact" },
-          { id: "topics", title: "Topics", href: "#" },
+          {
+            id: "contact",
+            target: { type: "internal_path", path: "contact" },
+            labelMode: "custom",
+            customLabel: "Contact",
+          },
+          {
+            id: "topics",
+            target: { type: "label" },
+            labelMode: "custom",
+            customLabel: "Topics",
+          },
         ],
       }],
     })).toMatchObject({
       menus: [{
         links: [
-          { href: "/contact" },
-          { href: undefined },
+          { target: { type: "internal_path", path: "/contact" } },
+          { target: { type: "label" } },
         ],
       }],
     });
@@ -42,9 +61,27 @@ describe("navigation configuration validation", () => {
     "http://example.com",
     "//example.com",
     "https://user:secret@example.com",
-  ])("rejects unsafe nested href %s", (href) => {
+  ])("rejects unsafe nested target %s", (href) => {
     expect(() => parseNavigationConfig("header", {
-      navigation: [{ id: "unsafe", title: "Unsafe", href }],
+      navigation: [{
+        id: "unsafe",
+        target: { type: "external_url", url: href },
+        labelMode: "custom",
+        customLabel: "Unsafe",
+      }],
+    })).toThrow(ValidationError);
+  });
+
+  it("rejects the copied href/title authority even beside a typed target", () => {
+    expect(() => parseNavigationConfig("header", {
+      navigation: [{
+        id: "dual-authority",
+        title: "Copied title",
+        href: "/copied-path",
+        target: { type: "internal_path", path: "/current-path" },
+        labelMode: "custom",
+        customLabel: "Current label",
+      }],
     })).toThrow(ValidationError);
   });
 
@@ -52,14 +89,25 @@ describe("navigation configuration validation", () => {
     expect(() => parseNavigationConfig("header", {
       navigation: [{
         id: "one",
-        title: "One",
+        target: { type: "label" },
+        labelMode: "custom",
+        customLabel: "One",
         subMenu: [{
           id: "two",
-          title: "Two",
+          target: { type: "label" },
+          labelMode: "custom",
+          customLabel: "Two",
           subMenu: [{
             id: "three",
-            title: "Three",
-            subMenu: [{ id: "four", title: "Four" }],
+            target: { type: "label" },
+            labelMode: "custom",
+            customLabel: "Three",
+            subMenu: [{
+              id: "four",
+              target: { type: "label" },
+              labelMode: "custom",
+              customLabel: "Four",
+            }],
           }],
         }],
       }],
@@ -70,8 +118,18 @@ describe("navigation configuration validation", () => {
         id: "support",
         title: "Support",
         links: [
-          { id: "same", title: "Contact", href: "/contact" },
-          { id: "same", title: "Returns", href: "/returns" },
+          {
+            id: "same",
+            target: { type: "internal_path", path: "/contact" },
+            labelMode: "custom",
+            customLabel: "Contact",
+          },
+          {
+            id: "same",
+            target: { type: "internal_path", path: "/returns" },
+            labelMode: "custom",
+            customLabel: "Returns",
+          },
         ],
       }],
     })).toThrow("item IDs must be unique");
@@ -107,7 +165,12 @@ describe("navigation configuration validation", () => {
 
   it("rejects blank labels and duplicate footer menu IDs", () => {
     expect(() => parseNavigationConfig("header", {
-      navigation: [{ id: "blank", title: "  " }],
+      navigation: [{
+        id: "blank",
+        target: { type: "label" },
+        labelMode: "custom",
+        customLabel: "  ",
+      }],
     })).toThrow(ValidationError);
 
     expect(() => parseNavigationConfig("footer", {
@@ -116,5 +179,15 @@ describe("navigation configuration validation", () => {
         { id: "links", title: "Help", links: [] },
       ],
     })).toThrow("menu IDs must be unique");
+  });
+
+  it("requires custom labels outside resource mode", () => {
+    expect(() => parseNavigationConfig("header", {
+      navigation: [{
+        id: "bad-label-mode",
+        target: { type: "internal_path", path: "/contact" },
+        labelMode: "resource",
+      }],
+    })).toThrow("Only resource targets");
   });
 });
