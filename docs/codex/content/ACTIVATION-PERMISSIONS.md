@@ -17,3 +17,9 @@ does not prevent an authorized content editor from saving an already-public
 resource. Dedicated publish/toggle commands remain the preferred lifecycle
 workflow, and admin form switches default off and disable themselves when the
 operator lacks the lifecycle permission.
+
+The replacement `/admin/promotions` authority currently exposes draft CRUD,
+archive, and revision-claimed preview only. It intentionally has no activation
+route while checkout still uses legacy one-code discounts; the eventual
+promotion lifecycle command must require `discounts.toggle_status` before it
+can create buyer-visible behavior.

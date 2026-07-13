@@ -4,12 +4,13 @@ import {
     discountProducts,
     discountCollections,
     discountUsage,
+    promotionCodes,
     DiscountType,
 } from "@scalius/database/schema";
 import { sql, desc, asc, isNull, and, isNotNull, eq, count, sum, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { ftsMatch } from "../../search/fts5";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ForbiddenError, ValidationError } from "@scalius/core/errors";
 import type { CreateDiscountInput, UpdateDiscountInput } from "./discounts.validation";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -24,6 +25,36 @@ export interface DiscountLifecycleAuthority {
 
 const DISCOUNT_ASSOCIATION_INSERT_CHUNK_SIZE = 20;
 const DISCOUNT_BULK_ID_LIMIT = 90;
+
+function isPromotionCodeIdentityConflict(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /PROMOTION_CODE_IDENTITY_CONFLICT/iu.test(message);
+}
+
+async function assertLegacyDiscountCodeAvailable(
+    db: Database,
+    code: string,
+    excludeDiscountId?: string,
+): Promise<void> {
+    const existingCode = await db
+        .select({ id: discounts.id })
+        .from(discounts)
+        .where(excludeDiscountId
+            ? and(
+                sql`lower(trim(${discounts.code})) = lower(${code})`,
+                sql`${discounts.id} != ${excludeDiscountId}`,
+            )
+            : sql`lower(trim(${discounts.code})) = lower(${code})`)
+        .get();
+    const existingPromotionCode = await db
+        .select({ id: promotionCodes.id })
+        .from(promotionCodes)
+        .where(eq(promotionCodes.normalizedCode, code))
+        .get();
+    if (existingCode || existingPromotionCode) {
+        throw new ConflictError("A discount or promotion with this code already exists, including in trash");
+    }
+}
 
 function chunksOf<T>(values: T[], size: number): T[][] {
     const chunks: T[][] = [];
@@ -218,15 +249,7 @@ export async function createDiscount(
     // Codes are stored uppercase (normalized by validation schema),
     // but ensure uppercase here too for the uniqueness check.
     const code = (data.code as string).trim().toUpperCase();
-    const existingCode = await db
-        .select({ id: discounts.id })
-        .from(discounts)
-        .where(sql`lower(trim(${discounts.code})) = lower(${code})`)
-        .get();
-
-    if (existingCode) {
-        throw new ConflictError("A discount with this code already exists, including in trash");
-    }
+    await assertLegacyDiscountCodeAvailable(db, code);
 
     const discountId = "disc_" + nanoid();
     const productsToInsert: { id: string; discountId: string; productId: string; applicationType: "get" }[] = [];
@@ -276,8 +299,14 @@ export async function createDiscount(
         batchOps.push(db.insert(discountCollections).values(collectionChunk));
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    await db.batch(batchOps as any);
+    try {
+        await safeBatch(db, batchOps as BatchItem<"sqlite">[]);
+    } catch (error) {
+        if (isPromotionCodeIdentityConflict(error)) {
+            throw new ConflictError("A discount or promotion with this code already exists, including in trash");
+        }
+        throw error;
+    }
     return { id: discountId, revision: 1 };
 }
 
@@ -314,18 +343,7 @@ export async function updateDiscount(
     );
 
     const code = (data.code as string).trim().toUpperCase();
-    const existingCode = await db
-        .select({ id: discounts.id })
-        .from(discounts)
-        .where(and(
-            sql`lower(trim(${discounts.code})) = lower(${code})`,
-            sql`${discounts.id} != ${id}`,
-        ))
-        .get();
-
-    if (existingCode) {
-        throw new ConflictError("A discount with this code already exists, including in trash");
-    }
+    await assertLegacyDiscountCodeAvailable(db, code, id);
 
     const currentTimestamp = Math.floor(Date.now() / 1000);
     let startDateTimestamp: number;
@@ -384,13 +402,20 @@ export async function updateDiscount(
         batchOps.push(db.insert(discountCollections).values(collectionChunk));
     }
 
-    const result = await executeDiscountRuleMutationBatch(
-        db,
-        id,
-        data.expectedRevision,
-        batchOps as BatchItem<"sqlite">[],
-    );
-    return { id, revision: result.revision };
+    try {
+        const result = await executeDiscountRuleMutationBatch(
+            db,
+            id,
+            data.expectedRevision,
+            batchOps as BatchItem<"sqlite">[],
+        );
+        return { id, revision: result.revision };
+    } catch (error) {
+        if (isPromotionCodeIdentityConflict(error)) {
+            throw new ConflictError("A discount or promotion with this code already exists, including in trash");
+        }
+        throw error;
+    }
 }
 
 export async function deleteDiscount(db: Database, id: string) {
