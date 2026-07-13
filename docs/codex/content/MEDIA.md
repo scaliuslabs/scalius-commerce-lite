@@ -140,6 +140,23 @@ buffered in a Worker invocation.
   failed, and provides an in-place retry state for both full-page and picker
   use.
 
+### Media library interaction follow-up (2026-07-13)
+
+- `Select` now enters an empty selection mode. Selecting every loaded result is
+  a separate `Select all shown` command, so beginning a bulk workflow never
+  silently targets the whole visible library. Standalone library selection can
+  be cancelled; multi-file pickers stay in selection mode after clearing so
+  their card semantics remain truthful.
+- The gallery uses two, three, four, then five columns as viewport room grows
+  and caps at five on wide screens. Loading skeletons use the same grid, avoiding
+  layout shifts between the loading and ready states.
+- Library thumbnails request a bounded 480 x 360 `contain` transform and render
+  with `object-contain`. The media workspace is an inspection surface, so it
+  must show the complete asset instead of pre-cropping it to a tile. Card and
+  folder actions remain visible on touch devices rather than depending on hover.
+- This interaction change does not alter upload limits or video lifecycle
+  architecture; those remain governed by the first-class media authority above.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)

@@ -20,12 +20,15 @@ interface MediaFilterBarProps {
   view: MediaLibraryView;
   selectedCount: number;
   visibleCount: number;
+  selectionMode: boolean;
+  persistentSelection?: boolean;
   folders: MediaFolder[];
   isMutating: boolean;
   allowSelection?: boolean;
   onSearch: (value: string) => void;
   onFiltersChange: (updates: Partial<MediaFilterOptions>) => void;
   onUpload: (files: FileList | null) => Promise<void>;
+  onBeginSelection: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onMove: (folderId: string | null) => void;
@@ -62,12 +65,12 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           <SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="largest">Largest</SelectItem><SelectItem value="smallest">Smallest</SelectItem><SelectItem value="name-asc">Name A–Z</SelectItem><SelectItem value="name-desc">Name Z–A</SelectItem></SelectContent>
         </Select>
 
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.selectedCount ? `${props.selectedCount} selected` : `${props.visibleCount} shown`}</span>
-        {props.allowSelection !== false && (props.selectedCount > 0 ? (
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.selectionMode ? `${props.selectedCount} selected` : `${props.visibleCount} shown`}</span>
+        {props.allowSelection !== false && (props.selectionMode ? (
           <>
-            {props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onSelectAll}>Select page</Button>}
-            <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onClearSelection}>Clear</Button>
-            {props.view === "ready" && (
+            {props.visibleCount > 0 && props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onSelectAll}>Select all shown</Button>}
+            {(props.selectedCount > 0 || !props.persistentSelection) && <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={props.onClearSelection}>{props.selectedCount ? "Clear" : "Cancel"}</Button>}
+            {props.selectedCount > 0 && props.view === "ready" && (
               <>
                 <Select value={targetFolder} onValueChange={setTargetFolder}>
                   <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Move to folder" /></SelectTrigger>
@@ -77,7 +80,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
                 <Button type="button" variant="outline" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button>
               </>
             )}
-            {props.view === "trash" && (
+            {props.selectedCount > 0 && props.view === "trash" && (
               <>
                 <Button type="button" variant="outline" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Restore</Button>
                 <Button type="button" variant="destructive" size="sm" className="h-8" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete</Button>
@@ -86,7 +89,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
             {props.onAddSelected && <Button type="button" size="sm" className="h-8" onClick={props.onAddSelected}>Add {props.selectedCount}</Button>}
           </>
         ) : (
-          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onSelectAll}>Select</Button>
+          <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onBeginSelection}>Select</Button>
         ))}
       </div>
     </div>

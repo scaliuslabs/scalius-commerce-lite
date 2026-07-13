@@ -27,7 +27,11 @@ interface MediaCardProps {
 export function MediaCard({ file, posterUrl, selected, selectionMode, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
-  const previewUrl = isImage ? getOptimizedImageUrl(file.url) : posterUrl ? getOptimizedImageUrl(posterUrl) : null;
+  const previewUrl = isImage
+    ? getOptimizedImageUrl(file.url, { width: 480, height: 360, fit: "contain", quality: 82 })
+    : posterUrl
+      ? getOptimizedImageUrl(posterUrl, { width: 480, height: 360, fit: "contain", quality: 82 })
+      : null;
 
   return (
     <article
@@ -47,7 +51,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
             <img
               src={previewUrl}
               alt={isImage ? (file.altText || file.filename) : ""}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
               loading="lazy"
               decoding="async"
               onError={() => setLoadFailed(true)}
@@ -74,7 +78,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
         </div>
       </button>
 
-      <div className="absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+      <div className="absolute right-1.5 top-1.5 flex gap-1">
         <Button type="button" variant="secondary" size="icon" className="h-7 w-7 bg-background/90" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
           <Search className="h-3.5 w-3.5" />
         </Button>
