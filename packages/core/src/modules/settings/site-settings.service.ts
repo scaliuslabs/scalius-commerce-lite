@@ -73,9 +73,18 @@ function parseAuthoritativeThemeSettings(value: string): StorefrontThemeSettings
   const record = parsed as Record<string, unknown>;
   // Flat color maps are the pre-semantic versioned document and are upgraded
   // on read. Fully semantic documents must remain exact and fail closed.
-  if ("colors" in record) {
+  const isSemanticDocument = [
+    "colors",
+    "typography",
+    "cornerStyle",
+    "density",
+    "containerWidth",
+    "components",
+  ].some((key) => key in record);
+  if (isSemanticDocument) {
     const invalid = listInvalidStorefrontThemeSettingsEntries(record);
-    if (invalid.length > 0) {
+    const missingRequiredSection = !("colors" in record);
+    if (missingRequiredSection || invalid.length > 0) {
       throw new ServiceUnavailableError(
         "Published storefront style contains unsupported values. Re-save it before editing.",
       );

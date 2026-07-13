@@ -88,6 +88,24 @@ describe("versioned storefront theme settings", () => {
     });
   });
 
+  it("does not misclassify a partial semantic document as legacy colors", async () => {
+    sqlite.prepare(`
+      INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
+      VALUES ('default', ?, 1, 1, 1)
+    `).run(JSON.stringify({
+      typography: DEFAULT_STOREFRONT_THEME_SETTINGS.typography,
+      cornerStyle: DEFAULT_STOREFRONT_THEME_SETTINGS.cornerStyle,
+      density: DEFAULT_STOREFRONT_THEME_SETTINGS.density,
+      containerWidth: DEFAULT_STOREFRONT_THEME_SETTINGS.containerWidth,
+      components: DEFAULT_STOREFRONT_THEME_SETTINGS.components,
+    }));
+
+    await expect(getThemeSettings(db)).rejects.toMatchObject({
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+    });
+  });
+
   it("claims revision one exactly once when publishing a legacy draft", async () => {
     const firstTheme = {
       ...DEFAULT_STOREFRONT_THEME_SETTINGS,
