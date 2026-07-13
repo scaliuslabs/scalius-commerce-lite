@@ -205,7 +205,10 @@ export function ProductView({ product }: ProductViewProps) {
                 </a>
               </Button>
               <div className="text-[10px] text-muted-foreground text-center sm:text-left lg:text-right mt-1 lg:mt-2">
-                Last updated {formatDateShort(product.updatedAt)}
+                Last updated{" "}
+                <span suppressHydrationWarning>
+                  {formatDateShort(product.updatedAt)}
+                </span>
               </div>
             </div>
           </div>

@@ -48,6 +48,13 @@ describe("ProductView catalog truth boundaries", () => {
     expect(source).toContain('product.category?.name || "Uncategorized"');
   });
 
+  it("treats the browser-local updated date as an intentional hydration boundary", () => {
+    const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
+
+    expect(source).toContain("<span suppressHydrationWarning>");
+    expect(source).toContain("{formatDateShort(product.updatedAt)}");
+  });
+
   it("renders video in the media stage without sending video URLs through image optimization", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
