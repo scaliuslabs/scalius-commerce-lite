@@ -35,7 +35,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
   return (
     <nav
       className={cn(
-        "flex items-center text-sm font-medium text-muted-foreground transition-all",
+        "flex min-w-0 items-center overflow-hidden text-sm font-medium text-muted-foreground transition-all",
         className,
       )}
       aria-label="Breadcrumb"
@@ -43,7 +43,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       {/* Home Link */}
       <Link
         to="/admin"
-        className="flex items-center px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary hover:scale-105 transform"
+        className="flex shrink-0 items-center px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary hover:scale-105 transform"
       >
         <Home className="h-[18px] w-[18px]" />
         <span className="sr-only">Home</span>
@@ -54,9 +54,15 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
         const isLast = index === items.length - 1;
 
         return (
-          <div key={index} className="flex items-center">
+          <div
+            key={index}
+            className={cn(
+              "min-w-0 items-center",
+              isLast ? "flex overflow-hidden" : "hidden shrink-0 md:flex",
+            )}
+          >
             {/* Separator */}
-            <div className="mx-1 text-muted-foreground/50">
+            <div className="mx-1 shrink-0 text-muted-foreground/50">
               <ChevronRight className="h-4 w-4" />
             </div>
 
@@ -64,12 +70,21 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
               // Clickable breadcrumb item — use Link for SPA navigation
               <Link
                 to={item.href}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-accent transition-all duration-300 text-muted-foreground hover:text-primary group relative"
+                aria-current={isLast ? "page" : undefined}
+                className={cn(
+                  "group relative flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground transition-all duration-300 hover:bg-accent hover:text-primary",
+                  isLast ? "min-w-0 overflow-hidden" : "shrink-0",
+                )}
               >
                 {Icon && (
-                  <Icon className="h-[18px] w-[18px] group-hover:scale-110 transition-transform duration-300" />
+                  <Icon className="h-[18px] w-[18px] shrink-0 group-hover:scale-110 transition-transform duration-300" />
                 )}
-                <span className="group-hover:translate-x-0.5 transition-transform duration-300">
+                <span
+                  className={cn(
+                    "transition-transform duration-300 group-hover:translate-x-0.5",
+                    isLast && "min-w-0 truncate",
+                  )}
+                >
                   {item.title}
                 </span>
                 {/* Hover effect overlay */}
@@ -78,15 +93,16 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
             ) : (
               // Current/active breadcrumb item
               <div
+                aria-current={isLast ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md font-medium relative overflow-hidden",
+                  "relative flex min-w-0 items-center gap-1.5 overflow-hidden rounded-md px-2.5 py-1.5 font-medium",
                   isLast
                     ? "bg-gradient-to-r from-primary/15 to-primary/5 text-primary border border-primary/20"
                     : "text-muted-foreground",
                 )}
               >
-                {Icon && <Icon className="h-[18px] w-[18px]" />}
-                <span>{item.title}</span>
+                {Icon && <Icon className="h-[18px] w-[18px] shrink-0" />}
+                <span className="min-w-0 truncate">{item.title}</span>
                 {isLast && (
                   <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer" />
                 )}
@@ -98,6 +114,5 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
     </nav>
   );
 }
-
 
 
