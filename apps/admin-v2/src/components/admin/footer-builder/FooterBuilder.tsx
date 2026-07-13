@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Image as ImageIcon, LayoutList, Loader2, RotateCcw, Share2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
+import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveFooterConfig } from "~/lib/api-functions/settings";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
@@ -88,10 +89,17 @@ export function FooterBuilder({
 
     setIsLoading(true);
     try {
+      const storedConfig: FooterConfig = {
+        ...config,
+        menus: config.menus.map((menu) => ({
+          ...menu,
+          links: menu.links.map(stripNavigationResolution),
+        })),
+      };
       if (typeof onSave === "function") {
-        await onSave(config);
+        await onSave(storedConfig);
       } else {
-        await saveFooterConfig({ data: config });
+        await saveFooterConfig({ data: storedConfig });
       }
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
