@@ -66,6 +66,13 @@ source audit found these concrete shared-contract violations:
   explicit bulk outcomes, a mobile folder rail, and guarded metadata drafts.
   Adaptive transcoding and timed caption tracks remain platform work, not UI
   labels.
+- Established administrator 2FA method changes now use an encrypted,
+  password-proven challenge bound to the initiating user and session. Email
+  and authenticator replacements commit only after the replacement proof,
+  consume the challenge atomically, and leave the current authenticator secret
+  and recovery codes untouched when setup is abandoned. Initial enrollment
+  remains a separate Better Auth flow; unchallenged method switching is rejected
+  once enrollment is established.
 
 Implementation order after the current promotion/payment/account cutovers:
 Cache operations, Fraud providers, Meta CAPI, Email/notification delivery, then

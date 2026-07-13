@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { authClient, verifyCurrentPassword } from "~/lib/auth-client";
+import { authClient } from "~/lib/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -36,6 +36,7 @@ import {
 import { toast } from "sonner";
 import {
   set2faMethod,
+  startTwoFactorMethodChallenge,
 } from "~/lib/api-functions/auth-management";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import type { User } from "./AccountSettingsContainer";
@@ -59,13 +60,18 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
   const [setupMode, setSetupMode] = useState<SetupMode>("enable");
   const [selectedMethod, setSelectedMethod] = useState<TwoFactorMethod>("email");
   const [totpUri, setTotpUri] = useState<string | null>(null);
+  const [methodChallengeId, setMethodChallengeId] = useState<string | null>(null);
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [verificationCode, setVerificationCode] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<TwoFactorStep>("method");
 
-  const setVerifiedMethod = async (method: TwoFactorMethod, code: string) => {
+  const setVerifiedMethod = async (
+    method: TwoFactorMethod,
+    code: string,
+    challengeId?: string,
+  ) => {
     if (method === "totp") {
       await set2faMethod({ data: { method, code } });
       return;
@@ -85,7 +91,11 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       throw new Error("Verification succeeded, but no session proof was returned.");
     }
 
-    await set2faMethod({ data: { method, sessionToken } });
+    await set2faMethod({
+      data: challengeId
+        ? { method: "email", challengeId, sessionToken }
+        : { method, sessionToken },
+    });
   };
 
   const refreshAdminContext = () => {
@@ -131,7 +141,14 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await setVerifiedMethod(selectedMethod, verificationCode);
+      if (setupMode === "change" && selectedMethod === "email" && !methodChallengeId) {
+        throw new Error("Email verification setup expired. Start again.");
+      }
+      await setVerifiedMethod(
+        selectedMethod,
+        verificationCode,
+        setupMode === "change" ? methodChallengeId ?? undefined : undefined,
+      );
 
       setIsEnabled(true);
       setCurrentMethod(selectedMethod);
@@ -161,20 +178,19 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.enable({ password });
-
-      if (result.error) {
-        setError(result.error.message || "Failed to setup authenticator");
-        return;
-      }
-
-      if (result.data) {
-        setTotpUri(result.data.totpURI);
-        setBackupCodes(result.data.backupCodes || []);
-        setStep("qr");
-      }
-    } catch {
-      setError("Failed to setup authenticator");
+      const challenge = await startTwoFactorMethodChallenge({
+        data: { method: "totp", password },
+      });
+      setMethodChallengeId(challenge.challengeId);
+      setTotpUri(challenge.totpUri);
+      setBackupCodes([]);
+      setStep("qr");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Authenticator setup could not be started",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -185,9 +201,22 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      await setVerifiedMethod("totp", verificationCode);
+      if (!methodChallengeId) {
+        throw new Error("Authenticator setup expired. Start again.");
+      }
+      const result = await set2faMethod({
+        data: {
+          method: "totp",
+          challengeId: methodChallengeId,
+          code: verificationCode,
+        },
+      });
+      if (!result.backupCodes?.length) {
+        throw new Error("Recovery codes were not returned after setup.");
+      }
 
       setCurrentMethod("totp");
+      setBackupCodes(result.backupCodes);
       setStep("backup");
       refreshAdminContext();
       toast.success("Authenticator app configured successfully");
@@ -203,11 +232,10 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const passwordResult = await verifyCurrentPassword(password);
-      if (!passwordResult.status) {
-        setError(passwordResult.error.message);
-        return;
-      }
+      const challenge = await startTwoFactorMethodChallenge({
+        data: { method: "email", password },
+      });
+      setMethodChallengeId(challenge.challengeId);
       // Changing the delivery method must preserve the current authenticator
       // secret and recovery codes. Only a verified email OTP changes method.
       setBackupCodes([]);
@@ -219,8 +247,12 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
       }
       setStep("verify");
       toast.success("Verification code sent to your email");
-    } catch {
-      setError("Failed to send verification code");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to start email verification",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -306,6 +338,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setPassword("");
     setVerificationCode("");
     setTotpUri(null);
+    setMethodChallengeId(null);
     setBackupCodes([]);
     setError(null);
     setSelectedMethod(currentMethod);

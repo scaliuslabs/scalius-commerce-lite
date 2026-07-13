@@ -101,6 +101,37 @@ describe("createAuth", () => {
     expect(adapterOptions.schema?.twoFactor).toHaveProperty("verified");
   });
 
+  it("encrypts new recovery-code rows while retaining legacy plaintext reads", async () => {
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+    } as never);
+
+    const twoFactorOptions = mocks.twoFactor.mock.calls[0]?.[0] as {
+      backupCodeOptions?: {
+        amount?: number;
+        length?: number;
+        storeBackupCodes?: {
+          encrypt: (value: string) => Promise<string>;
+          decrypt: (value: string) => Promise<string>;
+        };
+      };
+    };
+    const storage = twoFactorOptions.backupCodeOptions?.storeBackupCodes;
+    expect(twoFactorOptions.backupCodeOptions).toMatchObject({
+      amount: 10,
+      length: 10,
+    });
+    expect(storage).toBeDefined();
+
+    const encrypted = await storage!.encrypt('["new-code"]');
+    expect(encrypted).not.toContain("new-code");
+    await expect(storage!.decrypt(encrypted)).resolves.toBe('["new-code"]');
+    await expect(storage!.decrypt('["legacy-code"]')).resolves.toBe(
+      '["legacy-code"]',
+    );
+  });
+
   it("revokes existing sessions after password reset", () => {
     createAuth({
       BETTER_AUTH_SECRET: "test-secret",

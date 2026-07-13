@@ -11,20 +11,33 @@ const mocks = vi.hoisted(() => ({
     claimId: "setup_claim_test",
   })),
   completeAdminSetupClaimWithUserPromotion: vi.fn(async () => undefined),
+  createPendingEmailMethodChallenge: vi.fn(),
+  createPendingTotpMethodChallenge: vi.fn(),
   createAuth: vi.fn(),
   enforceAdminSetupRateLimit: vi.fn(async () => undefined),
   markAdminSetupClaimCompleted: vi.fn(async () => undefined),
   markAdminSetupClaimFailed: vi.fn(async () => undefined),
+  getTwoFactorMethodChallengeIdentifier: vi.fn(
+    (userId: string, sessionId: string) =>
+      `admin:2fa-method:${userId}:${sessionId}`,
+  ),
+  readPendingTwoFactorMethodChallenge: vi.fn(),
+  verifyPendingTotpCode: vi.fn(),
   assignRoleToUser: vi.fn(async () => undefined),
 }));
 
 vi.mock("@scalius/core/auth", () => ({
   claimAdminSetup: mocks.claimAdminSetup,
   completeAdminSetupClaimWithUserPromotion: mocks.completeAdminSetupClaimWithUserPromotion,
+  createPendingEmailMethodChallenge: mocks.createPendingEmailMethodChallenge,
+  createPendingTotpMethodChallenge: mocks.createPendingTotpMethodChallenge,
   createAuth: mocks.createAuth,
   enforceAdminSetupRateLimit: mocks.enforceAdminSetupRateLimit,
   markAdminSetupClaimCompleted: mocks.markAdminSetupClaimCompleted,
   markAdminSetupClaimFailed: mocks.markAdminSetupClaimFailed,
+  getTwoFactorMethodChallengeIdentifier: mocks.getTwoFactorMethodChallengeIdentifier,
+  readPendingTwoFactorMethodChallenge: mocks.readPendingTwoFactorMethodChallenge,
+  verifyPendingTotpCode: mocks.verifyPendingTotpCode,
 }));
 
 vi.mock("@scalius/core/auth/rbac/auto-seed", () => ({
@@ -65,6 +78,31 @@ beforeEach(() => {
   mocks.enforceAdminSetupRateLimit.mockResolvedValue(undefined);
   mocks.markAdminSetupClaimCompleted.mockResolvedValue(undefined);
   mocks.markAdminSetupClaimFailed.mockResolvedValue(undefined);
+  mocks.createPendingTotpMethodChallenge.mockResolvedValue({
+    challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+    identifier: "admin:2fa-method:user_1:session_1",
+    encryptedValue: "encrypted-challenge-value",
+    totpUri: "otpauth://totp/Scalius%20Commerce%3Aadmin%40example.com?secret=ABC",
+    expiresAt: new Date("2026-07-13T12:10:00.000Z"),
+  });
+  mocks.createPendingEmailMethodChallenge.mockResolvedValue({
+    challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+    identifier: "admin:2fa-method:user_1:session_1",
+    encryptedValue: "encrypted-email-challenge-value",
+    expiresAt: new Date("2026-07-13T12:10:00.000Z"),
+  });
+  mocks.readPendingTwoFactorMethodChallenge.mockResolvedValue({
+    version: 1,
+    userId: "user_1",
+    sessionId: "session_1",
+    method: "totp",
+    secret: "pending-raw-secret-with-enough-length",
+    encryptedSecret: "encrypted-pending-secret",
+    backupCodes: ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"],
+    storedBackupCodes: "encrypted-stored-backup-codes",
+    expiresAt: Date.now() + 600_000,
+  });
+  mocks.verifyPendingTotpCode.mockResolvedValue(true);
 });
 
 function createDbMock(options: { matchingSession?: boolean } = {}) {
@@ -86,6 +124,65 @@ function createDbMock(options: { matchingSession?: boolean } = {}) {
       })),
     })),
     update: vi.fn(() => ({ set: updateSet })),
+  };
+}
+
+function createTwoFactorMethodChallengeDbMock(options: {
+  challengeRows?: Array<{ value: string } | null>;
+  duplicateTwoFactor?: boolean;
+  existingTwoFactor?: { id: string } | null;
+  batchChanges?: number[];
+  batchError?: Error;
+} = {}) {
+  const challengeRows = [...(options.challengeRows ?? [{ value: "encrypted-challenge-value" }])];
+  const updateSets: Array<Record<string, unknown>> = [];
+  const insertedValues: Array<Record<string, unknown>> = [];
+  const batch = vi.fn(async () => {
+    if (options.batchError) throw options.batchError;
+    return (options.batchChanges ?? [1, 1, 1, 1, 1]).map((changes) => ({
+      meta: { changes },
+    }));
+  });
+
+  return {
+    __batch: batch,
+    __insertedValues: insertedValues,
+    __updateSets: updateSets,
+    batch,
+    delete: vi.fn(() => ({ where: vi.fn(() => ({ kind: "delete" })) })),
+    insert: vi.fn(() => ({
+      values: vi.fn((value: Record<string, unknown>) => {
+        insertedValues.push(value);
+        return { kind: "insert" };
+      }),
+    })),
+    select: vi.fn((selection: Record<string, unknown>) => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: vi.fn(async () => {
+            if ("value" in selection) return challengeRows.shift() ?? null;
+            return options.existingTwoFactor === undefined
+              ? { id: "two_factor_1" }
+              : options.existingTwoFactor;
+          }),
+          limit: vi.fn(async () => {
+            const authority = options.existingTwoFactor === undefined
+              ? { id: "two_factor_1" }
+              : options.existingTwoFactor;
+            if (!authority) return [];
+            return options.duplicateTwoFactor
+              ? [authority, { id: "two_factor_2" }]
+              : [authority];
+          }),
+        })),
+      })),
+    })),
+    update: vi.fn(() => ({
+      set: vi.fn((value: Record<string, unknown>) => {
+        updateSets.push(value);
+        return { where: vi.fn(() => ({ kind: "update" })) };
+      }),
+    })),
   };
 }
 
@@ -691,6 +788,301 @@ describe("admin auth management 2FA completion", () => {
 });
 
 describe("admin auth management 2FA method changes", () => {
+  it("stages a password-proven TOTP replacement without mutating current authority", async () => {
+    const db = createTwoFactorMethodChallengeDbMock();
+    const verifyPassword = vi.fn().mockResolvedValue({ status: true });
+    mocks.createAuth.mockReturnValue({ api: { verifyPassword } });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method-challenge",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "totp", password: "correct password" }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(verifyPassword).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      body: { password: "correct password" },
+    });
+    expect(mocks.createPendingTotpMethodChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authSecret: TEST_ACCOUNT_SESSION_COMMAND_SECRET,
+        userId: "user_1",
+        sessionId: "session_1",
+        email: "admin@example.com",
+      }),
+    );
+    expect(db.__insertedValues).toEqual([
+      expect.objectContaining({
+        id: "tfmc_0123456789abcdef0123456789abcdef",
+        identifier: "admin:2fa-method:user_1:session_1",
+        value: "encrypted-challenge-value",
+      }),
+    ]);
+    expect(db.__updateSets).toEqual([]);
+    expect(db.__batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("commits staged TOTP secret, recovery codes, method, and session before consuming the challenge", async () => {
+    const db = createTwoFactorMethodChallengeDbMock();
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "totp",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          code: "123456",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+    const body = await response.json() as { data?: { backupCodes?: string[] } };
+
+    expect(response.status).toBe(200);
+    expect(mocks.verifyPendingTotpCode).toHaveBeenCalledWith(
+      "pending-raw-secret-with-enough-length",
+      "123456",
+    );
+    expect(db.__updateSets).toEqual([
+      expect.objectContaining({
+        secret: "encrypted-pending-secret",
+        backupCodes: "encrypted-stored-backup-codes",
+        verified: true,
+      }),
+      expect.objectContaining({
+        twoFactorEnabled: true,
+        twoFactorMethod: "totp",
+        mustEnrollTwoFactor: false,
+      }),
+      expect.objectContaining({ twoFactorVerified: true }),
+    ]);
+    expect(db.__batch).toHaveBeenCalledTimes(1);
+    expect(body.data?.backupCodes).toEqual([
+      "one", "two", "three", "four", "five",
+      "six", "seven", "eight", "nine", "ten",
+    ]);
+  });
+
+  it("stages a password-proven email replacement without touching recovery authority", async () => {
+    const db = createTwoFactorMethodChallengeDbMock();
+    const verifyPassword = vi.fn().mockResolvedValue({ status: true });
+    mocks.createAuth.mockReturnValue({ api: { verifyPassword } });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+      user: { twoFactorMethod: "totp", mustEnrollTwoFactor: false },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method-challenge",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "email", password: "correct password" }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+    const body = await response.json() as { data?: { totpUri?: string | null } };
+
+    expect(response.status).toBe(200);
+    expect(mocks.createPendingEmailMethodChallenge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authSecret: TEST_ACCOUNT_SESSION_COMMAND_SECRET,
+        userId: "user_1",
+        sessionId: "session_1",
+      }),
+    );
+    expect(body.data?.totpUri).toBeNull();
+    expect(db.__updateSets).toEqual([]);
+  });
+
+  it("atomically consumes a password-bound challenge after email OTP verification", async () => {
+    const db = createTwoFactorMethodChallengeDbMock({ batchChanges: [1, 1, 1, 1] });
+    mocks.readPendingTwoFactorMethodChallenge.mockResolvedValueOnce({
+      version: 1,
+      userId: "user_1",
+      sessionId: "session_1",
+      method: "email",
+      expiresAt: Date.now() + 600_000,
+    });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+      user: { twoFactorMethod: "totp", mustEnrollTwoFactor: false },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "email",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          sessionToken: "same_origin_verified_session_token_123456789",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.__updateSets).toEqual([
+      expect.objectContaining({
+        twoFactorEnabled: true,
+        twoFactorMethod: "email",
+        mustEnrollTwoFactor: false,
+      }),
+      expect.objectContaining({ twoFactorVerified: true }),
+    ]);
+    expect(db.__batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves current method authority untouched when a staged challenge is abandoned", async () => {
+    const db = createTwoFactorMethodChallengeDbMock();
+    mocks.createAuth.mockReturnValue({
+      api: { verifyPassword: vi.fn().mockResolvedValue({ status: true }) },
+    });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method-challenge",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "totp", password: "correct password" }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.__updateSets).toEqual([]);
+    expect(mocks.readPendingTwoFactorMethodChallenge).not.toHaveBeenCalled();
+  });
+
+  it("rejects expired staged challenges before any authority update", async () => {
+    const db = createTwoFactorMethodChallengeDbMock({ challengeRows: [null] });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "totp",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          code: "123456",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.__updateSets).toEqual([]);
+    expect(db.__batch).not.toHaveBeenCalled();
+    expect(mocks.createAuth).not.toHaveBeenCalled();
+  });
+
+  it("rejects an ambiguous existing two-factor authority before commit", async () => {
+    const db = createTwoFactorMethodChallengeDbMock({ duplicateTwoFactor: true });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "totp",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          code: "123456",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status).toBe(409);
+    expect(db.__updateSets).toEqual([]);
+    expect(db.__batch).not.toHaveBeenCalled();
+  });
+
+  it("fails a concurrent replay after the one-time challenge is consumed", async () => {
+    const db = createTwoFactorMethodChallengeDbMock({
+      challengeRows: [{ value: "encrypted-challenge-value" }, null],
+    });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+    const request = () => app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "totp",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          code: "123456",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect((await request()).status).toBe(200);
+    expect((await request()).status).toBe(400);
+    expect(db.__batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a transactional guard abort to a stale-challenge conflict", async () => {
+    const db = createTwoFactorMethodChallengeDbMock({
+      batchError: new Error("malformed JSON"),
+    });
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/auth/2fa/method",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "totp",
+          challengeId: "tfmc_0123456789abcdef0123456789abcdef",
+          code: "123456",
+        }),
+      },
+      TEST_ACCOUNT_SESSION_ENV,
+    );
+
+    expect(response.status).toBe(409);
+  });
+
   it("accepts a same-origin session-token proof before updating the preferred 2FA method", async () => {
     const db = createDbMock();
     const app = createTestApp(db, {
@@ -714,6 +1106,27 @@ describe("admin auth management 2FA method changes", () => {
       twoFactorMethod: "email",
       mustEnrollTwoFactor: false,
     }));
+  });
+
+  it("rejects an unchallenged method switch after enrollment is established", async () => {
+    const db = createDbMock();
+    const app = createTestApp(db, {
+      twoFactorEnabled: true,
+      session: { id: "session_1", twoFactorVerified: true },
+      user: { twoFactorMethod: "totp", mustEnrollTwoFactor: false },
+    });
+
+    const response = await app.request("/api/v1/admin/auth/2fa/method", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: "email",
+        sessionToken: "same_origin_verified_session_token_123456789",
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(db.__updateSet).not.toHaveBeenCalled();
   });
 
   it("rejects a preferred method update when the same-origin proof does not match the current session", async () => {

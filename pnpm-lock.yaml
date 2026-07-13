@@ -572,6 +572,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@better-auth/utils':
+        specifier: 0.4.1
+        version: 0.4.1
       '@firebase/app':
         specifier: ^0.14.13
         version: 0.14.13

@@ -52,6 +52,7 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "dependencies": {
+    "@better-auth/utils": "0.4.1",
     "@firebase/app": "^0.14.13",
     "@firebase/messaging": "^0.13.0",
     "@paralleldrive/cuid2": "^3.3.0",
