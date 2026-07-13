@@ -50,6 +50,26 @@ function assertUnversionedSettingsExcluded(intent) {
   if (intent?.header || intent?.footer) throw new Error("Header/footer writes are not revisioned and remain blocked from automated apply.");
 }
 
+function assertStagedResourcesInactive(manifest, snapshot) {
+  const retainedIds = new Set(manifest.products
+    .map((product) => product.retainedProductId)
+    .filter(Boolean));
+  const activeProduct = (snapshot.productDetails ?? []).find((product) =>
+    product.isActive === true && !retainedIds.has(product.id),
+  );
+  if (activeProduct) {
+    throw new Error(`Inactive staging requires ${activeProduct.slug} to be quarantined before apply.`);
+  }
+  const activeCollection = (snapshot.collections ?? []).find((collection) => collection.isActive === true);
+  if (activeCollection) {
+    throw new Error(`Inactive staging requires collection ${activeCollection.name} to be quarantined before apply.`);
+  }
+  const activeHero = (snapshot.presentation?.heroes ?? snapshot.heroes ?? []).find((hero) => hero.isActive === true);
+  if (activeHero) {
+    throw new Error(`Inactive staging requires the ${activeHero.type} hero to be quarantined before apply.`);
+  }
+}
+
 function simpleResumeSlugs(manifest, snapshot, completed) {
   const details = exactMap(snapshot.productDetails, "slug", "Product details");
   const resumable = [];
@@ -89,6 +109,7 @@ export async function runRevisionSafeApply({
   let snapshot = await readSnapshot();
   assertFreshSnapshot(snapshot, now());
   assertRetainedProductAuthority(manifest, snapshot, readiness);
+  assertStagedResourcesInactive(manifest, snapshot);
   const resumeSimpleSlugs = simpleResumeSlugs(manifest, snapshot, completed);
   const compiled = compileDemoStoreAdminCommands(manifest, { current: { ...snapshot, resumeSimpleSlugs } });
   const outputs = new Map();
@@ -99,6 +120,7 @@ export async function runRevisionSafeApply({
     if (phaseIndex > 0) snapshot = await readSnapshot();
     assertFreshSnapshot(snapshot, now());
     assertRetainedProductAuthority(manifest, snapshot, readiness);
+    assertStagedResourcesInactive(manifest, snapshot);
     const binder = createApplyBinder({ manifest, readiness, snapshot, outputs });
     const commands = compiled.commands.filter((command) => command.phase === phase);
     const outcomes = [];

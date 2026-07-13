@@ -19,6 +19,8 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   explicit draft/save/conflict workflow, and storefront rendering rules.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,
   scalable list/edit workflows, activation, and public injection.
+- [SETTINGS.md](SETTINGS.md) — cross-settings authority map, shared workflow
+  contract, buyer/operational consequences, and per-surface release proof.
 - [ACTIVATION-PERMISSIONS.md](ACTIVATION-PERMISSIONS.md) — shared draft-first
   create/edit boundary for Pages, Analytics, and Discounts.
 - [THEME-TAX.md](THEME-TAX.md) — tax domain strengths and workflow gaps plus a

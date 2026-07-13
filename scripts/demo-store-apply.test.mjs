@@ -78,7 +78,10 @@ function detail(product, readiness, id = product.retainedProductId ?? `prod_${pr
 function completeSnapshot(report) {
   const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
   const categories = demoStoreManifest.categories.map((category) => ({ id: `cat_${category.slug}`, slug: category.slug, name: category.name, description: category.description, status: "published", revision: 3 }));
-  const productDetails = demoStoreManifest.products.map((product) => detail(product, readiness));
+  const productDetails = demoStoreManifest.products.map((product) => ({
+    ...detail(product, readiness),
+    isActive: Boolean(product.retainedProductId),
+  }));
   return {
     capturedAt: "2026-07-13T03:00:00.000Z",
     categories,
@@ -278,6 +281,22 @@ describe("apply orchestration", () => {
       executeCommand,
       now: () => new Date("2026-07-13T03:01:00.000Z"),
     })).rejects.toThrow(/Simple stock provenance is unknown/);
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("refuses to overwrite a public demo resource before the quarantine lifecycle", async () => {
+    const report = readinessReport();
+    const snapshot = completeSnapshot(report);
+    snapshot.productDetails.find((item) => item.slug === "vale-everyday-runners").isActive = true;
+    const executeCommand = vi.fn();
+    await expect(runRevisionSafeApply({
+      manifest: demoStoreManifest,
+      readinessReport: report,
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
+      readSnapshot: vi.fn().mockResolvedValue(snapshot),
+      executeCommand,
+      now: () => new Date("2026-07-13T03:01:00.000Z"),
+    })).rejects.toThrow(/to be quarantined before apply/);
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
