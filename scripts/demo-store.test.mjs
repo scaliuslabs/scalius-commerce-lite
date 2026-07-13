@@ -87,9 +87,8 @@ describe("demo store plan command", () => {
   });
 
   it("rejects implicit write mode and unknown flags", async () => {
-    expect(parseDemoStoreArgs(["--plan", "--json"])).toEqual({ help: false, plan: true, json: true });
+    expect(parseDemoStoreArgs(["--plan", "--json"])).toEqual({ help: false, plan: true, diff: false, json: true });
     expect(() => parseDemoStoreArgs(["--apply"])).toThrow("Unknown option");
     await expect(main([], { log: vi.fn() })).rejects.toThrow("Write mode is not implemented");
   });
 });
-
