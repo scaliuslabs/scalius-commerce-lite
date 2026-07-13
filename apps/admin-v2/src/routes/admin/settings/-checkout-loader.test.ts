@@ -28,22 +28,22 @@ vi.mock("~/lib/route-error", () => ({
 import { Route } from "./checkout";
 
 describe("checkout settings route loader", () => {
-  it("preloads only the default checkout-flow auth settings", async () => {
-    const ensureQueryData = vi.fn(async () => undefined);
+  it("prefetches only checkout flow without replacing its local retry state", async () => {
+    const prefetchQuery = vi.fn(async () => undefined);
     expect(typeof Route.options.loader).toBe("function");
 
     const loader = Route.options.loader as unknown as (args: {
-      context: { queryClient: { ensureQueryData: typeof ensureQueryData } };
+      context: { queryClient: { prefetchQuery: typeof prefetchQuery } };
     }) => Promise<unknown>;
 
     await loader({
-      context: { queryClient: { ensureQueryData } },
+      context: { queryClient: { prefetchQuery } },
     });
 
     expect(queryOptionMocks.checkoutFlowSettingsQueryOptions).toHaveBeenCalledOnce();
     expect(queryOptionMocks.paymentMethodsQueryOptions).not.toHaveBeenCalled();
     expect(queryOptionMocks.shippingMethodsQueryOptions).not.toHaveBeenCalled();
-    expect(ensureQueryData).toHaveBeenCalledWith({
+    expect(prefetchQuery).toHaveBeenCalledWith({
       queryKey: ["settings", "checkout-flow"],
       queryFn: expect.any(Function),
     });

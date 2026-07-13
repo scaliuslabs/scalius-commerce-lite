@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type { GatewayStatus, MethodKey } from "./payment-gateway-utils";
 import {
+  getEligibleDefaultPaymentMethods,
+  getPaymentMethodFlowEligibility,
+  getPaymentMethodFlowExclusionReason,
   getPaymentMethodOutcome,
   type PaymentMethodEnvironment,
 } from "./payment-method-outcome";
@@ -143,7 +146,70 @@ describe("payment method merchant outcome matrix", () => {
   it("does not present unsupported provider health checks as passing", () => {
     expect(outcome({ method: "stripe", status: readyStatus })).toMatchObject({
       healthLabel: "Not checked",
+      setupLabel: "Complete",
       effective: true,
     });
+  });
+
+  it.each([
+    ["Standard / COD", "cod", "all", false, 0, true],
+    ["Standard / Stripe", "stripe", "all", false, 0, true],
+    ["COD only / COD", "cod", "guest_cod_only", false, 0, true],
+    ["COD only / Stripe", "stripe", "guest_cod_only", false, 0, false],
+    ["Online only / COD", "cod", "gateways_only", false, 0, false],
+    ["Online only / Polar", "polar", "gateways_only", false, 0, true],
+    ["Advance / COD", "cod", "all", true, 200, false],
+    ["Advance / SSLCommerz", "sslcommerz", "all", true, 200, true],
+    ["Invalid zero advance / Stripe", "stripe", "all", true, 0, false],
+    ["Conflicting COD-only advance / COD", "cod", "guest_cod_only", true, 200, false],
+    ["Conflicting COD-only advance / Stripe", "stripe", "guest_cod_only", true, 200, false],
+  ] as const)("projects flow eligibility for %s", (_label, method, checkoutMode, partialPaymentEnabled, partialPaymentAmount, expected) => {
+    expect(getPaymentMethodFlowEligibility(method, {
+      checkoutMode,
+      partialPaymentEnabled,
+      partialPaymentAmount,
+    })).toBe(expected);
+  });
+
+  it("explains invalid and flow-hidden methods without reviving an excluded provider", () => {
+    expect(getPaymentMethodFlowExclusionReason("stripe", {
+      checkoutMode: "all",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 0,
+    })).toContain("advance amount is invalid");
+    expect(getPaymentMethodFlowExclusionReason("polar", {
+      checkoutMode: "guest_cod_only",
+      partialPaymentEnabled: true,
+      partialPaymentAmount: 200,
+    })).toContain("conflicts with an online advance");
+  });
+
+  it("chooses defaults only from ready, selected methods allowed by the flow", () => {
+    const methods: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
+    const statuses: Partial<Record<MethodKey, GatewayStatus>> = {
+      stripe: { ...readyStatus, providerEnabled: false, enabled: false, usable: false },
+      sslcommerz: readyStatus,
+      polar: readyStatus,
+      cod: { configured: true, enabled: true, usable: true },
+    };
+
+    expect(getEligibleDefaultPaymentMethods({
+      methods,
+      statuses,
+      selectedMethods: new Set(methods),
+      flowAllowed: (method) => method !== "cod",
+    })).toEqual(["sslcommerz", "polar"]);
+  });
+
+  it.each([
+    ["Stripe missing", "stripe", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
+    ["Stripe provider off", "stripe", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
+    ["Stripe blocked", "stripe", { ...readyStatus, usable: false, blockedReason: "Key mismatch" }, "blocked"],
+    ["SSLCommerz missing", "sslcommerz", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
+    ["SSLCommerz provider off", "sslcommerz", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
+    ["Polar missing", "polar", { configured: false, enabled: true, providerEnabled: true, usable: false }, "needs_setup"],
+    ["Polar provider off", "polar", { ...readyStatus, enabled: false, providerEnabled: false, usable: false }, "provider_off"],
+  ] as const)("keeps setup/provider truth separate for %s", (_label, method, status, state) => {
+    expect(outcome({ method, status })).toMatchObject({ state, effective: false, healthLabel: "Not checked" });
   });
 });

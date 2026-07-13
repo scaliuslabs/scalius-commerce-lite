@@ -17,7 +17,7 @@ export function validateCheckoutSettingsSearch(
 export const Route = createFileRoute("/admin/settings/checkout")({
   validateSearch: validateCheckoutSettingsSearch,
   loader: async ({ context: { queryClient } }) => {
-    await queryClient.ensureQueryData(checkoutFlowSettingsQueryOptions());
+    await queryClient.prefetchQuery(checkoutFlowSettingsQueryOptions());
   },
   head: () => ({ meta: [{ title: "Checkout Settings | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,

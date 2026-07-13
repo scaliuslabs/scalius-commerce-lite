@@ -1,7 +1,7 @@
 // src/components/admin/settings/PaymentGatewaysManager.tsx
 // Accordion-based payment gateway management with lazy-loaded credentials.
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
     type SSLCommerzData,
     type PolarData,
     META,
+    MASKED,
     PasswordInput,
     LiveWarning,
     SaveBtn,
@@ -34,11 +35,20 @@ import {
     ExtLink,
 } from "./payment-gateway-utils";
 import {
+    getEligibleDefaultPaymentMethods,
+    getPaymentMethodFlowEligibility,
+    getPaymentMethodFlowExclusionReason,
     getPaymentMethodOutcome,
     type PaymentMethodEnvironment,
     type PaymentMethodOutcome,
 } from "./payment-method-outcome";
+import {
+    polarDraftIsDirty,
+    sslCommerzDraftIsDirty,
+    stripeDraftIsDirty,
+} from "./payment-gateway-draft";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
@@ -98,14 +108,17 @@ export default function PaymentGatewaysManager() {
     const [savingMethods, setSavingMethods] = useState(false);
 
     const [stripe, setStripe] = useState<StripeData>({ secretKey: "", publishableKey: "", webhookSecret: "", enabled: false });
+    const [savedStripe, setSavedStripe] = useState<StripeData | null>(null);
     const [stripeConf, setStripeConf] = useState({ secret: false, webhook: false });
     const [savingStripe, setSavingStripe] = useState(false);
 
     const [ssl, setSsl] = useState<SSLCommerzData>({ storeId: "", storePassword: "", sandbox: true, enabled: false });
+    const [savedSsl, setSavedSsl] = useState<SSLCommerzData | null>(null);
     const [sslConf, setSslConf] = useState({ password: false });
     const [savingSsl, setSavingSsl] = useState(false);
 
     const [polar, setPolar] = useState<PolarData>({ accessToken: "", webhookSecret: "", productId: "", sandbox: true, enabled: false });
+    const [savedPolar, setSavedPolar] = useState<PolarData | null>(null);
     const [polarConf, setPolarConf] = useState({ token: false, webhook: false });
     const [savingPolar, setSavingPolar] = useState(false);
 
@@ -116,14 +129,16 @@ export default function PaymentGatewaysManager() {
     const [expanded, setExpanded] = useState<string[]>([]);
 
     // Load only payment-methods on mount (1 API call)
-    const loadMethods = useCallback(async (showInitialLoader = true, notifyOnError = true) => {
+    const loadMethods = useCallback(async (showInitialLoader = true, notifyOnError = true, preserveDraft = false) => {
         if (showInitialLoader) setLoading(true);
         setMethodsLoadError(null);
         try {
             const d = await getPaymentMethods() as PaymentMethodsData;
             setMethods(d);
-            setEnabledMethods(new Set(d.enabledMethods));
-            setDefaultMethod(d.defaultMethod);
+            if (!preserveDraft) {
+                setEnabledMethods(new Set(d.enabledMethods));
+                setDefaultMethod(d.defaultMethod);
+            }
             return true;
         } catch (err) {
             const message = getServerFnError(err, "Failed to load payment settings");
@@ -140,8 +155,8 @@ export default function PaymentGatewaysManager() {
     useEffect(() => { void loadMethods(); }, [loadMethods]);
 
     // Lazy-load gateway credentials on accordion expand
-    const loadCreds = useCallback(async (gw: MethodKey, force = false) => {
-        if (gw === "cod" || (loadedGateways.current.has(gw) && !force)) return;
+    const loadCreds = useCallback(async (gw: MethodKey, force = false, notifyOnError = true) => {
+        if (gw === "cod" || (loadedGateways.current.has(gw) && !force)) return true;
         setLoadingGw(gw);
         setGatewayLoadErrors((prev) => {
             const next = { ...prev };
@@ -152,15 +167,16 @@ export default function PaymentGatewaysManager() {
             const d = await getPaymentGatewaySettings({ data: { gateway: gw } }) as Record<string, unknown>;
             if (gw === "stripe") {
                 const sd = d as unknown as StripeData;
-                setStripe(sd); setStripeConf({ secret: !!sd.secretKey, webhook: !!sd.webhookSecret });
+                setStripe(sd); setSavedStripe({ ...sd }); setStripeConf({ secret: !!sd.secretKey, webhook: !!sd.webhookSecret });
             } else if (gw === "sslcommerz") {
                 const sd = d as unknown as SSLCommerzData;
-                setSsl(sd); setSslConf({ password: !!sd.storePassword });
+                setSsl(sd); setSavedSsl({ ...sd }); setSslConf({ password: !!sd.storePassword });
             } else if (gw === "polar") {
                 const sd = d as unknown as PolarData;
-                setPolar(sd); setPolarConf({ token: !!sd.accessToken, webhook: !!sd.webhookSecret });
+                setPolar(sd); setSavedPolar({ ...sd }); setPolarConf({ token: !!sd.accessToken, webhook: !!sd.webhookSecret });
             }
             loadedGateways.current.add(gw);
+            return true;
         } catch (err) {
             loadedGateways.current.delete(gw);
             const message = getSettingsLoadErrorMessage(
@@ -168,7 +184,8 @@ export default function PaymentGatewaysManager() {
                 `Failed to load ${META[gw].label} settings. Existing credentials were not changed.`,
             );
             setGatewayLoadErrors((prev) => ({ ...prev, [gw]: message }));
-            toast.error(message);
+            if (notifyOnError) toast.error(message);
+            return false;
         }
         finally { setLoadingGw(null); }
     }, []);
@@ -176,7 +193,7 @@ export default function PaymentGatewaysManager() {
     const handleAccordion = (vals: string[]) => {
         setExpanded(vals);
         for (const v of vals) {
-            if (v !== "cod" && !loadedGateways.current.has(v)) loadCreds(v as MethodKey);
+            if (v !== "cod" && !loadedGateways.current.has(v)) void loadCreds(v as MethodKey);
         }
     };
 
@@ -230,15 +247,45 @@ export default function PaymentGatewaysManager() {
         setSaving(true);
         try {
             await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
+            if (gw === "stripe") {
+                const committed = {
+                    ...stripe,
+                    secretKey: (stripe.secretKey.trim() || stripeConf.secret) ? MASKED : "",
+                    publishableKey: stripe.publishableKey.trim(),
+                    webhookSecret: (stripe.webhookSecret.trim() || stripeConf.webhook) ? MASKED : "",
+                };
+                setStripe(committed);
+                setSavedStripe({ ...committed });
+                setStripeConf({ secret: Boolean(committed.secretKey), webhook: Boolean(committed.webhookSecret) });
+            } else if (gw === "sslcommerz") {
+                const committed = {
+                    ...ssl,
+                    storeId: ssl.storeId.trim(),
+                    storePassword: (ssl.storePassword.trim() || sslConf.password) ? MASKED : "",
+                };
+                setSsl(committed);
+                setSavedSsl({ ...committed });
+                setSslConf({ password: Boolean(committed.storePassword) });
+            } else if (gw === "polar") {
+                const committed = {
+                    ...polar,
+                    accessToken: (polar.accessToken.trim() || polarConf.token) ? MASKED : "",
+                    webhookSecret: (polar.webhookSecret.trim() || polarConf.webhook) ? MASKED : "",
+                    productId: polar.productId.trim(),
+                };
+                setPolar(committed);
+                setSavedPolar({ ...committed });
+                setPolarConf({ token: Boolean(committed.accessToken), webhook: Boolean(committed.webhookSecret) });
+            }
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             loadedGateways.current.delete(gw);
-            const [methodsRefreshed] = await Promise.all([
-                loadMethods(false, false),
-                loadCreds(gw),
+            const [methodsRefreshed, credentialsRefreshed] = await Promise.all([
+                loadMethods(false, false, true),
+                loadCreds(gw, false, false),
             ]);
-            if (methodsRefreshed) toast.success(`${META[gw].label} settings saved`);
-            else toast.warning(`${META[gw].label} was saved, but checkout status could not be refreshed.`);
+            if (methodsRefreshed && credentialsRefreshed) toast.success(`${META[gw].label} settings saved`);
+            else toast.warning(`${META[gw].label} was saved, but its current checkout status could not be refreshed.`);
         } catch (err) {
             toast.error(getServerFnError(err, `Error saving ${META[gw].label} settings`));
         }
@@ -247,42 +294,38 @@ export default function PaymentGatewaysManager() {
 
     const methodAllowedByFlow = useCallback((method: MethodKey) => {
         if (!checkoutFlowSettings) return undefined;
-        const checkoutMode = checkoutFlowSettings.checkoutMode;
-        const partialPaymentEnabled = checkoutFlowSettings.partialPaymentEnabled === true;
-        const partialPaymentAmount = checkoutFlowSettings.partialPaymentAmount ?? 0;
-        if (partialPaymentEnabled && partialPaymentAmount > 0) return method !== "cod";
-        if (checkoutMode === "guest_cod_only") return method === "cod";
-        if (checkoutMode === "gateways_only") return method !== "cod";
-        return true;
+        return getPaymentMethodFlowEligibility(method, {
+            checkoutMode: checkoutFlowSettings.checkoutMode,
+            partialPaymentEnabled: checkoutFlowSettings.partialPaymentEnabled === true,
+            partialPaymentAmount: checkoutFlowSettings.partialPaymentAmount ?? 0,
+        });
     }, [checkoutFlowSettings]);
 
     const getFlowHiddenReason = useCallback((method: MethodKey) => {
         if (!checkoutFlowSettings) return null;
-        const checkoutMode = checkoutFlowSettings.checkoutMode;
-        const partialPaymentEnabled = checkoutFlowSettings.partialPaymentEnabled === true;
-        const partialPaymentAmount = checkoutFlowSettings.partialPaymentAmount ?? 0;
-        if (partialPaymentEnabled && partialPaymentAmount > 0 && method === "cod") {
-            return "COD is hidden while Online advance deposit is enabled.";
-        }
-        if (checkoutMode === "guest_cod_only" && method !== "cod") {
-            return "Fast COD Only hides online gateways from customers.";
-        }
-        if (checkoutMode === "gateways_only" && method === "cod") {
-            return "Online Gateways Only hides COD from customers.";
-        }
-        return null;
+        return getPaymentMethodFlowExclusionReason(method, {
+            checkoutMode: checkoutFlowSettings.checkoutMode,
+            partialPaymentEnabled: checkoutFlowSettings.partialPaymentEnabled === true,
+            partialPaymentAmount: checkoutFlowSettings.partialPaymentAmount ?? 0,
+        });
     }, [checkoutFlowSettings]);
 
-    useEffect(() => {
-        const visibleEnabledMethods = ALL_METHODS.filter((method) =>
-            enabledMethods.has(method) && methodAllowedByFlow(method) === true,
-        );
-        if (visibleEnabledMethods.length > 0 && !visibleEnabledMethods.includes(defaultMethod)) {
-            setDefaultMethod(visibleEnabledMethods[0]);
-        }
-    }, [defaultMethod, enabledMethods, methodAllowedByFlow]);
+    const defaultOptions = useMemo(() => methods
+        ? getEligibleDefaultPaymentMethods({
+            methods: ALL_METHODS,
+            statuses: methods.gatewayStatus,
+            selectedMethods: enabledMethods,
+            flowAllowed: methodAllowedByFlow,
+        })
+        : [], [enabledMethods, methodAllowedByFlow, methods]);
 
-    if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+    useEffect(() => {
+        if (defaultOptions.length > 0 && !defaultOptions.includes(defaultMethod)) {
+            setDefaultMethod(defaultOptions[0]);
+        }
+    }, [defaultMethod, defaultOptions]);
+
+    if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status" aria-live="polite"><Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />Loading payment settings…</div>;
 
     if (!methods) {
         return (
@@ -325,11 +368,6 @@ export default function PaymentGatewaysManager() {
         flowAllowed: methodAllowedByFlow(method),
         environment: getSavedEnvironment(method),
     });
-    const defaultOptions = ALL_METHODS.filter((method) => (
-        enabledMethods.has(method)
-        && methodAllowedByFlow(method) === true
-        && getMethodOutcome(method).canSelect
-    ));
     const defaultMethodAvailable = defaultOptions.includes(defaultMethod);
     const canSaveMethods = Boolean(checkoutFlowSettings)
         && !methodsLoadError
@@ -340,12 +378,19 @@ export default function PaymentGatewaysManager() {
         enabledMethods.has(method) !== savedEnabledMethods.has(method)
     ));
     const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod;
+    const stripeDirty = loadedGateways.current.has("stripe") && stripeDraftIsDirty(stripe, savedStripe);
+    const sslDirty = loadedGateways.current.has("sslcommerz") && sslCommerzDraftIsDirty(ssl, savedSsl);
+    const polarDirty = loadedGateways.current.has("polar") && polarDraftIsDirty(polar, savedPolar);
+    const anyGatewayDirty = stripeDirty || sslDirty || polarDirty;
+    const anySavePending = savingMethods || savingStripe || savingSsl || savingPolar;
     const resetMethods = () => {
         setEnabledMethods(new Set(methods.enabledMethods));
         setDefaultMethod(methods.defaultMethod);
     };
 
     return (
+        <>
+        <UnsavedChangesGuard isDirty={methodsDirty || anyGatewayDirty} isSubmitting={anySavePending} />
         <div className="max-w-4xl space-y-4">
             {!checkoutFlowSettings && (
                 <Alert className={checkoutFlowError ? "border-amber-500/30 bg-amber-500/5" : undefined}>
@@ -390,7 +435,7 @@ export default function PaymentGatewaysManager() {
                             variant="outline"
                             size="sm"
                             className="shrink-0"
-                            onClick={() => void loadMethods(false)}
+                            onClick={() => void loadMethods(false, true, true)}
                         >
                             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                             Refresh status
@@ -407,20 +452,20 @@ export default function PaymentGatewaysManager() {
                         </Badge>
                     </div>
                     <CardDescription>
-                        Choose which ready methods buyers can use. Card results preview this draft until you save.
+                        Choose which setup-complete, provider-enabled methods buyers can use. Card results preview this draft until you save.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-2 px-4 pb-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
                     <div>
                         <Label htmlFor="default-payment-method">Default buyer selection</Label>
-                        <p className="mt-0.5 text-xs text-muted-foreground">Only ready methods allowed by the saved checkout flow appear here.</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Only setup-complete, provider-enabled methods allowed by the saved checkout flow appear here.</p>
                     </div>
                     <Select
                         value={defaultMethodAvailable ? defaultMethod : undefined}
                         onValueChange={(value) => setDefaultMethod(value as MethodKey)}
                         disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
                     >
-                        <SelectTrigger id="default-payment-method" className="h-9 w-full"><SelectValue placeholder="No ready method" /></SelectTrigger>
+                        <SelectTrigger id="default-payment-method" className="h-9 w-full"><SelectValue placeholder="No eligible method" /></SelectTrigger>
                         <SelectContent>
                             {defaultOptions.map((method) => (
                                 <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
@@ -431,7 +476,7 @@ export default function PaymentGatewaysManager() {
                 {!canSaveMethods && !methodsLoadError && checkoutFlowSettings && (
                     <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        <span>Select at least one ready method allowed by the current checkout flow.</span>
+                        <span>Select at least one setup-complete, provider-enabled method allowed by the current checkout flow.</span>
                     </div>
                 )}
                 <CardFooter className="justify-between gap-2 border-t px-4 py-3">
@@ -446,7 +491,7 @@ export default function PaymentGatewaysManager() {
             </Card>
 
             <Accordion type="multiple" value={expanded} onValueChange={handleAccordion}>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                     {ALL_METHODS.map((method) => {
                         const meta = META[method];
                         const isOpen = expanded.includes(method);
@@ -463,8 +508,8 @@ export default function PaymentGatewaysManager() {
                         return (
                             <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
                                 <div className={`p-3.5 ${meta.headerBg}`}>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-3 min-w-0">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex min-w-0 items-start gap-3">
                                             <meta.Logo className="h-8 w-8 shrink-0 rounded" />
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -513,7 +558,7 @@ export default function PaymentGatewaysManager() {
                                                 disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
                                                 onCheckedChange={(v) => toggleMethod(method, v)}
                                             />
-                                            <span className="max-w-20 text-right text-[11px] leading-3 text-muted-foreground">Offer to buyers</span>
+                                            <Label htmlFor={`toggle-${method}`} className="max-w-20 cursor-pointer text-right text-[11px] font-normal leading-3 text-muted-foreground">Offer to buyers</Label>
                                         </div>
                                     </div>
                                     {gatewayNotice && (
@@ -525,7 +570,7 @@ export default function PaymentGatewaysManager() {
                                 </div>
                                 {method !== "cod" && (
                                     <AccordionPrimitive.Header className="flex">
-                                        <AccordionPrimitive.Trigger className="flex w-full items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors border-t border-border/50 cursor-pointer [&[data-state=open]>svg]:rotate-180">
+                                        <AccordionPrimitive.Trigger className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-1.5 border-t border-border/50 text-xs text-muted-foreground transition-colors hover:text-foreground [&[data-state=open]>svg]:rotate-180">
                                             {isOpen ? "Hide" : "Configure"} credentials
                                             <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
                                         </AccordionPrimitive.Trigger>
@@ -534,7 +579,7 @@ export default function PaymentGatewaysManager() {
                                 {method !== "cod" && (
                                     <AccordionContent className="px-4 pb-4">
                                         {loadingGw === method ? (
-                                            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                                            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading {meta.label} setup…</div>
                                         ) : gatewayLoadError ? (
                                             <Alert variant="destructive" className="mt-3">
                                                 <AlertTriangle className="h-4 w-4" />
@@ -553,15 +598,18 @@ export default function PaymentGatewaysManager() {
                                                 </AlertDescription>
                                             </Alert>
                                         ) : !gatewayLoaded ? (
-                                            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                                            <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground" role="status"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Loading {meta.label} setup…</div>
                                         ) : method === "stripe" ? (
-                                            <StripeForm s={stripe} set={setStripe} conf={stripeConf} saving={savingStripe}
+                                            <StripeForm s={stripe} set={setStripe} conf={stripeConf} saving={savingStripe} dirty={stripeDirty}
+                                                onReset={() => savedStripe && setStripe({ ...savedStripe })}
                                                 onSave={() => saveGw("stripe", stripe, setSavingStripe)} />
                                         ) : method === "sslcommerz" ? (
-                                            <SSLForm s={ssl} set={setSsl} conf={sslConf} saving={savingSsl}
+                                            <SSLForm s={ssl} set={setSsl} conf={sslConf} saving={savingSsl} dirty={sslDirty}
+                                                onReset={() => savedSsl && setSsl({ ...savedSsl })}
                                                 onSave={() => saveGw("sslcommerz", ssl, setSavingSsl)} />
                                         ) : method === "polar" ? (
-                                            <PolarForm s={polar} set={setPolar} conf={polarConf} saving={savingPolar}
+                                            <PolarForm s={polar} set={setPolar} conf={polarConf} saving={savingPolar} dirty={polarDirty}
+                                                onReset={() => savedPolar && setPolar({ ...savedPolar })}
                                                 onSave={() => saveGw("polar", polar, setSavingPolar)} onHelp={() => setShowPolarHelp(true)} />
                                         ) : null}
                                     </AccordionContent>
@@ -582,14 +630,15 @@ export default function PaymentGatewaysManager() {
                 </DialogContent>
             </Dialog>
         </div>
+        </>
     );
 }
 
 // --- Inline Form Sub-Components (Stripe & SSL kept inline as they're small) ---
 
-function StripeForm({ s, set, conf, saving, onSave }: {
+function StripeForm({ s, set, conf, saving, dirty, onReset, onSave }: {
     s: StripeData; set: React.Dispatch<React.SetStateAction<StripeData>>;
-    conf: { secret: boolean; webhook: boolean }; saving: boolean; onSave: () => void;
+    conf: { secret: boolean; webhook: boolean }; saving: boolean; dirty: boolean; onReset: () => void; onSave: () => void;
 }) {
     const keyEnvironment = getStripeCredentialEnvironment(s);
     const environmentLabel = keyEnvironment === "mixed"
@@ -600,7 +649,7 @@ function StripeForm({ s, set, conf, saving, onSave }: {
                 ? "Live mode"
                 : "Not detected";
     return (
-        <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
+        <form method="post" onSubmit={(e) => { e.preventDefault(); if (dirty && !saving) onSave(); }} className="space-y-3 pt-2" noValidate>
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="stripe-enabled" className="text-sm">Provider enabled</Label>
@@ -645,17 +694,17 @@ function StripeForm({ s, set, conf, saving, onSave }: {
             {keyEnvironment === "live" && s.enabled && (
                 <LiveWarning message="Live mode enabled. Real cards will be charged." />
             )}
-            <SaveBtn saving={saving} label="Save Stripe" />
+            <SaveBtn saving={saving} dirty={dirty} onReset={onReset} label="Save Stripe" />
         </form>
     );
 }
 
-function SSLForm({ s, set, conf, saving, onSave }: {
+function SSLForm({ s, set, conf, saving, dirty, onReset, onSave }: {
     s: SSLCommerzData; set: React.Dispatch<React.SetStateAction<SSLCommerzData>>;
-    conf: { password: boolean }; saving: boolean; onSave: () => void;
+    conf: { password: boolean }; saving: boolean; dirty: boolean; onReset: () => void; onSave: () => void;
 }) {
     return (
-        <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
+        <form method="post" onSubmit={(e) => { e.preventDefault(); if (dirty && !saving) onSave(); }} className="space-y-3 pt-2" noValidate>
             <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
                 <div className="space-y-0.5">
                     <Label htmlFor="ssl-enabled" className="text-sm">Provider enabled</Label>
@@ -667,7 +716,7 @@ function SSLForm({ s, set, conf, saving, onSave }: {
                     onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
                 />
             </div>
-            <SandboxToggle checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))} />
+            <SandboxToggle id="ssl-sandbox" checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))} />
             {!s.sandbox && s.enabled && <LiveWarning message="Live mode enabled. Real payments will be processed." />}
             <div className="space-y-1.5">
                 <Label htmlFor="ssl-id" className="text-sm">Store ID</Label>
@@ -681,7 +730,7 @@ function SSLForm({ s, set, conf, saving, onSave }: {
                 <PasswordInput id="ssl-pw" value={s.storePassword} onChange={(v) => set((p) => ({ ...p, storePassword: v }))}
                     placeholder="your_store_password" configured={conf.password} />
             </div>
-            <SaveBtn saving={saving} label="Save SSLCommerz" />
+            <SaveBtn saving={saving} dirty={dirty} onReset={onReset} label="Save SSLCommerz" />
         </form>
     );
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
   Loader2, Save, CheckCircle2, AlertTriangle, ExternalLink,
@@ -86,8 +87,10 @@ export function PasswordInput({ id, value, onChange, placeholder, configured }: 
       <Input id={id} type={show ? "text" : "password"} value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={configured ? MASKED : placeholder} className="font-mono pr-10" />
-      <button type="button" onClick={() => setShow((s) => !s)} tabIndex={-1}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+      <button type="button" onClick={() => setShow((s) => !s)}
+        aria-controls={id}
+        aria-label={`${show ? "Hide" : "Show"} credential value`}
+        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
       {configured && value === MASKED && (
@@ -108,29 +111,33 @@ export function LiveWarning({ message }: { message: string }) {
   );
 }
 
-export function SaveBtn({ saving, label }: { saving: boolean; label: string }) {
+export function SaveBtn({ saving, dirty, onReset, label }: { saving: boolean; dirty: boolean; onReset: () => void; label: string }) {
   return (
-    <div className="flex justify-end pt-1">
-      <Button type="submit" disabled={saving} size="sm">
+    <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-xs text-muted-foreground" aria-live="polite">{dirty ? "Unsaved provider changes" : "Provider settings saved"}</span>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row">
+      <Button type="button" variant="ghost" disabled={!dirty || saving} size="sm" onClick={onReset}>Reset</Button>
+      <Button type="submit" disabled={!dirty || saving} size="sm">
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
         {label}
       </Button>
+      </div>
     </div>
   );
 }
 
-export function SandboxToggle({ checked, onChange, extra }: {
-  checked: boolean; onChange: (v: boolean) => void; extra?: React.ReactNode;
+export function SandboxToggle({ id, checked, onChange, extra }: {
+  id: string; checked: boolean; onChange: (v: boolean) => void; extra?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm font-medium">Sandbox Mode</p>
+        <Label htmlFor={id} className="text-sm font-medium">Sandbox mode</Label>
         <p className="text-xs text-muted-foreground">Use test credentials</p>
       </div>
       <div className="flex items-center gap-2">
         {extra}
-        <Switch checked={checked} onCheckedChange={onChange} />
+        <Switch id={id} checked={checked} onCheckedChange={onChange} />
       </div>
     </div>
   );

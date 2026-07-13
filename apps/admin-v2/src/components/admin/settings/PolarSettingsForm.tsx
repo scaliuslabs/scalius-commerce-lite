@@ -17,13 +17,15 @@ interface PolarFormProps {
   set: React.Dispatch<React.SetStateAction<PolarData>>;
   conf: { token: boolean; webhook: boolean };
   saving: boolean;
+  dirty: boolean;
+  onReset: () => void;
   onSave: () => void;
   onHelp: () => void;
 }
 
-export function PolarForm({ s, set, conf, saving, onSave, onHelp }: PolarFormProps) {
+export function PolarForm({ s, set, conf, saving, dirty, onReset, onSave, onHelp }: PolarFormProps) {
   return (
-    <form method="post" onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-3 pt-2" noValidate>
+    <form method="post" onSubmit={(e) => { e.preventDefault(); if (dirty && !saving) onSave(); }} className="space-y-3 pt-2" noValidate>
       <div className="flex items-center justify-between rounded-md border border-border/70 px-3 py-2">
         <div className="space-y-0.5">
           <Label htmlFor="polar-enabled" className="text-sm">Provider enabled</Label>
@@ -35,8 +37,8 @@ export function PolarForm({ s, set, conf, saving, onSave, onHelp }: PolarFormPro
           onCheckedChange={(v) => set((p) => ({ ...p, enabled: v }))}
         />
       </div>
-      <SandboxToggle checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))}
-        extra={<Button type="button" variant="ghost" size="sm" className="text-xs gap-1 text-muted-foreground h-7" onClick={onHelp}>
+      <SandboxToggle id="polar-sandbox" checked={s.sandbox} onChange={(v) => set((p) => ({ ...p, sandbox: v }))}
+        extra={<Button type="button" variant="ghost" size="sm" className="h-9 gap-1 text-xs text-muted-foreground sm:h-7" onClick={onHelp}>
           <HelpCircle className="h-3.5 w-3.5" /> Setup Guide
         </Button>} />
       {!s.sandbox && s.enabled && <LiveWarning message="Live mode enabled. Real payments will be processed." />}
@@ -62,7 +64,7 @@ export function PolarForm({ s, set, conf, saving, onSave, onHelp }: PolarFormPro
           onChange={(e) => set((p) => ({ ...p, productId: e.target.value }))} placeholder="prod_..." />
         <p className="text-xs text-muted-foreground">Create a generic product on Polar and paste its ID here.</p>
       </div>
-      <SaveBtn saving={saving} label="Save Polar" />
+      <SaveBtn saving={saving} dirty={dirty} onReset={onReset} label="Save Polar" />
     </form>
   );
 }
@@ -73,7 +75,7 @@ export function PolarSetupGuide() {
     { t: "Generate an Access Token", c: <>Go to <ExtLink href="https://polar.sh/settings">Organization Settings</ExtLink> &rarr; <strong>Access Tokens</strong> &rarr; Create a token with <code className="bg-muted px-1 rounded text-xs">checkouts:write</code> scope.</> },
     { t: "Create a Generic Product", c: <>In Polar Dashboard &rarr; <strong>Products</strong> &rarr; Create a product. Copy the <strong>Product ID</strong> from the &hellip; menu.</> },
     { t: "Configure Webhooks", c: <>Add endpoint <code className="block bg-muted px-3 py-2 rounded text-xs break-all mt-1">https://your-domain.com/api/v1/webhooks/polar</code>Select events: <code className="bg-muted px-1 rounded text-xs">checkout.updated</code> and <code className="bg-muted px-1 rounded text-xs">order.paid</code>.</> },
-    { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then use <strong>Show at checkout</strong> on the gateway card when you are ready for customers to see it.</> },
+    { t: "Enable & Save", c: <>Turn <strong>Provider enabled</strong> on, click <strong>Save Polar</strong>, then use <strong>Offer to buyers</strong> on the gateway card when you are ready for customers to see it.</> },
   ];
   return (
     <div className="space-y-4 text-sm">
