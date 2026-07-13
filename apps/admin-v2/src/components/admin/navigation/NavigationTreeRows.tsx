@@ -27,7 +27,12 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import type { NavigationItem } from "./types";
-import { MAX_NAV_DEPTH, getDepthColor } from "./types";
+import {
+  canIndentNavigationItem,
+  MAX_NAV_DEPTH,
+  getDepthColor,
+} from "./types";
+import { openNavigationPreview } from "./navigation-preview";
 
 interface NavigationTreeRowsProps {
   navigation: NavigationItem[];
@@ -117,6 +122,8 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
   const isLabel = !item.href;
   const hasLinkAndSubmenu = item.href && hasSubMenu;
   const canAddChildren = depth + 1 < maxDepth;
+  const canIndentWithinDepth = canIndent
+    && canIndentNavigationItem(item, depth, maxDepth);
   const indentPadding = depth * 16;
   const hrefResult = parseNavigationHref(item.href);
 
@@ -239,14 +246,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0"
-                onClick={() => {
-                  let url = hrefResult.href!;
-                  if (!url.startsWith("http")) {
-                    if (!url.startsWith("/")) url = `/${url}`;
-                    url = getStorefrontPath(url);
-                  }
-                  window.open(url, "_blank");
-                }}
+                onClick={() => openNavigationPreview(hrefResult.href, getStorefrontPath)}
                 aria-label={`Preview ${item.title}`}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -277,7 +277,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {canIndent && (
+                {canIndentWithinDepth && (
                   <DropdownMenuItem
                     onClick={() => onIndent(parentPath, index)}
                   >
@@ -293,7 +293,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                     Outdent (move up)
                   </DropdownMenuItem>
                 )}
-                {(canIndent || canOutdent) && <DropdownMenuSeparator />}
+                {(canIndentWithinDepth || canOutdent) && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onClick={() => onRemove(parentPath, index)}
                   className="text-destructive focus:text-destructive"
@@ -328,7 +328,7 @@ const NavigationTreeRow = memo(function NavigationTreeRow({
                     getStorefrontPath={getStorefrontPath}
                     onReorderRequest={onReorderRequest}
                     canReorder={canReorder}
-                    canIndent={subIndex > 0 && depth < maxDepth - 1}
+                    canIndent={subIndex > 0}
                     canOutdent
                   />
                 ))}

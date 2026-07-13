@@ -97,4 +97,38 @@ describe("MobileNavigationTree", () => {
     expect(host.querySelectorAll("article")).toHaveLength(2);
     expect(host.querySelector('[aria-label="Expand children of Shop"]')?.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("does not offer an indent that would push descendants past the public depth limit", async () => {
+    await act(async () => root.render(
+      <MobileNavigationTree
+        navigation={[{
+          id: "root",
+          title: "Root",
+          subMenu: [
+            { id: "first", title: "First" },
+            {
+              id: "branch",
+              title: "Branch",
+              subMenu: [{ id: "leaf", title: "Leaf" }],
+            },
+          ],
+        }]}
+        arranging
+        onUpdate={vi.fn()}
+        onRemove={vi.fn()}
+        onAddChild={vi.fn()}
+        onIndent={vi.fn()}
+        onOutdent={vi.fn()}
+        onMove={vi.fn()}
+        getStorefrontPath={(path) => `https://store.example${path}`}
+      />,
+    ));
+
+    expect(
+      (host.querySelector(
+        '[aria-label="Make Branch a child of the previous item"]',
+      ) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(host.querySelector('[aria-label="Add child under Leaf"]')).toBeNull();
+  });
 });

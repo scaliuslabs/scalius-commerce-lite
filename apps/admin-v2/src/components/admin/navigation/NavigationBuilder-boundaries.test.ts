@@ -77,6 +77,22 @@ describe("NavigationBuilder bundle boundaries", () => {
     expect(mobileSource).toContain("Move ${label} up one level");
   });
 
+  it("keeps every editor on the shared depth and safe-preview boundaries", () => {
+    const builderSource = readFileSync(NAVIGATION_BUILDER_SOURCE, "utf8");
+    const treeRowsSource = readFileSync(NAVIGATION_TREE_ROWS_SOURCE, "utf8");
+    const mobileSource = readFileSync(MOBILE_NAVIGATION_TREE_SOURCE, "utf8");
+    const sortableSource = readFileSync(SORTABLE_NAV_ITEM_SOURCE, "utf8");
+
+    expect(builderSource).toContain("canIndentNavigationItem(item, depth)");
+    for (const source of [treeRowsSource, mobileSource, sortableSource]) {
+      expect(source).toContain("canIndentNavigationItem(item, depth, maxDepth)");
+      expect(source).toContain("openNavigationPreview");
+      expect(source).not.toContain("window.open(");
+    }
+    expect(sortableSource).toContain("depth + 1 < maxDepth");
+    expect(sortableSource).not.toContain("depth < maxDepth;");
+  });
+
   it("uses public page sources and the shared safe-link policy", () => {
     const dialogSource = readFileSync(ADD_NAV_ITEM_DIALOG_SOURCE, "utf8");
 

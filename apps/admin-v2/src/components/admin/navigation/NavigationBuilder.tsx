@@ -15,7 +15,7 @@ import { AddNavItemDialog } from "./AddNavItemDialog";
 import { MobileNavigationTree } from "./MobileNavigationTree";
 import { NavigationTreeRows } from "./NavigationTreeRows";
 import type { NavigationItem, NavigationBuilderProps } from "./types";
-import { MAX_NAV_DEPTH } from "./types";
+import { canIndentNavigationItem, MAX_NAV_DEPTH } from "./types";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const SortableNavigationEditor = lazy(() =>
@@ -197,6 +197,8 @@ export function NavigationBuilder({
     (path: string, index: number) => {
       if (index === 0) return; // Can't indent first item
 
+      const depth = path ? path.split(".").length : 0;
+
       const indentAtPath = (
         items: NavigationItem[],
         parts: number[],
@@ -204,6 +206,9 @@ export function NavigationBuilder({
         if (parts.length === 0) {
           const item = items[index];
           const prevItem = items[index - 1];
+          if (!item || !prevItem || !canIndentNavigationItem(item, depth)) {
+            return items;
+          }
           const newItems = items.filter((_, i) => i !== index);
           newItems[index - 1] = {
             ...prevItem,
