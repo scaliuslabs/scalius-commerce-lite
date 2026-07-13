@@ -23,12 +23,21 @@ command intents.
 
 ## Retained resources
 
-Rider and Halo are always guarded updates. Their command intents carry explicit
-preservation markers for SKU/option/media identities, inventory ledger, and
-reservations. Current option/value/variant/media/section facts remain reference
-tokens until the apply phase binds them from a fresh complete product read.
-Applying a retained command with an unresolved preservation reference is a
-compiler-consumer defect and must fail closed.
+Rider and Halo are always guarded base-only updates. Their command intents carry
+explicit preservation markers for SKU/option/media identities, inventory
+ledger, and reservations, and the compiler emits no option-matrix or SKU
+command for either product. Current activation, attributes, media-association
+IDs, and section IDs remain reference tokens until the apply binder resolves
+them from a fresh complete product read. Applying a retained command with an
+unresolved preservation reference is a compiler-consumer defect and must fail
+closed.
+
+Existing non-retained option matrices adopt current SKU, stock, tracking,
+weight, barcode, option, value, and variant identities by exact option
+combination. A missing combination may be created from manifest intent; an
+ambiguous current combination fails closed. Existing simple-SKU stock is never
+reseeded merely because the product exists. It is compiled only when the resume
+journal proves the base create completed and its SKU initialization did not.
 
 Every update carries either a numeric revision from the supplied current-state
 snapshot or a reference to the exact prerequisite command result. A later
@@ -43,3 +52,11 @@ hero documents. Manual collection membership is explicit and ordered. Dynamic
 collections contain explicit category references. New categories publish only
 after a first product dependency; new products start inactive and activate only
 after their SKU/media/content payload is complete.
+
+`apply-bind.mjs` is resolution-only: it binds compiler references from a fresh
+authenticated snapshot, verified staged assets, or safe prerequisite command
+authority (`id` and monotonic revisions). It must not rebuild or reinterpret a
+request payload. `run-apply.mjs` currently executes only category, product,
+inactive collection, and inactive presentation commands. Activation and
+publication remain excluded until the browser-verification milestone; the
+public CLI still exposes no write mode.

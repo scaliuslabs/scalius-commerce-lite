@@ -32,7 +32,6 @@ describe("demo-store admin command compiler", () => {
     const compiled = compileDemoStoreAdminCommands(demoStoreManifest);
     const vale = matrixFor(compiled, "vale-everyday-runners");
     const rove = matrixFor(compiled, "rove-packable-flats");
-    const halo = matrixFor(compiled, "halo-arc-table-lamp");
 
     expect(vale.options[0].id).toMatch(/^draft_option_[a-f0-9]{20}$/);
     expect(vale.options[0].values[0].id).toMatch(/^draft_value_[a-f0-9]{20}$/);
@@ -46,8 +45,6 @@ describe("demo-store admin command compiler", () => {
     expect(new Set(chalkImages).size).toBe(1);
     expect(chalkImages[0]).toMatch(/^pmed_demo_[a-f0-9]{20}$/);
     expect(rove.variants.filter((variant) => variant.sku.includes("BLACK")).every((variant) => variant.imageId === null)).toBe(true);
-    expect(halo.variants).toHaveLength(3);
-    expect(halo.variants.some((variant) => variant.sku.endsWith("GLOSS-US"))).toBe(false);
   });
 
   it("keeps new prices and stock positive while preserving simple-SKU generated barcodes", () => {
@@ -70,7 +67,6 @@ describe("demo-store admin command compiler", () => {
     const compiled = compileDemoStoreAdminCommands(demoStoreManifest);
     for (const slug of ["rider-court-trainers", "halo-arc-table-lamp"]) {
       const base = findCommand(compiled, `product:${slug}:base`);
-      const matrix = findCommand(compiled, `product:${slug}:matrix`);
       expect(base.method).toBe("PUT");
       expect(base.preservation).toMatchObject({
         preserveSkuIds: true,
@@ -79,14 +75,36 @@ describe("demo-store admin command compiler", () => {
         preserveInventoryLedger: true,
         preserveReservations: true,
       });
-      expect(matrix.preservation).toEqual({ adoptCurrentVariantFacts: true, noStockReset: true });
-      expect(matrix.body.expectedAggregateRevision).toEqual({
-        $ref: `product:${slug}:base`,
-        field: "aggregateRevision",
-      });
-      expect(matrix.body.variants.every((variant) => variant.stock.$ref.startsWith("current-variant:"))).toBe(true);
-      expect(matrix.body.variants.every((variant) => variant.id.$ref.startsWith("current-variant:"))).toBe(true);
+      expect(compiled.commands.find((item) => item.logicalKey === `product:${slug}:matrix`)).toBeUndefined();
+      expect(base.body.isActive).toEqual({ $ref: `current-product:${slug}`, field: "isActive" });
     }
+  });
+
+  it("adopts operational SKU authority for existing matrices and seeds simple stock only with resume provenance", () => {
+    const optioned = demoStoreManifest.products.find((product) => product.slug === "vale-everyday-runners");
+    const simple = demoStoreManifest.products.find((product) => product.slug === "noor-ceramic-vase");
+    const current = {
+      productDetails: [
+        { id: "prod_vale", slug: optioned.slug, aggregateRevision: 7, isActive: true },
+        { id: "prod_noor", slug: simple.slug, aggregateRevision: 3, isActive: true },
+      ],
+    };
+    const first = compileDemoStoreAdminCommands(demoStoreManifest, { current });
+    const matrix = findCommand(first, `${optioned.logicalKey}:matrix`);
+    expect(matrix.body.variants[0]).toMatchObject({
+      id: { $ref: optioned.variants[0].logicalKey.replace(/^/u, "current-variant:"), field: "id" },
+      sku: { $ref: optioned.variants[0].logicalKey.replace(/^/u, "current-variant:"), field: "sku" },
+      stock: { $ref: optioned.variants[0].logicalKey.replace(/^/u, "current-variant:"), field: "stock" },
+      barcode: { $ref: optioned.variants[0].logicalKey.replace(/^/u, "current-variant:"), field: "barcode" },
+    });
+    expect(first.commands.find((item) => item.logicalKey === `${simple.logicalKey}:simple-sku`)).toBeUndefined();
+
+    current.resumeSimpleSlugs = [simple.slug];
+    const resumed = compileDemoStoreAdminCommands(demoStoreManifest, { current });
+    expect(findCommand(resumed, `${simple.logicalKey}:simple-sku`).body.sku).toEqual({
+      $ref: `current-variant:${simple.variants[0].logicalKey}`,
+      field: "sku",
+    });
   });
 
   it("compiles sections, collection membership, heroes, and revision preconditions", () => {
@@ -110,6 +128,8 @@ describe("demo-store admin command compiler", () => {
     expect(desktopHero.body.expectedRevision).toBe(4);
     expect(desktopHero.body.images).toHaveLength(3);
     expect(desktopHero.body.images.every((slide) => slide.url.$ref.endsWith(":desktop"))).toBe(true);
+    expect(newCollection.body.isActive).toBe(false);
+    expect(desktopHero.body.isActive).toBe(false);
     expect(rider.body.additionalInfo).toHaveLength(3);
     expect(rider.body.additionalInfo.every((section) => section.id.$ref.startsWith("current-section:"))).toBe(true);
   });

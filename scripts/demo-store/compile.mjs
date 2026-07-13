@@ -32,10 +32,8 @@ function currentBy(rows, key) {
   return new Map((rows ?? []).map((row) => [row[key], row]));
 }
 
-function productAssociationId(product, media) {
-  if (product.retainedProductId) {
-    return commandRef(`current-product-media:${media.logicalKey}`);
-  }
+function productAssociationId(product, media, existing) {
+  if (existing) return commandRef(`bound-product-media:${product.slug}:${media.logicalKey}`);
   return stableDraftId("pmed_demo", `${product.logicalKey}:${media.logicalKey}`);
 }
 
@@ -47,26 +45,26 @@ function categoryImageRef(category) {
   return commandRef(`media:${category.media[0].logicalKey}`, "categoryImage");
 }
 
-function productMediaPayload(product) {
+function productMediaPayload(product, existing) {
   return product.media
     .filter((media) => media.role !== "poster")
     .map((media) => ({
-      id: productAssociationId(product, media),
+      id: productAssociationId(product, media, existing),
       mediaId: mediaAssetRef(media),
       altText: media.altText,
       isPrimary: media.slot === "P",
     }));
 }
 
-function optionDrafts(product) {
+function optionDrafts(product, existing) {
   return product.options.map((axis, axisIndex) => ({
-    id: product.retainedProductId
+    id: existing
       ? commandRef(`current-option:${product.slug}:${axis.name}`)
       : stableDraftId("draft_option", `${product.logicalKey}:${axisIndex}:${axis.name}`),
     name: axis.name,
     standardMapping: axis.mapping,
     values: axis.values.map((value, valueIndex) => ({
-      id: product.retainedProductId
+      id: existing
         ? commandRef(`current-option-value:${product.slug}:${axis.name}:${value}`)
         : stableDraftId("draft_value", `${product.logicalKey}:${axisIndex}:${valueIndex}:${value}`),
       value,
@@ -74,7 +72,7 @@ function optionDrafts(product) {
   }));
 }
 
-function variantImageId(product, variant) {
+function variantImageId(product, variant, existing) {
   const intent = product.variantImageIntent;
   if (intent.mode === "fallback") return null;
   if (intent.mode === "combinations") {
@@ -86,14 +84,14 @@ function variantImageId(product, variant) {
       media.variantValue && variant.optionValues.includes(media.variantValue),
     );
     return matchingMedia
-      ? productAssociationId(product, matchingMedia)
+      ? productAssociationId(product, matchingMedia, existing)
       : commandRef(`current-variant:${variant.logicalKey}`, "imageId");
   }
   const axisIndex = product.options.findIndex((axis) => axis.name === intent.axis);
   const value = variant.optionValues[axisIndex];
   if (!intent.exactValues.includes(value)) return null;
   const media = product.media.find((candidate) => candidate.slot === `V:${value}`);
-  return media ? productAssociationId(product, media) : null;
+  return media ? productAssociationId(product, media, existing) : null;
 }
 
 function variantOffer(product, variant) {
@@ -109,31 +107,31 @@ function variantOffer(product, variant) {
     : { discountType: "percentage", discountPercentage: offer.value, discountAmount: null };
 }
 
-function productOptionMatrix(product) {
+function productOptionMatrix(product, existing) {
   if (product.options.length === 0) return undefined;
-  const options = optionDrafts(product);
+  const options = optionDrafts(product, existing);
   return {
     options,
     variants: product.variants.map((variant) => ({
-      id: product.retainedProductId
+      id: existing
         ? commandRef(`current-variant:${variant.logicalKey}`)
         : stableDraftId("draft_variant", variant.logicalKey),
       selectedOptionValueIds: variant.optionValues.map((value, axisIndex) => {
         const option = options[axisIndex];
         return option.values.find((candidate) => candidate.value === value).id;
       }),
-      imageId: variantImageId(product, variant),
-      sku: variant.sku,
+      imageId: variantImageId(product, variant, existing),
+      sku: existing ? commandRef(`current-variant:${variant.logicalKey}`, "sku") : variant.sku,
       price: variant.price,
-      stock: variant.inventory.mode === "preserve"
+      stock: existing
         ? commandRef(`current-variant:${variant.logicalKey}`, "stock")
         : variant.inventory.onHand,
-      trackInventory: true,
-      weight: null,
-      barcode: product.retainedProductId
+      trackInventory: existing ? commandRef(`current-variant:${variant.logicalKey}`, "trackInventory") : true,
+      weight: existing ? commandRef(`current-variant:${variant.logicalKey}`, "weight") : null,
+      barcode: existing
         ? commandRef(`current-variant:${variant.logicalKey}`, "barcode")
         : null,
-      barcodeType: product.retainedProductId
+      barcodeType: existing
         ? commandRef(`current-variant:${variant.logicalKey}`, "barcodeType")
         : null,
       ...variantOffer(product, variant),
@@ -151,7 +149,7 @@ function productDiscount(product) {
     : { discountType: "percentage", discountPercentage: offer.value, discountAmount: null };
 }
 
-function productBasePayload(product, categoryId, { isActive, expectedAggregateRevision, id } = {}) {
+function productBasePayload(product, categoryId, { isActive, expectedAggregateRevision, id, existing = false } = {}) {
   return {
     ...(id ? { id } : {}),
     ...(expectedAggregateRevision ? { expectedAggregateRevision } : {}),
@@ -170,10 +168,12 @@ function productBasePayload(product, categoryId, { isActive, expectedAggregateRe
     excludeFromProductFeed: false,
     productCondition: product.condition,
     slug: product.slug,
-    media: productMediaPayload(product),
-    attributes: [{ attributeId: commandRef("attribute:brand"), value: product.brand }],
+    media: productMediaPayload(product, existing),
+    attributes: existing
+      ? commandRef(`current-product:${product.slug}`, "attributesWithBrand")
+      : [{ attributeId: commandRef("attribute:brand"), value: product.brand }],
     additionalInfo: product.additionalSections.map((section) => ({
-      id: product.retainedProductId
+      id: existing
         ? commandRef(`current-section:${section.logicalKey}`)
         : stableDraftId("item-demo", section.logicalKey),
       title: section.title,
@@ -230,8 +230,9 @@ function productCommands(manifest, current) {
     if (existing || retained) {
       const payload = productBasePayload(product, categoryId, {
         id: productId,
-        isActive: true,
+        isActive: commandRef(`current-product:${product.slug}`, "isActive"),
         expectedAggregateRevision: revision,
+        existing: true,
       });
       commands.push(command(baseLogicalKey, "products", "PUT", `${API}/products/${productId}`, payload, {
         dependsOn: [`category:${product.categorySlug}`],
@@ -246,23 +247,23 @@ function productCommands(manifest, current) {
           preserveReservations: true,
         } : undefined,
       }));
-      if (product.options.length > 0) {
+      if (product.options.length > 0 && !retained) {
         commands.push(command(`${product.logicalKey}:matrix`, "products", "PUT", `${API}/products/${productId}/options/matrix`, {
-          ...productOptionMatrix(product),
+          ...productOptionMatrix(product, true),
           expectedAggregateRevision: commandRef(baseLogicalKey, "aggregateRevision"),
         }, {
           dependsOn: [baseLogicalKey],
           preconditions: { expectedAggregateRevision: commandRef(baseLogicalKey, "aggregateRevision") },
           preservation: retained ? { adoptCurrentVariantFacts: true, noStockReset: true } : undefined,
         }));
-      } else if (!retained) {
+      } else if (!retained && current.resumeSimpleSlugs?.includes(product.slug)) {
         const variant = product.variants[0];
         const simpleKey = `${product.logicalKey}:simple-sku`;
         commands.push(command(simpleKey, "products", "PUT", `${API}/products/${productId}/variants/{defaultVariantId}`, {
           selectedOptionValueIds: [],
           imageId: null,
           weight: null,
-          sku: variant.sku,
+          sku: commandRef(`current-variant:${variant.logicalKey}`, "sku"),
           price: variant.price,
           stock: variant.inventory.onHand,
           trackInventory: true,
@@ -283,7 +284,7 @@ function productCommands(manifest, current) {
     }
 
     const createBody = productBasePayload(product, categoryId, { isActive: false });
-    const matrix = productOptionMatrix(product);
+    const matrix = productOptionMatrix(product, false);
     if (matrix) createBody.optionMatrix = matrix;
     commands.push(command(baseLogicalKey, "products", "POST", `${API}/products`, createBody, {
       dependsOn: [`category:${product.categorySlug}`],
@@ -383,7 +384,7 @@ function collectionCommands(manifest, current) {
       ...(existing ? { expectedVersion: existing.version } : {}),
       name: collection.name,
       presentation: collection.presentation,
-      isActive: true,
+      isActive: existing?.isActive ?? false,
       canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
@@ -392,13 +393,7 @@ function collectionCommands(manifest, current) {
     return command(collection.logicalKey, "collections", existing ? "PUT" : "POST", existing ? `${API}/collections/${existing.id}` : `${API}/collections`, body, {
       dependsOn: [
         ...collectionCategories(collection).map((slug) => `category:${slug}`),
-        ...collectionMembers(collection, manifest).map((product) =>
-          product.retainedProductId
-            ? product.options.length > 0
-              ? `${product.logicalKey}:matrix`
-              : `${product.logicalKey}:base`
-            : `${product.logicalKey}:activate`,
-        ),
+        ...collectionMembers(collection, manifest).map((product) => `${product.logicalKey}:base`),
       ],
       preconditions: existing ? { expectedVersion: existing.version } : { exactNameAbsent: collection.name },
       produces: { id: existing?.id ?? stableDraftId("draft_collection", collection.logicalKey) },
@@ -419,7 +414,7 @@ function heroCommands(manifest, current) {
     return command(`hero-slider:${type}`, "presentation", existing ? "PUT" : "POST", existing ? `${API}/settings/hero-sliders/${existing.id}` : `${API}/settings/hero-sliders`, {
       ...(existing ? { expectedRevision: existing.revision } : { type }),
       images,
-      isActive: true,
+      isActive: existing?.isActive ?? false,
     }, {
       dependsOn: manifest.heroes.map((hero) => hero.destination),
       preconditions: existing ? { expectedRevision: existing.revision } : { sliderTypeAbsent: type },
@@ -434,9 +429,7 @@ function publicationCommands(manifest, categoryBaseCommands) {
     if (currentStatus === "published") return null;
     const firstProduct = manifest.products.find((product) => product.categorySlug === category.slug);
     const productDependency = firstProduct.retainedProductId
-      ? firstProduct.options.length > 0
-        ? `${firstProduct.logicalKey}:matrix`
-        : `${firstProduct.logicalKey}:base`
+      ? `${firstProduct.logicalKey}:base`
       : `${firstProduct.logicalKey}:activate`;
     return command(`${category.logicalKey}:publish`, "publication", "PATCH", `${API}/categories/{categoryId}/status`, {
       expectedRevision: commandRef(category.logicalKey, "revision"),
@@ -456,6 +449,8 @@ export function compileDemoStoreAdminCommands(manifest, { current = {} } = {}) {
     productDetails: current.productDetails ?? [],
     collections: current.collections ?? [],
     heroes: current.heroes ?? current.presentation?.heroes ?? [],
+    attributes: current.attributes ?? [],
+    resumeSimpleSlugs: current.resumeSimpleSlugs ?? [],
   };
   const categories = categoryCommands(manifest, normalizedCurrent);
   const products = productCommands(manifest, normalizedCurrent);

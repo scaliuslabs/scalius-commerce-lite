@@ -22,7 +22,7 @@ export function createApplyRuntime(readClient) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/categories/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         return exactFromList(command, "/api/v1/admin/categories", "slug", "categories");
       }
-      if (command.phase === "products" || command.phase === "product-options" || command.phase === "product-stock-initialization") {
+      if (command.logicalKey.startsWith("product:")) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/products/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         const row = await exactFromList(command, "/api/v1/admin/products", "slug", "products");
         return row ? readClient.get(`/api/v1/admin/products/${encodeURIComponent(row.id)}`, command.logicalKey) : null;
@@ -31,8 +31,7 @@ export function createApplyRuntime(readClient) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/collections/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         return exactFromList(command, "/api/v1/admin/collections", "name", "collections");
       }
-      if (command.logicalKey === "settings:theme") return readClient.get("/api/v1/admin/settings/theme", command.logicalKey);
-      if (command.logicalKey.startsWith("settings:hero:")) {
+      if (command.logicalKey.startsWith("hero-slider:")) {
         const heroes = await readClient.get("/api/v1/admin/settings/hero-sliders", command.logicalKey);
         return heroes.find((hero) => hero.id === command.identity.id || hero.type === command.identity.type) ?? null;
       }
@@ -40,21 +39,20 @@ export function createApplyRuntime(readClient) {
     },
     async matchesDesired(command, current) {
       if (command.phase === "categories") return current.slug === command.body.slug && current.name === command.body.name && current.description === command.body.description;
-      if (command.phase === "products") return current.slug === command.body.slug && current.name === command.body.name && current.price === command.body.price && current.description === command.body.description && current.categoryId === command.body.categoryId;
-      if (command.phase === "product-options") {
+      if (command.logicalKey.endsWith(":matrix")) {
         const desired = command.body.variants.map((variant) => variant.selectedOptionValueIds.join("|")).sort();
         const actual = (current.variants ?? []).map((variant) => variant.optionCombinationKey).filter(Boolean).sort();
         return equal(actual, desired);
       }
-      if (command.phase === "product-stock-initialization") {
-        const variant = current.variants?.find((item) => item.id === command.identity.variantId);
+      if (command.logicalKey.endsWith(":simple-sku")) {
+        const variant = current.variants?.find((item) => item.id === command.identity.variantId)
+          ?? current.variants?.find((item) => item.isDefault === true && !item.deletedAt);
         return variant?.stock === command.desired.stock && variant.trackInventory === true;
       }
+      if (command.logicalKey.startsWith("product:")) return current.slug === command.body.slug && current.name === command.body.name && current.price === command.body.price && current.description === command.body.description && current.categoryId === command.body.categoryId && current.isActive === command.body.isActive;
       if (command.phase === "collections") return current.name === command.body.name && current.presentation === command.body.presentation && equal(unwrapConfig(current.config), command.body.config);
-      if (command.logicalKey === "settings:theme") return equal(current.colors, command.body.colors);
-      if (command.logicalKey.startsWith("settings:hero:")) return current.type === (command.body.type ?? command.desired.type) && equal(current.images, command.body.images) && current.isActive === command.body.isActive;
+      if (command.logicalKey.startsWith("hero-slider:")) return current.type === (command.body.type ?? command.desired.type) && equal(current.images, command.body.images) && current.isActive === command.body.isActive;
       return false;
     },
   };
 }
-
