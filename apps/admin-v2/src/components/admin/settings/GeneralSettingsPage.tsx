@@ -42,10 +42,6 @@ const ScannerTokenGenerator = lazy(() =>
   })),
 );
 const BusinessSettingsBuilder = lazy(() => import("./BusinessSettingsBuilder"));
-const NotificationChannelsBuilder = lazy(
-  () => import("./NotificationChannelsBuilder"),
-);
-
 function TabSpinner() {
   return (
     <div className="flex items-center justify-center py-16">
@@ -74,7 +70,6 @@ const tabs = [
   { value: "auth", label: "Auth & Access" },
   { value: "security", label: "Security" },
   { value: "scanner", label: "Scanner" },
-  { value: "notification-channels", label: "Notifications" },
 ] as const;
 
 export default function GeneralSettingsPage({
@@ -234,14 +229,6 @@ export default function GeneralSettingsPage({
               {mountedTabs.has("scanner") && (
                 <Suspense fallback={<TabSpinner />}>
                   <ScannerTokenGenerator />
-                </Suspense>
-              )}
-            </TabsContent>
-
-            <TabsContent value="notification-channels" className="mt-0">
-              {mountedTabs.has("notification-channels") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <NotificationChannelsBuilder />
                 </Suspense>
               )}
             </TabsContent>

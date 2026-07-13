@@ -11,7 +11,6 @@ export const GENERAL_SETTINGS_SECTIONS = [
   "auth",
   "security",
   "scanner",
-  "notification-channels",
 ] as const;
 
 export type GeneralSettingsSection =
