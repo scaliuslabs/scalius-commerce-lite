@@ -36,7 +36,7 @@ registerGateway(polarHandler);
 let selectedMethod: string | null = null;
 let checkoutData: Record<string, unknown> | null = null;
 let checkoutConfig: CheckoutConfig | null = null;
-let gateways: Array<{ id: string; [key: string]: unknown }> = [];
+let gateways: CheckoutConfig["gateways"] = [];
 let authoritativeTaxQuote: CheckoutTaxQuote | null = null;
 let isProcessing = false;
 let selectionVersion = 0;
@@ -328,7 +328,7 @@ function loadCheckoutData(): boolean {
             const id = typeof gateway?.id === "string" ? gateway.id : "";
             return freshGatewayMap.get(id);
           })
-          .filter((gateway): gateway is { id: string; [key: string]: unknown } => Boolean(gateway))
+          .filter((gateway): gateway is CheckoutConfig["gateways"][number] => Boolean(gateway))
       : checkoutConfig!.gateways;
     if (gwRaw && gateways.length === 0) {
       sessionStorage.removeItem("scalius_checkout_gateways");

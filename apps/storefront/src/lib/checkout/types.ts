@@ -42,7 +42,13 @@ export interface GatewayHandler {
 }
 
 export interface CheckoutConfig {
-  gateways: Array<{ id: string; [key: string]: unknown }>;
+  gateways: Array<{
+    id: string;
+    testMode?: boolean;
+    /** @deprecated Transitional fallback for cached gateway configuration. */
+    sandbox?: boolean;
+    [key: string]: unknown;
+  }>;
   activeDefaultMethod?: string;
   guestCheckoutEnabled: boolean;
   authVerificationMethod: CustomerAuthMethod;
