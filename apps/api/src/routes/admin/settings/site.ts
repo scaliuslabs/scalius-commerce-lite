@@ -1,6 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getKv } from "../../../utils/kv-cache";
-import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
+import {
+  invalidateSiteSettingsCache,
+  invalidateStorefrontUrlCache,
+} from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
 import {
   STOREFRONT_THEME_BODY_FONTS,
@@ -822,7 +825,11 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
   const { storefrontUrl } = c.req.valid("json");
   await saveStorefrontUrl(db, storefrontUrl);
   layoutCache.invalidate(CACHE_KEYS.STOREFRONT_URL);
-  await invalidateSiteSettingsCache(getKv());
+  const kv = getKv();
+  await Promise.all([
+    invalidateSiteSettingsCache(kv),
+    invalidateStorefrontUrlCache(kv),
+  ]);
   await invalidateApiAndScheduleStorefrontGroups(STOREFRONT_URL_CACHE_GROUPS, c, {
     htmlPaths: SEO_DISCOVERY_WARM_PATHS,
   });

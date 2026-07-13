@@ -8,6 +8,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   getKv: vi.fn(),
   invalidateSiteSettingsCache: vi.fn(),
+  invalidateStorefrontUrlCache: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   getCurrencySettings: vi.fn(),
   isCurrencyCodeLocked: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock("../../../utils/kv-cache", () => ({
 
 vi.mock("@scalius/core/modules/settings", () => ({
   invalidateSiteSettingsCache: mocks.invalidateSiteSettingsCache,
+  invalidateStorefrontUrlCache: mocks.invalidateStorefrontUrlCache,
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -93,6 +95,7 @@ function createTestApp() {
 
   mocks.getKv.mockReturnValue(kv);
   mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
+  mocks.invalidateStorefrontUrlCache.mockResolvedValue(undefined);
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
   mocks.getCurrencySettings.mockResolvedValue({
     currencyCode: "BDT",
@@ -540,7 +543,7 @@ describe("site settings cache invalidation", () => {
       groups: ["checkout"],
     },
   ])("invalidates $groups after $path saves", async ({ path, method, body, groups, options }) => {
-    const { app, env } = createTestApp();
+    const { app, env, kv } = createTestApp();
 
     const response = await requestJson(app, env, method, path, body);
 
@@ -556,6 +559,11 @@ describe("site settings cache invalidation", () => {
         groups,
         expect.objectContaining({ env }),
       );
+    }
+    if (path === "/storefront-url") {
+      expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
+      expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();
+      expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(kv);
     }
   });
 

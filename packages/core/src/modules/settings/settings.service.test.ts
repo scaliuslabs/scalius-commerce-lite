@@ -36,8 +36,31 @@ import {
     getAdminNotificationChannels,
     getCurrencyConfig,
     getNotificationChannels,
+    invalidateStorefrontUrlCache,
     updateNotificationChannels,
 } from "./settings.service";
+
+describe("storefront URL cache invalidation", () => {
+    it("clears the dedicated gateway URL cache key", async () => {
+        const kv = { delete: vi.fn(async () => undefined) };
+
+        await invalidateStorefrontUrlCache(kv as never);
+
+        expect(kv.delete).toHaveBeenCalledWith("gw:storefront_url");
+    });
+
+    it("keeps the committed settings write successful when cache cleanup fails", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const kv = { delete: vi.fn(async () => { throw new Error("KV unavailable"); }) };
+
+        await expect(invalidateStorefrontUrlCache(kv as never)).resolves.toBeUndefined();
+        expect(warn).toHaveBeenCalledWith(
+            "[Settings] KV delete failed for storefront_url:",
+            "KV unavailable",
+        );
+        warn.mockRestore();
+    });
+});
 
 function createCurrencyConfigDb(values: Record<string, string>) {
     return {

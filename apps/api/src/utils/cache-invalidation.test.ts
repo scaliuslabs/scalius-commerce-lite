@@ -4,6 +4,7 @@ import {
   D1_CACHE_SUBJECT_ID_CHUNK_SIZE,
   INVALIDATION_GROUPS,
   MAX_STOREFRONT_EXACT_HTML_PATHS,
+  SETTINGS_CACHE_DEPENDENCIES,
   collectCmsShortcodePageInvalidation,
   collectCollectionCacheInvalidation,
   collectProductAvailabilityCacheInvalidation,
@@ -105,6 +106,32 @@ describe("catalog cache groups", () => {
         "https://external.example/categories/rice",
       ]),
     ).toEqual(["/search", "/categories/fish"]);
+  });
+});
+
+describe("settings cache dependency inventory", () => {
+  it("maps every shared projection to declared valid invalidation groups", () => {
+    const dependencies = Object.values(SETTINGS_CACHE_DEPENDENCIES);
+    expect(dependencies.length).toBe(32);
+
+    for (const dependency of dependencies) {
+      for (const group of dependency.groups) {
+        expect(INVALIDATION_GROUPS[group]).toBeDefined();
+      }
+      if (dependency.strategy === "shared-projection") {
+        expect(dependency.groups.length).toBeGreaterThan(0);
+        expect(getGroupsForPath(dependency.path)).toEqual(dependency.groups);
+      } else {
+        expect(dependency.groups).toEqual([]);
+      }
+    }
+  });
+
+  it("records direct-read settings as intentional no-shared-cache boundaries", () => {
+    expect(SETTINGS_CACHE_DEPENDENCIES.firebase.strategy).toBe("credential-scoped");
+    expect(SETTINGS_CACHE_DEPENDENCIES.notificationChannels.strategy).toBe("authoritative-read");
+    expect(SETTINGS_CACHE_DEPENDENCIES.customerRequests.strategy).toBe("authoritative-read");
+    expect(SETTINGS_CACHE_DEPENDENCIES.fraud.strategy).toBe("authoritative-read");
   });
 });
 
