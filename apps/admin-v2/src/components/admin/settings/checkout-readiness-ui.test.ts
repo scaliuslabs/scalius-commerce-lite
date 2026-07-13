@@ -10,6 +10,10 @@ const gatewaysSource = readFileSync(
   fileURLToPath(new URL("./PaymentGatewaysManager.tsx", import.meta.url)),
   "utf8",
 );
+const gatewayUtilsSource = readFileSync(
+  fileURLToPath(new URL("./payment-gateway-utils.tsx", import.meta.url)),
+  "utf8",
+);
 const pageSource = readFileSync(
   fileURLToPath(new URL("./CheckoutSettingsPage.tsx", import.meta.url)),
   "utf8",
@@ -46,6 +50,10 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain("Your unsaved values are still here.");
     expect(flowSource).toContain("Merge my changes");
     expect(flowSource).toContain("Use latest saved version");
+    expect(flowSource).toContain("<UnsavedChangesGuard");
+    expect(flowSource).toContain("Customer sign-in verification must be ready before requiring an account");
+    expect(flowSource).toContain("checkoutSettingsStale");
+    expect(flowSource).toContain("Your draft is preserved and saving is locked.");
     expect(flowSource).toContain('aria-invalid={Boolean(partialPaymentAmountIssue)}');
     expect(flowSource).toContain('id="partial-payment-amount-error"');
     expect(flowSource).toContain('id="partial-payment-amount-help"');
@@ -63,6 +71,7 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Environment</dt>");
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Connection</dt>");
     expect(gatewaysSource).toContain("Card results preview this draft until you save.");
+    expect(gatewaysSource).toContain("setup-complete, provider-enabled methods");
     expect(gatewaysSource).toContain("No provider connection health check is available.");
     expect(gatewaysSource).toContain("Key environment");
     expect(gatewaysSource).toContain("Key mismatch");
@@ -79,6 +88,19 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("The last loaded workspace is preserved, but saves are locked");
     expect(gatewaysSource).toContain("? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }");
     expect(gatewaysSource).toContain("Buyer visibility cannot be confirmed until the saved checkout flow loads.");
+    expect(gatewaysSource).toContain("loadMethods(false, false, true)");
+    expect(gatewaysSource).toContain("loadMethods(false, true, true)");
+    expect(gatewaysSource).toContain("getEligibleDefaultPaymentMethods");
+    expect(gatewaysSource).toContain("<UnsavedChangesGuard");
+    expect(gatewaysSource).toContain("dirty={stripeDirty}");
+    expect(gatewaysSource).toContain("dirty={sslDirty}");
+    expect(gatewaysSource).toContain("dirty={polarDirty}");
+    expect(gatewaysSource).toContain("lg:grid-cols-2");
+    expect(gatewaysSource).toContain("Loading payment settings…");
+    expect(gatewayUtilsSource).toContain("Provider settings saved");
+    expect(gatewayUtilsSource).toContain("Unsaved provider changes");
+    expect(gatewayUtilsSource).toContain('aria-label={`${show ? "Hide" : "Show"} credential value`}');
+    expect(gatewayUtilsSource).not.toContain("tabIndex={-1}");
   });
 
   it("keeps the tab strip mobile-safe and explains that refund requests are not automatic refunds", () => {

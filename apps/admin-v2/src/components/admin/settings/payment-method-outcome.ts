@@ -15,7 +15,7 @@ export interface PaymentMethodOutcome {
   state: PaymentMethodOutcomeState;
   label: string;
   description: string;
-  setupLabel: "Ready" | "Required" | "Not required";
+  setupLabel: "Complete" | "Required" | "Not required";
   providerLabel: "On" | "Off" | "Always available";
   checkoutLabel: "Visible" | "Hidden" | "Hidden by flow" | "Unavailable";
   environmentLabel: string;
@@ -24,7 +24,13 @@ export interface PaymentMethodOutcome {
   canSelect: boolean;
 }
 
-const FALLBACK_BLOCKED_COPY = "This method is not ready for buyer checkout.";
+export interface SavedCheckoutFlowProjection {
+  checkoutMode: string;
+  partialPaymentEnabled: boolean;
+  partialPaymentAmount: number;
+}
+
+const FALLBACK_BLOCKED_COPY = "This method is unavailable for buyer checkout.";
 
 function getEnvironmentLabel(
   method: MethodKey,
@@ -51,7 +57,7 @@ export function getPaymentMethodOutcome(options: {
   const providerEnabled = isCod || (status?.providerEnabled ?? status?.enabled) === true;
   const usable = isCod || status?.usable === true;
   const common = {
-    setupLabel: (isCod ? "Not required" : configured ? "Ready" : "Required") as PaymentMethodOutcome["setupLabel"],
+    setupLabel: (isCod ? "Not required" : configured ? "Complete" : "Required") as PaymentMethodOutcome["setupLabel"],
     providerLabel: (isCod ? "Always available" : providerEnabled ? "On" : "Off") as PaymentMethodOutcome["providerLabel"],
     environmentLabel: getEnvironmentLabel(method, environment),
     healthLabel: "Not checked" as const,
@@ -95,8 +101,10 @@ export function getPaymentMethodOutcome(options: {
     return {
       ...common,
       state: "ready_hidden",
-      label: "Ready, hidden",
-      description: "The provider is ready, but it is not selected for buyer checkout.",
+      label: isCod ? "Available, hidden" : "Configured, hidden",
+      description: isCod
+        ? "COD is available, but it is not selected for buyer checkout."
+        : "Provider setup is complete, but it is not selected for buyer checkout.",
       checkoutLabel: "Hidden",
       effective: false,
     };
@@ -128,8 +136,62 @@ export function getPaymentMethodOutcome(options: {
     ...common,
     state: "visible",
     label: "Visible",
-    description: "This method is ready and included in the current buyer checkout flow.",
+    description: "This method is included in the current buyer checkout flow.",
     checkoutLabel: "Visible",
     effective: true,
   };
+}
+
+export function getEligibleDefaultPaymentMethods(options: {
+  methods: readonly MethodKey[];
+  statuses: Partial<Record<MethodKey, GatewayStatus>>;
+  selectedMethods: ReadonlySet<MethodKey>;
+  flowAllowed: (method: MethodKey) => boolean | undefined;
+}): MethodKey[] {
+  return options.methods.filter((method) => {
+    if (!options.selectedMethods.has(method) || options.flowAllowed(method) !== true) return false;
+    return getPaymentMethodOutcome({
+      method,
+      status: options.statuses[method],
+      checkoutSelected: true,
+      flowAllowed: true,
+    }).canSelect;
+  });
+}
+
+export function getPaymentMethodFlowEligibility(
+  method: MethodKey,
+  flow: SavedCheckoutFlowProjection,
+): boolean {
+  if (flow.partialPaymentEnabled) {
+    if (!Number.isFinite(flow.partialPaymentAmount) || flow.partialPaymentAmount <= 0) return false;
+    if (flow.checkoutMode === "guest_cod_only") return false;
+    return method !== "cod";
+  }
+  if (flow.checkoutMode === "guest_cod_only") return method === "cod";
+  if (flow.checkoutMode === "gateways_only") return method !== "cod";
+  return true;
+}
+
+export function getPaymentMethodFlowExclusionReason(
+  method: MethodKey,
+  flow: SavedCheckoutFlowProjection,
+): string | null {
+  if (getPaymentMethodFlowEligibility(method, flow)) return null;
+  if (flow.partialPaymentEnabled && (!Number.isFinite(flow.partialPaymentAmount) || flow.partialPaymentAmount <= 0)) {
+    return "The saved online advance amount is invalid. Fix Checkout Flow before offering payment methods.";
+  }
+  if (flow.partialPaymentEnabled && flow.checkoutMode === "guest_cod_only") {
+    return "The saved COD-only flow conflicts with an online advance. Fix Checkout Flow before offering payment methods.";
+  }
+  if (flow.partialPaymentEnabled && method === "cod") {
+    return "COD is hidden while an online advance is required.";
+  }
+  if (flow.checkoutMode === "guest_cod_only" && method !== "cod") {
+    return "COD only hides online gateways from buyers.";
+  }
+  if (flow.checkoutMode === "gateways_only" && method === "cod") {
+    return "Online only hides COD from buyers.";
+  }
+  return "The saved checkout flow excludes this method.";
 }

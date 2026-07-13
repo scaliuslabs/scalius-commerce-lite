@@ -51,7 +51,7 @@ describe("checkout flow preview policy", () => {
             checkoutMode: "guest_cod_only",
             codEnabled: false,
             activeOnlineMethodCount: 1,
-        })).toContain("Enable Cash on Delivery in Payment Gateways before using Fast COD Only.");
+        })).toContain("Enable Cash on Delivery in Payment Gateways before using COD only.");
         expect(issues({
             checkoutMode: "gateways_only",
             codEnabled: true,
@@ -142,5 +142,54 @@ describe("checkout flow preview policy", () => {
         });
 
         expect(adminIssues.length === 0).toBe(serverIssues.length === 0);
+    });
+
+    it("matches server acceptance across every flow, advance, and supported method family", () => {
+        const modes = ["all", "guest_cod_only", "gateways_only"] as const;
+        const methodSets = [
+            [],
+            ["cod"],
+            ["stripe"],
+            ["sslcommerz"],
+            ["polar"],
+            ["cod", "stripe"],
+        ];
+        const advances = [
+            { enabled: false, amount: 0 },
+            { enabled: true, amount: 200 },
+        ];
+
+        for (const mode of modes) {
+            for (const methods of methodSets) {
+                for (const advance of advances) {
+                    const serverIssues = getCheckoutFlowValidationIssues({
+                        checkoutMode: mode,
+                        partialPaymentEnabled: advance.enabled,
+                        partialPaymentAmount: advance.amount,
+                        availablePaymentMethods: methods,
+                    });
+                    const adminIssues = issues({
+                        checkoutMode: mode,
+                        partialPaymentEnabled: advance.enabled,
+                        partialPaymentAmount: advance.amount,
+                        codEnabled: methods.includes("cod"),
+                        activeOnlineMethodCount: methods.filter((method) => method !== "cod").length,
+                        sslCommerzEnabled: methods.includes("sslcommerz"),
+                    });
+
+                    expect({
+                        accepted: adminIssues.length === 0,
+                        mode,
+                        methods,
+                        advance,
+                    }).toEqual({
+                        accepted: serverIssues.length === 0,
+                        mode,
+                        methods,
+                        advance,
+                    });
+                }
+            }
+        }
     });
 });

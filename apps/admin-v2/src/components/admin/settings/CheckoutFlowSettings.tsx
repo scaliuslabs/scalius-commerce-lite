@@ -33,6 +33,7 @@ import {
     paymentMethodsQueryOptions,
 } from "@/lib/api-query-options/settings";
 import { queryKeys } from "@/lib/query-keys";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import {
     CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS,
     CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL,
@@ -166,6 +167,7 @@ export default function CheckoutFlowSettings() {
         data: checkoutSettings,
         isLoading,
         isError,
+        isFetching,
         refetch,
     } = useQuery(checkoutFlowSettingsQueryOptions());
     const {
@@ -272,6 +274,7 @@ export default function CheckoutFlowSettings() {
     const previewLoading = paymentMethodsPending || readinessPending;
     const readinessUnknown = !readiness && checkoutReadinessError;
     const readinessCheckUnavailable = readinessUnknown;
+    const checkoutSettingsStale = isError && Boolean(checkoutSettings);
     const readinessErrorMessage = checkoutReadinessQueryError instanceof Error
         ? checkoutReadinessQueryError.message
         : null;
@@ -291,6 +294,7 @@ export default function CheckoutFlowSettings() {
     const saveBlocked = !isDirty
         || !editor
         || Boolean(conflict)
+        || checkoutSettingsStale
         || paymentMethodsPending
         || flowIssues.length > 0
         || customerSignInCheckBlocked;
@@ -315,7 +319,15 @@ export default function CheckoutFlowSettings() {
             toast.error("Wait for payment readiness to finish loading before saving checkout flow changes.");
             return;
         }
+        if (checkoutSettingsStale) {
+            toast.error("Refresh the saved checkout flow before saving these changes.");
+            return;
+        }
         if (flowIssues.length > 0) return;
+        if (customerSignInCheckBlocked) {
+            toast.error("Customer sign-in verification must be ready before requiring an account at checkout.");
+            return;
+        }
         setSaving(true);
 
         try {
@@ -399,8 +411,9 @@ export default function CheckoutFlowSettings() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground" role="status" aria-live="polite">
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                Loading checkout flow…
             </div>
         );
     }
@@ -425,12 +438,26 @@ export default function CheckoutFlowSettings() {
     }
 
     return (
+        <>
+        <UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving} />
         <form
             method="post"
             onSubmit={handleSubmit}
             className="grid max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
             noValidate
         >
+            {checkoutSettingsStale && (
+                <Alert className="border-amber-500/30 bg-amber-500/5 lg:col-span-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <AlertDescription className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <span>The last saved checkout flow is still shown, but its current revision could not be refreshed. Your draft is preserved and saving is locked.</span>
+                        <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void refetch()} disabled={isFetching}>
+                            {isFetching && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                            Refresh saved flow
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
             <Card className="lg:col-start-1 lg:row-start-1">
                 <CardHeader className="p-4 pb-3">
                     <CardTitle className="text-base">Customer access</CardTitle>
@@ -778,5 +805,6 @@ export default function CheckoutFlowSettings() {
                 </div>
             </div>
         </form>
+        </>
     );
 }

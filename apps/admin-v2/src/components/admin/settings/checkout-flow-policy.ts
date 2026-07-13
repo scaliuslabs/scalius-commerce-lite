@@ -48,7 +48,7 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
         issues.push("Enable at least one configured payment method in Payment Gateways.");
     }
     if (options.checkoutMode === "guest_cod_only" && !options.codEnabled) {
-        issues.push("Enable Cash on Delivery in Payment Gateways before using Fast COD Only.");
+        issues.push("Enable Cash on Delivery in Payment Gateways before using COD only.");
     }
     if (options.checkoutMode === "gateways_only" && options.activeOnlineMethodCount === 0) {
         issues.push("Enable and configure at least one online gateway in Payment Gateways.");
@@ -62,7 +62,7 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
     );
     if (amountIssue) issues.push(amountIssue);
     if (options.checkoutMode === "guest_cod_only") {
-        issues.push("Fast COD Only cannot be used with advance payments.");
+        issues.push("COD only cannot be used with advance payments.");
     }
     if (options.activeOnlineMethodCount === 0) {
         issues.push("Advance payments need at least one enabled and configured online gateway.");

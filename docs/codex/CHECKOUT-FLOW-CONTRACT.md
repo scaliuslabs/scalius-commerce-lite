@@ -118,3 +118,18 @@ prerequisites are ready.
 - Source and responsive-contract tests cover the 390 px layout intent. A final
   dark/light browser pass should be performed against the deployed build before
   release sign-off.
+
+## Admin state hardening (2026-07-13)
+
+- Route entry prefetches Checkout Flow without throwing away the component's
+  fail-closed retry surface. Initial read failure therefore remains actionable
+  inside the workspace instead of becoming a generic route error.
+- A failed background refresh with a prior saved document preserves the local
+  draft, labels the saved revision stale, and locks saving until Retry succeeds.
+  Revision CAS remains the server conflict authority.
+- The shared navigation guard now protects checkout-flow drafts. Pressing Enter
+  cannot bypass the customer-sign-in readiness gate: submit handling repeats
+  the same check as the disabled Save button before any mutation is attempted.
+- Payment-method status refreshes are separately documented in
+  [`PAYMENT-METHOD-READINESS.md`](PAYMENT-METHOD-READINESS.md); they do not alter
+  this document's delivery-readiness rule or claim a provider connection test.

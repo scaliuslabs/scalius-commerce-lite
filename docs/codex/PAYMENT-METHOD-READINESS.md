@@ -39,31 +39,31 @@ payment-session allowlist.
 
 | Method | Saved situation | Admin outcome | Buyer method projection |
 | --- | --- | --- | --- |
-| COD | Not checkout-selected | Ready, hidden; setup not required; provider always available | Hidden |
+| COD | Not checkout-selected | Available, hidden; setup not required; provider always available | Hidden |
 | COD | Selected, but online-only or advance flow | Hidden by flow with the exact flow reason | Hidden |
 | COD | Selected and COD-compatible flow | Visible | Visible if whole-checkout readiness also passes |
 | Stripe | Required key/secret missing | Needs setup with missing-field reason | Hidden |
 | Stripe | Obvious placeholder credential | Needs setup with placeholder reason; no provider call | Hidden |
 | Stripe | Test/live key mismatch | Blocked with key-pair mismatch reason | Hidden |
 | Stripe | Configured, provider off | Provider off; setup retained | Hidden |
-| Stripe | Configured/provider on, not checkout-selected | Ready, hidden | Hidden |
+| Stripe | Configured/provider on, not checkout-selected | Configured, hidden; connection still Not checked | Hidden |
 | Stripe | Configured/provider on/selected, flow excludes it | Hidden by flow | Hidden |
 | Stripe | Matching test keys and all method gates pass | Visible; Test mode | Visible with buyer-facing test-mode disclosure |
 | Stripe | Matching live keys and all method gates pass | Visible; Live mode | Visible |
 | SSLCommerz | Store ID or password missing | Needs setup with missing-field reason | Hidden |
 | SSLCommerz | Obvious placeholder ID/password | Needs setup with placeholder reason; no provider call | Hidden |
 | SSLCommerz | Configured, provider off | Provider off; setup retained | Hidden |
-| SSLCommerz | Configured/provider on, not selected or flow-excluded | Ready, hidden or Hidden by flow | Hidden |
+| SSLCommerz | Configured/provider on, not selected or flow-excluded | Configured, hidden or Hidden by flow; connection still Not checked | Hidden |
 | SSLCommerz | Sandbox and all method gates pass | Visible; Test mode | Visible with buyer-facing test-mode disclosure |
 | SSLCommerz | Live and all method gates pass | Visible; Live mode | Visible |
 | Polar | Token, webhook secret, or product ID missing | Needs setup with missing-field reason | Hidden |
 | Polar | Obvious placeholder token/secret/product ID | Needs setup with placeholder reason; no provider call | Hidden |
 | Polar | Configured, provider off | Provider off; setup retained | Hidden |
-| Polar | Configured/provider on, not selected or flow-excluded | Ready, hidden or Hidden by flow | Hidden |
+| Polar | Configured/provider on, not selected or flow-excluded | Configured, hidden or Hidden by flow; connection still Not checked | Hidden |
 | Polar | Sandbox and all method gates pass | Visible; Test mode | Visible with buyer-facing test-mode disclosure |
 | Polar | Live and all method gates pass | Visible; Live mode | Visible |
 | Any online provider | Credential decryption or readiness read fails | Blocked/unavailable; dependent saves lock or fail | Hidden; public checkout fails closed |
-| Any method | Method passes but shipping/location/auth readiness fails | Method card can remain ready; checkout overview names the separate blocker | Public config returns no gateways and unavailable status |
+| Any method | Method passes but shipping/location/auth readiness fails | Method card keeps its method outcome; checkout overview names the separate blocker | Public config returns no gateways and unavailable status |
 
 ## UI and save contract
 
@@ -86,6 +86,42 @@ payment-session allowlist.
   after setup is opened; the collapsed state says **Open setup** instead of
   guessing.
 
+### Admin state hardening (2026-07-13)
+
+- Payment-method selection and every lazy provider form now own explicit saved
+  and draft snapshots. Provider forms expose Saved/Unsaved, Reset, no-op save
+  locks, and the shared navigation guard. A gateway status refresh preserves an
+  in-progress payment-method draft instead of replacing it with the last server
+  response.
+- A successful credential write immediately replaces submitted secret values
+  with the standard mask in browser state. The subsequent method and credential
+  reads remain authoritative; if either refresh fails, the committed write is
+  reported as saved-but-stale and the workspace offers its existing retry path.
+- Default-method fallback considers only selected, setup-complete,
+  provider-enabled methods allowed by the saved checkout flow. It cannot choose
+  a selected but unusable provider merely because that provider appears first
+  in the display order.
+- Invalid legacy flow combinations fail closed in the admin projection. A zero
+  or non-finite online advance and COD-only plus advance hide every method with
+  an exact Checkout Flow correction instead of projecting one side of a
+  contradictory policy.
+- Setup completeness is labelled **Complete**, not healthy. Configured but
+  unselected online methods say **Configured, hidden** and retain a separate
+  **Connection: Not checked** fact. COD may say **Available, hidden** because it
+  has no credential setup. None of these labels claims a provider probe.
+- Provider toggles, sandbox toggles, secret visibility buttons, setup accordions,
+  and buyer-selection labels are keyboard reachable and named. Provider cards
+  remain one column until the wider `lg` workspace breakpoint so the admin
+  sidebar cannot force two cramped cards at tablet viewport widths.
+
+The local matrix covers COD, Stripe, SSLCommerz, and Polar across missing setup,
+provider off, blocked setup, selected/hidden, flow unknown/excluded, visible,
+test/live/mixed environment, default eligibility, and every checkout mode with
+and without an advance. This proves deterministic admin projection only. It
+does not prove provider authorization, decline, timeout, delayed/duplicate
+webhook, interrupted browser recovery, capture, settlement, refund,
+reconciliation, secret rotation, or test-to-live cutover.
+
 ## Focused evidence
 
 - Admin matrix: `payment-method-outcome.test.ts`
@@ -104,6 +140,7 @@ payment-session allowlist.
 - Add coordinated credential rotation/cutover with historical refund support.
 - Execute and record the sandbox success/failure/duplicate/webhook/refund matrix
   in `COMMERCE-SETTINGS-BENCHMARK.md` for every provider before release.
-- Replace local Checkout Settings tabs with addressable authority-owned routes
-  and a dirty-navigation guard. This slice does not pretend the current mounted
-  tab strip solves that architecture gap.
+- Replace local Checkout Settings sections with separate authority-owned routes.
+  Checkout Flow and Payment now guard dirty navigation, but the current mounted
+  section strip remains an interim addressable-query workspace rather than the
+  target route split.
