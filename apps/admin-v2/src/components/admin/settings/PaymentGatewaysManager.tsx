@@ -349,6 +349,8 @@ export default function PaymentGatewaysManager() {
                         const usable = method === "cod"
                             ? true
                             : status?.usable ?? (providerEnabled && status?.configured === true);
+                        const configured = method === "cod" || status?.configured === true;
+                        const checkoutVisible = selected && methodAllowedByFlow(method) && usable;
                         const toggleDisabled = method !== "cod" && !selected && !usable;
                         return (
                             <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
@@ -362,6 +364,26 @@ export default function PaymentGatewaysManager() {
                                                     {getStatusBadge(method)}
                                                 </div>
                                                 <p className="text-xs text-muted-foreground mt-0.5 truncate">{meta.desc}</p>
+                                                <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] leading-4">
+                                                    <div className="flex items-center gap-1">
+                                                        <dt className="text-muted-foreground">Setup</dt>
+                                                        <dd className={configured ? "font-medium text-foreground" : "font-medium text-destructive"}>
+                                                            {configured ? "Ready" : "Required"}
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <dt className="text-muted-foreground">Provider</dt>
+                                                        <dd className={providerEnabled ? "font-medium text-foreground" : "font-medium text-muted-foreground"}>
+                                                            {providerEnabled ? "On" : "Off"}
+                                                        </dd>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <dt className="text-muted-foreground">Checkout</dt>
+                                                        <dd className={checkoutVisible ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                                                            {checkoutVisible ? "Visible" : "Hidden"}
+                                                        </dd>
+                                                    </div>
+                                                </dl>
                                             </div>
                                         </div>
                                         <div className="flex shrink-0 flex-col items-end gap-1">

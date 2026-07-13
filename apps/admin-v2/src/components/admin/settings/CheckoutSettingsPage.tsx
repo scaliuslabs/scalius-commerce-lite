@@ -77,12 +77,12 @@ export default function CheckoutSettingsPage() {
                 onValueChange={handleTabChange}
                 className="w-full"
             >
-                <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent p-0 h-auto flex-wrap gap-0">
+                <TabsList className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin]">
                     {tabs.map((tab) => (
                         <TabsTrigger
                             key={tab.value}
                             value={tab.value}
-                            className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground"
+                            className="shrink-0 rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground sm:px-4"
                         >
                             {tab.label}
                         </TabsTrigger>
