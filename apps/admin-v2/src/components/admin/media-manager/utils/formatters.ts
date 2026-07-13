@@ -18,9 +18,19 @@ export function formatFileType(mimeType: string): string {
     "image/png": "PNG Image",
     "image/gif": "GIF Image",
     "image/webp": "WebP Image",
-    "image/svg+xml": "SVG Image",
+    "image/avif": "AVIF Image",
+    "video/mp4": "MP4 Video",
+    "video/webm": "WebM Video",
   };
   return typeMap[mimeType] || mimeType;
+}
+
+export function formatDuration(durationMs: number | null | undefined): string | null {
+  if (!durationMs || !Number.isFinite(durationMs) || durationMs <= 0) return null;
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 export function truncateFilename(

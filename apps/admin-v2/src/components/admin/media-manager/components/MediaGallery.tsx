@@ -29,7 +29,7 @@ function Skeleton() {
 
 export function MediaGallery(props: MediaGalleryProps) {
   if (props.isLoading && !props.files.length) {
-    return <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{Array.from({ length: 15 }, (_, index) => <Skeleton key={index} />)}</div>;
+    return <ScrollArea className="h-full" aria-busy="true" aria-label="Loading media"><div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{Array.from({ length: 15 }, (_, index) => <Skeleton key={index} />)}</div></ScrollArea>;
   }
   if (!props.files.length) {
     if (props.loadError) {
@@ -54,7 +54,7 @@ export function MediaGallery(props: MediaGalleryProps) {
   return (
     <ScrollArea className="h-full">
       {props.loadError && <div className="mx-3 mt-3 flex items-center gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200" role="status"><AlertCircle className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 flex-1">Could not refresh. The previous results are still shown.</span><Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={props.onRetry}>Retry</Button></div>}
-      <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" role="list" aria-label={`${props.view === "trash" ? "Trashed" : "Ready"} media assets`}>
         {props.files.map((file) => (
           <MediaCard
             key={file.id}
@@ -70,7 +70,7 @@ export function MediaGallery(props: MediaGalleryProps) {
           />
         ))}
       </div>
-      {props.hasMore && <div className="flex justify-center pb-4"><Button type="button" size="sm" variant="outline" className="h-8" disabled={props.isLoadingMore} onClick={props.onLoadMore}>{props.isLoadingMore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Load more</Button></div>}
+      {props.hasMore && <div className="flex justify-center pb-4"><Button type="button" size="sm" variant="outline" className="h-9 sm:h-8" disabled={props.isLoadingMore} onClick={props.onLoadMore}>{props.isLoadingMore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Load more</Button></div>}
     </ScrollArea>
   );
 }

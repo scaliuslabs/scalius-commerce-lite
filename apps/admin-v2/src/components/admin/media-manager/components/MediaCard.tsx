@@ -1,5 +1,5 @@
 import { useState, type MouseEvent } from "react";
-import { Check, MoreHorizontal, Play, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Check, Eye, MoreHorizontal, Play, RotateCcw, Trash2 } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import type { LibraryMediaFile, MediaLibraryView } from "../types";
-import { formatFileSize } from "../utils";
+import { formatDuration, formatFileSize, formatFileType } from "../utils";
 
 interface MediaCardProps {
   file: LibraryMediaFile;
@@ -27,6 +27,8 @@ interface MediaCardProps {
 export function MediaCard({ file, posterUrl, selected, selectionMode, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
+  const duration = formatDuration(file.durationMs);
+  const dimensions = file.width && file.height ? `${file.width} × ${file.height}` : null;
   const previewUrl = isImage
     ? getOptimizedImageUrl(file.url, { width: 480, height: 360, fit: "contain", quality: 82 })
     : posterUrl
@@ -35,6 +37,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
 
   return (
     <article
+      role="listitem"
       className={cn(
         "group relative overflow-hidden rounded-lg border bg-card transition-colors focus-within:border-foreground/40",
         selected && "border-primary ring-1 ring-primary",
@@ -75,19 +78,19 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
         </div>
         <div className="px-2.5 py-2">
           <p className="truncate text-[13px] font-medium" title={file.filename}>{file.filename}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="capitalize">{file.kind}</span><span aria-hidden="true">·</span><span>{formatFileSize(file.size)}</span>
+          <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="shrink-0">{formatFileType(file.mimeType).replace(/ (Image|Video)$/, "")}</span><span aria-hidden="true">·</span><span className="shrink-0">{formatFileSize(file.size)}</span>{(duration || dimensions) && <><span aria-hidden="true">·</span><span className="truncate">{duration ?? dimensions}</span></>}
           </p>
         </div>
       </button>
 
-      <div className="absolute right-1.5 top-1.5 flex gap-1">
-        <Button type="button" variant="secondary" size="icon" className="h-7 w-7 bg-background/90" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
-          <Search className="h-3.5 w-3.5" />
+      {!selectionMode && <div className="absolute right-1.5 top-1.5 flex gap-1">
+        <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
+          <Eye className="h-3.5 w-3.5" />
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="secondary" size="icon" className="h-7 w-7 bg-background/90" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
+            <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
@@ -102,7 +105,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </div>}
     </article>
   );
 }
