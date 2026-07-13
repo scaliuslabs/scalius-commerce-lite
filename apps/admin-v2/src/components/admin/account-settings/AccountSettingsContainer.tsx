@@ -1,6 +1,11 @@
 import { useEffect } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Shield, KeyRound, MonitorSmartphone, Users, ShieldPlus } from "lucide-react";
+import {
+  KeyRound,
+  MonitorSmartphone,
+  Shield,
+  ShieldPlus,
+  Users,
+} from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { RolesManagement } from "../RolesManagement";
@@ -53,87 +58,90 @@ export function AccountSettings({
     }
   }, [activeSection, onSectionChange, section]);
 
+  const personalSections = [
+    { value: "security" as const, label: "Two-factor", icon: Shield },
+    { value: "password" as const, label: "Password", icon: KeyRound },
+    { value: "sessions" as const, label: "Sessions", icon: MonitorSmartphone },
+  ];
+  const storeSections = [
+    ...(canViewTeam
+      ? [{ value: "team" as const, label: "Administrators", icon: Users }]
+      : []),
+    ...(canManageRoles
+      ? [{ value: "roles" as const, label: "Roles", icon: ShieldPlus }]
+      : []),
+  ];
+
+  const renderSection = () => {
+    if (activeSection === "password") return <ChangePasswordForm />;
+    if (activeSection === "sessions") return <AccountSessions />;
+    if (activeSection === "team" && canViewTeam) {
+      return <AdminUsersManager currentUserId={user.id} />;
+    }
+    if (activeSection === "roles" && canManageRoles) return <RolesManagement />;
+    return <TwoFactorSetup user={user} />;
+  };
+
+  const renderNavigationItem = ({
+    value,
+    label,
+    icon: Icon,
+  }: (typeof personalSections)[number] | (typeof storeSections)[number]) => {
+    const active = value === activeSection;
+
+    return (
+      <button
+        key={value}
+        type="button"
+        aria-current={active ? "page" : undefined}
+        onClick={() => onSectionChange(value)}
+        className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:w-full lg:justify-start ${
+          active
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        }`}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+        {label}
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-4 pb-8">
       <ProfileHeader user={user} />
 
-      <Tabs
-        value={activeSection}
-        onValueChange={(value) => onSectionChange(value as AccountSection)}
-        className="space-y-4"
-      >
-        <div className="rounded-xl border bg-card p-2">
-          <TabsList
-            aria-label="Account settings sections"
-            className="grid h-auto w-full grid-cols-1 gap-2 bg-transparent p-0 sm:grid-cols-2"
-          >
-            <div className="min-w-0 rounded-lg bg-muted/35 p-1" role="presentation">
-              <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
+        <nav
+          aria-label="Account settings"
+          className="min-w-0 rounded-xl border bg-card p-2 lg:sticky lg:top-4"
+        >
+          <div className="overflow-x-auto pb-1 lg:overflow-visible lg:pb-0">
+            <div className="flex min-w-max gap-1 lg:min-w-0 lg:flex-col">
+              <p className="flex items-center px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:block lg:px-3 lg:pb-1 lg:pt-2 lg:text-[11px]">
                 Personal
               </p>
-              <div className="grid grid-cols-1 gap-1 sm:grid-cols-3" role="presentation">
-                <TabsTrigger value="security" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
-                  <Shield className="h-4 w-4" />
-                  Two-factor
-                </TabsTrigger>
-                <TabsTrigger value="password" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
-                  <KeyRound className="h-4 w-4" />
-                  Password
-                </TabsTrigger>
-                <TabsTrigger value="sessions" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
-                  <MonitorSmartphone className="h-4 w-4" />
-                  Sessions
-                </TabsTrigger>
-              </div>
-            </div>
-            {(canViewTeam || canManageRoles) && (
-              <div className="min-w-0 rounded-lg bg-muted/35 p-1" role="presentation">
-                <p className="px-2 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {personalSections.map(renderNavigationItem)}
+              {storeSections.length > 0 && (
+                <div
+                  className="mx-1 w-px shrink-0 bg-border lg:my-2 lg:h-px lg:w-auto"
+                  aria-hidden="true"
+                />
+              )}
+              {storeSections.length > 0 && (
+                <p className="flex items-center px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground lg:block lg:px-3 lg:pb-1 lg:pt-1 lg:text-[11px]">
                   Store access
                 </p>
-                <div className="grid grid-cols-2 gap-1" role="presentation">
-                  {canViewTeam && (
-                    <TabsTrigger value="team" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
-                      <Users className="h-4 w-4" />
-                      Administrators
-                    </TabsTrigger>
-                  )}
-                  {canManageRoles && (
-                    <TabsTrigger value="roles" className="min-h-11 justify-start gap-2 px-2.5 text-sm data-[state=active]:bg-background data-[state=active]:shadow-none sm:min-h-9">
-                      <ShieldPlus className="h-4 w-4" />
-                      Roles
-                    </TabsTrigger>
-                  )}
-                </div>
-              </div>
-            )}
-          </TabsList>
-        </div>
+              )}
+              {storeSections.map(renderNavigationItem)}
+            </div>
+          </div>
+        </nav>
 
-        <TabsContent value="security" className="mt-0 space-y-4">
-          <TwoFactorSetup user={user} />
-        </TabsContent>
-
-        <TabsContent value="password" className="mt-0 max-w-3xl space-y-4">
-          <ChangePasswordForm />
-        </TabsContent>
-
-        <TabsContent value="sessions" className="mt-0 space-y-4">
-          <AccountSessions />
-        </TabsContent>
-
-        {canViewTeam && (
-          <TabsContent value="team" className="mt-0 space-y-4">
-            <AdminUsersManager currentUserId={user.id} />
-          </TabsContent>
-        )}
-
-        {canManageRoles && (
-          <TabsContent value="roles" className="mt-0 space-y-4">
-            <RolesManagement />
-          </TabsContent>
-        )}
-      </Tabs>
+        <section className="min-w-0" aria-live="polite">
+          {renderSection()}
+        </section>
+      </div>
     </div>
   );
 }

@@ -12,6 +12,17 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
+import {
   Loader2,
   Shield,
   ShieldCheck,
@@ -122,9 +133,16 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     try {
       await setVerifiedMethod(selectedMethod, verificationCode);
 
-      setStep("backup");
       setIsEnabled(true);
       setCurrentMethod(selectedMethod);
+      if (backupCodes.length > 0) {
+        setStep("backup");
+      } else {
+        setShowSetup(false);
+        setStep("method");
+        setPassword("");
+        setVerificationCode("");
+      }
       refreshAdminContext();
       toast.success(
         setupMode === "change"
@@ -180,14 +198,21 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     }
   };
 
-  const handleChangeToEmail = async () => {
+  const handleSetupEmailForChange = async () => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const result = await authClient.twoFactor.sendOtp();
-      if (result?.error) {
-        setError(result.error.message || "Failed to send verification code");
+      const passwordResult = await authClient.twoFactor.enable({ password });
+      if (passwordResult.error) {
+        setError(passwordResult.error.message || "Password confirmation failed");
+        return;
+      }
+      setBackupCodes(passwordResult.data?.backupCodes || []);
+
+      const otpResult = await authClient.twoFactor.sendOtp();
+      if (otpResult?.error) {
+        setError(otpResult.error.message || "Failed to send verification code");
         return;
       }
       setStep("verify");
@@ -239,9 +264,13 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     }
   };
 
-  const copyBackupCodes = () => {
-    navigator.clipboard.writeText(backupCodes.join("\n"));
-    toast.success("Backup codes copied to clipboard");
+  const copyBackupCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(backupCodes.join("\n"));
+      toast.success("Recovery codes copied");
+    } catch {
+      toast.error("Could not copy recovery codes");
+    }
   };
 
   // Generate QR code locally as data URI after the TOTP setup flow needs it.
@@ -307,15 +336,15 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
           </CardTitle>
           <CardDescription>
             {setupMode === "disable"
-              ? "Enter your password to confirm"
+              ? "Confirm your password before changing this security requirement."
               : setupMode === "change"
-                ? "Choose your preferred verification method"
-                : "Add an extra layer of security to your account"}
+                ? "Verify a replacement method before the current method changes."
+                : "Choose and verify the method used when you sign in."}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0">
           {error && (
-            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -323,63 +352,49 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
           {step === "method" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label="Verification method">
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("totp")}
-                  className={`min-h-24 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "totp"
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50 hover:border-muted-foreground/20"
+                  aria-pressed={selectedMethod === "totp"}
+                  className={`min-h-16 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "totp"
+                    ? "border-foreground bg-muted/55"
+                    : "hover:border-muted-foreground/40 hover:bg-muted/30"
                     }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${selectedMethod === "totp" ? "bg-primary/10" : "bg-muted"
-                      }`}>
-                      <Smartphone className={`h-5 w-5 ${selectedMethod === "totp" ? "text-primary" : "text-muted-foreground"}`} />
-                    </div>
+                    <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <div>
                       <p className="font-medium">Authenticator app</p>
-                      <p className="text-xs text-muted-foreground">Google Authenticator, Authy</p>
+                      <p className="text-xs text-muted-foreground">Time-based code; works offline</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    More secure. Works offline.
-                  </p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedMethod("email")}
-                  className={`min-h-24 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "email"
-                    ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50 hover:border-muted-foreground/20"
+                  aria-pressed={selectedMethod === "email"}
+                  className={`min-h-16 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedMethod === "email"
+                    ? "border-foreground bg-muted/55"
+                    : "hover:border-muted-foreground/40 hover:bg-muted/30"
                     }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${selectedMethod === "email" ? "bg-primary/10" : "bg-muted"
-                      }`}>
-                      <Mail className={`h-5 w-5 ${selectedMethod === "email" ? "text-primary" : "text-muted-foreground"}`} />
-                    </div>
+                    <Mail className="h-5 w-5 shrink-0 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">Email</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                      <p className="font-medium">Email code</p>
+                      <p className="break-all text-xs text-muted-foreground">Sent to {user.email}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-3">
-                    More convenient. No app needed.
-                  </p>
                 </button>
               </div>
               <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <Button
                   onClick={() => {
-                    if (setupMode === "change" && selectedMethod === "email") {
-                      handleChangeToEmail();
-                    } else {
-                      setStep("password");
-                    }
+                    setStep("password");
                   }}
                   disabled={isLoading}
-                  className="min-h-10 sm:order-2 sm:flex-none"
+                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Continue
@@ -388,7 +403,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   variant="outline"
                   onClick={() => { setShowSetup(false); resetState(); }}
                   disabled={isLoading}
-                  className="min-h-10"
+                  className="min-h-11 sm:min-h-9"
                 >
                   Cancel
                 </Button>
@@ -408,23 +423,59 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   disabled={isLoading}
+                  className="min-h-11 sm:min-h-9"
                   autoFocus
                 />
               </div>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button
-                  onClick={() => {
-                    if (setupMode === "disable") handleDisable2FA();
-                    else if (setupMode === "change" && selectedMethod === "totp") handleSetupTotpForChange();
-                    else handleEnable2FA();
-                  }}
-                  disabled={isLoading || !password}
-                  variant={setupMode === "disable" ? "destructive" : "default"}
-                  className="min-h-10 sm:order-2 sm:flex-none"
-                >
-                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {setupMode === "disable" ? "Disable 2FA" : "Continue"}
-                </Button>
+                {setupMode === "disable" ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        disabled={isLoading || !password}
+                        variant="destructive"
+                        className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
+                      >
+                        Turn off two-factor
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="max-w-sm">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Turn off two-factor authentication?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This account will return to setup required. Admin access may be restricted until a method is verified again.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel className="min-h-11 sm:min-h-9">Keep enabled</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="min-h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90 sm:min-h-9"
+                          onClick={() => void handleDisable2FA()}
+                        >
+                          Turn off two-factor
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      if (setupMode === "change" && selectedMethod === "totp") {
+                        handleSetupTotpForChange();
+                      } else if (setupMode === "change") {
+                        handleSetupEmailForChange();
+                      } else {
+                        handleEnable2FA();
+                      }
+                    }}
+                    disabled={isLoading || !password}
+                    className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
+                  >
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Continue
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -432,7 +483,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                     else { setShowSetup(false); resetState(); }
                   }}
                   disabled={isLoading}
-                  className="min-h-10"
+                  className="min-h-11 sm:min-h-9"
                 >
                   Back
                 </Button>
@@ -462,7 +513,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => setStep("verify")} className="min-h-10 w-full">
+              <Button onClick={() => setStep("verify")} className="min-h-11 w-full sm:min-h-9">
                 I scanned the code
               </Button>
             </div>
@@ -497,7 +548,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                     else handleVerify2FA();
                   }}
                   disabled={isLoading || verificationCode.length !== 6}
-                  className="min-h-10 sm:order-2 sm:flex-none"
+                  className="min-h-11 sm:order-2 sm:min-h-9 sm:flex-none"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Verify
@@ -505,7 +556,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 <Button
                   variant="outline"
                   onClick={() => setStep(selectedMethod === "totp" ? "qr" : "password")}
-                  className="min-h-10"
+                  className="min-h-11 sm:min-h-9"
                 >
                   Back
                 </Button>
@@ -516,7 +567,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   variant="link"
                   onClick={handleResendOtp}
                   disabled={isLoading}
-                  className="w-full text-sm"
+                  className="min-h-11 w-full text-sm sm:min-h-9"
                 >
                   Didn't receive the code? Resend
                 </Button>
@@ -526,14 +577,14 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
 
           {step === "backup" && backupCodes.length > 0 && (
             <div className="space-y-4">
-              <div role="status" className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground">
+              <div role="status" className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-foreground">
                 <Check className="h-4 w-4 flex-shrink-0" />
                 <span>Two-factor authentication is enabled.</span>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label>Recovery codes</Label>
-                  <Button variant="ghost" size="sm" onClick={copyBackupCodes}>
+                  <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void copyBackupCodes()}>
                     <Copy className="h-4 w-4 mr-1" />
                     Copy
                   </Button>
@@ -551,7 +602,7 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                   </div>
                 </div>
               </div>
-              <Button onClick={() => { setShowSetup(false); resetState(); }} className="min-h-10 w-full">
+              <Button onClick={() => { setShowSetup(false); resetState(); }} className="min-h-11 w-full sm:min-h-9">
                 Done
               </Button>
             </div>
@@ -574,19 +625,19 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
         </CardTitle>
         <CardDescription>
           {isEnabled
-            ? "Your account is protected with an extra layer of security"
-            : "Protect your account with two-factor authentication"}
+            ? "A verified second step is required when this account signs in."
+            : "Admin accounts must verify a second sign-in method."}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-4 pt-0">
         {isEnabled ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border bg-background">
                 {currentMethod === "totp" ? (
-                  <Smartphone className="h-5 w-5 text-primary" />
+                  <Smartphone className="h-4 w-4 text-muted-foreground" />
                 ) : (
-                  <Mail className="h-5 w-5 text-primary" />
+                  <Mail className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -595,40 +646,40 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
                 </p>
                 <p className="break-words text-sm text-muted-foreground">
                   {currentMethod === "totp"
-                    ? "Using authenticator app for verification"
+                    ? "Time-based codes from an authenticator app"
                     : `Codes sent to ${user.email}`}
                 </p>
               </div>
-              <ShieldCheck className="h-5 w-5 shrink-0 text-primary" />
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">On</span>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => startSetup("change")} className="flex-1">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => startSetup("change")} className="min-h-11 flex-1 sm:min-h-9">
                 Change method
               </Button>
               <Button
                 variant="outline"
                 onClick={() => startSetup("disable")}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive sm:min-h-9"
               >
-                Disable
+                Turn off
               </Button>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                <AlertCircle className="h-5 w-5 text-destructive" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-destructive/25 bg-background">
+                <AlertCircle className="h-4 w-4 text-destructive" />
               </div>
               <div>
-                <p className="font-medium text-foreground">2FA required</p>
+                <p className="font-medium text-foreground">Setup required</p>
                 <p className="text-sm text-muted-foreground">
-                  Two-factor authentication is required for admin accounts
+                  Verify a method before this account is considered ready.
                 </p>
               </div>
             </div>
-            <Button onClick={() => startSetup("enable")} className="min-h-10 shrink-0">
-              Enable 2FA
+            <Button onClick={() => startSetup("enable")} className="min-h-11 shrink-0 sm:min-h-9">
+              Set up two-factor
             </Button>
           </div>
         )}

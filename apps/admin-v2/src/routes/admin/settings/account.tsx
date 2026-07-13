@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin/settings/account")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(accountSecurityQueryOptions());
   },
-  head: () => ({ meta: [{ title: "My account | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Account | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: AccountSettingsPage,
 });
@@ -50,9 +50,9 @@ function AccountSettingsPage() {
   return (
     <div className="mx-auto max-w-6xl">
       <div className="mb-4">
-        <h1 className="text-xl font-semibold tracking-tight">My account</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Account</h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Manage your profile, sign-in security, and store access.
+          Manage your identity, sign-in security, and store access.
         </p>
       </div>
 

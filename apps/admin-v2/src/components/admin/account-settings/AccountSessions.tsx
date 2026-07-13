@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Laptop,
   Loader2,
+  LockKeyhole,
   LogOut,
   MonitorSmartphone,
   RefreshCw,
@@ -72,7 +73,7 @@ function SessionDeviceIcon({ type }: { type: AccountSession["deviceType"] }) {
 
 function AccountSessionsLoading() {
   return (
-    <div className="divide-y" aria-label="Loading active sessions">
+    <div className="divide-y" role="status" aria-label="Loading active sessions">
       {[0, 1].map((item) => (
         <div key={item} className="flex items-center gap-3 p-4">
           <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -142,7 +143,12 @@ function AccountSessionRow({
         </div>
       </div>
 
-      {!session.current && (
+      {session.current ? (
+        <div className="col-start-2 flex min-h-9 items-center gap-1.5 justify-self-start text-xs font-medium text-muted-foreground sm:col-start-3 sm:row-start-1 sm:justify-self-end">
+          <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />
+          Protected
+        </div>
+      ) : (
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
@@ -321,7 +327,7 @@ export function AccountSessions() {
         {sessionsQuery.isPending ? (
           <AccountSessionsLoading />
         ) : sessionsQuery.error ? (
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div role="alert" className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
               <AlertCircle
                 className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
@@ -330,7 +336,7 @@ export function AccountSessions() {
               <div>
                 <p className="text-sm font-medium">Sessions are unavailable</p>
                 <p className="text-xs text-muted-foreground">
-                  Nothing was changed. Retry to load the current session authority.
+                  Device access cannot be changed until the session list loads.
                 </p>
               </div>
             </div>
@@ -350,11 +356,27 @@ export function AccountSessions() {
             </Button>
           </div>
         ) : sessions.length === 0 ? (
-          <div className="p-6 text-center">
-            <p className="text-sm font-medium">No active session was returned</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Refresh this page before changing account security settings.
-            </p>
+          <div role="alert" className="flex flex-col items-center gap-3 p-6 text-center">
+            <div>
+              <p className="text-sm font-medium">No active session was returned</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Retry before changing device access.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => void sessionsQuery.refetch()}
+              disabled={sessionsQuery.isFetching}
+            >
+              <RefreshCw
+                className={sessionsQuery.isFetching ? "animate-spin" : ""}
+                aria-hidden="true"
+              />
+              Retry
+            </Button>
           </div>
         ) : (
           <>

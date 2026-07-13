@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
 import {
   Check,
   Loader2,
   Pencil,
   Shield,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   Upload,
@@ -93,13 +95,12 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
       const updatedImage =
         result.user?.image === undefined ? image || "" : result.user.image || "";
 
-      toast.success("Profile updated successfully");
+      toast.success("Profile saved");
       setSavedName(updatedName);
       setSavedImage(updatedImage);
       setName(updatedName);
       setImage(updatedImage);
       setIsEditing(false);
-      // Refresh to update header with updated user info
       void refreshAdminRouteContext(router);
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to update profile"));
@@ -117,10 +118,9 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   return (
     <Card className="rounded-xl shadow-none">
       <CardContent className="p-4">
-        <div className="grid gap-3 sm:grid-cols-[72px_minmax(0,1fr)] sm:items-center">
-          {/* Avatar */}
-          <div className="relative h-16 w-16">
-            <div className="h-16 w-16 overflow-hidden rounded-full border bg-muted">
+        <div className="grid gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-center">
+          <div className="relative h-12 w-12">
+            <div className="h-12 w-12 overflow-hidden rounded-full border bg-muted">
               {image ? (
                 <img
                   src={image}
@@ -130,8 +130,8 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                   decoding="async"
                 />
               ) : (
-                <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                  <span className="text-lg font-semibold text-primary">
+                <div className="flex h-full w-full items-center justify-center bg-muted">
+                  <span className="text-sm font-semibold text-foreground">
                     {getInitials(name)}
                   </span>
                 </div>
@@ -152,8 +152,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             )}
           </div>
 
-          {/* User Info */}
-          <div className="min-w-0 space-y-3">
+          <div className="min-w-0 space-y-2.5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1 space-y-1.5">
                 {isEditing ? (
@@ -171,7 +170,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                         handleCancel();
                       }
                     }}
-                    className="h-10 max-w-xl text-base font-semibold"
+                    className="min-h-11 max-w-xl text-base font-semibold sm:min-h-9"
                     placeholder="Display name"
                     aria-label="Display name"
                     autoFocus
@@ -182,21 +181,24 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 <p className="break-words text-sm text-muted-foreground">{user.email}</p>
               </div>
 
-              <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                {user.role === "admin" && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
-                    <Shield className="h-3 w-3" />
-                    Administrator
-                  </span>
-                )}
-                {user.twoFactorEnabled && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 sm:min-h-9 sm:justify-end">
+                <Badge variant="outline" className="gap-1 font-normal">
+                  <Shield className="h-3 w-3" />
+                  {user.role === "admin" ? "Administrator" : "Admin account"}
+                </Badge>
+                {user.twoFactorEnabled ? (
+                  <Badge variant="secondary" className="gap-1 font-normal">
                     <ShieldCheck className="h-3 w-3" />
-                    2FA
-                  </span>
+                    2FA on
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="gap-1 font-normal">
+                    <ShieldAlert className="h-3 w-3" />
+                    2FA setup required
+                  </Badge>
                 )}
                 <div
-                  className="flex min-h-10 flex-wrap items-center gap-2"
+                  className="flex min-h-11 flex-wrap items-center gap-2 sm:min-h-9"
                   data-profile-edit-actions
                 >
                   {!isEditing ? (
@@ -204,7 +206,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="min-h-10 sm:min-h-8"
+                      className="min-h-11 sm:min-h-9"
                       onClick={() => setIsEditing(true)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -216,7 +218,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="min-h-10 sm:min-h-8"
+                        className="min-h-11 sm:min-h-9"
                         onClick={handleCancel}
                         disabled={isLoading}
                       >
@@ -226,7 +228,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                       <Button
                         type="button"
                         size="sm"
-                        className="min-h-10 sm:min-h-8"
+                        className="min-h-11 sm:min-h-9"
                         onClick={handleSave}
                         disabled={isLoading || !hasChanges}
                       >
@@ -243,8 +245,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex min-h-10 flex-wrap items-center gap-2 border-t pt-3 sm:border-t-0 sm:pt-0">
+            <div className="flex min-h-11 flex-wrap items-center gap-2 border-t pt-2.5 sm:min-h-9 sm:border-t-0 sm:pt-0">
               <MediaManager
                 capability="image"
                 onSelect={handleImageSelect}
@@ -254,7 +255,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="min-h-10 shrink-0 shadow-none after:shadow-none sm:min-h-8"
+                    className="min-h-11 shrink-0 shadow-none after:shadow-none sm:min-h-9"
                   >
                     <Upload className="h-3.5 w-3.5" />
                     {image ? "Change photo" : "Add photo"}
@@ -266,7 +267,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="min-h-10 text-destructive hover:text-destructive sm:min-h-8"
+                  className="min-h-11 text-destructive hover:text-destructive sm:min-h-9"
                   onClick={removeImage}
                   disabled={isLoading}
                 >
