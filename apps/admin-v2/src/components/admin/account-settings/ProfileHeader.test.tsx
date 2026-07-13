@@ -171,7 +171,7 @@ describe("ProfileHeader display-name editing", () => {
     );
     expect(
       saveButton.closest("[data-profile-edit-actions]")?.className,
-    ).toContain("min-h-8");
+    ).toContain("min-h-10");
   });
 
   it("restores the prior display name on cancel without saving", () => {

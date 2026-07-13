@@ -115,13 +115,12 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   };
 
   return (
-    <Card className="overflow-hidden rounded-lg shadow-sm">
-      <div className="h-16 border-b bg-[linear-gradient(135deg,hsl(var(--primary)/0.12),hsl(var(--muted)/0.28)_52%,transparent)]" />
-      <CardContent className="relative px-4 pb-5 pt-0 sm:px-5">
-        <div className="grid gap-4 sm:grid-cols-[104px_minmax(0,1fr)]">
+    <Card className="rounded-xl shadow-none">
+      <CardContent className="p-4">
+        <div className="grid gap-3 sm:grid-cols-[72px_minmax(0,1fr)] sm:items-center">
           {/* Avatar */}
-          <div className="relative -mt-10 h-24 w-24">
-            <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-background bg-muted shadow-lg">
+          <div className="relative h-16 w-16">
+            <div className="h-16 w-16 overflow-hidden rounded-full border bg-muted">
               {image ? (
                 <img
                   src={image}
@@ -132,7 +131,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 />
               ) : (
                 <div className="h-full w-full flex items-center justify-center bg-primary/10">
-                  <span className="text-2xl font-semibold text-primary">
+                  <span className="text-lg font-semibold text-primary">
                     {getInitials(name)}
                   </span>
                 </div>
@@ -143,7 +142,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full shadow-md"
+                className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full"
                 onClick={removeImage}
                 title="Remove photo"
                 aria-label="Remove profile photo"
@@ -154,8 +153,8 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
           </div>
 
           {/* User Info */}
-          <div className="-mt-1 min-w-0 space-y-4 sm:mt-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1 space-y-1.5">
                 {isEditing ? (
                   <Input
@@ -172,18 +171,18 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                         handleCancel();
                       }
                     }}
-                    className="h-10 max-w-xl text-lg font-semibold"
+                    className="h-10 max-w-xl text-base font-semibold"
                     placeholder="Display name"
                     aria-label="Display name"
                     autoFocus
                   />
                 ) : (
-                  <h2 className="truncate text-xl font-semibold">{name}</h2>
+                  <h2 className="truncate text-base font-semibold">{name}</h2>
                 )}
-                <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+                <p className="break-all text-sm text-muted-foreground">{user.email}</p>
               </div>
 
-              <div className="flex min-h-8 shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+              <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 {user.role === "admin" && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
                     <Shield className="h-3 w-3" />
@@ -191,13 +190,13 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                   </span>
                 )}
                 {user.twoFactorEnabled && (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                     <ShieldCheck className="h-3 w-3" />
                     2FA
                   </span>
                 )}
                 <div
-                  className="flex min-h-8 flex-wrap items-center gap-2"
+                  className="flex min-h-10 flex-wrap items-center gap-2"
                   data-profile-edit-actions
                 >
                   {!isEditing ? (
@@ -205,7 +204,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8"
+                      className="min-h-10 sm:min-h-8"
                       onClick={() => setIsEditing(true)}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -217,7 +216,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8"
+                        className="min-h-10 sm:min-h-8"
                         onClick={handleCancel}
                         disabled={isLoading}
                       >
@@ -227,7 +226,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                       <Button
                         type="button"
                         size="sm"
-                        className="h-8"
+                        className="min-h-10 sm:min-h-8"
                         onClick={handleSave}
                         disabled={isLoading || !hasChanges}
                       >
@@ -245,7 +244,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             </div>
 
             {/* Actions */}
-            <div className="flex min-h-8 flex-wrap items-center gap-2">
+            <div className="flex min-h-10 flex-wrap items-center gap-2 border-t pt-3 sm:border-t-0 sm:pt-0">
               <MediaManager
                 capability="image"
                 onSelect={handleImageSelect}
@@ -255,7 +254,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 shrink-0 shadow-none after:shadow-none"
+                    className="min-h-10 shrink-0 shadow-none after:shadow-none sm:min-h-8"
                   >
                     <Upload className="h-3.5 w-3.5" />
                     {image ? "Change photo" : "Add photo"}
@@ -267,7 +266,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 text-destructive hover:text-destructive"
+                  className="min-h-10 text-destructive hover:text-destructive sm:min-h-8"
                   onClick={removeImage}
                   disabled={isLoading}
                 >

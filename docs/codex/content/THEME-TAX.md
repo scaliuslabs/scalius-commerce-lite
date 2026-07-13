@@ -64,8 +64,9 @@ coverage, and route-backed tab/search state remain follow-up work.
 - The saved value is one sanitized `storefront_colors` object. The storefront
   injects approved CSS custom-property overrides; unsafe keys/values are
   rejected and relevant caches invalidate.
-- The admin exposes five palettes and 17 individual color cards with a small
-  synthetic product preview. It tracks dirty state locally.
+- The admin exposes five palettes and the 17 allowlisted tokens through paired
+  semantic rows. It tracks dirty state locally and shows a token map without
+  pretending that admin markup is a storefront preview.
 - Theme and Hero remain separate authorities. Theme controls allowlisted color
   tokens; Hero controls viewport media, alternative text, destination, order,
   and visibility through its own revision. Carousel overlay contrast is not
@@ -77,9 +78,9 @@ coverage, and route-backed tab/search state remain follow-up work.
 2. “Theme” controls colors only. Typography, type scale, radius, container
    width, button/input density, card treatment, product-card choices, and
    header/footer presentation are scattered or hard-coded.
-3. Seventeen raw tokens are too low-level for most merchants and consume large
-   space. Foreground pairs can be saved without contrast guidance; the preview
-   is not the real storefront and cannot reveal inaccessible combinations.
+3. Seventeen raw tokens remain too low-level for most merchants, even though
+   paired semantic rows now make the current authority more understandable.
+   The real storefront preview still requires a durable presentation draft.
 4. Reset stages an empty object without explaining the effective defaults or
    showing the before/after scope. Load/save errors are page-level text and do
    not preserve/reconcile another editor's version.
@@ -117,13 +118,23 @@ coverage, and route-backed tab/search state remain follow-up work.
 - A stale publish returns 409 before cache invalidation. The admin preserves the
   local draft, fetches the latest revision, and lets the merchant explicitly
   load that saved version or review and republish the retained draft.
-- The color workspace is palette-first, keeps raw semantic tokens in collapsed
-  advanced disclosure, shows published revision/dirty state in a persistent
-  publish bar, and disables all mutations without `settings.general.edit`.
+- The color workspace is palette-first, groups background/foreground authority
+  into dense semantic pairs, shows published revision/dirty state in a
+  persistent publish bar, and disables all mutations without
+  `settings.general.edit`.
+- Essential opaque-hex text pairs are checked against a 4.5:1 contrast floor
+  before publish. Unsupported values are diagnosed at their field through the
+  same shared sanitizer contract as the API. Functional CSS colors remain
+  safe but explicitly unscored until the shared semantic color engine can
+  normalize them.
+- The misleading synthetic product preview and hard-coded light color-picker
+  popover were removed. Native compact pickers work in light/dark mode, and a
+  semantic token map makes the narrow scope of this editor explicit.
 
 This slice deliberately does not claim the larger semantic theme system is
-finished. Typography, density, radius, real-route isolated previews, automated
-contrast enforcement, publish history, and rollback remain follow-up work.
+finished. Typography, density, radius, real-route isolated previews, full
+functional-color contrast normalization, publish history, and rollback remain
+follow-up work.
 
 ## Shared UI direction
 
