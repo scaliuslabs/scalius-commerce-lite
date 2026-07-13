@@ -60,6 +60,8 @@ the current category revision, product aggregate revision, collection version,
 theme revision, or hero revision. A 409 is reported as a conflict and is never
 blindly retried. Every command is re-read and verified after a nominal success,
 and later dependent phases stop when an earlier phase conflicts.
+The staged-only executor refuses active non-retained products, collections, or
+heroes until the explicit quarantine lifecycle has deactivated them.
 
 Product creation uses stable request-scoped option/value/SKU/media association
 IDs, starts inactive, and writes optioned initial stock through the existing

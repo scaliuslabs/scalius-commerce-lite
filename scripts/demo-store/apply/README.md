@@ -17,6 +17,9 @@ never bypassed by the orchestrator.
   activation command, including products found inactive after an interrupted
   earlier run. Retained Rider and Halo preserve their lifecycle and operational
   SKU authority.
+- The older staged-only executor now refuses any active non-retained product,
+  collection, or hero instead of updating a public resource without first
+  running this quarantine lifecycle.
 - Existing active collections and heroes are revision-deactivated before their
   desired configuration is staged. They reactivate only after catalog
   publication dependencies have completed.
