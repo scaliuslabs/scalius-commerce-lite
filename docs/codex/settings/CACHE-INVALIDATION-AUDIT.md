@@ -42,7 +42,7 @@ It does not mean the setting has no consequence.
 | Theme `/settings/theme` | semantic storefront presentation document | `layout` | layout/theme consumers; HTML version | `/` | `site-cache-invalidation.test.ts` |
 | Media delivery `/settings/media` | CDN URL/host policy used by layout/homepage rendering | `media` (`api:storefront:layout`, `api:storefront:homepage`) | layout/homepage; HTML version | `/` | `site-cache-invalidation.test.ts` |
 | SEO, discovery, return policy `/settings/seo` | `/api/v1/seo`, canonical/schema policy, robots, sitemaps, Google/Meta feeds, homepage metadata | `homepage`, `layout`, `discovery` (`api:seo:*` fence included) | SEO, feed and sitemap families; HTML version | `/`, robots, sitemap index/children, both feeds | `site-cache-invalidation.test.ts`, `cache-invalidation.test.ts` |
-| Storefront URL `/settings/storefront-url` | canonical URLs, preview links, schema/discovery origins, gateway URL helper | `homepage`, `layout`, `discovery`; `gw:site_settings` plus isolate URL key | layout/SEO/feed/sitemap; HTML version | same discovery set as SEO | `site-cache-invalidation.test.ts` |
+| Storefront URL `/settings/storefront-url` | canonical URLs, preview links, schema/discovery origins, gateway URL helper | `homepage`, `layout`, `discovery`; explicit cleanup of `gw:site_settings` and `gw:storefront_url` | layout/SEO/feed/sitemap; HTML version | same discovery set as SEO | `site-cache-invalidation.test.ts`, `settings.service.test.ts` |
 | Hero sliders `/settings/hero-sliders/**` | homepage hero projection | `homepage` | hero/homepage; HTML version | `/` | `hero-sliders-cache-invalidation.test.ts` |
 | Analytics scripts `/admin/analytics/**` | global analytics injection | `layout` | analytics/layout; HTML version | `/` | `analytics.test.ts` |
 | Meta CAPI settings `/settings/meta-conversions` | browser analytics injection and API event dispatch | `layout`; successful save also clears the CAPI circuit marker | analytics/layout; HTML version | `/` | `meta-conversions-admin.test.ts` |
@@ -52,7 +52,7 @@ It does not mean the setting has no consequence.
 | Customer auth + WhatsApp `/settings/auth` | checkout readiness, OTP policy/provider configuration | `checkout`; legacy site-settings cache cleanup | `checkout_config` generation | none | `system-cache-invalidation.test.ts` |
 | Email provider `/settings/email` | notification dispatch and customer-sign-in checkout readiness | `checkout` after any committed field update | `checkout_config` generation | none | `system-cache-invalidation.test.ts` |
 | SMS provider `/settings/sms` | SMS dispatch and customer-sign-in checkout readiness | dispatch reads authoritative D1 settings for every send; save invalidates `checkout` | `checkout_config` generation | none | `sms-settings.test.ts`, `sms-cache-invalidation.test.ts` |
-| Firebase `/settings/firebase` | admin push dispatch and public `/auth/firebase-config` | —; public config and service account are direct D1 reads. The local `layoutCache` key is compatibility cleanup only | — | none | `system-cache-invalidation.test.ts`, Firebase integration tests |
+| Firebase `/settings/firebase` | admin push dispatch and public `/auth/firebase-config` | —; public config and service account are direct D1 reads. Shared OAuth tokens are keyed by a credential fingerprint so rotations cannot reuse an old token | — | none | `system-cache-invalidation.test.ts`, `firebase/admin.test.ts` |
 | Customer/admin notification channels `/settings/notification-channels/**` | order notification outbox/dispatch | —; dispatch reads D1 policy and provider-health rows | — | none | `notification-channels.test.ts` |
 | Payment methods + Stripe/SSLCommerz/Polar `/settings/{payment-methods,stripe,sslcommerz,polar}` | public checkout gateways/readiness and payment runtime | provider-specific cache invalidator + `checkout` | `checkout_config` generation | none | `payments.test.ts`, `cache-invalidation.test.ts` |
 | Shipping methods `/settings/shipping-methods/**` | checkout methods, cart/checkout SSR reads, Product Offer shippingDetails JSON-LD | `checkout`, `product-schema`; shipping-method API prefix | checkout generations + product page family; HTML version | `/` | `shipping-cache-invalidation.test.ts`, `cache-invalidation.test.ts` |
@@ -95,5 +95,31 @@ It does not mean the setting has no consequence.
    isolate handling the save while a warm queue consumer kept the old provider.
    Dispatch now reads and decrypts authoritative D1 settings for every send;
    the regression test proves two sends perform two reads.
+5. Storefront URL saves cleared `gw:site_settings` but not the separately read
+   `gw:storefront_url` key. Gateway URL helpers could therefore retain the old
+   origin for up to five minutes. Saves now best-effort clear both keys after
+   the D1 commit.
+6. Firebase shared OAuth tokens were keyed only by project ID. Rotating a
+   service-account private key inside the same project could reuse the previous
+   credential's token until its 55-minute TTL expired. Token keys now include a
+   non-reversible SHA-256 credential fingerprint; a rotated credential cannot
+   address the old token.
+7. `SETTINGS_CACHE_DEPENDENCIES` is now the typed route-level inventory for all
+   32 settings/configuration mutation surfaces. Its regression test requires
+   every shared projection to name valid groups and every empty group list to
+   declare an authoritative-read, credential-scoped, or cache-operation
+   boundary.
+
+## Remaining boundary notes
+
+- The Partytown allowlist uses a D1 commit followed by a best-effort write to
+  `security:csp_allowed_domains`; public storefront CSP separately reads the
+  D1-backed `/storefront/csp` projection and is covered by the layout purge.
+  The Partytown KV replica remains eventually consistent across Cloudflare
+  locations and has no durable retry outbox today.
+- Gateway in-memory credential caches remain per isolate, but checkout config,
+  session creation, webhook verification, refunds, and readiness all use the
+  documented bypass reads at provider boundaries. Removing those bypasses
+  requires a different cross-isolate invalidation design.
 
 No API response contract or database schema changed in this audit.

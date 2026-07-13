@@ -9,7 +9,7 @@ import {
   encryptCredentials,
 } from "../../utils/credential-encryption";
 
-interface ServiceAccount {
+export interface ServiceAccount {
   client_email: string;
   private_key: string;
   project_id: string;
@@ -44,6 +44,28 @@ function getProjectCachePrefix(env: Record<string, unknown>): string {
   return typeof prefix === "string" && prefix.trim()
     ? prefix.trim()
     : "scalius";
+}
+
+async function serviceAccountCacheFingerprint(
+  serviceAccount: ServiceAccount,
+): Promise<string> {
+  const material = new TextEncoder().encode(JSON.stringify([
+    serviceAccount.project_id,
+    serviceAccount.client_email,
+    serviceAccount.private_key,
+  ]));
+  const digest = await crypto.subtle.digest("SHA-256", material);
+  return Array.from(new Uint8Array(digest).slice(0, 12), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+export async function getFirebaseAccessTokenCacheKey(
+  env: Record<string, unknown>,
+  serviceAccount: ServiceAccount,
+): Promise<string> {
+  const fingerprint = await serviceAccountCacheFingerprint(serviceAccount);
+  return `${getProjectCachePrefix(env)}:fcm_access_token:${serviceAccount.project_id}:${fingerprint}`;
 }
 
 async function readCachedAccessToken(
@@ -410,7 +432,13 @@ export class FCMMessagingService {
       return this.accessTokenCache.token;
     }
 
-    const cacheKey = `${getProjectCachePrefix(this.env)}:fcm_access_token:${this.projectId}`;
+    // Scope the reusable OAuth token to the exact service-account credential.
+    // Project-only keys can reuse an old token after private-key rotation in a
+    // warm Worker/colo for the full token TTL.
+    const cacheKey = await getFirebaseAccessTokenCacheKey(
+      this.env,
+      this.serviceAccount,
+    );
     const cache = this.env.SHARED_AUTH_CACHE as KVNamespace | undefined;
     const encryptionKey = getCredentialEncryptionKey(this.env);
 

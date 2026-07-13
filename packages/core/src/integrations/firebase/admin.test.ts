@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FCMMessagingService } from "./admin";
+import {
+  FCMMessagingService,
+  getFirebaseAccessTokenCacheKey,
+} from "./admin";
 import { decryptCredentials } from "../../utils/credential-encryption";
 
 const credentialKey = Buffer.alloc(32, 23).toString("base64");
@@ -118,7 +121,11 @@ describe("FCMMessagingService", () => {
       },
     });
 
-    expect(cache.get).toHaveBeenCalledWith("test:fcm_access_token:scalius-test");
+    const expectedCacheKey = await getFirebaseAccessTokenCacheKey(
+      { PROJECT_CACHE_PREFIX: "test" },
+      JSON.parse(serviceAccountJson),
+    );
+    expect(cache.get).toHaveBeenCalledWith(expectedCacheKey);
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(maxActiveRequests).toBe(2);
     expect(sentTokens).toEqual(["token-1", "bad-token", "token-3", "token-4"]);
@@ -184,7 +191,10 @@ describe("FCMMessagingService", () => {
       { expirationTtl: number },
     ]>;
     const [cacheKey, storedValue, options] = putCalls[0] ?? [];
-    expect(cacheKey).toBe("test:fcm_access_token:scalius-test");
+    expect(cacheKey).toBe(await getFirebaseAccessTokenCacheKey(
+      { PROJECT_CACHE_PREFIX: "test" },
+      JSON.parse(signableServiceAccountJson),
+    ));
     expect(storedValue).toMatch(/^enc:/);
     expect(storedValue).not.toContain("fresh-oauth-token");
     await expect(
@@ -199,6 +209,21 @@ describe("FCMMessagingService", () => {
         }),
       }),
     );
+  });
+
+  it("rotates the shared token cache key with service-account credentials", async () => {
+    const base = JSON.parse(serviceAccountJson);
+    const first = await getFirebaseAccessTokenCacheKey(
+      { PROJECT_CACHE_PREFIX: "test" },
+      base,
+    );
+    const rotated = await getFirebaseAccessTokenCacheKey(
+      { PROJECT_CACHE_PREFIX: "test" },
+      { ...base, private_key: "rotated-private-key" },
+    );
+
+    expect(first).toMatch(/^test:fcm_access_token:scalius-test:[0-9a-f]{24}$/);
+    expect(rotated).not.toBe(first);
   });
 
   it("does not persist OAuth access tokens to KV when credential encryption is unavailable", async () => {

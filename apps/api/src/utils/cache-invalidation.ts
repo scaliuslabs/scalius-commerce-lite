@@ -312,6 +312,55 @@ export const CATALOG_CACHE_GROUPS = {
 
 export type CatalogCacheDomain = keyof typeof CATALOG_CACHE_GROUPS;
 
+export type SettingsCacheStrategy =
+  | "shared-projection"
+  | "authoritative-read"
+  | "credential-scoped"
+  | "cache-operation";
+
+export interface SettingsCacheDependencyDef {
+  path: string;
+  groups: readonly string[];
+  strategy: SettingsCacheStrategy;
+  note: string;
+}
+
+/** Every merchant-settings mutation surface and its shared-cache policy. */
+export const SETTINGS_CACHE_DEPENDENCIES = {
+  currency: { path: "/api/v1/admin/settings/currency", groups: ["layout", "checkout"], strategy: "shared-projection", note: "Layout currency and checkout totals." },
+  header: { path: "/api/v1/admin/settings/header", groups: ["layout"], strategy: "shared-projection", note: "Global storefront header." },
+  footer: { path: "/api/v1/admin/settings/footer", groups: ["layout"], strategy: "shared-projection", note: "Global storefront footer." },
+  navigation: { path: "/api/v1/admin/navigation", groups: ["layout"], strategy: "shared-projection", note: "Header and footer menu trees." },
+  business: { path: "/api/v1/admin/settings/business", groups: ["layout"], strategy: "shared-projection", note: "Public business and schema identity." },
+  theme: { path: "/api/v1/admin/settings/theme", groups: ["layout"], strategy: "shared-projection", note: "Global storefront presentation." },
+  media: { path: "/api/v1/admin/settings/media", groups: ["media"], strategy: "shared-projection", note: "Layout/homepage image policy." },
+  seo: { path: "/api/v1/admin/settings/seo", groups: ["homepage", "layout", "discovery"], strategy: "shared-projection", note: "Metadata, discovery and schema." },
+  storefrontUrl: { path: "/api/v1/admin/settings/storefront-url", groups: ["homepage", "layout", "discovery"], strategy: "shared-projection", note: "Discovery origins plus gw:storefront_url." },
+  heroSliders: { path: "/api/v1/admin/settings/hero-sliders", groups: ["homepage"], strategy: "shared-projection", note: "Homepage hero." },
+  analytics: { path: "/api/v1/admin/analytics", groups: ["layout"], strategy: "shared-projection", note: "Browser analytics injection." },
+  metaConversions: { path: "/api/v1/admin/settings/meta-conversions", groups: ["layout"], strategy: "shared-projection", note: "Browser readiness; dispatch reads D1." },
+  security: { path: "/api/v1/admin/settings/security", groups: ["layout"], strategy: "shared-projection", note: "CSP projections and Partytown write-through." },
+  allowedCountries: { path: "/api/v1/admin/settings/allowed-countries", groups: ["checkout"], strategy: "shared-projection", note: "Checkout phone-country policy." },
+  checkoutFlow: { path: "/api/v1/admin/settings/checkout-flow", groups: ["checkout"], strategy: "shared-projection", note: "Buyer checkout flow." },
+  customerAuth: { path: "/api/v1/admin/settings/auth", groups: ["checkout"], strategy: "shared-projection", note: "Customer sign-in readiness." },
+  email: { path: "/api/v1/admin/settings/email", groups: ["checkout"], strategy: "shared-projection", note: "Sign-in readiness; dispatch reads D1." },
+  sms: { path: "/api/v1/admin/settings/sms", groups: ["checkout"], strategy: "shared-projection", note: "Sign-in readiness; dispatch reads D1." },
+  firebase: { path: "/api/v1/admin/settings/firebase", groups: [], strategy: "credential-scoped", note: "D1 settings; OAuth KV key includes credential fingerprint." },
+  notificationChannels: { path: "/api/v1/admin/settings/notification-channels", groups: [], strategy: "authoritative-read", note: "Dispatch resolves D1 policy." },
+  paymentMethods: { path: "/api/v1/admin/settings/payment-methods", groups: ["checkout"], strategy: "shared-projection", note: "Buyer payment allowlist." },
+  stripe: { path: "/api/v1/admin/settings/stripe", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
+  sslcommerz: { path: "/api/v1/admin/settings/sslcommerz", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
+  polar: { path: "/api/v1/admin/settings/polar", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
+  shippingMethods: { path: "/api/v1/admin/settings/shipping-methods", groups: ["checkout", "product-schema"], strategy: "shared-projection", note: "Checkout and Product shippingDetails." },
+  deliveryLocations: { path: "/api/v1/admin/settings/delivery-locations", groups: ["checkout"], strategy: "shared-projection", note: "Checkout location hierarchy." },
+  deliveryProviders: { path: "/api/v1/admin/settings/delivery-providers", groups: ["checkout"], strategy: "shared-projection", note: "Delivery readiness; fulfillment reads D1." },
+  checkoutLanguages: { path: "/api/v1/admin/settings/checkout-languages", groups: ["checkout"], strategy: "shared-projection", note: "Checkout labels and fields." },
+  tax: { path: "/api/v1/admin/taxes", groups: ["checkout"], strategy: "shared-projection", note: "Checkout/order tax authority." },
+  customerRequests: { path: "/api/v1/admin/settings/customer-requests", groups: [], strategy: "authoritative-read", note: "Private eligibility reads D1." },
+  fraud: { path: "/api/v1/admin/fraud-checker", groups: [], strategy: "authoritative-read", note: "Risk lookup reads D1." },
+  cacheOperations: { path: "/api/v1/cache", groups: [], strategy: "cache-operation", note: "Purges/replays mutate cache state, not merchant facts." },
+} as const satisfies Record<string, SettingsCacheDependencyDef>;
+
 export interface CatalogCacheInvalidationOptions {
   htmlPaths?: readonly string[];
 }

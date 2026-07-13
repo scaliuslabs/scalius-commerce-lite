@@ -173,6 +173,7 @@ export async function getCurrencyConfig(
 // ─────────────────────────────────────────
 
 const SITE_SETTINGS_CACHE_KEY = "gw:site_settings";
+const STOREFRONT_URL_CACHE_KEY = "gw:storefront_url";
 
 /**
  * Returns the full siteSettings row (contains headerConfig, footerConfig, storefrontUrl, etc.)
@@ -219,6 +220,27 @@ export async function invalidateSiteSettingsCache(kv?: KVNamespace | null): Prom
         await kv.delete(SITE_SETTINGS_CACHE_KEY);
     } catch (e: unknown) {
         console.warn("[Settings] KV delete failed for site_settings:", e instanceof Error ? e.message : e);
+    }
+}
+
+/**
+ * Invalidate the separately cached storefront URL used by gateway URL helpers.
+ *
+ * This is intentionally distinct from `gw:site_settings`: readers of
+ * `getStorefrontBaseUrl()` do not consult the site-settings cache, so clearing
+ * only that broader row can leave URL generation stale for five minutes.
+ */
+export async function invalidateStorefrontUrlCache(
+    kv?: KVNamespace | null,
+): Promise<void> {
+    if (!kv) return;
+    try {
+        await kv.delete(STOREFRONT_URL_CACHE_KEY);
+    } catch (e: unknown) {
+        console.warn(
+            "[Settings] KV delete failed for storefront_url:",
+            e instanceof Error ? e.message : e,
+        );
     }
 }
 
