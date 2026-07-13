@@ -9,25 +9,25 @@ current first-party brand terms, and a fresh asset review remain authoritative.
 
 ## Release decision
 
-Official does not mean freely reusable. A logo visible on a provider website,
-in an app, or in an asset pack is still governed by that provider's trademark
-and brand terms. Scalius must not download marks from aggregators, redraw them,
-or infer permission from an integration relationship.
+The product owner explicitly authorized Scalius to ship current first-party
+provider artwork in direct integration settings and to remove it if a provider
+later objects. That authorization does not make website artwork public domain;
+it is an implementation decision. Assets must still come from the provider's
+own newsroom, brand kit, or website, remain unmodified, and be traceable so a
+single provider can be removed without redesigning settings.
 
-No provider asset is currently checked into the admin application. The source
-asset inventory contains only Scalius artwork and country flags. This audit
-therefore does not import a mark. Neutral Lucide glyphs and text labels remain
-the safe presentation until an exact first-party asset, applicable permission,
-and an asset manifest are committed together.
+The first adoption is now source-controlled in
+`apps/admin-v2/public/provider-marks/` and registered by
+`provider-marks.tsx`: Stripe's current newsroom wordmark, Polar's current
+brand-pack logomark, SSLCommerz's own website logo, Cloudflare's current press
+kit logo, and Resend's current brand-kit icon. The registry records source,
+terms page, retrieval date, intended surface, minimum rendered size, and SHA-256;
+its focused test proves every local asset and digest. Provider names remain real
+text and readiness stays separate from brand identity.
 
-One current implementation is not an acceptable neutral fallback:
-`payment-gateway-utils.tsx` calls four hand-drawn inline SVGs gateway “logos.”
-The Stripe drawing imitates a protected mark; the SSLCommerz and Polar drawings
-are invented identities; and all three can be mistaken for approved provider
-artwork. Replace the Stripe, SSLCommerz, and Polar drawings with plainly generic
-payment glyphs before adding any official asset. Cash on Delivery is a Scalius
-commerce concept rather than a third-party mark, so its banknote glyph may stay
-after it is renamed from `CODLogo` to a semantic icon.
+The prior hand-drawn Stripe, SSLCommerz, and Polar SVGs were removed. Cash on
+Delivery is a Scalius commerce concept rather than a third-party mark and now
+uses a semantic `CODIcon` instead of claiming to be a provider logo.
 
 Priority meanings:
 
@@ -41,10 +41,10 @@ Priority meanings:
 
 | Provider | Current mark and exact code location | First-party asset availability and constraints | Safe implementation decision | Priority |
 | --- | --- | --- | --- | --- |
-| Stripe | Hand-drawn purple inline SVG named `StripeLogo`; `apps/admin-v2/src/components/admin/settings/payment-gateway-utils.tsx:35-43,69-76` | [Stripe's Mark Usage Terms](https://stripe.com/legal/marks) permit marks only to truthfully describe the directly related Stripe service, forbid alteration, prominence, endorsement implications, and uses outside the stated context. The current drawing is not a supplied asset. | Replace the drawing with a neutral card/payment glyph now. Later vendor an unmodified current Stripe asset with the direct integration-card use recorded in the manifest; keep “Stripe” as text and do not imply connection health. | **P0** |
-| SSLCommerz | Invented green lock/bag SVG named `SSLCommerzLogo`; `apps/admin-v2/src/components/admin/settings/payment-gateway-utils.tsx:45-50,69-76` | The reviewed [SSLCommerz developer site](https://developer.sslcommerz.com/) identifies the gateway but no applicable public integration-card asset license or mark-use rules were found. Website artwork is not a license. | Replace the invented identity with a neutral payment-terminal glyph. Keep text until SSLCommerz supplies written permission and approved light/dark artwork. Do not show bKash or Nagad marks merely because the aggregator may process them. | **P0** |
-| Polar | Invented purple lightning SVG named `PolarLogo`; `apps/admin-v2/src/components/admin/settings/payment-gateway-utils.tsx:52-58,69-76` | [Polar Brand](https://polar.sh/brand) supplies icon/wordmark assets, black/white use, one-icon-height clear space, and a 16 px minimum. [Polar Master Services Terms](https://polar.sh/legal/master-services-terms) grant the contracting supplier a limited right to place then-current Polar marks for using Polar Checkout, subject to brand guidance; that clause does not automatically prove Scalius may bundle the mark for every merchant. | Replace the invented mark with a neutral digital-payment glyph first. Use a later exact asset only after the Scalius/platform distribution context is covered by written permission or the applicable contract, with the terms and asset revision in the manifest. | **P0** |
-| Cash on Delivery | Scalius-authored banknote SVG named `CODLogo`; `apps/admin-v2/src/components/admin/settings/payment-gateway-utils.tsx:60-67,69-76` | Not a third-party brand; no provider permission is needed. | Keep a generic cash/banknote identity, but rename it to `CODIcon` and keep it visually neutral so the code does not claim it is a vendor logo. | **P1** |
+| Stripe | Official current Blurple wordmark from Stripe's newsroom logo kit, rendered beside the provider name through `OfficialProviderMark` | [Stripe's Mark Usage Terms](https://stripe.com/legal/marks) permit truthful direct-service references and prohibit alteration or endorsement implications. | Implemented for the direct Stripe configuration card; byte and source are recorded in the manifest. | **Done** |
+| SSLCommerz | Current transparent wordmark served by `sslcommerz.com`, rendered beside provider text | The reviewed [SSLCommerz developer site](https://developer.sslcommerz.com/) identifies the gateway; the asset source remains the provider's own site. | Implemented under the product-owner authorization. Do not add bKash/Nagad marks merely because the gateway can process them. | **Done** |
+| Polar | Exact black/white logomarks from Polar's current brand pack | [Polar Brand](https://polar.sh/brand) requires monochrome use, clear space, and a 16 px minimum. | Implemented with separate light/dark files and a 32 px container. | **Done** |
+| Cash on Delivery | Neutral Lucide banknote in `CODIcon` | Not a third-party brand; no provider permission is needed. | Implemented as a commerce concept, not a vendor logo. | **Done** |
 
 ## Delivery providers
 
@@ -82,8 +82,8 @@ generic settings/activity glyphs in
 | Provider | Current mark and exact code location | First-party asset availability and constraints | Safe implementation decision | Priority |
 | --- | --- | --- | --- | --- |
 | Firebase Cloud Messaging | Text plus neutral `RadioTower` tab/status glyphs; `apps/admin-v2/src/routes/admin/settings/notifications.tsx:1-3,49-80`; no provider art in `apps/admin-v2/src/components/admin/settings/FirebaseSettingsForm.tsx:1-20` | [Firebase Brand Guidelines](https://firebase.google.com/brand-guidelines) provide assets but say the standard lockup may not be used in a product, prohibit misleading prominence/alteration, and set a 24 px minimum. The page does not clearly grant this commercial settings-card use for a standalone logomark. | Keep neutral push/radio glyphs and the full provider name. Do not import the standard lockup into product UI. | **P2** |
-| Cloudflare Email | Generic Lucide `Cloud`; `apps/admin-v2/src/components/admin/settings/EmailSettingsForm.tsx:98-113,135-158,178-203` | Cloudflare logo requires written permission under the same trademark rules above. | Keep the generic cloud and text. | **P2** |
-| Resend | Generic Lucide `Send`; `apps/admin-v2/src/components/admin/settings/EmailSettingsForm.tsx:98-113,159-173` | [Resend Brand Kit](https://resend.com/brand) supplies current black/white SVG/PNG icon and wordmark assets and says not to alter them. | This is a good first official-asset candidate after an asset manifest exists. Vendor both official light/dark icon variants; keep “Resend” as adjacent text and use the mark decoratively. | **P1** |
+| Cloudflare Email | Official current Cloudflare press-kit wordmark in the provider summary and selector | Cloudflare publishes the asset through its [press kit](https://www.cloudflare.com/press/press-kit/); its trademark page remains recorded in the manifest. | Implemented under the product-owner authorization, unmodified and beside provider text. | **Done** |
+| Resend | Official current black/white icon from the [Resend Brand Kit](https://resend.com/brand) in the provider summary and selector | Resend supplies both variants and says not to alter them. | Implemented with exact theme variants and adjacent text. | **Done** |
 | Meta WhatsApp Cloud API | Text and readiness glyphs only; `apps/admin-v2/src/components/admin/settings/AuthSettingsBuilder.tsx:583-665` | [WhatsApp Brand Guidelines](https://www.meta.com/brand/resources/whatsapp/whatsapp-brand/) provide an official pack subject to acceptance, require current official resources, prohibit modification/endorsement implications, and allow scaling when the mark is not the most prominent feature. | Eligible for a reviewed future exact WhatsApp mark in the provider header, not a Meta company or Facebook mark. Record acceptance/retrieval and keep the text label. | **P1** |
 | SMS.net.bd | Text-only selector; `apps/admin-v2/src/components/admin/settings/AuthSettingsBuilder.tsx:708-770` | The reviewed provider site/API materials do not publish an applicable integration-card asset license. | Keep text and a neutral message glyph if the future shared component requires one. | **P2** |
 | BDBulkSMS / GreenWeb | Text-only selector; `apps/admin-v2/src/components/admin/settings/AuthSettingsBuilder.tsx:731-793` | The current UI links the first-party token surface, but no applicable public brand-asset permission was found. | Keep text; do not copy the website logo. | **P2** |
@@ -115,9 +115,9 @@ response keys into a logo strip without a separate source/permission review.
 
 ## Asset and component contract
 
-Do not add a shared `ProviderMark` component until the same change adds at least
-one compliant official asset. A registry containing only invented marks would
-make the current problem harder to see.
+`OfficialProviderMark` is now the shared renderer for adopted first-party assets.
+Do not add a provider to it without adding the immutable local asset and complete
+manifest evidence in the same change.
 
 Each approved asset must have a checked-in manifest entry containing:
 
@@ -158,13 +158,10 @@ The rendering component must enforce these rules:
 
 ## Implementation order
 
-1. **P0 payment cleanup:** replace the invented Stripe, SSLCommerz, and Polar
-   SVGs with neutral payment glyphs; rename `Logo` types/variables to `Icon`;
-   add a source-boundary test that rejects inline components named as provider
-   logos unless their asset path exists in the approved manifest.
-2. **P1 provider-mark foundation:** add the manifest and one accessible shared
-   renderer. Start only with an exact Resend asset or another mark whose current
-   rules and intended surface are unambiguous.
+1. **Completed payment cleanup:** the invented Stripe, SSLCommerz, and Polar
+   SVGs are gone; official local assets and a semantic COD icon now render.
+2. **Completed provider-mark foundation:** the typed manifest, accessible
+   renderer, local assets, theme variants, source evidence, and digest test exist.
 3. **P1 reviewed candidates:** assess exact Polar, Stripe, and WhatsApp assets
    in their direct configuration surfaces, including dark mode, compact sizing,
    text adjacency, and permission evidence. Do not include Google Analytics at
