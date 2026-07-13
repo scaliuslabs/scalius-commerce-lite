@@ -130,7 +130,7 @@ describe("calculateTaxQuote", () => {
         expect(quote.totalMinor).toBe(11_500);
     });
 
-    it("applies compound rates in priority then stable id order", () => {
+    it("applies compound rates across ascending priority layers", () => {
         const quote = calculateTaxQuote(input({
             rates: [
                 rate({ id: "rate-second", rateBps: 500, priority: 20, isCompound: true }),
@@ -145,6 +145,39 @@ describe("calculateTaxQuote", () => {
             { id: "rate-second", amount: 550 },
         ]);
         expect(quote.taxMinor).toBe(1_550);
+    });
+
+    it("treats equal-priority rates as one layer instead of compounding by opaque id order", () => {
+        const quote = calculateTaxQuote(input({
+            rates: [
+                rate({ id: "z-compound", rateBps: 500, priority: 10, isCompound: true }),
+                rate({ id: "a-standard", rateBps: 1_000, priority: 10 }),
+            ],
+        }));
+        expect(quote.lines[0]?.components.map((component) => ({
+            id: component.rateId,
+            amount: component.amountMinor,
+        }))).toEqual([
+            { id: "a-standard", amount: 1_000 },
+            { id: "z-compound", amount: 500 },
+        ]);
+        expect(quote.taxMinor).toBe(1_500);
+    });
+
+    it("extracts inclusive equal-priority layers without hidden same-layer compounding", () => {
+        const quote = calculateTaxQuote(input({
+            settings: { ...input().settings, pricesIncludeTax: true },
+            lines: [{ ...input().lines[0]!, unitPriceMinor: 11_500 }],
+            rates: [
+                rate({ id: "z-compound", rateBps: 500, priority: 10, isCompound: true }),
+                rate({ id: "a-standard", rateBps: 1_000, priority: 10 }),
+            ],
+        }));
+        expect(quote.lines[0]).toMatchObject({
+            taxableAmountMinor: 10_000,
+            taxMinor: 1_500,
+            totalMinor: 11_500,
+        });
     });
 
     it("matches only the configured destination scopes while allowing layered all-scope rates", () => {
