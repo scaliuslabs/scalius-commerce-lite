@@ -298,10 +298,32 @@ export function SeoSettingsBuilder() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]">
+      <aside className="order-first min-w-0 xl:order-last xl:sticky xl:top-4">
+        <SeoDiscoveryStatusCard
+          discovery={values.discovery}
+          robotsTxt={values.robotsTxt}
+          businessIdentity={businessIdentity}
+          hasStoreLogo={hasStoreLogo}
+        />
+      </aside>
+
+      <div className="min-w-0 space-y-5">
+        <section className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="flex items-start gap-3 border-b border-border px-4 py-3">
+            <Search className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Search appearance</h3>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Set the fallback title and homepage summary shown to buyers and search engines.
+                Products, categories, and pages can override them.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-4 p-4">
+            <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="site-title">Global Site Title</Label>
+          <Label htmlFor="site-title">Fallback site title</Label>
           <Input
             id="site-title"
             value={values.siteTitle}
@@ -315,13 +337,13 @@ export function SeoSettingsBuilder() {
               max={70}
             />
           )}
-          <p className="text-xs text-muted-foreground">
-            Default title for your site. Keep it concise and descriptive.
+          <p className="text-xs leading-5 text-muted-foreground">
+            Used only when a public resource has no specific title.
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="homepage-title">Homepage Title</Label>
+          <Label htmlFor="homepage-title">Homepage title</Label>
           <Input
             id="homepage-title"
             value={values.homepageTitle}
@@ -335,15 +357,15 @@ export function SeoSettingsBuilder() {
               max={70}
             />
           )}
-          <p className="text-xs text-muted-foreground">
-            Title shown in browser tabs and search results for your homepage.
+          <p className="text-xs leading-5 text-muted-foreground">
+            Shown in the homepage browser tab and search result.
           </p>
         </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="homepage-meta-description">
-          Homepage Meta Description
+          Homepage search summary
         </Label>
         <Textarea
           id="homepage-meta-description"
@@ -363,14 +385,12 @@ export function SeoSettingsBuilder() {
         )}
       </div>
 
-      <Alert variant="default">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Title Usage</AlertTitle>
-        <AlertDescription>
-          Individual pages, products, and categories can override these global
-          settings with their own meta titles.
-        </AlertDescription>
-      </Alert>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Describe the store plainly; search engines may choose different text when it
+              better matches a buyer’s query.
+            </p>
+          </div>
+        </section>
 
       <div className="rounded-lg border border-border">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -789,28 +809,23 @@ export function SeoSettingsBuilder() {
         </div>
       </div>
 
-      <SeoDiscoveryStatusCard
-        discovery={values.discovery}
-        robotsTxt={values.robotsTxt}
-        businessIdentity={businessIdentity}
-        hasStoreLogo={hasStoreLogo}
-      />
-
-      <div className="space-y-2">
-        <Label htmlFor="robots-txt">robots.txt Content</Label>
-        <Textarea
-          id="robots-txt"
-          value={values.robotsTxt}
-          onChange={(e) => updateField("robotsTxt", e.target.value)}
-          placeholder={`User-agent: *\nAllow: /`}
-          rows={6}
-          className="font-mono text-sm"
-        />
-        <p className="text-xs text-muted-foreground">
-          Crawler rules only. Sitemap lines are managed by the Advertise
-          sitemap URL switch and normalized to the current Store URL.
-        </p>
-      </div>
+        <section className="rounded-lg border border-border bg-background p-4">
+          <div className="space-y-2">
+            <Label htmlFor="robots-txt">Additional robots.txt rules</Label>
+            <Textarea
+              id="robots-txt"
+              value={values.robotsTxt}
+              onChange={(e) => updateField("robotsTxt", e.target.value)}
+              placeholder={`User-agent: *\nAllow: /`}
+              rows={6}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs leading-5 text-muted-foreground">
+              Add crawler allow or disallow rules only. Sitemap lines are managed by the
+              Advertise sitemap URL switch and normalized to the current Store URL.
+            </p>
+          </div>
+        </section>
 
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
@@ -824,9 +839,10 @@ export function SeoSettingsBuilder() {
               Saving...
             </>
           ) : (
-            "Save SEO Settings"
+            "Save discovery settings"
           )}
         </Button>
+      </div>
       </div>
     </div>
   );

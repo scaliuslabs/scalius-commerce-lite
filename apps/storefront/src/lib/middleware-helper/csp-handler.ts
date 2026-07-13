@@ -1,5 +1,9 @@
 // src/lib/middleware-helper/csp-handler.ts
 import { withEdgeCache, CACHE_TTL } from "../edge-cache";
+import {
+  normalizePlatformOrigin,
+  parseMerchantCspSources,
+} from "@scalius/shared/security-csp";
 
 /**
  * Parse additional domains from CSP_ALLOWED environment variable
@@ -14,6 +18,9 @@ interface CspEnv {
   CSP_ALLOWED?: string;
   PUBLIC_API_BASE_URL?: string;
   CDN_DOMAIN_URL?: string;
+  R2_PUBLIC_URL?: string;
+  STOREFRONT_URL?: string;
+  BETTER_AUTH_URL?: string;
   [key: string]: unknown;
 }
 
@@ -22,7 +29,8 @@ interface CspEnv {
 const EMPTY_CSP_DATA = { cspAllowedDomains: "" };
 
 async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
-  let additionalDomains = (env?.CSP_ALLOWED || process.env.CSP_ALLOWED)?.trim() || "";
+  let additionalDomains =
+    (env?.CSP_ALLOWED || process.env.CSP_ALLOWED)?.trim() || "";
   try {
     const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
     if (apiUrl) {
@@ -33,7 +41,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
             const url = `${apiUrl}/api/v1/storefront/csp`;
             const response = await fetch(url, {
               headers: {
-                "Accept": "application/json"
+                Accept: "application/json",
               },
               signal: AbortSignal.timeout(4000),
             });
@@ -45,7 +53,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
               // and we don't re-fetch on every single request
               return EMPTY_CSP_DATA;
             }
-            const json = await response.json() as {
+            const json = (await response.json()) as {
               cspAllowedDomains?: string;
               data?: { cspAllowedDomains?: string };
             };
@@ -58,7 +66,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
             return EMPTY_CSP_DATA;
           }
         },
-        { ttlSeconds: CACHE_TTL.SHORT }
+        { ttlSeconds: CACHE_TTL.SHORT },
       );
 
       if (cachedData?.cspAllowedDomains) {
@@ -73,16 +81,7 @@ async function parseAdditionalDomains(env?: CspEnv): Promise<string[]> {
     return [];
   }
 
-  return additionalDomains
-    .split(",")
-    .map((domain: string) => domain.trim())
-    .filter((domain: string) => domain.length > 0)
-    .flatMap((domain: string) => {
-      // Remove protocol if present
-      const cleanDomain = domain.replace(/^https?:\/\//, "");
-      // Add both the domain and its wildcard subdomain
-      return [`https://${cleanDomain}`, `https://*.${cleanDomain}`];
-    });
+  return parseMerchantCspSources(additionalDomains);
 }
 
 // Define essential hardcoded CSP directives that should never be configurable
@@ -93,18 +92,11 @@ const ESSENTIAL_SCRIPT_SRC = [
   "data:",
 ];
 
-const ESSENTIAL_CONNECT_SRC = [
-  "'self'",
-];
+const ESSENTIAL_CONNECT_SRC = ["'self'"];
 
 const ESSENTIAL_FRAME_SRC = ["'self'"];
 
-const ESSENTIAL_IMG_SRC = [
-  "'self'",
-  "data:",
-  "https:",
-  "blob:",
-];
+const ESSENTIAL_IMG_SRC = ["'self'", "data:", "https:", "blob:"];
 
 const ESSENTIAL_WORKER_SRC = [
   "'self'",
@@ -150,8 +142,15 @@ function getScriptSrcDirectives(additionalDomains: string[]): string[] {
 }
 
 // Generate connect-src directives
-function getConnectSrcDirectives(additionalDomains: string[], env?: CspEnv): string[] {
-  const apiUrl = (env?.PUBLIC_API_BASE_URL || import.meta.env.PUBLIC_API_BASE_URL || "")?.trim();
+function getConnectSrcDirectives(
+  additionalDomains: string[],
+  env?: CspEnv,
+): string[] {
+  const apiUrl = (
+    env?.PUBLIC_API_BASE_URL ||
+    import.meta.env.PUBLIC_API_BASE_URL ||
+    ""
+  )?.trim();
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
@@ -162,13 +161,8 @@ function getConnectSrcDirectives(additionalDomains: string[], env?: CspEnv): str
     ...additionalDomains,
   ];
 
-  if (apiUrl) {
-    // Preserve original protocol — local dev uses http://, production uses https://
-    directives.push(apiUrl);
-    const host = apiUrl.replace(/^https?:\/\//, "");
-    // Wildcard for subdomains (always https in production)
-    directives.push(`https://*.${host}`);
-  }
+  const apiOrigin = normalizePlatformOrigin(apiUrl);
+  if (apiOrigin) directives.push(apiOrigin);
 
   return directives;
 }
@@ -187,7 +181,11 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
 }
 
 // Generate img-src directives
-function getImgSrcDirectives(additionalDomains: string[], platformDomains: string[], localDevSources: string[]): string[] {
+function getImgSrcDirectives(
+  additionalDomains: string[],
+  platformDomains: string[],
+  localDevSources: string[],
+): string[] {
   return [
     ...ESSENTIAL_IMG_SRC,
     "https://www.facebook.com", // Facebook Pixel noscript tag
@@ -220,36 +218,30 @@ function getPlatformDomains(env?: CspEnv): string[] {
     const raw = (env?.[key] as string | undefined)?.trim();
     if (!raw) continue;
 
-    try {
-      const hasScheme = /^https?:\/\//.test(raw);
-      if (hasScheme) {
-        const parsed = new URL(raw);
-        urls.push(parsed.origin);
-        urls.push(`${parsed.protocol}//*.${parsed.hostname}`);
-      } else {
-        // Bare domain (e.g. CDN_DOMAIN_URL = "cloud.scalius.com")
-        urls.push(`https://${raw}`, `https://*.${raw}`);
-      }
-    } catch {
-      urls.push(`https://${raw}`, `https://*.${raw}`);
-    }
+    const origin = normalizePlatformOrigin(raw);
+    if (origin) urls.push(origin);
   }
 
-  return urls;
+  return [...new Set(urls)];
 }
 
 /**
  * Applies Content Security Policy (CSP) headers to a given Response object.
  * All platform domains derived from env vars — no hardcoded URLs.
  */
-export async function setPageCspHeader(response: Response, env?: CspEnv): Promise<Response> {
+export async function setPageCspHeader(
+  response: Response,
+  env?: CspEnv,
+): Promise<Response> {
   const additionalDomains = await parseAdditionalDomains(env);
   const platformDomains = getPlatformDomains(env);
 
   // Dev mode detection — allow http://localhost in dev, never in production
   const apiUrl = (env?.PUBLIC_API_BASE_URL || "")?.trim();
   const isDev = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
-  const localDevSources = isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : [];
+  const localDevSources = isDev
+    ? ["http://localhost:*", "http://127.0.0.1:*"]
+    : [];
 
   const cspDirectives = [
     `script-src ${getScriptSrcDirectives(additionalDomains).join(" ")}`,
@@ -263,6 +255,9 @@ export async function setPageCspHeader(response: Response, env?: CspEnv): Promis
     "frame-ancestors 'self'",
   ];
 
-  response.headers.set("Content-Security-Policy", [...new Set(cspDirectives)].join("; "));
+  response.headers.set(
+    "Content-Security-Policy",
+    [...new Set(cspDirectives)].join("; "),
+  );
   return response;
 }

@@ -73,11 +73,58 @@ source audit found these concrete shared-contract violations:
   and recovery codes untouched when setup is abandoned. Initial enrollment
   remains a separate Better Auth flow; unchallenged method switching is rejected
   once enrollment is established.
+- Security origins must become structured entries, not one comma-delimited
+  field. The effective policy should show platform-inherited storefront, API,
+  dashboard, and configured CDN origins separately from merchant additions;
+  inherited origins are trusted automatically when their canonical settings are
+  valid and must not be copied into mutable merchant text.
+- SEO needs an outcome-first workspace for canonical/discovery readiness,
+  sitemap and feed inclusion, schema prerequisites, return-policy truth, and
+  cache freshness. Each control must preview the exact public consequence and
+  retain the existing fail-closed discovery invariants.
+- Theme remains incomplete until it provides real route/device preview,
+  versioned drafts, publication history, and rollback. More power must remain a
+  coherent semantic design system; do not expose a loose collection of CSS
+  knobs or redesign the protected product-detail composition.
+- Notification policy and delivery providers are different authorities. The
+  notification workspace should own event/channel rules while Firebase, email,
+  SMS, and push setup live as provider readiness; duplicated Firebase controls
+  across both surfaces must be consolidated without hiding delivery state.
+- First-class integrations should use the provider's current official mark when
+  permission and source terms allow it. Keep a durable source/license record,
+  accessible text label, neutral fallback, and light/dark rendering; do not
+  fetch arbitrary logo-aggregator SVGs or imply provider endorsement.
 
 Implementation order after the current promotion/payment/account cutovers:
 Cache operations, Fraud providers, Meta CAPI, Email/notification delivery, then
 Scanner/security proof. Each slice must include mobile/dark/error states and the
 actual operational or buyer projection before it can be called complete.
+
+### Security and discovery decisions — 2026-07-14
+
+- The persisted `security/csp_allowed_domains` value is merchant additions only.
+  Storefront, API, dashboard/auth, canonical CDN, and public media storage come
+  from deployed platform configuration and must be shown as read-only inherited
+  sources. Never copy inherited values into merchant-managed settings.
+- Inherited values must normalize to one exact HTTP(S) origin. Credentials,
+  paths, queries, fragments, unsafe schemes, and wildcard platform values fail
+  closed. HTTP remains limited to explicit loopback development origins.
+- A merchant addition is one explicit source. Bare hosts canonicalize to HTTPS;
+  wildcard subdomains require an explicit `*.example.com` entry and are never
+  inferred from an exact host. The compatibility string is an internal storage
+  detail, not the editing interface.
+- The dashboard/auth origin belongs to admin-session and credentialed-request
+  trust; it must not silently broaden storefront script, frame, or media policy.
+  The storefront API and media origins are inherited only by the directives that
+  need them.
+- The current merchant additions still apply across script, connect, frame,
+  image, and worker directives. The UI must state that consequence. A future
+  capability-scoped policy requires a versioned authority and runtime cutover;
+  do not imply per-capability isolation before it exists.
+- SEO is an outcome-first workspace: on mobile the public discovery outcome
+  precedes controls; on wide screens it remains beside the editor. Draft policy
+  previews and published live probes are labeled as different facts so an
+  unsaved switch cannot masquerade as deployed XML, feed, or schema proof.
 
 ## General settings authorities
 

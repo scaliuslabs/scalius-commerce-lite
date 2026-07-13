@@ -378,7 +378,10 @@ describe("SeoDiscoveryStatusCard", () => {
       link.getAttribute("href"),
     );
 
-    expect(host.textContent).toContain("Discovery Status / QA");
+    expect(host.textContent).toContain("Public discovery outcome");
+    expect(host.textContent).toContain(
+      "Live proof checks the currently published storefront",
+    );
     expect(host.textContent).toContain("Output mode: SKU / variant rows");
     expect(host.textContent).toContain(
       "This is a dashboard preview, not a live probe of the storefront Worker env.",
