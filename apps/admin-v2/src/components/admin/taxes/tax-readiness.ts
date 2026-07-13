@@ -3,7 +3,7 @@ import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
 export type TaxWorkspaceTab = "policy" | "classes" | "rates" | "classification" | "preview";
 
 export interface TaxReadinessStep {
-  id: "default-class" | "rates" | "calculation";
+  id: "default-class" | "rates" | "shipping-rates" | "calculation";
   label: string;
   detail: string;
   ready: boolean;
@@ -28,8 +28,25 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
       )
     : [];
   const defaultClassReady = Boolean(defaultClass);
-  const ratesReady = Boolean(defaultClass?.isExempt || activeDefaultRates.length > 0);
-  const calculationReady = configuration.settings.enabled && defaultClassReady && ratesReady;
+  const defaultRatesReady = Boolean(defaultClass?.isExempt || activeDefaultRates.length > 0);
+  const effectiveShippingClassId = configuration.settings.taxShipping
+    ? configuration.settings.shippingTaxClassId ?? configuration.settings.defaultTaxClassId
+    : null;
+  const shippingClass = effectiveShippingClassId
+    ? configuration.classes.find((taxClass) => taxClass.id === effectiveShippingClassId)
+    : null;
+  const activeShippingRates = shippingClass
+    ? configuration.rates.filter(
+        (rate) => rate.isActive && rate.taxClassId === shippingClass.id,
+      )
+    : [];
+  const shippingRatesReady = !configuration.settings.taxShipping || Boolean(
+    shippingClass?.isExempt || activeShippingRates.length > 0,
+  );
+  const calculationReady = configuration.settings.enabled
+    && defaultClassReady
+    && defaultRatesReady
+    && shippingRatesReady;
 
   const steps: TaxReadinessStep[] = [
     {
@@ -46,8 +63,18 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
         : activeDefaultRates.length > 0
           ? `${activeDefaultRates.length} active ${activeDefaultRates.length === 1 ? "rate" : "rates"}`
           : "Add a verified destination rate before collecting tax.",
-      ready: ratesReady,
+      ready: defaultRatesReady,
     },
+    ...(configuration.settings.taxShipping ? [{
+      id: "shipping-rates" as const,
+      label: "Active shipping-class rates",
+      detail: shippingClass?.isExempt
+        ? `${shippingClass.name} is exempt and does not require a rate.`
+        : activeShippingRates.length > 0
+          ? `${activeShippingRates.length} active ${activeShippingRates.length === 1 ? "rate" : "rates"}`
+          : "Add a verified shipping rate before collecting tax on delivery.",
+      ready: shippingRatesReady,
+    }] : []),
     {
       id: "calculation",
       label: "Checkout calculation",
@@ -73,7 +100,7 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
     };
   }
 
-  if (!ratesReady) {
+  if (!defaultRatesReady) {
     return {
       state: configuration.settings.enabled ? "attention" : "off",
       title: configuration.settings.enabled ? "Tax setup needs attention" : "Tax calculation is off",
@@ -82,6 +109,19 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
         : "Checkout records zero tax. Add a verified rate before turning calculation on.",
       nextTab: "rates",
       nextAction: "Add an active rate",
+      steps,
+    };
+  }
+
+  if (!shippingRatesReady) {
+    return {
+      state: configuration.settings.enabled ? "attention" : "off",
+      title: configuration.settings.enabled ? "Tax setup needs attention" : "Tax calculation is off",
+      description: configuration.settings.enabled
+        ? "The effective shipping class has no active rate, so delivery charges receive zero tax."
+        : "Checkout records zero tax. Add a verified shipping rate before turning calculation on.",
+      nextTab: "rates",
+      nextAction: "Add a shipping rate",
       steps,
     };
   }

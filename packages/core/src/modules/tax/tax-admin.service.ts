@@ -109,13 +109,46 @@ async function resolveJurisdiction(
     return { jurisdictionId: location.id, jurisdictionLabel: location.name };
 }
 
-async function assertActiveTaxClass(db: Database, id: string | null, label: string): Promise<void> {
-    if (!id) return;
-    const row = await db.select({ id: taxClasses.id })
+type ActiveTaxClass = Pick<typeof taxClasses.$inferSelect, "id" | "name" | "isExempt">;
+
+async function assertActiveTaxClass(
+    db: Database,
+    id: string | null,
+    label: string,
+): Promise<ActiveTaxClass | null> {
+    if (!id) return null;
+    const row = await db.select({
+        id: taxClasses.id,
+        name: taxClasses.name,
+        isExempt: taxClasses.isExempt,
+    })
         .from(taxClasses)
         .where(and(eq(taxClasses.id, id), isNull(taxClasses.deletedAt)))
         .get();
     if (!row) throw new ValidationError(`${label} is not an active tax class.`);
+    return row;
+}
+
+async function assertClassCanCalculateTax(
+    db: Database,
+    taxClass: ActiveTaxClass,
+    role: "product" | "shipping",
+): Promise<void> {
+    if (taxClass.isExempt) return;
+    const activeRate = await db.select({ id: taxRates.id })
+        .from(taxRates)
+        .where(and(
+            eq(taxRates.taxClassId, taxClass.id),
+            eq(taxRates.isActive, true),
+            isNull(taxRates.deletedAt),
+        ))
+        .get();
+    if (!activeRate) {
+        const scope = role === "shipping" ? "shipping class" : "default product class";
+        throw new ValidationError(
+            `Add an active rate to ${scope} “${taxClass.name}” before enabling tax.`,
+        );
+    }
 }
 
 export async function getTaxConfiguration(db: Database) {
@@ -147,7 +180,7 @@ export async function getTaxConfiguration(db: Database) {
 
 export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsInput) {
     const displayLabel = normalizeName(input.displayLabel, "Tax label", 80);
-    await Promise.all([
+    const [defaultTaxClass, shippingTaxClass] = await Promise.all([
         assertActiveTaxClass(db, input.defaultTaxClassId, "Default tax class"),
         assertActiveTaxClass(db, input.shippingTaxClassId, "Shipping tax class"),
     ]);
@@ -156,6 +189,15 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
     }
     if (input.taxShipping && !input.shippingTaxClassId && !input.defaultTaxClassId) {
         throw new ValidationError("Choose a shipping or default tax class before taxing shipping.");
+    }
+    if (input.enabled && defaultTaxClass) {
+        await assertClassCanCalculateTax(db, defaultTaxClass, "product");
+        const effectiveShippingClass = input.taxShipping
+            ? shippingTaxClass ?? defaultTaxClass
+            : null;
+        if (effectiveShippingClass && effectiveShippingClass.id !== defaultTaxClass.id) {
+            await assertClassCanCalculateTax(db, effectiveShippingClass, "shipping");
+        }
     }
 
     if (input.expectedVersion === 0) {

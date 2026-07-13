@@ -1,7 +1,44 @@
 import { describe, expect, it, vi } from "vitest";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { products } from "@scalius/database/schema";
-import { createTaxClass, createTaxRate, updateTaxClass, updateTaxClassification } from "./tax-admin.service";
+import {
+  createTaxClass,
+  createTaxRate,
+  updateTaxClass,
+  updateTaxClassification,
+  updateTaxSettings,
+} from "./tax-admin.service";
+
+const taxSettingsInput = {
+  expectedVersion: 1,
+  enabled: true,
+  pricesIncludeTax: false,
+  taxShipping: false,
+  defaultTaxClassId: "taxc_standard",
+  shippingTaxClassId: null,
+  displayLabel: "Tax",
+};
+
+function createSettingsDb(getResults: unknown[]) {
+  const results = [...getResults];
+  const select = vi.fn(() => {
+    const query = {
+      from: vi.fn(() => query),
+      where: vi.fn(() => query),
+      get: vi.fn(async () => results.shift() ?? null),
+    };
+    return query;
+  });
+  const returning = vi.fn(async () => [{
+    id: "default",
+    ...taxSettingsInput,
+    version: 2,
+  }]);
+  const where = vi.fn(() => ({ returning }));
+  const set = vi.fn(() => ({ where }));
+  const update = vi.fn(() => ({ set }));
+  return { db: { select, update }, select, update };
+}
 
 function createRateDb(location: { id: string; name: string } | null) {
   const getResults = [{ id: "taxc_standard" }, location];
@@ -35,6 +72,58 @@ function createRateDb(location: { id: string; name: string } | null) {
 }
 
 describe("tax Admin jurisdiction authority", () => {
+  it("rejects activation when the taxable default class has no active rate", async () => {
+    const { db, update } = createSettingsDb([
+      { id: "taxc_standard", name: "Standard", isExempt: false },
+      null,
+    ]);
+
+    await expect(updateTaxSettings(db as never, taxSettingsInput))
+      .rejects.toThrow("Add an active rate to default product class “Standard”");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("checks a separate effective shipping class before activation", async () => {
+    const { db, update } = createSettingsDb([
+      { id: "taxc_standard", name: "Standard", isExempt: false },
+      { id: "taxc_shipping", name: "Shipping", isExempt: false },
+      { id: "taxr_standard" },
+      null,
+    ]);
+
+    await expect(updateTaxSettings(db as never, {
+      ...taxSettingsInput,
+      taxShipping: true,
+      shippingTaxClassId: "taxc_shipping",
+    })).rejects.toThrow("Add an active rate to shipping class “Shipping”");
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("allows an incomplete legacy setup to be disabled for repair", async () => {
+    const { db, select, update } = createSettingsDb([
+      { id: "taxc_standard", name: "Standard", isExempt: false },
+    ]);
+
+    await expect(updateTaxSettings(db as never, {
+      ...taxSettingsInput,
+      enabled: false,
+    })).resolves.toMatchObject({ version: 2 });
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows activation after the taxable default class has an active rate", async () => {
+    const { db, select, update } = createSettingsDb([
+      { id: "taxc_standard", name: "Standard", isExempt: false },
+      { id: "taxr_standard" },
+    ]);
+
+    await expect(updateTaxSettings(db as never, taxSettingsInput))
+      .resolves.toMatchObject({ version: 2 });
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
   it("persists the authoritative D1 location label instead of client text", async () => {
     const { db, values } = createRateDb({ id: "city_1", name: "Dhaka" });
 

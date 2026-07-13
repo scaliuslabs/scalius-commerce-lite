@@ -87,4 +87,46 @@ describe("tax workspace readiness", () => {
       nextAction: "Test calculation",
     });
   });
+
+  it("keeps a separately taxed shipping class in the readiness sequence", () => {
+    const config = configuration({
+      classes: [
+        ...configuration().classes,
+        {
+          ...configuration().classes[0]!,
+          id: "class_shipping",
+          name: "Shipping",
+        },
+      ],
+      rates: [{
+        id: "rate_1",
+        taxClassId: "class_standard",
+        name: "Standard rate",
+        rateBps: 1500,
+        jurisdictionType: "all",
+        jurisdictionId: null,
+        jurisdictionLabel: null,
+        priority: 0,
+        isCompound: false,
+        isActive: true,
+        version: 1,
+        createdAt: null,
+        updatedAt: null,
+        deletedAt: null,
+      }],
+    });
+    config.settings.enabled = true;
+    config.settings.taxShipping = true;
+    config.settings.shippingTaxClassId = "class_shipping";
+
+    expect(getTaxReadiness(config)).toMatchObject({
+      state: "attention",
+      nextTab: "rates",
+      nextAction: "Add a shipping rate",
+    });
+    expect(getTaxReadiness(config).steps).toContainEqual(expect.objectContaining({
+      id: "shipping-rates",
+      ready: false,
+    }));
+  });
 });

@@ -52,7 +52,7 @@ export function TaxSettingsPanel({
     });
   }, [configuration.settings]);
 
-  const issue = taxSettingsIssue(form);
+  const issue = taxSettingsIssue(form, configuration);
   const saveMutation = useMutation({
     mutationFn: () => saveTaxSettings({ data: form }),
     onSuccess: async () => {
