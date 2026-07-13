@@ -1696,7 +1696,7 @@ app.openapi(createOrderRoute, async (c) => {
       data,
       requestUrl,
       (db, code, total, items, customerPhone) => isDiscountValid(db, code, total, items as CartItem[], customerPhone),
-      (db, discount, total, items, shippingCost, applicableProductIds) => calculateDiscountAmount(
+      (db, discount, total, items, shippingCost, applicableProductIds, hasProductRestrictions) => calculateDiscountAmount(
         db,
         discount as { id: string; type: string; valueType: string; discountValue: number },
         total,
@@ -1704,6 +1704,7 @@ app.openapi(createOrderRoute, async (c) => {
         shippingCost,
         applicableProductIds,
         currency.currencyCode,
+        hasProductRestrictions,
       ),
       {
         orderId: checkoutAttempt.orderId,

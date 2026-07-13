@@ -241,7 +241,11 @@ Explicit Scalius decisions:
    route with retry, and local date controls state their inclusive day bounds.
 6. Public validation accepts bounded non-negative prices/totals/shipping and
    positive integral quantities only. Final checkout re-runs authority and
-   preserves the evaluator's bounded buyer-safe rejection reason.
+   preserves the evaluator's bounded buyer-safe rejection reason. It evaluates
+   minimums against the server-resolved merchandise subtotal (never delivery),
+   carries exact product scope into calculation, and ignores browser discount
+   and shipping amounts. D1 triggers remain the concurrent authority for total
+   usage and immutable canonical-phone redemption claims.
 7. This code-builder cleanup is not the target promotion system. Automatic
    rules, priority, combination, budgets, conflict/CAS, immutable allocations,
    test-cart explanation, and refunds remain blocked on the typed promotion

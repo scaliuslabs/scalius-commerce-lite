@@ -5,6 +5,7 @@ import {
   createDiscountEditorDefaults,
   discountEditorSchema,
   fromDateInputValue,
+  hydrateSelectedOptionLabels,
   parseOptionalNumber,
   toDateInputValue,
   toDiscountWritePayload,
@@ -106,5 +107,23 @@ describe("discount editor model", () => {
         "৳",
       ),
     ).toBe("Free delivery for eligible orders.");
+  });
+
+  it("hydrates fallback labels without restoring removed or overwriting edited selections", () => {
+    const current = [
+      { id: "prod_1", name: "prod_1", price: 0 },
+      { id: "prod_added", name: "Merchant selection", price: 100 },
+    ];
+    const hydrated = hydrateSelectedOptionLabels(current, [
+      { id: "prod_1", name: "Resolved product", price: 250 },
+      { id: "prod_removed", name: "Removed product", price: 300 },
+      { id: "prod_added", name: "Stale label", price: 10 },
+    ]);
+
+    expect(hydrated).toEqual([
+      { id: "prod_1", name: "Resolved product", price: 250 },
+      { id: "prod_added", name: "Merchant selection", price: 100 },
+    ]);
+    expect(hydrateSelectedOptionLabels(hydrated, [])).toBe(hydrated);
   });
 });

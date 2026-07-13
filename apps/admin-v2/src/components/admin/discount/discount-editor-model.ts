@@ -118,6 +118,29 @@ export interface DiscountEditorDefaults {
   appliesToCollections?: string[];
 }
 
+export function hydrateSelectedOptionLabels<T extends { id: string; name: string }>(
+  current: T[],
+  resolved: T[],
+): T[] {
+  const resolvedById = new Map(resolved.map((item) => [item.id, item]));
+  let changed = false;
+  const hydrated = current.map((item) => {
+    const replacement = resolvedById.get(item.id);
+    if (
+      replacement &&
+      replacement.name &&
+      replacement.name !== replacement.id &&
+      (!item.name || item.name === item.id)
+    ) {
+      changed = true;
+      return { ...item, ...replacement };
+    }
+    return item;
+  });
+
+  return changed ? hydrated : current;
+}
+
 function validDate(value: Date | string | number | null | undefined): Date | null {
   if (value == null) return null;
   const date = value instanceof Date ? new Date(value) : new Date(value);

@@ -2536,6 +2536,27 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
   });
 
+  it("rejects multiple discount codes at the checkout schema boundary", async () => {
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...validOrderBody,
+          discountCode: ["SAVE10", "DELIVERY"],
+        }),
+      },
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.buildCheckoutAttemptIdentity).not.toHaveBeenCalled();
+    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["missing", undefined],
     ["null", null],

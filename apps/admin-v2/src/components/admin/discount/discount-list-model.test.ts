@@ -66,6 +66,12 @@ describe("discount list presentation", () => {
     ).toBe("expired");
     expect(
       getDiscountLifecycle(
+        discount({ endDate: "2026-07-13T12:00:00.000Z" }),
+        new Date("2026-07-13T12:00:00.999Z"),
+      ),
+    ).toBe("active");
+    expect(
+      getDiscountLifecycle(
         discount({ deletedAt: "2026-07-10T00:00:00.000Z", endDate: "2026-07-12T00:00:00.000Z" }),
         now,
       ),

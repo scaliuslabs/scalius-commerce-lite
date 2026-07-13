@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { useForm } from "react-hook-form";
 import {
   AlertCircle,
@@ -43,6 +43,7 @@ import {
   discountEditorSchema,
   fromDateInputValue,
   getDiscountTypeLabel,
+  hydrateSelectedOptionLabels,
   parseOptionalNumber,
   toDateInputValue,
   toDiscountWritePayload,
@@ -177,6 +178,27 @@ export function DiscountCodeBuilder({
     resolver: zodResolver(discountEditorSchema),
     defaultValues: initialValues,
   });
+
+  useEffect(() => {
+    initialProductsRef.current = hydrateSelectedOptionLabels(
+      initialProductsRef.current,
+      initialSelectedProducts,
+    );
+    setSelectedProducts((current) =>
+      hydrateSelectedOptionLabels(current, initialSelectedProducts),
+    );
+  }, [initialSelectedProducts]);
+
+  useEffect(() => {
+    initialCollectionsRef.current = hydrateSelectedOptionLabels(
+      initialCollectionsRef.current,
+      initialSelectedCollections,
+    );
+    setSelectedCollections((current) =>
+      hydrateSelectedOptionLabels(current, initialSelectedCollections),
+    );
+  }, [initialSelectedCollections]);
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const values = form.watch();
   const validation = discountEditorSchema.safeParse(values);
@@ -564,7 +586,7 @@ export function DiscountCodeBuilder({
                                   }
                                 />
                               </FormControl>
-                              <FormDescription>Optional. Ends at 11:59 PM on the selected day.</FormDescription>
+                              <FormDescription>Optional. The selected end date is included.</FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
