@@ -20,6 +20,13 @@ import {
   getThemeColorError,
   getThemeColorPairStatus,
 } from "./theme-color-accessibility";
+import {
+  DEFAULT_THEME_COLORS,
+  THEME_ACTION_CONTRAST_PAIRS,
+  THEME_COLOR_PALETTES,
+  THEME_CONTRAST_PAIRS,
+  THEME_SURFACE_CONTRAST_PAIRS,
+} from "./theme-color-presets";
 
 const COLOR_FIELDS = [
   { key: "primary", label: "Primary", description: "Main actions and links" },
@@ -50,151 +57,21 @@ const COLOR_FIELD_BY_KEY = Object.fromEntries(
 const COLOR_GROUPS: Array<{
   title: string;
   description: string;
-  rows: Array<{ background: ColorKey; foreground: ColorKey }>;
+  rows: ReadonlyArray<{ background: ColorKey; foreground: ColorKey }>;
 }> = [
   {
     title: "Brand and actions",
     description: "The colors buyers use to recognize and act on your store.",
-    rows: [
-      { background: "primary", foreground: "primary-foreground" },
-      { background: "secondary", foreground: "secondary-foreground" },
-      { background: "accent", foreground: "accent-foreground" },
-      { background: "destructive", foreground: "destructive-foreground" },
-    ],
+    rows: THEME_ACTION_CONTRAST_PAIRS,
   },
   {
     title: "Surfaces and content",
     description: "The reading surfaces behind products, pages, and supporting copy.",
-    rows: [
-      { background: "background", foreground: "foreground" },
-      { background: "card", foreground: "card-foreground" },
-      { background: "muted", foreground: "muted-foreground" },
-    ],
+    rows: THEME_SURFACE_CONTRAST_PAIRS,
   },
 ];
 
 const CONTROL_KEYS: ColorKey[] = ["border", "input", "ring"];
-const ALL_COLOR_PAIRS = COLOR_GROUPS.flatMap((group) => group.rows);
-
-const PREDEFINED_PALETTES: Record<
-  string,
-  { label: string; colors: Record<string, string> }
-> = {
-  Zinc: {
-    label: "Zinc",
-    colors: {
-      background: "#ffffff",
-      foreground: "#09090b",
-      card: "#ffffff",
-      "card-foreground": "#09090b",
-      popover: "#ffffff",
-      "popover-foreground": "#09090b",
-      primary: "#18181b",
-      "primary-foreground": "#fafafa",
-      secondary: "#f4f4f5",
-      "secondary-foreground": "#18181b",
-      muted: "#f4f4f5",
-      "muted-foreground": "#71717a",
-      accent: "#f4f4f5",
-      "accent-foreground": "#18181b",
-      destructive: "#dc2626",
-      "destructive-foreground": "#ffffff",
-      border: "#e4e4e7",
-      input: "#e4e4e7",
-      ring: "#09090b",
-    },
-  },
-  Ocean: {
-    label: "Ocean",
-    colors: {
-      background: "#ffffff",
-      foreground: "#0f172a",
-      card: "#ffffff",
-      "card-foreground": "#0f172a",
-      primary: "#1d4ed8",
-      "primary-foreground": "#ffffff",
-      secondary: "#e2e8f0",
-      "secondary-foreground": "#0f172a",
-      muted: "#f1f5f9",
-      "muted-foreground": "#475569",
-      accent: "#dbeafe",
-      "accent-foreground": "#1e3a8a",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#cbd5e1",
-      input: "#cbd5e1",
-      ring: "#1d4ed8",
-    },
-  },
-  Emerald: {
-    label: "Emerald",
-    colors: {
-      background: "#ffffff",
-      foreground: "#022c22",
-      card: "#ffffff",
-      "card-foreground": "#022c22",
-      primary: "#047857",
-      "primary-foreground": "#ffffff",
-      secondary: "#d1fae5",
-      "secondary-foreground": "#064e3b",
-      muted: "#ecfdf5",
-      "muted-foreground": "#065f46",
-      accent: "#a7f3d0",
-      "accent-foreground": "#064e3b",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#a7f3d0",
-      input: "#a7f3d0",
-      ring: "#047857",
-    },
-  },
-  Rose: {
-    label: "Rose",
-    colors: {
-      background: "#ffffff",
-      foreground: "#4c0519",
-      card: "#ffffff",
-      "card-foreground": "#4c0519",
-      primary: "#be123c",
-      "primary-foreground": "#ffffff",
-      secondary: "#ffe4e6",
-      "secondary-foreground": "#881337",
-      muted: "#fff1f2",
-      "muted-foreground": "#9f1239",
-      accent: "#fecdd3",
-      "accent-foreground": "#881337",
-      destructive: "#991b1b",
-      "destructive-foreground": "#ffffff",
-      border: "#fecdd3",
-      input: "#fecdd3",
-      ring: "#be123c",
-    },
-  },
-  Midnight: {
-    label: "Midnight",
-    colors: {
-      background: "#09090b",
-      foreground: "#fafafa",
-      card: "#18181b",
-      "card-foreground": "#fafafa",
-      primary: "#fafafa",
-      "primary-foreground": "#18181b",
-      secondary: "#27272a",
-      "secondary-foreground": "#fafafa",
-      muted: "#27272a",
-      "muted-foreground": "#d4d4d8",
-      accent: "#3f3f46",
-      "accent-foreground": "#fafafa",
-      destructive: "#991b1b",
-      "destructive-foreground": "#fafafa",
-      border: "#3f3f46",
-      input: "#3f3f46",
-      ring: "#d4d4d8",
-    },
-  },
-};
-
-const DEFAULT_COLORS = PREDEFINED_PALETTES.Zinc!.colors;
 const isPickerHex = (value: string) => /^#[\da-f]{6}$/i.test(value);
 
 export default function ThemeSettingsPage() {
@@ -240,7 +117,7 @@ export default function ThemeSettingsPage() {
   }, [fetchColors]);
 
   const effectiveColors = useMemo(
-    () => ({ ...DEFAULT_COLORS, ...colors }),
+    () => ({ ...DEFAULT_THEME_COLORS, ...colors }),
     [colors],
   );
   const invalidKeys = useMemo(
@@ -251,7 +128,7 @@ export default function ThemeSettingsPage() {
   );
   const contrastFailures = useMemo(
     () =>
-      ALL_COLOR_PAIRS.filter(({ background, foreground }) =>
+      THEME_CONTRAST_PAIRS.filter(({ background, foreground }) =>
         getThemeColorPairStatus(
           effectiveColors[foreground] ?? "",
           effectiveColors[background] ?? "",
@@ -268,7 +145,7 @@ export default function ThemeSettingsPage() {
   };
 
   const applyPalette = (paletteName: string) => {
-    const palette = PREDEFINED_PALETTES[paletteName];
+    const palette = THEME_COLOR_PALETTES[paletteName];
     if (!palette) return;
     setColors((previous) => ({ ...previous, ...palette.colors }));
     setDirty(true);
@@ -426,7 +303,7 @@ export default function ThemeSettingsPage() {
           <p className="text-xs text-muted-foreground">Apply a complete accessible palette, then adjust individual pairs.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-5">
-          {Object.entries(PREDEFINED_PALETTES).map(([key, palette]) => (
+          {Object.entries(THEME_COLOR_PALETTES).map(([key, palette]) => (
             <button
               key={key}
               type="button"
