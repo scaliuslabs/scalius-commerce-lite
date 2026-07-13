@@ -23,6 +23,9 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   create/edit boundary for Pages, Analytics, and Discounts.
 - [THEME-TAX.md](THEME-TAX.md) — tax domain strengths and workflow gaps plus a
   versioned, accessible, previewable theme model.
+- [../COMMERCE-SETTINGS-BENCHMARK.md](../COMMERCE-SETTINGS-BENCHMARK.md) —
+  Shopify/Vendure/Medusa benchmarks and the cross-domain replacement plan for
+  Promotions, Tax, Checkout/Payments, Theme, and Account/Users.
 
 ## Shared product principles
 

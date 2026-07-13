@@ -14,6 +14,9 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `ITEM-LEVEL-RETURNS.md` - durable return lifecycle, inventory disposition, recovery, and deletion/status boundaries.
 - `INVOICE-AUTHORITY.md` - explicit idempotent invoice issuance, atomic numbering, immutable historical snapshots, and draft/read rules.
 - `CUSTOMER-REQUEST-POLICY.md` - merchant operational controls for buyer cancellation, return, and refund request visibility and eligibility.
+- `COMMERCE-SETTINGS-BENCHMARK.md` - benchmark-backed replacement decisions,
+  edge cases, UI information architecture, migration stance, and implementation
+  order for Promotions, Tax, Checkout/Payments, Theme, and Account/Users.
 
 ## Toolchain Rules
 
