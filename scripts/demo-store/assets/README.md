@@ -59,7 +59,7 @@ SHA-256. Replacing source bytes cannot silently reuse a filename.
 
 | Profile | Master | Behavior |
 | --- | --- | --- |
-| Product primary, variant, poster | 1600×1600 WebP | sRGB; source is contained in a centered 80% safe-area canvas |
+| Product primary, variant, poster | 1600×1600 WebP | sRGB; contiguous near-white exterior margins are trimmed, then the source is contained in a centered 80% safe-area canvas |
 | Product detail/lifestyle | 1600×1600 WebP | sRGB cover using the reviewed crop position |
 | Category | 1600×1000 WebP | sRGB cover |
 | Desktop hero | 2400×900 WebP | sRGB cover; source must already respect its copy-safe composition |
@@ -70,6 +70,13 @@ Images use the storefront workspace's pinned `sharp` dependency. Videos require
 `ffprobe` so dimensions are verified instead of trusted from the manifest.
 Sources are limited to the platform policy (20 MiB images, 100 MiB videos).
 Normalized images are rechecked as exact-size WebP files below 20 MiB.
+
+Contain-safe trimming is deliberately conservative: it removes only exterior
+pixels within a six-level tolerance of pure white before resizing. It does not
+detect subjects, replace backgrounds, trim opaque colored scenes, or run for
+detail/lifestyle cover profiles. Product edges and shadows must remain visibly
+different from near-white exterior space; ambiguous all-white inputs are left
+unchanged by the image pipeline.
 
 ## Source record shape
 
