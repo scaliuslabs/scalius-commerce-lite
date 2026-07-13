@@ -67,3 +67,44 @@ library, and writes `posterLogicalKey`/`posterMediaId` evidence. Only then can i
 emit `status: "complete"` apply readiness. Partial local staging, missing remote
 Media, ambiguous filenames, retained identity drift, hash mismatch, stale CAS,
 or an incomplete poster relationship stops without producing final readiness.
+
+## Read-only retained Media export
+
+The retained export is a separate recovery boundary for the eight current Rider
+and Halo source objects. It never calls a Media, product, or publication write
+route. Supply a reviewed authority file containing exactly these logical keys
+and their current Media IDs; fixed retained product IDs come from checked-in
+code:
+
+- `rider-court-trainers:primary`, `:variant-sand`, `:detail`, `:lifestyle`
+- `halo-arc-table-lamp:primary`, `:video`, `:poster`, `:detail`
+
+The private authority JSON supplies one exact HTTPS Media/CDN origin plus only
+`logicalKey` and `mediaId` for each entry. Retained product IDs stay fixed in
+checked-in code and cannot be overridden by the authority file.
+
+The command rejects incomplete authority files. Run it only into an explicit
+private workspace `.wrangler` child directory:
+
+```sh
+pnpm exec node scripts/demo-store/media-upload/retained-export-cli.mjs \
+  --export-retained \
+  --authority .wrangler/demo-store-assets/retained-media-authority.json \
+  --source-dir .wrangler/demo-store-assets/retained-sources
+```
+
+Authentication uses the upload bridge's interactive prompt: email is entered
+normally and password input is hidden. Downloads are sequential and
+credential-free. Redirects are inspected
+manually and an off-origin redirect is never followed. Every response must have
+the exact current Content-Length and MIME; the downloaded file is independently
+inspected for MIME, dimensions, byte count, and SHA-256. A second fresh admin
+snapshot must match the first before the command creates
+`provenance-candidate.json` with mode `0600`.
+
+Generated records deliberately use `status: "unapproved"` and
+`sourceKind: "merchant-owned"`. Ownership reference, reviewer identity, rights
+checks, creator, license URL, and verification date remain unset, so staging
+cannot approve them until a human supplies and reviews that evidence. Halo video
+evidence records its exact current poster logical key and Media ID in both
+directions.
