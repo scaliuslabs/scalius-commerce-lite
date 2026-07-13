@@ -12042,7 +12042,7 @@ export type GetApiV1AdminDiscountsByIdResponses = {
 export type GetApiV1AdminDiscountsByIdResponse = GetApiV1AdminDiscountsByIdResponses[keyof GetApiV1AdminDiscountsByIdResponses];
 
 export type PutApiV1AdminDiscountsByIdData = {
-    body?: {
+    body: {
         code: string;
         type: 'amount_off_products' | 'amount_off_order' | 'free_shipping';
         valueType: 'percentage' | 'fixed_amount' | 'free';
@@ -12214,7 +12214,7 @@ export type DeleteApiV1AdminDiscountsByIdPermanentResponses = {
 export type DeleteApiV1AdminDiscountsByIdPermanentResponse = DeleteApiV1AdminDiscountsByIdPermanentResponses[keyof DeleteApiV1AdminDiscountsByIdPermanentResponses];
 
 export type PostApiV1AdminDiscountsByIdToggleStatusData = {
-    body?: {
+    body: {
         isActive: boolean;
         expectedRevision: number;
     };
