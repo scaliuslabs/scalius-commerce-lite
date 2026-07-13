@@ -60,3 +60,10 @@ request payload. `run-apply.mjs` currently executes only category, product,
 inactive collection, and inactive presentation commands. Activation and
 publication remain excluded until the browser-verification milestone; the
 public CLI still exposes no write mode.
+
+The safe publication architecture is defined in `apply/README.md` and
+`apply/phase-model.mjs`. It adds quarantine and explicit activation/publication
+phases, repairs inactive-product resume, blocks unversioned settings, hashes the
+complete intended payload for authorization, and restores safe authority from
+the resume journal. This architecture is intentionally not reachable through a
+public `--apply` flag yet.
