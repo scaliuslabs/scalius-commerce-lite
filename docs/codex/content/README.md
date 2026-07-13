@@ -94,6 +94,10 @@ already complete.
   now fail closed when their authoritative read fails. They show one local
   retry state, explicitly say defaults were not assumed, and keep saving
   locked instead of presenting editable placeholder data as current settings.
+- Allowed Countries now follows the same rule despite using its own country
+  catalog: a failed policy read cannot become an editable empty allowlist. It
+  tracks Saved/Unsaved state, offers Reset, and exposes 44 px selectable rows
+  and named remove actions for touch and assistive technology.
 - Cross-domain links must preserve the exact section. Delivery-provider setup,
   for example, opens Checkout directly at Delivery Locations rather than
   forcing the merchant to rediscover the referenced field.

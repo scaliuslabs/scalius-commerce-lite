@@ -34,4 +34,16 @@ describe("general settings read failures", () => {
     expect(source).toContain("saving stays locked");
     expect(source).toContain("Retry");
   });
+
+  it("keeps the checkout country policy locked until its custom read settles", () => {
+    const source = readFileSync(
+      resolve(settingsDir, "AllowedCountriesBuilder.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("SettingsLoadFailure");
+    expect(source).toContain("setHasLoaded(false)");
+    expect(source).toContain("!hasLoaded || loadError");
+    expect(source).toContain("saving || !hasLoaded || !isDirty");
+    expect(source).toContain("setSavedSelected(selected)");
+  });
 });
