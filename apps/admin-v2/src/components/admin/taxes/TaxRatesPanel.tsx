@@ -173,7 +173,7 @@ export function TaxRatesPanel({
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>{editing ? "Edit rate" : "Create a rate"}</CardTitle>
-            <CardDescription>Priority runs low to high. Compound rates include earlier priority tax in their base.</CardDescription>
+            <CardDescription>Priority runs low to high. Equal priorities form one layer; compound rates include tax only from lower layers.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">

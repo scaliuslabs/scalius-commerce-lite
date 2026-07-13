@@ -33,11 +33,26 @@ function exclusiveComponents(
     baseMinor: number,
     rates: TaxRateDefinition[],
 ): TaxComponentSnapshot[] {
-    let priorTaxMinor = 0;
+    // Priority is a calculation layer, not merely a display order. Rates in
+    // the same layer must see the same base; otherwise the opaque rate id
+    // tie-breaker can change compound tax. Only completed, lower-priority
+    // layers participate in a compound rate's base.
+    let currentPriority: number | null = null;
+    let completedPriorityTaxMinor = 0;
+    let currentPriorityTaxMinor = 0;
     return rates.map((rate) => {
-        const componentBase = rate.isCompound ? baseMinor + priorTaxMinor : baseMinor;
+        if (currentPriority === null) {
+            currentPriority = rate.priority;
+        } else if (rate.priority !== currentPriority) {
+            completedPriorityTaxMinor += currentPriorityTaxMinor;
+            currentPriorityTaxMinor = 0;
+            currentPriority = rate.priority;
+        }
+        const componentBase = rate.isCompound
+            ? baseMinor + completedPriorityTaxMinor
+            : baseMinor;
         const amountMinor = multiplyMinorByRate(componentBase, rate.rateBps);
-        priorTaxMinor += amountMinor;
+        currentPriorityTaxMinor += amountMinor;
         return {
             rateId: rate.id,
             name: rate.name,

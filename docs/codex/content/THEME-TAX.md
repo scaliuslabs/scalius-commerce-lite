@@ -41,6 +41,24 @@ model presented as if it were a complete theme system.
 - Keep the domain model. Do not replace basis points/CAS/snapshots with a
   superficially simpler percentage form.
 
+## Implemented tax calculation hardening (2026-07-13)
+
+- Compound calculation now treats priority as an explicit layer. Every rate at
+  the same priority sees the same taxable base; a compound rate includes tax
+  only from completed, strictly lower-priority layers.
+- This removes a hidden dependency on random rate IDs. Previously, a compound
+  rate and a standard rate at equal priority could produce different component
+  amounts depending on their opaque ID sort order, contradicting the admin's
+  “earlier priority” explanation.
+- Exclusive and inclusive regression cases prove that equal-priority 10% and
+  5% rates produce 15% total tax, while the existing lower-priority →
+  higher-priority compound behavior remains unchanged. The rate editor now
+  describes equal priorities as one layer.
+
+This is a calculation-authority fix, not completion of the tax workspace. Rate
+overlap diagnostics, bulk classification, configuration export, refund matrix
+coverage, and route-backed tab/search state remain follow-up work.
+
 ## Theme: verified current scope
 
 - The saved value is one sanitized `storefront_colors` object. The storefront
