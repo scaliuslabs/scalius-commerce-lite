@@ -4,6 +4,31 @@ Last reviewed: 2026-07-14
 
 ## 2026-07-14 interaction correction and large-menu behavior
 
+### Deployed proof
+
+Admin version `a5391efd-877e-4ee5-973c-d85505475750` serves commits
+`e84d6ff5f`, `07bde164f`, and `d1474a1ed` at 100%. Live Chrome verification
+proved:
+
+- `/admin/settings?section=header&panel=navigation` and
+  `?section=footer&panel=navigation` restore the correct nested workspace after
+  refresh; switching Branding/Navigation updates the URL and Back/Forward
+  restores the corresponding panel;
+- a real pointer drag moved Footwear before Home & Living, kept all three menu
+  rows in the rendered structure, and enabled the save boundary; Discard
+  restored the original order, cleared the transient drop status, and did not
+  write production settings;
+- the same Footer > Navigation URL and selected panel survived a 390x844 mobile
+  viewport; and
+- the console had no errors. The sequential admin typecheck, 23 navigation
+  interaction tests, 11 settings/route boundary tests, focused ESLint, deploy
+  build, and `pnpm release:check` all passed.
+
+The admin route-state and future global-search dependency are recorded in
+[ADMIN-ROUTE-STATE.md](../ADMIN-ROUTE-STATE.md). The command-palette research
+and prototype gate is recorded in
+[GLOBAL-ADMIN-SEARCH.md](../GLOBAL-ADMIN-SEARCH.md).
+
 The first 2026-07-14 workspace put a permanent menu map beside a selected-item
 inspector. That made every edit a map-to-pane trip, compounded the header/footer
 section rails, and was materially slower than the prior inline editor. It was
