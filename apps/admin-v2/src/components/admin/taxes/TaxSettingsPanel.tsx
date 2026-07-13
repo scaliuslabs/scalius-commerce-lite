@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Loader2, Save } from "lucide-react";
+import { AlertCircle, Loader2, ReceiptText, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -81,7 +81,7 @@ export function TaxSettingsPanel({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="tax-display-label">Buyer-facing label</Label>
               <Input
@@ -138,9 +138,6 @@ export function TaxSettingsPanel({
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Configuration version <span className="font-mono text-foreground">{form.expectedVersion}</span> prevents a stale tab from overwriting newer rules.
-            </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
@@ -196,14 +193,20 @@ export function TaxSettingsPanel({
       <Card className="h-fit border-primary/20 bg-primary/[0.03]">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-            Release-safe behavior
+            <ReceiptText className="h-4 w-4 text-primary" />
+            Checkout outcome
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>Disabled or missing configuration produces zero tax.</p>
-          <p>Checkout resolves current SKU price, class, destination, discounts, and shipping on the server.</p>
-          <p>Every order stores an immutable minor-unit calculation snapshot.</p>
+          <p className="font-medium text-foreground">
+            {!form.enabled
+              ? "Checkout does not charge tax."
+              : form.pricesIncludeTax
+                ? "Matching tax is included in the displayed price."
+                : "Matching tax is added after discounts at checkout."}
+          </p>
+          <p>{form.taxShipping ? "Delivery charges use the selected shipping class." : "Delivery charges are not taxed."}</p>
+          <p>Existing orders keep the tax totals they had when customers placed them.</p>
         </CardContent>
       </Card>
     </div>

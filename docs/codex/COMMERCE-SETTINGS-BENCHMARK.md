@@ -144,7 +144,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
 | Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; revision/CAS for rule edits and status; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons | Still code-only and one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, allocation ledger, or exact cart preview. |
-| Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator | Five equally weighted tabs, merchant-facing priority field, no overlap diagnostics, no bulk classification, no customer exemption workflow, weak region/readiness mental model, and insufficient refund/rounding regression matrix. |
+| Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
 | Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset link, RBAC roles/overrides, permission checks | Personal and organization settings mixed; local-state tabs; no pending-invite workspace/resend/revoke; no suspend/reactivate; no session/device list or revoke controls; no user search/filter/bulk; decorative profile treatment consumes space; team rows/actions are not a deliberate mobile layout. |
@@ -424,6 +424,24 @@ next work should make that authority understandable and testable.
 | Partial quantity refund | Use saved line tax/allocation and deterministic proration. |
 | Configuration changes after order | Never change order/invoice/refund authority retroactively. |
 | Bulk reclassification conflict | Aggregate revision/CAS rejects stale changes without partial silent writes. |
+
+### Implemented coverage and overlap workflow (2026-07-13)
+
+- One pure diagnostic model now drives both overview readiness and the Rates
+  workspace. Classes distinguish all-destination, selected-only, empty, and
+  exempt behavior without claiming legal completeness.
+- Saved rate checks cover repeated exact scopes, all-destination plus local
+  stacking, and city/zone/area ancestor overlaps proven by the active delivery
+  hierarchy. Inactive rates, different tax classes, unrelated locations, and
+  label similarity do not create false warnings.
+- The workspace makes each result actionable: prepare a broad rate, review a
+  participating rule, or test a destination through the same calculator used
+  by checkout. A proposed active rate previews its existing overlaps before
+  save; intentional stacking remains allowed.
+- Detail output is bounded to eight cases with aggregate and hidden counts.
+  This explains current saved behavior only. Registration/nexus authority,
+  history/export, bulk classification, customer exemptions, and the complete
+  refund/rounding matrix remain separate release work.
 
 ## Checkout and payment configuration
 

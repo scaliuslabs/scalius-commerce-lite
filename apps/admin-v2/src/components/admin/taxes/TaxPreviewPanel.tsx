@@ -160,7 +160,7 @@ export function TaxPreviewPanel({
               </div>
             </>
           ) : (
-            <p className="py-10 text-center text-sm text-muted-foreground">Choose a destination and calculate to see the server result.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">Choose a destination and calculate to see the result.</p>
           )}
         </CardContent>
       </Card>

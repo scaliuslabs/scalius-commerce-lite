@@ -55,9 +55,9 @@ model presented as if it were a complete theme system.
   higher-priority compound behavior remains unchanged. The rate editor now
   describes equal priorities as one layer.
 
-This is a calculation-authority fix, not completion of the tax workspace. Rate
-overlap diagnostics, bulk classification, configuration export, refund matrix
-coverage, and route-backed tab/search state remain follow-up work.
+This is a calculation-authority fix, not completion of the tax workspace. Bulk
+classification, configuration export, refund matrix coverage, and route-backed
+tab/search state remain follow-up work.
 
 ## Implemented tax readiness slice (2026-07-13)
 
@@ -82,9 +82,34 @@ coverage, and route-backed tab/search state remain follow-up work.
   a false ready state. Disabled stores may still save incomplete configuration
   so legacy setups can be turned off and repaired safely.
 - This is an activation-time guard, not a complete destination-coverage proof.
-  Preventing later rate edits/deletes from invalidating an already-enabled
-  configuration, diagnosing geographic gaps/overlaps, and verifying the full
-  refund/rounding matrix remain release work.
+  The subsequent atomic mutation and coverage-diagnostic slices protect later
+  rate edits/deletes and explain saved geographic scope. Verifying the full
+  refund/rounding matrix remains release work.
+
+## Implemented tax coverage and stacking diagnostics (2026-07-13)
+
+- Overview and Rates now share one derived coverage authority. Every class is
+  labeled as all destinations, selected destinations only, no active rate, or
+  exempt; selected-only and empty classes can prepare an all-destination rate
+  directly from the diagnostic.
+- The workspace identifies exact duplicate scopes, broad-plus-local stacking,
+  and city/zone/area overlaps only when the saved delivery hierarchy proves an
+  ancestor relationship. It does not infer geography from merchant labels.
+- Each stacking case explains whether rates share a priority layer or apply in
+  priority order, opens a saved rate for review, and links to the production
+  calculator Preview. Creating or editing an active rate shows the same
+  stacking consequence before save.
+- Rendered details are capped at eight with an explicit hidden count and sampled
+  rate references, so a misconfigured demo catalog cannot turn the overview
+  into an unbounded wall of warnings.
+- Merchant copy now describes checkout outcome, zero-tax destinations, and
+  rates being added together. “Release-safe behavior,” configuration-version
+  prose, and lifecycle implementation language were removed from the normal
+  workflow.
+
+This is a calculation-explanation tool, not a legal nexus/registration engine.
+Authoritative jurisdiction obligations, configuration history/export, bulk
+classification, route-backed state, and the full refund matrix remain open.
 
 ## Theme: verified current scope
 

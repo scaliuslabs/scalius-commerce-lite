@@ -97,6 +97,7 @@ import {
 } from "./order-returns";
 import { assertGenericAdminOrderStatusTransition } from "./admin-status-policy";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { retryTransientD1 } from "../../utils/transient-d1";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -1324,6 +1325,13 @@ export async function createOrderPaymentRecoveryLink(
  * Returns null if the order does not exist.
  */
 export async function getOrderDetails(
+    db: Database,
+    id: string,
+): Promise<OrderDetails | null> {
+    return retryTransientD1(() => getOrderDetailsOnce(db, id));
+}
+
+async function getOrderDetailsOnce(
     db: Database,
     id: string,
 ): Promise<OrderDetails | null> {
