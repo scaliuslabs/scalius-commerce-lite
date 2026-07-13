@@ -1,17 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApplyHttpError } from "./demo-store/apply-client.mjs";
-import {
-  buildProductCommands,
-  buildSimpleStockInitializationCommand,
-} from "./demo-store/apply-commands.mjs";
+import { createApplyBinder } from "./demo-store/apply-bind.mjs";
 import { executeIdempotentCommand } from "./demo-store/apply-executor.mjs";
 import {
   assertStagedAssetReadiness,
   manifestReadinessFingerprint,
   validateStagedAssetReadiness,
 } from "./demo-store/apply-readiness.mjs";
+import { compileDemoStoreAdminCommands } from "./demo-store/compile.mjs";
 import { demoStoreManifest } from "./demo-store/manifest.mjs";
-import { runRevisionSafeApply } from "./demo-store/run-apply.mjs";
+import { assertRetainedProductAuthority, runRevisionSafeApply } from "./demo-store/run-apply.mjs";
 
 function readinessReport() {
   const media = [
@@ -113,43 +111,70 @@ describe("staged asset apply gate", () => {
 });
 
 describe("revision-safe product commands", () => {
-  it("never submits retained Rider option or stock mutations", () => {
+  it("binds retained Rider through the compiler without option or stock mutations", () => {
     const report = readinessReport();
     const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
+    const snapshot = completeSnapshot(report);
     const rider = demoStoreManifest.products.find((product) => product.slug === "rider-court-trainers");
-    const current = detail(rider, readiness);
-    const commands = buildProductCommands(rider, { id: rider.retainedProductId, slug: rider.slug }, current, {
-      readiness, categoryId: "cat_footwear", brandAttributeId: "attr_brand",
-    });
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: snapshot });
+    const commands = compiled.commands.filter((command) => command.logicalKey.startsWith(`${rider.logicalKey}:`));
+    const bound = createApplyBinder({ manifest: demoStoreManifest, readiness, snapshot }).bind(commands[0]);
     expect(commands).toHaveLength(1);
-    expect(commands[0].path).toBe(`/api/v1/admin/products/${rider.retainedProductId}`);
-    expect(commands[0].body).not.toHaveProperty("optionMatrix");
-    expect(JSON.stringify(commands[0].body)).not.toContain("stock");
-    expect(commands[0].body.isActive).toBe(true);
+    expect(bound.path).toBe(`/api/v1/admin/products/${rider.retainedProductId}`);
+    expect(bound.body).not.toHaveProperty("optionMatrix");
+    expect(JSON.stringify(bound.body)).not.toContain("stock");
+    expect(bound.body.isActive).toBe(true);
+    expect(bound.body.media.map((item) => item.id)).toEqual(snapshot.productDetails.find((item) => item.slug === rider.slug).media.map((item) => item.id));
+    expect(bound.body.media.every((item) => typeof item.mediaId === "string" && item.mediaId.startsWith("media_demo_"))).toBe(true);
   });
 
-  it("preserves existing SKU stock, barcode, and identity in a non-retained matrix", () => {
+  it("binds existing matrices with current SKU stock, barcode, and identity", () => {
     const report = readinessReport();
     const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
+    const snapshot = completeSnapshot(report);
     const product = demoStoreManifest.products.find((item) => item.slug === "vale-everyday-runners");
-    const current = detail(product, readiness);
+    const current = snapshot.productDetails.find((item) => item.slug === product.slug);
     current.variants[0].stock = 7;
-    const commands = buildProductCommands(product, { id: current.id, slug: product.slug }, current, {
-      readiness, categoryId: "cat_footwear", brandAttributeId: "attr_brand",
-    });
-    const matrix = commands.find((command) => command.phase === "product-options").body;
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: snapshot });
+    const intent = compiled.commands.find((command) => command.logicalKey === `${product.logicalKey}:matrix`);
+    const matrix = createApplyBinder({
+      manifest: demoStoreManifest,
+      readiness,
+      snapshot,
+      outputs: new Map([[`${product.logicalKey}:base`, { id: current.id, aggregateRevision: 5 }]]),
+    }).bind(intent).body;
     expect(matrix.variants[0]).toMatchObject({ id: current.variants[0].id, stock: 7, barcode: current.variants[0].barcode });
-    expect(matrix.expectedAggregateRevision).toBe("REFETCH_AFTER_BASE");
+    expect(matrix.expectedAggregateRevision).toBe(5);
   });
 
-  it("builds simple stock initialization from the server default SKU and barcode", () => {
+  it("resumes simple stock only through the server default SKU and omits barcode fields", () => {
     const report = readinessReport();
     const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
+    const snapshot = completeSnapshot(report);
     const product = demoStoreManifest.products.find((item) => item.slug === "noor-ceramic-vase");
-    const current = detail(product, readiness);
+    const current = snapshot.productDetails.find((item) => item.slug === product.slug);
     current.variants[0].stock = 0;
-    const command = buildSimpleStockInitializationCommand(product, current);
-    expect(command.body).toMatchObject({ stock: 24, barcode: current.variants[0].barcode, expectedAggregateRevision: 4 });
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: { ...snapshot, resumeSimpleSlugs: [product.slug] } });
+    const intent = compiled.commands.find((command) => command.logicalKey === `${product.logicalKey}:simple-sku`);
+    const command = createApplyBinder({
+      manifest: demoStoreManifest,
+      readiness,
+      snapshot,
+      outputs: new Map([[`${product.logicalKey}:base`, { id: current.id, aggregateRevision: 5 }]]),
+    }).bind(intent);
+    expect(command.path).toContain(current.variants[0].id);
+    expect(command.body).toMatchObject({ stock: 24, sku: current.variants[0].sku, expectedAggregateRevision: 5 });
+    expect(command.body).not.toHaveProperty("barcode");
+    expect(command.body).not.toHaveProperty("barcodeType");
+  });
+
+  it("fails closed when a retained ready media association would be removed", () => {
+    const report = readinessReport();
+    const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
+    const snapshot = completeSnapshot(report);
+    const rider = snapshot.productDetails.find((item) => item.slug === "rider-court-trainers");
+    rider.media.push({ id: "pmed_unrepresented", mediaId: "media_unrepresented", status: "ready" });
+    expect(() => assertRetainedProductAuthority(demoStoreManifest, snapshot, readiness)).toThrow(/Retained media would be removed/);
   });
 });
 
@@ -184,38 +209,72 @@ describe("apply orchestration", () => {
     const report = readinessReport();
     report.status = "partial";
     const readSnapshot = vi.fn();
-    const executePhase = vi.fn();
+    const executeCommand = vi.fn();
     await expect(runRevisionSafeApply({
       manifest: demoStoreManifest,
       readinessReport: report,
       authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
       readSnapshot,
-      executePhase,
+      executeCommand,
     })).rejects.toThrow("readiness is incomplete");
     expect(readSnapshot).not.toHaveBeenCalled();
-    expect(executePhase).not.toHaveBeenCalled();
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  it("orders revision-safe phases and excludes retained option mutations", async () => {
+  it("refuses to reseed an existing simple SKU without completed-create provenance", async () => {
+    const report = readinessReport();
+    const snapshot = completeSnapshot(report);
+    snapshot.productDetails.find((item) => item.slug === "noor-ceramic-vase").variants[0].stock = 0;
+    const executeCommand = vi.fn();
+    await expect(runRevisionSafeApply({
+      manifest: demoStoreManifest,
+      readinessReport: report,
+      authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
+      readSnapshot: vi.fn().mockResolvedValue(snapshot),
+      executeCommand,
+      now: () => new Date("2026-07-13T03:01:00.000Z"),
+    })).rejects.toThrow(/Simple stock provenance is unknown/);
+    expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("binds the compiler plan in staged order and excludes activation, publication, and retained matrices", async () => {
     const report = readinessReport();
     const snapshot = completeSnapshot(report);
     const seen = [];
-    const executePhase = vi.fn(async (commands, { phase }) => {
-      seen.push({ phase, commands });
-      return { ok: true, outcomes: commands.map((command) => ({ logicalKey: command.logicalKey, status: "already_applied", resourceId: command.identity.id ?? null })) };
+    const executeCommand = vi.fn(async (command, { phase }) => {
+      seen.push({ phase, command });
+      const current = command.identity.id
+        ? snapshot.productDetails.find((item) => item.id === command.identity.id)
+          ?? snapshot.categories.find((item) => item.id === command.identity.id)
+          ?? snapshot.collections.find((item) => item.id === command.identity.id)
+          ?? snapshot.presentation.heroes.find((item) => item.id === command.identity.id)
+        : null;
+      return {
+        logicalKey: command.logicalKey,
+        status: "already_applied",
+        resourceId: current?.id ?? command.identity.id ?? null,
+        authority: {
+          id: current?.id ?? command.identity.id ?? `created_${command.logicalKey}`,
+          aggregateRevision: (current?.aggregateRevision ?? 4) + 1,
+          revision: current?.revision ?? 3,
+          version: current?.version ?? 2,
+        },
+      };
     });
     const result = await runRevisionSafeApply({
       manifest: demoStoreManifest,
       readinessReport: report,
       authorization: { confirmed: true, manifestFingerprint: manifestReadinessFingerprint(demoStoreManifest) },
       readSnapshot: vi.fn().mockResolvedValue(snapshot),
-      executePhase,
+      executeCommand,
       now: () => new Date("2026-07-13T03:01:00.000Z"),
     });
     expect(result.status).toBe("staged_complete");
-    expect(seen.map((item) => item.phase)).toEqual(["categories", "products", "collections", "settings"]);
-    expect(seen.flatMap((item) => item.commands).some((command) => command.logicalKey === "product:rider-court-trainers:options")).toBe(false);
-    expect(seen.flatMap((item) => item.commands).some((command) => command.logicalKey === "product:halo-arc-table-lamp:options")).toBe(false);
+    expect([...new Set(seen.map((item) => item.phase))]).toEqual(["categories", "products", "collections", "presentation"]);
+    expect(result.excludedPhases).toEqual(["activation", "publication"]);
+    expect(seen.some((item) => item.command.logicalKey === "product:rider-court-trainers:matrix")).toBe(false);
+    expect(seen.some((item) => item.command.logicalKey === "product:halo-arc-table-lamp:matrix")).toBe(false);
+    expect(seen.some((item) => item.command.phase === "activation" || item.command.phase === "publication")).toBe(false);
+    expect(seen.every((item) => !JSON.stringify(item.command).includes('"$ref"'))).toBe(true);
   });
 });
-

@@ -43,8 +43,11 @@ typed. Header/footer intent is rejected because those settings APIs do not yet
 have revision claims. The public `pnpm demo:store` command still rejects
 `--apply`; completing this report does not by itself authorize writes.
 
-The internal executor builds sequential category, product, collection, theme,
-and desktop/mobile hero commands through admin APIs only. Creates are resolved
+The internal executor consumes one pure compiler authority and binds its
+references from fresh snapshots and verified staged assets; it does not rebuild
+request payloads in the apply layer. It runs sequential category, product,
+inactive collection, and desktop/mobile hero commands through admin APIs only.
+Theme intent remains outside this milestone. Creates are resolved
 again by exact slug/name/type after success, timeout, or conflict; updates carry
 the current category revision, product aggregate revision, collection version,
 theme revision, or hero revision. A 409 is reported as a conflict and is never
