@@ -66,19 +66,37 @@ curl -sS -o /tmp/scalius-admin-orders-401.json \
 
 When an authenticated production regression check is warranted, use the optional
 admin read smoke. Credentials are accepted only through process environment and
-must belong to a least-privilege account that can view inventory and orders. The
-script creates an authentication session, keeps its cookies only in memory,
-performs bounded `GET` requests for one inventory variant, one order-list
-candidate, and that candidate's detail, then performs best-effort authenticated
-sign-out even when a read fails. A truthfully empty order catalog passes and skips
-detail. It prints only HTTP states, aggregate counts, and safe session-cleanup
-evidence; it never prints credentials, cookies, order IDs, SKUs, customer data,
-or response bodies.
+must belong to an account whose read permissions cover the representative admin
+workspaces below. The script creates an authentication session, keeps its cookies
+only in memory, and performs bounded `GET` discovery for inventory, orders,
+products, and customers. When candidates exist it validates order detail plus the
+order-edit form-data contract and customer history, then opens a fresh headless
+Chrome/Chromium profile against representative dashboard, product, order,
+customer, inventory, media, discount, analytics, SEO/security, account, theme,
+notification, checkout, and tax routes. Product/order/customer view or edit
+routes are skipped truthfully when their catalog is empty. The browser never
+submits a form: it fails on unexpected redirects, route error fallbacks, console
+errors, or page exceptions, and the script still performs best-effort
+authenticated sign-out when a read or route check fails. Output contains only
+HTTP states, aggregate counts, stable route labels, and safe session-cleanup
+evidence; it never prints credentials, cookies, resource IDs, SKUs, customer
+data, response bodies, or browser error payloads.
 
 ```bash
 SCALIUS_ADMIN_READ_EMAIL='<admin-email>' \
 SCALIUS_ADMIN_READ_PASSWORD='<admin-password>' \
 pnpm admin:read:check
+```
+
+Chrome is discovered from the normal platform paths. In a minimal CI or incident
+host, point to an installed browser through `SCALIUS_ADMIN_READ_BROWSER` (or
+`CHROME_BIN`) rather than adding it to a command containing credentials:
+
+```bash
+SCALIUS_ADMIN_READ_EMAIL='<admin-email>' \
+SCALIUS_ADMIN_READ_PASSWORD='<admin-password>' \
+SCALIUS_ADMIN_READ_BROWSER='/path/to/chrome' \
+pnpm admin:read:check --json
 ```
 
 Use a different dashboard origin only when deliberately checking another trusted
@@ -91,9 +109,9 @@ pnpm admin:read:check --dashboard-base-url https://dashboard.example.com --json
 ```
 
 Do not put credentials in CLI flags, shell scripts, committed files, screenshots,
-or incident notes. This smoke makes no commerce/settings writes, sends no OTPs or
-notifications, and performs no provider action. Authentication session creation
-and best-effort sign-out are its only non-GET requests. A `200` response with
+or incident notes. This smoke makes no commerce/settings writes, clicks no action,
+sends no OTPs or notifications, and performs no provider action. Authentication
+session creation and best-effort sign-out are its only non-GET requests. A `200` response with
 `success: true` proves that Better Auth acknowledged sign-out and attempted its
 normal session deletion/cookie clearing path. Better Auth intentionally catches
 adapter deletion errors internally, so this remains best-effort evidence; any
