@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { authClient } from "~/lib/auth-client";
+import { authClient, verifyCurrentPassword } from "~/lib/auth-client";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -203,12 +203,14 @@ export function TwoFactorSetup({ user }: TwoFactorSetupProps) {
     setIsLoading(true);
 
     try {
-      const passwordResult = await authClient.twoFactor.enable({ password });
-      if (passwordResult.error) {
-        setError(passwordResult.error.message || "Password confirmation failed");
+      const passwordResult = await verifyCurrentPassword(password);
+      if (!passwordResult.status) {
+        setError(passwordResult.error.message);
         return;
       }
-      setBackupCodes(passwordResult.data?.backupCodes || []);
+      // Changing the delivery method must preserve the current authenticator
+      // secret and recovery codes. Only a verified email OTP changes method.
+      setBackupCodes([]);
 
       const otpResult = await authClient.twoFactor.sendOtp();
       if (otpResult?.error) {
