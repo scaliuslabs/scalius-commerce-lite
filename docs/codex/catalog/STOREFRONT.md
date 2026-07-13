@@ -46,6 +46,23 @@ The storefront product page’s visual design is owner-protected. Do not redesig
   retaining readable type, safe-area handling, and at least 44px interactive
   targets. This is a density pass, not permission to recompose the page.
 
+### Implemented sticky information rail
+
+- The existing Description/additional-section rail uses native CSS sticky
+  positioning inside its own details region. It therefore stops with that
+  region instead of floating over related products or the rest of the page.
+- Its offset comes from the storefront header's measured `--header-height`;
+  panel anchors include the rail height and reduced-motion users receive
+  immediate tab/anchor movement.
+- The rail is an opaque `bg-white` surface without mobile backdrop filtering,
+  preventing content bleed and avoidable compositing jank. It remains
+  `relative` so overflow buttons/fades are bounded to the rail when more than
+  four merchant-defined sections exist.
+- Tab state keeps roving focus, Arrow/Home/End navigation, URL anchors, and
+  active/inactive hover styling synchronized. This is a behavior-only change;
+  gallery, summary, typography, section order, and product-page composition are
+  unchanged.
+
 ## Product-page changes not allowed without owner approval
 
 - New layout, typography, spacing system, gallery composition, option-control visual style, sticky purchase bar, tab visual design, or overall mobile composition.

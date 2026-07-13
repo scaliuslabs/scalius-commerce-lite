@@ -39,7 +39,10 @@ describe("product detail tabs", () => {
   it("keeps the information rail below the measured header without layout shims", () => {
     const source = readFileSync(DETAILS_SOURCE, "utf8");
 
-    expect(source).toContain("product-details-tab-rail sticky z-40");
+    expect(source).toContain("product-details-tab-rail relative sticky z-40");
+    expect(source).toContain("border-gray-200 bg-white");
+    expect(source).not.toContain("product-details-tab-rail sticky z-40");
+    expect(source).not.toContain("backdrop-blur");
     expect(source).toContain(
       "top: calc(var(--header-height, 3.5rem) - 1px)",
     );
@@ -58,6 +61,13 @@ describe("product detail tabs", () => {
 
     expect(review.getAttribute("aria-selected")).toBe("true");
     expect(review.tabIndex).toBe(0);
+    expect(review.classList.contains("hover:border-gray-300")).toBe(false);
+    expect(review.classList.contains("hover:text-gray-700")).toBe(false);
+    expect(
+      document
+        .querySelector("#details-tab-description")
+        ?.classList.contains("hover:border-gray-300"),
+    ).toBe(true);
     expect(document.querySelector("#details-tab-description")?.getAttribute("aria-selected")).toBe("false");
     expect(document.querySelector("#details-panel-review")?.classList.contains("hidden")).toBe(false);
     expect(document.querySelector("#details-panel-description")?.classList.contains("hidden")).toBe(true);
