@@ -6,6 +6,12 @@ type OperationDoc = {
     responses?: Record<string, unknown>;
 };
 
+type OpenApiSchema = {
+    required?: string[];
+    properties?: Record<string, OpenApiSchema>;
+    items?: OpenApiSchema;
+};
+
 type TestOpenApiDocument = {
     paths?: Record<string, Record<string, OperationDoc>>;
 };
@@ -35,6 +41,20 @@ function expectResponses(
 }
 
 describe("admin order mutation OpenAPI responses", () => {
+    it("requires selectedOptions on every order-form SKU", () => {
+        const spec = buildAdminOrdersSpec();
+        const operation = spec.paths?.["/api/v1/admin/orders/{id}/form-data"]?.get;
+        const response = operation?.responses?.["200"] as {
+            content?: Record<string, { schema?: OpenApiSchema }>;
+        } | undefined;
+        const responseSchema = response?.content?.["application/json"]?.schema;
+        const variantSchema = responseSchema?.properties?.data
+            ?.properties?.productsWithVariants?.items
+            ?.properties?.variants?.items;
+
+        expect(variantSchema?.required).toContain("selectedOptions");
+    });
+
     it("documents representative order, refund, return, COD, and fulfillment failures", () => {
         const spec = buildAdminOrdersSpec();
 

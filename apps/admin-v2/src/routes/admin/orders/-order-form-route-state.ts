@@ -56,6 +56,33 @@ function isEditOrderFormProduct(value: unknown): value is EditOrderFormProduct {
   );
 }
 
+function normalizeEditOrderFormProduct(
+  value: EditOrderFormProduct,
+): EditOrderFormProduct {
+  return {
+    ...value,
+    variants: value.variants.map((variant) => {
+      if (!variant || typeof variant !== "object" || Array.isArray(variant)) {
+        throw new Error("Order form response included an unusable SKU row.");
+      }
+      const selectedOptions = (variant as ProductVariant & {
+        selectedOptions?: unknown;
+      }).selectedOptions;
+      if (selectedOptions !== undefined && !Array.isArray(selectedOptions)) {
+        throw new Error("Order form response included unusable SKU options.");
+      }
+      return {
+        ...variant,
+        // Rolling deploys and cached responses may predate the required
+        // form-data contract. A missing collection means the SKU has no
+        // customer-facing axes (for example a default/simple SKU), not that
+        // the required catalog or order-item dependency can be invented.
+        selectedOptions: selectedOptions ?? [],
+      };
+    }),
+  };
+}
+
 export function buildNewOrderFormRouteData(payload: unknown): {
   productsWithVariants: Product[];
 } {
@@ -101,7 +128,9 @@ export function buildEditOrderFormRouteData(payload: unknown): EditOrderFormRout
     throw new Error("Order form defaults did not include order items.");
   }
   return {
-    productsWithVariants: data.productsWithVariants,
+    productsWithVariants: data.productsWithVariants.map(
+      normalizeEditOrderFormProduct,
+    ),
     defaultValues,
   };
 }

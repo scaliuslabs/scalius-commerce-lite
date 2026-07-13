@@ -31701,15 +31701,15 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 id: string;
                 name: string;
                 price: number;
-                discountPercentage: number;
+                discountPercentage: number | null;
                 discountType: string | null;
-                discountAmount: number;
+                discountAmount: number | null;
                 variants: Array<{
                     id: string;
                     productId: string;
                     optionCombinationKey: string | null;
                     imageId: string | null;
-                    selectedOptions?: Array<{
+                    selectedOptions: Array<{
                         optionDefinitionId: string;
                         optionValueId: string;
                         name: string;
