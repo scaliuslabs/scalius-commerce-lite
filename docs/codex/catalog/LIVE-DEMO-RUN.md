@@ -13,7 +13,7 @@ Only these products should remain active after cleanup:
 | Halo Arc Table Lamp | `prod_FOHvuxr0Hr11AA_hyLUpH` | Home & Living | Mixed image/video gallery; merchant-defined Finish and Plug options; 3 active of 4 possible SKUs; percentage SKU discount; partial exact-SKU image assignment with automatic fallback |
 | Rider Court Trainers | `prod_9XNNERD2XpAOIoI1SN6gx` | Footwear | Four real product images; merchant-defined Size and Color options; 6 active SKUs; per-SKU stock; partial exact-SKU image assignment with product-primary fallback |
 
-The product copy and image metadata came from public DummyJSON demo data and were rewritten for this store. The media library also contains a successfully uploaded 23.56 MB MP4, proving the multipart path above the old 10 MB ceiling.
+The product copy and image metadata came from public DummyJSON demo data and were rewritten for this store. A 23.56 MB MP4 was successfully uploaded during the media-path proof, demonstrating the multipart path above the old 10 MB ceiling. The final curated live media library contains only the five product images plus the dedicated logo and favicon; temporary proof media was removed.
 
 Keep these categories active and published:
 
@@ -28,15 +28,16 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 - Buyer selected Rider Court Trainers `Size 40 / Color Sand` and added one unit to cart.
 - Cart showed the correct trainer image, option labels, BDT 8,990 price, BDT 110 shipping, and BDT 9,100 total.
-- COD checkout completed as order `ZUMOSE` for the demo buyer.
+- COD checkout completed again after the 2026-07-13 coordinated release as order `FWW6XI` for `Scalius Demo Buyer`.
 - The guest receipt rendered order, money, address, item, cancellation-request entry point, and browser-bound receipt guidance.
-- `/admin/orders/ZUMOSE` opened the real detail page instead of redirecting to the order list.
+- `/admin/orders/FWW6XI` opened the real detail page instead of redirecting to the order list.
 - Inventory showed `RIDER-COURT-TRAINERS-40-SAND` as 14 on hand, 1 committed, 13 available. The other five Rider SKUs were unchanged.
 - Historical order `16V71E` was moved from Processing to Cancelled through the admin lifecycle. Global committed inventory dropped from 2 to 1, proving its Nike reservation was released.
 - After the coordinated release, Rider `Size 42 / Color Sand` was added to a fresh cart. The cart retained the exact product image and merchant option labels with a BDT 8,990 subtotal.
 - The cleaned storefront homepage showed Curated Essentials with Halo and Rider only. No obsolete Nike or energy-drink card remained.
 - Legacy product-photo branding was replaced with dedicated Scalius logo and favicon media. The saved D1 layout projection and a cache-bypassed storefront render both resolved the new assets with `Scalius`/`Scalius icon` alternative text.
-- `/admin/orders/ZUMOSE` still opened the order detail and exposed the pending status plus return/refund controls after the CMS/catalog migrations.
+- The legacy screenshot and flag homepage banners were replaced through the revision-aware admin workflow with Rider and Halo product media, accurate alternative text, and direct product destinations. Reload confirmed desktop hero revision 2 and a cache-bypassed storefront render showed both linked slides.
+- `/admin/orders/FWW6XI` exposed pending fulfillment, COD collection controls, immutable BDT totals, the exact `40 / Sand` SKU identity, and return controls without redirecting or logging a browser error.
 
 ## Cleanup decisions and state
 
@@ -52,11 +53,12 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 ## Release proof
 
-- Coordinated release: API `4bf80a0a-b0be-4e9e-821c-54f9f12630e2`, admin `ec2f865e-c89c-4c80-a995-904d1bb964f4`, storefront `4b5b7694-36b8-4f0d-bd6f-2ea488df5cc6`, ops monitor `d45f2083-24ac-4365-8e12-7220904eece9`.
+- Current coordinated release: API `9f27a2f6-a2a3-4fe3-91c9-195a38f1d08d`, admin `474f2ca9-903a-457f-85be-168a5c1de6b6`, storefront `fa2799cf-29d9-4ba4-8793-ce2885cf356c`, ops monitor `a2aed446-5e1b-4588-a568-1c0f93da3cc3`.
 - CMS page migration `0021_eminent_slayback.sql` applied successfully; the Pages admin loads without a route or API error.
 - Latest API after the live D1 and media-key fixes: `6c0c3abc-01a9-4b2c-91f9-c1eefe2121a2`.
-- Full local release gate after deployment: 525 test files and 3,707 tests passed; TypeScript/Astro diagnostics, lint, and Worker binding checks passed.
-- Production ops and release checks passed. Discovery proof covered six sitemap checks, Google and Meta feeds with nine valid variant rows, UCP search/lookup, product JSON-LD, storefront cache headers, and auth gates.
+- Migrations `0022` (analytics lifecycle), `0023` (hero slider revisions), and `0024` (theme revisions) applied successfully before the current release.
+- Full local release gate before deployment: 540 test files and 3,779 tests passed; TypeScript/Astro diagnostics, lint, SDK generation, and Worker binding checks passed.
+- Production ops and release checks passed after all four current deployments. Discovery proof covered six sitemap checks, Google and Meta feeds with nine valid variant rows, UCP search/lookup, product JSON-LD, storefront cache headers, and auth gates. All eight queue bindings had only the intended API/ops-monitor producers and API consumers.
 - The obsolete `storefront-test` -> `testdash` Worker chain was removed after dependency inspection. This also removed `testdash` from the payment-events, order-notifications, and auth-otp production producer lists; a subsequent queue topology check showed only the source-owned API and ops-monitor producers.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
