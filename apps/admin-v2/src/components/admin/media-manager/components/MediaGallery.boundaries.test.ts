@@ -18,4 +18,11 @@ describe("media gallery presentation boundaries", () => {
     expect(card).toContain('className="absolute right-1.5 top-1.5 flex gap-1"');
     expect(card).not.toContain("opacity-0 transition-opacity");
   });
+
+  it("exposes truthful keyboard selection state and forwards Shift range intent", () => {
+    expect(card).toContain('aria-pressed={selectionMode ? selected : undefined}');
+    expect(card).toContain('aria-keyshortcuts={selectionMode ? "Shift+Enter" : undefined}');
+    expect(gallery).toContain("props.onToggleSelection(file.id, event.shiftKey)");
+    expect(gallery).toContain("props.onFileSelect(file, event.shiftKey)");
+  });
 });

@@ -43,17 +43,18 @@ export function MediaManager({
 
   useEffect(() => {
     if (!open) return;
-    manager.setSelectedFileIds(selectedFiles.map((file) => file.id.replace(/^temp_/, "")));
-    manager.setSelectionMode(!!onSelectMultiple || selectedFiles.length > 0);
-    // Seed the caller's selection once when the dialog opens; navigation then
-    // clears it so hidden assets cannot remain selected.
+    manager.replaceSelection(selectedFiles.map((file) => file.id.replace(/^temp_/, "")));
+    manager.setSelectionMode(!!onSelectMultiple);
+    // Seed the caller's current value once when the dialog opens. A selected
+    // value may be highlighted in a single picker, but only a multi-picker uses
+    // toggle semantics; clicking another card in a single picker must choose it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger ?? <Button type="button" variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4" />{triggerLabel}</Button>}</DialogTrigger>
-      <DialogContent className={`h-[94vh] max-h-[860px] w-[96vw] max-w-7xl overflow-hidden p-0 ${dialogClassName ?? ""}`}>
+      <DialogContent className={`h-[94svh] max-h-[860px] w-[96vw] max-w-7xl overflow-hidden p-0 ${dialogClassName ?? ""}`}>
         <DialogTitle className="sr-only">Choose media</DialogTitle>
         <DialogDescription className="sr-only">Browse and upload supported media assets.</DialogDescription>
         <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onSelect(file); setOpen(false); } : undefined} onClose={() => setOpen(false)} />

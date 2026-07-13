@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
 import { capabilityKind, type LibraryMediaFile, type MediaCapability, type MediaFile, type MediaLibraryView } from "../types";
+import { selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
 
 interface UseMediaManagerOptions {
   autoLoad: boolean;
@@ -30,20 +31,23 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
   const media = useMediaFiles(false);
   const folders = useFolders(autoLoad);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
-  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(!!onSelectMultiple);
   const [previewFile, setPreviewFile] = useState<LibraryMediaFile | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [view, setViewState] = useState<MediaLibraryView>("ready");
   const [isMutating, setIsMutating] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectionAnchorId = useRef<string | null>(null);
 
   const upload = useMediaUpload({
     capability,
     folderId: folders.currentFolderId === "all" ? null : folders.currentFolderId,
     onUploadComplete: (uploaded) => {
-      setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
-      if (onSelectMultiple) setSelectionMode(true);
+      if (onSelectMultiple) {
+        setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
+        setSelectionMode(true);
+      }
       if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
       uploadRefreshTimer.current = setTimeout(() => void media.refresh(), 350);
     },
@@ -57,7 +61,8 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
 
   useEffect(() => {
     setSelectedFileIds([]);
-    setSelectionMode(false);
+    setSelectionMode(!!onSelectMultiple);
+    selectionAnchorId.current = null;
     if (autoLoad) void media.loadFiles(undefined, { ...media.filters, ...baseFilters });
     // Filters are deliberately reset by these navigation changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,9 +77,10 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
 
   const applyFilters = useCallback((updates: Partial<typeof media.filters>) => {
     setSelectedFileIds([]);
-    setSelectionMode(false);
+    setSelectionMode(!!onSelectMultiple);
+    selectionAnchorId.current = null;
     void media.loadFiles(undefined, { ...media.filters, ...baseFilters, ...updates });
-  }, [baseFilters, media]);
+  }, [baseFilters, media, onSelectMultiple]);
 
   const applySearch = useCallback((search: string) => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -84,17 +90,50 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
   const setView = useCallback((next: MediaLibraryView) => {
     setViewState(next);
     setSelectedFileIds([]);
-    setSelectionMode(false);
+    setSelectionMode(!!onSelectMultiple);
+    selectionAnchorId.current = null;
+  }, [onSelectMultiple]);
+
+  const replaceSelection = useCallback((ids: string[]) => {
+    selectionAnchorId.current = null;
+    setSelectedFileIds(ids);
   }, []);
 
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedFileIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  const beginSelection = useCallback(() => {
+    selectionAnchorId.current = null;
+    setSelectionMode(true);
   }, []);
 
-  const handleFileSelect = useCallback((file: LibraryMediaFile) => {
+  const selectAllVisible = useCallback(() => {
+    const visibleIds = media.files.map((file) => file.id);
+    selectionAnchorId.current = visibleIds[0] ?? null;
+    setSelectedFileIds(selectAllVisibleMedia(visibleIds));
+  }, [media.files]);
+
+  const clearSelection = useCallback((preserveMode: boolean) => {
+    selectionAnchorId.current = null;
+    setSelectedFileIds([]);
+    setSelectionMode(preserveMode);
+  }, []);
+
+  const toggleSelection = useCallback((id: string, extendRange = false) => {
+    setSelectedFileIds((current) => {
+      const update = updateMediaSelection({
+        selectedIds: current,
+        visibleIds: media.files.map((file) => file.id),
+        targetId: id,
+        anchorId: selectionAnchorId.current,
+        extendRange,
+      });
+      selectionAnchorId.current = update.anchorId;
+      return update.selectedIds;
+    });
+  }, [media.files]);
+
+  const handleFileSelect = useCallback((file: LibraryMediaFile, extendRange = false) => {
     if (selectionMode || onSelectMultiple) {
       setSelectionMode(true);
-      toggleSelection(file.id);
+      toggleSelection(file.id, extendRange);
       return;
     }
     if (onSelect) onSelect(file);
@@ -112,6 +151,8 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
       if (action === "trash") await MediaApiClient.trashFile(file);
       else if (action === "restore") await MediaApiClient.restoreFile(file);
       else await MediaApiClient.permanentlyDeleteFile(file);
+      setSelectedFileIds((current) => current.filter((id) => id !== file.id));
+      if (selectionAnchorId.current === file.id) selectionAnchorId.current = null;
       toast.success(action === "trash" ? "Moved to trash" : action === "restore" ? "Restored" : "Permanently deleted");
       await load();
     } catch (error) {
@@ -126,6 +167,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     setIsMutating(true);
     let succeeded = 0;
     const failures: string[] = [];
+    const failedIds: string[] = [];
     await bounded(selectedFiles, async (file) => {
       try {
         if (action === "trash") await MediaApiClient.trashFile(file);
@@ -133,12 +175,14 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
         else await MediaApiClient.permanentlyDeleteFile(file);
         succeeded += 1;
       } catch (error) {
+        failedIds.push(file.id);
         failures.push(`${file.filename}: ${error instanceof Error ? error.message : "failed"}`);
       }
     });
-    setIsMutating(false);
-    setSelectedFileIds([]);
+    setSelectedFileIds(failedIds);
+    selectionAnchorId.current = null;
     await load();
+    setIsMutating(false);
     if (succeeded) toast.success(`${succeeded} asset${succeeded === 1 ? "" : "s"} updated`);
     if (failures.length) toast.error(`${failures.length} asset${failures.length === 1 ? "" : "s"} not changed`, { description: failures.slice(0, 3).join("\n") });
   }, [load, selectedFiles]);
@@ -149,6 +193,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     try {
       await MediaApiClient.moveFiles(selectedFiles, folderId);
       setSelectedFileIds([]);
+      selectionAnchorId.current = null;
       toast.success("Assets moved");
       await load();
     } catch (error) {
@@ -183,7 +228,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     view,
     setView,
     selectedFileIds,
-    setSelectedFileIds,
+    replaceSelection,
     selectionMode,
     setSelectionMode,
     selectedFiles,
@@ -195,6 +240,9 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     load,
     applyFilters,
     applySearch,
+    beginSelection,
+    selectAllVisible,
+    clearSelection,
     toggleSelection,
     handleFileSelect,
     mutateOne,

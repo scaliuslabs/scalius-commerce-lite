@@ -18,9 +18,9 @@ interface MediaCardProps {
   selected: boolean;
   selectionMode: boolean;
   view: MediaLibraryView;
-  onActivate: () => void;
+  onActivate: (event: MouseEvent<HTMLButtonElement>) => void;
   onPreview: (event: MouseEvent) => void;
-  onToggle: () => void;
+  onToggle: (event: MouseEvent<HTMLButtonElement>) => void;
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
 }
 
@@ -37,14 +37,17 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
     <article
       className={cn(
         "group relative overflow-hidden rounded-lg border bg-card transition-colors focus-within:border-foreground/40",
-        selected && "border-foreground ring-1 ring-foreground",
+        selected && "border-primary ring-1 ring-primary",
       )}
     >
       <button
         type="button"
         className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         onClick={selectionMode ? onToggle : onActivate}
+        aria-pressed={selectionMode ? selected : undefined}
+        aria-keyshortcuts={selectionMode ? "Shift+Enter" : undefined}
         aria-label={`${selectionMode ? (selected ? "Deselect" : "Select") : "Open"} ${file.filename}`}
+        title={selectionMode ? "Hold Shift to select a range" : undefined}
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {previewUrl && !loadFailed ? (
@@ -67,7 +70,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
             </span>
           )}
           {selectionMode && (
-            <span aria-hidden="true" className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border bg-background/90 shadow-sm">{selected && <Check className="h-3.5 w-3.5" />}</span>
+            <span aria-hidden="true" className={cn("absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border bg-background/90 shadow-sm", selected && "border-primary bg-primary text-primary-foreground")}>{selected && <Check className="h-3.5 w-3.5" />}</span>
           )}
         </div>
         <div className="px-2.5 py-2">
