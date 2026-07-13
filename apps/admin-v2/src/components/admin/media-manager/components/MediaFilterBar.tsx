@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckSquare2, FolderInput, RotateCcw, Search, Trash2, Upload, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -41,6 +41,11 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
   const [search, setSearch] = useState(props.filters.search);
   const [targetFolder, setTargetFolder] = useState("");
   const sortValue = Object.entries(SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
+
+  useEffect(() => {
+    if (props.selectedCount === 0) setTargetFolder("");
+  }, [props.selectedCount]);
+
   return (
     <div className="border-b bg-background px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
