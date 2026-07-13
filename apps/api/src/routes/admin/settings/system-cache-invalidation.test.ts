@@ -770,6 +770,10 @@ describe("system settings cache invalidation", () => {
       expect.anything(),
       { channel: "email" },
     );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
+    );
   });
 
   it("encrypts a new Resend key before saving it", async () => {
@@ -792,6 +796,10 @@ describe("system settings cache invalidation", () => {
     expect(mocks.clearNotificationProviderBlocks).toHaveBeenCalledWith(
       expect.anything(),
       { channel: "email" },
+    );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["checkout"],
+      expect.objectContaining({ env }),
     );
   });
 

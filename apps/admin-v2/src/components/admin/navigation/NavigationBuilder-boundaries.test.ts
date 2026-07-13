@@ -1,104 +1,75 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
-const NAVIGATION_BUILDER_SOURCE = fileURLToPath(
-  new URL("./NavigationBuilder.tsx", import.meta.url),
-);
-const NAVIGATION_TREE_ROWS_SOURCE = fileURLToPath(
-  new URL("./NavigationTreeRows.tsx", import.meta.url),
-);
-const MOBILE_NAVIGATION_TREE_SOURCE = fileURLToPath(
-  new URL("./MobileNavigationTree.tsx", import.meta.url),
-);
-const SORTABLE_NAVIGATION_EDITOR_SOURCE = fileURLToPath(
-  new URL("./SortableNavigationEditor.tsx", import.meta.url),
-);
-const SORTABLE_NAV_ITEM_SOURCE = fileURLToPath(
-  new URL("./SortableNavItem.tsx", import.meta.url),
-);
-const ADD_NAV_ITEM_DIALOG_SOURCE = fileURLToPath(
-  new URL("./AddNavItemDialog.tsx", import.meta.url),
-);
+function readSource(relativePath: string) {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+}
 
-describe("NavigationBuilder bundle boundaries", () => {
-  it("keeps dnd-kit behind the reorder-mode lazy boundary", () => {
-    const builderSource = readFileSync(NAVIGATION_BUILDER_SOURCE, "utf8");
-    const treeRowsSource = readFileSync(NAVIGATION_TREE_ROWS_SOURCE, "utf8");
-    const sortableEditorSource = readFileSync(
-      SORTABLE_NAVIGATION_EDITOR_SOURCE,
-      "utf8",
-    );
-    const sortableNavItemSource = readFileSync(SORTABLE_NAV_ITEM_SOURCE, "utf8");
+describe("navigation workspace boundaries", () => {
+  it("uses one searchable hierarchy and selected-item inspector instead of simultaneous row inputs", () => {
+    const source = readSource("./NavigationBuilder.tsx");
+    const mapSource = readSource("./NavigationMap.tsx");
 
-    expect(builderSource).toContain('import("./SortableNavigationEditor")');
-    expect(builderSource).toContain("isReorderMode");
-    expect(builderSource).not.toContain("@dnd-kit/");
-    expect(builderSource).not.toContain("./SortableNavItem");
-
-    expect(treeRowsSource).not.toContain("@dnd-kit/");
-    expect(treeRowsSource).not.toContain("useSortable");
-
-    expect(sortableEditorSource).toContain("@dnd-kit/core");
-    expect(sortableEditorSource).toContain("@dnd-kit/sortable");
-    expect(sortableEditorSource).toContain("./SortableNavItem");
-    expect(sortableNavItemSource).toContain("useSortable");
+    expect(source).toContain('aria-label="Find menu item"');
+    expect(source).toContain('aria-label="Selected menu item"');
+    expect(source).toContain("Collapse all");
+    expect(source).toContain("Expand all");
+    expect(source).toContain("matchingItems");
+    expect(source).toContain("<NavigationMap");
+    expect(mapSource).toContain('aria-label={depth === 0 ? "Menu map"');
+    expect(mapSource).toContain("[content-visibility:auto]");
+    expect(source).not.toContain("<Table");
+    expect(source).not.toContain("@dnd-kit/");
   });
 
-  it("keeps plain child rows editable without entering reorder mode", () => {
-    const treeRowsSource = readFileSync(NAVIGATION_TREE_ROWS_SOURCE, "utf8");
+  it("keeps deterministic keyboard and touch arrangement controls in the inspector", () => {
+    const source = readSource("./NavigationBuilder.tsx");
 
-    expect(treeRowsSource).toContain("onOutdent(parentPath, index)");
-    expect(treeRowsSource).toContain("canOutdent");
-    expect(treeRowsSource).toContain("depth + 1 < maxDepth");
+    expect(source).toContain("Position and nesting");
+    expect(source).toContain("Earlier");
+    expect(source).toContain("Later");
+    expect(source).toContain("Make child");
+    expect(source).toContain("Up a level");
+    expect(source).toContain("canIndentNavigationItem");
+    expect(source).toContain("MAX_NAV_DEPTH");
+    expect(source).toContain("MAX_NAV_ITEMS");
   });
 
-  it("keeps public menus to three usable levels", () => {
-    const typesSource = readFileSync(
-      fileURLToPath(new URL("./types.ts", import.meta.url)),
-      "utf8",
-    );
+  it("keeps editing responsive without maintaining a second mobile implementation", () => {
+    const source = readSource("./NavigationBuilder.tsx");
 
-    expect(typesSource).toContain("MAX_NAV_DEPTH = 3");
-    expect(typesSource).not.toContain("MAX_NAV_DEPTH = 10");
+    expect(source).toContain("useIsMobile");
+    expect(source).toContain("scrollIntoView");
+    expect(source).toContain("lg:grid-cols-");
+    expect(source).not.toContain("MobileNavigationTree");
+    expect(source).not.toContain("SortableNavigationEditor");
   });
 
-  it("uses a native-control mobile tree instead of squeezing the desktop table", () => {
-    const builderSource = readFileSync(NAVIGATION_BUILDER_SOURCE, "utf8");
-    const mobileSource = readFileSync(MOBILE_NAVIGATION_TREE_SOURCE, "utf8");
+  it("uses the shared safe-link policy and public item sources", () => {
+    const builderSource = readSource("./NavigationBuilder.tsx");
+    const dialogSource = readSource("./AddNavItemDialog.tsx");
 
-    expect(builderSource).toContain("useIsMobile");
-    expect(builderSource).toContain("renderMobileNavigation");
-    expect(builderSource).toContain("<MobileNavigationTree");
-    expect(mobileSource).not.toContain("<Table");
-    expect(mobileSource).toContain('aria-expanded={expanded}');
-    expect(mobileSource).toContain('role="group"');
-    expect(mobileSource).toContain("Move ${label} earlier");
-    expect(mobileSource).toContain("Move ${label} up one level");
-  });
-
-  it("keeps every editor on the shared depth and safe-preview boundaries", () => {
-    const builderSource = readFileSync(NAVIGATION_BUILDER_SOURCE, "utf8");
-    const treeRowsSource = readFileSync(NAVIGATION_TREE_ROWS_SOURCE, "utf8");
-    const mobileSource = readFileSync(MOBILE_NAVIGATION_TREE_SOURCE, "utf8");
-    const sortableSource = readFileSync(SORTABLE_NAV_ITEM_SOURCE, "utf8");
-
-    expect(builderSource).toContain("canIndentNavigationItem(item, depth)");
-    for (const source of [treeRowsSource, mobileSource, sortableSource]) {
-      expect(source).toContain("canIndentNavigationItem(item, depth, maxDepth)");
-      expect(source).toContain("openNavigationPreview");
-      expect(source).not.toContain("window.open(");
-    }
-    expect(sortableSource).toContain("depth + 1 < maxDepth");
-    expect(sortableSource).not.toContain("depth < maxDepth;");
-  });
-
-  it("uses public page sources and the shared safe-link policy", () => {
-    const dialogSource = readFileSync(ADD_NAV_ITEM_DIALOG_SOURCE, "utf8");
-
+    expect(builderSource).toContain("parseNavigationHref");
+    expect(builderSource).toContain("openNavigationPreview");
+    expect(builderSource).not.toContain("window.open(");
     expect(dialogSource).toContain("data.items.pages");
     expect(dialogSource).toContain("parseNavigationHref(customUrl)");
+    expect(dialogSource).toContain("availableSlots");
+    expect(dialogSource).toContain("onCheckedChange={() => toggleCategory(cat)}");
     expect(dialogSource).not.toContain("`/pages/${p.slug}`");
-    expect(dialogSource).not.toContain('from "~/lib/api-functions/pages"');
+  });
+
+  it("edits one footer column at a time with native column-order controls", () => {
+    const source = readSource("../footer-builder/NavigationMenusSection.tsx");
+
+    expect(source).toContain('aria-label="Footer columns"');
+    expect(source).toContain('aria-label="Selected footer column"');
+    expect(source).toContain("Move ${selectedMenu.title || \"column\"} earlier");
+    expect(source).toContain("Move ${selectedMenu.title || \"column\"} later");
+    expect(source).toContain("<NavigationBuilder");
+    expect(source).not.toContain("@dnd-kit/");
+    expect(source).not.toContain("localStorage");
+    expect(source).not.toContain("<Accordion");
   });
 });

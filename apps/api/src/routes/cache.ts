@@ -141,7 +141,11 @@ const getLastClearedRoute = createRoute({
 app.openapi(getLastClearedRoute, async (c) => {
   const kvNs = kv(c);
   const groupNames = Object.keys(INVALIDATION_GROUPS);
-  const timestamps: Record<string, number | null> = {};
+  // Preserve the declared operator-facing group order regardless of which KV
+  // lookup resolves first (groups with no API prefixes resolve immediately).
+  const timestamps: Record<string, number | null> = Object.fromEntries(
+    groupNames.map((group) => [group, null]),
+  );
 
   if (kvNs) {
     await Promise.all(

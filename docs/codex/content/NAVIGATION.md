@@ -1,6 +1,44 @@
 # Navigation, Header, and Footer Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-14
+
+## 2026-07-14 scalable menu workspace
+
+Header navigation and every footer column now use the same compact menu-map
+workspace:
+
+- A searchable, collapsible hierarchy is the orientation surface. Search checks
+  labels and destinations while retaining matching ancestors, and explicit
+  expand/collapse-all controls make wide trees navigable.
+- Only the selected item exposes label and destination inputs. Its inspector
+  shows the ancestor trail, level, sibling position, destination validation,
+  safe preview, child count, add/remove, and native Earlier/Later/Make child/Up
+  a level controls. Hundreds of simultaneous inputs no longer make the page
+  visually or computationally heavy.
+- All mutations address stable node IDs, not filtered row positions. Selecting,
+  searching, reordering, indenting, or outdenting cannot accidentally update a
+  different item because the visible result set changed.
+- The tree remains bounded by the existing 150-node/three-level public contract.
+  Collapsed branches and CSS content visibility bound normal rendering without
+  adding a second virtualized-tree dependency for a maximum of 150 compact
+  summary rows.
+- Narrow screens use the same semantic tree and inspector rather than a second
+  implementation. Selecting a mobile tree node moves focus context to the
+  inspector; all arrangement actions are native buttons operable by keyboard
+  and touch.
+- Footer columns now use one horizontal/vertical column rail and one active
+  editor. At most four columns exist, and native earlier/later controls replace
+  drag-only column ordering. Accordion state and its unrelated local-storage
+  persistence were removed.
+
+Focused tests cover stable-ID mutations, ancestor-preserving search, depth and
+count summaries, sibling moves, indent/outdent depth guards, responsive/shared
+workspace boundaries, safe link preview, and footer single-editor behavior.
+
+This is a UI/workflow hardening slice over the interim JSON authority. It does
+not claim the accepted versioned reusable-menu model, typed resource references,
+CAS conflicts, broken-resource diagnostics, publish lifecycle, or real
+desktop/mobile storefront preview; those remain the architecture work below.
 
 ## 2026-07-13 bounded builder hardening
 
@@ -23,13 +61,9 @@ model remains the architectural destination:
   credential-free HTTPS URLs. The editor exposes invalid destinations inline.
 - Footer menu previews now resolve against the real storefront origin rather
   than opening a fake `#` URL.
-- At mobile admin widths, navigation editing uses a compact nested card tree
-  instead of squeezing the four-column desktop table into 390 px. Native
-  inputs and buttons keep label/destination edits, safe preview, add/remove,
-  collapse, and hierarchy visible. Reorder mode exposes deterministic Earlier,
-  Later, Make child, and Up a level commands, so touch and keyboard merchants
-  are never required to drag. The desktop table and drag workflow remain
-  unchanged.
+- At mobile admin widths, the shared menu map and selected-item inspector avoid
+  squeezing a desktop table into 390 px. Native arrangement buttons mean touch
+  and keyboard merchants are never required to drag.
 - Copyright input is defined as the owner/business name. The storefront owns
   the current year and rights suffix exactly once, and no longer writes unused
   footer presentation data into `localStorage` on every page.

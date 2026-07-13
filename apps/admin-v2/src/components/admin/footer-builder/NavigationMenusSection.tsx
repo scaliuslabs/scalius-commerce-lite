@@ -1,34 +1,17 @@
-// src/components/admin/footer-builder/NavigationMenusSection.tsx
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Columns3,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { nanoid } from "nanoid";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Plus, Trash2, GripVertical } from "lucide-react";
-import { nanoid } from "nanoid";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "~/components/ui/accordion";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { cn } from "@scalius/shared/utils";
+import { Label } from "~/components/ui/label";
 import { NavigationBuilder } from "../navigation/NavigationBuilder";
-import { getSortableStyle } from "../shared/sortable-style";
 import type { FooterMenu, NavigationItem } from "./types";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 
@@ -39,233 +22,200 @@ interface NavigationMenusSectionProps {
   onChange: (menus: FooterMenu[]) => void;
 }
 
-const SortableMenuCard = React.memo(function SortableMenuCard({
-  menu,
-  onRemove,
-  onUpdateTitle,
-  onUpdateLinks,
-  getStorefrontPath,
-}: {
-  menu: FooterMenu;
-  onRemove: (id: string, e: React.MouseEvent) => void;
-  onUpdateTitle: (id: string, title: string) => void;
-  onUpdateLinks: (menuId: string, links: NavigationItem[]) => void;
-  getStorefrontPath: (path: string) => string;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: menu.id });
-
-  const style = useMemo(
-    () => getSortableStyle(transform, transition),
-    [transform, transition],
-  );
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "rounded-md border bg-card",
-        isDragging && "shadow-lg ring-2 ring-primary/30 opacity-50",
-      )}
-    >
-      <AccordionItem value={menu.id} className="border-0">
-        <div className="flex items-center bg-muted/10 px-2 py-1.5">
-          <div
-            {...attributes}
-            {...listeners}
-            className="mr-1 cursor-grab rounded p-1 hover:bg-muted"
-            aria-label={`Reorder ${menu.title}`}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
-
-          <AccordionTrigger className="flex-1 py-1 hover:no-underline pr-3">
-            <span className="flex items-center gap-2 font-medium text-sm">
-              {menu.title || "Untitled menu"}
-              <span className="text-xs font-normal text-muted-foreground">
-                {menu.links.length} links
-              </span>
-            </span>
-          </AccordionTrigger>
-
-          <div className="ml-auto flex items-center border-l pl-2">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={(e) => onRemove(menu.id, e)}
-              aria-label={`Remove ${menu.title || "footer menu"}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <AccordionContent className="border-t bg-background p-3">
-          <div className="mb-3 grid max-w-sm gap-1.5">
-            <label htmlFor={`footer-menu-${menu.id}`} className="text-xs font-medium">
-              Column heading
-            </label>
-            <Input
-              id={`footer-menu-${menu.id}`}
-              value={menu.title}
-              onChange={(e) => onUpdateTitle(menu.id, e.target.value)}
-              className="h-8"
-              placeholder="e.g. Help"
-            />
-          </div>
-          <NavigationBuilder
-            navigation={menu.links}
-            onChange={(newLinks) => onUpdateLinks(menu.id, newLinks)}
-            getStorefrontPath={getStorefrontPath}
-          />
-        </AccordionContent>
-      </AccordionItem>
-    </div>
-  );
-});
+function moveMenu(menus: FooterMenu[], index: number, direction: -1 | 1) {
+  const destination = index + direction;
+  if (destination < 0 || destination >= menus.length) return menus;
+  const next = [...menus];
+  const [moved] = next.splice(index, 1);
+  next.splice(destination, 0, moved);
+  return next;
+}
 
 export function NavigationMenusSection({
   menus,
   onChange,
 }: NavigationMenusSectionProps) {
   const { getStorefrontPath } = useStorefrontUrl();
-  const [openItems, setOpenItems] = useState<string[]>([]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
+  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(
+    menus[0]?.id ?? null,
   );
+  const selectedIndex = useMemo(
+    () => menus.findIndex((menu) => menu.id === selectedMenuId),
+    [menus, selectedMenuId],
+  );
+  const selectedMenu = selectedIndex >= 0 ? menus[selectedIndex] : null;
 
-  // Memoize menu IDs for SortableContext
-  const menuIds = useMemo(() => menus.map((m) => m.id), [menus]);
-
-  // Load accordion state from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("footer-builder-accordions");
-    if (saved) {
-      try {
-        setOpenItems(JSON.parse(saved));
-      } catch {
-        setOpenItems([]);
-      }
-    }
-  }, []);
-
-  const handleAccordionChange = useCallback((value: string[]) => {
-    setOpenItems(value);
-    localStorage.setItem("footer-builder-accordions", JSON.stringify(value));
-  }, []);
+    if (selectedMenu || menus.length === 0) return;
+    setSelectedMenuId(menus[0]?.id ?? null);
+  }, [menus, selectedMenu]);
 
   const addMenu = useCallback(() => {
-    const newId = nanoid();
-    onChange([
-      ...menus,
-      { id: newId, title: `Menu ${menus.length + 1}`, links: [] },
-    ]);
-    setOpenItems((prev) => {
-      const next = [...prev, newId];
-      localStorage.setItem("footer-builder-accordions", JSON.stringify(next));
-      return next;
-    });
+    if (menus.length >= MAX_FOOTER_MENUS) return;
+    const newMenu: FooterMenu = {
+      id: nanoid(),
+      title: `Menu ${menus.length + 1}`,
+      links: [],
+    };
+    onChange([...menus, newMenu]);
+    setSelectedMenuId(newMenu.id);
   }, [menus, onChange]);
 
-  const removeMenu = useCallback(
-    (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      onChange(menus.filter((m) => m.id !== id));
+  const updateSelected = useCallback(
+    (updates: Partial<FooterMenu>) => {
+      if (!selectedMenu) return;
+      onChange(
+        menus.map((menu) =>
+          menu.id === selectedMenu.id ? { ...menu, ...updates } : menu,
+        ),
+      );
     },
-    [menus, onChange],
+    [menus, onChange, selectedMenu],
   );
 
-  const updateMenuTitle = useCallback(
-    (id: string, title: string) => {
-      onChange(menus.map((m) => (m.id === id ? { ...m, title } : m)));
-    },
-    [menus, onChange],
-  );
+  const removeSelected = useCallback(() => {
+    if (!selectedMenu) return;
+    const next = menus.filter((menu) => menu.id !== selectedMenu.id);
+    onChange(next);
+    setSelectedMenuId(next[Math.min(selectedIndex, next.length - 1)]?.id ?? null);
+  }, [menus, onChange, selectedIndex, selectedMenu]);
 
-  const updateMenuLinks = useCallback(
-    (menuId: string, links: NavigationItem[]) => {
-      onChange(menus.map((m) => (m.id === menuId ? { ...m, links } : m)));
-    },
-    [menus, onChange],
-  );
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-
-      const oldIndex = menus.findIndex((m) => m.id === active.id);
-      const newIndex = menus.findIndex((m) => m.id === over.id);
-      onChange(arrayMove(menus, oldIndex, newIndex));
-    },
-    [menus, onChange],
+  const updateLinks = useCallback(
+    (links: NavigationItem[]) => updateSelected({ links }),
+    [updateSelected],
   );
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-medium">Footer columns</h3>
+          <h3 className="text-base font-medium">Footer navigation</h3>
           <p className="text-xs text-muted-foreground">
-            Up to {MAX_FOOTER_MENUS} focused groups of shopping and help links.
+            Organize up to {MAX_FOOTER_MENUS} focused columns without opening several editors at once.
           </p>
         </div>
-        <Button onClick={addMenu} size="sm" disabled={menus.length >= MAX_FOOTER_MENUS}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add column
+        <Button
+          type="button"
+          onClick={addMenu}
+          size="sm"
+          disabled={menus.length >= MAX_FOOTER_MENUS}
+        >
+          <Plus /> Add column
         </Button>
       </div>
 
       {menus.length === 0 ? (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-4 text-muted-foreground">
-          <p className="text-sm">No footer columns</p>
-          <Button size="sm" onClick={addMenu}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add first column
-          </Button>
+        <div className="grid min-h-48 place-items-center rounded-lg border border-dashed px-4 py-8 text-center">
+          <div>
+            <Columns3 className="mx-auto h-6 w-6 text-muted-foreground/50" />
+            <p className="mt-2 text-sm font-medium">No footer columns</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Add a compact group for shopping, support, company, or policy links.
+            </p>
+            <Button type="button" size="sm" className="mt-3" onClick={addMenu}>
+              <Plus /> Add first column
+            </Button>
+          </div>
         </div>
       ) : (
-        <Accordion
-          type="multiple"
-          value={openItems}
-          onValueChange={handleAccordionChange}
-          className="w-full space-y-2"
-        >
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[190px_minmax(0,1fr)]">
+          <nav
+            className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/15 p-1 xl:block xl:space-y-1 xl:overflow-visible"
+            aria-label="Footer columns"
           >
-            <SortableContext
-              items={menuIds}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-2">
-                {menus.map((menu) => (
-                  <SortableMenuCard
-                    key={menu.id}
-                    menu={menu}
-                    onRemove={removeMenu}
-                    onUpdateTitle={updateMenuTitle}
-                    onUpdateLinks={updateMenuLinks}
-                    getStorefrontPath={getStorefrontPath}
+            {menus.map((menu, index) => {
+              const isSelected = menu.id === selectedMenuId;
+              return (
+                <button
+                  key={menu.id}
+                  type="button"
+                  className={cn(
+                    "flex min-w-40 shrink-0 items-center gap-2 rounded-md px-2.5 py-2 text-left xl:w-full xl:min-w-0",
+                    isSelected
+                      ? "bg-foreground text-background shadow-sm"
+                      : "hover:bg-muted",
+                  )}
+                  onClick={() => setSelectedMenuId(menu.id)}
+                  aria-pressed={isSelected}
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded border border-current/20 text-[11px] font-medium tabular-nums">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">
+                      {menu.title.trim() || "Untitled column"}
+                    </span>
+                    <span
+                      className={cn(
+                        "block text-[11px]",
+                        isSelected ? "text-background/65" : "text-muted-foreground",
+                      )}
+                    >
+                      {menu.links.length} {menu.links.length === 1 ? "item" : "items"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+
+          {selectedMenu ? (
+            <section className="min-w-0 space-y-3" aria-label="Selected footer column">
+              <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-card p-3">
+                <div className="grid min-w-48 flex-1 gap-1.5">
+                  <Label htmlFor={`footer-menu-${selectedMenu.id}`}>Column heading</Label>
+                  <Input
+                    id={`footer-menu-${selectedMenu.id}`}
+                    value={selectedMenu.title}
+                    onChange={(event) => updateSelected({ title: event.target.value })}
+                    className="h-9"
+                    placeholder="e.g. Help"
                   />
-                ))}
+                </div>
+                <div className="flex items-center gap-1" role="group" aria-label="Arrange footer column">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    disabled={selectedIndex === 0}
+                    onClick={() => onChange(moveMenu(menus, selectedIndex, -1))}
+                    aria-label={`Move ${selectedMenu.title || "column"} earlier`}
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    disabled={selectedIndex === menus.length - 1}
+                    onClick={() => onChange(moveMenu(menus, selectedIndex, 1))}
+                    aria-label={`Move ${selectedMenu.title || "column"} later`}
+                  >
+                    <ArrowDown />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-destructive hover:text-destructive"
+                    onClick={removeSelected}
+                    aria-label={`Remove ${selectedMenu.title || "footer column"}`}
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
               </div>
-            </SortableContext>
-          </DndContext>
-        </Accordion>
+
+              <NavigationBuilder
+                navigation={selectedMenu.links}
+                onChange={updateLinks}
+                getStorefrontPath={getStorefrontPath}
+              />
+            </section>
+          ) : null}
+        </div>
       )}
     </div>
   );

@@ -597,6 +597,9 @@ app.openapi(saveEmailRoute, async (c) => {
         await Promise.all(updates);
         if (updates.length > 0) {
             await clearNotificationProviderBlocks(db, { channel: "email" });
+            // Email readiness is projected into the cached public checkout
+            // configuration when customer sign-in is required.
+            await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
         }
         return ok(c, { message: "Email settings saved successfully" });
 });

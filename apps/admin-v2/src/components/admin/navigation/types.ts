@@ -29,6 +29,7 @@ export interface NavigationBuilderProps {
 // Public desktop/mobile menus are intentionally capped at three visible levels.
 // Deeper trees are difficult to scan, operate by keyboard, and render on mobile.
 export const MAX_NAV_DEPTH = 3;
+export const MAX_NAV_ITEMS = 150;
 
 /** Number of visible levels occupied by an item and its deepest descendant. */
 export function getNavigationSubtreeDepth(item: NavigationItem): number {

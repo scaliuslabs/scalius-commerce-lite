@@ -4,8 +4,10 @@ import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
+import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 
 // ─────────────────────────────────────────
 // GET /sms — returns SMS provider settings with masked credentials
@@ -96,6 +98,9 @@ app.openapi(saveSmsRoute, async (c) => {
     await saveSmsSettings(db, body, encKey);
     await clearNotificationProviderBlocks(db, { channel: "sms" });
     invalidateSmsCache();
+    // SMS provider readiness participates in public checkout readiness when
+    // customer sign-in is required; do not leave the cached projection stale.
+    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
     return ok(c, { message: "SMS settings saved successfully" });
 });
 
