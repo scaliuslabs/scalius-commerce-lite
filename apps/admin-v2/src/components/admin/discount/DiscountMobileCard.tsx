@@ -1,5 +1,5 @@
 import { formatDateShort } from "@scalius/shared/timestamps";
-import { Check, Copy, Pencil, Tag, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, Pencil, Tag, X } from "lucide-react";
 
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import type { DiscountItem } from "~/components/admin/data-table/columns/discount-columns";
@@ -9,6 +9,7 @@ import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import {
   getDiscountLifecycle,
   getDiscountOutcome,
+  getDiscountReadinessIssues,
   getDiscountRequirement,
   getDiscountTypeLabel,
 } from "./discount-list-model";
@@ -45,6 +46,7 @@ export function DiscountMobileCard({
   const status = getDiscountLifecycle(discount);
   const usage = discount.usageCount ?? 0;
   const usageLabel = discount.maxUses ? `${usage} / ${discount.maxUses}` : `${usage}`;
+  const readinessIssues = getDiscountReadinessIssues(discount);
 
   return (
     <article className={selected ? "bg-primary/5 px-3 py-3" : "bg-background px-3 py-3"}>
@@ -99,6 +101,20 @@ export function DiscountMobileCard({
           }
         />
       </div>
+
+      {readinessIssues.length > 0 ? (
+        <div className="mt-2.5 flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0 text-xs leading-4">
+            <p className="font-semibold">Rule needs review</p>
+            <ul className="mt-0.5 space-y-0.5">
+              {readinessIssues.map((issue) => (
+                <li key={issue.code}>{issue.message}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
 
       <dl className="mt-3 grid grid-cols-3 divide-x rounded-md border bg-muted/20 py-2 text-center">
         <div className="min-w-0 px-2">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDiscountRequirementSummary,
   buildDiscountRuleSummary,
   createDiscountEditorDefaults,
   discountEditorSchema,
@@ -107,6 +108,24 @@ describe("discount editor model", () => {
         "৳",
       ),
     ).toBe("Free delivery for eligible orders.");
+  });
+
+  it("explains every configured minimum and their AND relationship", () => {
+    expect(
+      buildDiscountRequirementSummary(
+        createDiscountEditorDefaults("amount_off_order", {
+          minPurchaseAmount: 1500,
+          minQuantity: 3,
+        }),
+        "৳",
+      ),
+    ).toBe("Minimum ৳1,500.00 and 3 items (both required)");
+    expect(
+      buildDiscountRequirementSummary(
+        createDiscountEditorDefaults("amount_off_order"),
+        "৳",
+      ),
+    ).toBe("No minimum");
   });
 
   it("hydrates fallback labels without restoring removed or overwriting edited selections", () => {

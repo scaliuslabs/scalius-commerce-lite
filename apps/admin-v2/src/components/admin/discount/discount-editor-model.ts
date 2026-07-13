@@ -6,6 +6,7 @@ import {
   normalizeDiscountEndDate,
   normalizeDiscountStartDate,
 } from "./shared-validation";
+import { formatDiscountRequirement } from "./discount-rule-presentation";
 
 export const discountEditorTypes = [
   "amount_off_products",
@@ -257,6 +258,17 @@ export function buildDiscountRuleSummary(
         .join(" and ") || "selected merchandise";
 
   return `${outcome} ${target}.`;
+}
+
+export function buildDiscountRequirementSummary(
+  values: DiscountEditorValues,
+  symbol: string,
+): string {
+  return formatDiscountRequirement({
+    minPurchaseAmount: values.minPurchaseAmount,
+    minQuantity: values.minQuantity,
+    symbol,
+  });
 }
 
 export function toDiscountWritePayload(values: DiscountEditorValues) {
