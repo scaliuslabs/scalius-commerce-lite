@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getBuildCommandForTarget,
   getDeployCommandForTarget,
+  getSequentialWorkspaceCommand,
   getTypecheckCommandForTarget,
   parseOnlyTarget,
   sampleApiReadiness,
@@ -115,11 +116,17 @@ describe("deploy target wiring", () => {
   });
 
   it("keeps typechecking and deployment commands on supported workspaces", () => {
-    expect(getTypecheckCommandForTarget("api")).toContain("typecheck");
+    expect(getTypecheckCommandForTarget("api")).toContain("--filter @scalius/api typecheck");
+    expect(getTypecheckCommandForTarget("admin")).toContain("--filter @scalius/admin-v2 typecheck");
+    expect(getSequentialWorkspaceCommand("typecheck")).toContain("--concurrency=1");
+    expect(getSequentialWorkspaceCommand("build")).toContain("--concurrency=1");
     expect(getBuildCommandForTarget("api")).toContain("--filter @scalius/api build");
     expect(getBuildCommandForTarget("admin")).toContain("--filter @scalius/admin-v2 build");
     expect(getBuildCommandForTarget("storefront")).toContain("--filter @scalius/storefront build");
     expect(() => getBuildCommandForTarget("removed-worker")).toThrow(
+      "Unknown deploy target: removed-worker",
+    );
+    expect(() => getTypecheckCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
     );
   });
