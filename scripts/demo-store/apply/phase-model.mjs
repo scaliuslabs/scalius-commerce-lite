@@ -54,6 +54,8 @@ function lastProductStageKey(product, compiledCommands) {
 
 function productActivationCommand(product, base, finalStageKey) {
   const existingPath = !base.path.includes("{") && base.method === "PUT";
+  const baseBody = { ...base.body };
+  delete baseBody.optionMatrix;
   return {
     ...base,
     id: `${base.id}:activate`,
@@ -63,8 +65,8 @@ function productActivationCommand(product, base, finalStageKey) {
     path: existingPath ? base.path : `${API}/products/{productId}`,
     ...(existingPath ? {} : { pathBindings: { productId: reference(base.logicalKey) } }),
     body: {
-      ...base.body,
-      id: existingPath ? base.body.id : reference(base.logicalKey),
+      ...baseBody,
+      id: existingPath ? baseBody.id : reference(base.logicalKey),
       isActive: true,
       expectedAggregateRevision: reference(finalStageKey, "aggregateRevision"),
     },

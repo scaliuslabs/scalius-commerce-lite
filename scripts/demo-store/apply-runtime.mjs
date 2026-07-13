@@ -9,6 +9,82 @@ function equal(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function comparableList(rows, fields) {
+  return (rows ?? [])
+    .map((row) => Object.fromEntries(fields.map((field) => [field, row?.[field] ?? null])))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+}
+
+function equalFields(current, desired, fields) {
+  return fields.every((field) => (current?.[field] ?? null) === (desired?.[field] ?? null));
+}
+
+function productBaseMatches(command, current) {
+  const scalarFields = [
+    "slug", "name", "description", "price", "categoryId", "isActive", "discountType",
+    "discountPercentage", "discountAmount", "freeDelivery", "metaTitle", "metaDescription",
+    "canonicalPath", "noIndex", "excludeFromSitemap", "excludeFromProductFeed", "productCondition",
+  ];
+  if (!equalFields(current, command.body, scalarFields)) return false;
+  if (!equal(
+    comparableList(current.media, ["id", "mediaId", "altText", "isPrimary"]),
+    comparableList(command.body.media, ["id", "mediaId", "altText", "isPrimary"]),
+  )) return false;
+  if (!equal(
+    comparableList(current.attributes, ["attributeId", "value"]),
+    comparableList(command.body.attributes, ["attributeId", "value"]),
+  )) return false;
+  if (!equal(
+    comparableList(current.additionalInfo, ["id", "title", "content", "sortOrder"]),
+    comparableList(command.body.additionalInfo, ["id", "title", "content", "sortOrder"]),
+  )) return false;
+  return true;
+}
+
+function optionMatrixMatches(command, current) {
+  const desiredOptions = comparableList(command.body.options, ["id", "name", "standardMapping"]);
+  const actualOptions = comparableList(current.options, ["id", "name", "standardMapping"]);
+  if (!equal(actualOptions, desiredOptions)) return false;
+  for (const desired of command.body.options ?? []) {
+    const actual = (current.options ?? []).find((option) => option.id === desired.id);
+    if (!actual || !equal(
+      comparableList(actual.values, ["id", "value"]),
+      comparableList(desired.values, ["id", "value"]),
+    )) return false;
+  }
+  const desiredVariants = (command.body.variants ?? []).map((variant) => ({
+    id: variant.id,
+    selectedOptionValueIds: [...variant.selectedOptionValueIds].sort(),
+    imageId: variant.imageId ?? null,
+    sku: variant.sku,
+    price: variant.price,
+    stock: variant.stock,
+    trackInventory: variant.trackInventory,
+    weight: variant.weight ?? null,
+    barcode: variant.barcode ?? null,
+    barcodeType: variant.barcodeType ?? null,
+    discountType: variant.discountType ?? null,
+    discountPercentage: variant.discountPercentage ?? null,
+    discountAmount: variant.discountAmount ?? null,
+  })).sort((left, right) => left.id.localeCompare(right.id));
+  const actualVariants = (current.variants ?? []).filter((variant) => !variant.deletedAt).map((variant) => ({
+    id: variant.id,
+    selectedOptionValueIds: (variant.selectedOptions ?? []).map((option) => option.optionValueId).sort(),
+    imageId: variant.imageId ?? null,
+    sku: variant.sku,
+    price: variant.price,
+    stock: variant.stock,
+    trackInventory: variant.trackInventory,
+    weight: variant.weight ?? null,
+    barcode: variant.barcode ?? null,
+    barcodeType: variant.barcodeType ?? null,
+    discountType: variant.discountType ?? null,
+    discountPercentage: variant.discountPercentage ?? null,
+    discountAmount: variant.discountAmount ?? null,
+  })).sort((left, right) => left.id.localeCompare(right.id));
+  return equal(actualVariants, desiredVariants);
+}
+
 export function createApplyRuntime(readClient) {
   async function exactFromList(command, path, key, collectionKey) {
     const rows = await listPaged(readClient, { path, collectionKey, label: `Resolve ${command.logicalKey}` });
@@ -46,28 +122,32 @@ export function createApplyRuntime(readClient) {
       }
       if (command.logicalKey.startsWith("category:")) {
         if (command.logicalKey.endsWith(":publish")) return current.status === command.body.status;
-        return current.slug === command.body.slug
-          && current.name === command.body.name
-          && current.description === command.body.description
-          && (command.body.status === undefined || current.status === command.body.status);
+        const fields = [
+          "slug", "name", "description", "metaTitle", "metaDescription", "canonicalPath",
+          "noIndex", "excludeFromSitemap",
+        ];
+        return equalFields(current, command.body, fields)
+          && (command.body.status === undefined || current.status === command.body.status)
+          && (command.body.image === undefined || (current.imageUrl ?? null) === (command.body.image?.url ?? null));
       }
       if (command.logicalKey.endsWith(":matrix")) {
-        const desired = command.body.variants.map((variant) => variant.selectedOptionValueIds.join("|")).sort();
-        const actual = (current.variants ?? []).map((variant) => variant.optionCombinationKey).filter(Boolean).sort();
-        return equal(actual, desired);
+        return optionMatrixMatches(command, current);
       }
       if (command.logicalKey.endsWith(":simple-sku")) {
         const variant = current.variants?.find((item) => item.id === command.identity.variantId)
           ?? current.variants?.find((item) => item.isDefault === true && !item.deletedAt);
-        return variant?.stock === command.desired.stock && variant.trackInventory === true;
+        return variant && equalFields(variant, command.body, [
+          "imageId", "weight", "sku", "price", "stock", "trackInventory", "discountType",
+          "discountPercentage", "discountAmount",
+        ]);
       }
-      if (command.logicalKey.startsWith("product:")) return current.slug === command.body.slug && current.name === command.body.name && current.price === command.body.price && current.description === command.body.description && current.categoryId === command.body.categoryId && current.isActive === command.body.isActive;
+      if (command.logicalKey.startsWith("product:")) return productBaseMatches(command, current);
       if (command.logicalKey.startsWith("collection:")) {
         if (command.body.name === undefined) return current.isActive === command.body.isActive;
-        return current.name === command.body.name
-          && current.presentation === command.body.presentation
-          && equal(unwrapConfig(current.config), command.body.config)
-          && current.isActive === command.body.isActive;
+        return equalFields(current, command.body, [
+          "name", "presentation", "isActive", "canonicalPath", "noIndex", "excludeFromSitemap",
+        ])
+          && equal(unwrapConfig(current.config), command.body.config);
       }
       if (command.logicalKey.startsWith("hero-slider:")) {
         if (command.body.images === undefined) return current.isActive === command.body.isActive;

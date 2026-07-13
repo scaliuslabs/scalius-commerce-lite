@@ -186,10 +186,10 @@ describe("demo-store diff and evidence", () => {
 });
 
 describe("demo-store diff CLI", () => {
-  it("rejects credentials in arguments and keeps apply mode unavailable", async () => {
+  it("rejects credentials in arguments and incomplete apply invocation", async () => {
     expect(() => parseDemoStoreArgs(["--diff", "--password", "private"])).toThrow("interactive terminal");
     expect(() => parseDemoStoreArgs(["--plan", "--diff"])).toThrow("exactly one");
-    await expect(main(["--apply"], { log: vi.fn() })).rejects.toThrow("Unknown option");
+    await expect(main(["--apply"], { log: vi.fn() })).rejects.toThrow("explicit --media-readiness");
   });
 
   it("passes prompted credentials in memory and prints only safe diff evidence", async () => {

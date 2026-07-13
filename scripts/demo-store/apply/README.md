@@ -1,8 +1,8 @@
 # Demo-store lifecycle apply
 
-This directory owns the write-disabled lifecycle architecture that sits between
-the pure demo command compiler and a future authenticated CLI executor. The
-public `pnpm demo:store` command remains plan/diff-only.
+This directory owns the authenticated, fail-closed lifecycle behind the guarded
+`pnpm demo:store --apply` command. Plan, compile, and diff remain read-only.
+Apply is an interactive operator command, never unattended CI automation.
 
 ## Phase contract
 
@@ -49,9 +49,41 @@ revisions, malformed JSON, and unknown authority fields. Completed outcomes are
 still reconciled by the idempotent executor; the journal restores references,
 not permission to skip verification.
 
-## Remaining exposure gate
+## CLI exposure gate
 
-Do not add `--apply` until remote media upload/readiness, authenticated
-write-session wiring, complete desired-state verification, production
-permissions preflight, and deployed browser/release smokes all pass. Navigation
-and standalone promotions must remain excluded until their APIs gain CAS.
+Run only from the repository root with the complete private readiness output
+created by the remote Media upload bridge:
+
+```sh
+pnpm demo:store --apply \
+  --media-readiness .wrangler/demo-store-assets/apply-readiness.json
+```
+
+Readiness, resume, and evidence paths must be real private files or directories
+below the workspace `.wrangler` boundary. Credentials are accepted only from
+the interactive email and hidden-password prompts. The command then:
+
+1. authenticates and reads a bounded fresh admin snapshot;
+2. proves all 237 readiness records against current remote Media IDs, metadata,
+   dimensions, URLs, import actions, and every video-poster relationship;
+3. builds a fresh diff and lifecycle, rejects identity conflicts, and derives
+   the exact required RBAC permissions from every planned mutation;
+4. prints the complete SHA-256 intent fingerprint and requires both the exact
+   `RESET SCALIUS MARKET DEMO` phrase and the full fingerprint;
+5. reads the snapshot and permissions again, aborting if authority changed
+   while the operator confirmed;
+6. executes the existing compiler intents through the shared binder,
+   idempotent executor, and lifecycle runtime, recording only private safe
+   revision/identity resume evidence; and
+7. re-reads the store and verifies every terminal command plus the final
+   desired-state diff before reporting success.
+
+No credential, session cookie, request payload, or buyer data is written to the
+resume/evidence files. Resources outside the manifest are reported and left
+untouched for a separate reviewed decision.
+
+Header/Footer navigation and standalone promotion writes remain excluded until
+those authorities have monotonic CAS. The checked-in CLI publication intent is
+empty, so Theme publication is skipped too. Remote Media staging must reach a
+complete upload-bridge report before apply can pass its first authenticated
+gate. Do not weaken these exclusions to complete a demo run.

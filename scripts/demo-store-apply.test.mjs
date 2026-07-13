@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApplyHttpError } from "./demo-store/apply-client.mjs";
 import { createApplyBinder } from "./demo-store/apply-bind.mjs";
 import { executeIdempotentCommand } from "./demo-store/apply-executor.mjs";
@@ -12,7 +15,13 @@ import { ASSET_PROFILES } from "./demo-store/assets/profiles.mjs";
 import { demoApplyIntentFingerprint } from "./demo-store/apply/authorization.mjs";
 import { compileDemoStoreAdminCommands } from "./demo-store/compile.mjs";
 import { demoStoreManifest } from "./demo-store/manifest.mjs";
-import { assertRetainedProductAuthority, runRevisionSafeApply } from "./demo-store/run-apply.mjs";
+import { assertRetainedProductAuthority, runDemoStoreApply, runRevisionSafeApply } from "./demo-store/run-apply.mjs";
+
+const temporaryDirectories = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
 
 function readinessReport() {
   const media = buildExpectedAssets(demoStoreManifest);
@@ -36,6 +45,40 @@ function readinessReport() {
     })),
     presentation: {},
   };
+}
+
+function remoteReadinessReport() {
+  const report = readinessReport();
+  const expected = buildExpectedAssets(demoStoreManifest);
+  const assetByKey = new Map(report.assets.map((asset) => [asset.logicalKey, asset]));
+  const expectedByOwner = new Map();
+  for (const asset of expected) {
+    const rows = expectedByOwner.get(asset.owner) ?? [];
+    rows.push(asset);
+    expectedByOwner.set(asset.owner, rows);
+  }
+  report.assets = report.assets.map((asset) => {
+    const intent = expected.find((candidate) => candidate.logicalKey === asset.logicalKey);
+    const poster = intent.kind === "video"
+      ? expectedByOwner.get(intent.owner).find((candidate) => candidate.role.startsWith("poster"))
+      : null;
+    return {
+      ...asset,
+      importAction: "uploaded",
+      ...(poster ? {
+        posterLogicalKey: poster.logicalKey,
+        posterMediaId: assetByKey.get(poster.logicalKey).mediaId,
+      } : {}),
+    };
+  });
+  report.unversionedSettings = [];
+  report.evidence = {
+    productsMutated: false,
+    publicationMutated: false,
+    uploadOrder: "sequential",
+    posterLinksVerified: report.assets.filter((asset) => asset.kind === "video").length,
+  };
+  return report;
 }
 
 function detail(product, readiness, id = product.retainedProductId ?? `prod_${product.slug}`) {
@@ -95,6 +138,22 @@ function completeSnapshot(report) {
       heroes: ["desktop", "mobile"].map((type) => ({ id: `slider_${type}`, type, revision: 2, images: [], isActive: false })),
     },
   };
+}
+
+function remoteSnapshot(report) {
+  const snapshot = completeSnapshot(report);
+  snapshot.media = report.assets.map((asset) => ({
+    id: asset.mediaId,
+    status: "ready",
+    kind: asset.kind,
+    filename: asset.filename,
+    url: asset.url,
+    size: asset.size,
+    width: asset.width,
+    height: asset.height,
+    posterMediaId: asset.posterMediaId ?? null,
+  }));
+  return snapshot;
 }
 
 describe("staged asset apply gate", () => {
@@ -339,5 +398,82 @@ describe("apply orchestration", () => {
     expect(seen.some((item) => item.command.logicalKey === "product:halo-arc-table-lamp:matrix")).toBe(false);
     expect(seen.some((item) => item.command.phase === "activation" || item.command.phase === "publication")).toBe(false);
     expect(seen.every((item) => !JSON.stringify(item.command).includes('"$ref"'))).toBe(true);
+  });
+});
+
+describe("guarded apply exposure", () => {
+  it("rechecks permissions and authority after confirmation before delegating to the lifecycle", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "scalius-apply-runner-"));
+    temporaryDirectories.push(directory);
+    const report = remoteReadinessReport();
+    const snapshot = remoteSnapshot(report);
+    const permissions = [
+      "attributes.create", "categories.create", "categories.edit", "collections.create",
+      "collections.edit", "products.create", "products.edit", "settings.header.edit",
+    ];
+    const readClient = { get: vi.fn().mockResolvedValue({ isSuperAdmin: false, permissions }) };
+    const lifecycleRunner = vi.fn().mockResolvedValue({
+      phases: [{ name: "complete", state: "complete", outcomes: [] }],
+      authorities: new Map(),
+    });
+    const desiredStateVerifier = vi.fn().mockResolvedValue({
+      status: "verified",
+      verifiedCommands: 117,
+      diff: { summary: { conflicts: 0 } },
+    });
+    const intentFingerprint = demoApplyIntentFingerprint(demoStoreManifest);
+    const closeSession = vi.fn().mockResolvedValue({ status: "closed", statusCode: 200 });
+    const result = await runDemoStoreApply({
+      adminOrigin: "https://dashboard.example.test",
+      credentials: { email: "admin@example.test", password: "private" },
+      readinessReport: report,
+      evidenceDir: directory,
+      resumeFile: path.join(directory, "resume.jsonl"),
+      manifest: demoStoreManifest,
+      confirmApply: vi.fn().mockResolvedValue({ confirmed: true, resetConfirmed: true, intentFingerprint }),
+      now: () => new Date("2026-07-13T03:01:00.000Z"),
+      openSession: vi.fn().mockResolvedValue({ cookieHeader: "session=private" }),
+      closeSession,
+      readClientFactory: vi.fn().mockReturnValue(readClient),
+      applyClientFactory: vi.fn().mockReturnValue({}),
+      snapshotReader: vi.fn().mockResolvedValue(snapshot),
+      evidenceWriter: vi.fn().mockResolvedValue({ runId: "run", runDir: directory, files: {} }),
+      lifecycleRunner,
+      desiredStateVerifier,
+      fetchImpl: vi.fn(),
+    });
+    expect(readClient.get).toHaveBeenCalledTimes(2);
+    expect(lifecycleRunner).toHaveBeenCalledTimes(1);
+    expect(desiredStateVerifier).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ status: "verified", sessionCleanup: { status: "closed" } });
+    expect(closeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not create evidence or invoke the lifecycle when reset confirmation is incomplete", async () => {
+    const report = remoteReadinessReport();
+    const snapshot = remoteSnapshot(report);
+    const evidenceWriter = vi.fn();
+    const lifecycleRunner = vi.fn();
+    const closeSession = vi.fn().mockResolvedValue({ status: "closed", statusCode: 200 });
+    await expect(runDemoStoreApply({
+      adminOrigin: "https://dashboard.example.test",
+      credentials: { email: "admin@example.test", password: "private" },
+      readinessReport: report,
+      evidenceDir: "/unused",
+      resumeFile: "/unused",
+      manifest: demoStoreManifest,
+      confirmApply: vi.fn().mockResolvedValue({ confirmed: true, resetConfirmed: false, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) }),
+      now: () => new Date("2026-07-13T03:01:00.000Z"),
+      openSession: vi.fn().mockResolvedValue({ cookieHeader: "session=private" }),
+      closeSession,
+      readClientFactory: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ isSuperAdmin: true, permissions: [] }) }),
+      snapshotReader: vi.fn().mockResolvedValue(snapshot),
+      evidenceWriter,
+      lifecycleRunner,
+      fetchImpl: vi.fn(),
+    })).rejects.toThrow("did not authorize");
+    expect(evidenceWriter).not.toHaveBeenCalled();
+    expect(lifecycleRunner).not.toHaveBeenCalled();
+    expect(closeSession).toHaveBeenCalledTimes(1);
   });
 });
