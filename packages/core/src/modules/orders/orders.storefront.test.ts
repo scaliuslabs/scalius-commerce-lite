@@ -250,6 +250,7 @@ async function placeOrder({
   calculatedDiscountAmount = 0,
   discountValidator,
   discountCalculator,
+  promotionAuthority,
 }: {
   inputOverrides?: Partial<CreateStorefrontOrderInput>;
   customerIdentity?: CreateStorefrontOrderCustomerIdentity;
@@ -261,6 +262,7 @@ async function placeOrder({
   calculatedDiscountAmount?: number;
   discountValidator?: Parameters<typeof createStorefrontOrder>[3];
   discountCalculator?: Parameters<typeof createStorefrontOrder>[4];
+  promotionAuthority?: Parameters<typeof createStorefrontOrder>[10];
 } = {}) {
   const validationProducts = products.filter((product) => product.isActive === true);
   const db = createDbMock(
@@ -282,6 +284,11 @@ async function placeOrder({
     undefined,
     undefined,
     customerIdentity,
+    undefined,
+    promotionAuthority ?? {
+      evaluateCode: vi.fn(async () => ({ matched: false as const })),
+      resolveCustomerIdByPhone: vi.fn(async () => null),
+    },
   );
 }
 
@@ -297,6 +304,78 @@ describe("createStorefrontOrder tax discount parity", () => {
     });
     expect(result.commitPayload.items[0]?.id).toMatch(/^item_/);
     expect(result.commitPayload.items[0]?.id).not.toBe("cart:0:var_standard");
+  });
+
+  it("carries typed promotion allocations into the exact tax and commit snapshots", async () => {
+    vi.mocked(calculateStorefrontTaxQuote).mockClear();
+    const applied = {
+      promotionId: "promo_1",
+      promotionRevision: 2,
+      promotionName: "Order and delivery savings",
+      method: "code" as const,
+      promotionCode: "SAVE15",
+      totalDiscountMinor: 1500,
+      allocations: [
+        {
+          promotionId: "promo_1",
+          promotionRevision: 2,
+          evaluatorVersion: 1,
+          promotionName: "Order and delivery savings",
+          promotionCode: "SAVE15",
+          method: "code" as const,
+          effectId: "effect_order",
+          effectKind: "fixed_amount_off" as const,
+          target: "order" as const,
+          lineId: "cart:0:var_standard",
+          quantity: 1,
+          currencyCode: "BDT",
+          baseAmountMinor: 12500,
+          discountAmountMinor: 1000,
+        },
+        {
+          promotionId: "promo_1",
+          promotionRevision: 2,
+          evaluatorVersion: 1,
+          promotionName: "Order and delivery savings",
+          promotionCode: "SAVE15",
+          method: "code" as const,
+          effectId: "effect_shipping",
+          effectKind: "fixed_amount_off" as const,
+          target: "shipping" as const,
+          lineId: null,
+          quantity: null,
+          currencyCode: "BDT",
+          baseAmountMinor: 6000,
+          discountAmountMinor: 500,
+        },
+      ],
+    };
+    const result = await placeOrder({
+      inputOverrides: { discountCode: "SAVE15" },
+      promotionAuthority: {
+        resolveCustomerIdByPhone: vi.fn(async () => "cust_1"),
+        evaluateCode: vi.fn(async () => ({
+          matched: true as const,
+          valid: true as const,
+          promotion: {} as never,
+          evaluation: {
+            evaluatorVersion: 1,
+            applied,
+            rejected: [],
+            unmatchedCodes: [],
+          },
+        })),
+      },
+    });
+    const taxInput = vi.mocked(calculateStorefrontTaxQuote).mock.calls.at(-1)?.[1];
+    expect(taxInput?.promotionDiscountAllocation).toEqual({
+      lines: [{ lineId: "cart:0:var_standard", amountMinor: 1000 }],
+      shippingMinor: 500,
+    });
+    expect(result.commitPayload).toMatchObject({
+      discountUsage: null,
+      promotion: { applied: { promotionId: "promo_1", totalDiscountMinor: 1500 } },
+    });
   });
 
   it("snapshots the actual resolved image asset in the checkout commit payload", async () => {

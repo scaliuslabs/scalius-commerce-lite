@@ -116,6 +116,13 @@ export const promotionCandidateSchema = z.object({
     conflictPolicy: z.literal("best"),
     startsAtEpochSeconds: z.number().int().min(0).nullable(),
     endsAtEpochSeconds: z.number().int().min(0).nullable(),
+    maxRedemptions: z.number().int().positive().nullable().default(null),
+    maxRedemptionsPerCustomer: z.number().int().positive().nullable().default(null),
+    maxDiscountSpendMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().default(null),
+    budgetCurrencyCode: currencyCodeSchema.nullable().default(null),
+    redemptionCount: z.number().int().nonnegative().default(0),
+    customerRedemptionCount: z.number().int().nonnegative().default(0),
+    discountSpendMinor: minorAmountSchema.default(0),
     codes: z.array(z.object({
         code: z.string().regex(/^[A-Z0-9_-]{3,50}$/u),
         isActive: z.boolean(),
@@ -146,6 +153,43 @@ export const promotionCandidateSchema = z.object({
             code: "custom",
             path: ["endsAtEpochSeconds"],
             message: "Promotion end must be after its start.",
+        });
+    }
+    if (
+        candidate.maxRedemptions !== null
+        && candidate.maxRedemptionsPerCustomer !== null
+        && candidate.maxRedemptionsPerCustomer > candidate.maxRedemptions
+    ) {
+        context.addIssue({
+            code: "custom",
+            path: ["maxRedemptionsPerCustomer"],
+            message: "Per-customer redemptions cannot exceed the total redemption limit.",
+        });
+    }
+    if ((candidate.maxDiscountSpendMinor === null) !== (candidate.budgetCurrencyCode === null)) {
+        context.addIssue({
+            code: "custom",
+            path: ["maxDiscountSpendMinor"],
+            message: "Discount spend budgets require both an amount and currency.",
+        });
+    }
+    const configuredCurrencies = new Set<string>();
+    if (candidate.budgetCurrencyCode) configuredCurrencies.add(candidate.budgetCurrencyCode);
+    for (const condition of candidate.conditions) {
+        if (condition.kind === "minimum_merchandise_subtotal") {
+            configuredCurrencies.add(condition.config.currencyCode);
+        }
+    }
+    for (const effect of candidate.effects) {
+        if (effect.kind === "fixed_amount_off") {
+            configuredCurrencies.add(effect.config.currencyCode);
+        }
+    }
+    if (configuredCurrencies.size > 1) {
+        context.addIssue({
+            code: "custom",
+            path: ["budgetCurrencyCode"],
+            message: "All currency-specific promotion rules and budgets must use one currency.",
         });
     }
 
@@ -214,6 +258,11 @@ export type PromotionRejectionReason =
     | "not_started"
     | "expired"
     | "code_not_submitted"
+    | "redemption_limit_reached"
+    | "customer_redemption_limit_reached"
+    | "budget_currency_mismatch"
+    | "discount_budget_exhausted"
+    | "discount_budget_insufficient"
     | "condition_currency_mismatch"
     | "minimum_subtotal_not_met"
     | "minimum_quantity_not_met"
@@ -506,10 +555,11 @@ function rejectForLifecycle(
 
 /**
  * Deterministic best-candidate evaluator for the first promotion authority
- * slice. It supports automatic and submitted-code methods, AND conditions,
- * line/order/shipping effects, and immutable allocation-plan output. Stacking,
- * audience/target selectors, budgets, and commit-time claims are deliberately
- * rejected by the schema until their authorities exist.
+ * slice. It supports submitted-code and internal automatic candidates, AND
+ * conditions, line/order/shipping effects, redemption/spend limits, and
+ * immutable allocation-plan output. Storefront resolution currently exposes
+ * one code promotion only; stacking, audience/target selectors, and automatic
+ * activation remain deliberately unavailable until their authorities exist.
  */
 export function evaluatePromotionCandidates(input: unknown): PromotionEvaluationResult {
     const parsedInput = evaluationInputSchema.safeParse(input);
@@ -604,6 +654,35 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
             return;
         }
 
+        if (
+            candidate.maxRedemptions !== null
+            && candidate.redemptionCount >= candidate.maxRedemptions
+        ) {
+            rejected.push({ promotionId: candidate.id, reason: "redemption_limit_reached" });
+            return;
+        }
+        if (
+            candidate.maxRedemptionsPerCustomer !== null
+            && candidate.customerRedemptionCount >= candidate.maxRedemptionsPerCustomer
+        ) {
+            rejected.push({ promotionId: candidate.id, reason: "customer_redemption_limit_reached" });
+            return;
+        }
+        if (
+            candidate.maxDiscountSpendMinor !== null
+            && candidate.budgetCurrencyCode !== cart.currencyCode
+        ) {
+            rejected.push({ promotionId: candidate.id, reason: "budget_currency_mismatch" });
+            return;
+        }
+        if (
+            candidate.maxDiscountSpendMinor !== null
+            && candidate.discountSpendMinor >= candidate.maxDiscountSpendMinor
+        ) {
+            rejected.push({ promotionId: candidate.id, reason: "discount_budget_exhausted" });
+            return;
+        }
+
         for (const condition of candidate.conditions) {
             if (condition.kind === "minimum_merchandise_subtotal") {
                 if (condition.config.currencyCode !== cart.currencyCode) {
@@ -642,6 +721,17 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
         }
         if (calculated.totalDiscountMinor <= 0) {
             rejected.push({ promotionId: candidate.id, reason: "no_savings" });
+            return;
+        }
+        if (
+            candidate.maxDiscountSpendMinor !== null
+            && candidate.discountSpendMinor + calculated.totalDiscountMinor > candidate.maxDiscountSpendMinor
+        ) {
+            rejected.push({
+                promotionId: candidate.id,
+                reason: "discount_budget_insufficient",
+                evaluatedSavingsMinor: calculated.totalDiscountMinor,
+            });
             return;
         }
         eligible.push(calculated);

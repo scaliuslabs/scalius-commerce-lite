@@ -13,6 +13,7 @@ import {
     uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { orderItems, orders } from "./orders";
+import { customers } from "./customers";
 import { UNIX_NOW } from "./shared";
 
 export const PROMOTION_METHODS = ["automatic", "code"] as const;
@@ -40,6 +41,10 @@ export const promotions = sqliteTable("promotions", {
     startsAt: integer("starts_at", { mode: "timestamp" }),
     endsAt: integer("ends_at", { mode: "timestamp" }),
     timezone: text("timezone").notNull().default("Asia/Dhaka"),
+    maxRedemptions: integer("max_redemptions"),
+    maxRedemptionsPerCustomer: integer("max_redemptions_per_customer"),
+    maxDiscountSpendMinor: integer("max_discount_spend_minor"),
+    budgetCurrencyCode: text("budget_currency_code"),
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
@@ -60,6 +65,25 @@ export const promotions = sqliteTable("promotions", {
     check("promotions_title_length", sql`${table.title} IS NULL OR length(trim(${table.title})) BETWEEN 1 AND 200`),
     check("promotions_priority_range", sql`${table.priority} BETWEEN 0 AND 10000`),
     check("promotions_revision_positive", sql`${table.revision} >= 1`),
+    check("promotions_max_redemptions_positive", sql`${table.maxRedemptions} IS NULL OR ${table.maxRedemptions} >= 1`),
+    check("promotions_max_redemptions_per_customer_positive", sql`${table.maxRedemptionsPerCustomer} IS NULL OR ${table.maxRedemptionsPerCustomer} >= 1`),
+    check(
+        "promotions_redemption_limits_ordered",
+        sql`${table.maxRedemptions} IS NULL
+            OR ${table.maxRedemptionsPerCustomer} IS NULL
+            OR ${table.maxRedemptionsPerCustomer} <= ${table.maxRedemptions}`,
+    ),
+    check(
+        "promotions_spend_budget_shape",
+        sql`(
+            (${table.maxDiscountSpendMinor} IS NULL AND ${table.budgetCurrencyCode} IS NULL)
+            OR
+            (${table.maxDiscountSpendMinor} >= 1
+                AND length(${table.budgetCurrencyCode}) = 3
+                AND ${table.budgetCurrencyCode} = upper(${table.budgetCurrencyCode})
+                AND ${table.budgetCurrencyCode} NOT GLOB '*[^A-Z]*')
+        )`,
+    ),
     check("promotions_timezone_length", sql`length(trim(${table.timezone})) BETWEEN 1 AND 80`),
     check("promotions_schedule_valid", sql`${table.endsAt} IS NULL OR ${table.startsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`),
 ]);
@@ -278,8 +302,51 @@ export const orderDiscountAllocations = sqliteTable("order_discount_allocations"
     ),
 ]);
 
+/**
+ * One immutable redemption claim per committed order. Checkout inserts the
+ * claim in the same D1 batch as the order and allocation snapshots. Database
+ * triggers enforce lifecycle and count/spend limits at the serialization
+ * point; advisory preview counts never become the authority.
+ */
+export const promotionRedemptions = sqliteTable("promotion_redemptions", {
+    id: text("id").primaryKey(),
+    promotionId: text("promotion_id")
+        .notNull()
+        .references(() => promotions.id, { onDelete: "restrict" }),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "restrict" }),
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "restrict" }),
+    promotionRevision: integer("promotion_revision").notNull(),
+    promotionCode: text("promotion_code").notNull(),
+    currencyCode: text("currency_code").notNull(),
+    discountAmountMinor: integer("discount_amount_minor").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("promotion_redemptions_order_unique").on(table.orderId),
+    index("promotion_redemptions_promotion_idx").on(table.promotionId, table.createdAt),
+    index("promotion_redemptions_customer_idx").on(table.promotionId, table.customerId, table.createdAt),
+    check("promotion_redemptions_revision_positive", sql`${table.promotionRevision} >= 1`),
+    check(
+        "promotion_redemptions_code_shape",
+        sql`length(${table.promotionCode}) BETWEEN 3 AND 50
+            AND ${table.promotionCode} = upper(trim(${table.promotionCode}))
+            AND ${table.promotionCode} NOT GLOB '*[^A-Z0-9_-]*'`,
+    ),
+    check(
+        "promotion_redemptions_currency_shape",
+        sql`length(${table.currencyCode}) = 3
+            AND ${table.currencyCode} = upper(${table.currencyCode})
+            AND ${table.currencyCode} NOT GLOB '*[^A-Z]*'`,
+    ),
+    check("promotion_redemptions_discount_positive", sql`${table.discountAmountMinor} > 0`),
+]);
+
 export type Promotion = InferSelectModel<typeof promotions>;
 export type PromotionCode = InferSelectModel<typeof promotionCodes>;
 export type PromotionCondition = InferSelectModel<typeof promotionConditions>;
 export type PromotionEffect = InferSelectModel<typeof promotionEffects>;
 export type OrderDiscountAllocation = InferSelectModel<typeof orderDiscountAllocations>;
+export type PromotionRedemption = InferSelectModel<typeof promotionRedemptions>;

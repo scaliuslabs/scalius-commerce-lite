@@ -8,6 +8,7 @@ import type {
 } from "../payments/refund-attempt-visibility";
 import type { OrderSupportRequestView } from "./order-support-requests";
 import type { TaxQuote } from "../tax";
+import type { PromotionCheckoutSnapshot } from "../promotions";
 
 // ─────────────────────────────────────────
 // Admin types
@@ -264,6 +265,8 @@ export interface StorefrontOrderCommitPayload {
         taxAmountMinor: number;
     }[];
     discountUsage: { discountId: string; amountDiscounted: number } | null;
+    /** Mutually exclusive with legacy discountUsage. Re-verified during the order commit. */
+    promotion?: PromotionCheckoutSnapshot | null;
     requestUrl: string;
     taxQuote: TaxQuote;
 }

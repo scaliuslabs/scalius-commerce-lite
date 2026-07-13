@@ -56,6 +56,9 @@ export const promotionEffectInputSchema = z.discriminatedUnion("kind", [
     }).strict(),
 ]);
 
+type PromotionConditionInput = z.infer<typeof promotionConditionInputSchema>;
+type PromotionEffectInput = z.infer<typeof promotionEffectInputSchema>;
+
 const promotionRuleShape = {
     name: z.string().trim().min(1).max(160),
     title: z.string().trim().min(1).max(200).nullable().optional()
@@ -66,6 +69,10 @@ const promotionRuleShape = {
     startsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
     endsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
     timezone: z.string().trim().min(1).max(80).default("Asia/Dhaka"),
+    maxRedemptions: z.number().int().positive().nullable().default(null),
+    maxRedemptionsPerCustomer: z.number().int().positive().nullable().default(null),
+    maxDiscountSpendMinor: z.number().int().positive().max(MAX_MINOR_AMOUNT).nullable().default(null),
+    budgetCurrencyCode: currencyCodeSchema.nullable().default(null),
     codes: z.array(promotionCodeInputSchema).max(90).default([]),
     conditions: z.array(promotionConditionInputSchema).max(20).default([]),
     effects: z.array(promotionEffectInputSchema).min(1).max(3),
@@ -77,8 +84,13 @@ function refinePromotionRule(
         startsAtEpochSeconds: number | null;
         endsAtEpochSeconds: number | null;
         timezone: string;
+        maxRedemptions: number | null;
+        maxRedemptionsPerCustomer: number | null;
+        maxDiscountSpendMinor: number | null;
+        budgetCurrencyCode: string | null;
         codes: Array<{ code: string; isActive: boolean }>;
-        effects: Array<{ target: "line" | "order" | "shipping"; allocation: "across" | "once" }>;
+        conditions: PromotionConditionInput[];
+        effects: PromotionEffectInput[];
     },
     context: z.RefinementCtx,
 ): void {
@@ -124,6 +136,43 @@ function refinePromotionRule(
             message: "Promotion timezone must be a valid IANA timezone.",
         });
     }
+    if (
+        rule.maxRedemptions !== null
+        && rule.maxRedemptionsPerCustomer !== null
+        && rule.maxRedemptionsPerCustomer > rule.maxRedemptions
+    ) {
+        context.addIssue({
+            code: "custom",
+            path: ["maxRedemptionsPerCustomer"],
+            message: "Per-customer redemptions cannot exceed the total redemption limit.",
+        });
+    }
+    if ((rule.maxDiscountSpendMinor === null) !== (rule.budgetCurrencyCode === null)) {
+        context.addIssue({
+            code: "custom",
+            path: [rule.maxDiscountSpendMinor === null ? "maxDiscountSpendMinor" : "budgetCurrencyCode"],
+            message: "Discount spend budgets require both an amount and currency.",
+        });
+    }
+    const configuredCurrencies = new Set<string>();
+    if (rule.budgetCurrencyCode) configuredCurrencies.add(rule.budgetCurrencyCode);
+    for (const condition of rule.conditions) {
+        if (condition.kind === "minimum_merchandise_subtotal") {
+            configuredCurrencies.add(condition.config.currencyCode);
+        }
+    }
+    for (const effect of rule.effects) {
+        if (effect.kind === "fixed_amount_off") {
+            configuredCurrencies.add(effect.config.currencyCode);
+        }
+    }
+    if (configuredCurrencies.size > 1) {
+        context.addIssue({
+            code: "custom",
+            path: ["budgetCurrencyCode"],
+            message: "All currency-specific promotion rules and budgets must use one currency.",
+        });
+    }
 
     const targets = rule.effects.map(({ target }) => target);
     if (new Set(targets).size !== targets.length) {
@@ -156,8 +205,8 @@ export const updatePromotionDraftSchema = z.object({
 
 /**
  * The first merchant API intentionally exposes code drafts only. Automatic
- * activation, combinations, gifts, targeting, and budgets stay absent until
- * checkout can execute and claim them atomically.
+ * activation, combinations, gifts, and targeting stay absent until checkout
+ * can execute them. Supported redemption/spend limits are enforced at commit.
  */
 export const createMerchantPromotionDraftSchema = createPromotionDraftSchema.refine(
     (rule) => rule.method === "code",

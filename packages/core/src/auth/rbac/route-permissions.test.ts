@@ -55,7 +55,11 @@ describe("route permissions", () => {
     expect(getRoutePermission(
       "/api/v1/admin/promotions/promo_1/activate",
       "POST",
-    )).toBeNull();
+    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
+    expect(getRoutePermission(
+      "/api/v1/admin/promotions/promo_1/pause",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS });
   });
 
   it("gates the atomic normalized option matrix behind product edit permission", () => {

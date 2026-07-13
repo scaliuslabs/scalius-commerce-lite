@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
     createPromotionDraft,
     getPromotionAggregate,
+    listPromotionDrafts,
     previewPersistedPromotion,
     updatePromotionDraft,
 } from "./promotions.service";
@@ -20,6 +21,10 @@ const migration28 = readFileSync(
 ).replaceAll("--> statement-breakpoint", "");
 const migration29 = readFileSync(
     resolve(import.meta.dirname, "../../../../database/migrations/0029_messy_silver_surfer.sql"),
+    "utf8",
+).replaceAll("--> statement-breakpoint", "");
+const migration30 = readFileSync(
+    resolve(import.meta.dirname, "../../../../database/migrations/0030_messy_ultragirl.sql"),
     "utf8",
 ).replaceAll("--> statement-breakpoint", "");
 
@@ -66,8 +71,10 @@ describe("promotion aggregate service", () => {
                 id TEXT PRIMARY KEY NOT NULL,
                 code TEXT NOT NULL UNIQUE
             );
+            CREATE TABLE customers (id TEXT PRIMARY KEY NOT NULL);
             ${migration28}
             ${migration29}
+            ${migration30}
         `);
 
         function executeQuery(query: string, params: unknown[], method: string) {
@@ -195,5 +202,43 @@ describe("promotion aggregate service", () => {
             code: "PROMOTION_REVISION_CONFLICT",
             details: { expectedRevision: 1, currentRevision: 2 },
         });
+    });
+
+    it("enriches bounded list results with committed usage and spend", async () => {
+        const db = createDb();
+        const created = await createPromotionDraft(db, baseDraft());
+        sqlite!.exec(`
+            UPDATE promotions SET status = 'active' WHERE id = '${created.id}';
+            INSERT INTO customers (id) VALUES ('cust_1');
+            INSERT INTO orders (id) VALUES ('order_usage');
+            INSERT INTO order_items (id, order_id, quantity)
+            VALUES ('item_usage', 'order_usage', 1);
+            INSERT INTO order_discount_allocations (
+                id, order_id, order_item_id, promotion_id, effect_id,
+                promotion_revision, evaluator_version, method, promotion_name,
+                promotion_code, effect_kind, target, currency_code,
+                base_amount_minor, discount_amount_minor, quantity
+            ) SELECT
+                'allocation_usage', 'order_usage', 'item_usage', '${created.id}', id,
+                1, 1, 'code', 'Ten percent code', 'SAVE10',
+                'percentage_off', 'order', 'BDT', 10000, 1000, 1
+            FROM promotion_effects
+            WHERE promotion_id = '${created.id}' AND deleted_at IS NULL;
+            INSERT INTO promotion_redemptions (
+                id, promotion_id, order_id, customer_id, promotion_revision,
+                promotion_code, currency_code, discount_amount_minor
+            ) VALUES (
+                'pred_usage', '${created.id}', 'order_usage', 'cust_1', 1,
+                'SAVE10', 'BDT', 1000
+            );
+        `);
+
+        await expect(listPromotionDrafts(db)).resolves.toEqual([
+            expect.objectContaining({
+                id: created.id,
+                redemptionCount: 1,
+                discountSpendMinor: 1_000,
+            }),
+        ]);
     });
 });

@@ -366,6 +366,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/promotions/*/preview": {
     POST: { permission: PERMISSIONS.DISCOUNTS_VIEW },
   },
+  "/api/v1/admin/promotions/*/activate": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
+  },
+  "/api/v1/admin/promotions/*/pause": {
+    POST: { permission: PERMISSIONS.DISCOUNTS_TOGGLE_STATUS },
+  },
   "/api/v1/admin/promotions/*": {
     GET: { permission: PERMISSIONS.DISCOUNTS_VIEW },
     PUT: { permission: PERMISSIONS.DISCOUNTS_EDIT },

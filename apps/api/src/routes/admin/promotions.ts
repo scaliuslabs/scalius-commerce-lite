@@ -1,11 +1,14 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     archivePromotionDraft,
+    activatePromotion,
     createMerchantPromotionDraftSchema,
     createPromotionDraft,
     getPromotionAggregate,
+    getPromotionUsageStats,
     listPromotionDrafts,
     previewPersistedPromotion,
+    pausePromotion,
     promotionEvaluationCartSchema,
     updateMerchantPromotionDraftSchema,
     updatePromotionDraft,
@@ -22,6 +25,13 @@ import {
 } from "../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const REDEMPTION_BUDGET_POLICY = "committed_orders_never_released" as const;
+
+function withRedemptionBudgetPolicy<T extends object>(promotion: T): T & {
+    redemptionBudgetPolicy: typeof REDEMPTION_BUDGET_POLICY;
+} {
+    return { ...promotion, redemptionBudgetPolicy: REDEMPTION_BUDGET_POLICY };
+}
 
 const promotionAggregateResponseSchema = z.object({
     id: z.string(),
@@ -35,6 +45,16 @@ const promotionAggregateResponseSchema = z.object({
     startsAtEpochSeconds: z.number().int().nullable(),
     endsAtEpochSeconds: z.number().int().nullable(),
     timezone: z.string(),
+    maxRedemptions: z.number().int().positive().nullable(),
+    maxRedemptionsPerCustomer: z.number().int().positive().nullable(),
+    maxDiscountSpendMinor: z.number().int().positive().nullable(),
+    budgetCurrencyCode: z.string().nullable(),
+    redemptionCount: z.number().int().nonnegative(),
+    customerRedemptionCount: z.number().int().nonnegative(),
+    discountSpendMinor: z.number().int().nonnegative(),
+    redemptionBudgetPolicy: z.literal(REDEMPTION_BUDGET_POLICY).openapi({
+        description: "Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them.",
+    }),
     createdAtEpochSeconds: z.number().int(),
     updatedAtEpochSeconds: z.number().int(),
     deletedAtEpochSeconds: z.number().int().nullable(),
@@ -63,16 +83,16 @@ const listRoute = createRoute({
     method: "get",
     path: "/",
     tags: ["Admin - Promotions"],
-    summary: "List revisioned promotion drafts",
+    summary: "List revisioned promotions",
     request: {
         query: z.object({
-            limit: z.coerce.number().int().min(1).max(100).default(50),
+            limit: z.coerce.number().int().min(1).max(90).default(50),
             includeDeleted: z.string().optional(),
         }),
     },
     responses: {
         200: {
-            description: "Promotion drafts",
+            description: "Promotions",
             content: {
                 "application/json": {
                     schema: successEnvelope(z.object({
@@ -91,7 +111,7 @@ app.openapi(listRoute, async (c) => {
         limit: query.limit,
         includeDeleted: query.includeDeleted === "true",
     });
-    return ok(c, { promotions: promotionRows });
+    return ok(c, { promotions: promotionRows.map(withRedemptionBudgetPolicy) });
 });
 
 const createPromotionRoute = createRoute({
@@ -128,11 +148,11 @@ const getRoute = createRoute({
     method: "get",
     path: "/{id}",
     tags: ["Admin - Promotions"],
-    summary: "Get a revisioned promotion draft",
+    summary: "Get a revisioned promotion",
     request: { params: z.object({ id: z.string().trim().min(1).max(180) }) },
     responses: {
         200: {
-            description: "Promotion draft",
+            description: "Promotion",
             content: {
                 "application/json": { schema: successEnvelope(promotionAggregateResponseSchema) },
             },
@@ -144,7 +164,8 @@ const getRoute = createRoute({
 app.openapi(getRoute, async (c) => {
     const promotion = await getPromotionAggregate(c.get("db"), c.req.valid("param").id);
     if (!promotion) throw new NotFoundError("Promotion not found");
-    return ok(c, promotion);
+    const usage = await getPromotionUsageStats(c.get("db"), promotion.id, null);
+    return ok(c, withRedemptionBudgetPolicy({ ...promotion, ...usage }));
 });
 
 const updateRoute = createRoute({
@@ -194,6 +215,7 @@ const previewRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         expectedRevision: z.number().int().positive(),
+                        customerId: z.string().trim().min(1).max(180).nullable().optional(),
                         cart: promotionEvaluationCartSchema,
                     }).strict(),
                 },
@@ -226,8 +248,71 @@ app.openapi(previewRoute, async (c) => {
     const result = await previewPersistedPromotion(c.get("db"), {
         promotionId: c.req.valid("param").id,
         expectedRevision: body.expectedRevision,
+        customerId: body.customerId ?? null,
         cart: body.cart,
     });
+    return ok(c, result);
+});
+
+const lifecycleBodySchema = z.object({
+    expectedRevision: z.number().int().positive(),
+}).strict();
+
+const activateRoute = createRoute({
+    method: "post",
+    path: "/{id}/activate",
+    tags: ["Admin - Promotions"],
+    summary: "Activate an eligible code promotion",
+    request: {
+        params: z.object({ id: z.string().trim().min(1).max(180) }),
+        body: { required: true, content: { "application/json": { schema: lifecycleBodySchema } } },
+    },
+    responses: {
+        200: {
+            description: "Promotion activated",
+            content: { "application/json": { schema: successEnvelope(promotionMutationResponseSchema) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(activateRoute, async (c) => {
+    const result = await activatePromotion(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").expectedRevision,
+    );
+    await invalidateCatalogCaches("discounts", c);
+    return ok(c, result);
+});
+
+const pauseRoute = createRoute({
+    method: "post",
+    path: "/{id}/pause",
+    tags: ["Admin - Promotions"],
+    summary: "Pause an active promotion",
+    request: {
+        params: z.object({ id: z.string().trim().min(1).max(180) }),
+        body: { required: true, content: { "application/json": { schema: lifecycleBodySchema } } },
+    },
+    responses: {
+        200: {
+            description: "Promotion paused",
+            content: { "application/json": { schema: successEnvelope(promotionMutationResponseSchema) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(pauseRoute, async (c) => {
+    const result = await pausePromotion(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").expectedRevision,
+    );
+    await invalidateCatalogCaches("discounts", c);
     return ok(c, result);
 });
 
