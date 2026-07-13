@@ -148,8 +148,19 @@ export function getBuildCommandForTarget(target) {
   }
 }
 
-export function getTypecheckCommandForTarget(_target) {
-  return `${pnpm} typecheck`;
+export function getTypecheckCommandForTarget(target) {
+  const workspace = {
+    api: "@scalius/api",
+    admin: "@scalius/admin-v2",
+    storefront: "@scalius/storefront",
+    "ops-monitor": "@scalius/ops-monitor",
+  }[target];
+  if (!workspace) throw new Error(`Unknown deploy target: ${target}`);
+  return `${pnpm} --filter ${workspace} typecheck`;
+}
+
+export function getSequentialWorkspaceCommand(task) {
+  return `${pnpm} exec turbo run ${task} --concurrency=1`;
 }
 
 export function getDeployCommandForTarget(target) {
@@ -662,8 +673,8 @@ export async function main() {
     run(
       requestedTarget
         ? getTypecheckCommandForTarget(requestedTarget)
-        : `${pnpm} typecheck`,
-      "Typecheck all workspaces",
+        : getSequentialWorkspaceCommand("typecheck"),
+      requestedTarget ? `Typecheck ${requestedTarget} workspace` : "Typecheck all workspaces sequentially",
     );
 
     if (requestedTarget) {
@@ -691,7 +702,7 @@ export async function main() {
     }
 
     // 2. Build: all workspaces via Turbo
-    run(`${pnpm} build`, "Build all workspaces");
+    run(getSequentialWorkspaceCommand("build"), "Build all workspaces sequentially");
     checkDistEnvFiles(deployTargets);
 
     if (dryRun) {
