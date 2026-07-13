@@ -29,4 +29,17 @@ DROP TABLE `discounts`;--> statement-breakpoint
 ALTER TABLE `__new_discounts` RENAME TO `discounts`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `discounts_code_unique_idx` ON `discounts` (`code`);--> statement-breakpoint
-CREATE INDEX `discounts_deleted_at_idx` ON `discounts` (`deleted_at`);
+CREATE INDEX `discounts_deleted_at_idx` ON `discounts` (`deleted_at`);--> statement-breakpoint
+INSERT INTO `discounts_fts`(`discounts_fts`) VALUES('rebuild');--> statement-breakpoint
+CREATE TRIGGER `discounts_fts_after_insert` AFTER INSERT ON `discounts` BEGIN
+  INSERT INTO `discounts_fts`(rowid, code) VALUES (new.rowid, new.code);
+END;--> statement-breakpoint
+CREATE TRIGGER `discounts_fts_after_update` AFTER UPDATE ON `discounts` BEGIN
+  INSERT INTO `discounts_fts`(rowid, code) VALUES (new.rowid, new.code);
+END;--> statement-breakpoint
+CREATE TRIGGER `discounts_fts_before_delete` BEFORE DELETE ON `discounts` BEGIN
+  INSERT INTO `discounts_fts`(`discounts_fts`, rowid, code) VALUES('delete', old.rowid, old.code);
+END;--> statement-breakpoint
+CREATE TRIGGER `discounts_fts_before_update` BEFORE UPDATE ON `discounts` BEGIN
+  INSERT INTO `discounts_fts`(`discounts_fts`, rowid, code) VALUES('delete', old.rowid, old.code);
+END;
