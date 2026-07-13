@@ -149,7 +149,11 @@ function SectionChips({
   );
 }
 
-function PreviewLinks({ status }: { status: SeoDiscoveryStatus["storefront"] }) {
+function PreviewLinks({
+  status,
+}: {
+  status: SeoDiscoveryStatus["storefront"];
+}) {
   return (
     <div className="space-y-2">
       <div className="grid gap-2 sm:grid-cols-3">
@@ -352,9 +356,7 @@ function formatProbeCounts(resource: SeoDiscoveryLiveProbeResource): string {
     countParts.push(`${resource.counts.feedLinks} link`);
   }
   countParts.push(`${resource.counts.imageLinks ?? 0} image_link`);
-  countParts.push(
-    `${resource.counts.availabilityValues ?? 0} availability`,
-  );
+  countParts.push(`${resource.counts.availabilityValues ?? 0} availability`);
   return countParts.join("; ");
 }
 
@@ -371,7 +373,9 @@ function LiveProbeRows({
     <div className="divide-y divide-border border-t border-border">
       {resources.map((resource) => {
         const tone = getLiveProbeResourceTone(resource);
-        const statusLabel = resource.status ? String(resource.status) : "No response";
+        const statusLabel = resource.status
+          ? String(resource.status)
+          : "No response";
         const countIssue = getSeoDiscoveryLiveProbeCountIssue(resource);
 
         return (
@@ -627,7 +631,9 @@ function FeedDiagnosticsPanel({
                       <p className="truncate text-[11px] text-muted-foreground">
                         Sample:{" "}
                         {reason.samples.map((sample, index) => (
-                          <Fragment key={`${sample.id || sample.slug}-${index}`}>
+                          <Fragment
+                            key={`${sample.id || sample.slug}-${index}`}
+                          >
                             {index > 0 ? ", " : null}
                             {sample.id ? (
                               <a
@@ -647,7 +653,9 @@ function FeedDiagnosticsPanel({
                   <Badge
                     variant="outline"
                     className={`w-fit shrink-0 self-start ${toneClassName(
-                      reason.reason === "feed_disabled" ? "disabled" : "warning",
+                      reason.reason === "feed_disabled"
+                        ? "disabled"
+                        : "warning",
                     )}`}
                   >
                     {formatCount(reason.products)}
@@ -705,10 +713,11 @@ export function SeoDiscoveryStatusCard({
       <div className="flex items-start gap-3 px-4 py-3">
         <FileSearch className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Discovery Status / QA</h3>
+          <h3 className="text-sm font-semibold">Public discovery outcome</h3>
           <p className="text-xs leading-5 text-muted-foreground">
-            Read-only checklist from the current discovery policy and dashboard
-            Store URL setting.
+            Policy previews follow the edits on this page. Live proof checks the
+            currently published storefront, feeds, schema prerequisites, and
+            URLs.
           </p>
         </div>
       </div>
