@@ -2,9 +2,18 @@
 
 Last reviewed: 2026-07-13
 
-Status: implementation-ready specification, not live completion evidence. The
-deployed result belongs in [LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) only after the
-API writes, storefront/admin browser run, and release checks have passed.
+Status: the checked-in manifest and network-free planning gate are implemented;
+authenticated write/reconcile phases are still disabled. The deployed result
+belongs in [LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) only after the API writes,
+storefront/admin browser run, and release checks have passed.
+
+Run `pnpm demo:store --plan` before any import work. It validates and prints the
+exact five-category, 50-product, 177-SKU contract, including identity and option
+topology, positive prices and stock intent, media-slot/alt-text intent, ordered
+additional sections, offers, collections, heroes, and retained Rider/Halo IDs.
+The command has no implicit write mode; omitting `--plan` fails closed. Stable
+phase resume keys are present for the later authenticated API reconciler, but
+they do not claim that any live resource has been created or updated.
 
 ## Target and acceptance contract
 
