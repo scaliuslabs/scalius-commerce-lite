@@ -50,6 +50,31 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Tax now opens with a compact operational readiness sequence instead of a decorative hero. The live disabled configuration truthfully reports zero checkout tax, identifies the Standard default class and missing active rate, and links directly to rate setup. Its Policy/Classes/Rates/Catalog/Preview rail was browser-verified as a horizontally scrollable 390 px dark-mode workspace.
 - Product detail tabs were reverified without redesigning the protected product page. The deployed rail resolves below the desktop header at 125 px and, under a long-content geometry, pins at the 56 px mobile header offset with an opaque white background, no backdrop filter, and contained horizontal overscroll. The current two short demo descriptions end before natural sticky travel; the 49-section rich-store plan supplies the long-content cases.
 - Hero editing and storefront rendering now share one presentation authority: desktop source target 1300×500 and mobile 640×300, both center-cropped to fill. Production showed the exact targets in their respective editor tabs while preserving the existing live carousel geometry.
+- The settings-authority release was rechecked at 390×844 in the authenticated
+  Abdur Rob Chrome profile. Media, Theme, Account, Discounts, Checkout flow,
+  Payment gateways, Tax, Header navigation, and Analytics all stayed within the
+  viewport without page-level horizontal overflow. Analytics dark-mode canvas
+  and card surfaces used the shared semantic colors, and the browser was
+  restored to light mode/default viewport after the read-only run.
+- Media showed nine ready assets in five columns at 1440 px and two columns at
+  390 px. Entering `Select` mode selected zero assets; `Select all shown` was a
+  separate command. Checkout readiness settled to Ready for payment, shipping,
+  and delivery location, and gateway cards exposed Setup, Provider, and
+  Checkout state independently for Stripe, SSLCommerz, Polar, and COD.
+- The same run identified two remaining release defects rather than hiding them
+  behind the responsive smoke. Inventory still renders its 770 px desktop
+  table inside a horizontal scroller at 390 px instead of a purpose-built
+  mobile card workflow. The first request to `/admin/orders/FWW6XI` also hit a
+  Cloudflare `D1_ERROR: internal error; reference = ...` and rendered the global
+  500 page; an immediate reload returned the complete order. Commit
+  `bfdf620ac` recognizes only that provider-referenced transient class and
+  retries the read-only order-detail projection while leaving permanent SQL and
+  constraint failures non-retryable. Its focused order/D1 tests and the new Tax
+  diagnostics/copy tests pass; deployment and a live first-load retry proof are
+  required in the next coordinated release.
+- Guest CRM linkage remained healthy after the transient order read: the
+  `cust_guest_FWW6XI` history route rendered the unified buyer profile, one
+  pending BDT 9,100 order, zero paid spend, and the link back to order detail.
 
 ## Cleanup decisions and state
 
