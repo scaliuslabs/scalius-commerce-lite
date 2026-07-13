@@ -44,6 +44,19 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 ### Shopify
 
+- A signed-in live-admin inspection on 2026-07-13 confirmed the current
+  workflow rather than relying only on help copy. “Create discount” first asks
+  for one outcome—amount off products, Buy X get Y, amount off order, or free
+  shipping. The Buy X get Y editor then treats code/automatic as a method,
+  keeps qualifying **Customer buys** and rewarded **Customer gets** sets
+  separate, and presents one dense main column beside a continuously updated
+  outcome summary. Eligibility, per-order and total limits, combination
+  classes, schedule, channels, and tags remain progressive sections in the
+  same workflow. Scalius should preserve that legibility, but improve it with a
+  production-backed test cart, explicit rejected-candidate explanations, and a
+  deliberate automatic-gift/customer-choice policy instead of requiring a
+  merchant to infer checkout behavior from switches.
+
 - Shopify distinguishes code and automatic methods and supports amount-off,
   free-shipping, and Buy X Get Y promotion types. Buy X Get Y separates the
   qualifying “customer buys” set from the discounted “customer gets” set,
