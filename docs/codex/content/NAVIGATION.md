@@ -23,6 +23,13 @@ model remains the architectural destination:
   credential-free HTTPS URLs. The editor exposes invalid destinations inline.
 - Footer menu previews now resolve against the real storefront origin rather
   than opening a fake `#` URL.
+- At mobile admin widths, navigation editing uses a compact nested card tree
+  instead of squeezing the four-column desktop table into 390 px. Native
+  inputs and buttons keep label/destination edits, safe preview, add/remove,
+  collapse, and hierarchy visible. Reorder mode exposes deterministic Earlier,
+  Later, Make child, and Up a level commands, so touch and keyboard merchants
+  are never required to drag. The desktop table and drag workflow remain
+  unchanged.
 - Copyright input is defined as the owner/business name. The storefront owns
   the current year and rights suffix exactly once, and no longer writes unused
   footer presentation data into `localStorage` on every page.

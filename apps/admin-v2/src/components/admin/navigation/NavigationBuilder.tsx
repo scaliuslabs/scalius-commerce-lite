@@ -12,9 +12,11 @@ import {
 } from "@/components/ui/table";
 import { Check, GripVertical, Plus, Menu, Layers } from "lucide-react";
 import { AddNavItemDialog } from "./AddNavItemDialog";
+import { MobileNavigationTree } from "./MobileNavigationTree";
 import { NavigationTreeRows } from "./NavigationTreeRows";
 import type { NavigationItem, NavigationBuilderProps } from "./types";
 import { MAX_NAV_DEPTH } from "./types";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const SortableNavigationEditor = lazy(() =>
   import("./SortableNavigationEditor").then((module) => ({
@@ -53,6 +55,7 @@ export function NavigationBuilder({
   onChange,
   getStorefrontPath,
 }: NavigationBuilderProps) {
+  const isMobile = useIsMobile();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [addToParentPath, setAddToParentPath] = useState<string | null>(null);
@@ -267,6 +270,30 @@ export function NavigationBuilder({
     [navigation, onChange],
   );
 
+  const handleMoveWithinSiblings = useCallback(
+    (path: string, oldIndex: number, newIndex: number) => {
+      const reorderAtPath = (
+        items: NavigationItem[],
+        parts: number[],
+      ): NavigationItem[] => {
+        if (parts.length === 0) {
+          return moveNavigationItem(items, oldIndex, newIndex);
+        }
+
+        const [first, ...rest] = parts;
+        return items.map((item, index) =>
+          index === first && item.subMenu
+            ? { ...item, subMenu: reorderAtPath(item.subMenu, rest) }
+            : item,
+        );
+      };
+
+      const parts = path ? path.split(".").map(Number) : [];
+      onChange(reorderAtPath(navigation, parts));
+    },
+    [navigation, onChange],
+  );
+
   // Reorder submenu items (called from SortableNavItem for nested lists)
   const handleReorderSubmenu = useCallback(
     (parentId: string, oldIndex: number, newIndex: number) => {
@@ -358,6 +385,34 @@ export function NavigationBuilder({
     </Table>
   );
 
+  const renderMobileNavigation = () => (
+    navigation.length === 0 ? (
+      <div className="px-4 py-10 text-center">
+        <Menu className="mx-auto mb-2 h-5 w-5 text-muted-foreground/50" />
+        <p className="mb-3 text-sm text-muted-foreground">
+          No links yet. Add a published page, category, custom link, or label.
+        </p>
+        <Button onClick={handleAddRoot} size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          Add first item
+        </Button>
+      </div>
+    ) : (
+      <MobileNavigationTree
+        navigation={navigation}
+        arranging={isReorderMode}
+        maxDepth={MAX_NAV_DEPTH}
+        onUpdate={updateItem}
+        onRemove={removeItem}
+        onAddChild={handleAddChild}
+        onIndent={handleIndent}
+        onOutdent={handleOutdent}
+        onMove={handleMoveWithinSiblings}
+        getStorefrontPath={getStorefrontPath}
+      />
+    )
+  );
+
   return (
     <Card className="overflow-hidden shadow-none">
       <CardHeader className="px-3 py-3">
@@ -408,7 +463,9 @@ export function NavigationBuilder({
 
       <CardContent className="p-0">
         <div className="border-t">
-          {isReorderMode && navigation.length > 0 ? (
+          {isMobile ? (
+            renderMobileNavigation()
+          ) : isReorderMode && navigation.length > 0 ? (
             <Suspense fallback={renderNavigationTable()}>
               <SortableNavigationEditor
                 navigation={navigation}
