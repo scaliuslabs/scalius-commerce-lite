@@ -2,8 +2,6 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import {
   createMediaFolder,
   deleteMediaFolder,
-  getMediaFolders,
-  getMediaList,
   moveMediaFiles,
   permanentlyDeleteMedia,
   renameMediaFolder,
@@ -85,6 +83,28 @@ function toFolder(folder: MediaFolderDto): MediaFolder {
   };
 }
 
+function mediaReadUrl(path: string, params: Record<string, string | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, value);
+  }
+  const serialized = query.toString();
+  return `${MEDIA_API}${path}${serialized ? `?${serialized}` : ""}`;
+}
+
+async function readDirect<T>(path: string, params: Record<string, string | undefined>): Promise<T> {
+  const response = await fetch(mediaReadUrl(path, params), {
+    method: "GET",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Cache-Control": "no-cache",
+    },
+  });
+  return parseDirectResponse<T>(response);
+}
+
 async function parseDirectResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
   let body: ApiEnvelope<T>;
@@ -107,16 +127,19 @@ export class MediaApiClient {
     limit: number,
     filters: Partial<MediaFilterOptions>,
   ): Promise<MediaApiResponse> {
-    const data = await getMediaList({ data: {
+    const data = await readDirect<{
+      files: MediaFileDto[];
+      pagination: CursorPagination;
+    }>("", {
       cursor,
-      limit,
-      search: filters.search,
-      folderId: filters.folderId,
+      limit: String(limit),
+      search: filters.search?.trim() || undefined,
+      folderId: filters.folderId === undefined ? undefined : filters.folderId ?? "root",
       sortBy: filters.sortBy,
       sortOrder: filters.sortOrder,
       kind: filters.kind,
       view: filters.view,
-    } });
+    });
     return { files: data.files.map(toMediaFile), pagination: data.pagination };
   }
 
@@ -124,7 +147,10 @@ export class MediaApiClient {
     const folders: MediaFolder[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < 20; page += 1) {
-      const data = await getMediaFolders({ data: { cursor, limit: 100 } });
+      const data = await readDirect<{
+        folders: MediaFolderDto[];
+        pagination: CursorPagination;
+      }>("/folders", { cursor, limit: "100" });
       folders.push(...data.folders.map(toFolder));
       if (!data.pagination.hasMore || !data.pagination.nextCursor) break;
       if (page === 19) {

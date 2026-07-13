@@ -142,6 +142,12 @@ buffered in a Worker invocation.
 
 ### Media library interaction follow-up (2026-07-13)
 
+- Asset and folder reads use the same-origin admin API proxy with explicit
+  `no-store`/`no-cache` semantics. The library is an operational work surface:
+  browser or server-function GET reuse must not preserve an earlier empty
+  result after uploads, demo population, restore, or navigation. Request IDs in
+  the client hook still ensure a slower older response cannot replace the
+  newest filter result.
 - `Select` now enters an empty selection mode. Selecting every loaded result is
   a separate `Select all shown` command, so beginning a bulk workflow never
   silently targets the whole visible library. Standalone library selection can
