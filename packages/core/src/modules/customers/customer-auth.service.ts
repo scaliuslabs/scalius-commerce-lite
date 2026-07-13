@@ -893,7 +893,7 @@ export async function verifyOtp(
             : await getActiveCustomerByPhone(db, normalizedIdentifier);
 
         if (intent === "sign_in") {
-            if (!existing) {
+            if (!existing || !existing.accountClaimedAt) {
                 if (method === "email" && await getDeletedCustomerByEmail(db, normalizedIdentifier)) {
                     throw new ValidationError("This email belongs to a deleted customer account. Contact store support to restore access.");
                 }
@@ -912,92 +912,110 @@ export async function verifyOtp(
             resolvedEmail = existing.email || resolvedEmail;
         } else {
             if (existing) {
-                throw new ValidationError(
-                    method === "email"
-                        ? "An account already exists for this email. Sign in instead."
-                        : "An account already exists for this phone number. Sign in instead.",
-                );
+                if (existing.accountClaimedAt) {
+                    throw new ValidationError(
+                        method === "email"
+                            ? "An account already exists for this email. Sign in instead."
+                            : "An account already exists for this phone number. Sign in instead.",
+                    );
+                }
+                if (method !== "phone") {
+                    throw new ValidationError("Use phone verification to create an account for this customer profile.");
+                }
+                customerProfileRow = existing;
+                customerId = existing.id;
+                customerName = existing.name || name;
+                resolvedEmail = existing.email || resolvedEmail;
+                isNewUser = true;
             }
-            if (method === "email") {
+            if (!existing && method === "email") {
                 if (!verifiedPhone) {
                     throw new ValidationError("Phone number is required to create an account with email OTP.");
                 }
             }
 
-            if (resolvedEmail) {
+            if (!existing && resolvedEmail) {
                 const activeEmailCustomers = await getActiveCustomersByEmail(db, resolvedEmail, 2);
                 if (activeEmailCustomers.length > 1) {
                     throw new ValidationError("Multiple accounts use this email. Please use phone verification or contact store support.");
                 }
                 if (activeEmailCustomers.length === 1) {
+                    if (!activeEmailCustomers[0]?.accountClaimedAt) {
+                        throw new ValidationError("Use phone verification to create an account for this customer profile.");
+                    }
                     throw new ValidationError("An account already exists for this email. Sign in instead.");
                 }
             }
 
-            const phoneForNewCustomer = method === "phone" ? normalizedIdentifier : verifiedPhone;
-            if (!phoneForNewCustomer) {
-                throw new ValidationError("Phone number is required to create an account.");
+            if (!existing) {
+                const phoneForNewCustomer = method === "phone" ? normalizedIdentifier : verifiedPhone;
+                if (!phoneForNewCustomer) {
+                    throw new ValidationError("Phone number is required to create an account.");
+                }
+
+                const activePhoneCustomer = await getActiveCustomerByPhone(db, phoneForNewCustomer);
+                if (activePhoneCustomer) {
+                    if (!activePhoneCustomer.accountClaimedAt) {
+                        throw new ValidationError("Use phone verification to create an account for this customer profile.");
+                    }
+                    throw new ValidationError("An account already exists for this phone number. Sign in instead.");
+                }
+                const deletedPhoneCustomer = await getDeletedCustomerByPhone(db, phoneForNewCustomer);
+                if (deletedPhoneCustomer) {
+                    throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
+                }
+
+                // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
+                customerId = "cust_" + nanoid();
+                const profileRequiredAt = new Date();
+
+                // Determine phone value
+                const customerPhone = phoneForNewCustomer;
+
+                const newCustomerValues: CustomerInsertRow = {
+                    id: customerId,
+                    name: customerName,
+                    email: resolvedEmail || null,
+                    phone: customerPhone || "",
+                    ...customerAccountInsertStateForProof({
+                        verifiedEmail: otpVerifiedEmail,
+                        verifiedPhone: otpVerifiedPhone,
+                        authenticatedAt: profileRequiredAt,
+                    }),
+                    profileCompletionRequiredAt: profileRequiredAt,
+                    profileCompletedAt: null,
+                    createdAt: profileRequiredAt,
+                    updatedAt: profileRequiredAt,
+                };
+
+                pendingCustomerInsertValues = newCustomerValues;
+                customerProfileRow = {
+                    id: customerId,
+                    name: customerName,
+                    email: resolvedEmail || null,
+                    phone: customerPhone || "",
+                    address: null,
+                    city: null,
+                    zone: null,
+                    area: null,
+                    cityName: null,
+                    zoneName: null,
+                    areaName: null,
+                    accountClaimedAt: profileRequiredAt,
+                    phoneVerifiedAt: otpVerifiedPhone ? profileRequiredAt : null,
+                    emailVerifiedAt: otpVerifiedEmail ? profileRequiredAt : null,
+                    lastAuthenticatedAt: profileRequiredAt,
+                    profileCompletionRequiredAt: profileRequiredAt,
+                    profileCompletedAt: null,
+                    totalOrders: 0,
+                    totalSpent: 0,
+                    lastOrderAt: null,
+                    createdAt: profileRequiredAt,
+                    updatedAt: profileRequiredAt,
+                    deletedAt: null,
+                };
+                isNewUser = true;
             }
-
-            const activePhoneCustomer = await getActiveCustomerByPhone(db, phoneForNewCustomer);
-            if (activePhoneCustomer) {
-                throw new ValidationError("An account already exists for this phone number. Sign in instead.");
-            }
-            const deletedPhoneCustomer = await getDeletedCustomerByPhone(db, phoneForNewCustomer);
-            if (deletedPhoneCustomer) {
-                throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
-            }
-
-            // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
-            customerId = "cust_" + nanoid();
-            const profileRequiredAt = new Date();
-
-            // Determine phone value
-            const customerPhone = phoneForNewCustomer;
-
-            const newCustomerValues: CustomerInsertRow = {
-                id: customerId,
-                name: customerName,
-                email: resolvedEmail || null,
-                phone: customerPhone || "",
-                ...customerAccountInsertStateForProof({
-                    verifiedEmail: otpVerifiedEmail,
-                    verifiedPhone: otpVerifiedPhone,
-                    authenticatedAt: profileRequiredAt,
-                }),
-                profileCompletionRequiredAt: profileRequiredAt,
-                profileCompletedAt: null,
-                createdAt: profileRequiredAt,
-                updatedAt: profileRequiredAt,
-            };
-
-            pendingCustomerInsertValues = newCustomerValues;
-            customerProfileRow = {
-                id: customerId,
-                name: customerName,
-                email: resolvedEmail || null,
-                phone: customerPhone || "",
-                address: null,
-                city: null,
-                zone: null,
-                area: null,
-                cityName: null,
-                zoneName: null,
-                areaName: null,
-                accountClaimedAt: profileRequiredAt,
-                phoneVerifiedAt: otpVerifiedPhone ? profileRequiredAt : null,
-                emailVerifiedAt: otpVerifiedEmail ? profileRequiredAt : null,
-                lastAuthenticatedAt: profileRequiredAt,
-                profileCompletionRequiredAt: profileRequiredAt,
-                profileCompletedAt: null,
-                totalOrders: 0,
-                totalSpent: 0,
-                lastOrderAt: null,
-                createdAt: profileRequiredAt,
-                updatedAt: profileRequiredAt,
-                deletedAt: null,
-            };
-            isNewUser = true;
         }
     } catch (dbError: unknown) {
         // Re-throw typed errors (ValidationError etc.) as-is

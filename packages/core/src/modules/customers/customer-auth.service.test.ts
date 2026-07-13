@@ -170,6 +170,10 @@ function createCustomerRow(overrides: Record<string, unknown> = {}) {
     cityName: null,
     zoneName: null,
     areaName: null,
+    accountClaimedAt: new Date(1_700_000_000_000),
+    phoneVerifiedAt: new Date(1_700_000_000_000),
+    emailVerifiedAt: null,
+    lastAuthenticatedAt: new Date(1_700_000_000_000),
     profileCompletionRequiredAt: null,
     profileCompletedAt: null,
     totalOrders: 0,
@@ -828,6 +832,84 @@ describe("customer auth service intent handling", () => {
     expect(JSON.stringify(sessionInsert?.values)).not.toContain(result.session?.token);
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("claims an existing unclaimed guest CRM profile after phone sign-up proof", async () => {
+    const guestProfile = createCustomerRow({
+      id: "cust_guest",
+      accountClaimedAt: null,
+      phoneVerifiedAt: null,
+      lastAuthenticatedAt: null,
+      address: "Guest checkout address",
+    });
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: null },
+      { get: guestProfile },
+    ]);
+    const kv = createKv();
+
+    const result = await verifyOtp(db as never, kv as never, {
+      intent: "sign_up",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      isNewUser: true,
+      session: { customerId: "cust_guest" },
+    });
+    expect(db.updateCalls).toHaveLength(1);
+    expect(db.updateCalls[0]?.values).toMatchObject({
+      accountClaimedAt: expect.anything(),
+      phoneVerifiedAt: expect.anything(),
+      lastAuthenticatedAt: expect.anything(),
+    });
+    expect(db.insertCalls.some(({ values }) => (
+      (values as { phone?: string }).phone === "+8801712345678"
+    ))).toBe(false);
+  });
+
+  it("does not treat an unclaimed CRM profile as an existing sign-in account", async () => {
+    const db = createDb([
+      { limit: [{ ...baseSiteSettings, authVerificationMethod: "sms_otp" }] },
+      { get: null },
+      { get: null },
+      { get: createCustomerRow({ accountClaimedAt: null }) },
+      { get: null },
+    ]);
+    const kv = createKv();
+    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
+      otpKey: "cust_otp:sms:+8801712345678",
+      method: "phone",
+      channel: "sms",
+      intent: "sign_in",
+      identifier: "+8801712345678",
+      phone: "+8801712345678",
+      expiresAt: Math.floor(Date.now() / 1000) + 300,
+      attempts: 1,
+      maxAttempts: 5,
+    });
+
+    await expect(verifyOtp(db as never, kv as never, {
+      intent: "sign_in",
+      method: "phone",
+      channel: "sms",
+      identifier: "+8801712345678",
+      code: "123456",
+      name: "Buyer",
+      encryptionKey: "test-key",
+      sessionHashKey: "session-test-key",
+    })).rejects.toThrow("No account was found for this phone number. Create an account instead.");
+
+    expect(db.batch).not.toHaveBeenCalled();
   });
 
   it("marks only the OTP-proven email as verified when email sign-up collects phone", async () => {

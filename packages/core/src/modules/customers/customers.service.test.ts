@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { customerSessions, customers, OrderStatus, PaymentStatus } from "@scalius/database/schema";
+import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 import {
   bulkDeleteCustomers,
+  buildCustomerOrderMetricsProjection,
+  customerAccountOrderVisibilityCondition,
   buildCustomerOrderBaseTimelineEvents,
   buildCustomerOrderNotificationTimelineEvents,
   decodeCustomerOrdersCursor,
@@ -14,6 +17,33 @@ import {
   projectCustomerOrderNotifications,
   summarizeCustomerAccountOrders,
 } from "./customers.service";
+
+describe("admin customer commerce metrics", () => {
+  it("derives lifetime value from paid value while retaining unpaid orders in the count", () => {
+    const metrics = buildCustomerOrderMetricsProjection();
+    const dialect = new SQLiteSyncDialect();
+    const totalOrders = dialect.sqlToQuery(metrics.totalOrders);
+    const totalSpent = dialect.sqlToQuery(metrics.totalSpent);
+
+    expect(totalOrders.sql).toContain("count(*)");
+    expect(totalOrders.sql).toContain("customer_orders.customer_id");
+    expect(totalSpent.sql).toContain("customer_orders.paid_amount");
+    expect(totalSpent.sql).not.toContain("customer_orders.total_amount");
+    expect(totalSpent.sql).toContain("partially_refunded");
+    expect(totalSpent.sql).toContain("customer_orders.deleted_at IS NULL");
+  });
+
+  it("filters private account history and detail reads by verified ownership", () => {
+    const compiled = new SQLiteSyncDialect().sqlToQuery(
+      customerAccountOrderVisibilityCondition("cust_account"),
+    );
+
+    expect(compiled.sql).toContain('"orders"."account_owner_customer_id" = ?');
+    expect(compiled.sql).toContain('"orders"."deleted_at" is null');
+    expect(compiled.sql).not.toContain('"orders"."customer_id" = ?');
+    expect(compiled.params).toEqual(["cust_account"]);
+  });
+});
 
 const existingCustomer = {
   id: "cust_1",
@@ -31,7 +61,10 @@ const existingCustomer = {
 
 function createDb(existing: unknown = existingCustomer) {
   const get = vi.fn(async () => existing);
-  const selectWhere = vi.fn(() => ({ get }));
+  const selectWhere = vi.fn(() => ({
+    get,
+    limit: vi.fn(() => ({ get })),
+  }));
   const from = vi.fn(() => ({ where: selectWhere }));
   const select = vi.fn(() => ({ from }));
   const update = vi.fn((table: unknown) => ({
@@ -64,7 +97,7 @@ describe("customers service session revocation", () => {
   });
 
   it("deletes customer session rows during permanent delete", async () => {
-    const db = createDb();
+    const db = createDb(null);
 
     await permanentlyDeleteCustomer(db as never, "cust_1");
 
@@ -79,9 +112,19 @@ describe("customers service session revocation", () => {
     await bulkDeleteCustomers(softDb as never, ["cust_1", "cust_2"], false);
     expect(softDb.update).toHaveBeenCalledWith(customerSessions);
 
-    const permanentDb = createDb();
+    const permanentDb = createDb(null);
     await bulkDeleteCustomers(permanentDb as never, ["cust_1", "cust_2"], true);
     expect(permanentDb.delete).toHaveBeenCalledWith(customerSessions);
+  });
+
+  it("blocks permanent deletion when order audit history references the customer", async () => {
+    const db = createDb({ id: "order_1" });
+
+    await expect(permanentlyDeleteCustomer(db as never, "cust_1"))
+      .rejects.toThrow("Customers with order history cannot be permanently deleted");
+
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(db.batch).not.toHaveBeenCalled();
   });
 });
 
