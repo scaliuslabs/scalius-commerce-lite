@@ -5,7 +5,8 @@ export function isTransientD1Error(error: unknown): boolean {
   return (
     message.includes("D1 DB is overloaded") ||
     message.includes("Requests queued for too long") ||
-    message.includes("code: 7429")
+    message.includes("code: 7429") ||
+    /D1_ERROR:\s*internal error;\s*reference\s*=/i.test(message)
   );
 }
 

@@ -39,6 +39,16 @@ describe("admin order list boundaries", () => {
     expect(detailSource).toContain("version: orders.version");
   });
 
+  it("retries only transient D1 failures while reading order details", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const detailStart = source.indexOf("export async function getOrderDetails");
+    const detailEnd = source.indexOf("export async function createOrder", detailStart);
+    const detailSource = source.slice(detailStart, detailEnd);
+
+    expect(detailSource).toContain("return retryTransientD1(() => getOrderDetailsOnce(db, id))");
+    expect(detailSource).toContain("async function getOrderDetailsOnce");
+  });
+
   it("clamps direct API page and limit inputs before building offsets", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 

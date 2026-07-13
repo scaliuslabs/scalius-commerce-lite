@@ -1,4 +1,8 @@
 import type { TaxConfigurationPayload, TaxRateRecord } from "@/lib/api-functions/taxes";
+import {
+  getTaxRateDiagnostics,
+  type TaxClassCoverageDiagnostic,
+} from "./tax-rate-diagnostics";
 
 export type TaxWorkspaceTab = "policy" | "classes" | "rates" | "classification" | "preview";
 
@@ -20,71 +24,20 @@ export interface TaxReadiness {
 
 export type RequiredTaxRateRole = "default products" | "shipping";
 
-type TaxDestinationCoverage = "exempt" | "all" | "scoped" | "none";
-
-interface TaxClassCoverage {
-  activeRateCount: number;
-  coverage: TaxDestinationCoverage;
-  scopedDestinationCount: number;
-  hasLayeredRates: boolean;
-}
-
-function getTaxClassCoverage(
-  configuration: TaxConfigurationPayload,
-  taxClassId: string | null | undefined,
-): TaxClassCoverage {
-  const taxClass = configuration.classes.find((candidate) => candidate.id === taxClassId);
-  if (taxClass?.isExempt) {
-    return {
-      activeRateCount: 0,
-      coverage: "exempt",
-      scopedDestinationCount: 0,
-      hasLayeredRates: false,
-    };
-  }
-
-  const activeRates = configuration.rates.filter(
-    (rate) => rate.isActive && rate.deletedAt === null && rate.taxClassId === taxClassId,
-  );
-  const allDestinationRates = activeRates.filter(
-    (rate) => rate.jurisdictionType === "all" && rate.jurisdictionId === null,
-  );
-  const scopedDestinations = new Set(
-    activeRates
-      .filter((rate) => rate.jurisdictionType !== "all" && rate.jurisdictionId)
-      .map((rate) => `${rate.jurisdictionType}:${rate.jurisdictionId}`),
-  );
-
-  return {
-    activeRateCount: activeRates.length,
-    coverage: allDestinationRates.length > 0
-      ? "all"
-      : scopedDestinations.size > 0
-        ? "scoped"
-        : "none",
-    scopedDestinationCount: scopedDestinations.size,
-    // All-destination rates and exact destination rates are cumulative in the
-    // calculator. Keep that fact visible without attempting to infer legal
-    // jurisdiction hierarchy from labels.
-    hasLayeredRates: allDestinationRates.length > 1
-      || (allDestinationRates.length > 0 && scopedDestinations.size > 0),
-  };
-}
-
 function coverageDetail(
-  taxClassName: string,
-  coverage: TaxClassCoverage,
+  coverage: TaxClassCoverageDiagnostic | undefined,
 ): string {
-  if (coverage.coverage === "exempt") {
-    return `${taxClassName} is exempt; every destination resolves to zero tax.`;
+  if (!coverage) return "Choose a class before reviewing destination coverage.";
+  if (coverage.state === "exempt") {
+    return `${coverage.className} is exempt; every destination resolves to zero tax.`;
   }
-  if (coverage.coverage === "all") {
+  if (coverage.state === "all") {
     const rateCount = `${coverage.activeRateCount} active ${coverage.activeRateCount === 1 ? "rate" : "rates"}`;
-    return coverage.hasLayeredRates
+    return coverage.hasStacking
       ? `${rateCount}; all destinations are covered and matching rates apply together.`
       : `${rateCount}; an all-destination rate covers every checkout destination.`;
   }
-  if (coverage.coverage === "scoped") {
+  if (coverage.state === "scoped") {
     const destinationCount = `${coverage.scopedDestinationCount} exact saved ${coverage.scopedDestinationCount === 1 ? "destination" : "destinations"}`;
     return `${destinationCount}; every other destination receives zero tax for this class.`;
   }
@@ -119,21 +72,26 @@ export function getRequiredTaxRateRoles(
 }
 
 export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxReadiness {
+  const rateDiagnostics = getTaxRateDiagnostics(configuration);
   const defaultClass = configuration.classes.find(
     (taxClass) => taxClass.id === configuration.settings.defaultTaxClassId,
   );
-  const defaultCoverage = getTaxClassCoverage(configuration, defaultClass?.id);
+  const defaultCoverage = rateDiagnostics.coverage.find(
+    (coverage) => coverage.classId === defaultClass?.id,
+  );
   const defaultClassReady = Boolean(defaultClass);
-  const defaultRatesReady = defaultCoverage.coverage !== "none";
+  const defaultRatesReady = Boolean(defaultCoverage && defaultCoverage.state !== "none");
   const effectiveShippingClassId = configuration.settings.taxShipping
     ? configuration.settings.shippingTaxClassId ?? configuration.settings.defaultTaxClassId
     : null;
   const shippingClass = effectiveShippingClassId
     ? configuration.classes.find((taxClass) => taxClass.id === effectiveShippingClassId)
     : null;
-  const shippingCoverage = getTaxClassCoverage(configuration, shippingClass?.id);
+  const shippingCoverage = rateDiagnostics.coverage.find(
+    (coverage) => coverage.classId === shippingClass?.id,
+  );
   const shippingRatesReady = !configuration.settings.taxShipping || Boolean(
-    shippingCoverage.coverage !== "none",
+    shippingCoverage && shippingCoverage.state !== "none",
   );
   const calculationReady = configuration.settings.enabled
     && defaultClassReady
@@ -150,18 +108,16 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
     {
       id: "rates",
       label: "Product destination coverage",
-      detail: defaultClass
-        ? coverageDetail(defaultClass.name, defaultCoverage)
-        : "Choose a default class before reviewing destination coverage.",
-      ready: defaultCoverage.coverage === "all" || defaultCoverage.coverage === "exempt",
+      detail: coverageDetail(defaultCoverage),
+      ready: defaultCoverage?.state === "all" || defaultCoverage?.state === "exempt",
     },
     ...(configuration.settings.taxShipping ? [{
       id: "shipping-rates" as const,
       label: "Shipping destination coverage",
       detail: shippingClass
-        ? coverageDetail(shippingClass.name, shippingCoverage)
+        ? coverageDetail(shippingCoverage)
         : "Choose an effective shipping class before reviewing destination coverage.",
-      ready: shippingCoverage.coverage === "all" || shippingCoverage.coverage === "exempt",
+      ready: shippingCoverage?.state === "all" || shippingCoverage?.state === "exempt",
     }] : []),
     {
       id: "calculation",
@@ -215,25 +171,25 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
   }
 
   if (!configuration.settings.enabled) {
-    const hasScopedCoverage = defaultCoverage.coverage === "scoped"
-      || (configuration.settings.taxShipping && shippingCoverage.coverage === "scoped");
+    const hasScopedCoverage = defaultCoverage?.state === "scoped"
+      || (configuration.settings.taxShipping && shippingCoverage?.state === "scoped");
     return {
       state: "off",
       title: "Tax calculation is off",
       description: hasScopedCoverage
         ? "Checkout records zero tax while disabled. Saved rates cover selected destinations only; every other destination would remain untaxed after enabling."
-        : "Your class and all-destination coverage pass lifecycle checks, but checkout continues to record zero tax until you enable calculation.",
+        : "Your saved classes and rates cover all destinations, but checkout continues to record zero tax until you enable calculation.",
       nextTab: hasScopedCoverage ? "rates" : "policy",
       nextAction: hasScopedCoverage ? "Review coverage" : "Review policy",
       steps,
     };
   }
 
-  const productCoverageIsGlobal = defaultCoverage.coverage === "all"
-    || defaultCoverage.coverage === "exempt";
+  const productCoverageIsGlobal = defaultCoverage?.state === "all"
+    || defaultCoverage?.state === "exempt";
   const shippingCoverageIsGlobal = !configuration.settings.taxShipping
-    || shippingCoverage.coverage === "all"
-    || shippingCoverage.coverage === "exempt";
+    || shippingCoverage?.state === "all"
+    || shippingCoverage?.state === "exempt";
   if (!productCoverageIsGlobal || !shippingCoverageIsGlobal) {
     const scopedRoles = [
       !productCoverageIsGlobal ? "products" : null,
@@ -242,7 +198,7 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
     return {
       state: "attention",
       title: "Tax is live for selected destinations",
-      description: `Lifecycle checks pass, but ${scopedRoles} have exact saved coverage only. Other destinations receive zero tax; matching destination scopes apply together.`,
+      description: `Tax is on, but ${scopedRoles} only match selected saved destinations. Other destinations receive zero tax; matching destination rates are added together.`,
       nextTab: "preview",
       nextAction: "Test destinations",
       steps,
@@ -252,7 +208,7 @@ export function getTaxReadiness(configuration: TaxConfigurationPayload): TaxRead
   return {
     state: "ready",
     title: "Tax has all-destination coverage",
-    description: "Lifecycle checks pass and each effective taxable class has an all-destination rate. Any matching scoped rates apply together, so preview layered destinations after changes.",
+    description: "Every destination matches a rate for each taxable class in use. Any more-specific matching rates are added too, so preview layered destinations after changes.",
     nextTab: "preview",
     nextAction: "Test calculation",
     steps,

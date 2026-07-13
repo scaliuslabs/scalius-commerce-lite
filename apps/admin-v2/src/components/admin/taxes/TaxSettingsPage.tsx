@@ -92,7 +92,7 @@ export function TaxSettingsPage() {
         </TabsList>
         <TabsContent value="policy"><TaxSettingsPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="classes"><TaxClassesPanel configuration={configuration} canManage={canManage} /></TabsContent>
-        <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} /></TabsContent>
+        <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} onOpenClasses={() => setActiveTab("classes")} onOpenPreview={() => setActiveTab("preview")} /></TabsContent>
         <TabsContent value="classification"><TaxClassificationsPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="preview"><TaxPreviewPanel configuration={configuration} /></TabsContent>
       </Tabs>

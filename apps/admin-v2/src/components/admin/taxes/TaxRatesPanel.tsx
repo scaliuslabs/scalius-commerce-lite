@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Edit3, Loader2, Plus, Scale, Trash2, X } from "lucide-react";
+import { AlertTriangle, Edit3, Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -36,6 +36,8 @@ import {
   percentToBasisPoints,
   resolveJurisdictionSelection,
 } from "./tax-form";
+import { getTaxRateDraftOverlap } from "./tax-rate-diagnostics";
+import { TaxRateDiagnosticsPanel } from "./TaxRateDiagnosticsPanel";
 import { getRequiredTaxRateRoles } from "./tax-readiness";
 
 interface RateDraft {
@@ -63,11 +65,16 @@ const EMPTY_DRAFT: RateDraft = {
 export function TaxRatesPanel({
   configuration,
   canManage,
+  onOpenClasses,
+  onOpenPreview,
 }: {
   configuration: TaxConfigurationPayload;
   canManage: boolean;
+  onOpenClasses: () => void;
+  onOpenPreview: () => void;
 }) {
   const queryClient = useQueryClient();
+  const rateNameRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<TaxRateRecord | null>(null);
   const [deleting, setDeleting] = useState<TaxRateRecord | null>(null);
   const [draft, setDraft] = useState<RateDraft>(EMPTY_DRAFT);
@@ -82,6 +89,15 @@ export function TaxRatesPanel({
     draft.jurisdictionId,
     configuration.jurisdictions,
   );
+  const draftOverlap = jurisdiction && parsedPriority >= 0
+    ? getTaxRateDraftOverlap(configuration, {
+        taxClassId: draft.taxClassId,
+        jurisdictionType: draft.jurisdictionType,
+        jurisdictionId: jurisdiction.jurisdictionId,
+        priority: parsedPriority,
+        isActive: draft.isActive,
+      }, editing?.id ?? null)
+    : null;
   const editingRequiredRoles = getRequiredTaxRateRoles(configuration, editing);
   const deletingRequiredRoles = getRequiredTaxRateRoles(configuration, deleting);
   const removesRequiredCoverage = Boolean(
@@ -162,6 +178,13 @@ export function TaxRatesPanel({
       isCompound: rate.isCompound,
       isActive: rate.isActive,
     });
+    requestAnimationFrame(() => rateNameRef.current?.focus());
+  };
+
+  const beginBroadRate = (taxClassId: string) => {
+    setEditing(null);
+    setDraft({ ...EMPTY_DRAFT, taxClassId });
+    requestAnimationFrame(() => rateNameRef.current?.focus());
   };
 
   const className = (id: string) =>
@@ -169,20 +192,23 @@ export function TaxRatesPanel({
 
   return (
     <div className="space-y-6">
-      <Card className="border-amber-500/25 bg-amber-500/[0.04]">
-        <CardContent className="flex gap-3 pt-6 text-sm text-muted-foreground">
-          <Scale className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <p>
-            Enter only rates your business has verified for the selected jurisdiction. The platform stores and calculates your rules; it does not provide tax or legal advice.
-          </p>
-        </CardContent>
-      </Card>
+      <TaxRateDiagnosticsPanel
+        configuration={configuration}
+        canManage={canManage}
+        onAddBroadRate={beginBroadRate}
+        onOpenClasses={onOpenClasses}
+        onReviewRate={(rateId) => {
+          const rate = configuration.rates.find((candidate) => candidate.id === rateId);
+          if (rate) beginEdit(rate);
+        }}
+        onOpenPreview={onOpenPreview}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>{editing ? "Edit rate" : "Create a rate"}</CardTitle>
-            <CardDescription>Priority runs low to high. Equal priorities form one layer; compound rates include tax only from lower layers.</CardDescription>
+            <CardDescription>Rates that match the same checkout are added together. Use priority and compound only when you intentionally layer rates.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -198,7 +224,7 @@ export function TaxRatesPanel({
             </div>
             <div className="space-y-2">
               <Label htmlFor="tax-rate-name">Rate name</Label>
-              <Input id="tax-rate-name" value={draft.name} maxLength={120} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Dhaka standard" />
+              <Input ref={rateNameRef} id="tax-rate-name" value={draft.name} maxLength={120} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Dhaka standard" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -206,7 +232,7 @@ export function TaxRatesPanel({
                 <Input id="tax-rate-percent" inputMode="decimal" value={draft.percent} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, percent: event.target.value }))} placeholder="15.00" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tax-rate-priority">Priority</Label>
+                <Label htmlFor="tax-rate-priority">Priority (advanced)</Label>
                 <Input id="tax-rate-priority" inputMode="numeric" value={draft.priority} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} />
               </div>
             </div>
@@ -250,6 +276,12 @@ export function TaxRatesPanel({
               <ToggleField label="Active" checked={draft.isActive} disabled={!canManage} onCheckedChange={(isActive) => setDraft((current) => ({ ...current, isActive }))} />
               <ToggleField label="Compound" checked={draft.isCompound} disabled={!canManage} onCheckedChange={(isCompound) => setDraft((current) => ({ ...current, isCompound }))} />
             </div>
+            {draftOverlap ? (
+              <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p>{draftOverlap.detail}</p>
+              </div>
+            ) : null}
             {removesRequiredCoverage ? (
               <p role="alert" className="text-xs leading-5 text-destructive">
                 This is the only active rate for {editingRequiredRoles.join(" and ")}. Add a replacement rate before deactivating it or moving it to another class.
