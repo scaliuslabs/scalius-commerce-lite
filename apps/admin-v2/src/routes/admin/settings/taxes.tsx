@@ -1,6 +1,11 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useCallback } from "react";
 
 import { TaxSettingsPage } from "~/components/admin/taxes";
+import {
+  normalizeTaxWorkspaceSection,
+  type TaxWorkspaceSection,
+} from "~/components/admin/taxes/tax-workspace-sections";
 import { taxConfigurationQueryOptions } from "~/lib/api-query-options/taxes";
 import {
   ADMIN_ACCESS_DENIED_PATH,
@@ -17,12 +22,40 @@ export async function requireFreshTaxesRouteAuthority() {
   return context;
 }
 
+export function validateTaxesSearch(search: Record<string, unknown>) {
+  return { section: normalizeTaxWorkspaceSection(search.section) };
+}
+
 export const Route = createFileRoute("/admin/settings/taxes")({
+  validateSearch: validateTaxesSearch,
   beforeLoad: requireFreshTaxesRouteAuthority,
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(taxConfigurationQueryOptions());
   },
   head: () => ({ meta: [{ title: "Taxes | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
-  component: TaxSettingsPage,
+  component: TaxesPage,
 });
+
+function TaxesPage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const handleSectionChange = useCallback(
+    (section: TaxWorkspaceSection) => {
+      void navigate({
+        search: ((previous: Record<string, unknown>) => ({
+          ...previous,
+          section,
+        })) as never,
+      });
+    },
+    [navigate],
+  );
+
+  return (
+    <TaxSettingsPage
+      section={search.section}
+      onSectionChange={handleSectionChange}
+    />
+  );
+}

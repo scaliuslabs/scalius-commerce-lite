@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Calculator, CheckCircle2, CircleOff, Layers3, MapPinned, ReceiptText, SlidersHorizontal } from "lucide-react";
 
@@ -14,7 +13,8 @@ import { TaxClassificationsPanel } from "./TaxClassificationsPanel";
 import { TaxPreviewPanel } from "./TaxPreviewPanel";
 import { TaxRatesPanel } from "./TaxRatesPanel";
 import { TaxSettingsPanel } from "./TaxSettingsPanel";
-import { getTaxReadiness, type TaxWorkspaceTab } from "./tax-readiness";
+import { getTaxReadiness } from "./tax-readiness";
+import type { TaxWorkspaceSection } from "./tax-workspace-sections";
 
 const tabs = [
   { value: "policy", label: "Policy", icon: SlidersHorizontal },
@@ -24,13 +24,20 @@ const tabs = [
   { value: "preview", label: "Preview", icon: Calculator },
 ] as const;
 
-export function TaxSettingsPage() {
+interface TaxSettingsPageProps {
+  section: TaxWorkspaceSection;
+  onSectionChange: (section: TaxWorkspaceSection) => void;
+}
+
+export function TaxSettingsPage({
+  section,
+  onSectionChange,
+}: TaxSettingsPageProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
   const { data: configuration } = useSuspenseQuery(
     taxConfigurationQueryOptions(),
   );
-  const [activeTab, setActiveTab] = useState<TaxWorkspaceTab>("policy");
   const readiness = getTaxReadiness(configuration);
   const ReadinessIcon = readiness.state === "ready" ? CheckCircle2 : CircleOff;
 
@@ -72,13 +79,13 @@ export function TaxSettingsPage() {
               ))}
             </dl>
           </div>
-          <Button type="button" variant={readiness.state === "ready" ? "outline" : "default"} onClick={() => setActiveTab(readiness.nextTab)}>
+          <Button type="button" variant={readiness.state === "ready" ? "outline" : "default"} onClick={() => onSectionChange(readiness.nextTab)}>
             {readiness.nextAction}
           </Button>
         </CardContent>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TaxWorkspaceTab)} className="space-y-5">
+      <Tabs value={section} onValueChange={(value) => onSectionChange(value as TaxWorkspaceSection)} className="space-y-5">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 [scrollbar-width:thin]">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -92,7 +99,7 @@ export function TaxSettingsPage() {
         </TabsList>
         <TabsContent value="policy"><TaxSettingsPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="classes"><TaxClassesPanel configuration={configuration} canManage={canManage} /></TabsContent>
-        <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} onOpenClasses={() => setActiveTab("classes")} onOpenPreview={() => setActiveTab("preview")} /></TabsContent>
+        <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} onOpenClasses={() => onSectionChange("classes")} onOpenPreview={() => onSectionChange("preview")} /></TabsContent>
         <TabsContent value="classification"><TaxClassificationsPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="preview"><TaxPreviewPanel configuration={configuration} /></TabsContent>
       </Tabs>

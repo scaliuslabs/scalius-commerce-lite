@@ -22,7 +22,11 @@ vi.mock("~/lib/route-error", () => ({
   RouteErrorComponent: () => null,
 }));
 
-import { Route, requireFreshTaxesRouteAuthority } from "./taxes";
+import {
+  Route,
+  requireFreshTaxesRouteAuthority,
+  validateTaxesSearch,
+} from "./taxes";
 
 function accessContext(input: {
   isSuperAdmin: boolean;
@@ -81,5 +85,15 @@ describe("taxes route authority", () => {
     mocks.getFreshAdminRouteContext.mockResolvedValue(context);
 
     await expect(requireFreshTaxesRouteAuthority()).resolves.toBe(context);
+  });
+
+  it("keeps a valid deep-linked workspace section and normalizes invalid input", () => {
+    expect(validateTaxesSearch({ section: "preview" })).toEqual({
+      section: "preview",
+    });
+    expect(validateTaxesSearch({ section: "unknown" })).toEqual({
+      section: "policy",
+    });
+    expect(Route.options.validateSearch).toBe(validateTaxesSearch);
   });
 });
