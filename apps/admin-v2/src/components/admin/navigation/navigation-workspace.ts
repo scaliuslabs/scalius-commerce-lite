@@ -16,6 +16,44 @@ export interface NavigationOutlineRow extends NavigationLocation {
   matchesQuery: boolean;
 }
 
+export const NAVIGATION_DRAG_INDENT_THRESHOLD = 32;
+
+export type NavigationDragIntent =
+  | {
+      type: "reorder";
+      activeId: string;
+      overId: string;
+      targetIndex: number;
+      parentId: string | null;
+      message: string;
+    }
+  | {
+      type: "nest";
+      activeId: string;
+      overId: string;
+      parentId: string;
+      message: string;
+    }
+  | {
+      type: "outdent";
+      activeId: string;
+      overId: string;
+      parentId: string | null;
+      message: string;
+    }
+  | {
+      type: "invalid";
+      activeId: string;
+      overId: string | null;
+      message: string;
+    };
+
+export interface NavigationDragResult {
+  items: NavigationItem[];
+  intent: NavigationDragIntent;
+  changed: boolean;
+}
+
 export function countNavigationItems(items: NavigationItem[]): number {
   return items.reduce(
     (total, item) =>
@@ -371,4 +409,151 @@ export function outdentNavigationItemById(
         }
       : item,
   );
+}
+
+/**
+ * Convert a flat outline drag into one deliberate tree command. A vertical
+ * drop only reorders siblings. Moving right nests the complete branch below
+ * the item under the pointer; moving left outdents one level. Ambiguous
+ * cross-parent vertical drops are rejected so a branch never changes level by
+ * accident.
+ */
+export function getNavigationDragIntent(
+  items: NavigationItem[],
+  activeId: string,
+  overId: string | null,
+  horizontalDelta: number,
+  maxDepth = MAX_NAV_DEPTH,
+): NavigationDragIntent {
+  const source = findNavigationLocation(items, activeId);
+  const target = overId ? findNavigationLocation(items, overId) : null;
+
+  if (!source || !target || !overId) {
+    return {
+      type: "invalid",
+      activeId,
+      overId,
+      message: "No menu item is available at that drop position.",
+    };
+  }
+
+  if (activeId === overId) {
+    return {
+      type: "invalid",
+      activeId,
+      overId,
+      message: "The item is already in that position.",
+    };
+  }
+
+  if (horizontalDelta >= NAVIGATION_DRAG_INDENT_THRESHOLD) {
+    if (
+      target.item.id === source.item.id ||
+      findNavigationLocation(source.item.subMenu ?? [], target.item.id)
+    ) {
+      return {
+        type: "invalid",
+        activeId,
+        overId,
+        message: "A menu item cannot be nested inside its own branch.",
+      };
+    }
+
+    const subtreeDepth = getNavigationDepth([source.item]);
+    if (target.depth + 1 + subtreeDepth > maxDepth) {
+      return {
+        type: "invalid",
+        activeId,
+        overId,
+        message: `That branch would exceed the ${maxDepth}-level menu limit.`,
+      };
+    }
+
+    if (source.parentId === target.item.id) {
+      return {
+        type: "invalid",
+        activeId,
+        overId,
+        message: `${source.item.title || "This item"} is already nested under ${target.item.title || "that item"}.`,
+      };
+    }
+
+    return {
+      type: "nest",
+      activeId,
+      overId,
+      parentId: target.item.id,
+      message: `Nest ${source.item.title || "item"} under ${target.item.title || "item"}.`,
+    };
+  }
+
+  if (horizontalDelta <= -NAVIGATION_DRAG_INDENT_THRESHOLD) {
+    if (source.depth === 0) {
+      return {
+        type: "invalid",
+        activeId,
+        overId,
+        message: `${source.item.title || "This item"} is already at the top level.`,
+      };
+    }
+
+    const nextParentId = source.ancestors.at(-2)?.id ?? null;
+    return {
+      type: "outdent",
+      activeId,
+      overId,
+      parentId: nextParentId,
+      message: `Move ${source.item.title || "item"} up one level.`,
+    };
+  }
+
+  if (source.parentId !== target.parentId) {
+    return {
+      type: "invalid",
+      activeId,
+      overId,
+      message: "Vertical dragging only reorders items with the same parent. Drag right to nest, left to move up a level, or use Parent.",
+    };
+  }
+
+  return {
+    type: "reorder",
+    activeId,
+    overId,
+    targetIndex: target.index,
+    parentId: source.parentId,
+    message: `Place ${source.item.title || "item"} at position ${target.index + 1}.`,
+  };
+}
+
+export function applyNavigationDrag(
+  items: NavigationItem[],
+  activeId: string,
+  overId: string | null,
+  horizontalDelta: number,
+  maxDepth = MAX_NAV_DEPTH,
+): NavigationDragResult {
+  const intent = getNavigationDragIntent(
+    items,
+    activeId,
+    overId,
+    horizontalDelta,
+    maxDepth,
+  );
+
+  if (intent.type === "invalid") {
+    return { items, intent, changed: false };
+  }
+
+  const next = intent.type === "reorder"
+    ? moveNavigationItemToIndexById(items, activeId, intent.targetIndex)
+    : intent.type === "nest"
+      ? moveNavigationItemToParentById(items, activeId, intent.parentId, maxDepth)
+      : outdentNavigationItemById(items, activeId);
+
+  return {
+    items: next,
+    intent,
+    changed: next !== items,
+  };
 }
