@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { analyticsReadinessPresentation } from "./analytics-list-presentation";
+import {
+  ANALYTICS_PROVIDER_MARKS,
+  analyticsReadinessPresentation,
+} from "./analytics-list-presentation";
 
 describe("analytics list readiness presentation", () => {
   it.each([
@@ -12,6 +15,16 @@ describe("analytics list readiness presentation", () => {
     expect(analyticsReadinessPresentation(readiness)).toMatchObject({
       label,
       className: expect.stringContaining(className),
+    });
+  });
+
+  it("maps every first-class analytics provider to its reviewed local mark", () => {
+    expect(ANALYTICS_PROVIDER_MARKS).toEqual({
+      google_analytics: "google-analytics",
+      google_tag_manager: "google-tag-manager",
+      facebook_pixel: "meta",
+      tiktok_pixel: "tiktok",
+      cloudflare_web_analytics: "cloudflare",
     });
   });
 });

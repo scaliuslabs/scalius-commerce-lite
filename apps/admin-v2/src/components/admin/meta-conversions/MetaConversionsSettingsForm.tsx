@@ -20,7 +20,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Info,
-  Settings,
   Loader2,
   Eye,
   EyeOff,
@@ -30,6 +29,7 @@ import {
 import { useMetaConversionsSettings } from "./hooks/useMetaConversionsSettings";
 import type { RetentionInfo } from "./hooks/useMetaConversionsLogs";
 import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
+import { OfficialProviderMark } from "~/components/admin/settings/provider-marks";
 
 // Local types replacing @scalius/database/schema imports
 export interface MetaConversionsSettings {
@@ -178,7 +178,7 @@ export function MetaConversionsSettingsForm({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Settings className="w-5 h-5" />
+          <OfficialProviderMark provider="meta" />
           Meta Conversions API Configuration
         </CardTitle>
         <CardDescription>

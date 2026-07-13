@@ -23,6 +23,7 @@ import {
 } from "~/lib/list-helpers";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { OfficialProviderMark } from "~/components/admin/settings/provider-marks";
 
 const PROVIDER_TYPES = [
   "google_analytics",
@@ -195,11 +196,21 @@ function AnalyticsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All providers</SelectItem>
-                  <SelectItem value="cloudflare_web_analytics">Cloudflare Web Analytics</SelectItem>
-                  <SelectItem value="google_analytics">Google Analytics 4</SelectItem>
-                  <SelectItem value="google_tag_manager">Google Tag Manager</SelectItem>
-                  <SelectItem value="facebook_pixel">Meta Pixel</SelectItem>
-                  <SelectItem value="tiktok_pixel">TikTok Pixel</SelectItem>
+                  <SelectItem value="cloudflare_web_analytics">
+                    <span className="flex items-center gap-2"><OfficialProviderMark provider="cloudflare" size="sm" />Cloudflare Web Analytics</span>
+                  </SelectItem>
+                  <SelectItem value="google_analytics">
+                    <span className="flex items-center gap-2"><OfficialProviderMark provider="google-analytics" size="sm" />Google Analytics 4</span>
+                  </SelectItem>
+                  <SelectItem value="google_tag_manager">
+                    <span className="flex items-center gap-2"><OfficialProviderMark provider="google-tag-manager" size="sm" />Google Tag Manager</span>
+                  </SelectItem>
+                  <SelectItem value="facebook_pixel">
+                    <span className="flex items-center gap-2"><OfficialProviderMark provider="meta" size="sm" />Meta Pixel</span>
+                  </SelectItem>
+                  <SelectItem value="tiktok_pixel">
+                    <span className="flex items-center gap-2"><OfficialProviderMark provider="tiktok" size="sm" />TikTok Pixel</span>
+                  </SelectItem>
                   <SelectItem value="custom">Custom code</SelectItem>
                 </SelectContent>
               </Select>

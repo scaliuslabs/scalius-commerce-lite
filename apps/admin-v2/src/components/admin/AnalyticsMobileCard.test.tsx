@@ -64,6 +64,7 @@ describe("AnalyticsMobileCard", () => {
     expect(host.querySelector("article")).toBeTruthy();
     expect(host.textContent).toContain("Storefront GA4");
     expect(host.textContent).toContain("Google Analytics 4");
+    expect(host.querySelector('img[src="/provider-marks/google-analytics.svg"]')).toBeTruthy();
     expect(host.textContent).toContain("G-••••7AB");
     expect(host.textContent).toContain("Ready to activate");
     expect(host.textContent).toContain("Review consent settings before activation.");

@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { AnalyticsScriptReadiness } from "~/types/api-responses";
+import type { ProviderMarkId } from "~/components/admin/settings/provider-marks";
 
 export const ANALYTICS_PROVIDER_LABELS: Record<string, string> = {
   google_analytics: "Google Analytics 4",
@@ -15,6 +16,14 @@ export const ANALYTICS_PROVIDER_LABELS: Record<string, string> = {
   tiktok_pixel: "TikTok Pixel",
   cloudflare_web_analytics: "Cloudflare Web Analytics",
   custom: "Custom code",
+};
+
+export const ANALYTICS_PROVIDER_MARKS: Partial<Record<string, ProviderMarkId>> = {
+  google_analytics: "google-analytics",
+  google_tag_manager: "google-tag-manager",
+  facebook_pixel: "meta",
+  tiktok_pixel: "tiktok",
+  cloudflare_web_analytics: "cloudflare",
 };
 
 export const ANALYTICS_LOCATION_LABELS: Record<string, string> = {

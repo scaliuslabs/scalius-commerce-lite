@@ -1,4 +1,8 @@
 import { Truck, Package } from "lucide-react";
+import {
+  OfficialProviderMark,
+  type ProviderMarkId,
+} from "~/components/admin/settings/provider-marks";
 
 /** Visual config for each provider type: icon, color scheme, description */
 export const PROVIDER_VISUAL: Record<
@@ -29,6 +33,17 @@ export const PROVIDER_VISUAL: Record<
 
 /** Provider type options */
 export type DeliveryProviderType = "pathao" | "steadfast";
+
+const DELIVERY_PROVIDER_MARKS: Record<DeliveryProviderType, ProviderMarkId> = {
+  pathao: "pathao",
+  steadfast: "steadfast",
+};
+
+export function getDeliveryProviderMarkId(type: string): ProviderMarkId | null {
+  return type in DELIVERY_PROVIDER_MARKS
+    ? DELIVERY_PROVIDER_MARKS[type as DeliveryProviderType]
+    : null;
+}
 
 export const PROVIDER_TYPES: { value: DeliveryProviderType; label: string }[] = [
   { value: "pathao", label: "Pathao" },
@@ -166,12 +181,20 @@ export function ProviderIcon({
   type: string;
   size?: "sm" | "md" | "lg";
 }) {
-  const visual = PROVIDER_VISUAL[type] || PROVIDER_VISUAL.pathao;
-  const Icon = visual.icon;
+  const provider = getDeliveryProviderMarkId(type);
+  if (provider) {
+    return (
+      <OfficialProviderMark
+        provider={provider}
+        size={size === "sm" ? "sm" : "md"}
+      />
+    );
+  }
+
   const sizeClasses = {
-    sm: "p-1.5 rounded-md",
-    md: "p-2 rounded-lg",
-    lg: "p-3 rounded-xl",
+    sm: "h-6 w-6 rounded-md",
+    md: "h-8 w-8 rounded-lg",
+    lg: "h-10 w-10 rounded-xl",
   };
   const iconSizes = {
     sm: "h-3.5 w-3.5",
@@ -179,8 +202,11 @@ export function ProviderIcon({
     lg: "h-7 w-7",
   };
   return (
-    <div className={`flex-shrink-0 ${visual.bgClass} ${sizeClasses[size]}`}>
-      <Icon className={`${iconSizes[size]} ${visual.iconClass}`} />
+    <div
+      className={`flex shrink-0 items-center justify-center bg-muted text-muted-foreground ${sizeClasses[size]}`}
+      aria-hidden="true"
+    >
+      <Package className={iconSizes[size]} />
     </div>
   );
 }

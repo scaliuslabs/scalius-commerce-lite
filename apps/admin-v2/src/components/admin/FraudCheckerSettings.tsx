@@ -39,7 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ExternalLink, Loader2, Plus, Pencil, Trash2, TestTube } from "lucide-react";
+import { ExternalLink, Loader2, Plus, Pencil, ShieldCheck, Trash2, TestTube } from "lucide-react";
 import {
   FRAUD_CHECK_PROVIDER_TYPES,
   FRAUD_CHECK_PROVIDER_DEFINITIONS,
@@ -47,6 +47,10 @@ import {
 } from "@scalius/core/modules/fraud-checker/provider";
 
 import type { FraudCheckProviderType } from "@scalius/core/modules/fraud-checker/provider";
+import {
+  OfficialProviderMark,
+} from "~/components/admin/settings/provider-marks";
+import { getFraudProviderMarkId } from "./fraud-provider-presentation";
 
 // ── Types & Validation ──
 
@@ -82,6 +86,25 @@ interface FraudCheckerSettingsProps {
 }
 
 const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
+
+function FraudProviderMark({
+  providerType,
+  size = "sm",
+}: {
+  providerType: FraudCheckProviderType | undefined;
+  size?: "sm" | "md";
+}) {
+  const provider = getFraudProviderMarkId(providerType);
+  if (provider) return <OfficialProviderMark provider={provider} size={size} />;
+  return (
+    <span
+      className={size === "sm" ? "inline-flex h-6 w-6 items-center justify-center" : "inline-flex h-8 w-8 items-center justify-center"}
+      aria-hidden="true"
+    >
+      <ShieldCheck className={size === "sm" ? "h-4 w-4" : "h-5 w-5"} />
+    </span>
+  );
+}
 
 function credentialPlaceholder(label: string | undefined, fallback: string): string {
   if (!label) return fallback;
@@ -293,6 +316,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                         provider.isActive ? "bg-green-500" : "bg-muted-foreground/30"
                       }`}
                     />
+                    <FraudProviderMark providerType={provider.providerType} />
                     <span className="font-medium truncate">{provider.name}</span>
                     <Badge variant="outline" className="hidden sm:inline-flex text-[10px] px-1.5 py-0">
                       {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
@@ -310,7 +334,13 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
         {/* Provider Detail / Form */}
         <Card className="md:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              {(selectedProvider || isCreating) ? (
+                <FraudProviderMark
+                  providerType={isCreating ? providerType : selectedProvider?.providerType}
+                  size="md"
+                />
+              ) : null}
               {isCreating ? "New Provider" : selectedProvider ? "Provider Details" : "Select a Provider"}
             </CardTitle>
             {!isCreating && !selectedProvider && (
@@ -336,7 +366,10 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     <SelectContent>
                       {FRAUD_CHECK_PROVIDER_DEFINITIONS.map((definition) => (
                         <SelectItem key={definition.value} value={definition.value}>
-                          {definition.label}
+                          <span className="flex items-center gap-2">
+                            <FraudProviderMark providerType={definition.value} />
+                            {definition.label}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

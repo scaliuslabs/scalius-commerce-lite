@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BellRing, RadioTower } from "lucide-react";
 import FirebaseSettingsForm from "~/components/admin/settings/FirebaseSettingsForm";
+import { OfficialProviderMark } from "~/components/admin/settings/provider-marks";
 import NotificationChannelsBuilder from "~/components/admin/settings/NotificationChannelsBuilder";
 import {
   normalizeNotificationSettingsSection,
@@ -68,8 +69,9 @@ function NotificationSettingsPage() {
               <div>
                 <h2
                   id="push-provider-heading"
-                  className="text-base font-semibold tracking-tight"
+                  className="flex items-center gap-2 text-base font-semibold tracking-tight"
                 >
+                  <OfficialProviderMark provider="firebase" />
                   Firebase Cloud Messaging
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">

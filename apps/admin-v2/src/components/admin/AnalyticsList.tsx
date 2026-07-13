@@ -52,8 +52,10 @@ import { AnalyticsMobileCard } from "./AnalyticsMobileCard";
 import {
   ANALYTICS_LOCATION_LABELS,
   ANALYTICS_PROVIDER_LABELS,
+  ANALYTICS_PROVIDER_MARKS,
   analyticsReadinessPresentation,
 } from "./analytics-list-presentation";
+import { OfficialProviderMark } from "./settings/provider-marks";
 
 interface AnalyticsListProps {
   scripts: AnalyticsScriptSummary[];
@@ -170,13 +172,13 @@ export function AnalyticsList({
                 <TableRow key={script.id} className="group">
                   <TableCell className="py-2.5">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted/30">
-                        {script.type === "custom" ? (
+                      {ANALYTICS_PROVIDER_MARKS[script.type] ? (
+                        <OfficialProviderMark provider={ANALYTICS_PROVIDER_MARKS[script.type]!} />
+                      ) : (
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md border bg-muted/30">
                           <Code2 className="h-4 w-4" />
-                        ) : (
-                          <Activity className="h-4 w-4" />
-                        )}
-                      </div>
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{script.name}</p>
                         <p className="truncate text-xs text-muted-foreground">

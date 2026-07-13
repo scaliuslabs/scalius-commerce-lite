@@ -2,13 +2,8 @@ import { useEffect, useRef } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
-  Activity,
   Check,
-  Cloud,
   Code2,
-  Gauge,
-  Layers3,
-  RadioTower,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -45,6 +40,10 @@ import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { cn } from "@scalius/shared/utils";
+import {
+  OfficialProviderMark,
+  type ProviderMarkId,
+} from "@/components/admin/settings/provider-marks";
 
 interface AnalyticsFormProps {
   defaultValues?: Partial<AnalyticsFormValues>;
@@ -100,39 +99,40 @@ const PROVIDERS: Array<{
   type: AnalyticsScriptType;
   label: string;
   description: string;
-  icon: typeof Activity;
+  mark?: ProviderMarkId;
+  icon?: typeof Code2;
   recommended?: boolean;
 }> = [
   {
     type: "cloudflare_web_analytics",
     label: "Cloudflare Web Analytics",
     description: "Lightweight traffic and performance measurement.",
-    icon: Cloud,
+    mark: "cloudflare",
     recommended: true,
   },
   {
     type: "google_analytics",
     label: "Google Analytics 4",
     description: "GA4 reporting with a G- measurement ID.",
-    icon: Activity,
+    mark: "google-analytics",
   },
   {
     type: "google_tag_manager",
     label: "Google Tag Manager",
     description: "Manage a GTM web container from one snippet.",
-    icon: Layers3,
+    mark: "google-tag-manager",
   },
   {
     type: "facebook_pixel",
     label: "Meta Pixel",
     description: "Browser events; pair with Meta CAPI settings.",
-    icon: RadioTower,
+    mark: "meta",
   },
   {
     type: "tiktok_pixel",
     label: "TikTok Pixel",
     description: "Browser commerce measurement for TikTok.",
-    icon: Gauge,
+    mark: "tiktok",
   },
   {
     type: "custom",
@@ -263,14 +263,22 @@ export function AnalyticsForm({ defaultValues, isEdit = false }: AnalyticsFormPr
                             )}
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <Icon className="h-4 w-4" />
+                              {provider.mark ? (
+                                <OfficialProviderMark provider={provider.mark} />
+                              ) : Icon ? (
+                                <Icon className="h-5 w-5" aria-hidden="true" />
+                              ) : null}
                               {selected ? <Check className="h-4 w-4" /> : null}
                             </div>
-                            <p className="mt-2 text-sm font-medium leading-tight">{provider.label}</p>
+                            <p className="mt-2 flex items-center gap-1.5 text-sm font-medium leading-tight">
+                              {provider.label}
+                              {provider.recommended ? (
+                                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                  Recommended
+                                </span>
+                              ) : null}
+                            </p>
                             <p className="mt-1 text-xs leading-snug text-muted-foreground">{provider.description}</p>
-                            {provider.recommended ? (
-                              <span className="absolute right-2 top-2 text-[10px] font-medium text-emerald-700">Recommended</span>
-                            ) : null}
                           </button>
                         );
                       })}

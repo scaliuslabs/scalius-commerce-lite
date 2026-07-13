@@ -48,9 +48,23 @@ import {
     type CustomerAuthOtpChannel,
     type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import {
+    OfficialProviderMark,
+    type ProviderMarkId,
+} from "./provider-marks";
 
 const MASKED_VALUE = "••••••••••••";
 type EmailCollectionMode = "none" | "optional" | "required";
+
+export const SMS_PROVIDER_PRESENTATION: Record<
+    "smsnetbd" | "bdbulksms" | "mimsms" | "gennet",
+    { label: string; mark: ProviderMarkId }
+> = {
+    smsnetbd: { label: "SMS.net.bd", mark: "smsnetbd" },
+    bdbulksms: { label: "BDBulkSMS (GreenWeb)", mark: "bdbulksms" },
+    mimsms: { label: "MIM SMS", mark: "mimsms" },
+    gennet: { label: "Gennet iSMS", mark: "gennet" },
+};
 
 function serializeCustomerAuthPolicy(policy: CustomerAuthPolicyConfig) {
     return {
@@ -584,6 +598,7 @@ export default function AuthSettingsBuilder() {
                 <Card className="border-green-500/20 dark:bg-green-950/10">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-base flex items-center gap-2">
+                                <OfficialProviderMark provider="whatsapp" />
                                 Meta WhatsApp Cloud API
                                 {whatsAppConfigured && (
                                     <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -709,6 +724,11 @@ export default function AuthSettingsBuilder() {
                 <Card className="border-blue-500/20 dark:bg-blue-950/10">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
+                            {values.smsProvider in SMS_PROVIDER_PRESENTATION ? (
+                                <OfficialProviderMark
+                                    provider={SMS_PROVIDER_PRESENTATION[values.smsProvider as keyof typeof SMS_PROVIDER_PRESENTATION].mark}
+                                />
+                            ) : null}
                             SMS Provider Configuration
                             {smsConfigured && (
                                 <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -735,10 +755,14 @@ export default function AuthSettingsBuilder() {
                                     <SelectValue placeholder="Select SMS provider" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="smsnetbd">SMS.net.bd</SelectItem>
-                                    <SelectItem value="bdbulksms">BDBulkSMS (GreenWeb)</SelectItem>
-                                    <SelectItem value="mimsms">MIM SMS</SelectItem>
-                                    <SelectItem value="gennet">Gennet iSMS</SelectItem>
+                                    {Object.entries(SMS_PROVIDER_PRESENTATION).map(([value, presentation]) => (
+                                        <SelectItem key={value} value={value}>
+                                            <span className="flex items-center gap-2">
+                                                <OfficialProviderMark provider={presentation.mark} size="sm" />
+                                                {presentation.label}
+                                            </span>
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

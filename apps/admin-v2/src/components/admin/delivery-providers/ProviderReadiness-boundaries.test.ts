@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { getDeliveryProviderMarkId } from "./ProviderIcon";
 
 const ICON_SOURCE = fileURLToPath(new URL("./ProviderIcon.tsx", import.meta.url));
 const SIDEBAR_SOURCE = fileURLToPath(new URL("./ProviderListSidebar.tsx", import.meta.url));
@@ -10,6 +11,12 @@ const SHIPMENT_MANAGER_SOURCE = fileURLToPath(new URL("../DeliveryShipmentManage
 const CONTAINER_SOURCE = fileURLToPath(new URL("./DeliveryProvidersContainer.tsx", import.meta.url));
 
 describe("delivery provider readiness UI boundaries", () => {
+  it("uses exact provider marks and never presents an unknown provider as Pathao", () => {
+    expect(getDeliveryProviderMarkId("pathao")).toBe("pathao");
+    expect(getDeliveryProviderMarkId("steadfast")).toBe("steadfast");
+    expect(getDeliveryProviderMarkId("custom")).toBeNull();
+  });
+
   it("falls back to isActive when API readiness is missing", () => {
     const source = readFileSync(ICON_SOURCE, "utf8");
 
