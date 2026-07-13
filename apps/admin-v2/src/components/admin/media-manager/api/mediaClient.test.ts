@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MediaFileDto } from "~/lib/api-functions/media";
-import { toMediaFile } from "./mediaClient";
+import { MediaApiClient, toMediaFile } from "./mediaClient";
 
 function dto(posterUrl: string | null): MediaFileDto {
   return {
@@ -29,5 +29,61 @@ describe("toMediaFile", () => {
 
   it("preserves a fail-closed null poster projection", () => {
     expect(toMediaFile(dto(null)).posterUrl).toBeNull();
+  });
+});
+
+describe("MediaApiClient reads", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads the live media endpoint without reusing a cached empty result", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      success: true,
+      data: {
+        files: [dto(null)],
+        pagination: { limit: 24, hasMore: false, nextCursor: null },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await MediaApiClient.fetchFiles(undefined, 24, {
+      search: "  ",
+      sortBy: "createdAt",
+      sortOrder: "desc",
+      view: "ready",
+    });
+
+    expect(result.files).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/admin/media?limit=24&sortBy=createdAt&sortOrder=desc&view=ready",
+      expect.objectContaining({
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: expect.objectContaining({ "Cache-Control": "no-cache" }),
+      }),
+    );
+  });
+
+  it("keeps the unfiled folder filter explicit", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      success: true,
+      data: {
+        files: [],
+        pagination: { limit: 24, hasMore: false, nextCursor: null },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await MediaApiClient.fetchFiles(undefined, 24, {
+      folderId: null,
+      sortBy: "filename",
+      sortOrder: "asc",
+      view: "ready",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("folderId=root"),
+      expect.any(Object),
+    );
   });
 });
