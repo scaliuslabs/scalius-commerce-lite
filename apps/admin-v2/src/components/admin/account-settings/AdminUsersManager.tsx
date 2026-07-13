@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -30,18 +30,23 @@ import {
 import {
   Loader2,
   Shield,
-  ShieldCheck,
-  KeyRound,
   UserPlus,
   Trash2,
   AlertCircle,
   Users,
+  RefreshCw,
+  Search,
 } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { UserPermissionEditor } from "../UserPermissionEditor";
 import { useAdminUsers, type AdminUser } from "./hooks/useAdminUsers";
 import { useHydrated } from "~/hooks/use-hydrated";
+import {
+  ADMIN_USER_STATUS_COPY,
+  getAdminUserStatus,
+  type AdminUserStatus,
+} from "./admin-user-status";
 
 function getInitials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -52,7 +57,18 @@ interface AdminUsersManagerProps {
 }
 
 export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
-  const { adminUsers, availableRoles, isLoading, addUser, deleteUser, refetch } = useAdminUsers();
+  const {
+    adminUsers,
+    availableRoles,
+    isLoading,
+    isLoadingRoles,
+    usersError,
+    rolesError,
+    addUser,
+    deleteUser,
+    refetch,
+    refetchRoles,
+  } = useAdminUsers();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserEmail, setNewUserEmail] = useState("");
@@ -60,10 +76,31 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [query, setQuery] = useState("");
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
   const isHydrated = useHydrated();
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return adminUsers;
+
+    return adminUsers.filter((adminUser) =>
+      [
+        adminUser.name,
+        adminUser.email,
+        ...adminUser.roles.map((role) => role.displayName),
+      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
+    );
+  }, [adminUsers, query]);
+
+  const resetInviteForm = () => {
+    setShowAddForm(false);
+    setNewUserName("");
+    setNewUserEmail("");
+    setSelectedRoleId("");
+    setError(null);
+  };
 
   const handleAddUser = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -72,10 +109,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
 
     try {
       await addUser(newUserName, newUserEmail, selectedRoleId);
-      setShowAddForm(false);
-      setNewUserName("");
-      setNewUserEmail("");
-      setSelectedRoleId("");
+      resetInviteForm();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");
     } finally {
@@ -84,62 +118,77 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <Card className="rounded-xl shadow-none">
+      <CardHeader className="p-4 pb-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              Team Members
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4" />
+              Administrators
+              <span className="rounded-full border px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                {adminUsers.length}
+              </span>
             </CardTitle>
             <CardDescription>
-              Manage administrator access to your store
+              Invite people and review whether their secure setup is complete.
             </CardDescription>
           </div>
           {canManageTeam && (
-            <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Member
+            <Button
+              size="sm"
+              className="min-h-11 sm:min-h-9"
+              onClick={() => setShowAddForm(true)}
+              disabled={showAddForm}
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Invite administrator
             </Button>
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         {canManageTeam && showAddForm && (
           <form
             method="post"
-            action="/admin/account"
+            action="/admin/settings/account"
             onSubmit={handleAddUser}
-            className="mb-6 p-5 bg-muted/30 rounded-xl border space-y-4"
+            className="mb-4 space-y-3 rounded-lg border bg-muted/20 p-4"
             noValidate
           >
-            <h4 className="font-medium">Invite New Team Member</h4>
+            <div>
+              <h4 className="text-sm font-semibold">Invite an administrator</h4>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                They receive a one-use setup link and must configure a password and 2FA.
+              </p>
+            </div>
             {error && (
               <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="newUserName">Full Name</Label>
+                <Label htmlFor="newUserName">Full name</Label>
                 <Input
                   id="newUserName"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
-                  placeholder="John Doe"
+                  placeholder="Samira Rahman"
+                  autoComplete="name"
                   required
                   disabled={!isHydrated || isAdding}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="newUserEmail">Email Address</Label>
+                <Label htmlFor="newUserEmail">Email address</Label>
                 <Input
                   id="newUserEmail"
                   type="email"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  placeholder="john@example.com"
+                  placeholder="samira@example.com"
+                  autoComplete="email"
                   required
                   disabled={!isHydrated || isAdding}
                 />
@@ -150,10 +199,10 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <Select
                 value={selectedRoleId}
                 onValueChange={setSelectedRoleId}
-                disabled={!isHydrated || isAdding}
+                disabled={!isHydrated || isAdding || isLoadingRoles || Boolean(rolesError)}
               >
                 <SelectTrigger id="roleSelect">
-                  <SelectValue placeholder="Select a role for this user" />
+                  <SelectValue placeholder={isLoadingRoles ? "Loading roles…" : "Select a role"} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableRoles.map((role) => (
@@ -168,53 +217,126 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                The role determines what this user can access. You can change it later.
-              </p>
+              {rolesError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/30 bg-background p-2 text-xs">
+                  <span className="text-destructive">{rolesError}</span>
+                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => void refetchRoles()}>
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Retry
+                  </Button>
+                </div>
+              ) : availableRoles.length === 0 && !isLoadingRoles ? (
+                <p className="rounded-md border border-destructive/30 bg-background p-2 text-xs text-destructive">
+                  No assignable roles are available. {canManageRoles ? "Create a role in the Roles section first." : "Ask a role manager to create one."}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  The role controls store access and can be changed later.
+                </p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              A secure setup link will be sent to their email. They must choose a password and enable 2FA before admin access is allowed.
-            </p>
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={!isHydrated || isAdding || !selectedRoleId}
-              >
-                {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send Invite
-              </Button>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => { setShowAddForm(false); setNewUserName(""); setNewUserEmail(""); setSelectedRoleId(""); setError(null); }}
+                variant="ghost"
+                onClick={resetInviteForm}
                 disabled={isAdding}
+                className="min-h-10"
               >
                 Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={!isHydrated || isAdding || !selectedRoleId || Boolean(rolesError) || availableRoles.length === 0}
+                className="min-h-10"
+              >
+                {isAdding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send invite
               </Button>
             </div>
           </form>
         )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        {usersError && adminUsers.length > 0 && (
+          <div role="alert" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <span className="text-destructive">{usersError} Showing the last loaded list.</span>
+            <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => void refetch()}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {adminUsers.length > 0 && (
+          <div className="relative mb-3 max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find name, email, or role…"
+              aria-label="Find administrators"
+              className="h-10 pl-9"
+            />
+          </div>
+        )}
+
+        {isLoading && adminUsers.length === 0 ? (
+          <div className="space-y-2" aria-busy="true" aria-label="Loading administrators">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="h-16 animate-pulse rounded-lg bg-muted" />
+            ))}
+          </div>
+        ) : usersError && adminUsers.length === 0 ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 p-5">
+            <div className="flex max-w-lg items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-semibold">Administrators are unavailable</p>
+                <p className="mt-1 text-sm text-muted-foreground">{usersError}</p>
+                <Button type="button" size="sm" className="mt-3 min-h-9" onClick={() => void refetch()}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </div>
           </div>
         ) : adminUsers.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Users className="h-12 w-12 mx-auto mb-3 opacity-20" />
-            <p>No team members found</p>
+          <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+            <Users className="mx-auto mb-2 h-8 w-8 opacity-40" />
+            <p className="text-sm font-medium text-foreground">No administrators found</p>
+            <p className="mt-1 text-xs">Invite someone when this store needs shared access.</p>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="rounded-lg border border-dashed py-8 text-center">
+            <p className="text-sm font-medium">No matching administrators</p>
+            <button type="button" onClick={() => setQuery("")} className="mt-1 min-h-9 px-3 text-sm text-muted-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              Clear search
+            </button>
           </div>
         ) : (
-          <div className="divide-y divide-border rounded-xl border overflow-hidden">
-            {adminUsers.map((adminUser) => (
+          <div className="overflow-hidden rounded-lg border">
+            <div className="hidden grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] gap-3 border-b bg-muted/30 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+              <span>Administrator</span>
+              <span>Access</span>
+              <span className="pr-1 text-right">Status and actions</span>
+            </div>
+            <div className="divide-y">
+            {filteredUsers.map((adminUser) => (
               <div
                 key={adminUser.id}
-                className="flex flex-col gap-3 p-3 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                className="grid gap-3 p-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] sm:items-center"
               >
                 <div className="flex min-w-0 items-start gap-3 sm:items-center">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10">
                     {adminUser.image ? (
-                      <img src={adminUser.image} alt={adminUser.name} className="w-full h-full object-cover" />
+                      <img
+                        src={adminUser.image}
+                        alt={adminUser.name}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
                     ) : (
                       <span className="text-sm font-medium text-primary">{getInitials(adminUser.name)}</span>
                     )}
@@ -233,50 +355,25 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                         </span>
                       )}
                     </p>
-                    <p className="break-all text-sm text-muted-foreground">{adminUser.email}</p>
-                    {adminUser.roles && adminUser.roles.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {adminUser.roles.map((role) => (
-                          <span
-                            key={role.id}
-                            className="text-xs bg-muted px-2 py-0.5 rounded"
-                          >
-                            {role.displayName}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <p className="break-words text-sm text-muted-foreground">{adminUser.email}</p>
                   </div>
                 </div>
+                <div className="flex min-w-0 flex-wrap gap-1.5">
+                  {adminUser.roles.length > 0 ? adminUser.roles.map((role) => (
+                    <span key={role.id} className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
+                      {role.displayName}
+                    </span>
+                  )) : (
+                    <span className="text-xs text-muted-foreground">No assigned role</span>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  {adminUser.twoFactorEnabled ? (
-                    <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-1 rounded-full">
-                      <ShieldCheck className="h-3 w-3" />
-                      2FA
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-1 rounded-full">
-                      <AlertCircle className="h-3 w-3" />
-                      No 2FA
-                    </span>
-                  )}
-                  {adminUser.mustChangePassword && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
-                      <KeyRound className="h-3 w-3" />
-                      Password setup
-                    </span>
-                  )}
-                  {adminUser.mustEnrollTwoFactor && !adminUser.twoFactorEnabled && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-blue-600 bg-blue-50 dark:bg-blue-900/30 dark:text-blue-400 px-2 py-1 rounded-full">
-                      <Shield className="h-3 w-3" />
-                      2FA setup
-                    </span>
-                  )}
+                  <AdminStatusBadge status={getAdminUserStatus(adminUser)} />
                   {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 text-xs"
+                      className="min-h-11 text-xs sm:min-h-9"
                       onClick={() => setEditingUser(adminUser)}
                     >
                       <Shield className="h-3 w-3 mr-1" />
@@ -286,15 +383,15 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Remove ${adminUser.name}`}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Remove Team Member</AlertDialogTitle>
+                        <AlertDialogTitle>Remove administrator?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to remove <strong>{adminUser.name}</strong> from the team? They will lose access to the admin dashboard immediately.
+                            <strong>{adminUser.name}</strong> will lose admin access immediately. Their historical activity remains in the audit trail.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -303,7 +400,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                             onClick={() => deleteUser(adminUser.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            Remove
+                            Remove access
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -312,6 +409,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
 
@@ -325,5 +423,23 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function AdminStatusBadge({ status }: { status: AdminUserStatus }) {
+  const copy = ADMIN_USER_STATUS_COPY[status];
+  const ready = status === "ready";
+
+  return (
+    <span
+      title={copy.description}
+      className={`inline-flex min-h-7 items-center rounded-full border px-2 py-1 text-xs font-medium ${
+        ready
+          ? "border-primary/25 bg-primary/5 text-primary"
+          : "border-destructive/25 bg-destructive/5 text-destructive"
+      }`}
+    >
+      {copy.label}
+    </span>
   );
 }

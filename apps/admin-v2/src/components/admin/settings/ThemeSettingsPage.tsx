@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Loader2,
   Palette,
@@ -9,13 +10,13 @@ import {
   Save,
 } from "lucide-react";
 
-import { isAdminApiConflictError } from "@/lib/admin-api-error";
-import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { isAdminApiConflictError } from "~/lib/admin-api-error";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import {
   getThemeSettings,
   updateThemeSettings,
-} from "@/lib/api-functions/settings";
-import { usePermissions } from "@/contexts/PermissionContext";
+} from "~/lib/api-functions/settings";
+import { usePermissions } from "~/contexts/PermissionContext";
 import {
   getThemeColorError,
   getThemeColorPairStatus,
@@ -27,6 +28,12 @@ import {
   THEME_CONTRAST_PAIRS,
   THEME_SURFACE_CONTRAST_PAIRS,
 } from "./theme-color-presets";
+import {
+  normalizeThemeColors,
+  rebaseThemeColorDraft,
+  themeColorRecordsEqual,
+} from "./theme-draft";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 const COLOR_FIELDS = [
   { key: "primary", label: "Primary", description: "Main actions and links" },
@@ -85,8 +92,8 @@ export default function ThemeSettingsPage() {
     revision: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
@@ -95,18 +102,15 @@ export default function ThemeSettingsPage() {
   const fetchColors = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const data = await getThemeSettings();
       setColors(data.colors);
       setSavedColors(data.colors);
       setRevision(data.revision);
-      setDirty(false);
       setConflict(null);
       setMessage(null);
     } catch {
-      setMessage({
-        type: "error",
-        text: "Theme colors could not be loaded. Retry before making changes.",
-      });
+      setLoadError("Theme colors could not be loaded. No values have been assumed.");
     } finally {
       setLoading(false);
     }
@@ -119,6 +123,10 @@ export default function ThemeSettingsPage() {
   const effectiveColors = useMemo(
     () => ({ ...DEFAULT_THEME_COLORS, ...colors }),
     [colors],
+  );
+  const dirty = useMemo(
+    () => !themeColorRecordsEqual(colors, savedColors),
+    [colors, savedColors],
   );
   const invalidKeys = useMemo(
     () =>
@@ -140,7 +148,6 @@ export default function ThemeSettingsPage() {
 
   const handleChange = (key: ColorKey, value: string) => {
     setColors((previous) => ({ ...previous, [key]: value }));
-    setDirty(true);
     setMessage(null);
   };
 
@@ -148,19 +155,25 @@ export default function ThemeSettingsPage() {
     const palette = THEME_COLOR_PALETTES[paletteName];
     if (!palette) return;
     setColors((previous) => ({ ...previous, ...palette.colors }));
-    setDirty(true);
     setMessage(null);
   };
 
   const handleReset = () => {
     setColors({});
-    setDirty(true);
     setMessage(null);
   };
 
   const handleDiscard = () => {
+    if (conflict) {
+      setColors(conflict.colors);
+      setSavedColors(conflict.colors);
+      setRevision(conflict.revision);
+      setConflict(null);
+      setMessage(null);
+      return;
+    }
+
     setColors(savedColors);
-    setDirty(false);
     setConflict(null);
     setMessage(null);
   };
@@ -170,12 +183,35 @@ export default function ThemeSettingsPage() {
     setColors(conflict.colors);
     setSavedColors(conflict.colors);
     setRevision(conflict.revision);
-    setDirty(false);
+    setConflict(null);
+    setMessage(null);
+  };
+
+  const rebaseLocalChanges = () => {
+    if (!conflict) return;
+
+    setColors(
+      rebaseThemeColorDraft({
+        base: savedColors,
+        local: colors,
+        latest: conflict.colors,
+      }),
+    );
+    setSavedColors(conflict.colors);
+    setRevision(conflict.revision);
     setConflict(null);
     setMessage(null);
   };
 
   const handleSave = async () => {
+    if (conflict) {
+      setMessage({
+        type: "error",
+        text: "Resolve the newer published revision before publishing this draft.",
+      });
+      return;
+    }
+
     if (publishBlocked) {
       setMessage({
         type: "error",
@@ -190,25 +226,19 @@ export default function ThemeSettingsPage() {
     try {
       setSaving(true);
       setMessage(null);
-      const cleaned: Record<string, string> = {};
-      for (const [key, value] of Object.entries(colors)) {
-        const normalized = value.trim();
-        if (normalized) cleaned[key] = normalized;
-      }
+      const cleaned = normalizeThemeColors(colors);
       const saved = await updateThemeSettings({
         data: { colors: cleaned, expectedRevision: revision },
       });
       setColors(saved.colors);
       setSavedColors(saved.colors);
       setRevision(saved.revision);
-      setDirty(false);
       setConflict(null);
       setMessage({ type: "success", text: "Theme colors published." });
     } catch (error) {
       if (isAdminApiConflictError(error)) {
         try {
           const latest = await getThemeSettings();
-          setRevision(latest.revision);
           setConflict(latest);
           setMessage(null);
         } catch {
@@ -240,6 +270,40 @@ export default function ThemeSettingsPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-4">
+        <header>
+          <h1 className="text-xl font-semibold tracking-tight">Theme colors</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Set the colors buyers see across storefront pages and checkout.
+          </p>
+        </header>
+        <section
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-card p-5"
+        >
+          <div className="flex max-w-xl items-start gap-3">
+            <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-sm font-semibold">Published colors are unavailable</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{loadError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void fetchColors()}
+                className="min-h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-4 pb-28">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -261,21 +325,30 @@ export default function ThemeSettingsPage() {
       )}
 
       {conflict && (
-        <div className="flex flex-col gap-3 rounded-lg border border-amber-400/50 bg-amber-500/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div role="alert" className="flex flex-col gap-3 rounded-lg border border-amber-400/50 bg-amber-500/10 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <div>
               <p className="font-medium">Revision {conflict.revision} was published elsewhere.</p>
-              <p className="text-xs text-muted-foreground">Your local changes are preserved until you load the latest version.</p>
+              <p className="text-xs text-muted-foreground">Use the latest version, or replay only your changed fields on top of it.</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={loadConflictingVersion}
-            className="min-h-9 shrink-0 rounded-md border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Load latest
-          </button>
+          <div className="grid shrink-0 grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={loadConflictingVersion}
+              className="min-h-10 rounded-md border bg-background px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Use latest
+            </button>
+            <button
+              type="button"
+              onClick={rebaseLocalChanges}
+              className="min-h-10 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Rebase mine
+            </button>
+          </div>
         </div>
       )}
 
@@ -350,12 +423,15 @@ export default function ThemeSettingsPage() {
             </section>
           ))}
 
-          <section className="overflow-hidden rounded-xl border bg-card">
-            <div className="border-b px-4 py-3">
-              <h2 className="text-sm font-semibold">Controls</h2>
-              <p className="text-xs text-muted-foreground">Borders and keyboard focus across interactive elements.</p>
-            </div>
-            <div className="grid gap-0 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <details className="group overflow-hidden rounded-xl border bg-card">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block text-sm font-semibold">Advanced controls</span>
+                <span className="block text-xs text-muted-foreground">Borders, inputs, and keyboard focus.</span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-0 divide-y border-t sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               {CONTROL_KEYS.map((key) => (
                 <ColorControl
                   key={key}
@@ -367,7 +443,7 @@ export default function ThemeSettingsPage() {
                 />
               ))}
             </div>
-          </section>
+          </details>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20">
@@ -386,7 +462,7 @@ export default function ThemeSettingsPage() {
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
             {dirty ? "Unpublished changes in this tab" : "Published colors are up to date"}
@@ -396,7 +472,7 @@ export default function ThemeSettingsPage() {
               type="button"
               onClick={handleDiscard}
               disabled={saving || !dirty}
-              className="min-h-10 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+              className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
             >
               Discard
             </button>
@@ -404,7 +480,7 @@ export default function ThemeSettingsPage() {
               type="button"
               onClick={handleReset}
               disabled={!canManage || saving}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
             >
               <RotateCcw className="h-4 w-4" />
               Defaults
@@ -412,8 +488,8 @@ export default function ThemeSettingsPage() {
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={!canManage || saving || !dirty || publishBlocked}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!canManage || saving || !dirty || publishBlocked || Boolean(conflict)}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {saving ? "Publishing…" : "Publish"}
@@ -421,6 +497,7 @@ export default function ThemeSettingsPage() {
           </div>
         </div>
       </div>
+      <UnsavedChangesGuard isDirty={dirty} isSubmitting={saving} />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Shield, KeyRound, Users, ShieldPlus } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -7,6 +8,7 @@ import { ProfileHeader } from "./ProfileHeader";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 import { TwoFactorSetup } from "./TwoFactorSetup";
 import { AdminUsersManager } from "./AdminUsersManager";
+import type { AccountSection } from "./account-sections";
 
 export interface User {
   id: string;
@@ -20,21 +22,45 @@ export interface User {
 
 interface AccountSettingsProps {
   user: User;
+  section: AccountSection;
+  onSectionChange: (
+    section: AccountSection,
+    options?: { replace?: boolean },
+  ) => void;
 }
 
-export function AccountSettings({ user }: AccountSettingsProps) {
+export function AccountSettings({
+  user,
+  section,
+  onSectionChange,
+}: AccountSettingsProps) {
   const { hasPermission } = usePermissions();
   const canManageRoles = hasPermission(PERMISSIONS.TEAM_MANAGE_ROLES);
   const canViewTeam =
     hasPermission(PERMISSIONS.TEAM_VIEW) ||
     hasPermission(PERMISSIONS.TEAM_MANAGE) ||
     canManageRoles;
+  const activeSection =
+    (section === "team" && !canViewTeam) ||
+    (section === "roles" && !canManageRoles)
+      ? "security"
+      : section;
+
+  useEffect(() => {
+    if (activeSection !== section) {
+      onSectionChange(activeSection, { replace: true });
+    }
+  }, [activeSection, onSectionChange, section]);
 
   return (
     <div className="space-y-4 pb-8">
       <ProfileHeader user={user} />
 
-      <Tabs defaultValue="security" className="space-y-4">
+      <Tabs
+        value={activeSection}
+        onValueChange={(value) => onSectionChange(value as AccountSection)}
+        className="space-y-4"
+      >
         <div className="rounded-xl border bg-card p-2">
           <TabsList
             aria-label="Account settings sections"

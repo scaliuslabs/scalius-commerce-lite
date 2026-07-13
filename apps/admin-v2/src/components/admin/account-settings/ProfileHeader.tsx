@@ -179,14 +179,14 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                 ) : (
                   <h2 className="truncate text-base font-semibold">{name}</h2>
                 )}
-                <p className="break-all text-sm text-muted-foreground">{user.email}</p>
+                <p className="break-words text-sm text-muted-foreground">{user.email}</p>
               </div>
 
               <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 {user.role === "admin" && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
                     <Shield className="h-3 w-3" />
-                    Admin
+                    Administrator
                   </span>
                 )}
                 {user.twoFactorEnabled && (

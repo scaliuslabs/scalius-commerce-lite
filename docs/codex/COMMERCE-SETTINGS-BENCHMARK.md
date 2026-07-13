@@ -502,12 +502,20 @@ retained. What changes is lifecycle visibility and operational control.
 - The old synthetic “Summer Collection” product preview and hard-coded white
   picker were removed. A semantic token map replaces it and explicitly defers
   real route/device preview to the versioned presentation editor.
+- Theme reads now fail closed instead of rendering editable assumed defaults.
+  Dirty state compares normalized saved values, navigation is guarded, and a
+  CAS conflict blocks publish until the merchant uses the latest revision or
+  explicitly rebases only their changed color fields onto it.
 - Account removed the decorative cover treatment and oversized avatar. The
   compact identity row keeps profile actions reachable at mobile touch sizes,
   while navigation now distinguishes **Personal** security from **Store
   access** administration.
 - Administrator rows stack identity, status, and actions on narrow viewports;
   long email addresses wrap instead of widening the page.
+- Account subsections now survive refresh/back/forward through a validated URL
+  value. The administrator workspace has searchable compact rows, one honest
+  onboarding-readiness status, shape-preserving loading, retryable user/role
+  failures, and a role-read failure cannot silently become an empty selector.
 
 This is an honest workflow improvement, not completion of the target account
 or presentation architecture. URL-owned account routes, sessions/devices,

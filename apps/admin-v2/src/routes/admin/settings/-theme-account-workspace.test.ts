@@ -18,6 +18,10 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("Surfaces and content");
     expect(source).toContain("getThemeColorPairStatus");
     expect(source).toContain("publishBlocked");
+    expect(source).toContain("loadError");
+    expect(source).toContain("rebaseThemeColorDraft");
+    expect(source).toContain("UnsavedChangesGuard");
+    expect(source).toContain("Advanced controls");
     expect(source).toContain("Semantic map");
     expect(source).not.toContain("Summer Collection");
     expect(source).not.toContain("Sample Preview");
@@ -34,5 +38,17 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("Administrators");
     expect(source).toContain("grid-cols-1");
     expect(source).toContain("min-h-11");
+    expect(source).toContain("value={activeSection}");
+
+    const routeSource = readSource("routes/admin/settings/account.tsx");
+    expect(routeSource).toContain("validateAccountSearch");
+    expect(routeSource).toContain("onSectionChange={handleSectionChange}");
+
+    const usersSource = readSource(
+      "components/admin/account-settings/AdminUsersManager.tsx",
+    );
+    expect(usersSource).toContain("Administrators are unavailable");
+    expect(usersSource).toContain("Find administrators");
+    expect(usersSource).toContain("getAdminUserStatus");
   });
 });
