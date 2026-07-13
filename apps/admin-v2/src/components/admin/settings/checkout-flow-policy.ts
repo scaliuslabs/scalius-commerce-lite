@@ -12,19 +12,24 @@ export interface CheckoutFlowPreviewOptions {
     paymentMethodsLoaded: boolean;
     codEnabled: boolean;
     activeOnlineMethodCount: number;
+    sslCommerzEnabled: boolean;
 }
 
-export function getCheckoutAdvancePaymentAmountIssue(amount: unknown): string | null {
+export function getCheckoutAdvancePaymentAmountIssue(
+    amount: unknown,
+    options: { sslCommerzEnabled: boolean },
+): string | null {
     const numericAmount = Number(amount);
-    if (
-        Number.isFinite(numericAmount) &&
-        numericAmount >= CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min &&
-        numericAmount <= CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max
-    ) {
-        return null;
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return "Set an advance amount greater than zero.";
     }
-
-    return `Set an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`;
+    if (options.sslCommerzEnabled && (
+        numericAmount < CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min ||
+        numericAmount > CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max
+    )) {
+        return `SSLCommerz requires an advance amount between ${CHECKOUT_ADVANCE_PAYMENT_AMOUNT_RANGE_LABEL}.`;
+    }
+    return null;
 }
 
 export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions): string[] {
@@ -51,7 +56,10 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
 
     if (!options.partialPaymentEnabled) return issues;
 
-    const amountIssue = getCheckoutAdvancePaymentAmountIssue(options.partialPaymentAmount);
+    const amountIssue = getCheckoutAdvancePaymentAmountIssue(
+        options.partialPaymentAmount,
+        { sslCommerzEnabled: options.sslCommerzEnabled },
+    );
     if (amountIssue) issues.push(amountIssue);
     if (options.checkoutMode === "guest_cod_only") {
         issues.push("Fast COD Only cannot be used with advance payments.");

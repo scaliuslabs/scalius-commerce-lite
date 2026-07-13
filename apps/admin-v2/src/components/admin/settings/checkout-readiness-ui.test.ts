@@ -33,6 +33,18 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain('previewLoading\n        ? "border-border bg-card"');
   });
 
+  it("keeps checkout flow compact, mobile-safe, and explicit about immutable buyer facts", () => {
+    expect(flowSource).toContain('method="post"');
+    expect(flowSource).toContain("lg:grid-cols-[minmax(0,1fr)_20rem]");
+    expect(flowSource).toContain("flex flex-col-reverse gap-2");
+    expect(flowSource).toContain("w-full sm:w-auto sm:min-w-[164px]");
+    expect(flowSource).toContain("Phone number is always required.");
+    expect(flowSource).toContain("The remaining balance is due on delivery.");
+    expect(flowSource).toContain("Unsaved checkout changes");
+    expect(flowSource).not.toContain("verified delivery phone");
+    expect(flowSource).not.toContain("Customers pay ৳");
+  });
+
   it("names readiness and gateway facts instead of relying on color or icons", () => {
     for (const label of ["Checking", "Ready", "Unavailable", "Needs setup"]) {
       expect(flowSource).toContain(`label: "${label}"`);
