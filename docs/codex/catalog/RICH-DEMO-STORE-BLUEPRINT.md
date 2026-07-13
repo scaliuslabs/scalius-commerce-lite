@@ -33,6 +33,48 @@ error bodies are not recorded. The session is closed best-effort even when a
 read or evidence write fails. `--diff` does not enable any write phase, and
 credential flags are rejected so secrets cannot enter shell history.
 
+### Apply executor milestone (not CLI-enabled)
+
+The checked-in apply engine now has a second, stricter gate behind `--diff`.
+It accepts only a complete staged-asset report whose SHA-256 manifest
+fingerprint matches the current 5/50/177 intent and whose 237 exact logical
+media records are all ready, uniquely identified, hashed, dimensioned, and
+typed. Header/footer intent is rejected because those settings APIs do not yet
+have revision claims. The public `pnpm demo:store` command still rejects
+`--apply`; completing this report does not by itself authorize writes.
+
+The internal executor builds sequential category, product, collection, theme,
+and desktop/mobile hero commands through admin APIs only. Creates are resolved
+again by exact slug/name/type after success, timeout, or conflict; updates carry
+the current category revision, product aggregate revision, collection version,
+theme revision, or hero revision. A 409 is reported as a conflict and is never
+blindly retried. Every command is re-read and verified after a nominal success,
+and later dependent phases stop when an earlier phase conflicts.
+
+Product creation uses stable request-scoped option/value/SKU/media association
+IDs, starts inactive, and writes optioned initial stock through the existing
+product matrix ledger-v2 path. Existing matching SKU rows retain their persisted
+ID, stock, barcode, barcode type, weight, and tracking policy; an editor rerun
+must not reset operational inventory. A newly created simple product may receive
+its one initial stock update only when the current run or a safe resume journal
+proves creation provenance. Otherwise the executor refuses to guess whether a
+zero/changed quantity is seed state or real commerce activity.
+
+Rider and Halo are stronger boundaries: exact retained IDs and option topology
+must match the fresh snapshot, all stock/reservation/version facts must be
+present, every existing ready media association must remain represented, and no
+option-matrix or variant-stock command is generated for either product. Their
+base copy/media command preserves current activation, non-Brand attributes,
+association IDs, SKU images, inventory, reservations, and barcodes.
+
+Collections are created inactive with deterministic membership (balanced
+3/3/2/2/2 New & Noteworthy selection, explicit Weekend Ready, first 12 current
+offers, and category-backed dynamic collections). Hero sliders are likewise
+saved inactive with separate desktop/mobile staged assets. Publication,
+activation, unversioned header/footer writes, and CLI exposure remain later
+milestones after staged browser verification; the executor reports
+`staged_complete`, never stable-release completion.
+
 ## Target and acceptance contract
 
 The demo merchant is **Scalius Market**, a coherent multi-category lifestyle
