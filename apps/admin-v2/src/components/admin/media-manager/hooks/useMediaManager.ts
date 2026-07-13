@@ -101,6 +101,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
 
   const beginSelection = useCallback(() => {
     selectionAnchorId.current = null;
+    setSelectedFileIds([]);
     setSelectionMode(true);
   }, []);
 
@@ -114,6 +115,12 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     selectionAnchorId.current = null;
     setSelectedFileIds([]);
     setSelectionMode(preserveMode);
+  }, []);
+
+  const cancelSelection = useCallback(() => {
+    selectionAnchorId.current = null;
+    setSelectedFileIds([]);
+    setSelectionMode(false);
   }, []);
 
   const toggleSelection = useCallback((id: string, extendRange = false) => {
@@ -244,6 +251,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     beginSelection,
     selectAllVisible,
     clearSelection,
+    cancelSelection,
     toggleSelection,
     handleFileSelect,
     mutateOne,

@@ -2,10 +2,24 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const manager = readFileSync(new URL("./MediaManager.tsx", import.meta.url), "utf8");
+const workspace = readFileSync(new URL("./MediaWorkspace.tsx", import.meta.url), "utf8");
+const managerHook = readFileSync(new URL("./hooks/useMediaManager.ts", import.meta.url), "utf8");
 
 describe("MediaManager picker selection boundary", () => {
   it("does not turn a single picker into toggle mode when it has a current value", () => {
     expect(manager).toContain("manager.setSelectionMode(!!onSelectMultiple)");
     expect(manager).not.toContain("!!onSelectMultiple || selectedFiles.length > 0");
+  });
+
+  it("starts standalone selection empty and keeps select-all explicit", () => {
+    expect(managerHook).toContain("const beginSelection = useCallback(() => {");
+    expect(managerHook).toMatch(/const beginSelection = useCallback\(\(\) => \{[\s\S]*?setSelectedFileIds\(\[\]\);[\s\S]*?setSelectionMode\(true\);/);
+    expect(managerHook).toContain("setSelectedFileIds(selectAllVisibleMedia(visibleIds))");
+  });
+
+  it("supports Escape cancellation only in the standalone library", () => {
+    expect(workspace).toContain('event.key !== "Escape"');
+    expect(workspace).toContain("cancelSelection()");
+    expect(workspace).toContain("onCancelSelection={!picker ? mm.cancelSelection : undefined}");
   });
 });

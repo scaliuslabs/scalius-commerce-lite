@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Trash2, Upload } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
@@ -19,6 +19,7 @@ interface MediaWorkspaceProps {
 export function MediaWorkspace({ manager: mm, capability, picker = false, multiple = false, onSelect, onClose }: MediaWorkspaceProps) {
   const [dragging, setDragging] = useState(false);
   const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile; bulk?: true } | null>(null);
+  const { cancelSelection, selectionMode, showPreview } = mm;
   const lifecycle = (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
     if (action === "permanent") setConfirm({ file });
     else void mm.mutateOne(file, action);
@@ -33,6 +34,21 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
     const next = mm.files[index + direction];
     if (next) mm.setPreviewFile(next);
   };
+
+  useEffect(() => {
+    if (picker || !selectionMode || showPreview || confirm) return;
+
+    const cancelWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement && activeElement.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+      event.preventDefault();
+      cancelSelection();
+    };
+
+    document.addEventListener("keydown", cancelWithEscape);
+    return () => document.removeEventListener("keydown", cancelWithEscape);
+  }, [cancelSelection, confirm, picker, selectionMode, showPreview]);
 
   return (
     <div
@@ -64,7 +80,6 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
             selectedCount={mm.selectedFileIds.length}
             visibleCount={mm.files.length}
             selectionMode={mm.selectionMode}
-            persistentSelection={picker && multiple}
             folders={mm.folders}
             isMutating={mm.isMutating}
             allowSelection={!picker || multiple}
@@ -73,7 +88,8 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
             onUpload={mm.uploadFiles}
             onBeginSelection={mm.beginSelection}
             onSelectAll={mm.selectAllVisible}
-            onClearSelection={() => mm.clearSelection(picker && multiple)}
+            onClearSelection={() => mm.clearSelection(true)}
+            onCancelSelection={!picker ? mm.cancelSelection : undefined}
             onMove={(folderId) => void mm.moveSelected(folderId)}
             onLifecycle={bulkLifecycle}
             onAddSelected={picker && multiple ? mm.addSelected : undefined}
