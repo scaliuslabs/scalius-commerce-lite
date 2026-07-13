@@ -307,7 +307,12 @@ app.openapi(getHistoryRoute, async (c) => {
                 updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
             })
             .from(customers)
-            .where(eq(customers.id, id)),
+            .leftJoin(orders, and(
+                eq(orders.customerId, customers.id),
+                isNull(orders.deletedAt),
+            ))
+            .where(eq(customers.id, id))
+            .groupBy(customers.id),
         db
             .select({
                 id: customerHistory.id,
@@ -335,7 +340,10 @@ app.openapi(getHistoryRoute, async (c) => {
                 createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             })
             .from(orders)
-            .where(eq(orders.customerId, id))
+            .where(and(
+                eq(orders.customerId, id),
+                isNull(orders.deletedAt),
+            ))
             .orderBy(sql`${orders.createdAt} DESC`),
     ]);
 
