@@ -22,6 +22,7 @@
     "./modules/pages": "./src/modules/pages/index.ts",
     "./modules/payments": "./src/modules/payments/index.ts",
     "./modules/products": "./src/modules/products/index.ts",
+    "./modules/promotions": "./src/modules/promotions/index.ts",
     "./modules/settings": "./src/modules/settings/index.ts",
     "./modules/storefront": "./src/modules/storefront/index.ts",
     "./modules/tax": "./src/modules/tax/index.ts",

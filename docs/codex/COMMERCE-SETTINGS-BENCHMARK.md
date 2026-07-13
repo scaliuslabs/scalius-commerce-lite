@@ -143,7 +143,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
-| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; revision/CAS for rule edits and status; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons | Still code-only and one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, allocation ledger, or exact cart preview. |
+| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; revision/CAS for rule edits and status; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons; dormant typed promotion evaluator/schema and immutable per-order-item allocation storage | Checkout and admin still use the legacy code-only, one-code/order authority; no promotion CRUD/cutover, Buy X Get Y, exclusions, segments, campaigns, budget claims, stacking, exact test-cart explanation, or allocation consumers in tax/refunds/orders. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
@@ -277,11 +277,14 @@ Explicit Scalius decisions:
    code active. The list marks targetless, mismatched, invalid-schedule, and
    legacy segment/combination/per-order states for review instead of silently
    presenting unsupported saved intent as live capability.
-8. This code-builder cleanup is not the target promotion system. Automatic
-   rules, priority, combination, budgets, immutable allocations, test-cart
-   explanation, and refunds remain blocked on the typed promotion evaluator and
-   schema below. That future aggregate needs its own revision semantics; current
-   customer-entered code rules already reject stale admin writes.
+8. This code-builder cleanup is not the target promotion system. A dormant
+   typed evaluator/schema and immutable allocation table now establish the
+   first replacement boundary, but checkout still does not read or commit it.
+   Automatic rules, richer targeting, combination, budgets, test-cart
+   explanation, and refund/tax consumers remain blocked on the cutover and
+   missing authorities below. The promotion aggregate still needs transactional
+   CRUD and revision semantics; current customer-entered code rules already
+   reject stale admin writes.
 
 ### Target domain model
 
@@ -345,6 +348,37 @@ Explicit Scalius decisions:
    make an order, line, or shipping amount negative.
 7. Re-run and atomically claim budgets/redemptions during synchronous order
    commit. Persist allocations with the order.
+
+### Implemented promotion authority foundation (2026-07-13)
+
+- Migration `0028_cute_ghost_rider` adds dormant promotion, code, condition,
+  effect, and order-allocation tables alongside the legacy discount tables.
+  D1 checks keep the first condition/effect arguments aligned with their kinds;
+  code ownership stays aligned with method, and normalized codes are globally
+  unique.
+- Evaluator version 1 separates `automatic | code` method from typed conditions
+  and effects. Its deliberately bounded vocabulary is AND-ed merchandise
+  subtotal/item-quantity conditions plus percentage/fixed line or order effects
+  and free shipping. It applies line, then order, then shipping effects within
+  one promotion and selects one best promotion by savings, priority, then stable
+  ID. Candidate IDs, code choice, rejection output, and cart-line allocation are
+  normalized for order-independent results.
+- Every merchandise saving, including an order-level effect, is proportionally
+  materialized against exact order-item bases. Shipping is the only allocation
+  without an order-item target. Insert guards bind snapshots to the promotion
+  revision, effect, method, active normalized code when applicable, and the
+  same order item; update/delete triggers make committed rows immutable.
+- This is storage and pure calculation only. No API, admin route, public
+  validation, checkout read/write, tax base, order detail, refund, invoice,
+  analytics, or feed path uses it, so no new capability is advertised. Legacy
+  discount codes remain production authority until one atomic cutover.
+- The next P0 work is transactional promotion CRUD/revision handling, catalog
+  selectors, campaign budget/redemption claim ledgers, and synchronous checkout
+  commit integration with tax and refund consumers. Buy X Get Y must keep
+  qualifying-buy and rewarded-get sets separate; combination must expose effect
+  classes/same-target policy; and the admin builder/test cart must render the
+  production evaluator's applied and rejected reasons before any automatic,
+  stacking, budget, or gift control becomes visible.
 
 ### Builder information architecture
 
