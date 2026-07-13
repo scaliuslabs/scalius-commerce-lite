@@ -1,6 +1,6 @@
 # Codex Working Notes
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-14
 
 This folder contains concise engineering context. Treat source code, tests, deployed behavior, fresh command output, and GitHub issues as the source of truth; older prose can be stale.
 
@@ -13,6 +13,12 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `content/NAVIGATION-AUTHORITY.md` - accepted reusable-menu, placement,
   publication, lifecycle, cache, migration, and rollback architecture for
   large-store navigation; this is not yet implemented.
+- `INTERFACE-COPY-DENSITY.md` - accepted admin copy hierarchy, progressive
+  disclosure, tooltip, helper-text, and density review contract.
+- `ADMIN-ROUTE-STATE.md` - canonical URL-state, refresh/share/back-forward,
+  sensitive-state exclusion, and global-search destination contract.
+- `GLOBAL-ADMIN-SEARCH.md` - research gate, deterministic local/API search
+  architecture, ranking, performance, accessibility, and prototype criteria.
 - `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
 - `ORDER-OPERATIONS-AUDIT.md` - code-backed order-admin workflow, domain, RBAC, failure-state, and implementation audit.
 - `ITEM-LEVEL-RETURNS.md` - durable return lifecycle, inventory disposition, recovery, and deletion/status boundaries.
