@@ -37,6 +37,7 @@ describe("discount checkout enforcement", () => {
         combine_with_order_discounts INTEGER NOT NULL DEFAULT 0,
         combine_with_shipping_discounts INTEGER NOT NULL DEFAULT 0,
         customer_segment TEXT,
+        revision INTEGER NOT NULL DEFAULT 1,
         start_date INTEGER NOT NULL,
         end_date INTEGER,
         is_active INTEGER NOT NULL DEFAULT 1,
