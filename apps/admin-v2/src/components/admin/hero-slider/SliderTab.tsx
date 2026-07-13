@@ -8,7 +8,11 @@ import {
   Save,
 } from "lucide-react";
 import { toast } from "sonner";
-import { HERO_SLIDE_LIMIT, validateAndNormalizeHeroSlides } from "@scalius/shared/hero-slider";
+import {
+  HERO_SLIDE_LIMIT,
+  HERO_SLIDE_PRESENTATION,
+  validateAndNormalizeHeroSlides,
+} from "@scalius/shared/hero-slider";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
@@ -58,6 +62,7 @@ export function SliderTab({
       : []),
     ...(validation.ok ? [] : validation.errors),
   ];
+  const presentation = HERO_SLIDE_PRESENTATION[type];
 
   if (!slider) {
     return (
@@ -150,7 +155,7 @@ export function SliderTab({
           </div>
           <span className="hidden h-4 w-px bg-border sm:block" />
           <span className="text-xs text-muted-foreground">
-            {type === "desktop" ? "Recommended 1400 × 450" : "Recommended 640 × 300"}
+            Source target {presentation.width} × {presentation.height} · center-cropped to fill
           </span>
           <Badge variant="outline" className="h-5 font-normal">Revision {slider.revision}</Badge>
         </div>

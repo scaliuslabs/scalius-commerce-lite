@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   HERO_SLIDE_LIMIT,
+  HERO_SLIDE_PRESENTATION,
   parseStoredHeroSlides,
   validateAndNormalizeHeroSlides,
 } from "./hero-slider";
@@ -13,6 +14,13 @@ const baseSlide = {
 };
 
 describe("hero slider document", () => {
+  it("keeps desktop and mobile source dimensions explicit", () => {
+    expect(HERO_SLIDE_PRESENTATION).toEqual({
+      desktop: { width: 1_300, height: 500 },
+      mobile: { width: 640, height: 300 },
+    });
+  });
+
   it("canonicalizes safe images and destinations", () => {
     expect(validateAndNormalizeHeroSlides([baseSlide])).toEqual({
       ok: true,

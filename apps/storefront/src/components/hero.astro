@@ -2,6 +2,7 @@
 // src/components/hero.astro
 // Hero component containing main carousel - receives data from parent
 import CustomCarousel from "./sliders/CustomCarousel.astro";
+import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 import type { HomepageHero } from "@/lib/api";
 
 interface Props {
@@ -30,7 +31,7 @@ const mobileImages = hero?.mobile?.images || [];
         desktopImages.length > 0 && (
           <CustomCarousel
             images={desktopImages}
-            height={500}
+            height={HERO_SLIDE_PRESENTATION.desktop.height}
             type="desktop"
             autoRotate={true}
             interval={3000}
@@ -45,7 +46,7 @@ const mobileImages = hero?.mobile?.images || [];
         mobileImages.length > 0 && (
           <CustomCarousel
             images={mobileImages}
-            height={300}
+            height={HERO_SLIDE_PRESENTATION.mobile.height}
             type="mobile"
             autoRotate={true}
             interval={3000}

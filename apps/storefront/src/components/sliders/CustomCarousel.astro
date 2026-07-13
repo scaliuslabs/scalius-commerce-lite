@@ -1,6 +1,7 @@
 ---
 // Optimized carousel component for best performance and LCP
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 
 interface Props {
   images: {
@@ -22,6 +23,7 @@ const {
   autoRotate = true,
   interval = 3000,
 } = Astro.props;
+const presentation = HERO_SLIDE_PRESENTATION[type];
 
 // Ensure we have at least one image
 if (images.length === 0) return;
@@ -55,13 +57,13 @@ if (images.length === 0) return;
               >
               <img
                 src={getOptimizedImageUrl(image.url, {
-                  width: type === "desktop" ? 1300 : 640,
+                  width: presentation.width,
                   height: height,
                   quality: index === 0 ? 90 : 80,
                   fit: "cover",
                 })}
                 alt={image.title || `Slide ${index + 1}`}
-                width={type === "desktop" ? 1300 : 640}
+                width={presentation.width}
                 height={height}
                 class="w-full h-full object-cover"
                 loading={index === 0 ? "eager" : "lazy"}

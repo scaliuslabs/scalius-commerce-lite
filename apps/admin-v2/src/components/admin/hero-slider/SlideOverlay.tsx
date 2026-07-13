@@ -1,5 +1,6 @@
 import { GripVertical } from "lucide-react";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 import { cn } from "@scalius/shared/utils";
 import type { SliderImage } from "./helpers";
 
@@ -10,6 +11,7 @@ export function SlideOverlay({
   image: SliderImage;
   type: "desktop" | "mobile";
 }) {
+  const presentation = HERO_SLIDE_PRESENTATION[type];
   return (
     <div
       className={cn(
@@ -24,9 +26,10 @@ export function SlideOverlay({
         className={cn(
           "relative shrink-0 overflow-hidden rounded-lg border bg-muted/30",
           type === "desktop"
-            ? "aspect-16/5 w-[180px]"
-            : "aspect-16/5 w-[132px]",
+            ? "w-[180px]"
+            : "w-[132px]",
         )}
+        style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
       >
         <img
           src={getOptimizedImageUrl(image.url)}

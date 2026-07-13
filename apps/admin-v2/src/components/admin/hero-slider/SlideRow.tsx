@@ -6,6 +6,7 @@ import { Label } from "~/components/ui/label";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
+import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 import type { SliderImage } from "./helpers";
 
 interface SlideRowProps {
@@ -33,6 +34,7 @@ export function SlideRow({
 }: SlideRowProps) {
   const linkResult = parseNavigationHref(image.link);
   const titleMissing = image.title.trim().length === 0;
+  const presentation = HERO_SLIDE_PRESENTATION[type];
   return (
     <div
       ref={rowRef}
@@ -48,9 +50,10 @@ export function SlideRow({
         className={cn(
           "relative shrink-0 overflow-hidden rounded-md border bg-muted/30",
           type === "desktop"
-            ? "aspect-16/5 w-full md:w-[180px]"
-            : "aspect-16/5 w-full md:w-[132px]",
+            ? "w-full md:w-[180px]"
+            : "w-full md:w-[132px]",
         )}
+        style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
       >
         <img
           src={getOptimizedImageUrl(image.url)}
