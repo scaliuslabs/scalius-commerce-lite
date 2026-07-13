@@ -10,6 +10,9 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `catalog/README.md` - current catalog hardening audit, evidence, decisions, and implementation order.
 - `catalog/RICH-DEMO-STORE-BLUEPRINT.md` - exact rich-demo assortment and API-safe population/verification plan.
 - `content/README.md` - Pages, Media, navigation/presentation, Theme, Analytics, Tax, and remaining settings hardening program.
+- `content/NAVIGATION-AUTHORITY.md` - accepted reusable-menu, placement,
+  publication, lifecycle, cache, migration, and rollback architecture for
+  large-store navigation; this is not yet implemented.
 - `INVENTORY-ORDERS-COMPETITIVE-AUDIT.md` - verified Shopify, Medusa, and Adobe inventory/order benchmark with prioritized Scalius gaps.
 - `ORDER-OPERATIONS-AUDIT.md` - code-backed order-admin workflow, domain, RBAC, failure-state, and implementation audit.
 - `ITEM-LEVEL-RETURNS.md` - durable return lifecycle, inventory disposition, recovery, and deletion/status boundaries.
