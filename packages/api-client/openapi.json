@@ -3597,13 +3597,41 @@
                             },
                             "cartTotal": {
                               "type": "string"
+                            },
+                            "navigation": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "href": {
+                                    "type": "string"
+                                  },
+                                  "subMenu": {
+                                    "type": "array",
+                                    "items": {
+                                      "nullable": true
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "title"
+                                ]
+                              }
                             }
                           },
                           "required": [
                             "topBar",
                             "logo",
                             "contact",
-                            "social"
+                            "social",
+                            "navigation"
                           ]
                         }
                       },
@@ -3897,26 +3925,59 @@
                                   "id": {
                                     "type": "string"
                                   },
-                                  "label": {
+                                  "title": {
                                     "type": "string"
                                   },
-                                  "url": {
-                                    "type": "string",
-                                    "nullable": true
+                                  "href": {
+                                    "type": "string"
                                   },
-                                  "sortOrder": {
-                                    "type": "number"
+                                  "subMenu": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "title": {
+                                          "type": "string"
+                                        },
+                                        "href": {
+                                          "type": "string"
+                                        },
+                                        "subMenu": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "id": {
+                                                "type": "string"
+                                              },
+                                              "title": {
+                                                "type": "string"
+                                              },
+                                              "href": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "id",
+                                              "title"
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "title"
+                                      ]
+                                    }
                                   }
                                 },
                                 "required": [
                                   "id",
-                                  "label",
-                                  "url",
-                                  "sortOrder"
-                                ],
-                                "additionalProperties": {
-                                  "nullable": true
-                                }
+                                  "title"
+                                ]
                               }
                             }
                           },
@@ -54729,11 +54790,73 @@
                                   "url"
                                 ]
                               }
+                            },
+                            "products": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "type",
+                                  "url"
+                                ]
+                              }
+                            },
+                            "collections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "url": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "slug",
+                                  "type",
+                                  "url"
+                                ]
+                              }
                             }
                           },
                           "required": [
                             "categories",
-                            "pages"
+                            "pages",
+                            "products",
+                            "collections"
                           ]
                         }
                       },
@@ -69495,10 +69618,102 @@
                         "id": {
                           "type": "string"
                         },
-                        "title": {
+                        "target": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "resource"
+                                  ]
+                                },
+                                "resourceType": {
+                                  "type": "string",
+                                  "enum": [
+                                    "page",
+                                    "category",
+                                    "collection",
+                                    "product"
+                                  ]
+                                },
+                                "resourceId": {
+                                  "type": "string"
+                                },
+                                "query": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "resourceType",
+                                "resourceId"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "internal_path"
+                                  ]
+                                },
+                                "path": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "path"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "external_url"
+                                  ]
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "url"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "label"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "type"
+                              ]
+                            }
+                          ]
+                        },
+                        "labelMode": {
+                          "type": "string",
+                          "enum": [
+                            "resource",
+                            "custom"
+                          ]
+                        },
+                        "customLabel": {
                           "type": "string"
                         },
-                        "href": {
+                        "lastKnownLabel": {
                           "type": "string"
                         },
                         "subMenu": {
@@ -69509,26 +69724,231 @@
                               "id": {
                                 "type": "string"
                               },
-                              "title": {
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "resource"
+                                        ]
+                                      },
+                                      "resourceType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "page",
+                                          "category",
+                                          "collection",
+                                          "product"
+                                        ]
+                                      },
+                                      "resourceId": {
+                                        "type": "string"
+                                      },
+                                      "query": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "resourceType",
+                                      "resourceId"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "internal_path"
+                                        ]
+                                      },
+                                      "path": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "path"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "external_url"
+                                        ]
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "url"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "label"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "labelMode": {
+                                "type": "string",
+                                "enum": [
+                                  "resource",
+                                  "custom"
+                                ]
+                              },
+                              "customLabel": {
                                 "type": "string"
                               },
-                              "href": {
+                              "lastKnownLabel": {
                                 "type": "string"
                               },
                               "subMenu": {
                                 "type": "array",
                                 "items": {
-                                  "type": "object"
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "target": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "resource"
+                                              ]
+                                            },
+                                            "resourceType": {
+                                              "type": "string",
+                                              "enum": [
+                                                "page",
+                                                "category",
+                                                "collection",
+                                                "product"
+                                              ]
+                                            },
+                                            "resourceId": {
+                                              "type": "string"
+                                            },
+                                            "query": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "resourceType",
+                                            "resourceId"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "internal_path"
+                                              ]
+                                            },
+                                            "path": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "path"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "external_url"
+                                              ]
+                                            },
+                                            "url": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "url"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "label"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "type"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "labelMode": {
+                                      "type": "string",
+                                      "enum": [
+                                        "resource",
+                                        "custom"
+                                      ]
+                                    },
+                                    "customLabel": {
+                                      "type": "string"
+                                    },
+                                    "lastKnownLabel": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "target",
+                                    "labelMode"
+                                  ]
                                 }
                               }
-                            }
-                          },
-                          "description": "Nested navigation items"
+                            },
+                            "required": [
+                              "id",
+                              "target",
+                              "labelMode"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "id",
-                        "title"
+                        "target",
+                        "labelMode"
                       ]
                     }
                   }
@@ -69878,10 +70298,102 @@
                               "id": {
                                 "type": "string"
                               },
-                              "title": {
+                              "target": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "resource"
+                                        ]
+                                      },
+                                      "resourceType": {
+                                        "type": "string",
+                                        "enum": [
+                                          "page",
+                                          "category",
+                                          "collection",
+                                          "product"
+                                        ]
+                                      },
+                                      "resourceId": {
+                                        "type": "string"
+                                      },
+                                      "query": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "resourceType",
+                                      "resourceId"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "internal_path"
+                                        ]
+                                      },
+                                      "path": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "path"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "external_url"
+                                        ]
+                                      },
+                                      "url": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "url"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "label"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "labelMode": {
+                                "type": "string",
+                                "enum": [
+                                  "resource",
+                                  "custom"
+                                ]
+                              },
+                              "customLabel": {
                                 "type": "string"
                               },
-                              "href": {
+                              "lastKnownLabel": {
                                 "type": "string"
                               },
                               "subMenu": {
@@ -69892,26 +70404,231 @@
                                     "id": {
                                       "type": "string"
                                     },
-                                    "title": {
+                                    "target": {
+                                      "oneOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "resource"
+                                              ]
+                                            },
+                                            "resourceType": {
+                                              "type": "string",
+                                              "enum": [
+                                                "page",
+                                                "category",
+                                                "collection",
+                                                "product"
+                                              ]
+                                            },
+                                            "resourceId": {
+                                              "type": "string"
+                                            },
+                                            "query": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "resourceType",
+                                            "resourceId"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "internal_path"
+                                              ]
+                                            },
+                                            "path": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "path"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "external_url"
+                                              ]
+                                            },
+                                            "url": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "url"
+                                          ]
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "enum": [
+                                                "label"
+                                              ]
+                                            }
+                                          },
+                                          "required": [
+                                            "type"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "labelMode": {
+                                      "type": "string",
+                                      "enum": [
+                                        "resource",
+                                        "custom"
+                                      ]
+                                    },
+                                    "customLabel": {
                                       "type": "string"
                                     },
-                                    "href": {
+                                    "lastKnownLabel": {
                                       "type": "string"
                                     },
                                     "subMenu": {
                                       "type": "array",
                                       "items": {
-                                        "type": "object"
+                                        "type": "object",
+                                        "properties": {
+                                          "id": {
+                                            "type": "string"
+                                          },
+                                          "target": {
+                                            "oneOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "resource"
+                                                    ]
+                                                  },
+                                                  "resourceType": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "page",
+                                                      "category",
+                                                      "collection",
+                                                      "product"
+                                                    ]
+                                                  },
+                                                  "resourceId": {
+                                                    "type": "string"
+                                                  },
+                                                  "query": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "type",
+                                                  "resourceType",
+                                                  "resourceId"
+                                                ]
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "internal_path"
+                                                    ]
+                                                  },
+                                                  "path": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "type",
+                                                  "path"
+                                                ]
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "external_url"
+                                                    ]
+                                                  },
+                                                  "url": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "type",
+                                                  "url"
+                                                ]
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "label"
+                                                    ]
+                                                  }
+                                                },
+                                                "required": [
+                                                  "type"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "labelMode": {
+                                            "type": "string",
+                                            "enum": [
+                                              "resource",
+                                              "custom"
+                                            ]
+                                          },
+                                          "customLabel": {
+                                            "type": "string"
+                                          },
+                                          "lastKnownLabel": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "id",
+                                          "target",
+                                          "labelMode"
+                                        ]
                                       }
                                     }
-                                  }
-                                },
-                                "description": "Nested navigation items"
+                                  },
+                                  "required": [
+                                    "id",
+                                    "target",
+                                    "labelMode"
+                                  ]
+                                }
                               }
                             },
                             "required": [
                               "id",
-                              "title"
+                              "target",
+                              "labelMode"
                             ]
                           }
                         }
