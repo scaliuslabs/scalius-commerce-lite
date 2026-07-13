@@ -14,13 +14,17 @@ import {
   Copy,
   X,
   Check,
-  Clock,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
-import { formatPrice } from "@scalius/shared/currency";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
+import { DiscountStatusBadge } from "../../discount/DiscountStatusBadge";
+import {
+  getDiscountLifecycle,
+  getDiscountTypeLabel,
+  getDiscountValueLabel,
+} from "../../discount/discount-list-model";
 
 export interface DiscountItem {
   id: string;
@@ -49,42 +53,13 @@ export interface DiscountItem {
   totalDiscountAmount?: number;
 }
 
-function getTypeLabel(type: string): string {
-  switch (type) {
-    case "amount_off_products":
-      return "Amount Off Products";
-    case "amount_off_order":
-      return "Amount Off Order";
-    case "free_shipping":
-      return "Free Shipping";
-    default:
-      return type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
-  }
-}
-
-function getDiscountValueDisplay(
-  discount: DiscountItem,
-  symbol: string,
-): string {
-  switch (discount.valueType) {
-    case "percentage":
-      return `${discount.discountValue}% off`;
-    case "fixed_amount":
-      return `${formatPrice(discount.discountValue, { symbol })} off`;
-    case "free":
-      return "Free";
-    default:
-      return discount.discountValue.toString();
-  }
-}
-
 function buildDiscountSummary(
   discount: DiscountItem,
   symbol: string,
 ): string[] {
   const lines: string[] = [];
-  lines.push(`Type: ${getTypeLabel(discount.type)}`);
-  lines.push(`Value: ${getDiscountValueDisplay(discount, symbol)}`);
+  lines.push(`Type: ${getDiscountTypeLabel(discount.type)}`);
+  lines.push(`Value: ${getDiscountValueLabel(discount, symbol)}`);
   if (discount.minPurchaseAmount) {
     lines.push(
       `Min purchase: ${symbol}${discount.minPurchaseAmount.toLocaleString()}`,
@@ -124,58 +99,11 @@ function DiscountStatusCell({
   canToggleStatus: boolean;
 }) {
   if (showTrashed) {
-    return (
-      <Badge
-        variant="outline"
-        className="text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full"
-      >
-        Deleted
-      </Badge>
-    );
+    return <DiscountStatusBadge status="deleted" />;
   }
 
-  const now = new Date();
-  const startDate = discount.startDate ? new Date(discount.startDate) : null;
-  const endDate = discount.endDate ? new Date(discount.endDate) : null;
-  const isExpired = endDate ? endDate < now : false;
-  const isScheduled = startDate ? startDate > now : false;
-
-  if (isExpired) {
-    return (
-      <Badge
-        variant="outline"
-        className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-50 text-gray-500 border-gray-200 dark:bg-gray-900/30 dark:text-gray-400"
-      >
-        Expired
-      </Badge>
-    );
-  }
-
-  if (isScheduled && discount.isActive) {
-    return (
-      <Badge
-        variant="outline"
-        className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
-      >
-        <Clock className="h-3 w-3 mr-1" />
-        Scheduled
-      </Badge>
-    );
-  }
-
-  const statusBadge = (
-    <Badge
-      variant={discount.isActive ? "default" : "outline"}
-      className={cn(
-        discount.isActive
-          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-700"
-          : "text-muted-foreground",
-        "text-xs font-medium px-2 py-0.5 rounded-full",
-      )}
-    >
-      {discount.isActive ? "Active" : "Inactive"}
-    </Badge>
-  );
+  const lifecycle = getDiscountLifecycle(discount);
+  const statusBadge = <DiscountStatusBadge status={lifecycle} />;
 
   if (!canToggleStatus) {
     return statusBadge;
@@ -262,7 +190,7 @@ export function getDiscountColumns(
             ) : discount.type === "free_shipping" ? (
               <Truck className="h-3 w-3 mr-1" />
             ) : null}
-            {getTypeLabel(discount.type)}
+            {getDiscountTypeLabel(discount.type)}
           </Badge>
         );
       },
@@ -275,7 +203,7 @@ export function getDiscountColumns(
       ),
       cell: ({ row }) => (
         <Badge variant="secondary">
-          {getDiscountValueDisplay(row.original, opts.symbol)}
+          {getDiscountValueLabel(row.original, opts.symbol)}
         </Badge>
       ),
       size: 120,
@@ -427,4 +355,4 @@ export function getDiscountColumns(
   ];
 }
 
-export { getTypeLabel };
+export { getDiscountTypeLabel as getTypeLabel };

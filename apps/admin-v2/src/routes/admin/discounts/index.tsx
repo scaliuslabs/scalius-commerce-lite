@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import type { Row } from "@tanstack/react-table";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash2, Tag } from "lucide-react";
 import {
@@ -29,6 +30,7 @@ import {
 } from "~/components/admin/data-table/columns/discount-columns";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { DiscountMobileCard } from "~/components/admin/discount/DiscountMobileCard";
 
 const baseSearchValidator = createListSearchValidator(
   ["code", "type", "value", "startDate", "endDate", "createdAt", "updatedAt"] as const,
@@ -238,7 +240,7 @@ function DiscountsPage() {
   );
 
   // Server table
-  const { table, isFetching, isLoading, selectedIds, clearSelection } =
+  const { table, isFetching, isLoading, error, refetch, selectedIds, clearSelection } =
     useServerTable<DiscountItem>({
       columns,
       queryOptions: discountsQueryOptions(mapParams(search)),
@@ -250,6 +252,38 @@ function DiscountsPage() {
       onPaginationChange,
       onSortingChange,
     });
+
+  const mobileCardRenderer = useCallback(
+    (row: Row<DiscountItem>) => {
+      const discount = row.original;
+      return (
+        <DiscountMobileCard
+          discount={discount}
+          selected={row.getIsSelected()}
+          showTrashed={showTrashed}
+          symbol={symbol}
+          canToggleStatus={canToggleStatus}
+          onSelectedChange={(selected) => row.toggleSelected(selected)}
+          onEdit={() => handleEdit(discount.id)}
+          onDuplicate={() => handleDuplicate(discount.id)}
+          onDelete={() => handleDelete(discount.id)}
+          onRestore={() => handleRestore(discount.id)}
+          onPermanentDelete={() => handlePermanentDelete(discount.id)}
+          onToggleStatus={() => handleToggleStatus(discount.id, discount.isActive)}
+        />
+      );
+    }, [
+      canToggleStatus,
+      handleDelete,
+      handleDuplicate,
+      handleEdit,
+      handlePermanentDelete,
+      handleRestore,
+      handleToggleStatus,
+      showTrashed,
+      symbol,
+    ],
+  );
 
   // Bulk action handlers
   const handleBulkDelete = useCallback(() => {
@@ -312,7 +346,7 @@ function DiscountsPage() {
               }
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Discount
+              Create discount
             </Button>
           )}
         </div>
@@ -337,7 +371,10 @@ function DiscountsPage() {
         table={table}
         isFetching={isFetching}
         isLoading={isLoading}
+        error={error}
+        onRetry={() => void refetch()}
         toolbar={toolbar}
+        mobileCardRenderer={mobileCardRenderer}
         itemLabel="discounts"
         emptyState={{
           icon: Tag,
@@ -361,7 +398,7 @@ function DiscountsPage() {
                 }
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Create First Discount
+                Create first discount
               </Button>
             ) : undefined,
         }}

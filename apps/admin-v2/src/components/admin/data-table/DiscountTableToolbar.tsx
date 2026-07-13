@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Filter, X } from "lucide-react";
 import { DataTableToolbar } from "./DataTableToolbar";
 import type { DiscountTypeFilterMenuProps } from "./DiscountTypeFilterMenu";
-import { getTypeLabel } from "./columns/discount-columns";
+import { getDiscountTypeLabel } from "../discount/discount-list-model";
 
 interface DiscountTableToolbarProps {
   searchValue: string;
@@ -112,7 +112,7 @@ export function DiscountTableToolbar({
           variant="secondary"
           className="rounded-md px-2 py-0.5 text-xs"
         >
-          Type: {getTypeLabel(activeType)}
+          Type: {getDiscountTypeLabel(activeType)}
           <button
             onClick={() => onTypeFilterChange(null)}
             className="ml-1 rounded-full hover:bg-background p-0.5 focus:outline-none focus:ring-1 focus:ring-ring"

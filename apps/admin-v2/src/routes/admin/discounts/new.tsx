@@ -25,7 +25,7 @@ function NewDiscountPage() {
 
   return (
     <>
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Create discount</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -34,16 +34,16 @@ function NewDiscountPage() {
               : "Choose what the customer code will reduce."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           {selectedType && (
-            <Button variant="outline" onClick={() => setSelectedType(null)}>
+            <Button className="min-h-10 flex-1 sm:flex-none" variant="outline" onClick={() => setSelectedType(null)}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Change Type
+              Change type
             </Button>
           )}
           <Link
             to="/admin/discounts"
-            className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+            className="inline-flex h-10 flex-1 items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground ring-offset-background transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:flex-none"
           >
             Cancel
           </Link>
