@@ -119,6 +119,28 @@ function refineDiscountSemantics<Shape extends z.ZodRawShape>(schema: z.ZodObjec
             });
         }
 
+        if (
+            discount.type === DiscountType.AMOUNT_OFF_PRODUCTS &&
+            scopeCount === 0
+        ) {
+            context.addIssue({
+                code: "custom",
+                message: "Product discounts require at least one product or collection",
+                path: ["appliesToProducts"],
+            });
+        }
+
+        if (
+            discount.type !== DiscountType.AMOUNT_OFF_PRODUCTS &&
+            scopeCount > 0
+        ) {
+            context.addIssue({
+                code: "custom",
+                message: "Only product discounts can target products or collections",
+                path: ["appliesToProducts"],
+            });
+        }
+
         if (discount.customerSegment?.trim()) {
             context.addIssue({
                 code: "custom",

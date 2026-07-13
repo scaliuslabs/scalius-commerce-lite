@@ -1634,20 +1634,20 @@ export type PostApiV1DiscountsValidateData = {
         /**
          * Cart total
          */
-        total?: number | null;
+        total?: number;
         /**
          * Cart items
          */
         items?: Array<{
             id: string;
-            price: number | null;
-            quantity: number | null;
+            price: number;
+            quantity: number;
             variantId?: string;
         }>;
         /**
          * Shipping cost
          */
-        shippingCost?: number | null;
+        shippingCost?: number;
         /**
          * Customer phone for per-customer limits
          */

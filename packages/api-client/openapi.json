@@ -5265,11 +5265,13 @@
                   "code": {
                     "type": "string",
                     "minLength": 1,
+                    "maxLength": 50,
                     "description": "Discount code to validate"
                   },
                   "total": {
                     "type": "number",
-                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1000000000000,
                     "description": "Cart total"
                   },
                   "items": {
@@ -5278,18 +5280,25 @@
                       "type": "object",
                       "properties": {
                         "id": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         },
                         "price": {
                           "type": "number",
-                          "nullable": true
+                          "minimum": 0,
+                          "maximum": 1000000000000
                         },
                         "quantity": {
-                          "type": "number",
-                          "nullable": true
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 10000
                         },
                         "variantId": {
-                          "type": "string"
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
                         }
                       },
                       "required": [
@@ -5298,16 +5307,19 @@
                         "quantity"
                       ]
                     },
+                    "maxItems": 250,
                     "description": "Cart items"
                   },
                   "shippingCost": {
                     "type": "number",
-                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1000000000000,
                     "default": 0,
                     "description": "Shipping cost"
                   },
                   "customerPhone": {
                     "type": "string",
+                    "maxLength": 64,
                     "description": "Customer phone for per-customer limits"
                   }
                 },

@@ -4,15 +4,10 @@ import { DiscountTypeSelector } from "~/components/admin/discount/DiscountTypeSe
 import { Button } from "~/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
+import type { DiscountEditorType } from "~/components/admin/discount/discount-editor-model";
 
-const AmountOffProductsContainer = lazy(
-  () => import("~/components/admin/discount/amount-off-products/AmountOffProductsContainer").then(m => ({ default: m.AmountOffProductsContainer })),
-);
-const AmountOffOrderForm = lazy(
-  () => import("~/components/admin/discount/AmountOffOrderForm").then(m => ({ default: m.AmountOffOrderForm })),
-);
-const FreeShippingForm = lazy(
-  () => import("~/components/admin/discount/FreeShippingForm").then(m => ({ default: m.FreeShippingForm })),
+const DiscountCodeBuilder = lazy(
+  () => import("~/components/admin/discount/DiscountCodeBuilder").then(m => ({ default: m.DiscountCodeBuilder })),
 );
 
 export const Route = createFileRoute("/admin/discounts/new")({
@@ -21,7 +16,7 @@ export const Route = createFileRoute("/admin/discounts/new")({
 });
 
 function NewDiscountPage() {
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<DiscountEditorType | null>(null);
 
   return (
     <>
@@ -54,9 +49,10 @@ function NewDiscountPage() {
           <DiscountTypeSelector onSelect={setSelectedType} />
         ) : (
           <Suspense fallback={<PageLoadingSpinner />}>
-            {selectedType === "amount_off_products" && <AmountOffProductsContainer />}
-            {selectedType === "amount_off_order" && <AmountOffOrderForm />}
-            {selectedType === "free_shipping" && <FreeShippingForm />}
+            <DiscountCodeBuilder
+              key={selectedType}
+              type={selectedType}
+            />
           </Suspense>
         )}
       </div>

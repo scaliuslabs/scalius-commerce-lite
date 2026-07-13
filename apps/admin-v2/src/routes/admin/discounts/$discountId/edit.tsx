@@ -1,17 +1,15 @@
 import { lazy, Suspense } from "react";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+
+import type { Discount } from "~/types/api-responses";
+import type { DiscountCollectionOption } from "~/components/admin/discount/CollectionSelector";
+import type { DiscountProductOption } from "~/components/admin/discount/ProductSelector";
 import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
-import {
-  discountQueryOptions,
-} from "~/lib/api-query-options/discounts";
-import {
-  productsByIdsQueryOptions,
-} from "~/lib/api-query-options/products";
-import type { Discount } from "~/types/api-responses";
-import type { Collection } from "~/components/admin/discount/amount-off-products/types";
+import { discountQueryOptions } from "~/lib/api-query-options/discounts";
+import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { PageLoadingSpinner } from "~/components/admin/shared/LoadingFallback";
 import {
@@ -19,23 +17,10 @@ import {
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
 
-const AmountOffProductsForm = lazy(
-  () =>
-    import("~/components/admin/discount/amount-off-products/AmountOffProductsContainer").then((m) => ({
-      default: m.AmountOffProductsContainer,
-    })),
-);
-const AmountOffOrderForm = lazy(
-  () =>
-    import("~/components/admin/discount/AmountOffOrderForm").then((m) => ({
-      default: m.AmountOffOrderForm,
-    })),
-);
-const FreeShippingForm = lazy(
-  () =>
-    import("~/components/admin/discount/FreeShippingForm").then((m) => ({
-      default: m.FreeShippingForm,
-    })),
+const DiscountCodeBuilder = lazy(() =>
+  import("~/components/admin/discount/DiscountCodeBuilder").then((module) => ({
+    default: module.DiscountCodeBuilder,
+  })),
 );
 
 type DiscountEditSearchParams = {
@@ -45,59 +30,52 @@ type DiscountEditSearchParams = {
 function validateDiscountEditSearch(
   search: SearchValidatorInput<DiscountEditSearchParams>,
 ): DiscountEditSearchParams {
-  return {
-    duplicate: normalizeBooleanSearchParam(search.duplicate),
-  };
+  return { duplicate: normalizeBooleanSearchParam(search.duplicate) };
 }
 
-function getDiscountProductIds(discount: Discount): string[] {
-  return Array.from(new Set([
-    ...(discount.relatedProducts?.buy || []),
-    ...(discount.relatedProducts?.get || []),
-  ].filter(Boolean)));
+function uniqueRelationIds(relation?: { buy?: string[]; get?: string[] }): string[] {
+  return Array.from(
+    new Set([...(relation?.buy ?? []), ...(relation?.get ?? [])].filter(Boolean)),
+  );
 }
 
-function getDiscountCollectionIds(discount: Discount): string[] {
-  return Array.from(new Set([
-    ...(discount.relatedCollections?.buy || []),
-    ...(discount.relatedCollections?.get || []),
-  ].filter(Boolean)));
+function isDiscountType(
+  value: string,
+): value is "amount_off_products" | "amount_off_order" | "free_shipping" {
+  return ["amount_off_products", "amount_off_order", "free_shipping"].includes(value);
 }
 
 export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
   validateSearch: validateDiscountEditSearch,
   loader: async ({ context: { queryClient }, params }) => {
-    const discountResult = await queryClient
-      .ensureQueryData({ ...discountQueryOptions(params.discountId), staleTime: Infinity })
-      .catch(() => null);
-    if (!discountResult) throw redirect({ to: "/admin/discounts" });
+    // Read failures stay on this route and use RouteErrorComponent. Redirecting
+    // every failed request to the list made outages look like missing records.
+    const discount = (await queryClient.ensureQueryData({
+      ...discountQueryOptions(params.discountId),
+      staleTime: Infinity,
+    })) as Discount;
 
-    const discount = discountResult as Discount;
-    if (discount.type === "amount_off_products") {
-      const productIds = getDiscountProductIds(discount);
-      const collectionIds = getDiscountCollectionIds(discount);
-      if (typeof window !== "undefined") {
-        if (productIds.length > 0) {
-          void queryClient
-            .prefetchQuery(productsByIdsQueryOptions(productIds))
-            .catch((error) => {
-              console.warn("Discount product label prefetch skipped", error);
-            });
-        }
-        if (collectionIds.length > 0) {
-          void queryClient
-            .prefetchQuery(collectionsByIdsQueryOptions(collectionIds))
-            .catch((error) => {
-              console.warn("Discount collection label prefetch skipped", error);
-            });
-        }
+    if (discount.type === "amount_off_products" && typeof window !== "undefined") {
+      const productIds = uniqueRelationIds(discount.relatedProducts);
+      const collectionIds = uniqueRelationIds(discount.relatedCollections);
+      if (productIds.length > 0) {
+        void queryClient
+          .prefetchQuery(productsByIdsQueryOptions(productIds))
+          .catch((error) => console.warn("Discount product label prefetch skipped", error));
+      }
+      if (collectionIds.length > 0) {
+        void queryClient
+          .prefetchQuery(collectionsByIdsQueryOptions(collectionIds))
+          .catch((error) => console.warn("Discount collection label prefetch skipped", error));
       }
     }
   },
   head: ({ match }) => ({
-    meta: [{
-      title: `${match.search.duplicate ? "Duplicate" : "Edit"} Discount | Scalius Admin`,
-    }],
+    meta: [
+      {
+        title: `${match.search.duplicate ? "Duplicate" : "Edit"} Discount | Scalius Admin`,
+      },
+    ],
   }),
   errorComponent: RouteErrorComponent,
   component: EditDiscountPage,
@@ -105,198 +83,88 @@ export const Route = createFileRoute("/admin/discounts/$discountId/edit")({
 
 function EditDiscountPage() {
   const { discountId } = Route.useParams();
-  const { duplicate: isDuplicate } = Route.useSearch();
-  const { data: discountResult } = useSuspenseQuery(discountQueryOptions(discountId));
-  const discount = discountResult as Discount;
-  const formattedDiscount = {
-    ...discount,
-    startDate: discount.startDate ? new Date(discount.startDate) : new Date(),
-    endDate: discount.endDate ? new Date(discount.endDate) : null,
-  };
+  const { duplicate } = Route.useSearch();
+  const { data } = useSuspenseQuery(discountQueryOptions(discountId));
+  const discount = data as Discount;
 
-  const pageTitle = isDuplicate ? "Duplicate Discount" : "Edit Discount";
-  const pageDescription = isDuplicate
-    ? `Creating a copy of "${discount.code}"`
-    : `Modify the discount "${discount.code}"`;
+  const productIds = uniqueRelationIds(discount.relatedProducts);
+  const collectionIds = uniqueRelationIds(discount.relatedCollections);
+  const { data: productsData } = useQuery({
+    ...productsByIdsQueryOptions(productIds),
+    enabled: productIds.length > 0,
+  });
+  const { data: collectionsData } = useQuery({
+    ...collectionsByIdsQueryOptions(collectionIds),
+    enabled: collectionIds.length > 0,
+  });
 
-  const effectiveId = isDuplicate ? undefined : discount.id;
-  const effectiveCode = isDuplicate ? "" : discount.code;
+  if (!isDiscountType(discount.type)) {
+    throw new Error("This discount type is not supported by the current editor.");
+  }
+  const productMap = new Map(
+    (productsData?.products ?? []).map((product) => [product.id, product]),
+  );
+  const collectionMap = new Map(
+    (collectionsData?.collections ?? []).map((collection) => [collection.id, collection]),
+  );
+  const selectedProducts: DiscountProductOption[] = productIds.map(
+    (id) => productMap.get(id) ?? { id, name: id, price: 0 },
+  );
+  const selectedCollections: DiscountCollectionOption[] = collectionIds.map((id) => {
+    const collection = collectionMap.get(id);
+    return {
+      id,
+      name: collection?.name ?? id,
+      description: null,
+      slug: "",
+      presentation: collection?.presentation,
+    };
+  });
 
   return (
     <>
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{pageTitle}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{pageDescription}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {duplicate ? "Duplicate discount" : "Edit discount"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {duplicate
+              ? `Create a new draft using ${discount.code} as the starting rule.`
+              : `Update ${discount.code}. Existing orders keep their saved totals.`}
+          </p>
         </div>
         <Link
           to="/admin/discounts"
-          className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 h-10 px-4 py-2"
+          className="inline-flex h-10 items-center justify-center rounded-md bg-secondary px-4 text-sm font-medium text-secondary-foreground ring-offset-background transition-colors hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           Cancel
         </Link>
       </div>
 
-      <div>
-        <Suspense fallback={<PageLoadingSpinner />}>
-          {discount.type === "amount_off_products" && (
-            <AmountOffProductsEditor
-              discount={discount}
-              effectiveId={effectiveId}
-              effectiveCode={effectiveCode}
-              startDate={formattedDiscount.startDate}
-              endDate={formattedDiscount.endDate}
-            />
-          )}
-
-          {discount.type === "amount_off_order" && (
-            <AmountOffOrderEditor
-              discount={discount}
-              effectiveId={effectiveId}
-              effectiveCode={effectiveCode}
-              startDate={formattedDiscount.startDate}
-              endDate={formattedDiscount.endDate}
-            />
-          )}
-
-          {discount.type === "free_shipping" && (
-            <FreeShippingEditor
-              discount={discount}
-              effectiveId={effectiveId}
-              effectiveCode={effectiveCode}
-              startDate={formattedDiscount.startDate}
-              endDate={formattedDiscount.endDate}
-            />
-          )}
-        </Suspense>
-      </div>
+      <Suspense fallback={<PageLoadingSpinner />}>
+        <DiscountCodeBuilder
+          key={`${discount.id}:${duplicate ? "copy" : "edit"}`}
+          type={discount.type}
+          discountId={duplicate ? undefined : discount.id}
+          defaultValues={{
+            code: duplicate ? "" : discount.code,
+            valueType: discount.valueType,
+            discountValue: discount.discountValue,
+            minPurchaseAmount: discount.minPurchaseAmount,
+            minQuantity: discount.minQuantity,
+            maxUses: discount.maxUses,
+            limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
+            startDate: discount.startDate,
+            endDate: discount.endDate,
+            isActive: duplicate ? false : Boolean(discount.isActive),
+            appliesToProducts: productIds,
+            appliesToCollections: collectionIds,
+          }}
+          initialSelectedProducts={selectedProducts}
+          initialSelectedCollections={selectedCollections}
+        />
+      </Suspense>
     </>
-  );
-}
-
-interface DiscountEditorProps {
-  discount: Discount;
-  effectiveId?: string;
-  effectiveCode: string;
-  startDate: Date;
-  endDate: Date | null;
-}
-
-function AmountOffProductsEditor({
-  discount,
-  effectiveId,
-  effectiveCode,
-  startDate,
-  endDate,
-}: DiscountEditorProps) {
-  const allProductIds = getDiscountProductIds(discount);
-  const allCollectionIds = getDiscountCollectionIds(discount);
-  const { data: productsData } = useQuery({
-    ...productsByIdsQueryOptions(allProductIds),
-    enabled: allProductIds.length > 0,
-  });
-  const { data: collectionsData } = useQuery({
-    ...collectionsByIdsQueryOptions(allCollectionIds),
-    enabled: allCollectionIds.length > 0,
-  });
-  const productsMap = new Map(
-    (productsData?.products ?? []).map((product) => [
-      product.id,
-      product,
-    ]),
-  );
-  const selectedProducts = allProductIds.map(
-    (productId) => productsMap.get(productId) ?? { id: productId, name: productId, price: 0 },
-  );
-  const collectionsMap = new Map(
-    (collectionsData?.collections ?? []).map((collection) => [collection.id, collection]),
-  );
-  const selectedCollections: Collection[] = allCollectionIds.map((collectionId: string) => {
-    const found = collectionsMap.get(collectionId);
-    return {
-      id: collectionId,
-      name: found?.name || collectionId,
-      description: null,
-      slug: "",
-      presentation: found?.presentation,
-    };
-  });
-
-  return (
-    <AmountOffProductsForm
-      defaultValues={{
-        id: effectiveId,
-        code: effectiveCode,
-        valueType: discount.valueType as "percentage" | "fixed_amount",
-        discountValue: discount.discountValue,
-        minPurchaseAmount: discount.minPurchaseAmount,
-        minQuantity: discount.minQuantity,
-        maxUsesPerOrder: discount.maxUsesPerOrder,
-        maxUses: discount.maxUses,
-        limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
-        combineWithProductDiscounts: Boolean(discount.combineWithProductDiscounts),
-        combineWithOrderDiscounts: Boolean(discount.combineWithOrderDiscounts),
-        combineWithShippingDiscounts: Boolean(discount.combineWithShippingDiscounts),
-        startDate,
-        endDate,
-        isActive: Boolean(discount.isActive),
-      }}
-      initialSelectedProducts={selectedProducts}
-      initialSelectedCollections={selectedCollections}
-    />
-  );
-}
-
-function AmountOffOrderEditor({
-  discount,
-  effectiveId,
-  effectiveCode,
-  startDate,
-  endDate,
-}: DiscountEditorProps) {
-  return (
-    <AmountOffOrderForm
-      defaultValues={{
-        id: effectiveId,
-        code: effectiveCode,
-        valueType: discount.valueType as "percentage" | "fixed_amount",
-        discountValue: discount.discountValue,
-        minPurchaseAmount: discount.minPurchaseAmount,
-        maxUsesPerOrder: discount.maxUsesPerOrder,
-        maxUses: discount.maxUses,
-        limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
-        combineWithProductDiscounts: Boolean(discount.combineWithProductDiscounts),
-        combineWithShippingDiscounts: Boolean(discount.combineWithShippingDiscounts),
-        startDate,
-        endDate,
-        isActive: Boolean(discount.isActive),
-      }}
-    />
-  );
-}
-
-function FreeShippingEditor({
-  discount,
-  effectiveId,
-  effectiveCode,
-  startDate,
-  endDate,
-}: DiscountEditorProps) {
-  return (
-    <FreeShippingForm
-      defaultValues={{
-        id: effectiveId,
-        code: effectiveCode,
-        minPurchaseAmount: discount.minPurchaseAmount,
-        maxUsesPerOrder: discount.maxUsesPerOrder,
-        maxUses: discount.maxUses,
-        limitOnePerCustomer: Boolean(discount.limitOnePerCustomer),
-        combineWithProductDiscounts: Boolean(discount.combineWithProductDiscounts),
-        combineWithOrderDiscounts: Boolean(discount.combineWithOrderDiscounts),
-        startDate,
-        endDate,
-        isActive: Boolean(discount.isActive),
-      }}
-    />
   );
 }

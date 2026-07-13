@@ -120,4 +120,29 @@ describe("public discount routes", () => {
     expect(mocks.isDiscountValid).not.toHaveBeenCalled();
     expect(mocks.calculateDiscountAmount).not.toHaveBeenCalled();
   });
+
+  it.each([
+    { total: -1 },
+    { shippingCost: -1 },
+    { items: [{ id: "prod_1", price: -1, quantity: 1 }] },
+    { items: [{ id: "prod_1", price: 10, quantity: 0 }] },
+    { items: [{ id: "prod_1", price: 10, quantity: 1.5 }] },
+    { total: null },
+    { items: [{ id: "prod_1", price: null, quantity: 1 }] },
+    { items: [{ id: "prod_1", price: 10, quantity: "1" }] },
+    { total: 1_000_000_000_001 },
+    { shippingCost: 1_000_000_000_001 },
+    { items: [{ id: "prod_1", price: 1_000_000_000_001, quantity: 1 }] },
+  ])("rejects invalid or unbounded cart facts: %o", async (invalid) => {
+    const { app } = createTestApp();
+    const response = await app.request("/api/v1/discounts/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "SAVE10", ...invalid }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.isDiscountValid).not.toHaveBeenCalled();
+    expect(mocks.calculateDiscountAmount).not.toHaveBeenCalled();
+  });
 });

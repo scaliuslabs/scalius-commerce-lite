@@ -1,7 +1,7 @@
 # Commerce Settings Competitive Audit
 
 Last reviewed: 2026-07-13
-Code baseline inspected: `b552074b`
+Code baseline inspected: `0b310660`
 
 This is the durable product and architecture decision record for Discounts,
 Taxes, Checkout and payment methods, Theme, and administrator Account settings.
@@ -143,7 +143,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
-| Discounts | Case-normalized codes; product/collection scoping; positive fixed/percentage validation; date window; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission | Code-only; one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, revision/CAS, allocation ledger, or exact cart preview. Three forms duplicate schemas/date/limit/save behavior. |
+| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons | Still code-only and one code/order; no automatic promotions, Buy X Get Y, exclusions, segments, campaigns, spend budgets, priority, real combination, revision/CAS, allocation ledger, or exact cart preview. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator | Five equally weighted tabs, merchant-facing priority field, no overlap diagnostics, no bulk classification, no customer exemption workflow, weak region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
@@ -156,9 +156,9 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 - Discount validation/evaluation/CRUD:
   `packages/core/src/modules/discounts/discounts.validation.ts`,
   `discounts.eligibility.ts`, and `discounts.service.ts`.
-- Duplicated merchant forms:
-  `apps/admin-v2/src/components/admin/discount/AmountOffOrderForm.tsx`,
-  `FreeShippingForm.tsx`, and `amount-off-products/**`.
+- Unified merchant code builder and form model:
+  `apps/admin-v2/src/components/admin/discount/DiscountCodeBuilder.tsx` and
+  `discount-editor-model.ts`.
 - Tax UI and domain:
   `apps/admin-v2/src/components/admin/taxes/**` and
   `packages/core/src/modules/tax/**`.
@@ -177,7 +177,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 ## Discounts and promotions
 
-### Why the current implementation feels glitchy
+### Why the legacy implementation felt glitchy
 
 - The first choice asks what a *code* reduces, so the architecture cannot express
   an automatic promotion even though method and effect are independent facts.
@@ -195,6 +195,57 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 - The list reports redemption totals but cannot explain why a promotion is not
   applying, what it conflicts with, which cart lines received savings, or how
   much budget remains.
+
+### Documentation re-verification and Scalius decisions (2026-07-13)
+
+The benchmark was rechecked against the current primary documentation for
+[Shopify discount methods and types](https://help.shopify.com/en/manual/discounts),
+[Shopify combinations](https://help.shopify.com/en/manual/discounts/discount-combinations),
+[Shopify code limits and expiry](https://help.shopify.com/en/manual/discounts/discounts-faq),
+and [Vendure promotions](https://docs.vendure.io/current/core/core-concepts/promotions).
+The current documents still support these observations:
+
+- Method and outcome are separate facts. Shopify exposes automatic and code
+  methods across product, order, and shipping classes; Vendure makes coupon
+  code optional on a promotion built from conditions and actions.
+- Combining is evaluator behavior, not presentation metadata. Shopify applies
+  product, then order, then shipping classes and documents many compatibility
+  restrictions. Vendure requires every configured condition to pass before
+  actions run.
+- Schedule, total usage, per-customer usage, target, and purchase requirements
+  affect eligibility independently and must be previewed as one rule.
+
+Merchant reports remain useful only for locating confusing boundaries. The
+Shopify Community thread
+[“Why aren't my automatic discount codes combining at checkout?”](https://community.shopify.com/c/shopify-discussions/why-aren-t-my-shopify-discount-codes-combining-at-checkout/m-p/2118337)
+shows that merchants can enable combination-looking controls without
+understanding target overlap and class restrictions. This is directional
+problem evidence, not calculation authority.
+
+Explicit Scalius decisions:
+
+1. The current release surface remains one checkout code per order. The admin
+   says **Discount code** and **Used alone**; it does not expose automatic or
+   combination controls that checkout cannot execute.
+2. Create, edit, and duplicate use one compact builder and one Zod/payload
+   model for product, order, and delivery outcomes. The three divergent forms
+   and dead `CombinationsSection` were removed.
+3. A product discount must save at least one product or collection. Empty,
+   deleted, inactive, or unreadable scope is ineligible and never degrades to
+   the full subtotal. Order and delivery discounts reject stray product scope.
+4. Purchase amount and item quantity are independent optional requirements.
+   When both exist, both must pass. Product rules count only eligible lines;
+   order and delivery rules count the complete merchandise cart.
+5. Duplicate always creates an inactive draft. Save failure preserves the
+   local draft, dirty navigation is guarded, edit-read failure remains on the
+   route with retry, and local date controls state their inclusive day bounds.
+6. Public validation accepts bounded non-negative prices/totals/shipping and
+   positive integral quantities only. Final checkout re-runs authority and
+   preserves the evaluator's bounded buyer-safe rejection reason.
+7. This code-builder cleanup is not the target promotion system. Automatic
+   rules, priority, combination, budgets, conflict/CAS, immutable allocations,
+   test-cart explanation, and refunds remain blocked on the typed promotion
+   evaluator and schema below.
 
 ### Target domain model
 

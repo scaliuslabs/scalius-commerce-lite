@@ -309,7 +309,13 @@ export async function createStorefrontOrder(
                 applicableProductIds,
             );
         } else {
-            throw new ValidationError(`Discount code ${normalizedDiscountCode} is invalid or expired.`);
+            const rejectionReason =
+                typeof validResult?.error === "string" &&
+                validResult.error.length > 0 &&
+                validResult.error.length <= 200
+                    ? validResult.error
+                    : `Discount code ${normalizedDiscountCode} is invalid or expired.`;
+            throw new ValidationError(rejectionReason);
         }
     }
 

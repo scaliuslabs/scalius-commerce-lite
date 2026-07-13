@@ -111,4 +111,23 @@ describe("discount validation", () => {
       appliesToCollections: ["collection_1"],
     })).toThrow(/at most 90/);
   });
+
+  it("requires scope only for product discounts", () => {
+    expect(() => createDiscountSchema.parse({
+      code: "TARGETLESS",
+      type: DiscountType.AMOUNT_OFF_PRODUCTS,
+      valueType: DiscountValueType.PERCENTAGE,
+      discountValue: 10,
+      startDate: "2026-01-01T00:00:00.000Z",
+    })).toThrow(/require at least one product or collection/);
+
+    expect(() => createDiscountSchema.parse({
+      code: "ORDERWITHSCOPE",
+      type: DiscountType.AMOUNT_OFF_ORDER,
+      valueType: DiscountValueType.PERCENTAGE,
+      discountValue: 10,
+      startDate: "2026-01-01T00:00:00.000Z",
+      appliesToProducts: ["product_1"],
+    })).toThrow(/Only product discounts/);
+  });
 });

@@ -103,7 +103,7 @@ describe("calculateDiscountAmount product scope", () => {
         )).resolves.toBe(0);
     });
 
-    it("keeps an intentionally unrestricted product discount cart-wide", async () => {
+    it("fails closed for legacy product discounts without a saved scope", async () => {
         await expect(calculateDiscountAmount(
             db,
             productDiscount,
@@ -113,7 +113,7 @@ describe("calculateDiscountAmount product scope", () => {
             new Set(),
             "BDT",
             false,
-        )).resolves.toBe(200);
+        )).resolves.toBe(0);
     });
 });
 
@@ -131,6 +131,27 @@ describe("isDiscountValid authority", () => {
             "save20",
             1_000,
             [{ id: "cart_product", price: 1_000, quantity: 1 }],
+        );
+
+        expect(result).toEqual({
+            valid: false,
+            error: "Discount code is not applicable to the items in your cart",
+        });
+    });
+
+    it("does not grant eligibility through an inactive direct product", async () => {
+        const scopedDb = createReadDb([
+            { get: discountRow({ type: DiscountType.AMOUNT_OFF_PRODUCTS }) },
+            { all: [{ productId: "product_inactive" }] },
+            { all: [] },
+            { all: [] },
+        ]);
+
+        const result = await isDiscountValid(
+            scopedDb,
+            "SAVE20",
+            1_000,
+            [{ id: "product_inactive", price: 1_000, quantity: 1 }],
         );
 
         expect(result).toEqual({
@@ -169,6 +190,7 @@ describe("isDiscountValid authority", () => {
                 }),
             },
             { all: [{ productId: "eligible" }] },
+            { all: [{ id: "eligible" }] },
             { all: [] },
         ]);
 
@@ -185,6 +207,39 @@ describe("isDiscountValid authority", () => {
         expect(result).toMatchObject({
             valid: false,
             minPurchaseAmount: 500,
+        });
+    });
+
+    it("requires a cart total when an order minimum cannot otherwise be evaluated", async () => {
+        const totalDb = createReadDb([
+            { get: discountRow({ minPurchaseAmount: 500 }) },
+        ]);
+
+        const result = await isDiscountValid(totalDb, "SAVE20");
+
+        expect(result).toEqual({
+            valid: false,
+            error: "Cart total is required to validate this discount",
+        });
+    });
+
+    it("rejects legacy product discounts that have no explicit scope", async () => {
+        const targetlessDb = createReadDb([
+            { get: discountRow({ type: DiscountType.AMOUNT_OFF_PRODUCTS }) },
+            { all: [] },
+            { all: [] },
+        ]);
+
+        const result = await isDiscountValid(
+            targetlessDb,
+            "SAVE20",
+            1_000,
+            [{ id: "cart_product", price: 1_000, quantity: 1 }],
+        );
+
+        expect(result).toEqual({
+            valid: false,
+            error: "This discount has no eligible products",
         });
     });
 });

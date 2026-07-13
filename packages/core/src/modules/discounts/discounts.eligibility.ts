@@ -91,6 +91,28 @@ async function expandCollectionsToProductIds(
     return productIds;
 }
 
+/** Keep only products that can still participate in storefront eligibility. */
+async function filterEligibleProductIds(
+    db: Database,
+    productIds: string[],
+): Promise<string[]> {
+    if (productIds.length === 0) return [];
+
+    const eligibleProducts = await db
+        .select({ id: products.id })
+        .from(products)
+        .where(
+            and(
+                inArray(products.id, productIds),
+                eq(products.isActive, true),
+                isNull(products.deletedAt),
+            ),
+        )
+        .all();
+
+    return eligibleProducts.map((product) => product.id);
+}
+
 // ─────────────────────────────────────────
 // Validation
 // ─────────────────────────────────────────
@@ -149,8 +171,12 @@ export async function isDiscountValid(
                 .where(eq(discountProducts.discountId, discount.id))
                 .all();
             hasProductRestrictions ||= discountProductsResult.length > 0;
-            discountProductsResult.forEach((relation) =>
-                applicableProductIds!.add(relation.productId),
+            const eligibleDirectProductIds = await filterEligibleProductIds(
+                db,
+                discountProductsResult.map((relation) => relation.productId),
+            );
+            eligibleDirectProductIds.forEach((productId) =>
+                applicableProductIds!.add(productId),
             );
 
             const discountCollectionsResult = await db
@@ -174,8 +200,14 @@ export async function isDiscountValid(
             return { valid: false, error: "Unable to validate discount at this time" };
         }
 
+        if (!hasProductRestrictions) {
+            return {
+                valid: false,
+                error: "This discount has no eligible products",
+            };
+        }
+
         if (
-            hasProductRestrictions &&
             !cartItems.some((item) => applicableProductIds!.has(item.id))
         ) {
             return {
@@ -199,6 +231,13 @@ export async function isDiscountValid(
                 effectiveCurrencyCode,
             )
             : total;
+
+    if (discount.minPurchaseAmount && requirementSubtotal === undefined) {
+        return {
+            valid: false,
+            error: "Cart total is required to validate this discount",
+        };
+    }
 
     if (
         discount.minPurchaseAmount &&
@@ -338,22 +377,7 @@ export async function calculateDiscountAmount(
     }
 
     if (discount.type === DiscountType.AMOUNT_OFF_PRODUCTS) {
-        const subTotal = roundPrice(total - shippingCost, effectiveCurrencyCode);
-
         if (!cartItems || cartItems.length === 0) {
-            if (precomputedHasProductRestrictions) return 0;
-            if (discount.valueType === DiscountValueType.PERCENTAGE) {
-                const calculatedDiscount = roundPrice(
-                    (subTotal * discount.discountValue) / 100,
-                    effectiveCurrencyCode,
-                );
-                return Math.min(subTotal, calculatedDiscount);
-            } else if (discount.valueType === DiscountValueType.FIXED_AMOUNT) {
-                return Math.min(
-                    subTotal,
-                    roundPrice(discount.discountValue, effectiveCurrencyCode),
-                );
-            }
             return 0;
         }
 
@@ -372,8 +396,12 @@ export async function calculateDiscountAmount(
                 .where(eq(discountProducts.discountId, discount.id))
                 .all();
             hasProductRestrictions ||= discountProductsResult.length > 0;
-            discountProductsResult.forEach((dp) =>
-                applicableProductIds.add(dp.productId),
+            const eligibleDirectProductIds = await filterEligibleProductIds(
+                db,
+                discountProductsResult.map((relation) => relation.productId),
+            );
+            eligibleDirectProductIds.forEach((productId) =>
+                applicableProductIds.add(productId),
             );
 
             const discountCollectionsResult = await db
@@ -403,11 +431,9 @@ export async function calculateDiscountAmount(
         }
         applicableProductsTotal = roundPrice(applicableProductsTotal, effectiveCurrencyCode);
 
-        // If products are specified but none match the cart, no discount applies.
-        // Only fall back to subtotal when no product/collection restrictions exist.
-        if (!hasProductRestrictions) {
-            applicableProductsTotal = subTotal;
-        } else if (applicableProductsTotal === 0) {
+        // Product discounts always require an explicit saved scope. Missing or
+        // non-matching scope never degrades to the order subtotal.
+        if (!hasProductRestrictions || applicableProductsTotal === 0) {
             return 0;
         }
 
