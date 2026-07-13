@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
   createLocation: vi.fn(),
   getLocationById: vi.fn(),
-  getCheckoutReadiness: vi.fn(),
+  getCheckoutDeliveryReadiness: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -20,7 +20,7 @@ vi.mock("@scalius/core/modules/delivery/locations", () => ({
 }));
 
 vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
-  getCheckoutReadiness: mocks.getCheckoutReadiness,
+  getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
 }));
 
 import { adminLocationRoutes } from "./delivery-locations";
@@ -34,7 +34,7 @@ function createTestApp(db: Record<string, unknown> = { id: "db" }) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  mocks.getCheckoutReadiness.mockResolvedValue({
+  mocks.getCheckoutDeliveryReadiness.mockResolvedValue({
     ready: true,
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
@@ -97,7 +97,7 @@ describe("delivery location cache invalidation", () => {
   });
 
   it("rejects bulk deleting the last usable city-zone checkout chain", async () => {
-    mocks.getCheckoutReadiness
+    mocks.getCheckoutDeliveryReadiness
       .mockResolvedValueOnce({
         ready: true,
         hasActiveShippingMethod: true,

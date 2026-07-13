@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../api-functions/settings", () => ({
   getAuthSettings: vi.fn(),
+  getCheckoutFlowSettings: vi.fn(),
   getCheckoutReadiness: vi.fn(),
   getFirebaseSettings: vi.fn(),
   getGeneralSettings: vi.fn(),

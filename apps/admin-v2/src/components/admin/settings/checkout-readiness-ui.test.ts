@@ -41,6 +41,11 @@ describe("checkout settings status presentation", () => {
     expect(flowSource).toContain("Phone number is always required.");
     expect(flowSource).toContain("The remaining balance is due on delivery.");
     expect(flowSource).toContain("Unsaved checkout changes");
+    expect(flowSource).toContain("Customer sign-in verification");
+    expect(flowSource).toContain("readCheckoutFlowRevisionConflict");
+    expect(flowSource).toContain("Your unsaved values are still here.");
+    expect(flowSource).toContain("Merge my changes");
+    expect(flowSource).toContain("Use latest saved version");
     expect(flowSource).toContain('aria-invalid={Boolean(partialPaymentAmountIssue)}');
     expect(flowSource).toContain('id="partial-payment-amount-error"');
     expect(flowSource).toContain('id="partial-payment-amount-help"');

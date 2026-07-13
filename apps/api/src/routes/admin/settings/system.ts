@@ -34,8 +34,16 @@ import {
     normalizeCustomerAuthMethod,
     normalizeCustomerAuthPolicy,
 } from "@scalius/shared/customer-auth-policy";
-import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
-import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import {
+    CheckoutFlowRevisionConflictError,
+    getCheckoutFlowSettingsDocument,
+    saveCheckoutFlowSettingsDocument,
+} from "@scalius/core/modules/settings/checkout-flow-admin.service";
+import {
+    CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
+    getCheckoutReadiness,
+    getCustomerSignInReadiness,
+} from "@scalius/core/modules/settings/checkout-readiness";
 import {
     getOptionalExecutionContext,
     invalidateApiAndScheduleStorefrontGroups,
@@ -44,7 +52,13 @@ import { clearNotificationProviderBlocks } from "@scalius/core/modules/notificat
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
+import {
+    conflictResponse,
+    successEnvelope,
+    messageResponse,
+    errorResponses,
+    serviceUnavailableResponse,
+} from "../../../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
@@ -61,6 +75,8 @@ const checkoutReadinessResponseSchema = z.object({
     ready: z.boolean(),
     hasActiveShippingMethod: z.boolean(),
     hasActiveDeliveryHierarchy: z.boolean(),
+    customerSignInRequired: z.boolean(),
+    hasUsableCustomerSignIn: z.boolean(),
     issues: z.array(z.string()),
 });
 
@@ -93,26 +109,119 @@ const getCheckoutReadinessRoute = createRoute({
 
 app.openapi(getCheckoutReadinessRoute, async (c) => {
     const db = c.get("db");
-    return ok(c, await getCheckoutReadiness(db));
+    return ok(c, await getCheckoutReadiness(db, {
+        encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        runtimeEnv: c.env as Record<string, unknown>,
+        inspectOptionalCustomerSignIn: true,
+    }));
+});
+
+const checkoutFlowSettingsSchema = z.object({
+    guestCheckoutEnabled: z.boolean(),
+    checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
+    partialPaymentEnabled: z.boolean(),
+    partialPaymentAmount: z.number(),
+    revision: z.number().int().positive(),
+});
+
+const getCheckoutFlowRoute = createRoute({
+    method: "get",
+    path: "/checkout-flow",
+    tags: ["Admin - Settings"],
+    summary: "Get versioned checkout flow settings",
+    responses: {
+        200: {
+            description: "Checkout flow settings",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(checkoutFlowSettingsSchema),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getCheckoutFlowRoute, async (c) => {
+    return ok(c, await getCheckoutFlowSettingsDocument(c.get("db")));
+});
+
+const saveCheckoutFlowSchema = checkoutFlowSettingsSchema
+    .omit({ revision: true })
+    .extend({ expectedRevision: z.number().int().positive() })
+    .strict();
+
+const saveCheckoutFlowRoute = createRoute({
+    method: "put",
+    path: "/checkout-flow",
+    tags: ["Admin - Settings"],
+    summary: "Save versioned checkout flow settings",
+    request: {
+        body: {
+            content: { "application/json": { schema: saveCheckoutFlowSchema } },
+        },
+    },
+    responses: {
+        200: {
+            description: "Checkout flow settings saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(checkoutFlowSettingsSchema),
+                },
+            },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(saveCheckoutFlowRoute, async (c) => {
+    const db = c.get("db");
+    const body = c.req.valid("json");
+    const current = await getCheckoutFlowSettingsDocument(db);
+    if (current.revision !== body.expectedRevision) {
+        throw new CheckoutFlowRevisionConflictError(body.expectedRevision, current.revision);
+    }
+    const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    if (!body.guestCheckoutEnabled) {
+        const signInReadiness = await getCustomerSignInReadiness(db, {
+            encryptionKey: credentialEncryptionKey,
+            runtimeEnv: c.env as Record<string, unknown>,
+            customerSignInRequiredOverride: true,
+        });
+        if (!signInReadiness.hasUsableCustomerSignIn) {
+            throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE);
+        }
+    }
+    const activePaymentMethods = await getActivePaymentMethods(
+        db,
+        getKv(),
+        credentialEncryptionKey,
+        { bypassMemoryCache: true },
+    );
+    const saved = await saveCheckoutFlowSettingsDocument(db, {
+        ...body,
+        availablePaymentMethods: activePaymentMethods.enabledMethods,
+    });
+
+    await invalidateSiteSettingsCache(getKv());
+    await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
+    return ok(c, saved);
 });
 
 const authSettingsResponseSchema = z.object({
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),
     customerAuthPolicy: customerAuthPolicySchema,
-    guestCheckoutEnabled: z.boolean(),
     whatsappAccessToken: z.string(),
     whatsappPhoneNumberId: z.string(),
     whatsappTemplateName: z.string(),
-    checkoutMode: z.string(),
-    partialPaymentEnabled: z.boolean(),
-    partialPaymentAmount: z.number().nullable(),
 });
 
 const getAuthRoute = createRoute({
     method: "get",
     path: "/auth",
     tags: ["Admin - Settings"],
-    summary: "Get auth/checkout settings",
+    summary: "Get customer authentication settings",
     responses: {
         200: { description: "Auth settings", content: { "application/json": { schema: successEnvelope(authSettingsResponseSchema) } } },
         ...errorResponses,
@@ -147,33 +256,25 @@ app.openapi(getAuthRoute, async (c) => {
                     ? getLegacyCustomerAuthMethodForPolicy(customerAuthPolicy)
                     : normalizeCustomerAuthMethod(row.authVerificationMethod),
                 customerAuthPolicy,
-	            guestCheckoutEnabled: row.guestCheckoutEnabled,
             whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
             whatsappPhoneNumberId: whatsapp.phoneNumberId || "",
             whatsappTemplateName: whatsapp.authTemplateName || "",
-            checkoutMode: row.checkoutMode,
-            partialPaymentEnabled: row.partialPaymentEnabled,
-            partialPaymentAmount: row.partialPaymentAmount
         });
 });
 
 const saveAuthSchema = z.object({
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS).optional(),
     customerAuthPolicy: customerAuthPolicySchema.optional(),
-    guestCheckoutEnabled: z.boolean().optional(),
     whatsappAccessToken: z.string().optional(),
     whatsappPhoneNumberId: z.string().nullable().optional(),
     whatsappTemplateName: z.string().nullable().optional(),
-    checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]).optional(),
-    partialPaymentEnabled: z.boolean().optional(),
-    partialPaymentAmount: z.number().optional(),
-});
+}).strict();
 
 const saveAuthRoute = createRoute({
     method: "post",
     path: "/auth",
     tags: ["Admin - Settings"],
-    summary: "Save auth/checkout settings",
+    summary: "Save customer authentication settings",
     request: { body: { content: { "application/json": { schema: saveAuthSchema } } } },
     responses: {
         200: { description: "Auth settings saved", content: { "application/json": { schema: messageResponse } } },
@@ -234,18 +335,12 @@ app.openapi(saveAuthRoute, async (c) => {
             updates.authVerificationMethod = authVerificationMethod;
             customerAuthPolicyValue = JSON.stringify(customerAuthPolicy);
         }
-        if (typeof body.guestCheckoutEnabled === "boolean") updates.guestCheckoutEnabled = body.guestCheckoutEnabled;
         if (typeof body.whatsappPhoneNumberId === "string" || body.whatsappPhoneNumberId === null) {
             updates.whatsappPhoneNumberId = body.whatsappPhoneNumberId;
         }
         if (typeof body.whatsappTemplateName === "string" || body.whatsappTemplateName === null) {
             updates.whatsappTemplateName = body.whatsappTemplateName;
         }
-        if (body.checkoutMode) {
-            updates.checkoutMode = body.checkoutMode;
-        }
-        if (typeof body.partialPaymentEnabled === "boolean") updates.partialPaymentEnabled = body.partialPaymentEnabled;
-        if (typeof body.partialPaymentAmount === "number") updates.partialPaymentAmount = body.partialPaymentAmount;
 
         if (requestedCustomerAuthPolicy && customerAuthPolicyUsesEmailProvider(requestedCustomerAuthPolicy)) {
             const emailReadiness = await getEmailProviderReadiness({
@@ -290,31 +385,6 @@ app.openapi(saveAuthRoute, async (c) => {
                 throw new ValidationError(
                     "WhatsApp OTP cannot be enabled until a WhatsApp access token, phone number ID, and OTP template name are configured.",
                 );
-            }
-        }
-
-        const shouldValidateCheckoutFlow =
-            body.checkoutMode !== undefined ||
-            typeof body.partialPaymentEnabled === "boolean" ||
-            typeof body.partialPaymentAmount === "number";
-        if (shouldValidateCheckoutFlow) {
-            const nextCheckoutMode = updates.checkoutMode ?? existingSettings.checkoutMode;
-            const nextPartialPaymentEnabled = updates.partialPaymentEnabled ?? existingSettings.partialPaymentEnabled;
-            const nextPartialPaymentAmount = updates.partialPaymentAmount ?? existingSettings.partialPaymentAmount;
-            const activePaymentMethods = await getActivePaymentMethods(
-                db,
-                getKv(),
-                credentialEncryptionKey,
-                { bypassMemoryCache: true },
-            );
-            const checkoutFlowIssues = getCheckoutFlowValidationIssues({
-                checkoutMode: nextCheckoutMode,
-                partialPaymentEnabled: nextPartialPaymentEnabled,
-                partialPaymentAmount: nextPartialPaymentAmount,
-                availablePaymentMethods: activePaymentMethods?.enabledMethods,
-            });
-            if (checkoutFlowIssues.length > 0) {
-                throw new ValidationError(checkoutFlowIssues.join(" "));
             }
         }
 

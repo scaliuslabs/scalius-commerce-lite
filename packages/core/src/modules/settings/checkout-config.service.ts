@@ -55,6 +55,7 @@ export async function getCheckoutConfig(
     db: Database,
     kv?: KVNamespace,
     encryptionKey?: string,
+    runtimeEnv?: Record<string, unknown>,
 ): Promise<CheckoutConfig> {
     const [siteSettingsRow, currencyRows, allowedCountriesConfig, customerAuthPolicyRow] = await Promise.all([
         db.select({
@@ -93,7 +94,7 @@ export async function getCheckoutConfig(
 
     const partialPaymentEnabled = siteSettingsRow?.partialPaymentEnabled ?? false;
     const partialPaymentAmount = siteSettingsRow?.partialPaymentAmount ?? 0;
-    const checkoutReadiness = await getCheckoutReadiness(db);
+    const checkoutReadiness = await getCheckoutReadiness(db, { encryptionKey, runtimeEnv });
 
     if (!checkoutReadiness.ready) {
         return {

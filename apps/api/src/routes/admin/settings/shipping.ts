@@ -3,7 +3,7 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { nanoid } from "nanoid";
 import { sql, eq, and, or, isNull, like, asc, desc } from "drizzle-orm";
 import { shippingMethods } from "@scalius/database/schema";
-import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ConflictError, ValidationError } from "../../../utils/api-error";
 
 import { ok, created, noContent } from "../../../utils/api-response";
@@ -28,12 +28,12 @@ const shippingMethodResourceErrorResponses = {
 } as const;
 
 async function assertShippingMethodCanBeRemovedFromCheckout(
-    db: Parameters<typeof getCheckoutReadiness>[0],
+    db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
     id: string,
 ) {
     const [currentReadiness, nextReadiness] = await Promise.all([
-        getCheckoutReadiness(db),
-        getCheckoutReadiness(db, { excludeShippingMethodIds: [id] }),
+        getCheckoutDeliveryReadiness(db),
+        getCheckoutDeliveryReadiness(db, { excludeShippingMethodIds: [id] }),
     ]);
     if (currentReadiness.ready && !nextReadiness.ready) {
         throw new ValidationError([CHECKOUT_BREAKING_SHIPPING_MESSAGE, ...nextReadiness.issues].join(" "));

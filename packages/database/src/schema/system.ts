@@ -68,6 +68,7 @@ export const siteSettings = sqliteTable("site_settings", {
     checkoutMode: text("checkout_mode", { enum: ["guest_cod_only", "gateways_only", "all"] }).notNull().default("all"),
     partialPaymentEnabled: integer("partial_payment_enabled", { mode: "boolean" }).notNull().default(false),
     partialPaymentAmount: real("partial_payment_amount").notNull().default(0),
+    checkoutFlowRevision: integer("checkout_flow_revision").notNull().default(1),
     whatsappAccessToken: text("whatsapp_access_token"),
     whatsappPhoneNumberId: text("whatsapp_phone_number_id"),
     whatsappTemplateName: text("whatsapp_template_name").default("auth_otp"),
@@ -79,6 +80,7 @@ export const siteSettings = sqliteTable("site_settings", {
         .default(UNIX_NOW),
 }, (table) => [
     uniqueIndex("site_settings_singleton_idx").on(table.singletonKey),
+    check("site_settings_checkout_flow_revision_positive", sql`${table.checkoutFlowRevision} >= 1`),
 ]);
 
 export const analytics = sqliteTable("analytics", {

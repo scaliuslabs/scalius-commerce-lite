@@ -3,6 +3,7 @@ import {
   AdminApiResponseError,
   isAdminApiNotFoundError,
   nullForAdminApiNotFound,
+  readCheckoutFlowRevisionConflict,
   readDiscountRevisionConflict,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
@@ -91,6 +92,28 @@ describe("admin API detail-loader errors", () => {
       "Bad revision",
       409,
       "DISCOUNT_REVISION_CONFLICT",
+      { expectedRevision: 0, currentRevision: "3" },
+    ))).toBeNull();
+  });
+
+  it("extracts only a typed checkout-flow revision conflict", () => {
+    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
+      "Checkout flow changed",
+      409,
+      "CHECKOUT_FLOW_REVISION_CONFLICT",
+      { expectedRevision: 2, currentRevision: 3 },
+    ))).toEqual({ expectedRevision: 2, currentRevision: 3 });
+
+    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
+      "Wrong conflict",
+      409,
+      "CONFLICT",
+      { expectedRevision: 2, currentRevision: 3 },
+    ))).toBeNull();
+    expect(readCheckoutFlowRevisionConflict(new AdminApiResponseError(
+      "Bad revision",
+      409,
+      "CHECKOUT_FLOW_REVISION_CONFLICT",
       { expectedRevision: 0, currentRevision: "3" },
     ))).toBeNull();
   });

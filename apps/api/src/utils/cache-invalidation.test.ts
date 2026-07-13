@@ -411,6 +411,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
       expect.arrayContaining([
         "api:checkout:config:",
         "api:checkout:config:v2:",
+        "api:checkout:config:v3:",
       ]),
     );
   });

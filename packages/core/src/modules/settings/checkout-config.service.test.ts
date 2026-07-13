@@ -74,6 +74,16 @@ function createDb(
                     limit: () => Promise.resolve(readiness.activeHierarchyRows ?? [{ id: "zone_1" }]),
                 }),
             }),
+        })
+        .mockReturnValueOnce({
+            from: () => ({
+                limit: () => ({
+                    get: () => Promise.resolve({
+                        guestCheckoutEnabled: siteOverrides.guestCheckoutEnabled ?? true,
+                        authVerificationMethod: siteOverrides.authVerificationMethod ?? "email",
+                    }),
+                }),
+            }),
         });
 
     return { select };
@@ -291,6 +301,29 @@ describe("getCheckoutConfig", () => {
         });
         expect(config.checkoutReadiness.issues).toContain(
             "Add at least one active city with an active zone before checkout can accept orders.",
+        );
+        expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when guest checkout is disabled without usable customer sign-in", async () => {
+        mocks.getActivePaymentMethods.mockResolvedValue({
+            enabledMethods: ["cod"],
+            defaultMethod: "cod",
+        });
+
+        const config = await getCheckoutConfig(createDb({
+            guestCheckoutEnabled: false,
+        }) as never);
+
+        expect(config.unavailable).toBe(true);
+        expect(config.gateways).toEqual([]);
+        expect(config.checkoutReadiness).toMatchObject({
+            ready: false,
+            customerSignInRequired: true,
+            hasUsableCustomerSignIn: false,
+        });
+        expect(config.checkoutReadiness.issues).toContain(
+            "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
         );
         expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
     });

@@ -21736,12 +21736,223 @@ export type GetApiV1AdminSettingsCheckoutReadinessResponses = {
             ready: boolean;
             hasActiveShippingMethod: boolean;
             hasActiveDeliveryHierarchy: boolean;
+            customerSignInRequired: boolean;
+            hasUsableCustomerSignIn: boolean;
             issues: Array<string>;
         };
     };
 };
 
 export type GetApiV1AdminSettingsCheckoutReadinessResponse = GetApiV1AdminSettingsCheckoutReadinessResponses[keyof GetApiV1AdminSettingsCheckoutReadinessResponses];
+
+export type GetApiV1AdminSettingsCheckoutFlowData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/checkout-flow';
+};
+
+export type GetApiV1AdminSettingsCheckoutFlowErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCheckoutFlowError = GetApiV1AdminSettingsCheckoutFlowErrors[keyof GetApiV1AdminSettingsCheckoutFlowErrors];
+
+export type GetApiV1AdminSettingsCheckoutFlowResponses = {
+    /**
+     * Checkout flow settings
+     */
+    200: {
+        success: true;
+        data: {
+            guestCheckoutEnabled: boolean;
+            checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
+            partialPaymentEnabled: boolean;
+            partialPaymentAmount: number;
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsCheckoutFlowResponse = GetApiV1AdminSettingsCheckoutFlowResponses[keyof GetApiV1AdminSettingsCheckoutFlowResponses];
+
+export type PutApiV1AdminSettingsCheckoutFlowData = {
+    body?: {
+        guestCheckoutEnabled: boolean;
+        checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
+        partialPaymentEnabled: boolean;
+        partialPaymentAmount: number;
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/checkout-flow';
+};
+
+export type PutApiV1AdminSettingsCheckoutFlowErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsCheckoutFlowError = PutApiV1AdminSettingsCheckoutFlowErrors[keyof PutApiV1AdminSettingsCheckoutFlowErrors];
+
+export type PutApiV1AdminSettingsCheckoutFlowResponses = {
+    /**
+     * Checkout flow settings saved
+     */
+    200: {
+        success: true;
+        data: {
+            guestCheckoutEnabled: boolean;
+            checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
+            partialPaymentEnabled: boolean;
+            partialPaymentAmount: number;
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsCheckoutFlowResponse = PutApiV1AdminSettingsCheckoutFlowResponses[keyof PutApiV1AdminSettingsCheckoutFlowResponses];
 
 export type GetApiV1AdminSettingsAuthData = {
     body?: never;
@@ -21835,13 +22046,9 @@ export type GetApiV1AdminSettingsAuthResponses = {
                 optionalContactFields?: Array<'email' | 'phone'>;
                 defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
             };
-            guestCheckoutEnabled: boolean;
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
             whatsappTemplateName: string;
-            checkoutMode: string;
-            partialPaymentEnabled: boolean;
-            partialPaymentAmount: number | null;
         };
     };
 };
@@ -21857,13 +22064,9 @@ export type PostApiV1AdminSettingsAuthData = {
             optionalContactFields?: Array<'email' | 'phone'>;
             defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
         };
-        guestCheckoutEnabled?: boolean;
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;
         whatsappTemplateName?: string | null;
-        checkoutMode?: 'guest_cod_only' | 'gateways_only' | 'all';
-        partialPaymentEnabled?: boolean;
-        partialPaymentAmount?: number;
     };
     path?: never;
     query?: never;

@@ -256,6 +256,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     kvPrefixes: [
       "api:checkout:config:",
       "api:checkout:config:v2:",
+      "api:checkout:config:v3:",
       "api:shipping-methods:",
       "api:locations:",
     ],
@@ -342,6 +343,7 @@ export const ADMIN_PATH_TO_GROUPS: Record<string, string[]> = {
   "/api/v1/admin/settings/media": ["media"],
   "/api/v1/admin/settings/currency": ["layout", "checkout"],
   "/api/v1/admin/settings/auth": ["checkout"],
+  "/api/v1/admin/settings/checkout-flow": ["checkout"],
   "/api/v1/admin/settings/allowed-countries": ["checkout"],
   "/api/v1/admin/settings/delivery-locations": ["checkout"],
   "/api/v1/admin/settings/delivery-providers": ["checkout"],

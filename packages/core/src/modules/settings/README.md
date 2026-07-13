@@ -77,11 +77,11 @@ The public checkout config still exposes only the normalized policy; provider re
 
 ## checkout-config.service.ts
 
-### `getCheckoutConfig(db, kv?, encryptionKey?)`
+### `getCheckoutConfig(db, kv?, encryptionKey?, runtimeEnv?)`
 
 Assembles the full checkout configuration for the storefront. Returns a `CheckoutConfig` object.
 
-Uses `Promise.all()` to fetch site settings, currency rows, the shared `getAllowedCountries()` policy, and customer-auth policy in parallel. Resolves enabled payment gateways dynamically from the gateway registry after intersecting the raw merchant allowlist with provider readiness. The returned allowed-country values are storefront hints only; checkout and customer-auth services re-read and enforce the same include/exclude policy server-side.
+Uses `Promise.all()` to fetch site settings, currency rows, the shared `getAllowedCountries()` policy, and customer-auth policy in parallel. It then evaluates delivery and required customer-sign-in readiness before resolving payment gateways. Resolves enabled payment gateways dynamically from the gateway registry after intersecting the raw merchant allowlist with provider readiness. The returned allowed-country values are storefront hints only; checkout and customer-auth services re-read and enforce the same include/exclude policy server-side.
 
 ```typescript
 interface CheckoutConfig {
@@ -188,8 +188,11 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 ### `system.ts` -- System integrations & auth
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/auth` | Get auth/checkout settings (verification method, guest checkout, checkout mode, partial payment, WhatsApp config). Masks encrypted or legacy `whatsappAccessToken`; uses tolerant reads but only migrates/clears legacy WhatsApp tokens when `CREDENTIAL_ENCRYPTION_KEY` is present |
-| POST | `/auth` | Save auth/checkout settings. Skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
+| GET | `/auth` | Get customer verification policy and WhatsApp configuration. Masks encrypted or legacy `whatsappAccessToken`; uses tolerant reads but only migrates/clears legacy WhatsApp tokens when `CREDENTIAL_ENCRYPTION_KEY` is present |
+| POST | `/auth` | Save customer verification policy and WhatsApp configuration. The strict request contract rejects checkout-flow fields, skips masked WhatsApp token values, encrypts new token values with `CREDENTIAL_ENCRYPTION_KEY`, and clears encrypted/legacy token storage when the token is set to an empty string |
+| GET | `/checkout-flow` | Get guest-access, payment-flow, and advance-collection settings with the current positive monotonic revision |
+| PUT | `/checkout-flow` | Replace the checkout-flow document using `expectedRevision`. A successful compare-and-swap advances the revision exactly once; stale writers receive typed `409 CHECKOUT_FLOW_REVISION_CONFLICT` with the current revision and do not overwrite the other session |
+| GET | `/checkout-readiness` | Evaluate delivery readiness plus required customer sign-in provider readiness. Admin reads also inspect optional sign-in readiness so the editor can validate turning guest checkout off before saving |
 | GET | `/security` | Get CSP allowed domains |
 | POST | `/security` | Save storefront CSP allowed domains. Also writes to KV at `security:csp_allowed_domains`; this setting is layout/CSP-only and must not expand credentialed API CORS origins |
 | GET | `/email` | Get transactional email provider settings: Cloudflare binding status, Resend key status, selected provider, and sender |
@@ -219,6 +222,10 @@ COD-only `POST /payment-methods` payloads are valid in compatible checkout flows
 
 Checkout Flow settings also depend on the same payment-method payload for compatibility previews. If payment-method readiness is pending or unavailable, the admin UI should mark payment flow as loading/unknown, show retry state for failed reads, and block checkout-flow saves instead of relying on backend rejection copy.
 
+Checkout-flow composition is no longer coupled to the auth-provider write endpoint. `site_settings.checkout_flow_revision` starts at `1` for legacy rows and is the D1 authority for concurrent editor writes. The admin keeps its dirty draft when a stale save is rejected, then offers an explicit three-way merge (local changed fields win; untouched fields adopt the latest saved values) or a full replacement with the latest revision. Cache invalidation runs only after a committed CAS save.
+
+If guest checkout is disabled, checkout readiness requires the dedicated `CREDENTIAL_ENCRYPTION_KEY` and at least one usable OTP channel allowed by the saved customer-auth policy. Email, SMS, and WhatsApp readiness reuse their strict provider readers; provider failures return only a safe aggregate checkout issue. Public `/checkout/config` fails closed before advertising payment gateways when required sign-in cannot deliver an OTP. Guest checkout still requires the buyer phone number; this readiness rule does not make phone collection optional.
+
 WhatsApp access-token saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and reject obvious dummy/placeholder values before storage. Runtime provider readiness and notification-channel saves pass the dedicated credential key; missing/wrong-key encrypted rows or placeholder token/phone/template values return `accessTokenConfigured=false` / not-ready instead of treating storage presence as configured. Legacy migration and legacy-column cleanup must receive `migrationEncryptionKey` from `getCredentialEncryptionKey()`; without that dedicated key, reads do not create encrypted rows and do not clear `site_settings.whatsapp_access_token`.
 
 Firebase service-account saves require the dedicated `CREDENTIAL_ENCRYPTION_KEY` and fail closed before settings writes when that secret is missing. Runtime notification reads decrypt `enc:` rows, tolerate legacy plaintext/bare encrypted rows for migration, and never pass unreadable ciphertext to the FCM client. FCM OAuth access tokens are persisted in `SHARED_AUTH_CACHE` only as encrypted `enc:` values when the dedicated key is available; otherwise the FCM client uses per-instance memory/fresh OAuth exchange.
@@ -239,6 +246,7 @@ The storefront checkout endpoint returns:
 - `allowedCountries: string[]` -- country codes for phone validation
 - `allowedCountriesMode: "include" | "exclude"` -- whether the list is allowlist or blocklist
 - `currency.decimalPlaces: number` -- ISO 4217 decimal places for the configured currency
+- `checkoutReadiness.customerSignInRequired` and `hasUsableCustomerSignIn` -- buyer-access readiness alongside shipping/location readiness
 
 Storefront order creation must enforce the same effective checkout policy server-side. The API create-order route fresh-checks `guestCheckoutEnabled`, `checkoutMode`, partial-payment settings, and active payment methods before mutating orders; guest-disabled checkout requires a valid customer session whose phone matches the submitted order phone.
 

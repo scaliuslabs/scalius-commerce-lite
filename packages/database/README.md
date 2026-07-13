@@ -63,7 +63,7 @@ Some tables use inline enum arrays instead of the centralized enums:
 - `deliveryLocations.type`: `["city", "zone", "area"]`
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`
 - `siteSettings.authVerificationMethod`: `["email", "both", "whatsapp_otp", "sms_otp"]` legacy summary only; advanced customer auth policy is stored in `settings.customer_auth/policy`, and phone collection remains mandatory.
-- `siteSettings.checkoutMode`: `["guest_cod_only", "gateways_only", "all"]`
+- `siteSettings.checkoutMode`: `["guest_cod_only", "gateways_only", "all"]`; the checkout-flow fields share the positive monotonic `checkoutFlowRevision` CAS authority so concurrent admin saves cannot silently overwrite one another.
 - `metaConversionsLogs.status`: `["success", "failed"]`
 
 ## Table Inventory
@@ -181,7 +181,7 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | Table | Purpose |
 |-------|---------|
 | `settings` | Key-value settings store. `key` + `category` unique constraint, value, type, expiry |
-| `siteSettings` | Singleton site config. Header/footer JSON, checkout settings, SEO, WhatsApp OTP config |
+| `siteSettings` | Singleton site config. Header/footer JSON, revision-guarded checkout-flow settings, SEO, WhatsApp OTP config |
 | `analytics` | Analytics script configs. Type, raw script config, location, Partytown flag |
 | `adminFcmTokens` | Firebase Cloud Messaging tokens. User FK, unique token, device metadata |
 | `shippingMethods` | Shipping method options. Name, fee, sort order |

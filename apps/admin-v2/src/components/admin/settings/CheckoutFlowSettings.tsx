@@ -20,11 +20,13 @@ import { AlertTriangle, CheckCircle2, Loader2, MapPinned, RotateCcw, Save, Shiel
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getServerFnError } from "@/lib/api-helpers";
 import {
-    updateAuthSettings,
-    type AuthSettingsPayload,
+    getCheckoutFlowSettings,
+    updateCheckoutFlowSettings,
+    type CheckoutFlowSettingsPayload,
     type CheckoutReadinessPayload,
     type PaymentMethodsPayload,
 } from "@/lib/api-functions/settings";
+import { readCheckoutFlowRevisionConflict } from "@/lib/admin-api-error";
 import {
     checkoutFlowSettingsQueryOptions,
     checkoutReadinessQueryOptions,
@@ -37,8 +39,16 @@ import {
     getCheckoutAdvancePaymentAmountIssue,
     getCheckoutFlowPreviewIssues,
 } from "./checkout-flow-policy";
+import {
+    checkoutFlowValuesEqual,
+    readCheckoutFlowValues,
+    rebaseCheckoutFlowDraft,
+    type CheckoutFlowValues,
+} from "./checkout-flow-draft";
 
 type CheckoutMode = "all" | "guest_cod_only" | "gateways_only";
+const CUSTOMER_SIGN_IN_READINESS_ISSUE =
+    "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.";
 
 const checkoutModes: Array<{
     value: CheckoutMode;
@@ -66,13 +76,22 @@ function normalizeCheckoutMode(value: unknown): CheckoutMode {
     return value === "guest_cod_only" || value === "gateways_only" ? value : "all";
 }
 
-function readSavedFlow(settings: AuthSettingsPayload | undefined) {
-    return {
-        guestCheckoutEnabled: settings?.guestCheckoutEnabled !== false,
-        checkoutMode: normalizeCheckoutMode(settings?.checkoutMode),
-        partialPaymentEnabled: settings?.partialPaymentEnabled === true,
-        partialPaymentAmount: Number(settings?.partialPaymentAmount ?? 0),
-    };
+interface CheckoutFlowEditorState {
+    draft: CheckoutFlowValues;
+    saved: CheckoutFlowValues;
+    revision: number;
+}
+
+interface CheckoutFlowConflictState {
+    currentRevision: number | null;
+    latest: CheckoutFlowSettingsPayload | null;
+    loading: boolean;
+    loadFailed: boolean;
+}
+
+function createEditorState(settings: CheckoutFlowSettingsPayload): CheckoutFlowEditorState {
+    const values = readCheckoutFlowValues(settings);
+    return { draft: values, saved: values, revision: settings.revision };
 }
 
 function buildCheckoutFlowSummary(options: {
@@ -144,7 +163,7 @@ function ReadinessRow({
 export default function CheckoutFlowSettings() {
     const queryClient = useQueryClient();
     const {
-        data: authSettings,
+        data: checkoutSettings,
         isLoading,
         isError,
         refetch,
@@ -164,20 +183,32 @@ export default function CheckoutFlowSettings() {
         refetch: refetchCheckoutReadiness,
     } = useQuery(checkoutReadinessQueryOptions());
     const [saving, setSaving] = useState(false);
-
-    const [guestCheckoutEnabled, setGuestCheckoutEnabled] = useState(true);
-    const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>("all");
-    const [partialPaymentEnabled, setPartialPaymentEnabled] = useState(false);
-    const [partialPaymentAmount, setPartialPaymentAmount] = useState<number>(0);
+    const [editor, setEditor] = useState<CheckoutFlowEditorState | null>(null);
+    const [conflict, setConflict] = useState<CheckoutFlowConflictState | null>(null);
 
     useEffect(() => {
-        if (!authSettings) return;
-        const saved = readSavedFlow(authSettings);
-        setGuestCheckoutEnabled(saved.guestCheckoutEnabled);
-        setCheckoutMode(saved.checkoutMode);
-        setPartialPaymentEnabled(saved.partialPaymentEnabled);
-        setPartialPaymentAmount(saved.partialPaymentAmount);
-    }, [authSettings]);
+        if (!checkoutSettings) return;
+        setEditor((current) => {
+            if (current && !checkoutFlowValuesEqual(current.draft, current.saved)) {
+                return current;
+            }
+            return createEditorState(checkoutSettings);
+        });
+    }, [checkoutSettings]);
+
+    const guestCheckoutEnabled = editor?.draft.guestCheckoutEnabled ?? true;
+    const checkoutMode = editor?.draft.checkoutMode ?? "all";
+    const partialPaymentEnabled = editor?.draft.partialPaymentEnabled ?? false;
+    const partialPaymentAmount = editor?.draft.partialPaymentAmount ?? 0;
+
+    const updateDraft = <Field extends keyof CheckoutFlowValues>(
+        field: Field,
+        value: CheckoutFlowValues[Field],
+    ) => {
+        setEditor((current) => current
+            ? { ...current, draft: { ...current.draft, [field]: value } }
+            : current);
+    };
 
     const activeOnlineMethods = useMemo(() => {
         const methodsPayload = paymentMethods as PaymentMethodsPayload | undefined;
@@ -220,16 +251,23 @@ export default function CheckoutFlowSettings() {
     const partialPaymentAmountIssue = partialPaymentEnabled
         ? getCheckoutAdvancePaymentAmountIssue(partialPaymentAmount, { sslCommerzEnabled })
         : null;
-    const savedFlow = readSavedFlow(authSettings);
-    const isDirty = Boolean(authSettings) && (
-        guestCheckoutEnabled !== savedFlow.guestCheckoutEnabled ||
-        checkoutMode !== savedFlow.checkoutMode ||
-        partialPaymentEnabled !== savedFlow.partialPaymentEnabled ||
-        partialPaymentAmount !== savedFlow.partialPaymentAmount
-    );
+    const isDirty = editor ? !checkoutFlowValuesEqual(editor.draft, editor.saved) : false;
     const readiness = checkoutReadiness as CheckoutReadinessPayload | undefined;
-    const readinessIssues = readiness?.issues ?? [];
-    const previewIssues = [...flowIssues, ...readinessIssues];
+    const readinessIssues = (readiness?.issues ?? []).filter((issue) => (
+        !guestCheckoutEnabled || issue !== CUSTOMER_SIGN_IN_READINESS_ISSUE
+    ));
+    const prospectiveCustomerSignInIssue = !guestCheckoutEnabled
+        && readiness
+        && !readiness.hasUsableCustomerSignIn
+        ? CUSTOMER_SIGN_IN_READINESS_ISSUE
+        : null;
+    const previewIssues = [
+        ...flowIssues,
+        ...readinessIssues,
+        ...(prospectiveCustomerSignInIssue && !readinessIssues.includes(prospectiveCustomerSignInIssue)
+            ? [prospectiveCustomerSignInIssue]
+            : []),
+    ];
     const readinessPending = !readiness && !checkoutReadinessError;
     const previewLoading = paymentMethodsPending || readinessPending;
     const readinessUnknown = !readiness && checkoutReadinessError;
@@ -248,17 +286,31 @@ export default function CheckoutFlowSettings() {
         : paymentMethodsUnavailable || readinessCheckUnavailable
             ? "border-amber-500/30 bg-amber-500/5"
             : "border-emerald-500/30 bg-emerald-500/5";
-    const saveBlocked = !isDirty || paymentMethodsPending || flowIssues.length > 0;
+    const customerSignInCheckBlocked = !guestCheckoutEnabled
+        && (!readiness || !readiness.hasUsableCustomerSignIn);
+    const saveBlocked = !isDirty
+        || !editor
+        || Boolean(conflict)
+        || paymentMethodsPending
+        || flowIssues.length > 0
+        || customerSignInCheckBlocked;
 
     const resetFlow = () => {
-        setGuestCheckoutEnabled(savedFlow.guestCheckoutEnabled);
-        setCheckoutMode(savedFlow.checkoutMode);
-        setPartialPaymentEnabled(savedFlow.partialPaymentEnabled);
-        setPartialPaymentAmount(savedFlow.partialPaymentAmount);
+        setEditor((current) => {
+            if (checkoutSettings && current?.revision !== checkoutSettings.revision) {
+                return createEditorState(checkoutSettings);
+            }
+            return current ? { ...current, draft: current.saved } : current;
+        });
+        setConflict(null);
     };
 
     const handleSubmit = async (e?: React.SyntheticEvent) => {
         e?.preventDefault();
+        if (!editor || !Number.isInteger(editor.revision) || editor.revision < 1) {
+            toast.error("Checkout settings are not ready to save. Reload this page and try again.");
+            return;
+        }
         if (paymentMethodsPending) {
             toast.error("Wait for payment readiness to finish loading before saving checkout flow changes.");
             return;
@@ -266,32 +318,83 @@ export default function CheckoutFlowSettings() {
         if (flowIssues.length > 0) return;
         setSaving(true);
 
-        const nextSettings = {
-            guestCheckoutEnabled,
-            checkoutMode,
-            partialPaymentEnabled,
-            partialPaymentAmount,
-        };
-
         try {
-            await updateAuthSettings({
-                data: nextSettings,
+            const saved = await updateCheckoutFlowSettings({
+                data: {
+                    ...editor.draft,
+                    expectedRevision: editor.revision,
+                },
             });
-            queryClient.setQueryData(
-                queryKeys.settings.checkoutFlow(),
-                (current: Record<string, unknown> | undefined) => ({
-                    ...(current ?? {}),
-                    ...nextSettings,
-                }),
-            );
+            setEditor(createEditorState(saved));
+            setConflict(null);
+            queryClient.setQueryData(queryKeys.settings.checkoutFlow(), saved);
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() });
             toast.success("Checkout flow saved");
         } catch (err) {
-            toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
+            const revisionConflict = readCheckoutFlowRevisionConflict(err);
+            if (!revisionConflict) {
+                toast.error(getServerFnError(err, "Failed to save checkout flow settings"));
+                return;
+            }
+
+            setConflict({
+                currentRevision: revisionConflict.currentRevision,
+                latest: null,
+                loading: true,
+                loadFailed: false,
+            });
+            toast.error("Checkout settings changed in another tab. Your unsaved values are still here.");
+            try {
+                const latest = await getCheckoutFlowSettings();
+                setConflict({
+                    currentRevision: latest.revision,
+                    latest,
+                    loading: false,
+                    loadFailed: false,
+                });
+            } catch {
+                setConflict((current) => current
+                    ? { ...current, loading: false, loadFailed: true }
+                    : current);
+            }
         } finally {
             setSaving(false);
         }
+    };
+
+    const retryLatestCheckoutFlow = async () => {
+        if (!conflict) return;
+        setConflict((current) => current ? { ...current, loading: true, loadFailed: false } : current);
+        try {
+            const latest = await getCheckoutFlowSettings();
+            setConflict({ currentRevision: latest.revision, latest, loading: false, loadFailed: false });
+        } catch {
+            setConflict((current) => current ? { ...current, loading: false, loadFailed: true } : current);
+        }
+    };
+
+    const mergeConflict = () => {
+        if (!editor || !conflict?.latest) return;
+        const latestValues = readCheckoutFlowValues(conflict.latest);
+        setEditor({
+            saved: latestValues,
+            draft: rebaseCheckoutFlowDraft({
+                base: editor.saved,
+                local: editor.draft,
+                latest: latestValues,
+            }),
+            revision: conflict.latest.revision,
+        });
+        queryClient.setQueryData(queryKeys.settings.checkoutFlow(), conflict.latest);
+        setConflict(null);
+    };
+
+    const useLatest = () => {
+        if (!conflict?.latest) return;
+        setEditor(createEditorState(conflict.latest));
+        queryClient.setQueryData(queryKeys.settings.checkoutFlow(), conflict.latest);
+        setConflict(null);
     };
 
     if (isLoading) {
@@ -302,7 +405,7 @@ export default function CheckoutFlowSettings() {
         );
     }
 
-    if (isError && !authSettings) {
+    if (isError && !checkoutSettings) {
         return (
             <Alert className="max-w-2xl border-destructive/30 bg-destructive/5">
                 <AlertTriangle className="h-4 w-4 text-destructive" />
@@ -347,7 +450,7 @@ export default function CheckoutFlowSettings() {
                             id="guest-checkout"
                             className="shrink-0"
                             checked={guestCheckoutEnabled}
-                            onCheckedChange={setGuestCheckoutEnabled}
+                            onCheckedChange={(value) => updateDraft("guestCheckoutEnabled", value)}
                         />
                     </div>
                     <div className="flex items-start gap-2.5 rounded-md bg-muted/45 px-3 py-2.5 text-xs text-muted-foreground">
@@ -396,6 +499,15 @@ export default function CheckoutFlowSettings() {
                             unknown={readinessUnknown}
                             icon={MapPinned}
                         />
+                        {!guestCheckoutEnabled && (
+                            <ReadinessRow
+                                label="Customer sign-in verification"
+                                ready={readiness?.hasUsableCustomerSignIn}
+                                loading={readinessPending}
+                                unknown={readinessUnknown}
+                                icon={ShieldCheck}
+                            />
+                        )}
                     </div>
                     {paymentMethodsUnavailable && (
                         <Alert className="border-amber-500/30 bg-amber-500/5">
@@ -486,7 +598,7 @@ export default function CheckoutFlowSettings() {
                         <Label>Available methods</Label>
                         <RadioGroup
                             value={checkoutMode}
-                            onValueChange={(value) => setCheckoutMode(normalizeCheckoutMode(value))}
+                            onValueChange={(value) => updateDraft("checkoutMode", normalizeCheckoutMode(value))}
                             className="grid gap-2 sm:grid-cols-3"
                             aria-label="Available payment methods"
                         >
@@ -539,7 +651,7 @@ export default function CheckoutFlowSettings() {
                             id="advance-payment"
                             className="shrink-0"
                             checked={partialPaymentEnabled}
-                            onCheckedChange={setPartialPaymentEnabled}
+                            onCheckedChange={(value) => updateDraft("partialPaymentEnabled", value)}
                         />
                     </div>
 
@@ -556,7 +668,7 @@ export default function CheckoutFlowSettings() {
                                     className="w-full sm:max-w-xs"
                                     placeholder="e.g. 200"
                                     value={partialPaymentAmount}
-                                    onChange={(e) => setPartialPaymentAmount(Number(e.target.value))}
+                                    onChange={(e) => updateDraft("partialPaymentAmount", Number(e.target.value))}
                                     aria-invalid={Boolean(partialPaymentAmountIssue)}
                                     aria-describedby={partialPaymentAmountIssue
                                         ? "partial-payment-amount-help partial-payment-amount-error"
@@ -585,15 +697,66 @@ export default function CheckoutFlowSettings() {
                 </CardContent>
             </Card>
 
+            {conflict && (
+                <Alert className="border-amber-500/40 bg-amber-500/5 lg:col-span-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="space-y-3 text-sm text-amber-900 dark:text-amber-200">
+                        <div>
+                            <p className="font-medium">Checkout settings changed in another tab.</p>
+                            <p className="mt-1 text-xs opacity-85">
+                                Your unsaved values are still here. {conflict.currentRevision
+                                    ? `The latest saved version is revision ${conflict.currentRevision}.`
+                                    : "Load the latest version before deciding which changes to keep."}
+                            </p>
+                        </div>
+                        {conflict.loadFailed && (
+                            <p className="text-xs">The latest version could not be loaded. Retry without refreshing this page.</p>
+                        )}
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            {conflict.latest ? (
+                                <>
+                                    <Button type="button" size="sm" onClick={mergeConflict}>
+                                        Merge my changes
+                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" onClick={useLatest}>
+                                        Use latest saved version
+                                    </Button>
+                                </>
+                            ) : (
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void retryLatestCheckoutFlow()}
+                                    disabled={conflict.loading}
+                                >
+                                    {conflict.loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Load latest version
+                                </Button>
+                            )}
+                        </div>
+                        {conflict.latest && (
+                            <p className="text-xs opacity-85">
+                                Merge keeps fields you changed here and adopts newer values for fields you did not change.
+                            </p>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
+
             <div className="sticky bottom-3 z-10 flex flex-col-reverse gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
                 <p className="text-xs text-muted-foreground" aria-live="polite">
-                    {isDirty ? "Unsaved checkout changes" : "Checkout flow is saved"}
+                    {conflict
+                        ? "Resolve the newer saved version before saving"
+                        : isDirty
+                            ? `Unsaved checkout changes · based on revision ${editor?.revision ?? "—"}`
+                            : `Checkout flow is saved · revision ${editor?.revision ?? "—"}`}
                 </p>
                 <div className="flex flex-col-reverse gap-2 sm:flex-row">
                     <Button
                         type="button"
                         variant="outline"
-                        disabled={!isDirty || saving}
+                        disabled={!isDirty || saving || Boolean(conflict)}
                         onClick={resetFlow}
                         className="w-full sm:w-auto"
                     >

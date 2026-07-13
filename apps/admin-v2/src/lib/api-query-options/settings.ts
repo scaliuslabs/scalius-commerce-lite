@@ -10,6 +10,7 @@ import {
 } from "../seo-discovery-status";
 import {
   type CheckoutReadinessPayload,
+  getCheckoutFlowSettings,
   getAuthSettings,
   getCheckoutReadiness,
   getCustomerRequestPolicySettings,
@@ -141,7 +142,7 @@ export const authSettingsQueryOptions = () =>
 export const checkoutFlowSettingsQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.checkoutFlow(),
-    queryFn: () => getAuthSettings(),
+    queryFn: () => getCheckoutFlowSettings(),
     staleTime: CONFIG_STALE_TIME_MS,
   });
 

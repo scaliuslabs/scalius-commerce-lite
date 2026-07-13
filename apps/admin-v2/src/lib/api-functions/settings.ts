@@ -5,8 +5,11 @@ import type {
   CustomerRequestPreviewState,
 } from "@scalius/core/modules/settings/customer-request-policy";
 import type {
+  GetApiV1AdminSettingsCheckoutFlowResponses,
+  GetApiV1AdminSettingsCheckoutReadinessResponses,
   GetApiV1AdminSettingsSeoResponses,
   PostApiV1AdminSettingsSeoData,
+  PutApiV1AdminSettingsCheckoutFlowData,
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 import type {
@@ -99,25 +102,24 @@ export type UpdateSeoSettingsInput = NonNullable<
 export type SecuritySettingsPayload = SettingsPayload;
 export type UpdateSecuritySettingsInput = SettingsPayload;
 export type AuthVerificationMethod = CustomerAuthMethod;
-export type CheckoutMode = "guest_cod_only" | "gateways_only" | "all";
 export interface AuthSettingsPayload {
   authVerificationMethod: AuthVerificationMethod | string;
   customerAuthPolicy?: SettingsPayload;
-  guestCheckoutEnabled: boolean;
   whatsappAccessToken: string;
   whatsappPhoneNumberId: string;
   whatsappTemplateName: string;
-  checkoutMode: CheckoutMode | string;
-  partialPaymentEnabled: boolean;
-  partialPaymentAmount: number | null;
 }
+export type CheckoutFlowSettingsPayload = ApiEnvelopeData<
+  GetApiV1AdminSettingsCheckoutFlowResponses[200]
+>;
+export type CheckoutMode = CheckoutFlowSettingsPayload["checkoutMode"];
+export type UpdateCheckoutFlowSettingsInput = NonNullable<
+  PutApiV1AdminSettingsCheckoutFlowData["body"]
+>;
 export type UpdateAuthSettingsInput = SettingsPayload;
-export interface CheckoutReadinessPayload {
-  ready: boolean;
-  hasActiveShippingMethod: boolean;
-  hasActiveDeliveryHierarchy: boolean;
-  issues: string[];
-}
+export type CheckoutReadinessPayload = ApiEnvelopeData<
+  GetApiV1AdminSettingsCheckoutReadinessResponses[200]
+>;
 export interface CustomerRequestPolicyPayload {
   policy: CustomerRequestPolicy;
   resolvedIntro: string;
@@ -306,6 +308,16 @@ export const updateAuthSettings = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     return apiPost<MessagePayload>("/settings/auth", data);
   });
+
+export const getCheckoutFlowSettings = createServerFn({ method: "GET" }).handler(
+  async () => apiGet<CheckoutFlowSettingsPayload>("/settings/checkout-flow"),
+);
+
+export const updateCheckoutFlowSettings = createServerFn({ method: "POST" })
+  .validator((data: UpdateCheckoutFlowSettingsInput) => data)
+  .handler(async ({ data }) => (
+    apiPut<CheckoutFlowSettingsPayload>("/settings/checkout-flow", data)
+  ));
 
 export const getCheckoutReadiness = createServerFn({ method: "GET" }).handler(
   async () => {
