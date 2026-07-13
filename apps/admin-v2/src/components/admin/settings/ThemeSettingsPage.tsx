@@ -1,28 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
   CircleAlert,
-  History,
   Loader2,
-  MonitorSmartphone,
   Palette,
   RotateCcw,
   Save,
-  Type,
 } from "lucide-react";
 import {
   DEFAULT_STOREFRONT_THEME_SETTINGS,
-  STOREFRONT_THEME_BODY_FONTS,
-  STOREFRONT_THEME_BUTTON_STYLES,
-  STOREFRONT_THEME_CARD_STYLES,
-  STOREFRONT_THEME_CONTAINER_WIDTHS,
-  STOREFRONT_THEME_CORNER_STYLES,
-  STOREFRONT_THEME_DENSITIES,
-  STOREFRONT_THEME_HEADING_FONTS,
-  STOREFRONT_THEME_INPUT_STYLES,
-  STOREFRONT_THEME_TYPE_SCALES,
   type StorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
 
@@ -32,6 +21,7 @@ import {
   getThemeSettings,
   updateThemeSettings,
 } from "~/lib/api-functions/settings";
+import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
 import {
   getThemeColorError,
@@ -50,6 +40,14 @@ import {
   rebaseThemeSettingsDraft,
   themeSettingsDraftsEqual,
 } from "./theme-draft";
+import {
+  buildStorefrontReviewLinks,
+  describeThemeDraftChanges,
+  THEME_WORKSPACE_SECTIONS,
+  type ThemeWorkspaceSection,
+} from "./theme-workspace";
+import { ThemeReviewWorkspace } from "./ThemeReviewWorkspace";
+import { ThemeSystemWorkspace } from "./ThemeSystemWorkspace";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 const COLOR_FIELDS = [
@@ -97,7 +95,13 @@ const COLOR_GROUPS: Array<{
 
 const CONTROL_KEYS: ColorKey[] = ["border", "input", "ring"];
 
-export default function ThemeSettingsPage() {
+export default function ThemeSettingsPage({
+  section,
+  onSectionChange,
+}: {
+  section: ThemeWorkspaceSection;
+  onSectionChange: (section: ThemeWorkspaceSection) => void;
+}) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const [theme, setTheme] = useState<StorefrontThemeSettings>(
@@ -140,6 +144,8 @@ export default function ThemeSettingsPage() {
     void fetchColors();
   }, [fetchColors]);
 
+  const storefrontUrlQuery = useQuery(storefrontUrlQueryOptions());
+
   const effectiveColors = useMemo(
     () => ({ ...DEFAULT_THEME_COLORS, ...theme.colors }),
     [theme.colors],
@@ -163,23 +169,24 @@ export default function ThemeSettingsPage() {
           effectiveColors[background] ?? "",
         ).passes === false,
       ),
-    [effectiveColors],
+    [effectiveColors, theme.colors],
   );
   const publishBlocked = invalidKeys.length > 0 || contrastFailures.length > 0;
+  const configuredStorefrontUrl = storefrontUrlQuery.data?.storefrontUrl;
+  const draftChanges = useMemo(
+    () => describeThemeDraftChanges(savedTheme, theme),
+    [savedTheme, theme],
+  );
+  const storefrontReviewLinks = useMemo(
+    () => buildStorefrontReviewLinks(configuredStorefrontUrl),
+    [configuredStorefrontUrl],
+  );
 
   const handleChange = (key: ColorKey, value: string) => {
     setTheme((previous) => ({
       ...previous,
       colors: { ...previous.colors, [key]: value },
     }));
-    setMessage(null);
-  };
-
-  const updateTheme = <Key extends keyof StorefrontThemeSettings>(
-    key: Key,
-    value: StorefrontThemeSettings[Key],
-  ) => {
-    setTheme((previous) => ({ ...previous, [key]: value }));
     setMessage(null);
   };
 
@@ -408,195 +415,147 @@ export default function ThemeSettingsPage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-xl border bg-card">
-        <div className="flex items-start gap-2 border-b px-4 py-3">
-          <Type className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <h2 className="text-sm font-semibold">Presentation</h2>
-            <p className="text-xs text-muted-foreground">
-              Semantic choices stay consistent across supported storefront components.
-            </p>
-          </div>
-        </div>
-        <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
-          <SelectControl
-            label="Headings"
-            value={theme.typography.heading}
-            options={STOREFRONT_THEME_HEADING_FONTS}
-            disabled={!canManage}
-            onChange={(heading) => updateTheme("typography", { ...theme.typography, heading })}
-          />
-          <SelectControl
-            label="Body text"
-            value={theme.typography.body}
-            options={STOREFRONT_THEME_BODY_FONTS}
-            disabled={!canManage}
-            onChange={(body) => updateTheme("typography", { ...theme.typography, body })}
-          />
-          <SelectControl
-            label="Type scale"
-            value={theme.typography.scale}
-            options={STOREFRONT_THEME_TYPE_SCALES}
-            disabled={!canManage}
-            onChange={(scale) => updateTheme("typography", { ...theme.typography, scale })}
-          />
-          <SelectControl
-            label="Content width"
-            value={theme.containerWidth}
-            options={STOREFRONT_THEME_CONTAINER_WIDTHS}
-            disabled={!canManage}
-            onChange={(containerWidth) => updateTheme("containerWidth", containerWidth)}
-          />
-        </div>
-        <div className="grid gap-px border-t bg-border sm:grid-cols-2 xl:grid-cols-5">
-          <SelectControl
-            label="Corners"
-            value={theme.cornerStyle}
-            options={STOREFRONT_THEME_CORNER_STYLES}
-            disabled={!canManage}
-            onChange={(cornerStyle) => updateTheme("cornerStyle", cornerStyle)}
-          />
-          <SelectControl
-            label="Density"
-            value={theme.density}
-            options={STOREFRONT_THEME_DENSITIES}
-            disabled={!canManage}
-            onChange={(density) => updateTheme("density", density)}
-          />
-          <SelectControl
-            label="Buttons"
-            value={theme.components.buttons}
-            options={STOREFRONT_THEME_BUTTON_STYLES}
-            disabled={!canManage}
-            onChange={(buttons) => updateTheme("components", { ...theme.components, buttons })}
-          />
-          <SelectControl
-            label="Fields"
-            value={theme.components.inputs}
-            options={STOREFRONT_THEME_INPUT_STYLES}
-            disabled={!canManage}
-            onChange={(inputs) => updateTheme("components", { ...theme.components, inputs })}
-          />
-          <SelectControl
-            label="Product cards"
-            value={theme.components.cards}
-            options={STOREFRONT_THEME_CARD_STYLES}
-            disabled={!canManage}
-            onChange={(cards) => updateTheme("components", { ...theme.components, cards })}
-          />
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border bg-card">
-        <div className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">Starting palette</h2>
-          <p className="text-xs text-muted-foreground">Apply a complete accessible palette, then adjust individual pairs.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-6">
-          {Object.entries(THEME_COLOR_PALETTES).map(([key, palette]) => (
+      <nav
+        aria-label="Theme settings"
+        className="flex gap-1 overflow-x-auto rounded-lg border bg-card p-1"
+      >
+        {THEME_WORKSPACE_SECTIONS.map((workspace) => {
+          const active = workspace.value === section;
+          return (
             <button
-              key={key}
+              key={workspace.value}
               type="button"
-              onClick={() => applyPalette(key)}
-              disabled={!canManage}
-              className="group min-h-14 rounded-lg border bg-background p-2 text-left transition-colors hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              aria-current={active ? "page" : undefined}
+              onClick={() => onSectionChange(workspace.value)}
+              className={`min-h-10 shrink-0 rounded-md px-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active
+                  ? "bg-foreground font-medium text-background shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
             >
-              <span className="mb-2 flex overflow-hidden rounded-full border">
-                {["primary", "secondary", "accent", "background"].map((colorKey) => (
-                  <span
-                    key={colorKey}
-                    className="h-2 flex-1"
-                    style={{ backgroundColor: palette.colors[colorKey] }}
-                  />
-                ))}
-              </span>
-              <span className="text-xs font-medium">{palette.label}</span>
+              {workspace.label}
             </button>
-          ))}
-        </div>
-      </section>
+          );
+        })}
+      </nav>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+      {section === "system" && (
+        <ThemeSystemWorkspace
+          theme={theme}
+          disabled={!canManage}
+          onChange={(nextTheme) => {
+            setTheme(nextTheme);
+            setMessage(null);
+          }}
+        />
+      )}
+
+      {section === "colors" && (
         <div className="space-y-4">
-          {COLOR_GROUPS.map((group) => (
-            <section key={group.title} className="overflow-hidden rounded-xl border bg-card">
-              <div className="border-b px-4 py-3">
-                <h2 className="text-sm font-semibold">{group.title}</h2>
-                <p className="text-xs text-muted-foreground">{group.description}</p>
-              </div>
-              <div className="divide-y">
-                {group.rows.map(({ background, foreground }) => (
-                  <ColorPairRow
-                    key={background}
-                    background={background}
-                    foreground={foreground}
-                    colors={theme.colors}
-                    effectiveColors={effectiveColors}
-                    disabled={!canManage}
-                    onChange={handleChange}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
-
-          <details className="group overflow-hidden rounded-xl border bg-card">
-            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
-              <span>
-                <span className="block text-sm font-semibold">Advanced controls</span>
-                <span className="block text-xs text-muted-foreground">Borders, inputs, and keyboard focus.</span>
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="grid gap-0 divide-y border-t sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              {CONTROL_KEYS.map((key) => (
-                <ColorControl
+          <section className="overflow-hidden rounded-xl border bg-card">
+            <div className="border-b px-4 py-3">
+              <h2 className="text-sm font-semibold">Starting palette</h2>
+              <p className="text-xs text-muted-foreground">Apply a complete accessible palette, then adjust individual pairs.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-3 lg:grid-cols-6">
+              {Object.entries(THEME_COLOR_PALETTES).map(([key, palette]) => (
+                <button
                   key={key}
-                  colorKey={key}
-                  value={theme.colors[key] ?? ""}
-                  effectiveValue={effectiveColors[key] ?? ""}
+                  type="button"
+                  onClick={() => applyPalette(key)}
                   disabled={!canManage}
-                  onChange={handleChange}
-                />
+                  className="group min-h-14 rounded-lg border bg-background p-2 text-left transition-colors hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="mb-2 flex overflow-hidden rounded-full border">
+                    {["primary", "secondary", "accent", "background"].map((colorKey) => (
+                      <span
+                        key={colorKey}
+                        className="h-2 flex-1"
+                        style={{ backgroundColor: palette.colors[colorKey] }}
+                      />
+                    ))}
+                  </span>
+                  <span className="text-xs font-medium">{palette.label}</span>
+                </button>
               ))}
             </div>
-          </details>
-        </div>
+          </section>
 
-        <aside className="space-y-4 lg:sticky lg:top-20">
-          <section className="rounded-xl border bg-card p-3">
-            <h2 className="text-sm font-semibold">Published scope</h2>
-            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-              <SummaryFact label="Type" value={`${labelize(theme.typography.heading)} / ${labelize(theme.typography.body)}`} />
-              <SummaryFact label="Density" value={labelize(theme.density)} />
-              <SummaryFact label="Corners" value={labelize(theme.cornerStyle)} />
-              <SummaryFact label="Width" value={labelize(theme.containerWidth)} />
-            </dl>
-          </section>
-          <ColorPreview colors={effectiveColors} />
-          <section className="rounded-xl border bg-card p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">Readability</h2>
-              <span className={`text-xs font-medium ${publishBlocked ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}>
-                {publishBlocked ? "Needs attention" : "Ready"}
-              </span>
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+            <div className="space-y-4">
+              {COLOR_GROUPS.map((group) => (
+                <section key={group.title} className="overflow-hidden rounded-xl border bg-card">
+                  <div className="border-b px-4 py-3">
+                    <h2 className="text-sm font-semibold">{group.title}</h2>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                  <div className="divide-y">
+                    {group.rows.map(({ background, foreground }) => (
+                      <ColorPairRow
+                        key={background}
+                        background={background}
+                        foreground={foreground}
+                        colors={theme.colors}
+                        effectiveColors={effectiveColors}
+                        disabled={!canManage}
+                        onChange={handleChange}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+
+              <details className="group overflow-hidden rounded-xl border bg-card">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+                  <span>
+                    <span className="block text-sm font-semibold">Advanced controls</span>
+                    <span className="block text-xs text-muted-foreground">Borders, inputs, and keyboard focus.</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="grid gap-0 divide-y border-t sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                  {CONTROL_KEYS.map((key) => (
+                    <ColorControl
+                      key={key}
+                      colorKey={key}
+                      value={theme.colors[key] ?? ""}
+                      effectiveValue={effectiveColors[key] ?? ""}
+                      disabled={!canManage}
+                      onChange={handleChange}
+                    />
+                  ))}
+                </div>
+              </details>
             </div>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Essential opaque hex and OKLCH text pairs must reach a 4.5:1 contrast ratio. Other functional colors remain unscored.
-            </p>
-          </section>
-          <section className="space-y-2 rounded-xl border bg-card p-3 text-xs text-muted-foreground">
-            <div className="flex gap-2">
-              <MonitorSmartphone className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Real route and device preview is not available yet. Review the live store after publishing.</p>
-            </div>
-            <div className="flex gap-2">
-              <History className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>Published revision {revision}; history and rollback are not available yet.</p>
-            </div>
-          </section>
-        </aside>
-      </div>
+
+            <aside className="space-y-4 lg:sticky lg:top-20">
+              <ColorPreview colors={effectiveColors} />
+              <section className="rounded-xl border bg-card p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold">Readability</h2>
+                  <span className={`text-xs font-medium ${publishBlocked ? "text-destructive" : "text-emerald-700 dark:text-emerald-300"}`}>
+                    {publishBlocked ? "Needs attention" : "Ready"}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Essential opaque hex and OKLCH text pairs must reach a 4.5:1 contrast ratio. Other functional colors remain unscored.
+                </p>
+              </section>
+            </aside>
+          </div>
+        </div>
+      )}
+
+      {section === "review" && (
+        <ThemeReviewWorkspace
+          draftChanges={draftChanges}
+          revision={revision}
+          dirty={dirty}
+          publishBlocked={publishBlocked}
+          storefrontLinks={storefrontReviewLinks}
+          storefrontUrlUnavailable={storefrontUrlQuery.isError}
+        />
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -787,54 +746,6 @@ function ColorPreview({ colors }: { colors: Record<string, string> }) {
       </div>
     </section>
   );
-}
-
-function SelectControl<Value extends string>({
-  label,
-  value,
-  options,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: Value;
-  options: readonly Value[];
-  disabled: boolean;
-  onChange: (value: Value) => void;
-}) {
-  return (
-    <label className="flex min-h-14 min-w-0 items-center justify-between gap-3 bg-card px-3 py-2">
-      <span className="min-w-0 text-xs font-medium">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value as Value)}
-        className="min-h-10 min-w-0 max-w-36 rounded-md border border-input bg-background px-2.5 text-sm capitalize text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {labelize(option)}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function SummaryFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="truncate font-medium text-foreground">{value}</dd>
-    </div>
-  );
-}
-
-function labelize(value: string): string {
-  return value
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function InlineNotice({ children }: { children: ReactNode }) {

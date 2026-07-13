@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { validateThemeSearch } from "./theme";
+
 const settingsRouteDir = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(settingsRouteDir, "../../..");
 const readSource = (pathFromSrc: string) =>
@@ -12,6 +14,12 @@ describe("theme and account settings workspace", () => {
   it("keeps the color editor semantic, contrast-aware, and honest about preview scope", () => {
     const source = readSource(
       "components/admin/settings/ThemeSettingsPage.tsx",
+    );
+    const systemSource = readSource(
+      "components/admin/settings/ThemeSystemWorkspace.tsx",
+    );
+    const reviewSource = readSource(
+      "components/admin/settings/ThemeReviewWorkspace.tsx",
     );
 
     expect(source).toContain("Brand and actions");
@@ -23,9 +31,26 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("UnsavedChangesGuard");
     expect(source).toContain("Advanced controls");
     expect(source).toContain("Semantic map");
+    expect(reviewSource).toContain("Review published routes");
+    expect(reviewSource).toContain("Draft ledger");
+    expect(systemSource).toContain("Product detail");
+    expect(reviewSource).toContain("Draft route/device preview is not available");
     expect(source).not.toContain("Summer Collection");
     expect(source).not.toContain("Sample Preview");
     expect(source).not.toContain("bg-white");
+  });
+
+  it("keeps the selected theme workspace in the URL", () => {
+    expect(validateThemeSearch({ section: "colors" })).toEqual({
+      section: "colors",
+    });
+    expect(validateThemeSearch({ section: "unknown" })).toEqual({
+      section: "system",
+    });
+
+    const routeSource = readSource("routes/admin/settings/theme.tsx");
+    expect(routeSource).toContain("validateSearch: validateThemeSearch");
+    expect(routeSource).toContain("onSectionChange={handleSectionChange}");
   });
 
   it("visually separates personal security from store administration", () => {

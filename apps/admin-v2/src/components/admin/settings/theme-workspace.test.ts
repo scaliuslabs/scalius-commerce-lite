@@ -1,0 +1,83 @@
+import { describe, expect, it } from "vitest";
+import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
+
+import {
+  buildStorefrontReviewLinks,
+  describeThemeDraftChanges,
+  normalizeThemeWorkspaceSection,
+} from "./theme-workspace";
+
+describe("theme workspace", () => {
+  it("normalizes unknown sections to the design system", () => {
+    expect(normalizeThemeWorkspaceSection("colors")).toBe("colors");
+    expect(normalizeThemeWorkspaceSection("unknown")).toBe("system");
+    expect(normalizeThemeWorkspaceSection(undefined)).toBe("system");
+  });
+
+  it("describes semantic and color changes against the published revision", () => {
+    expect(
+      describeThemeDraftChanges(DEFAULT_STOREFRONT_THEME_SETTINGS, {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        density: "compact",
+        components: {
+          ...DEFAULT_STOREFRONT_THEME_SETTINGS.components,
+          cards: "elevated",
+        },
+        colors: { primary: "#123456" },
+      }),
+    ).toEqual([
+      {
+        key: "density",
+        label: "Density",
+        published: "Comfortable",
+        draft: "Compact",
+      },
+      {
+        key: "cards",
+        label: "Product cards",
+        published: "Bordered",
+        draft: "Elevated",
+      },
+      {
+        key: "colors",
+        label: "Semantic colors",
+        published: "0 overrides",
+        draft: "1 changed · 1 overrides",
+      },
+    ]);
+  });
+
+  it("keeps an invalid blocked color visible in the draft summary", () => {
+    expect(
+      describeThemeDraftChanges(DEFAULT_STOREFRONT_THEME_SETTINGS, {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: { primary: "not-a-safe-color" },
+      }),
+    ).toEqual([
+      {
+        key: "colors",
+        label: "Semantic colors",
+        published: "0 overrides",
+        draft: "1 changed · 1 overrides",
+      },
+    ]);
+  });
+
+  it("builds only safe absolute published-route review links", () => {
+    expect(buildStorefrontReviewLinks("https://shop.example.com")).toEqual([
+      {
+        label: "Home",
+        description: "Header, hero, product cards, buttons, and footer",
+        href: "https://shop.example.com/",
+      },
+      {
+        label: "Search",
+        description: "Fields, filters, empty states, and listing density",
+        href: "https://shop.example.com/search",
+      },
+    ]);
+    expect(buildStorefrontReviewLinks("javascript:alert(1)")).toEqual([]);
+    expect(buildStorefrontReviewLinks("https://user:secret@shop.example.com")).toEqual([]);
+    expect(buildStorefrontReviewLinks("/store")).toEqual([]);
+  });
+});

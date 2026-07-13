@@ -55,6 +55,16 @@ describe("theme color draft", () => {
     ).toBe(false);
   });
 
+  it("keeps an invalid color draft dirty so the blocked input can be discarded", () => {
+    const base = DEFAULT_STOREFRONT_THEME_SETTINGS;
+    expect(
+      themeSettingsDraftsEqual(base, {
+        ...base,
+        colors: { primary: "not-a-safe-color" },
+      }),
+    ).toBe(false);
+  });
+
   it("rebases semantic leaves without erasing unrelated published changes", () => {
     const base = DEFAULT_STOREFRONT_THEME_SETTINGS;
     expect(
