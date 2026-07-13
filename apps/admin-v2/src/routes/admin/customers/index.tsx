@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState, useMemo, useCallback } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import type { Row } from "@tanstack/react-table";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Users, UserPlus, Trash2 } from "lucide-react";
 import { createListSearchValidator, createDataSelector } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
@@ -17,7 +19,9 @@ import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getCustomerColumns } from "~/components/admin/data-table/columns/customer-columns";
-import type { Customer } from "~/types/api-responses";
+import { CustomerMobileCard } from "~/components/admin/customer-list/CustomerMobileCard";
+import type { CustomerListBuyer } from "~/components/admin/customer-list/customer-list-model";
+import { usePermissions } from "~/contexts/PermissionContext";
 
 const CustomerDeleteDialog = lazy(() =>
   import("./-CustomerDeleteDialog").then((module) => ({
@@ -63,7 +67,12 @@ function CustomersPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { symbol } = useCurrency();
+  const { hasPermission } = usePermissions();
   const showTrashed = search.trashed;
+  const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
+  const canEdit = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
+  const canDelete = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
+  const canViewHistory = hasPermission(PERMISSIONS.CUSTOMERS_VIEW_HISTORY);
 
   // Mutations
   const deleteMutation = useDeleteCustomer();
@@ -78,7 +87,7 @@ function CustomersPage() {
     deleteMutation.isPending || permanentDeleteMutation.isPending;
 
   const handleConfirmDelete = useCallback(() => {
-    if (!deleteId) return;
+    if (!deleteId || !canDelete) return;
     const id = deleteId;
     setDeleteId(null);
     if (showTrashed) {
@@ -86,7 +95,7 @@ function CustomersPage() {
     } else {
       deleteMutation.mutate(id);
     }
-  }, [deleteId, showTrashed, deleteMutation, permanentDeleteMutation]);
+  }, [deleteId, canDelete, showTrashed, deleteMutation, permanentDeleteMutation]);
 
   const isCustomerDeleteDialogOpen = !!deleteId;
 
@@ -96,17 +105,32 @@ function CustomersPage() {
       getCustomerColumns({
         showTrashed,
         symbol,
+        canSelect: canDelete,
+        canViewHistory,
+        canEdit,
+        canDelete,
         onEdit: (id) =>
           void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id } }),
         onDelete: (id) => setDeleteId(id),
         onRestore: (id) => restoreMutation.mutate(id),
         onPermanentDelete: (id) => setDeleteId(id),
       }),
-    [showTrashed, symbol, navigate, restoreMutation],
+    [
+      showTrashed,
+      symbol,
+      canDelete,
+      canViewHistory,
+      canEdit,
+      navigate,
+      restoreMutation,
+    ],
   );
 
   // Data selector
-  const dataSelector = useMemo(() => createDataSelector<Customer>("customers"), []);
+  const dataSelector = useMemo(
+    () => createDataSelector<CustomerListBuyer>("customers"),
+    [],
+  );
 
   const onPaginationChange = useCallback(
     (page: number, limit: number) => {
@@ -139,9 +163,43 @@ function CustomersPage() {
       onSortingChange,
     });
 
+  const mobileCardRenderer = useCallback(
+    (row: Row<CustomerListBuyer>) => {
+      const customer = row.original;
+      return (
+        <CustomerMobileCard
+          customer={customer}
+          selected={row.getIsSelected()}
+          showTrashed={showTrashed}
+          symbol={symbol}
+          canSelect={canDelete}
+          canViewHistory={canViewHistory}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onSelectedChange={(selected) => row.toggleSelected(selected)}
+          onEdit={() => void navigate({
+            to: "/admin/customers/$customerId/edit",
+            params: { customerId: customer.id },
+          })}
+          onArchive={() => setDeleteId(customer.id)}
+          onRestore={() => restoreMutation.mutate(customer.id)}
+          onPermanentDelete={() => setDeleteId(customer.id)}
+        />
+      );
+    }, [
+      showTrashed,
+      symbol,
+      canDelete,
+      canViewHistory,
+      canEdit,
+      navigate,
+      restoreMutation,
+    ],
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             {showTrashed ? "Customer Trash" : "Customers"}
@@ -149,15 +207,16 @@ function CustomersPage() {
           <p className="text-muted-foreground">
             {showTrashed
               ? "Review and manage deleted customer records."
-              : "Browse, manage, and view your customer database."}
+              : "Find every guest and account buyer in one directory."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Link
             to="/admin/customers"
             search={((prev: Record<string, unknown>) => ({ ...prev, trashed: !showTrashed })) as never}
+            className="flex-1 sm:flex-none"
           >
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               {showTrashed ? (
                 <Users className="mr-2 h-4 w-4" />
               ) : (
@@ -166,9 +225,9 @@ function CustomersPage() {
               {showTrashed ? "View Active" : "View Trash"}
             </Button>
           </Link>
-          {!showTrashed && (
-            <Link to="/admin/customers/new">
-              <Button size="sm">
+          {!showTrashed && canCreate && (
+            <Link to="/admin/customers/new" className="flex-1 sm:flex-none">
+              <Button size="sm" className="w-full sm:w-auto">
                 <UserPlus className="mr-2 h-4 w-4" />
                 Add Customer
               </Button>
@@ -182,12 +241,13 @@ function CustomersPage() {
         isFetching={isFetching}
         isLoading={isLoading}
         itemLabel="customers"
+        mobileCardRenderer={mobileCardRenderer}
         emptyState={{
           icon: Users,
           title: showTrashed ? "Trash is empty" : "No customers found",
           description: showTrashed
             ? "Deleted customer records will appear here."
-            : "Add a new customer or sync from your orders.",
+            : "Guest and account buyers appear after checkout. You can also add one manually.",
         }}
         toolbar={
           <DataTableToolbar
@@ -199,7 +259,7 @@ function CustomersPage() {
             }
             searchPlaceholder="Search by name, phone, or email..."
             selectedCount={selectedIds.length}
-            bulkActions={
+            bulkActions={canDelete ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -217,7 +277,7 @@ function CustomersPage() {
                 <Trash2 className="mr-2 h-4 w-4" />
                 {showTrashed ? "Delete" : "Trash"} ({selectedIds.length})
               </Button>
-            }
+            ) : undefined}
           />
         }
       />

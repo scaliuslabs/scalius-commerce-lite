@@ -12,21 +12,20 @@ import {
 } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
-import type { Customer } from "~/types/api-responses";
-
-function formatLocation(customer: Customer): string {
-  const parts = [
-    customer.address,
-    customer.areaName,
-    customer.zoneName,
-    customer.cityName,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : "";
-}
+import { CustomerAccountBadge } from "~/components/admin/customer-list/CustomerAccountBadge";
+import {
+  customerHasAccount,
+  formatCustomerLocation,
+  type CustomerListBuyer,
+} from "~/components/admin/customer-list/customer-list-model";
 
 interface CustomerColumnOptions {
   showTrashed: boolean;
   symbol: string;
+  canSelect: boolean;
+  canViewHistory: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onRestore: (id: string) => void;
@@ -35,9 +34,13 @@ interface CustomerColumnOptions {
 
 export function getCustomerColumns(
   opts: CustomerColumnOptions,
-): ColumnDef<Customer, unknown>[] {
+): ColumnDef<CustomerListBuyer, unknown>[] {
   return [
-    createSelectColumn<Customer>({ getLabel: (r) => (r as Customer).name }),
+    ...(opts.canSelect
+      ? [createSelectColumn<CustomerListBuyer>({
+          getLabel: (row) => (row as CustomerListBuyer).name,
+        })]
+      : []),
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -45,16 +48,24 @@ export function getCustomerColumns(
       ),
       cell: ({ row }) => {
         const customer = row.original;
-        const location = formatLocation(customer);
+        const location = formatCustomerLocation(customer);
         return (
           <div className="flex flex-col">
-            <Link
-              to={`/admin/customers/${customer.id}/history` as string}
-              className="text-primary hover:underline flex items-center gap-1.5 w-fit"
-            >
-              {customer.name}
-              <ExternalLink className="h-3.5 w-3.5 opacity-50" />
-            </Link>
+            <div className="flex w-fit max-w-full items-center gap-1.5">
+              {opts.canViewHistory ? (
+                <Link
+                  to="/admin/customers/$customerId/history"
+                  params={{ customerId: customer.id }}
+                  className="flex min-w-0 items-center gap-1 text-primary hover:underline"
+                >
+                  <span className="truncate">{customer.name}</span>
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
+                </Link>
+              ) : (
+                <span className="truncate font-medium text-foreground">{customer.name}</span>
+              )}
+              <CustomerAccountBadge hasAccount={customerHasAccount(customer)} />
+            </div>
             <div className="text-xs text-muted-foreground mt-1 space-y-1">
               <div className="flex items-center gap-2">
                 <Phone className="h-3 w-3" />
@@ -93,7 +104,7 @@ export function getCustomerColumns(
     {
       accessorKey: "totalSpent",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Total Spent" />
+        <DataTableColumnHeader column={column} title="Paid Spend" />
       ),
       cell: ({ row }) => (
         <div className="flex items-center gap-2 text-sm">
@@ -116,12 +127,22 @@ export function getCustomerColumns(
         </div>
       ),
     },
-    createActionsColumn<Customer>({
-      showTrashed: opts.showTrashed,
-      onEdit: (c) => opts.onEdit(c.id),
-      onDelete: (c) => opts.onDelete(c.id),
-      onRestore: (c) => opts.onRestore(c.id),
-      onPermanentDelete: (c) => opts.onPermanentDelete(c.id),
-    }),
+    ...((!opts.showTrashed && opts.canEdit) || opts.canDelete
+      ? [createActionsColumn<CustomerListBuyer>({
+          showTrashed: opts.showTrashed,
+          onEdit: !opts.showTrashed && opts.canEdit
+            ? (customer) => opts.onEdit(customer.id)
+            : undefined,
+          onDelete: !opts.showTrashed && opts.canDelete
+            ? (customer) => opts.onDelete(customer.id)
+            : undefined,
+          onRestore: opts.showTrashed && opts.canDelete
+            ? (customer) => opts.onRestore(customer.id)
+            : undefined,
+          onPermanentDelete: opts.showTrashed && opts.canDelete
+            ? (customer) => opts.onPermanentDelete(customer.id)
+            : undefined,
+        })]
+      : []),
   ];
 }
