@@ -205,6 +205,33 @@ buffered in a Worker invocation.
   Multi-file pickers remain in their truthful persistent selection mode and use
   the dialog's normal Close/Escape action instead.
 
+### Media workspace polish follow-up (2026-07-13)
+
+- The five-column desktop cap remains the density contract. Cards now expose
+  the supported file type, byte size, and available duration or dimensions in
+  one compact metadata line; video posters and media previews continue to use
+  contain geometry so inspection never silently crops the asset.
+- Mobile uses one horizontally scrollable folder rail instead of a tall folder
+  panel. The selected folder is programmatically current, folder actions remain
+  available without hover, and compact-screen controls receive larger targets
+  while desktop controls retain the denser workbench sizing.
+- Bulk commands use outcome language: `Move`, `Move to trash`, `Restore`, and
+  `Delete permanently`. Per-card lifecycle menus disappear in selection mode so
+  a bulk workflow has one action authority. `Select all shown` still applies
+  only to the currently loaded result scope and entering `Select` still starts
+  with zero selected assets.
+- Preview metadata is now a guarded draft. Changing the file name, image alt
+  text, video caption, or video poster exposes `Unsaved details`, enables Reset
+  and Save only when meaningful, and requires explicit confirmation before
+  closing or navigating away. Refreshes of the same asset revision do not erase
+  a merchant's in-progress draft. Video captions are labelled honestly as
+  descriptive text rather than timed caption tracks.
+- Loading and ready grids share scrollable five-column geometry and expose list
+  semantics. Supported AVIF, MP4, and WebM labels plus bounded video duration
+  formatting are presentation-only; the first-class image/video authority,
+  multipart limits, and protected storefront product-page composition are
+  unchanged.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)

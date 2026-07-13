@@ -61,26 +61,26 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
         {props.view === "ready" && (
           <>
             <input ref={inputRef} className="sr-only" type="file" multiple accept={capabilityAccept(props.capability)} onChange={(event) => { void props.onUpload(event.target.files); event.currentTarget.value = ""; }} />
-            <Button type="button" size="sm" className="h-8" onClick={() => inputRef.current?.click()}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
+            <Button type="button" size="sm" className="h-9 sm:h-8" onClick={() => inputRef.current?.click()}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload</Button>
           </>
         )}
         <div className="relative min-w-44 flex-1 basis-52 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input className="h-8 pl-8 text-[13px]" value={search} placeholder="Search assets" onChange={(event) => { setSearch(event.target.value); props.onSearch(event.target.value); }} />
+          <Input aria-label="Search media assets" className="h-9 pl-8 text-[13px] sm:h-8" value={search} placeholder="Search assets" onChange={(event) => { setSearch(event.target.value); props.onSearch(event.target.value); }} />
         </div>
         {props.capability === "both" && (
           <Select value={props.filters.kind ?? "all"} onValueChange={(value) => props.onFiltersChange({ kind: value === "all" ? undefined : value as "image" | "video" })}>
-            <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger aria-label="Filter by media type" className="h-9 w-28 text-xs sm:h-8"><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="image">Images</SelectItem><SelectItem value="video">Videos</SelectItem></SelectContent>
           </Select>
         )}
         <Select value={sortValue} onValueChange={(value) => { const sort = SORTS[value as keyof typeof SORTS]; props.onFiltersChange({ sortBy: sort[0], sortOrder: sort[1] }); }}>
-          <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+          <SelectTrigger aria-label="Sort media assets" className="h-9 w-28 text-xs sm:h-8"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="largest">Largest</SelectItem><SelectItem value="smallest">Smallest</SelectItem><SelectItem value="name-asc">Name A–Z</SelectItem><SelectItem value="name-desc">Name Z–A</SelectItem></SelectContent>
         </Select>
 
         {!props.selectionMode && <span className="ml-auto text-xs tabular-nums text-muted-foreground">{props.visibleCount} shown</span>}
-        {props.allowSelection !== false && !props.selectionMode && <Button ref={selectTriggerRef} type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={props.onBeginSelection}>Select</Button>}
+        {props.allowSelection !== false && !props.selectionMode && <Button ref={selectTriggerRef} type="button" variant="outline" size="sm" className="h-9 text-xs sm:h-8" onClick={props.onBeginSelection}>Select</Button>}
       </div>
 
       {props.allowSelection !== false && props.selectionMode && (
@@ -91,29 +91,29 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
             <span className="hidden text-muted-foreground sm:inline">Shift-click for a range{props.onCancelSelection ? " · Esc to cancel" : ""}</span>
           </div>
 
-          {props.visibleCount > 0 && props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onSelectAll}>Select all shown</Button>}
-          {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
-          {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={props.onCancelSelection}>Cancel</Button>}
+          {props.visibleCount > 0 && props.selectedCount < props.visibleCount && <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-xs sm:h-7" onClick={props.onSelectAll}>Select all shown</Button>}
+          {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-xs sm:h-7" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
+          {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-xs sm:h-7" onClick={props.onCancelSelection}>Cancel</Button>}
 
           {props.selectedCount > 0 && props.view === "ready" && (
             <>
               <div className="flex items-center">
                 <Select value={targetFolder} onValueChange={setTargetFolder}>
-                  <SelectTrigger className="h-7 w-32 rounded-r-none text-xs"><SelectValue placeholder="Move to folder" /></SelectTrigger>
+                  <SelectTrigger aria-label="Destination folder" className="h-9 w-32 rounded-r-none text-xs sm:h-7"><SelectValue placeholder="Move to folder" /></SelectTrigger>
                   <SelectContent><SelectItem value="root">Unfiled</SelectItem>{props.folders.map((folder) => <SelectItem value={folder.id} key={folder.id}>{folder.name}</SelectItem>)}</SelectContent>
                 </Select>
-                <Button type="button" variant="outline" size="icon" className="h-7 w-7 rounded-l-none border-l-0" disabled={!targetFolder || props.isMutating} onClick={() => props.onMove(targetFolder === "root" ? null : targetFolder)} aria-label="Move selected assets"><FolderInput className="h-3.5 w-3.5" /></Button>
+                <Button type="button" variant="outline" size="sm" className="h-9 rounded-l-none border-l-0 px-2 text-xs sm:h-7" disabled={!targetFolder || props.isMutating} onClick={() => props.onMove(targetFolder === "root" ? null : targetFolder)}><FolderInput className="mr-1 h-3.5 w-3.5" />Move</Button>
               </div>
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1 h-3.5 w-3.5" />Trash</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1 h-3.5 w-3.5" />Move to trash</Button>
             </>
           )}
           {props.selectedCount > 0 && props.view === "trash" && (
             <>
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1 h-3.5 w-3.5" />Restore</Button>
-              <Button type="button" variant="destructive" size="sm" className="h-7 px-2 text-xs" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete</Button>
+              <Button type="button" variant="outline" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1 h-3.5 w-3.5" />Restore</Button>
+              <Button type="button" variant="destructive" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete permanently</Button>
             </>
           )}
-          {props.onAddSelected && <Button type="button" size="sm" className="h-7 px-2.5 text-xs" disabled={!props.selectedCount || props.isMutating} onClick={props.onAddSelected}>Add {props.selectedCount}</Button>}
+          {props.onAddSelected && <Button type="button" size="sm" className="h-9 px-2.5 text-xs sm:h-7" disabled={!props.selectedCount || props.isMutating} onClick={props.onAddSelected}>Add {props.selectedCount}</Button>}
         </div>
       )}
     </div>

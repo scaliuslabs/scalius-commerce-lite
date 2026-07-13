@@ -39,11 +39,21 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
     } finally { setBusy(false); }
   };
 
-  const row = (id: string | null | "all", label: string, icon: React.ReactNode, actions?: React.ReactNode) => (
-    <div className="group flex items-center gap-0.5" key={String(id)}>
-      <button type="button" onClick={() => onFolderSelect(id)} className={cn("flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", currentFolderId === id && "bg-muted font-medium")}>{icon}<span className="truncate">{label}</span></button>
+  const row = (id: string | null | "all", label: string, icon: React.ReactNode, actions?: React.ReactNode, compact = false) => (
+    <div className={cn("group flex items-center gap-0.5", compact && "shrink-0")} key={`${compact ? "mobile" : "desktop"}-${String(id)}`}>
+      <button type="button" aria-current={currentFolderId === id ? "page" : undefined} onClick={() => onFolderSelect(id)} className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", compact ? "h-9 max-w-40 border bg-background" : "h-8", currentFolderId === id && "bg-muted font-medium")}>{icon}<span className="truncate">{label}</span></button>
       {actions}
     </div>
+  );
+
+  const folderActions = (folder: MediaFolder, compact = false) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className={cn("text-muted-foreground hover:text-foreground", compact ? "h-9 w-9 border bg-background" : "h-7 w-7")} aria-label={`Actions for ${folder.name}`}><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => open({ mode: "rename", folder })}><Pencil className="mr-2 h-3.5 w-3.5" />Rename</DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteFolder(folder)}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 
   return (
@@ -51,21 +61,18 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
       <aside className="flex min-h-0 w-full shrink-0 flex-col border-b bg-muted/15 md:w-48 md:border-b-0 md:border-r">
         <div className="flex h-10 items-center justify-between border-b px-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Folders</span>
-          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => open({ mode: "create" })} aria-label="Create folder"><Plus className="h-3.5 w-3.5" /></Button>
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 md:h-7 md:w-7" onClick={() => open({ mode: "create" })} aria-label="Create folder"><Plus className="h-3.5 w-3.5" /></Button>
         </div>
-        <ScrollArea className="max-h-36 flex-1 md:max-h-none">
+        <nav aria-label="Media folders" className="flex w-full gap-1 overflow-x-auto p-2 md:hidden">
+          {row("all", "All assets", <FolderOpen className="h-3.5 w-3.5 shrink-0" />, undefined, true)}
+          {row(null, "Unfiled", <Folder className="h-3.5 w-3.5 shrink-0" />, undefined, true)}
+          {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, folderActions(folder, true), true))}
+        </nav>
+        <ScrollArea className="hidden flex-1 md:block">
           <nav aria-label="Media folders" className="space-y-0.5 p-2">
             {row("all", "All assets", <FolderOpen className="h-3.5 w-3.5 shrink-0" />)}
             {row(null, "Unfiled", <Folder className="h-3.5 w-3.5 shrink-0" />)}
-            {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" aria-label={`Actions for ${folder.name}`}><MoreHorizontal className="h-3.5 w-3.5" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => open({ mode: "rename", folder })}><Pencil className="mr-2 h-3.5 w-3.5" />Rename</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleteFolder(folder)}><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )))}
+            {folders.map((folder) => row(folder.id, folder.name, <Folder className="h-3.5 w-3.5 shrink-0" />, folderActions(folder)))}
           </nav>
         </ScrollArea>
       </aside>
