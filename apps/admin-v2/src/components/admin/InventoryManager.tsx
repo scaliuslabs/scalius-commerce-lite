@@ -66,6 +66,7 @@ type StockFilter = "all" | "low" | "out" | "reserved";
 type AlertStatusFilter = "active" | "acknowledged" | "resolved" | "all";
 type SortField = "productName" | "sku" | "available";
 type SortOrder = "asc" | "desc";
+type SortSelection = `${SortField}:${SortOrder}`;
 type MovementTypeFilter = "all" | "reserved" | "deducted" | "released" | "adjusted" | "restored" | "preorder_reserved" | "preorder_deducted";
 type AdjustmentMode = "relative" | "stocktake";
 
@@ -382,6 +383,12 @@ export function InventoryManager() {
     }));
   }, []);
 
+  const handleSortSelection = useCallback((value: SortSelection) => {
+    const [field, order] = value.split(":") as [SortField, SortOrder];
+    setRequestedPage(1);
+    setSort({ field, order });
+  }, []);
+
   const hasActiveFilters = localSearch.trim() || stockFilter !== "all";
   const hasMovementFilters = Boolean(
     movementLocalSearch.trim()
@@ -489,8 +496,8 @@ export function InventoryManager() {
           >
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="flex flex-1 items-center w-full sm:w-auto space-x-1.5">
-                <div className="relative flex-1 sm:max-w-xs">
+              <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_140px] gap-1.5 sm:flex sm:w-auto sm:flex-1 sm:items-center">
+                <div className="relative min-w-0 sm:max-w-xs sm:flex-1">
                   <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     type="search"
@@ -519,15 +526,46 @@ export function InventoryManager() {
                   </SelectContent>
                 </Select>
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" className="h-8 px-1.5 text-sm text-muted-foreground" onClick={clearFilters}>
+                  <Button variant="ghost" size="sm" className="col-span-2 h-8 justify-self-start px-1.5 text-sm text-muted-foreground" onClick={clearFilters}>
                     <X className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 )}
               </div>
             </div>
 
+            <div className="flex min-w-0 items-center gap-2 md:hidden">
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">Sort</span>
+              <Select
+                value={`${sort.field}:${sort.order}` satisfies SortSelection}
+                onValueChange={(value) => handleSortSelection(value as SortSelection)}
+              >
+                <SelectTrigger className="h-8 min-w-0 flex-1 text-sm" aria-label="Sort inventory variants">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available:asc">Available: low to high</SelectItem>
+                  <SelectItem value="available:desc">Available: high to low</SelectItem>
+                  <SelectItem value="productName:asc">Product: A to Z</SelectItem>
+                  <SelectItem value="productName:desc">Product: Z to A</SelectItem>
+                  <SelectItem value="sku:asc">SKU: A to Z</SelectItem>
+                  <SelectItem value="sku:desc">SKU: Z to A</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <InventoryVariantMobileList
+              variants={variants}
+              isError={variantsQuery.isError}
+              isInitialLoad={isInitialLoad}
+              isRefreshing={loading}
+              hasActiveFilters={Boolean(hasActiveFilters)}
+              canAdjust={inventoryActions.canAdjustStock}
+              onAdjust={setAdjustingVariant}
+              onRetry={() => void variantsQuery.refetch()}
+            />
+
             {/* Table */}
-            <div className="border rounded-md overflow-hidden relative">
+            <div data-inventory-layout="desktop" className="relative hidden overflow-hidden rounded-md border md:block">
               {loading && variants.length > 0 && (
                 <div aria-hidden="true" className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
               )}
@@ -613,16 +651,9 @@ export function InventoryManager() {
                             </Badge>
                           </TableCell>
                           <TableCell className="py-2 text-right pr-3 flex justify-end">
-                            {inventoryActions.canAdjustStock && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-sm font-medium"
-                                onClick={() => setAdjustingVariant(v)}
-                              >
-                                <ArrowUpDown className="h-3 w-3 mr-1" /> Adjust
-                              </Button>
-                            )}
+                            {inventoryActions.canAdjustStock ? (
+                              <InventoryAdjustButton variant={v} onAdjust={setAdjustingVariant} />
+                            ) : null}
                           </TableCell>
                         </TableRow>
                       );
@@ -998,6 +1029,129 @@ export function InventoryManager() {
 }
 
 // ---------- Sub-components ----------
+
+function InventoryVariantMobileList({
+  variants,
+  isError,
+  isInitialLoad,
+  isRefreshing,
+  hasActiveFilters,
+  canAdjust,
+  onAdjust,
+  onRetry,
+}: {
+  variants: InventoryVariant[];
+  isError: boolean;
+  isInitialLoad: boolean;
+  isRefreshing: boolean;
+  hasActiveFilters: boolean;
+  canAdjust: boolean;
+  onAdjust: (variant: InventoryVariant) => void;
+  onRetry: () => void;
+}) {
+  return (
+    <div data-inventory-layout="mobile" className="relative md:hidden">
+      {isRefreshing && variants.length > 0 ? (
+        <div aria-hidden="true" className="absolute inset-0 z-10 rounded-md bg-background/50 backdrop-blur-[1px]" />
+      ) : null}
+
+      {isError ? (
+        <div className="rounded-md border px-3 py-6 text-center">
+          <p className="text-xs font-medium text-destructive">Inventory could not be loaded.</p>
+          <Button type="button" variant="outline" size="sm" className="mt-2 h-7 text-xs" onClick={onRetry}>
+            Retry
+          </Button>
+        </div>
+      ) : isInitialLoad ? (
+        <div role="status" className="rounded-md border px-3 py-6 text-center">
+          <RefreshCw className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
+          <span className="sr-only">Loading inventory variants</span>
+        </div>
+      ) : variants.length === 0 ? (
+        <p className="rounded-md border px-3 py-6 text-center text-xs text-muted-foreground">
+          {hasActiveFilters ? "No variants match your filters." : "No variants found."}
+        </p>
+      ) : (
+        <ul aria-label="Inventory variants" className="space-y-2">
+          {variants.map((variant) => {
+            const badge = getStockBadge(variant.available, variant.lowStockThreshold);
+            const productName = variant.productName || "Unknown Product";
+
+            return (
+              <li key={variant.id} className="overflow-hidden rounded-md border bg-card">
+                <div className="flex min-w-0 items-start justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <Link
+                      to={`/admin/products/${variant.productId}` as string}
+                      className="block break-words text-sm font-medium leading-5 text-primary hover:underline"
+                    >
+                      {productName}
+                    </Link>
+                    <p className="mt-0.5 break-all font-mono text-xs leading-4 text-muted-foreground">
+                      {variant.sku}
+                    </p>
+                    <p className="mt-0.5 break-words text-xs leading-4 text-muted-foreground">
+                      {variant.optionLabel || "Default variant"}
+                    </p>
+                  </div>
+                  <Badge variant={badge.variant} className={cn("shrink-0 px-1.5 py-0 text-xs", badge.className)}>
+                    {badge.label}
+                  </Badge>
+                </div>
+
+                <dl className="grid grid-cols-3 border-t bg-muted/20">
+                  <div className="min-w-0 px-2 py-2 text-center">
+                    <dt className="text-xs text-muted-foreground">On hand</dt>
+                    <dd className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{variant.stock}</dd>
+                  </div>
+                  <div className="min-w-0 border-x px-2 py-2 text-center">
+                    <dt className="text-xs text-muted-foreground">Committed</dt>
+                    <dd className={cn("mt-0.5 text-sm font-semibold tabular-nums", variant.reservedStock > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+                      {variant.reservedStock}
+                    </dd>
+                  </div>
+                  <div className="min-w-0 px-2 py-2 text-center">
+                    <dt className="text-xs text-muted-foreground">Available</dt>
+                    <dd className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{variant.available}</dd>
+                  </div>
+                </dl>
+
+                {canAdjust ? (
+                  <div className="flex justify-end border-t px-2 py-1">
+                    <InventoryAdjustButton variant={variant} onAdjust={onAdjust} />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function InventoryAdjustButton({
+  variant,
+  onAdjust,
+}: {
+  variant: InventoryVariant;
+  onAdjust: (variant: InventoryVariant) => void;
+}) {
+  const productName = variant.productName || "Unknown Product";
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-7 px-2 text-sm font-medium"
+      aria-label={`Adjust stock for ${productName}, SKU ${variant.sku}`}
+      onClick={() => onAdjust(variant)}
+    >
+      <ArrowUpDown className="mr-1 h-3 w-3" /> Adjust
+    </Button>
+  );
+}
 
 function PaginationControls({
   pagination,
