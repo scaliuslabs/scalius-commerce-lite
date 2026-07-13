@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildExpectedAssets } from "./expected-assets.mjs";
 import { ASSET_PROFILES, deterministicAssetFilename } from "./profiles.mjs";
 import { validateSourceManifest } from "./provenance.mjs";
-import { assessAndStageAssets } from "./stage-assets.mjs";
+import { assessAndStageAssets, normalizeImage } from "./stage-assets.mjs";
 
 const requireFromStorefront = createRequire(
   new URL("../../../apps/storefront/package.json", import.meta.url),
@@ -64,6 +64,61 @@ function approvedRecord({ bytes, width, height, sha }) {
       optionAppearanceVerified: true,
     },
   };
+}
+
+async function directLegacyNormalize(source, profile, cropPosition = "centre") {
+  let pipeline = sharp(source, { animated: false, failOn: "error" })
+    .rotate()
+    .toColorspace("srgb");
+  if (profile.fit === "contain-safe") {
+    const safeWidth = Math.round(profile.width * profile.safeArea);
+    const safeHeight = Math.round(profile.height * profile.safeArea);
+    pipeline = pipeline
+      .resize({
+        width: safeWidth,
+        height: safeHeight,
+        fit: "contain",
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+        withoutEnlargement: false,
+      })
+      .extend({
+        top: Math.floor((profile.height - safeHeight) / 2),
+        bottom: Math.ceil((profile.height - safeHeight) / 2),
+        left: Math.floor((profile.width - safeWidth) / 2),
+        right: Math.ceil((profile.width - safeWidth) / 2),
+        background: { r: 255, g: 255, b: 255, alpha: 1 },
+      });
+  } else {
+    pipeline = pipeline.resize({
+      width: profile.width,
+      height: profile.height,
+      fit: "cover",
+      position: cropPosition,
+      withoutEnlargement: false,
+    });
+  }
+  return pipeline.webp({ quality: profile.quality, effort: 5 }).toBuffer();
+}
+
+async function coloredPixelBounds(image, predicate) {
+  const { data, info } = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let left = info.width;
+  let right = -1;
+  let top = info.height;
+  let bottom = -1;
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const offset = (y * info.width + x) * info.channels;
+      if (!predicate(data[offset], data[offset + 1], data[offset + 2])) continue;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+  return right < left
+    ? null
+    : { left, top, width: right - left + 1, height: bottom - top + 1 };
 }
 
 describe("demo asset staging", () => {
@@ -144,6 +199,78 @@ describe("demo asset staging", () => {
     const center = await sharp(centerRegion).stats();
     expect(edge.channels.slice(0, 3).every((channel) => channel.mean > 245)).toBe(true);
     expect(center.channels[2].mean).toBeGreaterThan(center.channels[0].mean);
+  });
+
+  it("removes landscape near-white exterior margins before contain-safe resize", async () => {
+    const product = await sharp({
+      create: { width: 900, height: 600, channels: 3, background: "#2450a4" },
+    }).png().toBuffer();
+    const source = await sharp({
+      create: { width: 1536, height: 1024, channels: 3, background: "#ffffff" },
+    }).composite([{ input: product, left: 318, top: 212 }]).png().toBuffer();
+
+    const first = await normalizeImage(source, ASSET_PROFILES["product-contain"], "centre");
+    const second = await normalizeImage(source, ASSET_PROFILES["product-contain"], "centre");
+    expect(first.equals(second)).toBe(true);
+    expect(await sharp(first).metadata()).toMatchObject({ format: "webp", width: 1600, height: 1600 });
+    const bounds = await coloredPixelBounds(first, (red, green, blue) =>
+      blue > red + 30 && blue > green + 10,
+    );
+    expect(bounds).toMatchObject({ width: expect.any(Number), height: expect.any(Number) });
+    expect(bounds.width).toBeGreaterThanOrEqual(1260);
+    expect(bounds.height).toBeGreaterThanOrEqual(830);
+  });
+
+  it("retains a white product and its soft shadow while trimming exterior white", async () => {
+    const shadow = await sharp({
+      create: { width: 540, height: 390, channels: 3, background: "#d1d5db" },
+    }).png().toBuffer();
+    const outline = await sharp({
+      create: { width: 500, height: 340, channels: 3, background: "#e5e7eb" },
+    }).png().toBuffer();
+    const product = await sharp({
+      create: { width: 490, height: 330, channels: 3, background: "#ffffff" },
+    }).png().toBuffer();
+    const source = await sharp({
+      create: { width: 1000, height: 800, channels: 3, background: "#ffffff" },
+    }).composite([
+      { input: shadow, left: 230, top: 230 },
+      { input: outline, left: 250, top: 190 },
+      { input: product, left: 255, top: 195 },
+    ]).png().toBuffer();
+
+    const normalized = await normalizeImage(source, ASSET_PROFILES["product-contain"], "centre");
+    const retainedBounds = await coloredPixelBounds(normalized, (red, green, blue) =>
+      red < 245 || green < 245 || blue < 245,
+    );
+    expect(retainedBounds.width).toBeGreaterThan(1100);
+    expect(retainedBounds.height).toBeGreaterThan(800);
+    const center = await sharp(normalized)
+      .extract({ left: 750, top: 720, width: 100, height: 100 })
+      .stats();
+    expect(center.channels.slice(0, 3).every((channel) => channel.mean > 248)).toBe(true);
+  });
+
+  it("does not trim an opaque colored contain background or any cover source", async () => {
+    const colored = await sharp({
+      create: { width: 1536, height: 1024, channels: 3, background: "#2450a4" },
+    }).png().toBuffer();
+    const contained = await normalizeImage(colored, ASSET_PROFILES["product-contain"], "centre");
+    const legacyContained = await directLegacyNormalize(colored, ASSET_PROFILES["product-contain"]);
+    expect(contained.equals(legacyContained)).toBe(true);
+
+    const whiteMargin = await sharp({
+      create: { width: 1536, height: 1024, channels: 3, background: "#ffffff" },
+    }).composite([{
+      input: await sharp({
+        create: { width: 500, height: 400, channels: 3, background: "#2450a4" },
+      }).png().toBuffer(),
+      left: 518,
+      top: 312,
+    }]).png().toBuffer();
+    const covered = await normalizeImage(whiteMargin, ASSET_PROFILES["product-cover"], "centre");
+    const legacyCovered = await directLegacyNormalize(whiteMargin, ASSET_PROFILES["product-cover"]);
+    expect(covered.equals(legacyCovered)).toBe(true);
   });
 
   it("reports SHA mismatches without writing an output", async () => {

@@ -19,6 +19,10 @@ const requireFromStorefront = createRequire(
   new URL("../../../apps/storefront/package.json", import.meta.url),
 );
 const sharp = requireFromStorefront("sharp");
+const CONTAIN_EXTERIOR_TRIM = Object.freeze({
+  background: { r: 255, g: 255, b: 255, alpha: 1 },
+  threshold: 6,
+});
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -38,7 +42,7 @@ async function validateSourceFile(filePath, record, expected) {
   return { ...inspected, digest: inspected.sha256 };
 }
 
-async function normalizeImage(sourceBytes, profile, cropPosition) {
+export async function normalizeImage(sourceBytes, profile, cropPosition) {
   let pipeline = sharp(sourceBytes, { animated: false, failOn: "error" })
     .rotate()
     .toColorspace("srgb");
@@ -46,6 +50,7 @@ async function normalizeImage(sourceBytes, profile, cropPosition) {
     const safeWidth = Math.round(profile.width * profile.safeArea);
     const safeHeight = Math.round(profile.height * profile.safeArea);
     pipeline = pipeline
+      .trim(CONTAIN_EXTERIOR_TRIM)
       .resize({
         width: safeWidth,
         height: safeHeight,
