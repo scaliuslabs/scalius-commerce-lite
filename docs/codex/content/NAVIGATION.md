@@ -2,43 +2,74 @@
 
 Last reviewed: 2026-07-14
 
-## 2026-07-14 scalable menu workspace
+## 2026-07-14 interaction correction and large-menu behavior
 
-Header navigation and every footer column now use the same compact menu-map
-workspace:
+The first 2026-07-14 workspace put a permanent menu map beside a selected-item
+inspector. That made every edit a map-to-pane trip, compounded the header/footer
+section rails, and was materially slower than the prior inline editor. It was
+not retained merely because it was already implemented.
 
-- A searchable, collapsible hierarchy is the orientation surface. Search checks
-  labels and destinations while retaining matching ancestors, and explicit
-  expand/collapse-all controls make wide trees navigable.
-- Only the selected item exposes label and destination inputs. Its inspector
-  shows the ancestor trail, level, sibling position, destination validation,
-  safe preview, child count, add/remove, and native Earlier/Later/Make child/Up
-  a level controls. Hundreds of simultaneous inputs no longer make the page
-  visually or computationally heavy.
-- All mutations address stable node IDs, not filtered row positions. Selecting,
-  searching, reordering, indenting, or outdenting cannot accidentally update a
-  different item because the visible result set changed.
-- The tree remains bounded by the existing 150-node/three-level public contract.
-  Collapsed branches and CSS content visibility bound normal rendering without
-  adding a second virtualized-tree dependency for a maximum of 150 compact
-  summary rows.
-- Narrow screens use the same semantic tree and inspector rather than a second
-  implementation. Selecting a mobile tree node moves focus context to the
-  inspector; all arrangement actions are native buttons operable by keyboard
-  and touch.
-- Footer columns now use one horizontal/vertical column rail and one active
-  editor. At most four columns exist, and native earlier/later controls replace
-  drag-only column ordering. Accordion state and its unrelated local-storage
-  persistence were removed.
+### Current-platform benchmark
 
-Focused tests cover stable-ID mutations, ancestor-preserving search, depth and
-count summaries, sibling moves, indent/outdent depth guards, responsive/shared
-workspace boundaries, safe link preview, and footer single-editor behavior.
+- [WordPress Site Editor navigation](https://wordpress.org/documentation/article/site-editor-navigation/)
+  separates menu browsing/basic reorder from Focus Mode for detailed editing.
+  Its Navigation Block List View supports direct selection and drag nesting,
+  while the [current Command Palette](https://wordpress.org/documentation/article/site-editor-command-palette/)
+  provides fast access to complex editor structure and actions.
+  [WordPress.com's April 2026 reorder guide](https://wordpress.com/support/menus/reorder-menu-items/)
+  also preserves explicit move controls as an accessible alternative to drag.
+- [Shopify's current menu editor guide](https://help.shopify.com/en/manual/online-store/menus-and-links/editing-menus)
+  uses a simple ordered menu-item list, an explicit Edit action with Apply
+  changes, direct drag ordering/nesting, contextual resource search, and a save
+  boundary. Its [drop-down menu guide](https://help.shopify.com/en/manual/online-store/menus-and-links/drop-down-menus)
+  documents two sub-levels and a much larger authority: up to 10,000 items per
+  menu and 1,000 menus. That scale requires named menus and focused rendering,
+  not a permanently mounted form or inspector for every node.
+- [Squarespace's March 2026 navigation guide](https://support.squarespace.com/hc/en-us/articles/206543897-Moving-pages-around-your-navigation)
+  keeps navigation in one compact Pages panel and uses direct manipulation for
+  reorder, placement, and dropdown nesting. Page settings open only when needed.
 
-This is a UI/workflow hardening slice over the interim JSON authority. It does
-not claim the accepted versioned reusable-menu model, typed resource references,
-CAS conflicts, broken-resource diagnostics, publish lifecycle, or real
-desktop/mobile storefront preview; those remain the architecture work below.
+The shared formula is a compact structure first, one local edit surface only
+when requested, and no permanent half-width inspector. Scalius now follows that
+formula without making drag the only way to arrange a menu:
+
+- The hierarchy is one full-width, narrow-screen-safe list. Opening a row puts
+  its label, destination, validation, preview, placement, and actions directly
+  under that row; closing it returns to the compact list. Only one form is
+  mounted at a time. A Focus action opens the same editor in a bounded
+  full-viewport workspace when the surrounding Header/Footer section rails are
+  too narrow; it is not a second editing implementation.
+- Search checks labels and destinations and shows matching rows with their
+  ancestors marked as parent context. Collapse/expand works outside search.
+  Small menus initially expand for speed; large menus initially collapse so the
+  first paint remains an orientation view rather than hundreds of rows.
+- All mutations still address stable node IDs. Earlier/Later and
+  Make child/Up a level remain keyboard/touch-safe, while direct Parent and
+  Position controls avoid 98 repeated clicks when moving an item across a long
+  sibling list.
+- The render projection is flattened in one traversal. At most 80 currently
+  visible rows mount at once; merchants explicitly reveal the next batch.
+  Search runs against the complete hierarchy, so a match beyond the first batch
+  is still immediately discoverable. Focused proof uses a 240-item input and
+  asserts an 80-row DOM boundary.
+- The same inline list is used at desktop and mobile widths; no second mobile
+  tree, nested table, or viewport-driven split pane can drift from it. Native
+  buttons and inputs preserve keyboard and touch access.
+- Footer columns retain one active column editor with native earlier/later
+  controls. The menu within that column now uses the same corrected inline list.
+
+The persisted/public validator still caps this interim JSON placement at 150
+nodes and three levels. The UI is deliberately robust when reading a larger
+legacy/future input, but it does not pretend a 240-node test can be saved through
+today's 150-node API contract. Supporting genuinely larger stores without one
+huge storefront menu requires the accepted reusable named-menu/placement model,
+typed resource references, and a compact resolved public projection—not simply
+raising a constant.
+
+This remains a UI/workflow slice over the interim JSON authority. Version/CAS,
+typed resource dependencies, broken-resource diagnostics, publish lifecycle,
+undo/confirmation for subtree deletion, and a real desktop/mobile storefront
+preview remain the architecture work below.
 
 ## 2026-07-13 bounded builder hardening
 

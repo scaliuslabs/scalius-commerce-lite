@@ -7,7 +7,7 @@ function readSource(relativePath: string) {
 }
 
 describe("navigation workspace boundaries", () => {
-  it("uses one searchable hierarchy and selected-item inspector instead of simultaneous row inputs", () => {
+  it("uses one searchable hierarchy with an editor directly under the chosen row", () => {
     const source = readSource("./NavigationBuilder.tsx");
     const mapSource = readSource("./NavigationMap.tsx");
 
@@ -17,16 +17,17 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("Expand all");
     expect(source).toContain("matchingItems");
     expect(source).toContain("<NavigationMap");
-    expect(mapSource).toContain('aria-label={depth === 0 ? "Menu map"');
+    expect(mapSource).toContain('aria-label="Menu items"');
+    expect(mapSource).toContain("renderEditor(row)");
     expect(mapSource).toContain("[content-visibility:auto]");
+    expect(source).not.toContain("lg:grid-cols-[minmax(270px");
     expect(source).not.toContain("<Table");
     expect(source).not.toContain("@dnd-kit/");
   });
 
-  it("keeps deterministic keyboard and touch arrangement controls in the inspector", () => {
+  it("keeps deterministic keyboard and touch arrangement controls inline", () => {
     const source = readSource("./NavigationBuilder.tsx");
 
-    expect(source).toContain("Position and nesting");
     expect(source).toContain("Earlier");
     expect(source).toContain("Later");
     expect(source).toContain("Make child");
@@ -34,16 +35,36 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("canIndentNavigationItem");
     expect(source).toContain("MAX_NAV_DEPTH");
     expect(source).toContain("MAX_NAV_ITEMS");
+    expect(source).toContain("moveNavigationItemToIndexById");
+    expect(source).toContain("moveNavigationItemToParentById");
   });
 
-  it("keeps editing responsive without maintaining a second mobile implementation", () => {
+  it("keeps one narrow-screen-safe editor without a second mobile implementation", () => {
     const source = readSource("./NavigationBuilder.tsx");
 
-    expect(source).toContain("useIsMobile");
-    expect(source).toContain("scrollIntoView");
-    expect(source).toContain("lg:grid-cols-");
+    expect(source).toContain("min-w-0");
+    expect(source).toContain("sm:flex-row");
+    expect(source).not.toContain("useIsMobile");
+    expect(source).not.toContain("scrollIntoView");
     expect(source).not.toContain("MobileNavigationTree");
     expect(source).not.toContain("SortableNavigationEditor");
+  });
+
+  it("bounds mounted rows independently from the saved menu limit", () => {
+    const source = readSource("./NavigationBuilder.tsx");
+
+    expect(source).toContain("NAVIGATION_RENDER_BATCH_SIZE = 80");
+    expect(source).toContain("outlineRows.slice(0, renderLimit)");
+    expect(source).toContain("Show next");
+  });
+
+  it("offers one full-workspace focus mode without recursively nesting it", () => {
+    const source = readSource("./NavigationBuilder.tsx");
+
+    expect(source).toContain("Focus on menu");
+    expect(source).toContain("focusedSurface");
+    expect(source).toContain("100dvh");
+    expect(source).toContain("max-w-[1500px]");
   });
 
   it("uses the shared safe-link policy and public item sources", () => {

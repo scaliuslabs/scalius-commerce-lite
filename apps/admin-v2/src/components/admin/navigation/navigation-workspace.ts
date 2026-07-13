@@ -10,6 +10,12 @@ export interface NavigationLocation {
   ancestors: NavigationItem[];
 }
 
+export interface NavigationOutlineRow extends NavigationLocation {
+  hasChildren: boolean;
+  isExpanded: boolean;
+  matchesQuery: boolean;
+}
+
 export function countNavigationItems(items: NavigationItem[]): number {
   return items.reduce(
     (total, item) =>
@@ -83,6 +89,87 @@ export function navigationItemMatchesQuery(
       navigationItemMatchesQuery(child, normalizedQuery),
     )
   );
+}
+
+/**
+ * Build the visible menu outline in one traversal. Search keeps matching items
+ * and their ancestors, so merchants never lose hierarchy context. Outside
+ * search, collapsed branches are not added to the render list at all.
+ */
+export function flattenNavigationOutline(
+  items: NavigationItem[],
+  expandedIds: ReadonlySet<string>,
+  normalizedQuery = "",
+): NavigationOutlineRow[] {
+  const visibleSearchIds = new Set<string>();
+  const matchingSearchIds = new Set<string>();
+
+  if (normalizedQuery) {
+    const collectSearchVisibility = (
+      currentItems: NavigationItem[],
+      ancestorIds: string[],
+    ): boolean => {
+      let branchMatches = false;
+
+      for (const item of currentItems) {
+        const ownText = `${item.title} ${item.href ?? ""}`.toLocaleLowerCase();
+        const ownMatch = ownText.includes(normalizedQuery);
+        const childMatch = collectSearchVisibility(item.subMenu ?? [], [
+          ...ancestorIds,
+          item.id,
+        ]);
+
+        if (!ownMatch && !childMatch) continue;
+        branchMatches = true;
+        visibleSearchIds.add(item.id);
+        if (ownMatch) matchingSearchIds.add(item.id);
+        for (const ancestorId of ancestorIds) visibleSearchIds.add(ancestorId);
+      }
+
+      return branchMatches;
+    };
+
+    collectSearchVisibility(items, []);
+  }
+
+  const rows: NavigationOutlineRow[] = [];
+
+  const visit = (
+    currentItems: NavigationItem[],
+    depth: number,
+    parentId: string | null,
+    ancestors: NavigationItem[],
+  ) => {
+    for (let index = 0; index < currentItems.length; index += 1) {
+      const item = currentItems[index];
+      if (normalizedQuery && !visibleSearchIds.has(item.id)) continue;
+
+      const children = item.subMenu ?? [];
+      const hasChildren = children.length > 0;
+      const isExpanded = hasChildren && (
+        Boolean(normalizedQuery) || expandedIds.has(item.id)
+      );
+
+      rows.push({
+        item,
+        index,
+        depth,
+        siblingCount: currentItems.length,
+        parentId,
+        ancestors,
+        hasChildren,
+        isExpanded,
+        matchesQuery: !normalizedQuery || matchingSearchIds.has(item.id),
+      });
+
+      if (isExpanded) {
+        visit(children, depth + 1, item.id, [...ancestors, item]);
+      }
+    }
+  };
+
+  visit(items, 0, null, []);
+  return rows;
 }
 
 export function updateNavigationItemById(
@@ -165,6 +252,58 @@ export function moveNavigationItemById(
           subMenu: moveNavigationItemById(item.subMenu, id, direction),
         }
       : item,
+  );
+}
+
+export function moveNavigationItemToIndexById(
+  items: NavigationItem[],
+  id: string,
+  newIndex: number,
+): NavigationItem[] {
+  const index = items.findIndex((item) => item.id === id);
+  if (index >= 0) return moveInArray(items, index, newIndex);
+
+  return items.map((item) =>
+    item.subMenu?.length
+      ? {
+          ...item,
+          subMenu: moveNavigationItemToIndexById(item.subMenu, id, newIndex),
+        }
+      : item,
+  );
+}
+
+export function moveNavigationItemToParentById(
+  items: NavigationItem[],
+  id: string,
+  newParentId: string | null,
+  maxDepth = MAX_NAV_DEPTH,
+): NavigationItem[] {
+  const source = findNavigationLocation(items, id);
+  if (!source || source.parentId === newParentId) return items;
+
+  if (newParentId) {
+    // A node cannot be moved below itself or any of its descendants.
+    if (
+      newParentId === id ||
+      findNavigationLocation(source.item.subMenu ?? [], newParentId)
+    ) {
+      return items;
+    }
+
+    const target = findNavigationLocation(items, newParentId);
+    if (
+      !target ||
+      target.depth + 1 + getNavigationDepth([source.item]) > maxDepth
+    ) {
+      return items;
+    }
+  }
+
+  return appendNavigationItems(
+    removeNavigationItemById(items, id),
+    newParentId,
+    [source.item],
   );
 }
 

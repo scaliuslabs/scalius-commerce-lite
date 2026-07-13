@@ -22,7 +22,7 @@ describe("NavigationBuilder", () => {
     host.remove();
   });
 
-  it("renders one selected-item inspector and changes items by stable identity", async () => {
+  it("opens one inline editor under the chosen row and changes by stable identity", async () => {
     const onChange = vi.fn();
     const navigation = [
       {
@@ -43,13 +43,14 @@ describe("NavigationBuilder", () => {
       ),
     );
 
-    expect(host.querySelectorAll('[aria-label="Selected menu item"]')).toHaveLength(1);
+    expect(host.querySelectorAll('[aria-label="Selected menu item"]')).toHaveLength(0);
     expect(host.querySelectorAll("table")).toHaveLength(0);
     expect(host.textContent).toContain("3/150");
 
     act(() =>
-      (host.querySelector('[role="treeitem"] button:last-child') as HTMLButtonElement).click(),
+      (host.querySelector('[aria-label="Edit Shop, level 1"]') as HTMLButtonElement).click(),
     );
+    expect(host.querySelectorAll('[aria-label="Selected menu item"]')).toHaveLength(1);
     const labelInput = host.querySelector("#nav-shop-label") as HTMLInputElement;
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
@@ -67,5 +68,39 @@ describe("NavigationBuilder", () => {
       },
       { id: "about", title: "About", href: "/about" },
     ]);
+  });
+
+  it("progressively renders a large outline and can search beyond the first batch", async () => {
+    const navigation = Array.from({ length: 240 }, (_, index) => ({
+      id: `item-${index + 1}`,
+      title: `Item ${index + 1}`,
+      href: `/item-${index + 1}`,
+    }));
+
+    await act(async () =>
+      root.render(
+        <NavigationBuilder
+          navigation={navigation}
+          onChange={vi.fn()}
+          getStorefrontPath={(path) => `https://store.example${path}`}
+        />,
+      ),
+    );
+
+    expect(host.querySelectorAll('ol[aria-label="Menu items"] > li')).toHaveLength(80);
+    expect(host.textContent).toContain("Showing 80 of 240 visible items");
+
+    act(() => {
+      const search = host.querySelector('[aria-label="Find menu item"]') as HTMLInputElement;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        search,
+        "Item 239",
+      );
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(host.querySelectorAll('ol[aria-label="Menu items"] > li')).toHaveLength(1);
+    expect(host.textContent).toContain("1 match");
+    expect(host.textContent).toContain("Item 239");
   });
 });
