@@ -170,4 +170,15 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
   });
 
+  it("separates checkout flow reads from versioned mutations", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/settings/checkout-flow",
+      "GET",
+    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_VIEW });
+    expect(getRoutePermission(
+      "/api/v1/admin/settings/checkout-flow",
+      "PUT",
+    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
+  });
+
 });

@@ -12,7 +12,7 @@ import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { CACHE_TTLS } from "../utils/cache-ttls";
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const CHECKOUT_CONFIG_CACHE_PREFIX = "api:checkout:config:v2:";
+const CHECKOUT_CONFIG_CACHE_PREFIX = "api:checkout:config:v3:";
 
 // ─── GET /config ─────────────────────────────────────────────────────────────
 
@@ -50,7 +50,12 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
     const kv: KVNamespace | undefined = c.env.CACHE;
 
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const config = await getCheckoutConfig(db, kv, encryptionKey);
+    const config = await getCheckoutConfig(
+      db,
+      kv,
+      encryptionKey,
+      c.env as unknown as Record<string, unknown>,
+    );
 
     return ok(c, config);
   } catch (error: unknown) {

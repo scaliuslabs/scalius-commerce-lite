@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   normalizeFirebaseServiceAccountJson: vi.fn(),
   saveFirebaseServiceAccountJson: vi.fn(),
   getCheckoutReadiness: vi.fn(),
+  getCustomerSignInReadiness: vi.fn(),
+  getCheckoutFlowSettingsDocument: vi.fn(),
+  saveCheckoutFlowSettingsDocument: vi.fn(),
   getOptionalExecutionContext: vi.fn((c: { executionCtx?: ExecutionContext }) => {
     try {
       return c.executionCtx;
@@ -41,7 +44,21 @@ vi.mock("@scalius/core/modules/settings", () => ({
 
 vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
   getCheckoutReadiness: mocks.getCheckoutReadiness,
+  getCustomerSignInReadiness: mocks.getCustomerSignInReadiness,
+  CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE:
+    "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
 }));
+
+vi.mock("@scalius/core/modules/settings/checkout-flow-admin.service", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@scalius/core/modules/settings/checkout-flow-admin.service")
+  >();
+  return {
+    ...actual,
+    getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
+    saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
+  };
+});
 
 vi.mock("../../../utils/cache-invalidation", () => ({
   invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
@@ -168,8 +185,28 @@ function createTestApp() {
     ready: true,
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
+    customerSignInRequired: false,
+    hasUsableCustomerSignIn: true,
     issues: [],
   });
+  mocks.getCustomerSignInReadiness.mockResolvedValue({
+    customerSignInRequired: true,
+    hasUsableCustomerSignIn: true,
+  });
+  mocks.getCheckoutFlowSettingsDocument.mockResolvedValue({
+    guestCheckoutEnabled: true,
+    checkoutMode: "all",
+    partialPaymentEnabled: false,
+    partialPaymentAmount: 0,
+    revision: 1,
+  });
+  mocks.saveCheckoutFlowSettingsDocument.mockImplementation(async (_db, input) => ({
+    guestCheckoutEnabled: input.guestCheckoutEnabled,
+    checkoutMode: input.checkoutMode,
+    partialPaymentEnabled: input.partialPaymentEnabled,
+    partialPaymentAmount: input.partialPaymentAmount,
+    revision: input.expectedRevision + 1,
+  }));
   mocks.getActivePaymentMethods.mockResolvedValue({
     enabledMethods: ["sslcommerz"],
     defaultMethod: "sslcommerz",
@@ -212,11 +249,12 @@ function requestJson(
     | undefined,
   path: string,
   body: unknown,
+  method: "POST" | "PUT" = "POST",
 ) {
   return app.request(
     `/api/v1/admin/settings${path}`,
     {
-      method: "POST",
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     },
@@ -225,21 +263,32 @@ function requestJson(
   );
 }
 
+function checkoutFlowBody(overrides: Record<string, unknown> = {}) {
+  return {
+    guestCheckoutEnabled: true,
+    checkoutMode: "all",
+    partialPaymentEnabled: false,
+    partialPaymentAmount: 0,
+    expectedRevision: 1,
+    ...overrides,
+  };
+}
+
 describe("system settings cache invalidation", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("invalidates checkout caches after auth and checkout settings save", async () => {
+  it("invalidates checkout caches after a versioned checkout settings save", async () => {
     const { app, env, executionCtx, kv } = createTestApp();
 
-    const response = await requestJson(app, env, executionCtx, "/auth", {
-      authVerificationMethod: "email",
+    const response = await requestJson(app, env, executionCtx, "/checkout-flow", {
       guestCheckoutEnabled: true,
       checkoutMode: "all",
       partialPaymentEnabled: true,
       partialPaymentAmount: 500,
-    });
+      expectedRevision: 1,
+    }, "PUT");
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledWith(kv);
@@ -249,11 +298,45 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("returns the current revision before stale checkout settings can reach provider checks", async () => {
+    mocks.getCheckoutFlowSettingsDocument.mockResolvedValueOnce({
+      guestCheckoutEnabled: true,
+      checkoutMode: "all",
+      partialPaymentEnabled: false,
+      partialPaymentAmount: 0,
+      revision: 2,
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(
+      app,
+      env,
+      executionCtx,
+      "/checkout-flow",
+      checkoutFlowBody({ guestCheckoutEnabled: false, expectedRevision: 1 }),
+      "PUT",
+    );
+
+    expect(response.status, await response.clone().text()).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      success: false,
+      error: {
+        code: "CHECKOUT_FLOW_REVISION_CONFLICT",
+        details: { expectedRevision: 1, currentRevision: 2 },
+      },
+    });
+    expect(mocks.getCustomerSignInReadiness).not.toHaveBeenCalled();
+    expect(mocks.getActivePaymentMethods).not.toHaveBeenCalled();
+    expect(mocks.saveCheckoutFlowSettingsDocument).not.toHaveBeenCalled();
+  });
+
   it("returns checkout readiness from the shared checker", async () => {
     mocks.getCheckoutReadiness.mockResolvedValueOnce({
       ready: false,
       hasActiveShippingMethod: true,
       hasActiveDeliveryHierarchy: false,
+      customerSignInRequired: false,
+      hasUsableCustomerSignIn: true,
       issues: ["Add at least one active city with an active zone before checkout can accept orders."],
     });
     const { app, env, executionCtx } = createTestApp();
@@ -265,6 +348,8 @@ describe("system settings cache invalidation", () => {
         ready: boolean;
         hasActiveShippingMethod: boolean;
         hasActiveDeliveryHierarchy: boolean;
+        customerSignInRequired: boolean;
+        hasUsableCustomerSignIn: boolean;
         issues: string[];
       };
     };
@@ -437,13 +522,16 @@ describe("system settings cache invalidation", () => {
       enabledMethods: ["cod"],
       defaultMethod: "cod",
     });
+    mocks.saveCheckoutFlowSettingsDocument.mockRejectedValueOnce(
+      new ValidationError("Advance payment requires an enabled online payment gateway."),
+    );
     const { app, env, executionCtx } = createTestApp();
 
-    const response = await requestJson(app, env, executionCtx, "/auth", {
+    const response = await requestJson(app, env, executionCtx, "/checkout-flow", checkoutFlowBody({
       checkoutMode: "all",
       partialPaymentEnabled: true,
       partialPaymentAmount: 500,
-    });
+    }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.upsertSetting).not.toHaveBeenCalled();
@@ -455,11 +543,14 @@ describe("system settings cache invalidation", () => {
       enabledMethods: ["cod"],
       defaultMethod: "cod",
     });
+    mocks.saveCheckoutFlowSettingsDocument.mockRejectedValueOnce(
+      new ValidationError("Online-only checkout requires an enabled online payment gateway."),
+    );
     const { app, env, executionCtx } = createTestApp();
 
-    const response = await requestJson(app, env, executionCtx, "/auth", {
+    const response = await requestJson(app, env, executionCtx, "/checkout-flow", checkoutFlowBody({
       checkoutMode: "gateways_only",
-    });
+    }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.upsertSetting).not.toHaveBeenCalled();
@@ -471,14 +562,49 @@ describe("system settings cache invalidation", () => {
       enabledMethods: ["sslcommerz"],
       defaultMethod: "sslcommerz",
     });
+    mocks.saveCheckoutFlowSettingsDocument.mockRejectedValueOnce(
+      new ValidationError("COD-only checkout requires Cash on Delivery to be enabled."),
+    );
     const { app, env, executionCtx } = createTestApp();
 
-    const response = await requestJson(app, env, executionCtx, "/auth", {
+    const response = await requestJson(app, env, executionCtx, "/checkout-flow", checkoutFlowBody({
       checkoutMode: "guest_cod_only",
-    });
+    }), "PUT");
 
     expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.upsertSetting).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects requiring customer accounts when no sign-in provider is usable", async () => {
+    mocks.getCustomerSignInReadiness.mockResolvedValueOnce({
+      customerSignInRequired: true,
+      hasUsableCustomerSignIn: false,
+    });
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(
+      app,
+      env,
+      executionCtx,
+      "/checkout-flow",
+      checkoutFlowBody({ guestCheckoutEnabled: false }),
+      "PUT",
+    );
+
+    expect(response.status, await response.clone().text()).toBe(400);
+    expect(mocks.saveCheckoutFlowSettingsDocument).not.toHaveBeenCalled();
+    expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
+  });
+
+  it("rejects legacy checkout fields on the auth settings endpoint", async () => {
+    const { app, env, executionCtx } = createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/auth", {
+      checkoutMode: "all",
+    });
+
+    expect(response.status, await response.clone().text()).toBe(400);
     expect(mocks.invalidateSiteSettingsCache).not.toHaveBeenCalled();
   });
 

@@ -73589,6 +73589,12 @@
                         "hasActiveDeliveryHierarchy": {
                           "type": "boolean"
                         },
+                        "customerSignInRequired": {
+                          "type": "boolean"
+                        },
+                        "hasUsableCustomerSignIn": {
+                          "type": "boolean"
+                        },
                         "issues": {
                           "type": "array",
                           "items": {
@@ -73600,6 +73606,8 @@
                         "ready",
                         "hasActiveShippingMethod",
                         "hasActiveDeliveryHierarchy",
+                        "customerSignInRequired",
+                        "hasUsableCustomerSignIn",
                         "issues"
                       ]
                     }
@@ -73860,12 +73868,713 @@
         ]
       }
     },
+    "/api/v1/admin/settings/checkout-flow": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get versioned checkout flow settings",
+        "responses": {
+          "200": {
+            "description": "Checkout flow settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "guestCheckoutEnabled": {
+                          "type": "boolean"
+                        },
+                        "checkoutMode": {
+                          "type": "string",
+                          "enum": [
+                            "guest_cod_only",
+                            "gateways_only",
+                            "all"
+                          ]
+                        },
+                        "partialPaymentEnabled": {
+                          "type": "boolean"
+                        },
+                        "partialPaymentAmount": {
+                          "type": "number"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "guestCheckoutEnabled",
+                        "checkoutMode",
+                        "partialPaymentEnabled",
+                        "partialPaymentAmount",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save versioned checkout flow settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guestCheckoutEnabled": {
+                    "type": "boolean"
+                  },
+                  "checkoutMode": {
+                    "type": "string",
+                    "enum": [
+                      "guest_cod_only",
+                      "gateways_only",
+                      "all"
+                    ]
+                  },
+                  "partialPaymentEnabled": {
+                    "type": "boolean"
+                  },
+                  "partialPaymentAmount": {
+                    "type": "number"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "guestCheckoutEnabled",
+                  "checkoutMode",
+                  "partialPaymentEnabled",
+                  "partialPaymentAmount",
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout flow settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "guestCheckoutEnabled": {
+                          "type": "boolean"
+                        },
+                        "checkoutMode": {
+                          "type": "string",
+                          "enum": [
+                            "guest_cod_only",
+                            "gateways_only",
+                            "all"
+                          ]
+                        },
+                        "partialPaymentEnabled": {
+                          "type": "boolean"
+                        },
+                        "partialPaymentAmount": {
+                          "type": "number"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "guestCheckoutEnabled",
+                        "checkoutMode",
+                        "partialPaymentEnabled",
+                        "partialPaymentAmount",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/settings/auth": {
       "get": {
         "tags": [
           "Admin - Settings"
         ],
-        "summary": "Get auth/checkout settings",
+        "summary": "Get customer authentication settings",
         "responses": {
           "200": {
             "description": "Auth settings",
@@ -73943,9 +74652,6 @@
                             "otpChannels"
                           ]
                         },
-                        "guestCheckoutEnabled": {
-                          "type": "boolean"
-                        },
                         "whatsappAccessToken": {
                           "type": "string"
                         },
@@ -73954,28 +74660,14 @@
                         },
                         "whatsappTemplateName": {
                           "type": "string"
-                        },
-                        "checkoutMode": {
-                          "type": "string"
-                        },
-                        "partialPaymentEnabled": {
-                          "type": "boolean"
-                        },
-                        "partialPaymentAmount": {
-                          "type": "number",
-                          "nullable": true
                         }
                       },
                       "required": [
                         "authVerificationMethod",
                         "customerAuthPolicy",
-                        "guestCheckoutEnabled",
                         "whatsappAccessToken",
                         "whatsappPhoneNumberId",
-                        "whatsappTemplateName",
-                        "checkoutMode",
-                        "partialPaymentEnabled",
-                        "partialPaymentAmount"
+                        "whatsappTemplateName"
                       ]
                     }
                   },
@@ -74238,7 +74930,7 @@
         "tags": [
           "Admin - Settings"
         ],
-        "summary": "Save auth/checkout settings",
+        "summary": "Save customer authentication settings",
         "requestBody": {
           "content": {
             "application/json": {
@@ -74305,9 +74997,6 @@
                       "otpChannels"
                     ]
                   },
-                  "guestCheckoutEnabled": {
-                    "type": "boolean"
-                  },
                   "whatsappAccessToken": {
                     "type": "string"
                   },
@@ -74318,22 +75007,9 @@
                   "whatsappTemplateName": {
                     "type": "string",
                     "nullable": true
-                  },
-                  "checkoutMode": {
-                    "type": "string",
-                    "enum": [
-                      "guest_cod_only",
-                      "gateways_only",
-                      "all"
-                    ]
-                  },
-                  "partialPaymentEnabled": {
-                    "type": "boolean"
-                  },
-                  "partialPaymentAmount": {
-                    "type": "number"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }

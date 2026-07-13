@@ -3,7 +3,7 @@ import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
 import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
-import { getCheckoutReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
@@ -18,12 +18,12 @@ const CHECKOUT_BREAKING_LOCATION_MESSAGE =
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 async function assertDeliveryLocationsCanBeRemovedFromCheckout(
-    db: Parameters<typeof getCheckoutReadiness>[0],
+    db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
     ids: readonly string[],
 ) {
     const [currentReadiness, nextReadiness] = await Promise.all([
-        getCheckoutReadiness(db),
-        getCheckoutReadiness(db, { excludeDeliveryLocationIds: ids }),
+        getCheckoutDeliveryReadiness(db),
+        getCheckoutDeliveryReadiness(db, { excludeDeliveryLocationIds: ids }),
     ]);
     if (currentReadiness.ready && !nextReadiness.ready) {
         throw new ValidationError([CHECKOUT_BREAKING_LOCATION_MESSAGE, ...nextReadiness.issues].join(" "));
@@ -31,9 +31,9 @@ async function assertDeliveryLocationsCanBeRemovedFromCheckout(
 }
 
 async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
-    db: Parameters<typeof getCheckoutReadiness>[0],
+    db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
 ) {
-    const currentReadiness = await getCheckoutReadiness(db);
+    const currentReadiness = await getCheckoutDeliveryReadiness(db);
     if (currentReadiness.ready) {
         throw new ValidationError([
             CHECKOUT_BREAKING_LOCATION_MESSAGE,
@@ -42,7 +42,7 @@ async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
     }
 }
 
-async function isActiveCity(db: Parameters<typeof getCheckoutReadiness>[0], id: string | null | undefined) {
+async function isActiveCity(db: Parameters<typeof getCheckoutDeliveryReadiness>[0], id: string | null | undefined) {
     if (!id) return false;
     const row = await db
         .select({ id: deliveryLocations.id })

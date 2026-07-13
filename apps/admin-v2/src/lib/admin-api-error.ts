@@ -28,6 +28,11 @@ export interface DiscountRevisionConflict {
   currentRevision: number | null;
 }
 
+export interface CheckoutFlowRevisionConflict {
+  expectedRevision: number;
+  currentRevision: number | null;
+}
+
 export interface CategoryRevisionConflict {
   expectedRevision: number;
   currentRevision: number | null;
@@ -150,6 +155,43 @@ export function readDiscountRevisionConflict(
   if (
     parsed?.status !== 409 ||
     parsed.code !== "DISCOUNT_REVISION_CONFLICT" ||
+    !parsed.details ||
+    typeof parsed.details !== "object"
+  ) {
+    return null;
+  }
+
+  const details = parsed.details as {
+    expectedRevision?: unknown;
+    currentRevision?: unknown;
+  };
+  if (
+    typeof details.expectedRevision !== "number" ||
+    !Number.isInteger(details.expectedRevision) ||
+    details.expectedRevision < 1 ||
+    !(
+      details.currentRevision === null ||
+      (typeof details.currentRevision === "number" &&
+        Number.isInteger(details.currentRevision) &&
+        details.currentRevision >= 1)
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    expectedRevision: details.expectedRevision,
+    currentRevision: details.currentRevision,
+  };
+}
+
+export function readCheckoutFlowRevisionConflict(
+  error: unknown,
+): CheckoutFlowRevisionConflict | null {
+  const parsed = readAdminApiError(error);
+  if (
+    parsed?.status !== 409 ||
+    parsed.code !== "CHECKOUT_FLOW_REVISION_CONFLICT" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {

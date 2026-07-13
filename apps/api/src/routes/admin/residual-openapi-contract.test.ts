@@ -92,6 +92,8 @@ describe("admin residual OpenAPI mutation responses", () => {
     expectResponses(spec, "/api/v1/admin/settings/hero-sliders/{id}", "delete", ["200", "409"]);
 
     expectResponses(spec, "/api/v1/admin/settings/auth", "post", ["200", "503"]);
+    expectResponses(spec, "/api/v1/admin/settings/checkout-flow", "get", ["200"]);
+    expectResponses(spec, "/api/v1/admin/settings/checkout-flow", "put", ["200", "409"]);
     expectResponses(spec, "/api/v1/admin/settings/email", "post", ["200", "503"]);
     expectResponses(spec, "/api/v1/admin/settings/firebase", "post", ["200", "503"]);
     expectResponses(spec, "/api/v1/admin/settings/sms", "post", ["200", "503"]);

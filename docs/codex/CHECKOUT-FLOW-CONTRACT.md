@@ -17,10 +17,13 @@ their own owners.
 | Require an online advance (`partialPaymentEnabled`) | `site_settings.partial_payment_enabled` | COD is hidden and an enabled online gateway is required. | Order creation rejects COD; payment-session creation derives the current deposit intent from trusted settings and order state. |
 | Advance amount (`partialPaymentAmount`) | `site_settings.partial_payment_amount` | Buyer pays `min(configured advance, order total)` online. Any remaining balance is due on delivery. | Saves require a finite positive amount and a usable online gateway. SSLCommerz's BDT range is applied only when SSLCommerz is one of the usable methods. |
 
-The admin saves these fields through `POST /api/v1/admin/settings/auth` because
-they currently share the legacy auth/settings record. Saving invalidates the
-checkout settings cache group. Public checkout configuration is assembled by
-`getCheckoutConfig()` and the final order gate is `assertCheckoutOrderPolicy()`.
+The admin reads and replaces this document through the dedicated
+`GET/PUT /api/v1/admin/settings/checkout-flow` contract. Every `PUT` includes
+the positive `expectedRevision`; D1 advances `checkout_flow_revision` exactly
+once only when the expected value still matches. Saving invalidates the
+checkout settings cache group after the committed compare-and-swap. Public
+checkout configuration is assembled by `getCheckoutConfig()` and the final
+order gate is `assertCheckoutOrderPolicy()`.
 
 ## Invariants
 
@@ -44,11 +47,13 @@ checkout settings cache group. Public checkout configuration is assembled by
 ## Fail-Closed Readiness
 
 Checkout readiness is more than a valid flow selection. The public config also
-requires an active shipping method and an active delivery hierarchy. If those
-facts are incomplete, it returns no gateways and an unavailable status. If no
-usable gateway survives current credentials, enabled-method selection, flow,
-and provider checks, checkout is unavailable rather than guessing COD or a
-gateway.
+requires an active shipping method and an active delivery hierarchy. When guest
+checkout is disabled, readiness additionally requires the dedicated credential
+encryption key and at least one usable OTP provider allowed by the saved
+customer-auth policy. If any required fact is incomplete, public config returns
+no gateways and an unavailable status. If no usable gateway survives current
+credentials, enabled-method selection, flow, and provider checks, checkout is
+unavailable rather than guessing COD or a gateway.
 
 The admin preview distinguishes three states:
 
@@ -75,6 +80,11 @@ prerequisites are ready.
   the available width without horizontal scrolling.
 - The action bar reports saved versus unsaved state, permits reset to the last
   server response, and disables no-op or invalid saves.
+- A stale save receives `409 CHECKOUT_FLOW_REVISION_CONFLICT`. The editor keeps
+  the local draft, loads the latest document without refreshing, and offers a
+  three-way merge or an explicit replacement with the latest saved version.
+- Turning guest checkout off previews customer sign-in provider readiness before
+  save and is rejected server-side if no configured OTP channel is usable.
 - Colors use semantic design-system tokens and all readiness states have text;
   meaning does not depend on color or icons.
 
@@ -90,20 +100,14 @@ prerequisites are ready.
   - `apps/admin-v2/src/components/admin/settings/checkout-flow-policy.test.ts`
   - `apps/admin-v2/src/components/admin/settings/checkout-readiness-ui.test.ts`
   - `packages/core/src/modules/settings/checkout-flow.test.ts`
+  - `packages/core/src/modules/settings/checkout-flow-admin.service.test.ts`
+  - `packages/core/src/modules/settings/checkout-readiness.test.ts`
   - `packages/core/src/modules/settings/checkout-config.service.test.ts`
+  - `packages/database/__tests__/checkout-flow-revision-migration.test.ts`
   - `apps/api/src/routes/orders-create.test.ts`
 
 ## Remaining Release Gaps
 
-- Checkout settings have no monotonic revision/CAS yet, so two merchant tabs can
-  overwrite each other. The UI's dirty/reset behavior prevents accidental
-  no-op writes but is not concurrency control.
-- Checkout fields still share the broad `/settings/auth` mutation with customer
-  authentication and legacy WhatsApp fields. A dedicated endpoint would reduce
-  coupling but requires an API-contract migration.
-- When guest checkout is disabled, the checkout readiness card does not yet
-  expose first-class customer-auth provider health; runtime sign-in remains the
-  authority.
 - The remaining balance is accurately stored as due, but merchant policy and
   operations for collecting that balance need a separate lifecycle design; do
   not imply automatic collection.

@@ -5,7 +5,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
-  getCheckoutReadiness: vi.fn(),
+  getCheckoutDeliveryReadiness: vi.fn(),
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
@@ -13,7 +13,7 @@ vi.mock("../../../utils/cache-invalidation", () => ({
 }));
 
 vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
-  getCheckoutReadiness: mocks.getCheckoutReadiness,
+  getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
 }));
 
 import { shippingMethodsSettingsRoutes } from "./shipping";
@@ -59,7 +59,7 @@ function createTestApp(db = createDb()) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-  mocks.getCheckoutReadiness.mockResolvedValue({
+  mocks.getCheckoutDeliveryReadiness.mockResolvedValue({
     ready: true,
     hasActiveShippingMethod: true,
     hasActiveDeliveryHierarchy: true,
@@ -108,7 +108,7 @@ describe("shipping settings cache invalidation", () => {
   });
 
   it("rejects deleting the last active shipping method from a ready checkout", async () => {
-    mocks.getCheckoutReadiness
+    mocks.getCheckoutDeliveryReadiness
       .mockResolvedValueOnce({
         ready: true,
         hasActiveShippingMethod: true,
