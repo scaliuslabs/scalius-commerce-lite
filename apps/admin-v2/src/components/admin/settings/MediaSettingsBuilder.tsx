@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { getMediaSettings, updateMediaSettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
+import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
 interface MediaSettingsValues {
   enabled: boolean;
@@ -59,7 +60,17 @@ const saveMedia = async (values: MediaSettingsValues) => {
 };
 
 export default function MediaSettingsBuilder() {
-  const { values, setValue, isLoading, isSaving, handleSubmit } =
+  const {
+    values,
+    setValue,
+    isLoading,
+    isLoaded,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } =
     useSettingsForm<MediaSettingsValues>({
       queryKey: queryKeys.settings.media(),
       fetchFn: fetchMedia,
@@ -79,6 +90,17 @@ export default function MediaSettingsBuilder() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <SettingsLoadFailure
+        title="Media delivery settings unavailable"
+        error={loadError}
+        fallback="The current image delivery and host policy could not be loaded."
+        onRetry={refetch}
+      />
     );
   }
 
@@ -150,7 +172,7 @@ export default function MediaSettingsBuilder() {
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={handleSubmit}
-          disabled={isSaving}
+          disabled={isSaving || !isLoaded}
           className="min-w-[140px]"
         >
           {isSaving ? (

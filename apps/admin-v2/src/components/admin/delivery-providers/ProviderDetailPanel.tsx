@@ -671,7 +671,20 @@ export function ProviderDetailPanel({
                     <ul className="list-disc pl-5 space-y-2">
                       <li><strong className="text-foreground">Credentials:</strong> Obtain your Client ID, Client Secret, Username, and Password from the Pathao Merchant Portal.</li>
                       <li><strong className="text-foreground">Store ID:</strong> Your Pathao Store ID where shipments will be originated.</li>
-                      <li><strong className="text-foreground">Location mapping:</strong> Pathao requires numeric IDs for City and Zone, with Area used when available. Add them through the Pathao ID field in <Link to="/admin/settings/checkout" className="text-primary hover:underline">Delivery Locations</Link>.</li>
+                      <li>
+                        <strong className="text-foreground">Location mapping:</strong>{" "}
+                        Pathao requires numeric IDs for City and Zone, with Area
+                        used when available. Add them through the Pathao ID field
+                        in{" "}
+                        <Link
+                          to="/admin/settings/checkout"
+                          search={{ section: "delivery" }}
+                          className="text-primary hover:underline"
+                        >
+                          Delivery Locations
+                        </Link>
+                        .
+                      </li>
                     </ul>
                     <p>Common IDs: Dhaka City (1), Chittagong City (2). Please refer to Pathao API docs for your specific zone and area IDs.</p>
                   </div>

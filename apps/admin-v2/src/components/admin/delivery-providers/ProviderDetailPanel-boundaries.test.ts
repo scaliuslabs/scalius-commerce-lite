@@ -18,6 +18,7 @@ describe("ProviderDetailPanel activation readiness boundaries", () => {
     expect(source).toContain("disabled={!isEditing || (!formData.isActive && hasActivationBlockers)}");
     expect(source).toContain("disabled={isSaving || activeSaveBlocked}");
     expect(source).toContain('to="/admin/settings/checkout"');
+    expect(source).toContain('search={{ section: "delivery" }}');
     expect(source).toContain("Pathao ID field");
   });
 });
