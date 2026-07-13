@@ -4,10 +4,11 @@ import {
     promotionCodes,
     promotionConditions,
     promotionEffects,
+    promotionRedemptions,
     promotions,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
@@ -41,6 +42,39 @@ export interface PromotionAggregate extends PromotionCandidate {
     createdAtEpochSeconds: number;
     updatedAtEpochSeconds: number;
     deletedAtEpochSeconds: number | null;
+}
+
+export async function getPromotionUsageStats(
+    db: Database,
+    promotionId: string,
+    customerId: string | null,
+): Promise<Pick<PromotionAggregate, "redemptionCount" | "customerRedemptionCount" | "discountSpendMinor">> {
+    const totalRead = db.select({
+        redemptionCount: count(),
+        discountSpendMinor: sql<number>`coalesce(sum(${promotionRedemptions.discountAmountMinor}), 0)`,
+    }).from(promotionRedemptions).where(eq(promotionRedemptions.promotionId, promotionId));
+    const customerRead = customerId
+        ? db.select({ customerRedemptionCount: count() })
+            .from(promotionRedemptions)
+            .where(and(
+                eq(promotionRedemptions.promotionId, promotionId),
+                eq(promotionRedemptions.customerId, customerId),
+            ))
+        : null;
+    if (!customerRead) {
+        const total = (await totalRead)[0];
+        return {
+            redemptionCount: Number(total?.redemptionCount ?? 0),
+            customerRedemptionCount: 0,
+            discountSpendMinor: Number(total?.discountSpendMinor ?? 0),
+        };
+    }
+    const [totalRows, customerRows] = await db.batch([totalRead, customerRead]);
+    return {
+        redemptionCount: Number(totalRows[0]?.redemptionCount ?? 0),
+        customerRedemptionCount: Number(customerRows[0]?.customerRedemptionCount ?? 0),
+        discountSpendMinor: Number(totalRows[0]?.discountSpendMinor ?? 0),
+    };
 }
 
 function chunksOf<T>(values: T[], size: number): T[][] {
@@ -85,6 +119,13 @@ function buildPromotionAggregate(
         conflictPolicy: parent.conflictPolicy,
         startsAtEpochSeconds: toEpochSeconds(parent.startsAt),
         endsAtEpochSeconds: toEpochSeconds(parent.endsAt),
+        maxRedemptions: parent.maxRedemptions,
+        maxRedemptionsPerCustomer: parent.maxRedemptionsPerCustomer,
+        maxDiscountSpendMinor: parent.maxDiscountSpendMinor,
+        budgetCurrencyCode: parent.budgetCurrencyCode,
+        redemptionCount: 0,
+        customerRedemptionCount: 0,
+        discountSpendMinor: 0,
         codes: codeRows.map((code) => ({ code: code.normalizedCode, isActive: code.isActive })),
         conditions: conditionRows.map((condition) => ({
             id: condition.id,
@@ -226,6 +267,10 @@ export async function createPromotionDraft(
         startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
         endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
         timezone: input.timezone,
+        maxRedemptions: input.maxRedemptions,
+        maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer,
+        maxDiscountSpendMinor: input.maxDiscountSpendMinor,
+        budgetCurrencyCode: input.budgetCurrencyCode,
         revision: 1,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
@@ -291,7 +336,7 @@ export async function listPromotionDrafts(
     if (rows.length === 0) return [];
 
     const ids = rows.map(({ id }) => id);
-    const [codeRows, conditionRows, effectRows] = await db.batch([
+    const [codeRows, conditionRows, effectRows, usageRows] = await db.batch([
         db.select().from(promotionCodes)
             .where(inArray(promotionCodes.promotionId, ids))
             .orderBy(asc(promotionCodes.normalizedCode)),
@@ -304,14 +349,30 @@ export async function listPromotionDrafts(
                 isNull(promotionEffects.deletedAt),
             ))
             .orderBy(asc(promotionEffects.position), asc(promotionEffects.id)),
+        db.select({
+            promotionId: promotionRedemptions.promotionId,
+            redemptionCount: count(),
+            discountSpendMinor: sql<number>`coalesce(sum(${promotionRedemptions.discountAmountMinor}), 0)`,
+        }).from(promotionRedemptions)
+            .where(inArray(promotionRedemptions.promotionId, ids))
+            .groupBy(promotionRedemptions.promotionId),
     ]);
+    const usageByPromotionId = new Map(usageRows.map((usage) => [usage.promotionId, usage]));
 
-    return rows.map((parent) => buildPromotionAggregate(
-        parent,
-        codeRows.filter((code) => code.promotionId === parent.id),
-        conditionRows.filter((condition) => condition.promotionId === parent.id),
-        effectRows.filter((effect) => effect.promotionId === parent.id),
-    ));
+    return rows.map((parent) => {
+        const aggregate = buildPromotionAggregate(
+            parent,
+            codeRows.filter((code) => code.promotionId === parent.id),
+            conditionRows.filter((condition) => condition.promotionId === parent.id),
+            effectRows.filter((effect) => effect.promotionId === parent.id),
+        );
+        const usage = usageByPromotionId.get(parent.id);
+        return {
+            ...aggregate,
+            redemptionCount: Number(usage?.redemptionCount ?? 0),
+            discountSpendMinor: Number(usage?.discountSpendMinor ?? 0),
+        };
+    });
 }
 
 export async function updatePromotionDraft(
@@ -355,6 +416,10 @@ export async function updatePromotionDraft(
             startsAt: fromEpochSeconds(input.startsAtEpochSeconds),
             endsAt: fromEpochSeconds(input.endsAtEpochSeconds),
             timezone: input.timezone,
+            maxRedemptions: input.maxRedemptions,
+            maxRedemptionsPerCustomer: input.maxRedemptionsPerCustomer,
+            maxDiscountSpendMinor: input.maxDiscountSpendMinor,
+            budgetCurrencyCode: input.budgetCurrencyCode,
             updatedAt: sql`unixepoch()`,
         }).where(eq(promotions.id, promotionId)),
     ];
@@ -424,6 +489,7 @@ export async function previewPersistedPromotion(
         promotionId: string;
         expectedRevision: number;
         cart: unknown;
+        customerId?: string | null;
     },
 ): Promise<PromotionEvaluationResult & { assumedActive: boolean; promotionRevision: number }> {
     const promotion = await getPromotionAggregate(db, input.promotionId);
@@ -436,11 +502,13 @@ export async function previewPersistedPromotion(
         );
     }
 
+    const usage = await getPromotionUsageStats(db, promotion.id, input.customerId ?? null);
     const assumedActive = promotion.status !== "active";
     const result = evaluatePromotionCandidates({
         cart: input.cart,
         candidates: [{
             ...promotion,
+            ...usage,
             status: "active",
         }],
     });

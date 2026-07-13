@@ -53,6 +53,7 @@ import type {
     RefundParams as ProviderRefundParams,
     RefundResult as ProviderRefundResult,
 } from "./provider";
+import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";
 
 export interface RefundRequest {
     orderId: string;
@@ -1135,6 +1136,7 @@ export async function processRefund(
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             currencyCode: orders.currencyCode,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
+            discountAmountMinor: orders.discountAmountMinor,
         })
         .from(orders)
         .where(eq(orders.id, params.orderId))
@@ -1144,6 +1146,13 @@ export async function processRefund(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     const currency = resolveOrderCurrencySnapshot(order);
+    if ((order.discountAmountMinor ?? 0) > 0) {
+        await readPromotionRefundSnapshot(db, {
+            orderId: order.id,
+            currencyCode: currency.code,
+            orderDiscountAmountMinor: order.discountAmountMinor ?? 0,
+        });
+    }
     assertNoActiveShipmentClaim(order);
     await assertNoActivePaymentSessionAttempt(db, params.orderId);
     await assertNoActiveRefundAttempt(db, params.orderId, { message: REFUND_IN_PROGRESS_MESSAGE });

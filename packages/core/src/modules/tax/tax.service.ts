@@ -5,7 +5,13 @@ import { getCurrencyConfig } from "../settings";
 import { calculateTaxQuote } from "./calculator";
 import { buildStorefrontDiscountAllocation, type StorefrontDiscountType } from "./discount-allocation";
 import { toMinorUnits } from "./money";
-import type { TaxDestination, TaxQuote, TaxQuoteLineInput, TaxSettingsDefinition } from "./types";
+import type {
+    TaxDestination,
+    TaxDiscountAllocationInput,
+    TaxQuote,
+    TaxQuoteLineInput,
+    TaxSettingsDefinition,
+} from "./types";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { ValidationError } from "@scalius/core/errors";
 
@@ -35,6 +41,8 @@ export interface StorefrontTaxQuoteInput {
     discountAmount: number;
     discountType: StorefrontDiscountType | null;
     applicableProductIds?: readonly string[];
+    /** Exact evaluator allocation for typed promotions; mutually exclusive with legacy discount metadata. */
+    promotionDiscountAllocation?: TaxDiscountAllocationInput;
     currency?: { code: string; decimalPlaces: number };
 }
 
@@ -104,14 +112,28 @@ export async function calculateStorefrontTaxQuote(
         taxClassId: line.taxClassId,
     }));
 
-    const discount = buildStorefrontDiscountAllocation({
-        decimalPlaces: currency.decimalPlaces,
-        discountAmount: input.discountAmount,
-        discountType: input.discountType,
-        applicableProductIds: input.applicableProductIds,
-        lines: input.lines,
-        shippingAmount: input.shippingAmount,
-    });
+    if (
+        input.promotionDiscountAllocation
+        && (input.discountType !== null || input.applicableProductIds !== undefined)
+    ) {
+        throw new ValidationError("Promotion allocations cannot be combined with legacy discount metadata.");
+    }
+    const discount = input.promotionDiscountAllocation
+        ? {
+            discountMinor: input.promotionDiscountAllocation.lines.reduce(
+                (total, allocation) => total + allocation.amountMinor,
+                input.promotionDiscountAllocation.shippingMinor,
+            ),
+            allocation: input.promotionDiscountAllocation,
+        }
+        : buildStorefrontDiscountAllocation({
+            decimalPlaces: currency.decimalPlaces,
+            discountAmount: input.discountAmount,
+            discountType: input.discountType,
+            applicableProductIds: input.applicableProductIds,
+            lines: input.lines,
+            shippingAmount: input.shippingAmount,
+        });
 
     return calculateTaxQuote({
         currencyCode: currency.code,

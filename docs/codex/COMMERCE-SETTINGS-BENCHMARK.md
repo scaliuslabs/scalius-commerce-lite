@@ -156,7 +156,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
-| Discounts | Case-normalized codes; one unified code builder; explicit product/collection scoping; positive fixed/percentage validation; date window; combined amount/quantity minimums; revision/CAS for rule edits and status; commit-time total/per-phone redemption guards; soft delete/history guard; activation permission; buyer-safe checkout rejection reasons; dormant typed promotion evaluator/schema and immutable per-order-item allocation storage | Checkout and admin still use the legacy code-only, one-code/order authority; no promotion CRUD/cutover, Buy X Get Y, exclusions, segments, campaigns, budget claims, stacking, exact test-cart explanation, or allocation consumers in tax/refunds/orders. |
+| Discounts | Case-normalized global code identity; one unified legacy builder; revisioned typed promotion CRUD/preview/activate/pause; exact code-promotion checkout evaluation; total/per-customer/spend-budget claims in the order batch; immutable line/shipping allocations consumed by tax and refund integrity checks; buyer-safe rejection reasons | Admin still lacks the replacement promotion builder. Live typed scope is deliberately one code promotion/order with subtotal/quantity conditions and line/order/shipping effects. Automatic promotion activation, selectors/audiences, BOGO/gifts, campaign sharing, stacking, and item-aware refund commands remain unavailable. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
@@ -290,14 +290,13 @@ Explicit Scalius decisions:
    code active. The list marks targetless, mismatched, invalid-schedule, and
    legacy segment/combination/per-order states for review instead of silently
    presenting unsupported saved intent as live capability.
-8. This code-builder cleanup is not the target promotion system. A dormant
-   typed evaluator/schema and immutable allocation table now establish the
-   first replacement boundary, but checkout still does not read or commit it.
-   Automatic rules, richer targeting, combination, budgets, test-cart
-   explanation, and refund/tax consumers remain blocked on the cutover and
-   missing authorities below. The promotion aggregate still needs transactional
-   CRUD and revision semantics; current customer-entered code rules already
-   reject stale admin writes.
+8. Typed code promotions now own checkout whenever a submitted normalized code
+   exists in the promotion authority. An inactive or ineligible typed code is a
+   matched rejection and never falls through to legacy discounts. Legacy
+   evaluation remains only for codes absent from typed authority. Automatic
+   rules, richer targeting, cross-promotion combination, BOGO/gifts, and the
+   replacement merchant builder remain unavailable rather than capability-
+   shaped switches with no live enforcement.
 
 ### Target domain model
 
@@ -376,6 +375,13 @@ Explicit Scalius decisions:
   identity across both legacy discounts and typed promotions in either write
   order; application prechecks provide a useful conflict while the triggers
   close concurrent races.
+- Migration `0030_messy_ultragirl` adds total redemption, per-customer
+  redemption, and same-currency discount-spend limits plus one immutable
+  redemption claim per order. D1 insert triggers are the serialized final
+  authority after advisory preview/checkout evaluation. Claims count committed
+  orders, are never deleted, and remain consumed after cancellation, return, or
+  refund; a future release policy requires a separate immutable adjustment
+  ledger rather than mutating historical claims.
 - Evaluator version 1 separates `automatic | code` method from typed conditions
   and effects. Its deliberately bounded vocabulary is AND-ed merchandise
   subtotal/item-quantity conditions plus percentage/fixed line or order effects
@@ -389,21 +395,26 @@ Explicit Scalius decisions:
   revision, effect, method, active normalized code when applicable, and the
   same order item; update/delete triggers make committed rows immutable.
 - A revisioned aggregate service and `/api/v1/admin/promotions` API now create,
-  read, replace, list, archive, and preview code-promotion **drafts**. Parent,
+  read, replace, list, archive, preview, activate, and pause code promotions. Parent,
   code, condition, and effect writes share one D1 batch; replacements guard the
   current positive revision and advance it exactly once. List enrichment uses
   one bounded 90-ID wave rather than per-row fan-out. Preview claims the saved
   revision and runs evaluator v1, explicitly reporting when draft status was
-  assumed active for simulation.
-- The merchant API deliberately rejects automatic authoring and exposes no
-  activation, combination, budget, targeting, or gift command. Public
-  validation, checkout read/write, tax base, order detail, refund, invoice,
-  analytics, and feeds still use legacy discount authority, so these drafts
-  create no buyer-visible promise.
-- The next P0 work is catalog selectors, campaign budget/redemption claim
-  ledgers, a dedicated lifecycle command, and synchronous checkout commit
-  integration that writes allocations in the same batch consumed by tax and
-  refund authorities. Buy X Get Y must keep
+  assumed active for simulation. Activation/pause is revision-CAS protected,
+  permission-gated, and rejects automatic rules, missing active codes/effects,
+  ended schedules, and exhausted limits.
+- Storefront apply-code, authoritative tax quote, order build, and synchronous
+  order commit use the same typed evaluator. A typed code is re-evaluated at
+  commit, its claim and exact allocations are inserted in the order batch, and
+  D1 rejects concurrent final-budget losers. Existing-order retries return
+  before a second evaluation or claim. Exact allocations reduce the same tax
+  bases, are reconciled before refund side effects, and define conservative
+  minor-unit proration for later item-aware partial refund commands.
+- The live boundary is intentionally one submitted code and one winning
+  promotion per order. Unknown codes alone may use legacy compatibility.
+  Automatic authoring/activation, cross-promotion combination/stacking,
+  audience/catalog selectors, campaign sharing, and gifts remain dormant.
+  Buy X Get Y must keep
   qualifying-buy and rewarded-get sets separate; combination must expose effect
   classes/same-target policy; and the admin builder/test cart must render the
   production evaluator's applied and rejected reasons before any automatic,

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getCurrencyConfig: vi.fn(),
   canTransitionTo: vi.fn(),
   applyInventoryForStatusChange: vi.fn(),
+  readPromotionRefundSnapshot: vi.fn(),
 }));
 
 vi.mock("./gateway-settings", () => ({
@@ -41,6 +42,10 @@ vi.mock("../orders/order-state-machine", () => ({
 
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
+}));
+
+vi.mock("../promotions/promotions.refunds", () => ({
+  readPromotionRefundSnapshot: mocks.readPromotionRefundSnapshot,
 }));
 
 import { PartialRefundProcessedError, processRefund } from "./refund-service";
@@ -73,6 +78,7 @@ type OrderRow = {
   shipmentClaimExpiresAt: number | null;
   currencyCode?: string | null;
   currencyDecimalPlaces?: number | null;
+  discountAmountMinor?: number | null;
 };
 
 const order: OrderRow = {
@@ -259,6 +265,7 @@ describe("refund allocation", () => {
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT" });
     mocks.canTransitionTo.mockReturnValue(false);
     mocks.providerCreateRefund.mockResolvedValue({ refundId: "provider_refund" });
+    mocks.readPromotionRefundSnapshot.mockResolvedValue(null);
     mocks.createPaymentProvider.mockReturnValue({
       createRefund: mocks.providerCreateRefund,
     });
@@ -275,6 +282,31 @@ describe("refund allocation", () => {
       productId: "polar_product",
       sandbox: true,
     });
+  });
+
+  it("reconciles immutable promotion allocations before any provider side effect", async () => {
+    const db = createDbMock({
+      orderOverrides: { discountAmountMinor: 1_000 },
+      payments: [stripePayment({})],
+    });
+    mocks.readPromotionRefundSnapshot.mockRejectedValue(
+      new Error("The saved promotion and order refund totals do not reconcile."),
+    );
+
+    await expect(processRefund(db as never, undefined, {
+      orderId: "order_1",
+      reason: "customer_request",
+      gateway: "stripe",
+    })).rejects.toThrow("do not reconcile");
+
+    expect(mocks.readPromotionRefundSnapshot).toHaveBeenCalledWith(db, {
+      orderId: "order_1",
+      currencyCode: "BDT",
+      orderDiscountAmountMinor: 1_000,
+    });
+    expect(mocks.createPaymentProvider).not.toHaveBeenCalled();
+    expect(mocks.providerCreateRefund).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
   it("allocates a full Stripe split-payment refund across balance and deposit charges with explicit amounts", async () => {

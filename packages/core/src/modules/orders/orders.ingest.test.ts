@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   safeBatch: vi.fn(),
   reserveStockBatch: vi.fn(),
   releaseReservedStockBatch: vi.fn(),
+  verifyPromotionCheckoutSnapshot: vi.fn(),
 }));
 
 vi.mock("@scalius/database/client", async (importOriginal) => ({
@@ -17,6 +18,11 @@ vi.mock("@scalius/database/client", async (importOriginal) => ({
 vi.mock("../inventory", () => ({
   reserveStockBatch: mocks.reserveStockBatch,
   releaseReservedStockBatch: mocks.releaseReservedStockBatch,
+}));
+
+vi.mock("../promotions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../promotions")>()),
+  verifyPromotionCheckoutSnapshot: mocks.verifyPromotionCheckoutSnapshot,
 }));
 
 import { commitStorefrontOrderPayload } from "./orders.ingest";
@@ -130,6 +136,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
 function createDbMock(options: {
   activeCustomer?: { id: string; accountClaimedAt: Date | null; deletedAt: Date | null } | null;
   customerReads?: Array<{ id: string; accountClaimedAt: Date | null; deletedAt: Date | null } | undefined>;
+  existingOrder?: { id: string; customerId: string | null; accountOwnerCustomerId: string | null };
 } = {}): Database & {
   insertValues: unknown[];
   conflictIgnoredInserts: unknown[];
@@ -140,6 +147,7 @@ function createDbMock(options: {
   const createReadQuery = (projection: Record<string, unknown>) => ({
     where: vi.fn(() => ({
       get: vi.fn(async () => {
+        if ("accountOwnerCustomerId" in projection) return options.existingOrder;
         if ("customerId" in projection) return undefined;
         if ("maxUses" in projection) return { maxUses: null, limitOnePerCustomer: false };
         if ("accountClaimedAt" in projection) {
@@ -198,6 +206,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     vi.clearAllMocks();
     mocks.reserveStockBatch.mockResolvedValue({ success: true, results: [] });
     mocks.releaseReservedStockBatch.mockResolvedValue({ success: true, results: [] });
+    mocks.verifyPromotionCheckoutSnapshot.mockReset();
   });
 
   it("maps max-uses trigger aborts to a checkout validation error and releases reserved stock", async () => {
@@ -352,6 +361,140 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       });
 
     expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+  });
+
+  it("commits one typed redemption and immutable line allocation in the order batch", async () => {
+    const db = createDbMock();
+    const applied = {
+      promotionId: "promo_1",
+      promotionRevision: 2,
+      promotionName: "Typed promotion",
+      method: "code" as const,
+      promotionCode: "SAVE50",
+      totalDiscountMinor: 5_000,
+      allocations: [{
+        promotionId: "promo_1",
+        promotionRevision: 2,
+        evaluatorVersion: 1,
+        promotionName: "Typed promotion",
+        promotionCode: "SAVE50",
+        method: "code" as const,
+        effectId: "peff_1",
+        effectKind: "fixed_amount_off" as const,
+        target: "order" as const,
+        lineId: "cart:0:variant_1",
+        quantity: 2,
+        currencyCode: "BDT",
+        baseAmountMinor: 20_000,
+        discountAmountMinor: 5_000,
+      }],
+    };
+    mocks.verifyPromotionCheckoutSnapshot.mockResolvedValue(applied);
+    mocks.safeBatch.mockResolvedValue([]);
+    const payload = createPayload({
+      discountUsage: null,
+      promotion: {
+        cart: {
+          currencyCode: "BDT",
+          lines: [{
+            id: "cart:0:variant_1",
+            productId: "prod_1",
+            variantId: "variant_1",
+            unitPriceMinor: 10_000,
+            quantity: 2,
+          }],
+          shippingAmountMinor: 6_000,
+          submittedCodes: ["SAVE50"],
+        },
+        applied,
+      },
+      orderData: { ...createPayload().orderData, inventoryAction: "none" },
+    });
+
+    await commitStorefrontOrderPayload(db, payload);
+
+    expect(mocks.verifyPromotionCheckoutSnapshot).toHaveBeenCalledWith(
+      db,
+      payload.promotion,
+      "cust_existing",
+    );
+    expect(db.insertValues).toContainEqual(expect.objectContaining({
+      promotionId: "promo_1",
+      orderId: "order_discount",
+      customerId: "cust_existing",
+      promotionCode: "SAVE50",
+      discountAmountMinor: 5_000,
+    }));
+    expect(db.insertValues).toContainEqual([
+      expect.objectContaining({
+        orderItemId: "item_1",
+        effectId: "peff_1",
+        target: "order",
+        discountAmountMinor: 5_000,
+      }),
+    ]);
+  });
+
+  it("maps concurrent typed budget exhaustion and releases reserved inventory", async () => {
+    const db = createDbMock();
+    const payload = createPayload({
+      discountUsage: null,
+      promotion: { cart: {} as never, applied: {} as never },
+    });
+    mocks.verifyPromotionCheckoutSnapshot.mockResolvedValue({
+      promotionId: "promo_1",
+      promotionRevision: 2,
+      promotionName: "Typed promotion",
+      method: "code",
+      promotionCode: "SAVE50",
+      totalDiscountMinor: 5_000,
+      allocations: [{
+        promotionId: "promo_1",
+        promotionRevision: 2,
+        evaluatorVersion: 1,
+        promotionName: "Typed promotion",
+        promotionCode: "SAVE50",
+        method: "code",
+        effectId: "peff_1",
+        effectKind: "fixed_amount_off",
+        target: "order",
+        lineId: "cart:0:variant_1",
+        quantity: 2,
+        currencyCode: "BDT",
+        baseAmountMinor: 20_000,
+        discountAmountMinor: 5_000,
+      }],
+    });
+    mocks.safeBatch.mockRejectedValue(new Error("PROMOTION_REDEMPTION_SPEND_LIMIT"));
+
+    await expect(commitStorefrontOrderPayload(db, payload)).rejects.toThrow(
+      "campaign budget is no longer available",
+    );
+    expect(mocks.releaseReservedStockBatch).toHaveBeenCalledOnce();
+  });
+
+  it("returns the committed order on a checkout retry without re-claiming the promotion", async () => {
+    const db = createDbMock({
+      existingOrder: {
+        id: "order_discount",
+        customerId: "cust_existing",
+        accountOwnerCustomerId: "cust_existing",
+      },
+    });
+    const payload = createPayload({
+      discountUsage: null,
+      promotion: { cart: {} as never, applied: {} as never },
+    });
+
+    await expect(commitStorefrontOrderPayload(db, payload)).resolves.toEqual({
+      orderId: "order_discount",
+      customerId: "cust_existing",
+      accountOwnerCustomerId: "cust_existing",
+      alreadyCommitted: true,
+    });
+    expect(mocks.verifyPromotionCheckoutSnapshot).not.toHaveBeenCalled();
+    expect(mocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(mocks.safeBatch).not.toHaveBeenCalled();
   });
 
   it("maps missing customer-key trigger aborts to a phone-specific validation error", async () => {

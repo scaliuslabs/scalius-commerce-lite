@@ -8,10 +8,12 @@ import {
     discounts,
     discountUsage,
     orderItems,
+    orderDiscountAllocations,
     orderItemTaxSnapshots,
     orderNotificationOutbox,
     orderTaxSnapshots,
     orders,
+    promotionRedemptions,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -35,6 +37,11 @@ import { getDiscountUsageConstraintError } from "./discount-usage-constraints";
 import { shouldCreateOrderCreatedNotification } from "./order-created-notification-policy";
 import type { StorefrontOrderCommitPayload } from "./orders.types";
 import type { StorefrontCartItemIssue } from "./cart-validation";
+import {
+    getPromotionRedemptionConstraintError,
+    verifyPromotionCheckoutSnapshot,
+    type AppliedPromotion,
+} from "../promotions";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -331,6 +338,7 @@ function buildOrderWriteBatch(
     db: Database,
     payload: StorefrontOrderCommitPayload,
     customer: ResolvedOrderCustomer,
+    appliedPromotion: AppliedPromotion | null,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
@@ -573,6 +581,91 @@ function buildOrderWriteBatch(
         );
     }
 
+    if (appliedPromotion) {
+        const promotionCode = appliedPromotion.promotionCode;
+        if (appliedPromotion.method !== "code" || !promotionCode) {
+            throw new ValidationError("Committed promotion authority is invalid.");
+        }
+        const allocationTotal = appliedPromotion.allocations.reduce(
+            (total, allocation) => total + allocation.discountAmountMinor,
+            0,
+        );
+        if (
+            allocationTotal !== appliedPromotion.totalDiscountMinor
+            || allocationTotal !== od.discountAmountMinor
+            || allocationTotal !== payload.taxQuote.discountMinor
+        ) {
+            throw new ValidationError("Committed promotion allocation does not match the order total.");
+        }
+        const itemByAllocationLineId = new Map(payload.items.map((item) => [
+            item.taxAllocationLineId,
+            item,
+        ]));
+        const lineDiscounts = new Map<string, number>();
+        let shippingDiscountMinor = 0;
+        for (const allocation of appliedPromotion.allocations) {
+            if (allocation.target === "shipping") {
+                shippingDiscountMinor += allocation.discountAmountMinor;
+                continue;
+            }
+            if (!allocation.lineId || !itemByAllocationLineId.has(allocation.lineId)) {
+                throw new ValidationError("Committed promotion allocation references an unknown order line.");
+            }
+            lineDiscounts.set(
+                allocation.lineId,
+                (lineDiscounts.get(allocation.lineId) ?? 0) + allocation.discountAmountMinor,
+            );
+        }
+        for (const line of payload.taxQuote.lines) {
+            if ((lineDiscounts.get(line.lineId) ?? 0) !== line.discountMinor) {
+                throw new ValidationError("Promotion and tax line allocations do not match.");
+            }
+        }
+        if (shippingDiscountMinor !== payload.taxQuote.shipping.discountMinor) {
+            throw new ValidationError("Promotion and shipping tax allocations do not match.");
+        }
+
+        writes.push(db.insert(orderDiscountAllocations).values(
+            appliedPromotion.allocations.map((allocation) => {
+                const item = allocation.lineId
+                    ? itemByAllocationLineId.get(allocation.lineId) ?? null
+                    : null;
+                return {
+                    id: `oda_${nanoid()}`,
+                    orderId: od.id,
+                    orderItemId: item?.id ?? null,
+                    promotionId: allocation.promotionId,
+                    effectId: allocation.effectId,
+                    promotionRevision: allocation.promotionRevision,
+                    evaluatorVersion: allocation.evaluatorVersion,
+                    method: allocation.method,
+                    promotionName: allocation.promotionName,
+                    promotionCode: allocation.promotionCode,
+                    effectKind: allocation.effectKind,
+                    target: allocation.target,
+                    currencyCode: allocation.currencyCode,
+                    baseAmountMinor: allocation.baseAmountMinor,
+                    discountAmountMinor: allocation.discountAmountMinor,
+                    quantity: item?.quantity ?? null,
+                    createdAt: sql`unixepoch()`,
+                };
+            }),
+        ));
+        // The immutable allocations precede the claim so the D1 claim trigger
+        // can prove their exact sum and identity in this same atomic batch.
+        writes.push(db.insert(promotionRedemptions).values({
+            id: `pred_${nanoid()}`,
+            promotionId: appliedPromotion.promotionId,
+            orderId: od.id,
+            customerId: customer.id,
+            promotionRevision: appliedPromotion.promotionRevision,
+            promotionCode,
+            currencyCode: od.currencyCode,
+            discountAmountMinor: appliedPromotion.totalDiscountMinor,
+            createdAt: sql`unixepoch()`,
+        }));
+    }
+
     if (isStorefrontOrderPayloadEligibleForMetaPurchase(payload, customer.id)) {
         writes.push(buildMetaPurchaseOutboxClaimInsert(db, {
             orderId: od.id,
@@ -621,14 +714,21 @@ export async function commitStorefrontOrderPayload(
     }
 
     const customer = await resolveCustomerForOrder(db, payload);
+    if (payload.discountUsage && payload.promotion) {
+        throw new ValidationError("An order cannot combine legacy and typed discount authorities.");
+    }
+    const appliedPromotion = payload.promotion
+        ? await verifyPromotionCheckoutSnapshot(db, payload.promotion, customer.id)
+        : null;
     await assertDiscountUsageStillAvailable(db, payload);
     const reservedEntries = await reserveOrderInventory(db, payload);
 
     try {
-        const writes = buildOrderWriteBatch(db, payload, customer);
+        const writes = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
         await safeBatch(db, writes);
     } catch (error) {
-        const discountConstraintError = getDiscountUsageConstraintError(error);
+        const discountConstraintError = getDiscountUsageConstraintError(error)
+            ?? getPromotionRedemptionConstraintError(error);
         await releaseReservedEntries(db, reservedEntries);
         if (
             retryGuestProfileRace

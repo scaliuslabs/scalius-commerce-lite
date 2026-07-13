@@ -18,8 +18,9 @@ resource. Dedicated publish/toggle commands remain the preferred lifecycle
 workflow, and admin form switches default off and disable themselves when the
 operator lacks the lifecycle permission.
 
-The replacement `/admin/promotions` authority currently exposes draft CRUD,
-archive, and revision-claimed preview only. It intentionally has no activation
-route while checkout still uses legacy one-code discounts; the eventual
-promotion lifecycle command must require `discounts.toggle_status` before it
-can create buyer-visible behavior.
+The replacement `/admin/promotions` authority exposes revision-claimed draft
+CRUD, preview, activation, pause, and archive. Activation and pause require
+`discounts.toggle_status`; creation and ordinary rule edits do not grant that
+authority. Activation is currently restricted to an internally consistent
+code promotion with at least one active code and one active effect. Automatic
+promotion activation remains unavailable until checkout can evaluate it.

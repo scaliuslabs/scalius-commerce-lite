@@ -75,6 +75,19 @@ describe("promotion draft validation", () => {
         }).success).toBe(false);
     });
 
+    it("rejects a spend budget that can never share a cart currency with its rules", () => {
+        expect(createPromotionDraftSchema.safeParse({
+            ...validDraft(),
+            maxDiscountSpendMinor: 10_000,
+            budgetCurrencyCode: "USD",
+        })).toMatchObject({ success: false });
+        expect(createPromotionDraftSchema.safeParse({
+            ...validDraft(),
+            maxDiscountSpendMinor: 10_000,
+            budgetCurrencyCode: "BDT",
+        })).toMatchObject({ success: true });
+    });
+
     it("requires an explicit positive revision for replacement writes", () => {
         expect(updatePromotionDraftSchema.safeParse({
             ...validDraft(),
