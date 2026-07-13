@@ -2,9 +2,18 @@ import { useEffect, useState, lazy, Suspense } from "react";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
-import type { HeaderConfig } from "../header-builder/types";
-import type { FooterConfig } from "../footer-builder/types";
-import type { GeneralSettingsSection } from "./general-settings-sections";
+import type {
+  HeaderBuilderPanel,
+  HeaderConfig,
+} from "../header-builder/types";
+import type {
+  FooterBuilderPanel,
+  FooterConfig,
+} from "../footer-builder/types";
+import type {
+  GeneralSettingsPanel,
+  GeneralSettingsSection,
+} from "./general-settings-sections";
 
 const HeaderBuilder = lazy(() =>
   import("../header-builder").then((m) => ({
@@ -53,7 +62,9 @@ function TabSpinner() {
 interface GeneralSettingsPageProps {
   headerConfig?: HeaderConfig | null;
   footerConfig?: FooterConfig | null;
+  panel?: GeneralSettingsPanel;
   section: GeneralSettingsSection;
+  onPanelChange: (panel: GeneralSettingsPanel) => void;
   onSectionChange: (section: GeneralSettingsSection) => void;
 }
 
@@ -75,7 +86,9 @@ const tabs = [
 export default function GeneralSettingsPage({
   headerConfig,
   footerConfig,
+  panel,
   section,
+  onPanelChange,
   onSectionChange,
 }: GeneralSettingsPageProps) {
   const [mountedTabs, setMountedTabs] = useState<Set<string>>(
@@ -94,6 +107,12 @@ export default function GeneralSettingsPage({
   const handleTabChange = (value: string) => {
     onSectionChange(value as GeneralSettingsSection);
   };
+  const headerPanel = section === "header"
+    ? (panel as HeaderBuilderPanel | undefined)
+    : undefined;
+  const footerPanel = section === "footer"
+    ? (panel as FooterBuilderPanel | undefined)
+    : undefined;
 
   return (
     <ErrorBoundary
@@ -140,7 +159,11 @@ export default function GeneralSettingsPage({
             <TabsContent value="header" className="mt-0">
               {mountedTabs.has("header") && (
                 <Suspense fallback={<TabSpinner />}>
-                  <HeaderBuilder initialConfig={headerConfig} />
+                  <HeaderBuilder
+                    activePanel={headerPanel}
+                    initialConfig={headerConfig}
+                    onPanelChange={onPanelChange}
+                  />
                 </Suspense>
               )}
             </TabsContent>
@@ -148,7 +171,11 @@ export default function GeneralSettingsPage({
             <TabsContent value="footer" className="mt-0">
               {mountedTabs.has("footer") && (
                 <Suspense fallback={<TabSpinner />}>
-                  <FooterBuilder initialConfig={footerConfig} />
+                  <FooterBuilder
+                    activePanel={footerPanel}
+                    initialConfig={footerConfig}
+                    onPanelChange={onPanelChange}
+                  />
                 </Suspense>
               )}
             </TabsContent>

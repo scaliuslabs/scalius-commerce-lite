@@ -15,6 +15,7 @@ import { ContentSection } from "./ContentSection";
 
 import type {
   FooterConfig,
+  FooterBuilderPanel,
   FooterBuilderProps,
 } from "./types";
 import { defaultFooterConfig } from "./types";
@@ -51,7 +52,12 @@ export function normalizeFooterConfig(config?: FooterConfig | null): FooterConfi
   };
 }
 
-export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
+export function FooterBuilder({
+  activePanel,
+  initialConfig,
+  onPanelChange,
+  onSave,
+}: FooterBuilderProps) {
   const queryClient = useQueryClient();
 
   const normalizedInitialConfig = useMemo(
@@ -61,7 +67,21 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
   const { config, setConfig, isDirty, discard, markSaved } =
     useConfigDraft(normalizedInitialConfig);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("branding");
+  const [internalActivePanel, setInternalActivePanel] =
+    useState<FooterBuilderPanel>("branding");
+  const activeTab = activePanel ?? internalActivePanel;
+  const [navigationEditorEpoch, setNavigationEditorEpoch] = useState(0);
+
+  const handlePanelChange = (panel: string) => {
+    const nextPanel = panel as FooterBuilderPanel;
+    if (activePanel === undefined) setInternalActivePanel(nextPanel);
+    onPanelChange?.(nextPanel);
+  };
+
+  const handleDiscard = () => {
+    discard();
+    setNavigationEditorEpoch((current) => current + 1);
+  };
 
   const handleSave = async () => {
     if (isLoading) return;
@@ -76,6 +96,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       markSaved();
+      setNavigationEditorEpoch((current) => current + 1);
       toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       console.error("Error saving footer:", error);
@@ -100,7 +121,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
@@ -150,6 +171,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
           {activeTab === "navigation" && (
             <Suspense fallback={<FooterSubtabSpinner />}>
               <NavigationMenusSection
+                editorEpoch={navigationEditorEpoch}
                 menus={config.menus}
                 onChange={(menus) =>
                   setConfig((prev) => ({ ...prev, menus }))
@@ -174,7 +196,7 @@ export function FooterBuilder({ initialConfig, onSave }: FooterBuilderProps) {
       </Tabs>
 
       <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <Button type="button" variant="ghost" size="sm" onClick={discard} disabled={!isDirty || isLoading}>
+        <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>

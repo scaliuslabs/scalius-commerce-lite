@@ -5,7 +5,6 @@ import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import {
-  BadgeInfo,
   Contact,
   Image as ImageIcon,
   Loader2,
@@ -23,7 +22,11 @@ import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
 import { ContactSection } from "./ContactSection";
 
-import type { HeaderConfig, HeaderBuilderProps } from "./types";
+import type {
+  HeaderConfig,
+  HeaderBuilderPanel,
+  HeaderBuilderProps,
+} from "./types";
 import { defaultHeaderConfig } from "./types";
 
 const SocialLinksSection = lazy(() =>
@@ -58,7 +61,12 @@ export function normalizeHeaderConfig(config?: HeaderConfig | null): HeaderConfi
   };
 }
 
-export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
+export function HeaderBuilder({
+  activePanel,
+  initialConfig,
+  onPanelChange,
+  onSave,
+}: HeaderBuilderProps) {
   const { getStorefrontPath } = useStorefrontUrl();
   const queryClient = useQueryClient();
 
@@ -69,14 +77,28 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
   const { config, setConfig, isDirty, discard, markSaved } =
     useConfigDraft(normalizedInitialConfig);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("branding");
+  const [internalActivePanel, setInternalActivePanel] =
+    useState<HeaderBuilderPanel>("branding");
+  const activeTab = activePanel ?? internalActivePanel;
+  const [navigationEditorEpoch, setNavigationEditorEpoch] = useState(0);
+
+  const handlePanelChange = (panel: string) => {
+    const nextPanel = panel as HeaderBuilderPanel;
+    if (activePanel === undefined) setInternalActivePanel(nextPanel);
+    onPanelChange?.(nextPanel);
+  };
+
+  const handleDiscard = () => {
+    discard();
+    setNavigationEditorEpoch((current) => current + 1);
+  };
 
   const handleSave = async () => {
     if (isLoading) return;
 
     if (!config.logo.src) {
       toast.error("Logo Required", { description: "Please select a logo before saving." });
-      setActiveTab("branding");
+      handlePanelChange("branding");
       return;
     }
 
@@ -90,6 +112,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       markSaved();
+      setNavigationEditorEpoch((current) => current + 1);
       toast.success("Header saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       console.error("Error saving header:", error);
@@ -114,7 +137,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
@@ -144,10 +167,6 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
             <Menu className="h-4 w-4" />
             Navigation
           </TabsTrigger>
-          <div className="hidden border-t px-3 py-3 text-xs leading-5 text-muted-foreground lg:block">
-            <BadgeInfo className="mb-1 h-4 w-4" />
-            Customers see saved changes after the storefront cache refreshes.
-          </div>
         </TabsList>
 
         <TabsContent value="branding" className="mt-0 min-w-0">
@@ -189,6 +208,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
           {activeTab === "navigation" && (
             <Suspense fallback={<HeaderSubtabSpinner />}>
               <NavigationSection
+                editorEpoch={navigationEditorEpoch}
                 navigation={config.navigation}
                 onChange={(navigation) =>
                   setConfig((prev) => ({ ...prev, navigation }))
@@ -201,7 +221,7 @@ export function HeaderBuilder({ initialConfig, onSave }: HeaderBuilderProps) {
       </Tabs>
 
       <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <Button type="button" variant="ghost" size="sm" onClick={discard} disabled={!isDirty || isLoading}>
+        <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>

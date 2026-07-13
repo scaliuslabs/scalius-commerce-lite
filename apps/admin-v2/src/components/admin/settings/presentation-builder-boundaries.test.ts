@@ -26,4 +26,31 @@ describe("header and footer builder workflow boundaries", () => {
     expect(footerMenus).toContain("getStorefrontPath={getStorefrontPath}");
     expect(footerMenus).not.toContain('getStorefrontPath={() => "#"}');
   });
+
+  it("resets transient navigation feedback after save or discard", () => {
+    const headerBuilder = source("../header-builder/HeaderBuilder.tsx");
+    const headerNavigation = source("../header-builder/NavigationSection.tsx");
+    const footerBuilder = source("../footer-builder/FooterBuilder.tsx");
+    const footerNavigation = source("../footer-builder/NavigationMenusSection.tsx");
+
+    for (const builder of [headerBuilder, footerBuilder]) {
+      expect(builder).toContain("navigationEditorEpoch");
+      expect(builder).toContain("setNavigationEditorEpoch");
+      expect(builder).toContain("onClick={handleDiscard}");
+    }
+    expect(headerNavigation).toContain("key={editorEpoch}");
+    expect(footerNavigation).toContain('key={`${editorEpoch}:${selectedMenu.id}`}');
+  });
+
+  it("keeps nested presentation workspaces addressable", () => {
+    const route = source("../../../routes/admin/settings/index.tsx");
+    const settingsPage = source("./GeneralSettingsPage.tsx");
+
+    expect(route).toContain("normalizeGeneralSettingsPanel");
+    expect(route).toContain("panel: normalizeGeneralSettingsPanel");
+    expect(route).toContain("panel={search.panel}");
+    expect(settingsPage).toContain("activePanel={headerPanel}");
+    expect(settingsPage).toContain("activePanel={footerPanel}");
+    expect(settingsPage).toContain("onPanelChange={onPanelChange}");
+  });
 });
