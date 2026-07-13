@@ -16,6 +16,7 @@ export * from "./orders";
 export * from "./inventory";
 export * from "./delivery";
 export * from "./marketing";
+export * from "./promotions";
 export * from "./content";
 export * from "./system";
 export * from "./tax";
