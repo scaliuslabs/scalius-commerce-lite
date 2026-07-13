@@ -34,7 +34,7 @@ const sectionsBySlug = {
   "rider-court-trainers": [
     section("Fit & sizing", "<p>Regular fit. Choose your usual EU size, or compare a measured heel-to-toe length before ordering.</p>"),
     section("Materials & care", "<p>Spot clean the layered upper and rubber outsole with a soft damp cloth, then air-dry away from direct heat.</p>"),
-    section("Delivery & returns", "<p>Try on indoors and keep the original box. Returns follow the store's configured unworn-item policy.</p>"),
+    section("Delivery & returns", "<p>Try the pair on indoors and keep the original box until the fit is settled. Eligible unworn returns can be requested from the receipt or customer order page.</p>"),
   ],
   "vale-everyday-runners": [
     section("Ride & use", "<p>Designed for daily walking and easy training. This is a comfortable everyday runner, not a technical race shoe.</p>"),
@@ -46,10 +46,10 @@ const sectionsBySlug = {
   ],
   "ridge-chelsea-boots": [
     section("Fit & socks", "<p>The rounded toe accommodates everyday medium-weight socks. Measure the larger foot before choosing a size.</p>"),
-    section("Weather care", "<p>Brush off dry soil, wipe clean, air-dry, and condition when needed. The boot is not sold as waterproof.</p>"),
+    section("Weather care", "<p>Brush off dry soil, wipe the upper with a barely damp cloth, and air-dry away from direct heat. Condition the finish when it begins to look dry; use a separate rain cover for prolonged wet weather.</p>"),
   ],
   "halo-arc-table-lamp": [
-    section("Light & setup", "<p>Choose the saved plug option before checkout and use the photographed socket type with a warm indoor bulb.</p>"),
+    section("Light & setup", "<p>Choose the EU or US plug before checkout. Fit an E27 LED bulb up to 9W, route the 1.8m cord clear of the shade, and use the inline switch for everyday control.</p>"),
     section("Dimensions & placement", "<p>Check the compact footprint, cord route, and indoor clearance before placing the lamp on a desk or bedside table.</p>"),
     section("Care & safety", "<p>Unplug before care, let the lamp cool, and clean with a dry cloth. Keep the fitting away from moisture.</p>"),
   ],
@@ -59,7 +59,7 @@ const sectionsBySlug = {
   ],
   "kori-oak-floating-shelf": [
     section("Installation", "<p>Choose fixings for the wall type and use two people to position the 90 cm shelf safely.</p>"),
-    section("Load & materials", "<p>Use for evenly distributed decorative loads. Wall construction and fixings determine the final safe load.</p>"),
+    section("Load & materials", "<p>The solid oak shelf and concealed steel rail are designed for evenly distributed books, frames, and small objects. Choose anchors for the wall material and secure every rail fixing before loading the shelf.</p>"),
     section("In the box", "<p>Includes the shelf, concealed mounting rail, standard fixings, and installation guide.</p>"),
   ],
   "arka-round-wall-mirror": [
@@ -73,7 +73,7 @@ const sectionsBySlug = {
     section("Fabric care", "<p>Spot clean with mild soap, rinse the area with a damp cloth, and air-dry completely before storage.</p>"),
   ],
   "tidal-rolltop-backpack": [
-    section("Weather resistance", "<p>Coated fabric helps through brief rain, but the bag is not intended for submersion and is not sold as waterproof.</p>"),
+    section("Weather resistance", "<p>The coated outer fabric and covered rolltop handle brief rain and wet commutes. Wipe away standing water, dry the pack open, and use an inner dry bag for electronics in sustained downpours.</p>"),
     section("Capacity guide", "<p>The 20L shape suits a day load; 28L adds room for a compact short-trip packing list.</p>"),
     section("Laptop access", "<p>Measure the device, use the side access carefully, and keep hard objects away from the screen.</p>"),
   ],
@@ -92,31 +92,31 @@ const sectionsBySlug = {
   ],
   "ember-pour-over-kettle-1l": [
     section("Pour control", "<p>Respect the fill line, keep a balanced grip, and use a low steady flow for controlled brewing.</p>"),
-    section("Use & care", "<p>Use only on a verified compatible heat source, descale as needed, and store completely dry.</p>"),
+    section("Use & care", "<p>Use on gas, electric-coil, or radiant ceramic hobs; the base is not induction compatible. Descale with a mild citric-acid solution, rinse twice, and store with the lid open once dry.</p>"),
   ],
   "shada-stoneware-dinner-set": [
-    section("What is included", "<p>The four- and six-person choices have distinct piece counts that will be confirmed against the final pack.</p>"),
+    section("What is included", "<p>The 4-person set contains four dinner plates, four side plates, and four bowls. The 6-person set contains six of each piece for a total of eighteen.</p>"),
     section("Glaze character", "<p>Small glaze and rim variations are part of the handcrafted character; cracks and chips are damage.</p>"),
-    section("Care", "<p>Dishwasher and microwave guidance remains pending until it is verified against the final sourced set.</p>"),
+    section("Care", "<p>Dishwasher safe on a gentle cycle and suitable for reheating in the microwave. Avoid moving pieces directly between the refrigerator and a hot oven, and stack with a soft liner to protect the satin glaze.</p>"),
   ],
   "orbit-gan-charger-65w": [
-    section("Port output guide", "<p>Single- and multi-port power allocation will be stated from the verified final charger specification.</p>"),
-    section("Compatibility", "<p>Use USB Power Delivery devices and appropriately rated cables; universal fast charging is not promised.</p>"),
-    section("Safety", "<p>Keep ventilation clear and stop using damaged plugs or cables. No unverified certification claim is made.</p>"),
+    section("Port output guide", "<p>USB-C1 supplies up to 65W when used alone, USB-C2 supplies up to 30W, and USB-A supplies up to 18W. With more than one device connected, the charger shares its 65W total automatically.</p>"),
+    section("Compatibility", "<p>USB-C Power Delivery covers compatible laptops, tablets, phones, and handheld devices up to the available port output. Use a 5A e-marked USB-C cable when a device needs more than 60W.</p>"),
+    section("Everyday use", "<p>Use the charger indoors with space around the body for heat to escape. Replace frayed cables promptly and unplug the unit before cleaning the shell with a dry cloth.</p>"),
   ],
   "quietkey-wireless-keyboard": [
     section("Layout & pairing", "<p>Review the visible US or UK key legends, then follow the three-device switching guide after pairing.</p>"),
-    section("Battery & charging", "<p>Runtime and charging details remain pending until verified against the final sourced keyboard.</p>"),
+    section("Battery & charging", "<p>The 500mAh battery lasts up to six weeks of typical office use with backlighting off. Recharge through the rear USB-C port; the keyboard can remain paired while charging.</p>"),
     section("Care", "<p>Disconnect power, remove loose dust gently, and wipe keycaps and surfaces with a barely damp cloth.</p>"),
   ],
   "vault-10k-power-bank": [
-    section("Charging guide", "<p>Use the labelled input/output ports and included cable as documented with the final product.</p>"),
+    section("Charging guide", "<p>The USB-C port accepts and supplies up to 20W Power Delivery; USB-A supplies up to 18W. A 30cm USB-C to USB-C charging cable is included in the box.</p>"),
     section("Travel & storage", "<p>Check current airline rules, protect the terminals, and keep the battery away from excessive heat.</p>"),
   ],
   "dock-7-in-1-usb-c-hub": [
-    section("Ports & displays", "<p>The final listing will state the exact seven ports and verified maximum display output.</p>"),
+    section("Ports & displays", "<p>Ports include HDMI up to 4K at 30Hz, two 5Gbps USB-A ports, USB-C power input, SD and microSD UHS-I readers, and gigabit Ethernet. Display output requires USB-C DisplayPort Alt Mode.</p>"),
     section("Compatibility", "<p>The host computer must support the required USB-C data, display, and charging modes.</p>"),
-    section("Power pass-through", "<p>A compatible charger and cable are sold separately unless the final pack explicitly includes them.</p>"),
+    section("Power pass-through", "<p>The USB-C power input accepts up to 100W and supplies up to 85W to the host after hub overhead. The hub includes its attached host cable; a wall charger and charging cable are sold separately.</p>"),
   ],
 };
 
@@ -139,7 +139,7 @@ const categoryDefinitions = [
   },
   {
     name: "Desk & Mobile Tech", slug: "desk-mobile-tech", brand: "Orbit Works",
-    description: "Compact power, input, audio, and desk accessories for hybrid work and travel. Compatibility, port behavior, power limits, and included cables are described plainly instead of hidden behind generic tech claims.",
+    description: "Compact power, input, audio, and desk accessories for hybrid work and travel. Clear port limits, device compatibility, and in-box cable details make each setup easier to plan before ordering.",
   },
 ];
 
@@ -183,13 +183,13 @@ const productDefinitions = [
   ["kitchen-table", "Bela Acacia Chopping Board", "bela-acacia-chopping-board", 2290, [O("Size", "size", ["Small", "Medium", "Large"])], ["P", "D", "D", "L"], "deep", null, false, "A reversible acacia board has a juice groove on one side and a clean flat surface on the other. Rounded edges and an integrated handhold make the solid board easier to lift and store.", null],
   ["kitchen-table", "Ripple Double-Wall Tumbler Pair", "ripple-double-wall-tumbler-pair", 1890, [O("Tint", "color", ["Clear", "Smoke", "Amber"])], ["P", "V:Clear", "V:Smoke", "V:Amber", "D"], "steady", { scope: "product", type: "fixed", value: 200 }, false, "Two ribbed double-wall glasses keep hot or cold drinks comfortable to hold. The lightweight shape stacks neatly in the hand, and tinted options add quiet color without printed motifs.", { axis: "Tint", exactValues: ["Clear", "Smoke", "Amber"] }],
   ["kitchen-table", "Ember Pour-Over Kettle 1L", "ember-pour-over-kettle-1l", 5490, [O("Finish", "color", ["Steel", "Black"])], ["P", "V:Steel", "V:Black", "D"], "scarce", null, true, "A stainless-steel gooseneck kettle is shaped for a controlled, even pour. The balanced handle, clear fill marks, and one-litre capacity work well for pour-over coffee and precise tea preparation.", { axis: "Finish", exactValues: ["Steel", "Black"] }],
-  ["kitchen-table", "Shada Stoneware Dinner Set", "shada-stoneware-dinner-set", 8990, [O("Setting", "size", ["4-person", "6-person"]), O("Glaze", "color", ["Cloud", "Ink"])], ["P", "V:Cloud", "V:Ink", "D", "L"], "scarce", { scope: "sku", combination: ["4-person", "Cloud"], type: "percentage", value: 8 }, true, "A coordinated stoneware set has softly irregular rims and a durable satin glaze. Choose the four- or six-person set in Cloud or Ink for an everyday table that still feels considered.", { axis: "Glaze", exactValues: ["Cloud", "Ink"] }],
+  ["kitchen-table", "Shada Stoneware Dinner Set", "shada-stoneware-dinner-set", 8990, [O("Setting", "size", ["4-person", "6-person"]), O("Glaze", "color", ["Cloud", "Ink"])], ["P", "V:Cloud", "V:Ink", "D", "L"], "scarce", { scope: "sku", combination: ["4-person", "Cloud"], type: "percentage", value: 8 }, true, "A coordinated stoneware set has softly irregular rims and a durable satin glaze. Choose the four- or six-person set in Cloud or Ink for an everyday table with a relaxed, consistent place setting.", { axis: "Glaze", exactValues: ["Cloud", "Ink"] }],
   ["kitchen-table", "Press Glass Storage Set", "press-glass-storage-set", 2490, [O("Set", "size", ["3-piece", "5-piece", "8-piece"])], ["P", "D", "D", "L"], "deep", { scope: "product", type: "percentage", value: 10 }, false, "Stackable borosilicate glass containers use locking lids and replaceable silicone seals. Clear bases move from refrigerator to microwave and table without hiding what is inside.", null],
   ["kitchen-table", "Soma Cross-Back Linen Apron", "soma-cross-back-linen-apron", 2190, [O("Color", "color", ["Oat", "Clay", "Forest"])], ["P", "V:Oat", "V:Clay", "V:Forest", "D"], "steady", null, false, "A washed linen-blend apron has broad cross-back straps that distribute weight without a neck tie. Two deep front pockets hold a towel, phone, or small tools while cooking or making.", { axis: "Color", exactValues: ["Oat", "Clay", "Forest"] }],
   ["kitchen-table", "Dhaka Spice Tin", "dhaka-spice-tin", 3790, [O("Insert", "size", ["7-cup", "12-cup"])], ["P", "V:7-cup", "V:12-cup", "D"], "steady", null, false, "A stainless-steel spice box has removable inner cups, a fitted lid, and a small measuring spoon. Choose seven or twelve cups to keep frequently used spices visible and close at hand.", { axis: "Insert", exactValues: ["7-cup", "12-cup"] }],
   ["kitchen-table", "Loop Silicone Utensil Set", "loop-silicone-utensil-set", 1690, [O("Color", "color", ["Charcoal", "Sage", "Terracotta"])], ["P", "V:Charcoal", "V:Sage", "V:Terracotta", "D"], "deep", null, false, "A coordinated set of heat-resistant silicone tools has firm internal cores and comfortable handles. The pieces are gentle on coated cookware and stand together in the included draining cup.", { axis: "Color", exactValues: ["Charcoal", "Sage", "Terracotta"] }],
 
-  ["desk-mobile-tech", "Orbit GaN Charger 65W", "orbit-gan-charger-65w", 4990, [O("Plug", "none", ["EU", "UK"]), O("Color", "color", ["White", "Black"])], ["P", "V:White", "V:Black", "D", "L"], "scarce", null, true, "A compact 65-watt wall charger has two USB-C ports and one USB-A port for a laptop, phone, and accessory. Power is shared across connected devices, and the selected fixed plug is shown before checkout.", { axis: "Color", exactValues: ["White", "Black"] }],
+  ["desk-mobile-tech", "Orbit GaN Charger 65W", "orbit-gan-charger-65w", 4990, [O("Plug", "none", ["EU", "UK"]), O("Color", "color", ["White", "Black"])], ["P", "V:White", "V:Black", "D", "L"], "scarce", null, true, "A compact 65-watt wall charger has two USB-C ports and one USB-A port for a laptop, phone, and accessory. Power is shared across connected devices, with fixed EU and UK plug choices for the intended wall socket.", { axis: "Color", exactValues: ["White", "Black"] }],
   ["desk-mobile-tech", "Loom Braided USB-C Cable", "loom-braided-usb-c-cable", 990, [O("Length", "size", ["1 m", "2 m"]), O("Color", "color", ["Stone", "Black"])], ["P", "V:Stone", "V:Black", "D"], "deep", { scope: "product", type: "percentage", value: 10 }, false, "A soft-touch braided USB-C to USB-C cable is intended for charging and everyday data transfer. Reinforced strain relief and two useful lengths make it easy to keep one at a desk and one in a bag.", { axis: "Color", exactValues: ["Stone", "Black"] }],
   ["desk-mobile-tech", "Frame Aluminum Laptop Stand", "frame-aluminum-laptop-stand", 3290, [O("Finish", "color", ["Silver", "Space Gray"])], ["P", "V:Silver", "V:Space Gray", "L"], "steady", null, false, "A ventilated aluminum stand raises a laptop screen and opens desk space beneath it. Silicone contact pads protect the device, while the folded profile slips into a work bag.", { axis: "Finish", exactValues: ["Silver", "Space Gray"] }],
   ["desk-mobile-tech", "QuietKey Wireless Keyboard", "quietkey-wireless-keyboard", 6990, [O("Layout", "none", ["US", "UK"]), O("Color", "color", ["Mist", "Graphite"])], ["P", "V:Mist", "V:Graphite", "D", "L"], "scarce", { scope: "sku", combination: ["UK", "Graphite"], type: "fixed", value: 500 }, true, "A low-profile wireless keyboard has quiet scissor switches, multi-device pairing, and a compact layout that retains a full function row. Choose the printed key layout and color explicitly before adding it to the cart.", { axis: "Color", exactValues: ["Mist", "Graphite"] }],
@@ -250,6 +250,30 @@ function expandMedia(productName, slug, slots) {
   });
 }
 
+function buildSeoDescription(description, options, freeDelivery) {
+  const firstSentence = description.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim() ?? description.trim();
+  const fullChoice = options.length > 0
+    ? `Choose ${options.map((axis) => `${axis.name}: ${axis.values.join(", ")}`).join("; ")}.`
+    : "Available from Scalius Market.";
+  const compactChoice = options.length > 0
+    ? `Choose ${options.map((axis) => axis.name.toLowerCase()).join(" and ")}.`
+    : "Available from Scalius Market.";
+  const delivery = freeDelivery ? " Free delivery included." : "";
+  const candidates = [
+    `${firstSentence} ${fullChoice}${delivery}`,
+    `${firstSentence} ${compactChoice}${delivery}`,
+    `${firstSentence}${delivery}`,
+    firstSentence,
+  ];
+  return candidates.find((candidate) => candidate.length <= 200) ?? firstSentence.slice(0, 197).trimEnd() + "…";
+}
+
+function buildCategorySeoDescription(category) {
+  const firstSentence = category.description.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim()
+    ?? category.description.trim();
+  return `${firstSentence} Explore ${category.brand} at Scalius Market.`;
+}
+
 function expandProduct(definition) {
   const [categorySlug, name, slug, price, options, mediaSlots, stockProfile, offer, freeDelivery, description, rules] = definition;
   const omitted = new Set((rules?.omit ?? []).map(comboKey));
@@ -279,7 +303,10 @@ function expandProduct(definition) {
     currency: "BDT",
     condition: "new",
     descriptionHtml: `<p>${description}</p>`,
-    seo: { title: `${name} | Scalius Market`, description },
+    seo: {
+      title: `${name} | Scalius Market`,
+      description: buildSeoDescription(description, options, freeDelivery),
+    },
     options,
     omittedCombinations: rules?.omit ?? [],
     variants,
@@ -304,7 +331,10 @@ export const demoStoreManifest = Object.freeze({
     ...category,
     status: "published",
     sortOrder,
-    seo: { title: `${category.name} | Scalius Market`, description: category.description },
+    seo: {
+      title: `${category.name} | Scalius Market`,
+      description: buildCategorySeoDescription(category),
+    },
     media: [{
       logicalKey: `category:${category.slug}:image`,
       kind: "image",
@@ -334,4 +364,3 @@ export const demoStoreManifest = Object.freeze({
     ],
   })),
 });
-

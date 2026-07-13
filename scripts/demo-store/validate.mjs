@@ -1,6 +1,7 @@
 import { DEMO_STORE_CONTRACT, demoStoreManifest } from "./manifest.mjs";
 
 const ALLOWED_MAPPINGS = new Set(["size", "color", "material", "pattern", "none"]);
+const BUYER_COPY_PLACEHOLDER_PATTERN = /\b(?:pending|to be confirmed|will be confirmed|will be stated|final sourced|final product|final pack|unverified certification|not promised)\b/i;
 
 function normalized(value) {
   return String(value).normalize("NFKC").trim().toLocaleLowerCase("en-US");
@@ -33,6 +34,12 @@ function expectCount(errors, label, actual, expected) {
   if (actual !== expected) errors.push(`${label} must be ${expected}; received ${actual}`);
 }
 
+function validateBuyerCopy(errors, label, value) {
+  if (BUYER_COPY_PLACEHOLDER_PATTERN.test(value)) {
+    errors.push(`${label} contains unfinished sourcing or placeholder language`);
+  }
+}
+
 function validateProduct(product, categories, errors) {
   const prefix = `Product ${product.slug}`;
   if (!categories.has(product.categorySlug)) errors.push(`${prefix} references unknown category ${product.categorySlug}`);
@@ -43,6 +50,14 @@ function validateProduct(product, categories, errors) {
   }
   if (!product.brand?.trim()) errors.push(`${prefix} needs an explicit brand`);
   if (!product.seo?.title?.trim() || !product.seo?.description?.trim()) errors.push(`${prefix} needs SEO title and description`);
+  if (product.seo?.description && (product.seo.description.length < 70 || product.seo.description.length > 200)) {
+    errors.push(`${prefix} SEO description must be 70–200 characters`);
+  }
+  if (product.seo?.description === plainText(product.descriptionHtml)) {
+    errors.push(`${prefix} SEO description must summarize rather than duplicate the full description`);
+  }
+  validateBuyerCopy(errors, `${prefix} description`, plainText(product.descriptionHtml));
+  validateBuyerCopy(errors, `${prefix} SEO description`, product.seo?.description ?? "");
 
   expectUnique(errors, `${prefix} option names`, product.options.map((axis) => axis.name));
   if (product.options.length > 2) errors.push(`${prefix} exceeds the current two-axis option contract`);
@@ -102,6 +117,7 @@ function validateProduct(product, categories, errors) {
   product.additionalSections.forEach((item, index) => {
     if (item.sortOrder !== index) errors.push(`${prefix} sections must have dense zero-based sort order`);
     if (!item.title?.trim() || plainText(item.html).length < 35) errors.push(`${prefix} section ${item.logicalKey} is incomplete`);
+    validateBuyerCopy(errors, `${prefix} section ${item.logicalKey}`, plainText(item.html));
   });
 
   if (product.offer) {
@@ -131,6 +147,14 @@ export function validateDemoStoreManifest(manifest = demoStoreManifest) {
     if (category.status !== "published") errors.push(`Category ${category.slug} must target published status`);
     if (!category.description?.trim() || category.description.length < 120) errors.push(`Category ${category.slug} needs substantial copy`);
     if (!category.brand?.trim()) errors.push(`Category ${category.slug} needs a house brand`);
+    if (!category.seo?.description || category.seo.description.length < 70 || category.seo.description.length > 200) {
+      errors.push(`Category ${category.slug} SEO description must be 70–200 characters`);
+    }
+    if (category.seo?.description === category.description) {
+      errors.push(`Category ${category.slug} SEO description must summarize rather than duplicate category copy`);
+    }
+    validateBuyerCopy(errors, `Category ${category.slug} description`, category.description ?? "");
+    validateBuyerCopy(errors, `Category ${category.slug} SEO description`, category.seo?.description ?? "");
   }
 
   for (const product of manifest.products) {

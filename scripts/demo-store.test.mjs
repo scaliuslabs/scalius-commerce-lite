@@ -58,6 +58,37 @@ describe("demo store manifest", () => {
       expect.stringContaining("Media alt text must be unique"),
     ]));
   });
+
+  it("ships finished buyer copy and distinct bounded SEO summaries", () => {
+    for (const category of demoStoreManifest.categories) {
+      expect(category.seo.description).not.toBe(category.description);
+      expect(category.seo.description.length).toBeGreaterThanOrEqual(70);
+      expect(category.seo.description.length).toBeLessThanOrEqual(200);
+    }
+    for (const product of demoStoreManifest.products) {
+      const description = product.descriptionHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const buyerCopy = [
+        description,
+        product.seo.description,
+        ...product.additionalSections.map((section) => section.html.replace(/<[^>]+>/g, " ")),
+      ].join(" ");
+      expect(buyerCopy).not.toMatch(/\b(?:pending|to be confirmed|will be confirmed|will be stated|final sourced|final product|final pack|unverified certification|not promised)\b/i);
+      expect(product.seo.description).not.toBe(description);
+      expect(product.seo.description.length).toBeGreaterThanOrEqual(70);
+      expect(product.seo.description.length).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it("rejects unfinished sourcing notes from buyer-facing fields", () => {
+    const manifest = structuredClone(demoStoreManifest);
+    manifest.products[0].additionalSections[0].html = "<p>Exact sizing will be confirmed against the final sourced product.</p>";
+
+    const result = validateDemoStoreManifest(manifest);
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "Product rider-court-trainers section rider-court-trainers:section:fit-sizing contains unfinished sourcing or placeholder language",
+    );
+  });
 });
 
 describe("demo store plan command", () => {
