@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getSmsSettings, saveSmsSettings, invalidateSmsCache, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
+import { getSmsSettings, saveSmsSettings, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
@@ -97,7 +97,6 @@ app.openapi(saveSmsRoute, async (c) => {
         : getCredentialEncryptionKey(c.env as Record<string, unknown>);
     await saveSmsSettings(db, body, encKey);
     await clearNotificationProviderBlocks(db, { channel: "sms" });
-    invalidateSmsCache();
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
