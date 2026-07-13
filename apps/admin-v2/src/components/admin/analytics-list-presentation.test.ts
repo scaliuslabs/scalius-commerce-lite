@@ -1,0 +1,17 @@
+import { describe, expect, it } from "vitest";
+import { analyticsReadinessPresentation } from "./analytics-list-presentation";
+
+describe("analytics list readiness presentation", () => {
+  it.each([
+    ["ready", "Live", "dark:text-emerald-300"],
+    ["ready_to_activate", "Ready to activate", "dark:text-sky-300"],
+    ["draft", "Draft", "dark:text-amber-300"],
+    ["blocked", "Needs attention", "text-destructive"],
+    ["trashed", "In trash", "text-muted-foreground"],
+  ] as const)("presents %s truthfully in light and dark modes", (readiness, label, className) => {
+    expect(analyticsReadinessPresentation(readiness)).toMatchObject({
+      label,
+      className: expect.stringContaining(className),
+    });
+  });
+});

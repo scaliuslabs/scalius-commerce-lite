@@ -3,11 +3,10 @@ import { Link } from "@tanstack/react-router";
 import {
   Activity,
   ArchiveRestore,
-  CircleAlert,
-  CircleCheck,
   Code2,
   Edit3,
-  Gauge,
+  FilterX,
+  Plus,
   Power,
   PowerOff,
   Trash2,
@@ -48,66 +47,36 @@ import type {
   PaginationResponse,
 } from "~/types/api-responses";
 import { cn } from "@scalius/shared/utils";
+import { useIsMobile } from "~/hooks/use-mobile";
+import { AnalyticsMobileCard } from "./AnalyticsMobileCard";
+import {
+  ANALYTICS_LOCATION_LABELS,
+  ANALYTICS_PROVIDER_LABELS,
+  analyticsReadinessPresentation,
+} from "./analytics-list-presentation";
 
 interface AnalyticsListProps {
   scripts: AnalyticsScriptSummary[];
   pagination: PaginationResponse;
   showTrashed: boolean;
+  hasFilters: boolean;
+  onClearFilters: () => void;
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
-}
-
-const PROVIDER_LABELS: Record<string, string> = {
-  google_analytics: "Google Analytics 4",
-  google_tag_manager: "Google Tag Manager",
-  facebook_pixel: "Meta Pixel",
-  tiktok_pixel: "TikTok Pixel",
-  cloudflare_web_analytics: "Cloudflare Web Analytics",
-  custom: "Custom code",
-};
-
-const LOCATION_LABELS: Record<string, string> = {
-  head: "Document head",
-  body_start: "Body start",
-  body_end: "Body end",
-};
-
-function readinessPresentation(script: AnalyticsScriptSummary) {
-  if (script.readiness === "ready") return {
-    label: "Live",
-    icon: CircleCheck,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  };
-  if (script.readiness === "ready_to_activate") return {
-    label: "Ready to activate",
-    icon: Power,
-    className: "border-sky-200 bg-sky-50 text-sky-700",
-  };
-  if (script.readiness === "blocked") return {
-    label: "Needs attention",
-    icon: CircleAlert,
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
-  };
-  if (script.readiness === "trashed") return {
-    label: "In trash",
-    icon: Trash2,
-    className: "border-muted bg-muted text-muted-foreground",
-  };
-  return {
-    label: "Draft",
-    icon: Gauge,
-    className: "border-amber-200 bg-amber-50 text-amber-800",
-  };
 }
 
 export function AnalyticsList({
   scripts,
   pagination,
   showTrashed,
+  hasFilters,
+  onClearFilters,
   onPageChange,
   onLimitChange,
 }: AnalyticsListProps) {
+  const isMobile = useIsMobile();
   const { hasPermission } = usePermissions();
+  const canCreate = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_CREATE);
   const canEdit = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
   const canToggle = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_TOGGLE);
   const deleteMutation = useDeleteAnalyticsScript();
@@ -118,28 +87,72 @@ export function AnalyticsList({
   const [duplicateTarget, setDuplicateTarget] = useState<AnalyticsScriptSummary | null>(null);
   const [duplicateConfirmed, setDuplicateConfirmed] = useState(false);
 
-  const isMutating = deleteMutation.isPending || permanentDeleteMutation.isPending;
+  const isMutating = deleteMutation.isPending
+    || permanentDeleteMutation.isPending
+    || restoreMutation.isPending
+    || toggleMutation.isPending;
+  const emptyTitle = showTrashed
+    ? hasFilters ? "No trashed integrations match" : "Analytics trash is empty"
+    : hasFilters ? "No integrations match these filters" : "No analytics integrations yet";
+  const emptyDescription = showTrashed
+    ? hasFilters
+      ? "Clear the filters to review every recoverable integration."
+      : "Integrations moved to trash stay recoverable here until permanently deleted."
+    : hasFilters
+      ? "Clear the filters or search for another integration or public identifier."
+      : "Create an inactive draft, verify its provider details, then activate it when ready.";
 
   if (scripts.length === 0) {
     return (
       <div className="rounded-lg border border-dashed px-6 py-12 text-center">
-        <Activity className="mx-auto h-8 w-8 text-muted-foreground/60" />
-        <h2 className="mt-3 text-sm font-semibold">
-          {showTrashed ? "Analytics trash is empty" : "No matching analytics scripts"}
-        </h2>
+        {hasFilters ? <FilterX className="mx-auto h-7 w-7 text-muted-foreground/60" /> : <Activity className="mx-auto h-7 w-7 text-muted-foreground/60" />}
+        <h2 className="mt-3 text-sm font-semibold">{emptyTitle}</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          {showTrashed
-            ? "Scripts moved to trash stay recoverable here."
-            : "Create a draft or change the filters to see another provider."}
+          {emptyDescription}
         </p>
+        {hasFilters ? (
+          <Button type="button" variant="outline" size="sm" className="mt-4" onClick={onClearFilters}>
+            <FilterX className="mr-2 h-4 w-4" />Clear filters
+          </Button>
+        ) : !showTrashed && canCreate ? (
+          <Button size="sm" className="mt-4" asChild>
+            <Link to="/admin/analytics/new"><Plus className="mr-2 h-4 w-4" />Add integration</Link>
+          </Button>
+        ) : null}
       </div>
     );
   }
 
   return (
     <>
-      <div className="overflow-hidden rounded-lg border bg-background">
-        <Table>
+      {isMobile ? (
+        <div className="space-y-2">
+          {scripts.map((script) => (
+            <AnalyticsMobileCard
+              key={script.id}
+              script={script}
+              showTrashed={showTrashed}
+              canEdit={canEdit}
+              canToggle={canToggle}
+              isMutating={isMutating}
+              onActivate={() => setDuplicateTarget(script)}
+              onDeactivate={() => toggleMutation.mutate({
+                id: script.id,
+                expectedRevision: script.revision,
+                isActive: false,
+              })}
+              onTrash={() => setDeleteTarget(script)}
+              onRestore={() => restoreMutation.mutate({
+                id: script.id,
+                expectedRevision: script.revision,
+              })}
+              onPermanentDelete={() => setDeleteTarget(script)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border bg-background">
+          <Table>
           <TableHeader>
             <TableRow className="bg-muted/35 hover:bg-muted/35">
               <TableHead>Integration</TableHead>
@@ -151,7 +164,7 @@ export function AnalyticsList({
           </TableHeader>
           <TableBody>
             {scripts.map((script) => {
-              const presentation = readinessPresentation(script);
+              const presentation = analyticsReadinessPresentation(script.readiness);
               const ReadinessIcon = presentation.icon;
               return (
                 <TableRow key={script.id} className="group">
@@ -167,7 +180,7 @@ export function AnalyticsList({
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{script.name}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {PROVIDER_LABELS[script.type] ?? script.type}
+                          {ANALYTICS_PROVIDER_LABELS[script.type] ?? script.type}
                           {script.identifier ? (
                             <span className="font-mono"> · {script.identifier}</span>
                           ) : null}
@@ -176,7 +189,7 @@ export function AnalyticsList({
                     </div>
                   </TableCell>
                   <TableCell className="py-2.5">
-                    <p className="text-sm">{LOCATION_LABELS[script.location] ?? script.location}</p>
+                    <p className="text-sm">{ANALYTICS_LOCATION_LABELS[script.location] ?? script.location}</p>
                     <p className="text-xs text-muted-foreground">
                       {script.usePartytown ? "Worker isolated" : "Main thread"}
                     </p>
@@ -202,6 +215,7 @@ export function AnalyticsList({
                             <Button
                               variant="ghost"
                               size="icon"
+                              disabled={isMutating}
                               aria-label={`Restore ${script.name}`}
                               title="Restore as inactive"
                               onClick={() => restoreMutation.mutate({
@@ -215,6 +229,7 @@ export function AnalyticsList({
                               variant="ghost"
                               size="icon"
                               className="text-destructive hover:text-destructive"
+                              disabled={isMutating}
                               aria-label={`Permanently delete ${script.name}`}
                               title="Delete permanently"
                               onClick={() => setDeleteTarget(script)}
@@ -229,6 +244,7 @@ export function AnalyticsList({
                             <Button
                               variant="ghost"
                               size="icon"
+                              disabled={isMutating}
                               aria-label={`Deactivate ${script.name}`}
                               title="Deactivate"
                               onClick={() => toggleMutation.mutate({
@@ -244,6 +260,7 @@ export function AnalyticsList({
                             <Button
                               variant="ghost"
                               size="icon"
+                              disabled={isMutating}
                               aria-label={`Activate ${script.name}`}
                               title="Activate"
                               onClick={() => setDuplicateTarget(script)}
@@ -268,6 +285,7 @@ export function AnalyticsList({
                               variant="ghost"
                               size="icon"
                               className="text-destructive hover:text-destructive"
+                              disabled={isMutating}
                               aria-label={`Move ${script.name} to trash`}
                               title="Move to trash"
                               onClick={() => setDeleteTarget(script)}
@@ -283,8 +301,9 @@ export function AnalyticsList({
               );
             })}
           </TableBody>
-        </Table>
-      </div>
+          </Table>
+        </div>
+      )}
 
       <AdminListPagination
         pagination={pagination}
