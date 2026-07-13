@@ -565,6 +565,26 @@ and a separate checkout visibility save without a single resulting preview.
   credential rotation/cutover, and a release gate that rejects any effective
   test-mode gateway on a production storefront.
 
+### Implemented payment-readiness workspace checkpoint (2026-07-13)
+
+- One pure admin outcome model now renders COD, Stripe, SSLCommerz, and Polar
+  setup, provider enablement, checkout selection, saved-flow eligibility,
+  environment, and resulting buyer visibility. Missing, placeholder,
+  mismatched, disabled, hidden, and flow-excluded states all project hidden;
+  only the complete method chain projects visible.
+- Connection health is deliberately **Not checked**. Credential shape is setup
+  readiness, not proof that a provider or webhook is healthy.
+- Checkout visibility is an explicit draft with Saved/Unsaved, Reset, a
+  ready-method-only default selector, and a no-op/invalid save lock. A
+  successful save refreshes authority without flashing the whole workspace;
+  post-write refresh failure preserves the last loaded workspace, marks status
+  stale, and locks dependent saves until retry. An unavailable checkout-flow
+  read likewise locks payment-method saves instead of assuming Standard flow.
+- The complete provider matrix and remaining boundaries are recorded in
+  [`PAYMENT-METHOD-READINESS.md`](PAYMENT-METHOD-READINESS.md). Addressable
+  settings routes, provider probes, webhook health, rotation, and sandbox
+  transaction evidence remain release work.
+
 ### Verification scenarios for every gateway
 
 Each gateway must have a documented sandbox run for: successful authorization,

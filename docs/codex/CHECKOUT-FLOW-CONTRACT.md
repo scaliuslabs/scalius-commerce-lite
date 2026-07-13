@@ -111,6 +111,10 @@ prerequisites are ready.
 - The remaining balance is accurately stored as due, but merchant policy and
   operations for collecting that balance need a separate lifecycle design; do
   not imply automatic collection.
+- The exact provider/setup/selection/flow/buyer projection matrix is recorded
+  in [`PAYMENT-METHOD-READINESS.md`](PAYMENT-METHOD-READINESS.md). Connection
+  health remains explicitly **Not checked** until a real provider probe and
+  webhook-health authority exist.
 - Source and responsive-contract tests cover the 390 px layout intent. A final
   dark/light browser pass should be performed against the deployed build before
   release sign-off.

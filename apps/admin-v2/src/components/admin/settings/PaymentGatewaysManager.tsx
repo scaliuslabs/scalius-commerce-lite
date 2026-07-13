@@ -33,6 +33,11 @@ import {
     SandboxToggle,
     ExtLink,
 } from "./payment-gateway-utils";
+import {
+    getPaymentMethodOutcome,
+    type PaymentMethodEnvironment,
+    type PaymentMethodOutcome,
+} from "./payment-method-outcome";
 import { PolarForm, PolarSetupGuide } from "./PolarSettingsForm";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
@@ -50,9 +55,41 @@ import {
 
 const ALL_METHODS: MethodKey[] = ["stripe", "sslcommerz", "polar", "cod"];
 
+function OutcomeBadge({ outcome }: { outcome: PaymentMethodOutcome }) {
+    if (outcome.state === "visible") {
+        return (
+            <Badge className="gap-1 border-0 bg-emerald-500/10 text-xs text-emerald-700 shadow-none hover:bg-emerald-500/15 dark:text-emerald-300">
+                <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                {outcome.label}
+            </Badge>
+        );
+    }
+    if (outcome.state === "blocked" || outcome.state === "needs_setup") {
+        return (
+            <Badge variant={outcome.state === "blocked" ? "destructive" : "outline"} className="gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                {outcome.label}
+            </Badge>
+        );
+    }
+    if (outcome.state === "hidden_by_flow") {
+        return <Badge variant="outline" className="border-amber-500/40 text-xs text-amber-700 dark:text-amber-300">{outcome.label}</Badge>;
+    }
+    if (outcome.state === "flow_unknown") {
+        return <Badge variant="outline" className="border-amber-500/40 text-xs text-amber-700 dark:text-amber-300">{outcome.label}</Badge>;
+    }
+    return <Badge variant="secondary" className="text-xs">{outcome.label}</Badge>;
+}
+
 export default function PaymentGatewaysManager() {
     const queryClient = useQueryClient();
-    const { data: checkoutFlowSettings } = useQuery(checkoutFlowSettingsQueryOptions());
+    const {
+        data: checkoutFlowSettings,
+        isError: checkoutFlowError,
+        error: checkoutFlowQueryError,
+        isFetching: checkoutFlowFetching,
+        refetch: refetchCheckoutFlow,
+    } = useQuery(checkoutFlowSettingsQueryOptions());
     const [loading, setLoading] = useState(true);
     const [methodsLoadError, setMethodsLoadError] = useState<string | null>(null);
     const [methods, setMethods] = useState<PaymentMethodsData | null>(null);
@@ -79,24 +116,28 @@ export default function PaymentGatewaysManager() {
     const [expanded, setExpanded] = useState<string[]>([]);
 
     // Load only payment-methods on mount (1 API call)
-    const loadMethods = useCallback(async () => {
-        setLoading(true);
+    const loadMethods = useCallback(async (showInitialLoader = true, notifyOnError = true) => {
+        if (showInitialLoader) setLoading(true);
         setMethodsLoadError(null);
         try {
             const d = await getPaymentMethods() as PaymentMethodsData;
             setMethods(d);
             setEnabledMethods(new Set(d.enabledMethods));
             setDefaultMethod(d.defaultMethod);
+            return true;
         } catch (err) {
             const message = getServerFnError(err, "Failed to load payment settings");
-            setMethods(null);
+            if (showInitialLoader) setMethods(null);
             setMethodsLoadError(message);
-            toast.error(message);
+            if (notifyOnError) toast.error(message);
+            return false;
         }
-        finally { setLoading(false); }
+        finally {
+            if (showInitialLoader) setLoading(false);
+        }
     }, []);
 
-    useEffect(() => { loadMethods(); }, [loadMethods]);
+    useEffect(() => { void loadMethods(); }, [loadMethods]);
 
     // Lazy-load gateway credentials on accordion expand
     const loadCreds = useCallback(async (gw: MethodKey, force = false) => {
@@ -151,18 +192,28 @@ export default function PaymentGatewaysManager() {
     };
 
     const saveMethods = async (silent = false) => {
-        if (loading || !methods) {
-            const message = "Reload payment settings before saving checkout visibility.";
+        if (loading || !methods || methodsLoadError || !checkoutFlowSettings) {
+            const message = !checkoutFlowSettings
+                ? "Reload checkout flow before saving buyer payment methods."
+                : "Reload payment status before saving buyer payment methods.";
             if (!silent) toast.error(message);
             return false;
         }
         setSavingMethods(true);
         try {
-            await updatePaymentMethods({ data: { enabledMethods: Array.from(enabledMethods), defaultMethod } });
+            const nextEnabledMethods = Array.from(enabledMethods);
+            await updatePaymentMethods({ data: { enabledMethods: nextEnabledMethods, defaultMethod } });
+            setMethods((current) => current
+                ? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }
+                : current);
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
-            if (!silent) toast.success("Storefront settings updated");
-            return true;
+            const refreshed = await loadMethods(false, false);
+            if (!silent) {
+                if (refreshed) toast.success("Buyer payment methods saved");
+                else toast.warning("Payment methods were saved, but their current status could not be refreshed.");
+            }
+            return refreshed;
         } catch (err) {
             if (!silent) toast.error(getServerFnError(err, "Error saving payment methods"));
             else throw err;
@@ -181,9 +232,13 @@ export default function PaymentGatewaysManager() {
             await updatePaymentGatewaySettings({ data: { gateway: gw, settings: body as unknown as SettingsPayload } });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.paymentMethods() });
             await queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutFlow() });
-            toast.success(`${META[gw].label} settings saved`);
             loadedGateways.current.delete(gw);
-            await Promise.all([loadMethods(), loadCreds(gw)]);
+            const [methodsRefreshed] = await Promise.all([
+                loadMethods(false, false),
+                loadCreds(gw),
+            ]);
+            if (methodsRefreshed) toast.success(`${META[gw].label} settings saved`);
+            else toast.warning(`${META[gw].label} was saved, but checkout status could not be refreshed.`);
         } catch (err) {
             toast.error(getServerFnError(err, `Error saving ${META[gw].label} settings`));
         }
@@ -191,9 +246,10 @@ export default function PaymentGatewaysManager() {
     };
 
     const methodAllowedByFlow = useCallback((method: MethodKey) => {
-        const checkoutMode = checkoutFlowSettings?.checkoutMode ?? "all";
-        const partialPaymentEnabled = checkoutFlowSettings?.partialPaymentEnabled === true;
-        const partialPaymentAmount = checkoutFlowSettings?.partialPaymentAmount ?? 0;
+        if (!checkoutFlowSettings) return undefined;
+        const checkoutMode = checkoutFlowSettings.checkoutMode;
+        const partialPaymentEnabled = checkoutFlowSettings.partialPaymentEnabled === true;
+        const partialPaymentAmount = checkoutFlowSettings.partialPaymentAmount ?? 0;
         if (partialPaymentEnabled && partialPaymentAmount > 0) return method !== "cod";
         if (checkoutMode === "guest_cod_only") return method === "cod";
         if (checkoutMode === "gateways_only") return method !== "cod";
@@ -201,9 +257,10 @@ export default function PaymentGatewaysManager() {
     }, [checkoutFlowSettings]);
 
     const getFlowHiddenReason = useCallback((method: MethodKey) => {
-        const checkoutMode = checkoutFlowSettings?.checkoutMode ?? "all";
-        const partialPaymentEnabled = checkoutFlowSettings?.partialPaymentEnabled === true;
-        const partialPaymentAmount = checkoutFlowSettings?.partialPaymentAmount ?? 0;
+        if (!checkoutFlowSettings) return null;
+        const checkoutMode = checkoutFlowSettings.checkoutMode;
+        const partialPaymentEnabled = checkoutFlowSettings.partialPaymentEnabled === true;
+        const partialPaymentAmount = checkoutFlowSettings.partialPaymentAmount ?? 0;
         if (partialPaymentEnabled && partialPaymentAmount > 0 && method === "cod") {
             return "COD is hidden while Online advance deposit is enabled.";
         }
@@ -218,58 +275,12 @@ export default function PaymentGatewaysManager() {
 
     useEffect(() => {
         const visibleEnabledMethods = ALL_METHODS.filter((method) =>
-            enabledMethods.has(method) && methodAllowedByFlow(method),
+            enabledMethods.has(method) && methodAllowedByFlow(method) === true,
         );
         if (visibleEnabledMethods.length > 0 && !visibleEnabledMethods.includes(defaultMethod)) {
             setDefaultMethod(visibleEnabledMethods[0]);
         }
     }, [defaultMethod, enabledMethods, methodAllowedByFlow]);
-
-    const getStatusBadge = (m: MethodKey) => {
-        const selected = enabledMethods.has(m);
-        const flowAllowed = methodAllowedByFlow(m);
-        if (m === "cod") {
-            if (!selected) return <Badge variant="secondary" className="text-xs">Hidden</Badge>;
-            if (!flowAllowed) return <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-700 dark:text-amber-400">Hidden by flow</Badge>;
-            return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" /> Visible</Badge>;
-        }
-        const st = methods?.gatewayStatus?.[m];
-        const providerEnabled = st?.providerEnabled ?? st?.enabled === true;
-        const usable = st?.usable ?? (providerEnabled && st?.configured === true);
-        if (st?.blockedReason && !usable) {
-            return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />Blocked</Badge>;
-        }
-        if (!st?.configured) return <Badge variant="outline" className="text-xs text-muted-foreground">Needs setup</Badge>;
-        if (!providerEnabled) return <Badge variant="secondary" className="text-xs">Provider off</Badge>;
-        if (selected && !usable) {
-            return <Badge variant="destructive" className="text-xs gap-1"><AlertTriangle className="h-3 w-3" />Blocked</Badge>;
-        }
-        if (!selected) return <Badge variant="secondary" className="text-xs">Hidden</Badge>;
-        if (!flowAllowed) return <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-700 dark:text-amber-400">Hidden by flow</Badge>;
-        if (usable) {
-            return <Badge variant="default" className="text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 shadow-none border-0 gap-1"><CheckCircle2 className="h-3 w-3" />Visible</Badge>;
-        }
-        return <Badge variant="outline" className="text-xs text-muted-foreground">Ready</Badge>;
-    };
-
-    const getGatewayNotice = (m: MethodKey) => {
-        const selected = enabledMethods.has(m);
-        const flowHiddenReason = getFlowHiddenReason(m);
-        if (selected && flowHiddenReason) return flowHiddenReason;
-        if (m === "cod") return null;
-        const st = methods?.gatewayStatus?.[m];
-        if (!st) return null;
-        const providerEnabled = st.providerEnabled ?? st.enabled;
-        if (st.blockedReason && (selected || providerEnabled)) return st.blockedReason;
-        if (!selected) return null;
-        if (st.configured && !(st.providerEnabled ?? st.enabled)) {
-            return `${META[m].label} has credentials, but the gateway itself is off. Save ${META[m].label} after turning it on.`;
-        }
-        if (st.usable === false) {
-            return `${META[m].label} is selected but cannot be shown to customers yet.`;
-        }
-        return null;
-    };
 
     if (loading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
 
@@ -300,90 +311,198 @@ export default function PaymentGatewaysManager() {
         );
     }
 
-    const defaultOptions = ALL_METHODS.filter((method) => enabledMethods.has(method) && methodAllowedByFlow(method));
-    const canSaveMethods = defaultOptions.length > 0 && defaultOptions.includes(defaultMethod);
+    const getSavedEnvironment = (method: MethodKey): PaymentMethodEnvironment | undefined => {
+        if (method === "cod") return "not_applicable";
+        if (!loadedGateways.current.has(method)) return undefined;
+        if (method === "stripe") return getStripeCredentialEnvironment(stripe);
+        if (method === "sslcommerz") return ssl.sandbox ? "test" : "live";
+        return polar.sandbox ? "test" : "live";
+    };
+    const getMethodOutcome = (method: MethodKey) => getPaymentMethodOutcome({
+        method,
+        status: methods.gatewayStatus[method],
+        checkoutSelected: enabledMethods.has(method),
+        flowAllowed: methodAllowedByFlow(method),
+        environment: getSavedEnvironment(method),
+    });
+    const defaultOptions = ALL_METHODS.filter((method) => (
+        enabledMethods.has(method)
+        && methodAllowedByFlow(method) === true
+        && getMethodOutcome(method).canSelect
+    ));
+    const defaultMethodAvailable = defaultOptions.includes(defaultMethod);
+    const canSaveMethods = Boolean(checkoutFlowSettings)
+        && !methodsLoadError
+        && defaultOptions.length > 0
+        && defaultMethodAvailable;
+    const savedEnabledMethods = new Set(methods.enabledMethods);
+    const enabledMethodsChanged = ALL_METHODS.some((method) => (
+        enabledMethods.has(method) !== savedEnabledMethods.has(method)
+    ));
+    const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod;
+    const resetMethods = () => {
+        setEnabledMethods(new Set(methods.enabledMethods));
+        setDefaultMethod(methods.defaultMethod);
+    };
 
     return (
-        <div className="space-y-6 max-w-4xl">
-            {/* Gateway Preferences */}
+        <div className="max-w-4xl space-y-4">
+            {!checkoutFlowSettings && (
+                <Alert className={checkoutFlowError ? "border-amber-500/30 bg-amber-500/5" : undefined}>
+                    {checkoutFlowError
+                        ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        : <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                    <AlertTitle>{checkoutFlowError ? "Checkout flow could not be loaded" : "Checking checkout flow"}</AlertTitle>
+                    <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                            {checkoutFlowError
+                                ? checkoutFlowQueryError instanceof Error
+                                    ? checkoutFlowQueryError.message
+                                    : "Buyer visibility cannot be confirmed until the saved checkout flow loads."
+                                : "Buyer visibility and payment-method saves stay locked until the saved flow is known."}
+                        </span>
+                        {checkoutFlowError && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                                onClick={() => void refetchCheckoutFlow()}
+                                disabled={checkoutFlowFetching}
+                            >
+                                {checkoutFlowFetching && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                Retry flow check
+                            </Button>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
+            {methodsLoadError && methods && (
+                <Alert className="border-amber-500/30 bg-amber-500/5">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <AlertTitle>Payment status needs a refresh</AlertTitle>
+                    <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                            The last loaded workspace is preserved, but saves are locked because current provider status could not be confirmed.
+                        </span>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => void loadMethods(false)}
+                        >
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            Refresh status
+                        </Button>
+                    </AlertDescription>
+                </Alert>
+            )}
             <Card>
-                <CardHeader className="pb-3 border-b border-border">
-                    <CardTitle className="text-base font-semibold">Checkout Visibility</CardTitle>
-                    <CardDescription>Choose which ready payment methods customers can see, and which one is selected first.</CardDescription>
+                <CardHeader className="p-4 pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base font-semibold">Buyer payment methods</CardTitle>
+                        <Badge variant={methodsLoadError || methodsDirty ? "outline" : "secondary"} className="text-xs">
+                            {methodsLoadError ? "Refresh needed" : methodsDirty ? "Unsaved" : "Saved"}
+                        </Badge>
+                    </div>
+                    <CardDescription>
+                        Choose which ready methods buyers can use. Card results preview this draft until you save.
+                    </CardDescription>
                 </CardHeader>
-                <CardContent className="pt-4 flex items-center justify-between pb-4">
-                    <span className="text-sm font-medium">Default selected checkout method</span>
+                <CardContent className="grid gap-2 px-4 pb-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
+                    <div>
+                        <Label htmlFor="default-payment-method">Default buyer selection</Label>
+                        <p className="mt-0.5 text-xs text-muted-foreground">Only ready methods allowed by the saved checkout flow appear here.</p>
+                    </div>
                     <Select
-                        value={canSaveMethods ? defaultMethod : undefined}
-                        onValueChange={(v) => setDefaultMethod(v as MethodKey)}
-                        disabled={defaultOptions.length === 0}
+                        value={defaultMethodAvailable ? defaultMethod : undefined}
+                        onValueChange={(value) => setDefaultMethod(value as MethodKey)}
+                        disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
                     >
-                        <SelectTrigger className="w-[200px] h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="default-payment-method" className="h-9 w-full"><SelectValue placeholder="No ready method" /></SelectTrigger>
                         <SelectContent>
-                            {defaultOptions.map((m) => (
-                                <SelectItem key={m} value={m} className="text-sm">{META[m].label}</SelectItem>
+                            {defaultOptions.map((method) => (
+                                <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </CardContent>
-                <CardFooter className="pt-0 justify-end">
-                    <Button variant="secondary" size="sm" onClick={() => saveMethods()} disabled={savingMethods || !canSaveMethods}>
+                {!canSaveMethods && !methodsLoadError && checkoutFlowSettings && (
+                    <div className="mx-4 mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>Select at least one ready method allowed by the current checkout flow.</span>
+                    </div>
+                )}
+                <CardFooter className="justify-between gap-2 border-t px-4 py-3">
+                    <Button type="button" variant="ghost" size="sm" onClick={resetMethods} disabled={!methodsDirty || savingMethods}>
+                        Reset
+                    </Button>
+                    <Button type="button" size="sm" onClick={() => void saveMethods()} disabled={savingMethods || !canSaveMethods || !methodsDirty}>
                         {savingMethods && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-                        Save checkout visibility
+                        Save payment methods
                     </Button>
                 </CardFooter>
             </Card>
 
-            {/* Gateway Cards - 2x2 Grid */}
             <Accordion type="multiple" value={expanded} onValueChange={handleAccordion}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {ALL_METHODS.map((method) => {
                         const meta = META[method];
                         const isOpen = expanded.includes(method);
-                        const gatewayNotice = getGatewayNotice(method);
                         const selected = enabledMethods.has(method);
-                        const status = methods?.gatewayStatus?.[method];
+                        const outcome = getMethodOutcome(method);
                         const gatewayLoaded = method === "cod" || loadedGateways.current.has(method);
                         const gatewayLoadError = gatewayLoadErrors[method];
-                        const providerEnabled = status?.providerEnabled ?? status?.enabled === true;
-                        const usable = method === "cod"
-                            ? true
-                            : status?.usable ?? (providerEnabled && status?.configured === true);
-                        const configured = method === "cod" || status?.configured === true;
-                        const checkoutVisible = selected && methodAllowedByFlow(method) && usable;
-                        const toggleDisabled = method !== "cod" && !selected && !usable;
+                        const gatewayNotice = outcome.state === "hidden_by_flow"
+                            ? getFlowHiddenReason(method) ?? outcome.description
+                            : outcome.state === "visible" || outcome.state === "ready_hidden"
+                                ? null
+                                : outcome.description;
+                        const toggleDisabled = !selected && !outcome.canSelect;
                         return (
                             <AccordionItem key={method} value={method} className={`border rounded-lg overflow-hidden ${meta.borderColor}`}>
-                                <div className={`p-4 ${meta.headerBg}`}>
+                                <div className={`p-3.5 ${meta.headerBg}`}>
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <meta.Logo className="h-8 w-8 shrink-0 rounded" />
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <h3 className="text-sm font-medium">{meta.label}</h3>
-                                                    {getStatusBadge(method)}
+                                                    <OutcomeBadge outcome={outcome} />
                                                 </div>
-                                                <p className="text-xs text-muted-foreground mt-0.5 truncate">{meta.desc}</p>
+                                                <p className="mt-0.5 text-xs leading-4 text-muted-foreground">{meta.desc}</p>
                                                 <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] leading-4">
                                                     <div className="flex items-center gap-1">
                                                         <dt className="text-muted-foreground">Setup</dt>
-                                                        <dd className={configured ? "font-medium text-foreground" : "font-medium text-destructive"}>
-                                                            {configured ? "Ready" : "Required"}
+                                                        <dd className={outcome.setupLabel === "Required" ? "font-medium text-destructive" : "font-medium text-foreground"}>
+                                                            {outcome.setupLabel}
                                                         </dd>
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <dt className="text-muted-foreground">Provider</dt>
-                                                        <dd className={providerEnabled ? "font-medium text-foreground" : "font-medium text-muted-foreground"}>
-                                                            {providerEnabled ? "On" : "Off"}
+                                                        <dd className={outcome.providerLabel === "Off" ? "font-medium text-muted-foreground" : "font-medium text-foreground"}>
+                                                            {outcome.providerLabel}
                                                         </dd>
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <dt className="text-muted-foreground">Checkout</dt>
-                                                        <dd className={checkoutVisible ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
-                                                            {checkoutVisible ? "Visible" : "Hidden"}
+                                                        <dd className={outcome.effective ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                                                            {outcome.checkoutLabel}
                                                         </dd>
                                                     </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <dt className="text-muted-foreground">Environment</dt>
+                                                        <dd className="font-medium text-foreground">{outcome.environmentLabel}</dd>
+                                                    </div>
+                                                    <div className="flex items-center gap-1">
+                                                        <dt className="text-muted-foreground">Connection</dt>
+                                                        <dd className="font-medium text-muted-foreground">{outcome.healthLabel}</dd>
+                                                    </div>
                                                 </dl>
+                                                {method !== "cod" && outcome.healthLabel === "Not checked" && (
+                                                    <span className="sr-only">No provider connection health check is available.</span>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex shrink-0 flex-col items-end gap-1">
@@ -391,14 +510,14 @@ export default function PaymentGatewaysManager() {
                                                 id={`toggle-${method}`}
                                                 checked={enabledMethods.has(method)}
                                                 aria-label={`Show ${meta.label} at checkout`}
-                                                disabled={toggleDisabled}
+                                                disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
                                                 onCheckedChange={(v) => toggleMethod(method, v)}
                                             />
-                                            <span className="text-[11px] leading-none text-muted-foreground">Show at checkout</span>
+                                            <span className="max-w-20 text-right text-[11px] leading-3 text-muted-foreground">Offer to buyers</span>
                                         </div>
                                     </div>
                                     {gatewayNotice && (
-                                        <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-background/80 px-3 py-2 text-xs text-destructive">
+                                        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-background/80 px-3 py-2 text-xs text-foreground">
                                             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                                             <span>{gatewayNotice}</span>
                                         </div>

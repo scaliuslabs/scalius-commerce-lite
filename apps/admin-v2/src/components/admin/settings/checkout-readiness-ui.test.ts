@@ -60,10 +60,25 @@ describe("checkout settings status presentation", () => {
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Setup</dt>");
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Provider</dt>");
     expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Checkout</dt>");
+    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Environment</dt>");
+    expect(gatewaysSource).toContain("<dt className=\"text-muted-foreground\">Connection</dt>");
+    expect(gatewaysSource).toContain("Card results preview this draft until you save.");
+    expect(gatewaysSource).toContain("No provider connection health check is available.");
     expect(gatewaysSource).toContain("Key environment");
     expect(gatewaysSource).toContain("Key mismatch");
     expect(gatewaysSource).toContain("@scalius/shared/payment-gateway-environment");
     expect(gatewaysSource).not.toContain("@scalius/core/modules/payments/gateway-settings");
+  });
+
+  it("keeps payment-method saves stable and visible instead of flashing the full loader", () => {
+    expect(gatewaysSource).toContain("const methodsDirty = enabledMethodsChanged || defaultMethod !== methods.defaultMethod");
+    expect(gatewaysSource).toContain("Save payment methods");
+    expect(gatewaysSource).toContain("loadMethods(false, false)");
+    expect(gatewaysSource).toContain("Payment methods were saved, but their current status could not be refreshed.");
+    expect(gatewaysSource).toContain("if (showInitialLoader) setMethods(null)");
+    expect(gatewaysSource).toContain("The last loaded workspace is preserved, but saves are locked");
+    expect(gatewaysSource).toContain("? { ...current, enabledMethods: nextEnabledMethods, defaultMethod }");
+    expect(gatewaysSource).toContain("Buyer visibility cannot be confirmed until the saved checkout flow loads.");
   });
 
   it("keeps the tab strip mobile-safe and explains that refund requests are not automatic refunds", () => {
