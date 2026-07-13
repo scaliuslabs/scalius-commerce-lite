@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
+import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import {
     createOrderSchema,
     updateOrderSchema,
@@ -39,6 +40,7 @@ import {
     orderRefundAttemptSchema,
     orderSummarySchema,
     productVariantSchema,
+    selectedProductOptionSchema,
 } from "../../schemas/entities";
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { adminOrdersStatusRoutes } from "./orders-status";
@@ -361,10 +363,12 @@ const formDataProductSchema = z.object({
     id: z.string(),
     name: z.string(),
     price: z.number(),
-    discountPercentage: z.number(),
+    discountPercentage: z.number().nullable(),
     discountType: z.string().nullable(),
-    discountAmount: z.number(),
-    variants: z.array(productVariantSchema),
+    discountAmount: z.number().nullable(),
+    variants: z.array(productVariantSchema.extend({
+        selectedOptions: z.array(selectedProductOptionSchema),
+    })),
 }).passthrough();
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
@@ -1257,8 +1261,19 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             ))
         : [];
 
-    const variantsByProductId = new Map<string, typeof allVariants>();
-    for (const variant of allVariants) {
+    const selectedOptionsByVariant = await loadVariantSelectedOptions(
+        db,
+        allVariants.map((variant) => variant.id),
+    );
+    const variantsWithOptions = allVariants.map((variant) => ({
+        ...variant,
+        selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
+    }));
+    const variantsByProductId = new Map<
+        string,
+        Array<(typeof variantsWithOptions)[number]>
+    >();
+    for (const variant of variantsWithOptions) {
         const existing = variantsByProductId.get(variant.productId) ?? [];
         existing.push(variant);
         variantsByProductId.set(variant.productId, existing);

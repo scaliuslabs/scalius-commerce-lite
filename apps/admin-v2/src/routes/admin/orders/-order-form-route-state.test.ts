@@ -69,6 +69,43 @@ describe("order form route data", () => {
       defaultValues: { id: "order_1", items: [] },
     });
   });
+
+  it("normalizes only an omitted optional SKU-option collection", () => {
+    const product = {
+      id: "product_1",
+      name: "Simple product",
+      price: 100,
+      discountPercentage: null,
+      variants: [{ id: "variant_1", productId: "product_1" }],
+    };
+
+    expect(buildEditOrderFormRouteData({
+      productsWithVariants: [product],
+      defaultValues: { id: "order_1", items: [] },
+    }).productsWithVariants[0]?.variants[0]?.selectedOptions).toEqual([]);
+
+    expect(() => buildEditOrderFormRouteData({
+      productsWithVariants: [{
+        ...product,
+        variants: [{
+          id: "variant_1",
+          productId: "product_1",
+          selectedOptions: {},
+        }],
+      }],
+      defaultValues: { id: "order_1", items: [] },
+    })).toThrow("included unusable SKU options");
+
+    expect(() => buildEditOrderFormRouteData({
+      productsWithVariants: [{ ...product, variants: undefined }],
+      defaultValues: { id: "order_1", items: [] },
+    })).toThrow("included an unusable product row");
+
+    expect(() => buildEditOrderFormRouteData({
+      productsWithVariants: [{ ...product, variants: [null] }],
+      defaultValues: { id: "order_1", items: [] },
+    })).toThrow("included an unusable SKU row");
+  });
 });
 
 describe("order form route failure wiring", () => {

@@ -109617,14 +109617,16 @@
                                 "type": "number"
                               },
                               "discountPercentage": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "discountType": {
                                 "type": "string",
                                 "nullable": true
                               },
                               "discountAmount": {
-                                "type": "number"
+                                "type": "number",
+                                "nullable": true
                               },
                               "variants": {
                                 "type": "array",
@@ -109806,6 +109808,7 @@
                                     "productId",
                                     "optionCombinationKey",
                                     "imageId",
+                                    "selectedOptions",
                                     "weight",
                                     "sku",
                                     "price",

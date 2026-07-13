@@ -36,6 +36,16 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("paymentRecovery: query.paymentRecovery");
     });
 
+    it("hydrates order-editor SKUs with their normalized option selections", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const formDataRoute = source.split("// ─── GET /:id/form-data")[1] ?? "";
+
+        expect(formDataRoute).toContain("loadVariantSelectedOptions(");
+        expect(formDataRoute).toContain("allVariants.map((variant) => variant.id)");
+        expect(formDataRoute).toContain("selectedOptions: selectedOptionsByVariant.get(variant.id) ?? []");
+        expect(source).toContain("selectedOptions: z.array(selectedProductOptionSchema)");
+    });
+
     it("keeps order-list refund recovery visibility as a compact summary", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const entitiesSource = readFileSync(
