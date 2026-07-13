@@ -14,9 +14,9 @@ interface MediaGalleryProps {
   isLoadingMore: boolean;
   hasMore: boolean;
   loadError: string | null;
-  onFileSelect: (file: LibraryMediaFile) => void;
+  onFileSelect: (file: LibraryMediaFile, extendRange?: boolean) => void;
   onFilePreview: (file: LibraryMediaFile, event: React.MouseEvent) => void;
-  onToggleSelection: (id: string) => void;
+  onToggleSelection: (id: string, extendRange?: boolean) => void;
   onLifecycle: (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => void;
   onLoadMore: () => void;
   onRetry: () => void;
@@ -63,9 +63,9 @@ export function MediaGallery(props: MediaGalleryProps) {
             selected={props.selectedFileIds.includes(file.id)}
             selectionMode={props.selectionMode}
             view={props.view}
-            onActivate={() => props.onFileSelect(file)}
+            onActivate={(event) => props.onFileSelect(file, event.shiftKey)}
             onPreview={(event) => props.onFilePreview(file, event)}
-            onToggle={() => props.onToggleSelection(file.id)}
+            onToggle={(event) => props.onToggleSelection(file.id, event.shiftKey)}
             onLifecycle={(action) => props.onLifecycle(file, action)}
           />
         ))}

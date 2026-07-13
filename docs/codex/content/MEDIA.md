@@ -153,6 +153,17 @@ buffered in a Worker invocation.
   silently targets the whole visible library. Standalone library selection can
   be cancelled; multi-file pickers stay in selection mode after clearing so
   their card semantics remain truthful.
+- Selection uses one shared contract across the library and every picker:
+  click/keyboard activation toggles one asset, Shift-activation adds the
+  inclusive visible range, `Select all shown` never targets an unloaded or
+  filtered-out asset, and changing scope clears hidden selections. A dedicated
+  compact command bar keeps the live count, clear/cancel, move, lifecycle, and
+  picker-confirm actions visible without mixing destructive work into filters.
+  A current value in a single-file picker is highlighted only; it never turns
+  that picker into multi-toggle mode or prevents the next click from choosing
+  and closing with a replacement asset. Partial bulk lifecycle failures retain
+  only the failed assets in the selection so the merchant can retry them
+  without repeating already successful mutations.
 - The gallery uses two, three, four, then five columns as viewport room grows
   and caps at five on wide screens. Loading skeletons use the same grid, avoiding
   layout shifts between the loading and ready states.

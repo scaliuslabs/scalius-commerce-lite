@@ -71,15 +71,12 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
             onSearch={mm.applySearch}
             onFiltersChange={mm.applyFilters}
             onUpload={mm.uploadFiles}
-            onBeginSelection={() => mm.setSelectionMode(true)}
-            onSelectAll={() => mm.setSelectedFileIds(mm.files.map((file) => file.id))}
-            onClearSelection={() => {
-              mm.setSelectedFileIds([]);
-              mm.setSelectionMode(picker && multiple);
-            }}
+            onBeginSelection={mm.beginSelection}
+            onSelectAll={mm.selectAllVisible}
+            onClearSelection={() => mm.clearSelection(picker && multiple)}
             onMove={(folderId) => void mm.moveSelected(folderId)}
             onLifecycle={bulkLifecycle}
-            onAddSelected={picker && multiple && mm.selectedFileIds.length ? mm.addSelected : undefined}
+            onAddSelected={picker && multiple ? mm.addSelected : undefined}
           />
           <div className="min-h-0 flex-1">
             <MediaGallery files={mm.files} selectedFileIds={mm.selectedFileIds} selectionMode={mm.selectionMode} view={mm.view} isLoading={mm.isLoading} isLoadingMore={mm.isLoadingMore} hasMore={mm.hasMore} loadError={mm.loadError} onFileSelect={mm.handleFileSelect} onFilePreview={(file, event) => { event.stopPropagation(); mm.setPreviewFile(file); mm.setShowPreview(true); }} onToggleSelection={mm.toggleSelection} onLifecycle={lifecycle} onLoadMore={mm.loadMore} onRetry={() => void mm.refresh()} />

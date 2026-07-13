@@ -54,6 +54,7 @@ describe("MediaFilterBar selection controls", () => {
         }}
         onMove={vi.fn()}
         onLifecycle={vi.fn()}
+        onAddSelected={persistentSelection ? vi.fn() : undefined}
       />
     );
   }
@@ -96,11 +97,22 @@ describe("MediaFilterBar selection controls", () => {
 
     expect(host.textContent).toContain("0 selected");
     expect(host.textContent).not.toContain("Cancel");
+    expect(buttonByName(host, "Add 0").disabled).toBe(true);
 
     act(() => buttonByName(host, "Select all shown").click());
     act(() => buttonByName(host, "Clear").click());
 
     expect(host.textContent).toContain("0 selected");
     expect(buttonByName(host, "Select all shown")).toBeTruthy();
+    expect(buttonByName(host, "Add 0").disabled).toBe(true);
+  });
+
+  it("separates selection commands into an accessible bulk-action toolbar", () => {
+    act(() => buttonByName(host, "Select").click());
+
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Selected asset actions"]');
+    expect(toolbar).toBeTruthy();
+    expect(toolbar?.textContent).toContain("Shift-click to select a range");
+    expect(toolbar?.textContent).toContain("0 selected");
   });
 });
