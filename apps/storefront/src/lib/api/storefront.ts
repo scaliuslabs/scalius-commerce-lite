@@ -14,6 +14,7 @@ import type {
   AnalyticsConfig,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -72,7 +73,7 @@ export interface LayoutData {
   navigation: NavigationItem[];
   footer: FooterData;
   currency?: CurrencyData;
-  theme?: { colors: Record<string, string> };
+  theme?: StorefrontThemeSettings;
   media?: {
     enabled?: boolean;
     canonicalCdnUrl?: string;

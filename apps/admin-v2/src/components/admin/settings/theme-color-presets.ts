@@ -1,3 +1,8 @@
+import {
+  DEFAULT_STOREFRONT_THEME_COLORS,
+  STOREFRONT_THEME_COLOR_PALETTES,
+} from "@scalius/shared/storefront-theme";
+
 export const THEME_ACTION_CONTRAST_PAIRS = [
   { background: "primary", foreground: "primary-foreground" },
   { background: "secondary", foreground: "secondary-foreground" },
@@ -16,122 +21,6 @@ export const THEME_CONTRAST_PAIRS = [
   ...THEME_SURFACE_CONTRAST_PAIRS,
 ] as const;
 
-export const THEME_COLOR_PALETTES: Record<
-  string,
-  { label: string; colors: Record<string, string> }
-> = {
-  Zinc: {
-    label: "Zinc",
-    colors: {
-      background: "#ffffff",
-      foreground: "#09090b",
-      card: "#ffffff",
-      "card-foreground": "#09090b",
-      popover: "#ffffff",
-      "popover-foreground": "#09090b",
-      primary: "#18181b",
-      "primary-foreground": "#fafafa",
-      secondary: "#f4f4f5",
-      "secondary-foreground": "#18181b",
-      muted: "#f4f4f5",
-      "muted-foreground": "#52525b",
-      accent: "#f4f4f5",
-      "accent-foreground": "#18181b",
-      destructive: "#dc2626",
-      "destructive-foreground": "#ffffff",
-      border: "#e4e4e7",
-      input: "#e4e4e7",
-      ring: "#09090b",
-    },
-  },
-  Ocean: {
-    label: "Ocean",
-    colors: {
-      background: "#ffffff",
-      foreground: "#0f172a",
-      card: "#ffffff",
-      "card-foreground": "#0f172a",
-      primary: "#1d4ed8",
-      "primary-foreground": "#ffffff",
-      secondary: "#e2e8f0",
-      "secondary-foreground": "#0f172a",
-      muted: "#f1f5f9",
-      "muted-foreground": "#475569",
-      accent: "#dbeafe",
-      "accent-foreground": "#1e3a8a",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#cbd5e1",
-      input: "#cbd5e1",
-      ring: "#1d4ed8",
-    },
-  },
-  Emerald: {
-    label: "Emerald",
-    colors: {
-      background: "#ffffff",
-      foreground: "#022c22",
-      card: "#ffffff",
-      "card-foreground": "#022c22",
-      primary: "#047857",
-      "primary-foreground": "#ffffff",
-      secondary: "#d1fae5",
-      "secondary-foreground": "#064e3b",
-      muted: "#ecfdf5",
-      "muted-foreground": "#065f46",
-      accent: "#a7f3d0",
-      "accent-foreground": "#064e3b",
-      destructive: "#b91c1c",
-      "destructive-foreground": "#ffffff",
-      border: "#a7f3d0",
-      input: "#a7f3d0",
-      ring: "#047857",
-    },
-  },
-  Rose: {
-    label: "Rose",
-    colors: {
-      background: "#ffffff",
-      foreground: "#4c0519",
-      card: "#ffffff",
-      "card-foreground": "#4c0519",
-      primary: "#be123c",
-      "primary-foreground": "#ffffff",
-      secondary: "#ffe4e6",
-      "secondary-foreground": "#881337",
-      muted: "#fff1f2",
-      "muted-foreground": "#9f1239",
-      accent: "#fecdd3",
-      "accent-foreground": "#881337",
-      destructive: "#991b1b",
-      "destructive-foreground": "#ffffff",
-      border: "#fecdd3",
-      input: "#fecdd3",
-      ring: "#be123c",
-    },
-  },
-  Midnight: {
-    label: "Midnight",
-    colors: {
-      background: "#09090b",
-      foreground: "#fafafa",
-      card: "#18181b",
-      "card-foreground": "#fafafa",
-      primary: "#fafafa",
-      "primary-foreground": "#18181b",
-      secondary: "#27272a",
-      "secondary-foreground": "#fafafa",
-      muted: "#27272a",
-      "muted-foreground": "#d4d4d8",
-      accent: "#3f3f46",
-      "accent-foreground": "#fafafa",
-      destructive: "#991b1b",
-      "destructive-foreground": "#fafafa",
-      border: "#3f3f46",
-      input: "#3f3f46",
-      ring: "#d4d4d8",
-    },
-  },
-};
-
-export const DEFAULT_THEME_COLORS = THEME_COLOR_PALETTES.Zinc!.colors;
+/** Shared with the buyer storefront; this is no longer an admin-only guess. */
+export const DEFAULT_THEME_COLORS = DEFAULT_STOREFRONT_THEME_COLORS;
+export const THEME_COLOR_PALETTES = STOREFRONT_THEME_COLOR_PALETTES;

@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStorefrontThemeTokens,
+  DEFAULT_STOREFRONT_THEME_SETTINGS,
   isSafeStorefrontThemeColorValue,
   isStorefrontThemeColorKey,
   listInvalidStorefrontThemeColorEntries,
+  listInvalidStorefrontThemeSettingsEntries,
+  parseStorefrontThemeSettings,
   sanitizeStorefrontThemeColors,
+  sanitizeStorefrontThemeSettings,
 } from "./storefront-theme";
 
 describe("storefront theme color sanitization", () => {
@@ -55,5 +60,102 @@ describe("storefront theme color sanitization", () => {
     expect(isStorefrontThemeColorKey("--primary")).toBe(false);
     expect(isSafeStorefrontThemeColorValue("var(--primary)")).toBe(true);
     expect(isSafeStorefrontThemeColorValue("var(--not-a-theme-token)")).toBe(false);
+  });
+});
+
+describe("storefront semantic theme settings", () => {
+  it("upgrades a legacy flat color document onto visually stable defaults", () => {
+    expect(
+      sanitizeStorefrontThemeSettings({
+        primary: " #2563eb ",
+        unsafe: "url(evil)",
+      }),
+    ).toEqual({
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      colors: { primary: "#2563eb" },
+    });
+  });
+
+  it("keeps only the bounded semantic vocabulary", () => {
+    expect(
+      sanitizeStorefrontThemeSettings({
+        colors: { primary: "#047857" },
+        typography: {
+          heading: "editorial",
+          body: "humanist",
+          scale: "generous",
+        },
+        cornerStyle: "rounded",
+        density: "compact",
+        containerWidth: "focused",
+        components: {
+          buttons: "soft",
+          inputs: "filled",
+          cards: "flat",
+        },
+      }),
+    ).toEqual({
+      colors: { primary: "#047857" },
+      typography: {
+        heading: "editorial",
+        body: "humanist",
+        scale: "generous",
+      },
+      cornerStyle: "rounded",
+      density: "compact",
+      containerWidth: "focused",
+      components: {
+        buttons: "soft",
+        inputs: "filled",
+        cards: "flat",
+      },
+    });
+
+    expect(
+      listInvalidStorefrontThemeSettingsEntries({
+        colors: { primary: "url(evil)" },
+        typography: { heading: "remote-font", body: "system", scale: "standard" },
+        cornerStyle: "999px",
+        density: "comfortable",
+        containerWidth: "wide",
+        components: { buttons: "script", inputs: "outlined", cards: "bordered" },
+        arbitraryCss: "body{display:none}",
+      }),
+    ).toEqual([
+      "arbitraryCss",
+      "colors.primary",
+      "typography.heading",
+      "cornerStyle",
+      "components.buttons",
+    ]);
+  });
+
+  it("generates deterministic CSS tokens without accepting merchant CSS", () => {
+    const tokens = buildStorefrontThemeTokens({
+      colors: { primary: "#047857", border: "var(--primary)" },
+      typography: { heading: "editorial", body: "humanist", scale: "compact" },
+      cornerStyle: "square",
+      density: "airy",
+      containerWidth: "standard",
+      components: { buttons: "outline", inputs: "filled", cards: "elevated" },
+    });
+
+    expect(tokens).toMatchObject({
+      primary: "#047857",
+      border: "var(--primary)",
+      "theme-font-heading": 'Georgia, "Times New Roman", ui-serif, serif',
+      "theme-font-body": 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
+      "theme-type-scale": "0.95",
+      radius: "0rem",
+      "theme-density-scale": "1.12",
+      "theme-container-width": "72rem",
+    });
+    expect(Object.values(tokens).join(" ")).not.toContain("url(");
+  });
+
+  it("fails closed to defaults for malformed stored JSON", () => {
+    expect(parseStorefrontThemeSettings("{not json")).toEqual(
+      DEFAULT_STOREFRONT_THEME_SETTINGS,
+    );
   });
 });

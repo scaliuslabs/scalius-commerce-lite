@@ -1,3 +1,8 @@
+import {
+  sanitizeStorefrontThemeSettings,
+  type StorefrontThemeSettings,
+} from "@scalius/shared/storefront-theme";
+
 export function normalizeThemeColors(
   colors: Record<string, string>,
 ): Record<string, string> {
@@ -62,4 +67,79 @@ export function rebaseThemeColorDraft({
   }
 
   return rebased;
+}
+
+export function normalizeThemeSettingsDraft(
+  theme: StorefrontThemeSettings,
+): StorefrontThemeSettings {
+  return sanitizeStorefrontThemeSettings({
+    ...theme,
+    colors: normalizeThemeColors(theme.colors),
+  });
+}
+
+export function themeSettingsDraftsEqual(
+  left: StorefrontThemeSettings,
+  right: StorefrontThemeSettings,
+): boolean {
+  return JSON.stringify(normalizeThemeSettingsDraft(left)) ===
+    JSON.stringify(normalizeThemeSettingsDraft(right));
+}
+
+/** Replays only locally changed semantic leaves onto the latest revision. */
+export function rebaseThemeSettingsDraft({
+  base,
+  local,
+  latest,
+}: {
+  base: StorefrontThemeSettings;
+  local: StorefrontThemeSettings;
+  latest: StorefrontThemeSettings;
+}): StorefrontThemeSettings {
+  const normalizedBase = normalizeThemeSettingsDraft(base);
+  const normalizedLocal = normalizeThemeSettingsDraft(local);
+  const normalizedLatest = normalizeThemeSettingsDraft(latest);
+
+  return normalizeThemeSettingsDraft({
+    colors: rebaseThemeColorDraft({
+      base: normalizedBase.colors,
+      local: normalizedLocal.colors,
+      latest: normalizedLatest.colors,
+    }),
+    typography: {
+      heading: changed(normalizedBase.typography.heading, normalizedLocal.typography.heading)
+        ? normalizedLocal.typography.heading
+        : normalizedLatest.typography.heading,
+      body: changed(normalizedBase.typography.body, normalizedLocal.typography.body)
+        ? normalizedLocal.typography.body
+        : normalizedLatest.typography.body,
+      scale: changed(normalizedBase.typography.scale, normalizedLocal.typography.scale)
+        ? normalizedLocal.typography.scale
+        : normalizedLatest.typography.scale,
+    },
+    cornerStyle: changed(normalizedBase.cornerStyle, normalizedLocal.cornerStyle)
+      ? normalizedLocal.cornerStyle
+      : normalizedLatest.cornerStyle,
+    density: changed(normalizedBase.density, normalizedLocal.density)
+      ? normalizedLocal.density
+      : normalizedLatest.density,
+    containerWidth: changed(normalizedBase.containerWidth, normalizedLocal.containerWidth)
+      ? normalizedLocal.containerWidth
+      : normalizedLatest.containerWidth,
+    components: {
+      buttons: changed(normalizedBase.components.buttons, normalizedLocal.components.buttons)
+        ? normalizedLocal.components.buttons
+        : normalizedLatest.components.buttons,
+      inputs: changed(normalizedBase.components.inputs, normalizedLocal.components.inputs)
+        ? normalizedLocal.components.inputs
+        : normalizedLatest.components.inputs,
+      cards: changed(normalizedBase.components.cards, normalizedLocal.components.cards)
+        ? normalizedLocal.components.cards
+        : normalizedLatest.components.cards,
+    },
+  });
+}
+
+function changed(left: string, right: string): boolean {
+  return left !== right;
 }

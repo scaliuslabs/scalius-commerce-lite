@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getThemeSettings, saveThemeSettings } from "./site-settings.service";
+import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
 
 describe("versioned storefront theme settings", () => {
   let sqlite: DatabaseSync;
@@ -61,28 +62,63 @@ describe("versioned storefront theme settings", () => {
     );
 
     await expect(getThemeSettings(db)).resolves.toEqual({
-      colors: { primary: "#2563eb" },
+      theme: {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: { primary: "#2563eb" },
+      },
       revision: 0,
     });
   });
 
+  it("fails closed when the versioned semantic document is unreadable", async () => {
+    sqlite.prepare(`
+      INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
+      VALUES ('default', ?, 1, 1, 1)
+    `).run(JSON.stringify({
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      typography: {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS.typography,
+        heading: "remote-font",
+      },
+    }));
+
+    await expect(getThemeSettings(db)).rejects.toMatchObject({
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+    });
+  });
+
   it("claims revision one exactly once when publishing a legacy draft", async () => {
-    const first = await saveThemeSettings(db, { primary: "#047857" }, 0);
-    expect(first).toEqual({ colors: { primary: "#047857" }, revision: 1 });
+    const firstTheme = {
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      colors: { primary: "#047857" },
+    };
+    const first = await saveThemeSettings(db, firstTheme, 0);
+    expect(first).toEqual({ theme: firstTheme, revision: 1 });
 
     await expect(
-      saveThemeSettings(db, { primary: "#be123c" }, 0),
+      saveThemeSettings(db, { ...firstTheme, colors: { primary: "#be123c" } }, 0),
     ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual(first);
   });
 
   it("rejects a stale publish without replacing the current storefront colors", async () => {
-    await saveThemeSettings(db, { primary: "#18181b" }, 0);
-    const current = await saveThemeSettings(db, { primary: "#2563eb" }, 1);
+    await saveThemeSettings(db, {
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      colors: { primary: "#18181b" },
+    }, 0);
+    const current = await saveThemeSettings(db, {
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      colors: { primary: "#2563eb" },
+      density: "compact",
+    }, 1);
     expect(current.revision).toBe(2);
 
     await expect(
-      saveThemeSettings(db, { primary: "#be123c" }, 1),
+      saveThemeSettings(db, {
+        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+        colors: { primary: "#be123c" },
+      }, 1),
     ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual(current);
   });

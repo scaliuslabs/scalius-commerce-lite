@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
+import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
 import type {
   CustomerRequestPolicy,
   CustomerRequestPreviewState,
@@ -145,12 +146,12 @@ export type UpdateFirebaseSettingsInput = SettingsPayload;
 export type BusinessSettingsPayload = SettingsPayload;
 export type UpdateBusinessSettingsInput = SettingsPayload;
 export interface ThemeSettingsPayload {
-  colors: Record<string, string>;
+  theme: StorefrontThemeSettings;
   revision: number;
 }
 export interface UpdateThemeSettingsInput {
   expectedRevision: number;
-  colors: Record<string, string>;
+  theme: StorefrontThemeSettings;
 }
 export type MediaSettingsPayload = SettingsPayload;
 export type UpdateMediaSettingsInput = SettingsPayload;

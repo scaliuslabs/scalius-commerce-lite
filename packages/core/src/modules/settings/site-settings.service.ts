@@ -23,7 +23,12 @@ import {
   normalizeSupportedCurrencyCode,
   type SupportedCurrencyCode,
 } from "@scalius/shared/currency";
-import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import {
+  listInvalidStorefrontThemeSettingsEntries,
+  parseStorefrontThemeSettings,
+  sanitizeStorefrontThemeSettings,
+  type StorefrontThemeSettings,
+} from "@scalius/shared/storefront-theme";
 import {
   mergeSeoDiscoverySettings,
   parseSeoDiscoverySettings,
@@ -46,8 +51,37 @@ const THEME_SETTINGS_CATEGORY = "theme";
 const THEME_COLORS_KEY = "storefront_colors";
 
 export interface ThemeSettingsDocument {
-  colors: Record<string, string>;
+  theme: StorefrontThemeSettings;
   revision: number;
+}
+
+function parseAuthoritativeThemeSettings(value: string): StorefrontThemeSettings {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new ServiceUnavailableError(
+      "Published storefront style is unreadable. Re-save it before editing.",
+    );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new ServiceUnavailableError(
+      "Published storefront style is unreadable. Re-save it before editing.",
+    );
+  }
+  const record = parsed as Record<string, unknown>;
+  // Flat color maps are the pre-semantic versioned document and are upgraded
+  // on read. Fully semantic documents must remain exact and fail closed.
+  if ("colors" in record) {
+    const invalid = listInvalidStorefrontThemeSettingsEntries(record);
+    if (invalid.length > 0) {
+      throw new ServiceUnavailableError(
+        "Published storefront style contains unsupported values. Re-save it before editing.",
+      );
+    }
+  }
+  return sanitizeStorefrontThemeSettings(record);
 }
 
 type PartialSeoDiscoverySettings = {
@@ -324,21 +358,6 @@ export async function saveFooterConfig(
 // Theme
 // ─────────────────────────────────────────
 
-function parseThemeColors(value: string | null | undefined): Record<string, string> {
-  let colors: unknown = {};
-  if (value) {
-    try {
-      colors = JSON.parse(value);
-    } catch (e: unknown) {
-      console.warn(
-        "[Settings] Failed to parse storefront theme colors:",
-        e instanceof Error ? e.message : e,
-      );
-    }
-  }
-  return sanitizeStorefrontThemeColors(colors as Record<string, unknown>);
-}
-
 export async function getThemeSettings(
   db: Database,
 ): Promise<ThemeSettingsDocument> {
@@ -353,7 +372,7 @@ export async function getThemeSettings(
 
   if (current) {
     return {
-      colors: parseThemeColors(current.colors),
+      theme: parseAuthoritativeThemeSettings(current.colors),
       revision: current.revision,
     };
   }
@@ -371,15 +390,15 @@ export async function getThemeSettings(
       ),
     )
     .get();
-  return { colors: parseThemeColors(legacy?.value), revision: 0 };
+  return { theme: parseStorefrontThemeSettings(legacy?.value), revision: 0 };
 }
 
 export async function saveThemeSettings(
   db: Database,
-  colors: Record<string, unknown>,
+  theme: StorefrontThemeSettings,
   expectedRevision: number,
 ): Promise<ThemeSettingsDocument> {
-  const sanitized = sanitizeStorefrontThemeColors(colors);
+  const sanitized = sanitizeStorefrontThemeSettings(theme);
   const serialized = JSON.stringify(sanitized);
 
   if (expectedRevision === 0) {
@@ -394,7 +413,7 @@ export async function saveThemeSettings(
       })
       .onConflictDoNothing()
       .returning({ revision: themeSettings.revision });
-    if (inserted[0]) return { colors: sanitized, revision: inserted[0].revision };
+    if (inserted[0]) return { theme: sanitized, revision: inserted[0].revision };
     throw new ConflictError(
       "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
     );
@@ -419,7 +438,7 @@ export async function saveThemeSettings(
       "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
     );
   }
-  return { colors: sanitized, revision: updated[0].revision };
+  return { theme: sanitized, revision: updated[0].revision };
 }
 
 // ─────────────────────────────────────────

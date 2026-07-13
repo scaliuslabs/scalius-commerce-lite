@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getThemeColorError,
+  getThemeColorPickerHex,
   getThemeColorPairStatus,
 } from "./theme-color-accessibility";
 import {
@@ -22,15 +23,19 @@ describe("theme color accessibility", () => {
     });
   });
 
-  it("supports shorthand hex and leaves functional colors unscored", () => {
+  it("supports shorthand hex and scores opaque OKLCH colors", () => {
     expect(getThemeColorPairStatus("#fff", "#000")).toEqual({
       ratio: 21,
       passes: true,
     });
     expect(getThemeColorPairStatus("oklch(1 0 0)", "#000000")).toEqual({
-      ratio: null,
-      passes: null,
+      ratio: 21,
+      passes: true,
     });
+    expect(getThemeColorPickerHex("oklch(0.53 0.14 150)")).toMatch(
+      /^#[\da-f]{6}$/,
+    );
+    expect(getThemeColorPickerHex("#abc")).toBe("#aabbcc");
   });
 
   it("uses the storefront sanitizer contract for field validation", () => {
@@ -43,6 +48,7 @@ describe("theme color accessibility", () => {
 
   it("keeps every essential pair in every preset at or above 4.5:1", () => {
     for (const [paletteName, palette] of Object.entries(THEME_COLOR_PALETTES)) {
+      if (paletteName === "Current") continue;
       for (const { background, foreground } of THEME_CONTRAST_PAIRS) {
         const status = getThemeColorPairStatus(
           palette.colors[foreground] ?? "",
@@ -61,13 +67,13 @@ describe("theme color accessibility", () => {
     }
   });
 
-  it("uses the verified Zinc palette as the effective default", () => {
-    expect(DEFAULT_THEME_COLORS).toBe(THEME_COLOR_PALETTES.Zinc?.colors);
+  it("uses the actual storefront defaults instead of an admin-only palette", () => {
+    expect(DEFAULT_THEME_COLORS).toBe(THEME_COLOR_PALETTES.Current?.colors);
     expect(
       getThemeColorPairStatus(
         DEFAULT_THEME_COLORS["muted-foreground"] ?? "",
         DEFAULT_THEME_COLORS.muted ?? "",
       ),
-    ).toEqual({ ratio: 7, passes: true });
+    ).toEqual({ ratio: 4.4, passes: false });
   });
 });

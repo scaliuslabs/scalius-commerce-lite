@@ -29,7 +29,10 @@ import { normalizeCollectionConfig, publicCollectionConfig } from "../collection
 import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
-import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import {
+  parseStorefrontThemeSettings,
+  type StorefrontThemeSettings,
+} from "@scalius/shared/storefront-theme";
 import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 import {
   DEFAULT_CURRENCY,
@@ -57,21 +60,12 @@ function parsePersistedNavigationConfig(
   }
 }
 
-export function resolveStorefrontThemeColors(
+export function resolveStorefrontThemeSettings(
   versionedValue: string | null | undefined,
   legacyValue: string | null | undefined,
-): Record<string, string> {
+): StorefrontThemeSettings {
   const value = versionedValue ?? legacyValue;
-  if (!value) return {};
-  try {
-    return sanitizeStorefrontThemeColors(JSON.parse(value));
-  } catch (e: unknown) {
-    console.warn(
-      "[Storefront] Failed to parse theme colors JSON:",
-      e instanceof Error ? e.message : e,
-    );
-    return {};
-  }
+  return parseStorefrontThemeSettings(value);
 }
 
 interface NestedNavigationItem {
@@ -560,7 +554,7 @@ export async function getLayoutData(
       };
 
   // Process Theme
-  const themeColors = resolveStorefrontThemeColors(
+  const storefrontTheme = resolveStorefrontThemeSettings(
     (themeResults as { value?: string }[])[0]?.value,
     (legacyThemeResults as { value?: string }[])[0]?.value,
   );
@@ -620,7 +614,7 @@ export async function getLayoutData(
     navigation: navigationData,
     footer: footerData,
     currency: currencyData,
-    theme: { colors: themeColors },
+    theme: storefrontTheme,
     media,
     metaCapi,
     business,

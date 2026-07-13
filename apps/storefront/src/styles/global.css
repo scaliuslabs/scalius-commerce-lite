@@ -110,6 +110,10 @@ body {
   overflow-x: clip;
 }
 
+html {
+  font-size: calc(100% * var(--theme-type-scale, 1));
+}
+
 body {
   @apply bg-background text-foreground;
   font-feature-settings:
@@ -120,6 +124,68 @@ body {
   padding-top: var(--safe-area-inset-top);
   padding-right: var(--safe-area-inset-right);
   padding-left: var(--safe-area-inset-left);
+}
+
+.site-root {
+  font-family: var(--theme-font-body);
+}
+
+.site-root :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--theme-font-heading);
+}
+
+/* Page width does not reshape the owner-approved product detail composition. */
+.site-root :where(header, footer) .max-w-7xl,
+.site-root:not([data-storefront-route="product"]) main .max-w-7xl {
+  max-width: var(--theme-container-width, 80rem);
+}
+
+/* Semantic presentation settings apply only to opted-in shared components. */
+.site-root[data-theme-density="compact"]
+  [data-theme-component="button"]:not([data-theme-size="icon"]),
+.site-root[data-theme-density="compact"] [data-theme-component="input"] {
+  height: 2.25rem;
+}
+
+.site-root[data-theme-density="airy"]
+  [data-theme-component="button"]:not([data-theme-size="icon"]),
+.site-root[data-theme-density="airy"] [data-theme-component="input"] {
+  height: 2.75rem;
+}
+
+.site-root[data-theme-button-style="soft"]
+  [data-theme-component="button"][data-theme-variant="default"] {
+  background: color-mix(in oklch, var(--primary) 14%, transparent) !important;
+  border-color: color-mix(in oklch, var(--primary) 28%, transparent) !important;
+  color: var(--primary) !important;
+  box-shadow: none !important;
+}
+
+.site-root[data-theme-button-style="outline"]
+  [data-theme-component="button"][data-theme-variant="default"] {
+  background: transparent !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  box-shadow: none !important;
+}
+
+.site-root[data-theme-input-style="filled"]
+  :where([data-theme-component="input"], [data-theme-component="textarea"]) {
+  background: var(--muted) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.site-root[data-theme-card-style="elevated"]
+  [data-theme-component="product-card"] {
+  border-color: transparent !important;
+  box-shadow: 0 0.75rem 2rem color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+
+.site-root[data-theme-card-style="flat"]
+  [data-theme-component="product-card"] {
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 html.dark {

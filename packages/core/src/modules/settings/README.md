@@ -56,8 +56,8 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 | `getGeneralSettings` | `(db) => { headerConfig, footerConfig }` | Returns parsed JSON from `siteSettings` singleton |
 | `saveHeaderConfig` | `(db, config) => void` | Upserts headerConfig on `siteSettings` singleton (insert with `onConflictDoUpdate` on `singletonKey`) |
 | `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
-| `getThemeSettings` | `(db) => { colors }` | Reads storefront color overrides from `settings` (category=theme, key=storefront_colors) and sanitizes legacy rows through `@scalius/shared/storefront-theme` |
-| `saveThemeSettings` | `(db, colors) => void` | Sanitizes and saves storefront color overrides via `upsertSetting()` |
+| `getThemeSettings` | `(db) => { theme, revision }` | Reads the versioned semantic presentation document, upgrades a legacy flat color row, and fails closed for an invalid versioned document |
+| `saveThemeSettings` | `(db, theme, expectedRevision) => { theme, revision }` | Sanitizes and CAS-publishes colors, typography, corners, density, container width, and safe component styles in the singleton theme document |
 | `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery, returnPolicy }` | Reads SEO fields from `siteSettings` singleton, the default-on discovery policy from `settings` (`category=seo`, `key=discovery`), and merchant return-policy schema facts from `settings` (`category=seo`, `key=return_policy`). Sitemap discovery includes `staticPages`, `products`, `categories`, `collections`, and `pages`; structured-data discovery controls OnlineStore/WebSite/Product/ProductGroup/Breadcrumb/CollectionPage plus offer shipping schema. Return-policy settings stay disabled until the merchant saves complete buyer-visible facts. Admin reads must fail visibly on DB errors; routes must not return default-on settings after a failed read. |
 | `saveSeoSettings` | `(db, data) => void` | Upserts SEO fields, optional discovery policy, and optional return-policy settings. Site fields only update provided values; discovery and return-policy patches are merged with stored policy and normalized before `upsertSetting()` so partial saves do not reset sibling sitemap/feed/robots/schema toggles or merchant return-policy facts |
 | `getStorefrontUrlSetting` | `(db) => { storefrontUrl }` | Reads storefrontUrl from `siteSettings` |
@@ -162,7 +162,7 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/general` | Get header + footer JSON configs |
 | POST | `/header` | Save header config (topBar, logo, favicon, contact, social, navigation). Upserts siteSettings singleton |
 | POST | `/footer` | Save footer config (logo, tagline, description, copyrightText, menus, social). Upserts siteSettings singleton |
-| GET | `/theme` | Get storefront color overrides from `settings` (category=theme, key=storefront_colors) |
+| GET | `/theme` | Get the published semantic storefront style and revision |
 | POST | `/theme` | Save storefront color overrides. Invalidates `api:storefront:layout:*` KV keys |
 | GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery policy, and merchant return-policy schema settings; fails closed on read errors |
 | POST | `/seo` | Save SEO fields, nested partial discovery toggles, and top-level `returnPolicy` settings on `siteSettings/settings`; the API route invalidates homepage/layout/API caches and schedules warmups for public robots/sitemap/feed XML paths after committed saves |

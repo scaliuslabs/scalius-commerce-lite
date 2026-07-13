@@ -2,7 +2,18 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getKv } from "../../../utils/kv-cache";
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { layoutCache, CACHE_KEYS } from "@scalius/shared/layout-cache";
-import { listInvalidStorefrontThemeColorEntries } from "@scalius/shared/storefront-theme";
+import {
+  STOREFRONT_THEME_BODY_FONTS,
+  STOREFRONT_THEME_BUTTON_STYLES,
+  STOREFRONT_THEME_CARD_STYLES,
+  STOREFRONT_THEME_CONTAINER_WIDTHS,
+  STOREFRONT_THEME_CORNER_STYLES,
+  STOREFRONT_THEME_DENSITIES,
+  STOREFRONT_THEME_HEADING_FONTS,
+  STOREFRONT_THEME_INPUT_STYLES,
+  STOREFRONT_THEME_TYPE_SCALES,
+  listInvalidStorefrontThemeSettingsEntries,
+} from "@scalius/shared/storefront-theme";
 import {
   SUPPORTED_CURRENCY_CODES,
 } from "@scalius/shared/currency";
@@ -329,6 +340,33 @@ app.openapi(saveFooterRoute, async (c) => {
 // THEME
 // ─────────────────────────────────────────
 
+const themeDocumentSchema = z
+  .object({
+    colors: z.record(z.string(), z.string()),
+    typography: z.object({
+      heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
+      body: z.enum(STOREFRONT_THEME_BODY_FONTS),
+      scale: z.enum(STOREFRONT_THEME_TYPE_SCALES),
+    }).strict(),
+    cornerStyle: z.enum(STOREFRONT_THEME_CORNER_STYLES),
+    density: z.enum(STOREFRONT_THEME_DENSITIES),
+    containerWidth: z.enum(STOREFRONT_THEME_CONTAINER_WIDTHS),
+    components: z.object({
+      buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
+      inputs: z.enum(STOREFRONT_THEME_INPUT_STYLES),
+      cards: z.enum(STOREFRONT_THEME_CARD_STYLES),
+    }).strict(),
+  })
+  .strict()
+  .superRefine((theme, ctx) => {
+    const invalidEntries = listInvalidStorefrontThemeSettingsEntries(theme);
+    if (invalidEntries.length === 0) return;
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid theme settings: ${invalidEntries.join(", ")}`,
+    });
+  });
+
 const getThemeRoute = createRoute({
   method: "get",
   path: "/theme",
@@ -342,7 +380,7 @@ const getThemeRoute = createRoute({
           schema: successEnvelope(
             z
               .object({
-                colors: z.record(z.string(), z.string()),
+                theme: themeDocumentSchema,
                 revision: z.number().int().nonnegative(),
               })
               .passthrough(),
@@ -362,14 +400,7 @@ app.openapi(getThemeRoute, async (c) => {
 
 const saveThemeSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
-  colors: z.record(z.string(), z.string()).superRefine((colors, ctx) => {
-    const invalidEntries = listInvalidStorefrontThemeColorEntries(colors);
-    if (invalidEntries.length === 0) return;
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid theme color keys or values: ${invalidEntries.join(", ")}`,
-    });
-  }),
+  theme: themeDocumentSchema,
 });
 
 const saveThemeRoute = createRoute({
@@ -386,7 +417,7 @@ const saveThemeRoute = createRoute({
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
-            colors: z.record(z.string(), z.string()),
+            theme: themeDocumentSchema,
             revision: z.number().int().positive(),
             message: z.string(),
           })),
@@ -402,7 +433,7 @@ app.openapi(saveThemeRoute, async (c) => {
   const body = c.req.valid("json");
   const saved = await saveThemeSettings(
     db,
-    body.colors,
+    body.theme,
     body.expectedRevision,
   );
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);

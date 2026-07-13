@@ -41,7 +41,7 @@ Fetches and shapes all layout data in a **single batched D1 round-trip** (11 par
 3. Categories (for navigation fallback when no custom nav configured)
 4. Published pages (for navigation fallback)
 5. Currency settings from `settings` table (category = "currency")
-6. Theme color overrides from `settings` table (category = "theme", key = "storefront_colors")
+6. Versioned semantic storefront style from `theme_settings`, with the legacy flat color row used only before the first versioned publish
 7. Media/image optimization settings from `settings` table (category = "media", key = "image_optimization")
 8. Meta CAPI browser dispatch readiness from `metaConversionsSettings`
 9. SEO discovery policy from `settings` table (category = "seo", key = "discovery")

@@ -22,7 +22,10 @@ import {
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { sanitizeStorefrontThemeColors } from "@scalius/shared/storefront-theme";
+import {
+  buildStorefrontThemeTokens,
+  sanitizeStorefrontThemeSettings,
+} from "@scalius/shared/storefront-theme";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 
 interface Props {
@@ -156,16 +159,17 @@ const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
-// Build dynamic CSS overrides from admin-configured theme colors.
-// Only non-empty color values are included.
-const themeColors = sanitizeStorefrontThemeColors(
-  layoutData?.theme?.colors ?? {},
+// Build CSS only from shared enum constants and sanitized color overrides.
+const storefrontTheme = sanitizeStorefrontThemeSettings(layoutData?.theme);
+const themeTokenEntries = Object.entries(
+  buildStorefrontThemeTokens(storefrontTheme),
 );
-const themeColorEntries = Object.entries(themeColors);
-const themeStyleBlock =
-  themeColorEntries.length > 0
-    ? `:root, .site-root { ${themeColorEntries.map(([k, v]) => `--${k}: ${v}`).join("; ")}; }`
-    : "";
+const themeStyleBlock = `:root, .site-root { ${themeTokenEntries
+  .map(([key, value]) => `--${key}: ${value}`)
+  .join("; ")}; }`;
+const storefrontRouteKind = Astro.url.pathname.startsWith("/products/")
+  ? "product"
+  : "standard";
 
 const headScripts = analyticsScripts.filter(
   (script) => script.location === "head",
@@ -421,7 +425,14 @@ const runtimeGlobalsScript = [
 
     <slot name="head" />
   </head>
-  <body class="flex flex-col min-h-screen site-root">
+  <body
+    class="flex flex-col min-h-screen site-root"
+    data-theme-density={storefrontTheme.density}
+    data-theme-button-style={storefrontTheme.components.buttons}
+    data-theme-input-style={storefrontTheme.components.inputs}
+    data-theme-card-style={storefrontTheme.components.cards}
+    data-storefront-route={storefrontRouteKind}
+  >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 
     <div class="site-wrapper grow">
