@@ -262,13 +262,6 @@ export function getCustomerVisibleBalanceDue(order: CustomerOrderMoneyState): nu
 }
 
 export function getCustomerSpendContribution(order: CustomerOrderMoneyState): number {
-    if (
-        CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET.has(order.status) ||
-        CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET.has(order.paymentStatus)
-    ) {
-        return 0;
-    }
-
     return roundPrice(Math.max(0, Number(order.paidAmount ?? 0)));
 }
 
@@ -290,12 +283,7 @@ export function buildCustomerOrderMetricsProjection() {
               AND customer_orders.deleted_at IS NULL
         ), 0) AS INTEGER)`,
         totalSpent: sql<number>`COALESCE((
-            SELECT sum(CASE
-                WHEN customer_orders.status IN ('cancelled', 'refunded', 'returned', 'partially_refunded')
-                    OR customer_orders.payment_status IN ('failed', 'refunded')
-                THEN 0
-                ELSE CASE WHEN customer_orders.paid_amount > 0 THEN customer_orders.paid_amount ELSE 0 END
-            END)
+            SELECT sum(CASE WHEN customer_orders.paid_amount > 0 THEN customer_orders.paid_amount ELSE 0 END)
             FROM orders AS customer_orders
             WHERE customer_orders.customer_id = ${customers.id}
               AND customer_orders.deleted_at IS NULL
@@ -309,11 +297,11 @@ export function buildCustomerOrderMetricsProjection() {
     };
 }
 
-export function customerAccountOrderVisibilityCondition(customerId: string) {
+export function customerAccountOrderVisibilityCondition(customerId: string): SQL {
     return and(
         customerAccountOwnershipCondition(customerId),
         isNull(orders.deletedAt),
-    );
+    )!;
 }
 
 export function buildCustomerOrderBaseTimelineEvents(order: {
@@ -756,12 +744,7 @@ export async function getCustomerOrders(
     const accountSummaryQuery = db
         .select({
             totalOrders: sql<number>`CAST(count(*) AS INTEGER)`,
-            totalSpent: sql<number>`COALESCE(SUM(CASE
-                WHEN ${inArray(orders.status, [...CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES])}
-                    OR ${inArray(orders.paymentStatus, [...CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES])}
-                THEN 0
-                ELSE CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END
-            END), 0)`,
+            totalSpent: sql<number>`COALESCE(SUM(CASE WHEN ${orders.paidAmount} > 0 THEN ${orders.paidAmount} ELSE 0 END), 0)`,
             completedOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_COMPLETED_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
             pendingOrders: sql<number>`CAST(COALESCE(SUM(CASE WHEN ${inArray(orders.status, [...CUSTOMER_PENDING_ORDER_STATUSES])} THEN 1 ELSE 0 END), 0) AS INTEGER)`,
         })

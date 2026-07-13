@@ -18,6 +18,31 @@ Last reviewed: 2026-07-13
 - Customer records and sessions remain D1 authority. An abandoned snapshot must
   never merge customers, prove account ownership, or mark a phone/email verified.
 
+## Unified buyer profiles and account ownership
+
+- The Customers workspace is the merchant's buyer directory, not an accounts-only
+  list. Storefront guest and authenticated orders both link `orders.customer_id`
+  to a CRM profile so order history and legitimate contact context are visible in
+  one place. `customers.account_claimed_at` distinguishes an account profile from
+  an unclaimed guest profile.
+- Private account ownership is separate: only an authoritative authenticated
+  customer session may populate `orders.account_owner_customer_id`. Customer
+  order reads, account support requests, and other account-private actions must
+  authorize through that field. A guest-supplied phone or email match is never
+  proof of account ownership.
+- Guest checkout reuses an unclaimed profile by canonical phone and may update
+  its contact/delivery context. It must not overwrite a claimed account profile.
+  Verified sign-up can claim an existing unclaimed profile after proving its
+  contact channel; sign-in must not treat an unclaimed CRM row as an account.
+- Customer metrics use the CRM link. Order count includes linked orders; paid
+  spend is the sum of each order's current non-negative `paid_amount`. Refund
+  processing reduces that net value instead of discarding a partially refunded
+  order's remaining paid amount. A pending COD order therefore increases order
+  count but not paid spend.
+- Permanent customer deletion is blocked while either CRM-linked or
+  account-owned orders exist. Soft deletion remains available and revokes active
+  sessions without erasing order or customer-history evidence.
+
 ## Lifecycle
 
 - Successful checkout removes its matching abandoned session asynchronously;

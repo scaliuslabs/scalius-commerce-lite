@@ -9662,6 +9662,7 @@ export type GetApiV1AdminCustomersResponses = {
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
+                accountClaimedAt: string | null;
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: string | null;
@@ -9931,6 +9932,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
             cityName: string | null;
             zoneName: string | null;
             areaName: string | null;
+            accountClaimedAt: string | number | null;
             totalOrders: number;
             totalSpent: number;
             lastOrderAt: string | number | null;
@@ -10180,6 +10182,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
+                accountClaimedAt: string | number | null;
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: string | number | null;

@@ -32442,6 +32442,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "accountClaimedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "totalOrders": {
                                 "type": "number"
                               },
@@ -32471,6 +32475,7 @@
                               "cityName",
                               "zoneName",
                               "areaName",
+                              "accountClaimedAt",
                               "totalOrders",
                               "totalSpent",
                               "lastOrderAt",
@@ -33219,6 +33224,17 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "accountClaimedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "nullable": true
+                        },
                         "totalOrders": {
                           "type": "number"
                         },
@@ -33280,6 +33296,7 @@
                         "cityName",
                         "zoneName",
                         "areaName",
+                        "accountClaimedAt",
                         "totalOrders",
                         "totalSpent",
                         "lastOrderAt",
@@ -34076,6 +34093,17 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "accountClaimedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ],
+                              "nullable": true
+                            },
                             "totalOrders": {
                               "type": "number"
                             },
@@ -34137,6 +34165,7 @@
                             "cityName",
                             "zoneName",
                             "areaName",
+                            "accountClaimedAt",
                             "totalOrders",
                             "totalSpent",
                             "lastOrderAt",

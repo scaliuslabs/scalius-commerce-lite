@@ -60,7 +60,6 @@ const buyer: CustomerListBuyer = {
   lastOrderAt: "2026-07-10T00:00:00.000Z",
   createdAt: "2026-07-01T00:00:00.000Z",
   updatedAt: "2026-07-10T00:00:00.000Z",
-  deletedAt: null,
   accountClaimedAt: "2026-07-02T00:00:00.000Z",
 };
 

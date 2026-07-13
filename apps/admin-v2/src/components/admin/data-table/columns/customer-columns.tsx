@@ -49,6 +49,7 @@ export function getCustomerColumns(
       cell: ({ row }) => {
         const customer = row.original;
         const location = formatCustomerLocation(customer);
+        const buyerName = customer.name || "Unnamed buyer";
         return (
           <div className="flex flex-col">
             <div className="flex w-fit max-w-full items-center gap-1.5">
@@ -58,11 +59,11 @@ export function getCustomerColumns(
                   params={{ customerId: customer.id }}
                   className="flex min-w-0 items-center gap-1 text-primary hover:underline"
                 >
-                  <span className="truncate">{customer.name}</span>
+                  <span className="truncate">{buyerName}</span>
                   <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
                 </Link>
               ) : (
-                <span className="truncate font-medium text-foreground">{customer.name}</span>
+                <span className="truncate font-medium text-foreground">{buyerName}</span>
               )}
               <CustomerAccountBadge hasAccount={customerHasAccount(customer)} />
             </div>

@@ -38,7 +38,7 @@ import {
 } from "../inventory";
 import type { ReservationEntry } from "../inventory";
 
-import { sql, desc, eq, inArray, isNotNull, and, type SQL } from "drizzle-orm";
+import { sql, desc, eq, inArray, isNotNull, isNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
@@ -1527,13 +1527,16 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
     let customerStats: { totalOrders: number; totalSpent: number; lastOrderAt: Date | null } | null = null;
     if (existingCustomer) {
         const customerOrders = await db
-            .select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
+            .select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
             .from(orders)
-            .where(eq(orders.customerId, existingCustomer.id));
+            .where(and(
+                eq(orders.customerId, existingCustomer.id),
+                isNull(orders.deletedAt),
+            ));
 
         const allOrders = [
             ...customerOrders,
-            { totalAmount, createdAt: Math.floor(Date.now() / 1000) },
+            { paidAmount: initialPaymentState.paidAmount, createdAt: new Date() },
         ];
         customerStats = calculateCustomerStats(allOrders);
     }
@@ -1589,7 +1592,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
                 zone: data.zone,
                 area: data.area,
                 totalOrders: 1,
-                totalSpent: totalAmount,
+                totalSpent: initialPaymentState.paidAmount,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
@@ -2328,8 +2331,11 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
 }
 
 async function updateCustomerStatsService(db: Database, customerId: string) {
-    const customerOrders = await db.select({ totalAmount: orders.totalAmount, createdAt: orders.createdAt })
-        .from(orders).where(eq(orders.customerId, customerId));
+    const customerOrders = await db.select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
+        .from(orders).where(and(
+            eq(orders.customerId, customerId),
+            isNull(orders.deletedAt),
+        ));
     const stats = calculateCustomerStats(customerOrders);
     await db.update(customers).set({
         totalOrders: stats.totalOrders,

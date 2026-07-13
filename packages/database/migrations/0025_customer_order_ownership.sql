@@ -127,12 +127,7 @@ SET
   ), 0),
   `total_spent` = COALESCE((
     SELECT sum(
-      CASE
-        WHEN `orders`.`status` IN ('cancelled', 'refunded', 'returned', 'partially_refunded')
-          OR `orders`.`payment_status` IN ('failed', 'refunded')
-        THEN 0
-        ELSE max(COALESCE(`orders`.`paid_amount`, 0), 0)
-      END
+      max(COALESCE(`orders`.`paid_amount`, 0), 0)
     )
     FROM `orders`
     WHERE `orders`.`customer_id` = `customers`.`id`
