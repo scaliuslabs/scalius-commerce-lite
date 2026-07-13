@@ -37,6 +37,35 @@ const legacySchema = `
     discount_id TEXT NOT NULL REFERENCES discounts(id) ON DELETE CASCADE,
     product_id TEXT NOT NULL
   );
+  CREATE TABLE discount_usage (
+    id TEXT PRIMARY KEY NOT NULL,
+    discount_id TEXT NOT NULL REFERENCES discounts(id) ON DELETE CASCADE,
+    order_id TEXT NOT NULL,
+    customer_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TRIGGER discount_usage_max_uses_guard
+  BEFORE INSERT ON discount_usage
+  WHEN (
+    SELECT max_uses FROM discounts WHERE id = NEW.discount_id
+  ) IS NOT NULL
+  AND (
+    SELECT COUNT(*) FROM discount_usage WHERE discount_id = NEW.discount_id
+  ) >= (
+    SELECT max_uses FROM discounts WHERE id = NEW.discount_id
+  )
+  BEGIN
+    SELECT RAISE(ABORT, 'DISCOUNT_MAX_USES_EXCEEDED');
+  END;
+  CREATE TRIGGER discount_usage_one_per_customer_guard
+  BEFORE INSERT ON discount_usage
+  WHEN (
+    SELECT limit_one_per_customer FROM discounts WHERE id = NEW.discount_id
+  ) = 1
+  BEGIN
+    SELECT RAISE(ABORT, 'DISCOUNT_CUSTOMER_KEY_REQUIRED')
+    WHERE NEW.customer_id IS NULL;
+  END;
   CREATE VIRTUAL TABLE discounts_fts USING fts5(
     code,
     content='discounts',
@@ -88,6 +117,12 @@ describe("discount revision migration", () => {
         FROM discounts AS d
         JOIN discounts_fts AS f ON f.rowid = d.rowid
         WHERE discounts_fts MATCH 'WELCOME10';
+        SELECT count(*) FROM sqlite_master
+        WHERE type = 'trigger'
+          AND name IN (
+            'discount_usage_max_uses_guard',
+            'discount_usage_one_per_customer_guard'
+          );
         INSERT INTO discounts (
           id, code, type, value_type, discount_value, start_date,
           is_active, created_at, updated_at
@@ -117,6 +152,7 @@ describe("discount revision migration", () => {
       "WELCOME10:1",
       "disc_legacy",
       "WELCOME10",
+      "2",
       "SUMMER20",
       "0",
       "MONSOON20",
