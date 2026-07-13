@@ -1,6 +1,7 @@
 import type {
   TaxJurisdictionOption,
   TaxJurisdictionType,
+  TaxConfigurationPayload,
   UpdateTaxSettingsInput,
 } from "@/lib/api-functions/taxes";
 
@@ -22,6 +23,7 @@ export function taxSettingsIssue(
     UpdateTaxSettingsInput,
     "enabled" | "taxShipping" | "defaultTaxClassId" | "shippingTaxClassId" | "displayLabel"
   >,
+  configuration?: Pick<TaxConfigurationPayload, "classes" | "rates">,
 ): string | null {
   if (!input.displayLabel.trim()) return "Enter the buyer-facing tax label.";
   if (input.enabled && !input.defaultTaxClassId) {
@@ -29,6 +31,34 @@ export function taxSettingsIssue(
   }
   if (input.taxShipping && !input.shippingTaxClassId && !input.defaultTaxClassId) {
     return "Choose a shipping or default class before taxing shipping.";
+  }
+  if (input.enabled && configuration && input.defaultTaxClassId) {
+    const defaultClass = configuration.classes.find(
+      (taxClass) => taxClass.id === input.defaultTaxClassId,
+    );
+    if (!defaultClass) return "Choose an active default tax class before enabling tax.";
+    const defaultRateReady = defaultClass.isExempt || configuration.rates.some(
+      (rate) => rate.isActive && rate.taxClassId === defaultClass.id,
+    );
+    if (!defaultRateReady) {
+      return `Add an active rate to default product class “${defaultClass.name}” before enabling tax.`;
+    }
+
+    const effectiveShippingClassId = input.taxShipping
+      ? input.shippingTaxClassId ?? input.defaultTaxClassId
+      : null;
+    if (effectiveShippingClassId && effectiveShippingClassId !== defaultClass.id) {
+      const shippingClass = configuration.classes.find(
+        (taxClass) => taxClass.id === effectiveShippingClassId,
+      );
+      if (!shippingClass) return "Choose an active shipping tax class before enabling tax.";
+      const shippingRateReady = shippingClass.isExempt || configuration.rates.some(
+        (rate) => rate.isActive && rate.taxClassId === shippingClass.id,
+      );
+      if (!shippingRateReady) {
+        return `Add an active rate to shipping class “${shippingClass.name}” before enabling tax.`;
+      }
+    }
   }
   return null;
 }

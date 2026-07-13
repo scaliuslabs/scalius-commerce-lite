@@ -1,6 +1,6 @@
 # Theme and Tax Settings Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-13
 
 These settings currently have very different risk profiles. Tax has a serious
 domain model behind a sprawling interface; Theme has a narrow color override
@@ -70,6 +70,21 @@ coverage, and route-backed tab/search state remain follow-up work.
 - The decorative hero was replaced by a compact operational header. Tax tabs
   are controlled, horizontally scrollable, and non-shrinking on mobile, so a
   readiness action and narrow viewport preserve the active workspace.
+
+## Implemented tax activation invariant (2026-07-13)
+
+- The D1-backed settings authority now rejects tax activation when the selected
+  non-exempt default product class has no active rate. If shipping tax uses a
+  separate non-exempt class, that class must also have an active rate. Exempt
+  classes intentionally remain valid without a rate.
+- The policy form enforces and explains the same rule before submission, and
+  workspace readiness includes the effective shipping class instead of showing
+  a false ready state. Disabled stores may still save incomplete configuration
+  so legacy setups can be turned off and repaired safely.
+- This is an activation-time guard, not a complete destination-coverage proof.
+  Preventing later rate edits/deletes from invalidating an already-enabled
+  configuration, diagnosing geographic gaps/overlaps, and verifying the full
+  refund/rounding matrix remain release work.
 
 ## Theme: verified current scope
 

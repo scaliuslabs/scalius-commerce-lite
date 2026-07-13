@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
 
+import type { TaxConfigurationPayload } from "@/lib/api-functions/taxes";
+
 import {
   basisPointsToPercent,
   percentToBasisPoints,
   resolveJurisdictionSelection,
   taxSettingsIssue,
 } from "./tax-form";
+
+function taxConfiguration(): Pick<TaxConfigurationPayload, "classes" | "rates"> {
+  return {
+    classes: [{
+      id: "class_standard",
+      name: "Standard",
+      description: null,
+      isExempt: false,
+      version: 1,
+      createdAt: null,
+      updatedAt: null,
+      deletedAt: null,
+    }],
+    rates: [],
+  };
+}
 
 describe("tax form boundaries", () => {
   it("converts merchant percentages to exact basis points", () => {
@@ -32,6 +50,47 @@ describe("tax form boundaries", () => {
       shippingTaxClassId: null,
       displayLabel: "Tax",
     })).toBeNull();
+  });
+
+  it("explains missing product and shipping rates before submit", () => {
+    const configuration = taxConfiguration();
+    expect(taxSettingsIssue({
+      enabled: true,
+      taxShipping: false,
+      defaultTaxClassId: "class_standard",
+      shippingTaxClassId: null,
+      displayLabel: "Tax",
+    }, configuration)).toContain("active rate to default product class");
+
+    configuration.rates.push({
+      id: "rate_standard",
+      taxClassId: "class_standard",
+      name: "Standard rate",
+      rateBps: 1500,
+      jurisdictionType: "all",
+      jurisdictionId: null,
+      jurisdictionLabel: null,
+      priority: 0,
+      isCompound: false,
+      isActive: true,
+      version: 1,
+      createdAt: null,
+      updatedAt: null,
+      deletedAt: null,
+    });
+    configuration.classes.push({
+      ...configuration.classes[0]!,
+      id: "class_shipping",
+      name: "Shipping",
+    });
+
+    expect(taxSettingsIssue({
+      enabled: true,
+      taxShipping: true,
+      defaultTaxClassId: "class_standard",
+      shippingTaxClassId: "class_shipping",
+      displayLabel: "Tax",
+    }, configuration)).toContain("active rate to shipping class");
   });
 
   it("accepts only authoritative jurisdiction options", () => {
