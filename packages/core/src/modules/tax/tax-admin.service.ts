@@ -157,47 +157,69 @@ async function assertClassCanCalculateTax(
 }
 
 function buildTaxConfigurationReadinessGuard(db: Database) {
+    // This expression is projected as a SELECT field by buildBatchGuard().
+    // Drizzle intentionally renders schema columns in a projection without
+    // their table prefix, which is unsafe for these nested correlated
+    // subqueries (`tax_rates.id` would otherwise shadow `tax_classes.id`).
+    // These are static schema identifiers, never user-controlled SQL.
+    const settings = {
+        id: sql.raw('"tax_settings"."id"'),
+        enabled: sql.raw('"tax_settings"."enabled"'),
+        taxShipping: sql.raw('"tax_settings"."tax_shipping"'),
+        defaultTaxClassId: sql.raw('"tax_settings"."default_tax_class_id"'),
+        shippingTaxClassId: sql.raw('"tax_settings"."shipping_tax_class_id"'),
+    };
+    const taxClass = {
+        id: sql.raw('"tax_classes"."id"'),
+        isExempt: sql.raw('"tax_classes"."is_exempt"'),
+        deletedAt: sql.raw('"tax_classes"."deleted_at"'),
+    };
+    const rate = {
+        taxClassId: sql.raw('"tax_rates"."tax_class_id"'),
+        isActive: sql.raw('"tax_rates"."is_active"'),
+        deletedAt: sql.raw('"tax_rates"."deleted_at"'),
+    };
     return buildBatchGuard(db, sql`
         CASE
             WHEN NOT EXISTS (
                 SELECT 1 FROM ${taxSettings}
-                WHERE ${taxSettings.id} = 'default'
-                  AND ${taxSettings.enabled} = 1
+                WHERE ${settings.id} = 'default'
+                  AND ${settings.enabled} = 1
             ) THEN 1
             WHEN EXISTS (
                 SELECT 1 FROM ${taxSettings}
-                WHERE ${taxSettings.id} = 'default'
-                  AND ${taxSettings.enabled} = 1
+                WHERE ${settings.id} = 'default'
+                  AND ${settings.enabled} = 1
                   AND EXISTS (
                       SELECT 1 FROM ${taxClasses}
-                      WHERE ${taxClasses.id} = ${taxSettings.defaultTaxClassId}
-                        AND ${taxClasses.deletedAt} IS NULL
+                      WHERE ${taxClass.id} = ${settings.defaultTaxClassId}
+                        AND ${taxClass.deletedAt} IS NULL
                         AND (
-                            ${taxClasses.isExempt} = 1
+                            ${taxClass.isExempt} = 1
                             OR EXISTS (
                                 SELECT 1 FROM ${taxRates}
-                                WHERE ${taxRates.taxClassId} = ${taxClasses.id}
-                                  AND ${taxRates.isActive} = 1
-                                  AND ${taxRates.deletedAt} IS NULL
+                                WHERE ${rate.taxClassId} = ${taxClass.id}
+                                  AND ${rate.isActive} = 1
+                                  AND ${rate.deletedAt} IS NULL
                             )
                         )
                   )
                   AND (
-                      ${taxSettings.taxShipping} = 0
+                      ${settings.taxShipping} = 0
                       OR EXISTS (
                           SELECT 1 FROM ${taxClasses}
-                          WHERE ${taxClasses.id} = COALESCE(
-                              ${taxSettings.shippingTaxClassId},
-                              ${taxSettings.defaultTaxClassId}
+                          WHERE ${taxClass.id} = COALESCE(
+                              ${settings.shippingTaxClassId},
+                              ${settings.defaultTaxClassId}
                           )
-                            AND ${taxClasses.deletedAt} IS NULL
+                            AND ${taxClass.deletedAt} IS NULL
                             AND (
-                                ${taxClasses.isExempt} = 1
+                                ${taxClass.isExempt} = 1
                                 OR EXISTS (
                                     SELECT 1 FROM ${taxRates}
-                                    WHERE ${taxRates.taxClassId} = ${taxClasses.id}
-                                      AND ${taxRates.isActive} = 1
-                                      AND ${taxRates.deletedAt} IS NULL
+                                    WHERE ${rate.taxClassId} = ${taxClass.id}
+                                      AND ${rate.isActive} = 1
+                                      AND ${rate.deletedAt} IS NULL
                                 )
                             )
                       )
