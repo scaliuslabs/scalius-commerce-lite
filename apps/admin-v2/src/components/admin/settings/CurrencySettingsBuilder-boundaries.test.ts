@@ -17,7 +17,9 @@ describe("currency settings safety boundaries", () => {
 
   it("validates the exchange rate and surfaces rejected saves", () => {
     expect(SOURCE).toContain("Number.isFinite(rate) && rate > 0");
-    expect(SOURCE).toContain("disabled={isSaving || !isExchangeRateValid}");
+    expect(SOURCE).toContain(
+      "disabled={isSaving || !isLoaded || !isExchangeRateValid}",
+    );
     expect(SOURCE).toContain('<Alert variant="destructive" role="alert">');
   });
 

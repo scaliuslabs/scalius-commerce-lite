@@ -112,6 +112,8 @@ describe("checkout settings status presentation", () => {
     expect(requestsSource).toContain("Unsaved customer request changes");
     expect(requestsSource).toContain("Customer request policy is up to date");
     expect(requestsSource).toContain("<UnsavedChangesGuard");
+    expect(requestsSource).toContain("isDirty={dirty}");
+    expect(requestsSource).toContain("isSubmitting={saveMutation.isPending}");
     expect(requestsSource).toContain("disabled={!canManage || !dirty || saveMutation.isPending}");
     expect(requestsSource).toContain("Save policy");
   });

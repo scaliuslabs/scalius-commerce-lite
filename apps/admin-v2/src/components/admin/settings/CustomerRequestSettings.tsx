@@ -123,8 +123,8 @@ export default function CustomerRequestSettings() {
   return (
     <>
       <UnsavedChangesGuard
-        dirty={dirty}
-        message="You have unsaved customer request policy changes."
+        isDirty={dirty}
+        isSubmitting={saveMutation.isPending}
       />
       <div className="grid items-start gap-5 pb-24 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
         <div className="space-y-4">

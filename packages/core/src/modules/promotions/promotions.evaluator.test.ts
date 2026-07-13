@@ -49,6 +49,13 @@ function candidate(overrides: Partial<PromotionCandidate> = {}): PromotionCandid
         conflictPolicy: "best",
         startsAtEpochSeconds: null,
         endsAtEpochSeconds: null,
+        maxRedemptions: null,
+        maxRedemptionsPerCustomer: null,
+        maxDiscountSpendMinor: null,
+        budgetCurrencyCode: null,
+        redemptionCount: 0,
+        customerRedemptionCount: 0,
+        discountSpendMinor: 0,
         codes: [],
         conditions: [],
         effects: [

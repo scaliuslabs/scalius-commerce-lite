@@ -12406,6 +12406,1048 @@ export type PostApiV1AdminDiscountsByIdRestoreResponses = {
 
 export type PostApiV1AdminDiscountsByIdRestoreResponse = PostApiV1AdminDiscountsByIdRestoreResponses[keyof PostApiV1AdminDiscountsByIdRestoreResponses];
 
+export type GetApiV1AdminPromotionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        includeDeleted?: string;
+    };
+    url: '/api/v1/admin/promotions';
+};
+
+export type GetApiV1AdminPromotionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminPromotionsError = GetApiV1AdminPromotionsErrors[keyof GetApiV1AdminPromotionsErrors];
+
+export type GetApiV1AdminPromotionsResponses = {
+    /**
+     * Promotions
+     */
+    200: {
+        success: true;
+        data: {
+            promotions: Array<{
+                id: string;
+                revision: number;
+                name: string;
+                title: string | null;
+                method: 'automatic' | 'code';
+                status: 'draft' | 'active' | 'paused' | 'archived';
+                priority: number;
+                conflictPolicy: 'best';
+                startsAtEpochSeconds: number | null;
+                endsAtEpochSeconds: number | null;
+                timezone: string;
+                maxRedemptions: number | null;
+                maxRedemptionsPerCustomer: number | null;
+                maxDiscountSpendMinor: number | null;
+                budgetCurrencyCode: string | null;
+                redemptionCount: number;
+                customerRedemptionCount: number;
+                discountSpendMinor: number;
+                /**
+                 * Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them.
+                 */
+                redemptionBudgetPolicy: 'committed_orders_never_released';
+                createdAtEpochSeconds: number;
+                updatedAtEpochSeconds: number;
+                deletedAtEpochSeconds: number | null;
+                codes: Array<{
+                    code: string;
+                    isActive: boolean;
+                }>;
+                conditions: Array<{
+                    id: string;
+                    kind: string;
+                    config: {
+                        [key: string]: unknown;
+                    };
+                }>;
+                effects: Array<{
+                    id: string;
+                    kind: string;
+                    target: string;
+                    allocation: string;
+                    config: {
+                        [key: string]: unknown;
+                    };
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminPromotionsResponse = GetApiV1AdminPromotionsResponses[keyof GetApiV1AdminPromotionsResponses];
+
+export type PostApiV1AdminPromotionsData = {
+    body: {
+        name: string;
+        title?: string | null;
+        method: 'automatic' | 'code';
+        priority?: number;
+        conflictPolicy?: 'best';
+        startsAtEpochSeconds?: number | null;
+        endsAtEpochSeconds?: number | null;
+        timezone?: string;
+        maxRedemptions?: number | null;
+        maxRedemptionsPerCustomer?: number | null;
+        maxDiscountSpendMinor?: number | null;
+        budgetCurrencyCode?: string | null;
+        codes?: Array<{
+            code: string;
+            isActive?: boolean;
+        }>;
+        conditions?: Array<{
+            kind: 'minimum_merchandise_subtotal';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+            };
+        } | {
+            kind: 'minimum_item_quantity';
+            config: {
+                quantity: number;
+            };
+        }>;
+        effects: Array<{
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'percentage_off';
+            config: {
+                basisPoints: number;
+            };
+        } | {
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'fixed_amount_off';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+            };
+        } | {
+            kind: 'free';
+            target: 'shipping';
+            allocation: 'once';
+            config: {
+                [key: string]: never;
+            };
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/promotions';
+};
+
+export type PostApiV1AdminPromotionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsError = PostApiV1AdminPromotionsErrors[keyof PostApiV1AdminPromotionsErrors];
+
+export type PostApiV1AdminPromotionsResponses = {
+    /**
+     * Promotion draft created
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsResponse = PostApiV1AdminPromotionsResponses[keyof PostApiV1AdminPromotionsResponses];
+
+export type DeleteApiV1AdminPromotionsByIdData = {
+    body: {
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}';
+};
+
+export type DeleteApiV1AdminPromotionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminPromotionsByIdError = DeleteApiV1AdminPromotionsByIdErrors[keyof DeleteApiV1AdminPromotionsByIdErrors];
+
+export type DeleteApiV1AdminPromotionsByIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminPromotionsByIdResponse = DeleteApiV1AdminPromotionsByIdResponses[keyof DeleteApiV1AdminPromotionsByIdResponses];
+
+export type GetApiV1AdminPromotionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}';
+};
+
+export type GetApiV1AdminPromotionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminPromotionsByIdError = GetApiV1AdminPromotionsByIdErrors[keyof GetApiV1AdminPromotionsByIdErrors];
+
+export type GetApiV1AdminPromotionsByIdResponses = {
+    /**
+     * Promotion
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            revision: number;
+            name: string;
+            title: string | null;
+            method: 'automatic' | 'code';
+            status: 'draft' | 'active' | 'paused' | 'archived';
+            priority: number;
+            conflictPolicy: 'best';
+            startsAtEpochSeconds: number | null;
+            endsAtEpochSeconds: number | null;
+            timezone: string;
+            maxRedemptions: number | null;
+            maxRedemptionsPerCustomer: number | null;
+            maxDiscountSpendMinor: number | null;
+            budgetCurrencyCode: string | null;
+            redemptionCount: number;
+            customerRedemptionCount: number;
+            discountSpendMinor: number;
+            /**
+             * Committed promotion claims permanently consume redemption and spend limits; cancellation and refund do not release them.
+             */
+            redemptionBudgetPolicy: 'committed_orders_never_released';
+            createdAtEpochSeconds: number;
+            updatedAtEpochSeconds: number;
+            deletedAtEpochSeconds: number | null;
+            codes: Array<{
+                code: string;
+                isActive: boolean;
+            }>;
+            conditions: Array<{
+                id: string;
+                kind: string;
+                config: {
+                    [key: string]: unknown;
+                };
+            }>;
+            effects: Array<{
+                id: string;
+                kind: string;
+                target: string;
+                allocation: string;
+                config: {
+                    [key: string]: unknown;
+                };
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminPromotionsByIdResponse = GetApiV1AdminPromotionsByIdResponses[keyof GetApiV1AdminPromotionsByIdResponses];
+
+export type PutApiV1AdminPromotionsByIdData = {
+    body: {
+        expectedRevision: number;
+        name: string;
+        title?: string | null;
+        method: 'automatic' | 'code';
+        priority?: number;
+        conflictPolicy?: 'best';
+        startsAtEpochSeconds?: number | null;
+        endsAtEpochSeconds?: number | null;
+        timezone?: string;
+        maxRedemptions?: number | null;
+        maxRedemptionsPerCustomer?: number | null;
+        maxDiscountSpendMinor?: number | null;
+        budgetCurrencyCode?: string | null;
+        codes?: Array<{
+            code: string;
+            isActive?: boolean;
+        }>;
+        conditions?: Array<{
+            kind: 'minimum_merchandise_subtotal';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+            };
+        } | {
+            kind: 'minimum_item_quantity';
+            config: {
+                quantity: number;
+            };
+        }>;
+        effects: Array<{
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'percentage_off';
+            config: {
+                basisPoints: number;
+            };
+        } | {
+            target: 'line' | 'order' | 'shipping';
+            allocation: 'across' | 'once';
+            kind: 'fixed_amount_off';
+            config: {
+                amountMinor: number;
+                currencyCode: string;
+            };
+        } | {
+            kind: 'free';
+            target: 'shipping';
+            allocation: 'once';
+            config: {
+                [key: string]: never;
+            };
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}';
+};
+
+export type PutApiV1AdminPromotionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminPromotionsByIdError = PutApiV1AdminPromotionsByIdErrors[keyof PutApiV1AdminPromotionsByIdErrors];
+
+export type PutApiV1AdminPromotionsByIdResponses = {
+    /**
+     * Promotion draft updated
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
+        };
+    };
+};
+
+export type PutApiV1AdminPromotionsByIdResponse = PutApiV1AdminPromotionsByIdResponses[keyof PutApiV1AdminPromotionsByIdResponses];
+
+export type PostApiV1AdminPromotionsByIdPreviewData = {
+    body: {
+        expectedRevision: number;
+        customerId?: string | null;
+        cart: {
+            currencyCode: string;
+            lines: Array<{
+                id: string;
+                productId: string;
+                variantId: string;
+                unitPriceMinor: number;
+                quantity: number;
+            }>;
+            shippingAmountMinor: number;
+            submittedCodes: Array<string>;
+            evaluatedAtEpochSeconds: number;
+        };
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}/preview';
+};
+
+export type PostApiV1AdminPromotionsByIdPreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdPreviewError = PostApiV1AdminPromotionsByIdPreviewErrors[keyof PostApiV1AdminPromotionsByIdPreviewErrors];
+
+export type PostApiV1AdminPromotionsByIdPreviewResponses = {
+    /**
+     * Deterministic promotion evaluation
+     */
+    200: {
+        success: true;
+        data: {
+            evaluatorVersion: number;
+            applied?: unknown;
+            rejected: Array<unknown>;
+            unmatchedCodes: Array<string>;
+            assumedActive: boolean;
+            promotionRevision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdPreviewResponse = PostApiV1AdminPromotionsByIdPreviewResponses[keyof PostApiV1AdminPromotionsByIdPreviewResponses];
+
+export type PostApiV1AdminPromotionsByIdActivateData = {
+    body: {
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}/activate';
+};
+
+export type PostApiV1AdminPromotionsByIdActivateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdActivateError = PostApiV1AdminPromotionsByIdActivateErrors[keyof PostApiV1AdminPromotionsByIdActivateErrors];
+
+export type PostApiV1AdminPromotionsByIdActivateResponses = {
+    /**
+     * Promotion activated
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdActivateResponse = PostApiV1AdminPromotionsByIdActivateResponses[keyof PostApiV1AdminPromotionsByIdActivateResponses];
+
+export type PostApiV1AdminPromotionsByIdPauseData = {
+    body: {
+        expectedRevision: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/promotions/{id}/pause';
+};
+
+export type PostApiV1AdminPromotionsByIdPauseErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdPauseError = PostApiV1AdminPromotionsByIdPauseErrors[keyof PostApiV1AdminPromotionsByIdPauseErrors];
+
+export type PostApiV1AdminPromotionsByIdPauseResponses = {
+    /**
+     * Promotion paused
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            revision: number;
+            status: 'draft' | 'active' | 'paused' | 'archived';
+        };
+    };
+};
+
+export type PostApiV1AdminPromotionsByIdPauseResponse = PostApiV1AdminPromotionsByIdPauseResponses[keyof PostApiV1AdminPromotionsByIdPauseResponses];
+
 export type GetApiV1AdminMediaData = {
     body?: never;
     path?: never;
@@ -19514,8 +20556,23 @@ export type GetApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            colors: {
-                [key: string]: string;
+            theme: {
+                colors: {
+                    [key: string]: string;
+                };
+                typography: {
+                    heading: 'system' | 'modern' | 'editorial';
+                    body: 'system' | 'modern' | 'humanist';
+                    scale: 'compact' | 'standard' | 'generous';
+                };
+                cornerStyle: 'square' | 'subtle' | 'rounded';
+                density: 'compact' | 'comfortable' | 'airy';
+                containerWidth: 'focused' | 'standard' | 'wide';
+                components: {
+                    buttons: 'solid' | 'soft' | 'outline';
+                    inputs: 'outlined' | 'filled';
+                    cards: 'bordered' | 'elevated' | 'flat';
+                };
             };
             revision: number;
             [key: string]: unknown;
@@ -19528,8 +20585,23 @@ export type GetApiV1AdminSettingsThemeResponse = GetApiV1AdminSettingsThemeRespo
 export type PostApiV1AdminSettingsThemeData = {
     body?: {
         expectedRevision: number;
-        colors: {
-            [key: string]: string;
+        theme: {
+            colors: {
+                [key: string]: string;
+            };
+            typography: {
+                heading: 'system' | 'modern' | 'editorial';
+                body: 'system' | 'modern' | 'humanist';
+                scale: 'compact' | 'standard' | 'generous';
+            };
+            cornerStyle: 'square' | 'subtle' | 'rounded';
+            density: 'compact' | 'comfortable' | 'airy';
+            containerWidth: 'focused' | 'standard' | 'wide';
+            components: {
+                buttons: 'solid' | 'soft' | 'outline';
+                inputs: 'outlined' | 'filled';
+                cards: 'bordered' | 'elevated' | 'flat';
+            };
         };
     };
     path?: never;
@@ -19615,8 +20687,23 @@ export type PostApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            colors: {
-                [key: string]: string;
+            theme: {
+                colors: {
+                    [key: string]: string;
+                };
+                typography: {
+                    heading: 'system' | 'modern' | 'editorial';
+                    body: 'system' | 'modern' | 'humanist';
+                    scale: 'compact' | 'standard' | 'generous';
+                };
+                cornerStyle: 'square' | 'subtle' | 'rounded';
+                density: 'compact' | 'comfortable' | 'airy';
+                containerWidth: 'focused' | 'standard' | 'wide';
+                components: {
+                    buttons: 'solid' | 'soft' | 'outline';
+                    inputs: 'outlined' | 'filled';
+                    cards: 'bordered' | 'elevated' | 'flat';
+                };
             };
             revision: number;
             message: string;
@@ -33671,11 +34758,118 @@ export type PostApiV1AdminAuth2FaCompleteVerificationResponses = {
 
 export type PostApiV1AdminAuth2FaCompleteVerificationResponse = PostApiV1AdminAuth2FaCompleteVerificationResponses[keyof PostApiV1AdminAuth2FaCompleteVerificationResponses];
 
-export type PostApiV1AdminAuth2FaMethodData = {
+export type PostApiV1AdminAuth2FaMethodChallengeData = {
     body?: {
         method: 'totp' | 'email';
-        code?: string;
-        sessionToken?: string;
+        password: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/2fa/method-challenge';
+};
+
+export type PostApiV1AdminAuth2FaMethodChallengeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAuth2FaMethodChallengeError = PostApiV1AdminAuth2FaMethodChallengeErrors[keyof PostApiV1AdminAuth2FaMethodChallengeErrors];
+
+export type PostApiV1AdminAuth2FaMethodChallengeResponses = {
+    /**
+     * Staged method challenge created
+     */
+    200: {
+        success: true;
+        data: {
+            challengeId: string;
+            totpUri: string | null;
+            expiresAt: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAuth2FaMethodChallengeResponse = PostApiV1AdminAuth2FaMethodChallengeResponses[keyof PostApiV1AdminAuth2FaMethodChallengeResponses];
+
+export type PostApiV1AdminAuth2FaMethodData = {
+    body?: {
+        method: 'totp';
+        challengeId: string;
+        code: string;
+    } | {
+        method: 'email';
+        challengeId: string;
+        sessionToken: string;
+    } | {
+        method: 'totp' | 'email';
+        code: string;
+    } | {
+        method: 'totp' | 'email';
+        sessionToken: string;
     };
     path?: never;
     query?: never;
@@ -33760,7 +34954,7 @@ export type PostApiV1AdminAuth2FaMethodResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            backupCodes?: Array<string>;
         };
     };
 };

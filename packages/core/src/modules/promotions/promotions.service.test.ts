@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -38,6 +38,10 @@ function baseDraft() {
         startsAtEpochSeconds: null,
         endsAtEpochSeconds: null,
         timezone: "Asia/Dhaka",
+        maxRedemptions: null,
+        maxRedemptionsPerCustomer: null,
+        maxDiscountSpendMinor: null,
+        budgetCurrencyCode: null,
         codes: [{ code: "SAVE10", isActive: true }],
         conditions: [],
         effects: [{
@@ -80,15 +84,16 @@ describe("promotion aggregate service", () => {
         function executeQuery(query: string, params: unknown[], method: string) {
             const statement = sqlite!.prepare(query);
             statement.setReturnArrays(true);
+            const sqlParams = params as SQLInputValue[];
             if (method === "run") {
-                statement.run(...params);
+                statement.run(...sqlParams);
                 return { rows: [] as unknown[][] };
             }
             if (method === "get") {
-                const row = statement.get(...params) as unknown[] | undefined;
+                const row = statement.get(...sqlParams) as unknown as unknown[] | undefined;
                 return { rows: row ?? [] };
             }
-            return { rows: statement.all(...params) as unknown[][] };
+            return { rows: statement.all(...sqlParams) as unknown as unknown[][] };
         }
 
         return drizzle(
