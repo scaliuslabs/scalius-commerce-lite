@@ -1,6 +1,19 @@
 # Discounts
 
-Discount code CRUD, eligibility validation, and discount amount calculation. Supports three discount types with product/collection scoping, usage limits, and combination flags.
+Discount code CRUD, eligibility validation, and discount amount calculation. Supports three discount types with product/collection scoping and usage limits. Combination columns are legacy storage only and do not represent a working stacking feature.
+
+## Current admin workflow
+
+- The list names the customer outcome, code method, eligibility minimum,
+  lifecycle, schedule, and usage instead of relying on a code tooltip.
+- Mobile uses purpose-built cards with the same selection, edit, duplicate,
+  activation, trash, restore, and permanent-delete actions as desktop.
+- List failures remain visible and retryable; they must not be rendered as an
+  empty discount library.
+- The create entry point asks which checkout amount the code reduces. It does
+  not expose automatic promotions or stacking until the typed promotion
+  evaluator and allocation ledger described in
+  `docs/codex/COMMERCE-SETTINGS-BENCHMARK.md` exist.
 
 ## Files
 
