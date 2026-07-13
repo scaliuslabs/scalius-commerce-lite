@@ -8,6 +8,7 @@ import {
 } from "~/lib/api-functions/storefront-url";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { queryKeys } from "~/lib/query-keys";
+import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
 
 interface StorefrontUrlValues {
   storefrontUrl: string;
@@ -33,7 +34,17 @@ interface StorefrontUrlBuilderProps {
 export function StorefrontUrlBuilder({
   initialUrl = "/",
 }: StorefrontUrlBuilderProps) {
-  const { values, setValue, isLoading, isSaving, handleSubmit } =
+  const {
+    values,
+    setValue,
+    isLoading,
+    isLoaded,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } =
     useSettingsForm<StorefrontUrlValues>({
       queryKey: queryKeys.settings.storefrontUrl(),
       fetchFn: fetchUrl,
@@ -58,6 +69,17 @@ export function StorefrontUrlBuilder({
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <SettingsLoadFailure
+        title="Store URL unavailable"
+        error={loadError}
+        fallback="The current storefront URL could not be loaded."
+        onRetry={refetch}
+      />
     );
   }
 
@@ -95,7 +117,7 @@ export function StorefrontUrlBuilder({
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={handleSubmit}
-          disabled={isSaving}
+          disabled={isSaving || !isLoaded}
           className="min-w-[120px]"
         >
           {isSaving ? (

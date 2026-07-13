@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { getSecuritySettings, updateSecuritySettings } from "@/lib/api-functions/settings";
 import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
+import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
 
 interface SecurityValues {
   cspAllowedDomains: string;
@@ -24,7 +25,17 @@ const saveSecurity = async (values: SecurityValues) => {
 };
 
 export function SecuritySettingsBuilder() {
-  const { values, setValue, isLoading, isSaving, handleSubmit } =
+  const {
+    values,
+    setValue,
+    isLoading,
+    isLoaded,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } =
     useSettingsForm<SecurityValues>({
       queryKey: queryKeys.settings.security(),
       fetchFn: fetchSecurity,
@@ -39,6 +50,17 @@ export function SecuritySettingsBuilder() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <SettingsLoadFailure
+        title="Security policy unavailable"
+        error={loadError}
+        fallback="The current storefront content-security policy could not be loaded."
+        onRetry={refetch}
+      />
     );
   }
 
@@ -71,7 +93,7 @@ export function SecuritySettingsBuilder() {
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={handleSubmit}
-          disabled={isSaving}
+          disabled={isSaving || !isLoaded}
           className="min-w-[120px]"
         >
           {isSaving ? (

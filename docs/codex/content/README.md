@@ -90,3 +90,10 @@ already complete.
   changes, preserving local input until the owning form's dirty/conflict
   contract handles navigation. This checkpoint does not pretend the eventual
   route split or every individual settings lifecycle is complete.
+- Store URL, Currency, Media delivery, Business identity, and Security policy
+  now fail closed when their authoritative read fails. They show one local
+  retry state, explicitly say defaults were not assumed, and keep saving
+  locked instead of presenting editable placeholder data as current settings.
+- Cross-domain links must preserve the exact section. Delivery-provider setup,
+  for example, opens Checkout directly at Delivery Locations rather than
+  forcing the merchant to rediscover the referenced field.

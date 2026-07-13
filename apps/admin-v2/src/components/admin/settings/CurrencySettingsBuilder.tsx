@@ -25,6 +25,7 @@ import {
   type SettingsPayload,
   updateCurrencySettings,
 } from "@/lib/api-functions/currency";
+import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
 interface CurrencyEntry {
   code: SupportedCurrencyCode;
@@ -232,7 +233,18 @@ export function isValidUsdExchangeRate(value: string): boolean {
 }
 
 export default function CurrencySettingsBuilder() {
-  const { values, setValue, setValues, isLoading, isSaving, handleSubmit } = useSettingsForm<CurrencySettings>({
+  const {
+    values,
+    setValue,
+    setValues,
+    isLoading,
+    isLoaded,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } = useSettingsForm<CurrencySettings>({
     queryKey: queryKeys.settings.currency(),
     fetchFn: () => getCurrencySettings(),
     saveFn: (v) => updateCurrencySettings({
@@ -316,6 +328,17 @@ export default function CurrencySettingsBuilder() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <SettingsLoadFailure
+        title="Currency settings unavailable"
+        error={loadError}
+        fallback="The store currency and exchange-rate authority could not be loaded."
+        onRetry={refetch}
+      />
     );
   }
 
@@ -476,7 +499,7 @@ export default function CurrencySettingsBuilder() {
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={() => void submit()}
-          disabled={isSaving || !isExchangeRateValid}
+          disabled={isSaving || !isLoaded || !isExchangeRateValid}
           className="min-w-[140px]"
         >
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

@@ -16,6 +16,7 @@ import {
   type SettingsPayload,
   updateBusinessSettings,
 } from "@/lib/api-functions/settings";
+import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
 interface BusinessSettings {
   companyName: string;
@@ -52,7 +53,17 @@ const defaultValues: BusinessSettings = {
 };
 
 export default function BusinessSettingsBuilder() {
-  const { values, setValue, isLoading, isSaving, handleSubmit } = useSettingsForm<BusinessSettings>({
+  const {
+    values,
+    setValue,
+    isLoading,
+    isLoaded,
+    isLoadError,
+    loadError,
+    isSaving,
+    handleSubmit,
+    refetch,
+  } = useSettingsForm<BusinessSettings>({
     queryKey: queryKeys.settings.business(),
     fetchFn: () => getBusinessSettings() as Promise<Partial<BusinessSettings>>,
     saveFn: (v) => updateBusinessSettings({ data: v as unknown as SettingsPayload }),
@@ -66,6 +77,17 @@ export default function BusinessSettingsBuilder() {
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
+    );
+  }
+
+  if (isLoadError) {
+    return (
+      <SettingsLoadFailure
+        title="Business identity unavailable"
+        error={loadError}
+        fallback="The company, address, and invoice settings could not be loaded."
+        onRetry={refetch}
+      />
     );
   }
 
@@ -276,7 +298,7 @@ export default function BusinessSettingsBuilder() {
       <div className="flex justify-end pt-4 border-t border-border">
         <Button
           onClick={() => handleSubmit()}
-          disabled={isSaving}
+          disabled={isSaving || !isLoaded}
           className="min-w-[140px]"
         >
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
