@@ -116,6 +116,7 @@ describe("safe lifecycle phase model", () => {
       $ref: "product:vale-everyday-runners:matrix",
       field: "aggregateRevision",
     });
+    expect(activate.body).not.toHaveProperty("optionMatrix");
     expect(plan.phases.find((phase) => phase.name === "activate_products").commands)
       .not.toEqual(expect.arrayContaining([
         expect.objectContaining({ logicalKey: "product:rider-court-trainers:activate" }),
@@ -188,6 +189,67 @@ describe("category publication runtime", () => {
     const current = await runtime.resolveCurrent(command);
     expect(get).toHaveBeenCalledWith("/api/v1/admin/categories/cat_1", command.logicalKey);
     expect(await runtime.matchesDesired(command, current)).toBe(true);
+  });
+
+  it("verifies persisted category image URLs rather than a request-only image object", async () => {
+    const runtime = createDemoLifecycleRuntime({});
+    const command = {
+      logicalKey: "category:footwear",
+      body: {
+        slug: "footwear", name: "Footwear", description: "Shoes", metaTitle: "Footwear",
+        metaDescription: "Daily shoes", canonicalPath: null, noIndex: false,
+        excludeFromSitemap: false, status: "draft", image: { url: "https://media.example.test/category.webp" },
+      },
+    };
+    expect(await runtime.matchesDesired(command, {
+      ...command.body,
+      image: undefined,
+      imageUrl: command.body.image.url,
+    })).toBe(true);
+  });
+});
+
+describe("complete desired-state runtime", () => {
+  it("detects product aggregate and matrix drift beyond names and option topology", async () => {
+    const runtime = createDemoLifecycleRuntime({});
+    const base = {
+      logicalKey: "product:demo:activate",
+      body: {
+        slug: "demo", name: "Demo", description: "Copy", price: 1200, categoryId: "cat_1",
+        isActive: true, discountType: "percentage", discountPercentage: 10, discountAmount: null,
+        freeDelivery: true, metaTitle: "Demo title", metaDescription: "Demo description",
+        canonicalPath: null, noIndex: false, excludeFromSitemap: false,
+        excludeFromProductFeed: false, productCondition: "new",
+        media: [{ id: "pmed_1", mediaId: "media_1", altText: "Demo", isPrimary: true }],
+        attributes: [{ attributeId: "attr_brand", value: "Brand" }],
+        additionalInfo: [{ id: "section_1", title: "Care", content: "Carefully", sortOrder: 0 }],
+      },
+    };
+    expect(await runtime.matchesDesired(base, structuredClone(base.body))).toBe(true);
+    expect(await runtime.matchesDesired(base, { ...structuredClone(base.body), metaDescription: "Drift" })).toBe(false);
+
+    const matrix = {
+      logicalKey: "product:demo:matrix",
+      body: {
+        options: [{ id: "option_1", name: "Finish", standardMapping: "color", values: [{ id: "value_1", value: "Black" }] }],
+        variants: [{
+          id: "variant_1", selectedOptionValueIds: ["value_1"], imageId: "pmed_1", sku: "DEMO-BLACK",
+          price: 1200, stock: 4, trackInventory: true, weight: null, barcode: "AUTO-1",
+          barcodeType: "code128", discountType: "percentage", discountPercentage: 10, discountAmount: null,
+        }],
+      },
+    };
+    const current = {
+      options: matrix.body.options,
+      variants: [{
+        ...matrix.body.variants[0],
+        selectedOptions: [{ optionValueId: "value_1" }],
+        deletedAt: null,
+      }],
+    };
+    expect(await runtime.matchesDesired(matrix, current)).toBe(true);
+    current.variants[0].price = 1299;
+    expect(await runtime.matchesDesired(matrix, current)).toBe(false);
   });
 });
 
