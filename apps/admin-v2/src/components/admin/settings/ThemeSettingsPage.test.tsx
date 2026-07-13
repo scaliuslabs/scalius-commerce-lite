@@ -13,6 +13,17 @@ import ThemeSettingsPage from "./ThemeSettingsPage";
 const getThemeSettingsMock = vi.hoisted(() => vi.fn());
 const updateThemeSettingsMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQuery: () => ({
+      data: { storefrontUrl: "https://shop.example.test" },
+      isError: false,
+    }),
+  };
+});
+
 vi.mock("~/lib/api-functions/settings", () => ({
   getThemeSettings: getThemeSettingsMock,
   updateThemeSettings: updateThemeSettingsMock,
@@ -58,7 +69,11 @@ describe("ThemeSettingsPage read authority", () => {
   it("does not expose editable assumed defaults when the published read fails", async () => {
     getThemeSettingsMock.mockRejectedValueOnce(new Error("offline"));
 
-    act(() => root.render(<ThemeSettingsPage />));
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="system" onSectionChange={() => undefined} />,
+      ),
+    );
     await flush();
 
     expect(host.textContent).toContain("Published style is unavailable");
@@ -79,7 +94,11 @@ describe("ThemeSettingsPage read authority", () => {
         revision: 4,
       });
 
-    act(() => root.render(<ThemeSettingsPage />));
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="system" onSectionChange={() => undefined} />,
+      ),
+    );
     await flush();
 
     const retry = Array.from(host.querySelectorAll("button")).find(
@@ -91,8 +110,8 @@ describe("ThemeSettingsPage read authority", () => {
     await flush();
 
     expect(host.textContent).toContain("Published · revision 4");
-    expect(host.textContent).toContain("Starting palette");
-    expect(host.querySelector('[aria-label$="color value"]')).toBeTruthy();
+    expect(host.textContent).toContain("Design system");
+    expect(host.querySelector('select[aria-label="Headings"]')).toBeTruthy();
   });
 
   it("publishes a semantic control through the same revisioned document", async () => {
@@ -112,7 +131,11 @@ describe("ThemeSettingsPage read authority", () => {
       revision: 5,
     });
 
-    act(() => root.render(<ThemeSettingsPage />));
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="system" onSectionChange={() => undefined} />,
+      ),
+    );
     await flush();
 
     const heading = host.querySelector<HTMLSelectElement>('select[aria-label="Headings"]');
@@ -137,5 +160,38 @@ describe("ThemeSettingsPage read authority", () => {
       },
     });
     expect(host.textContent).toContain("Published · revision 5");
+  });
+
+  it("shows an exact draft ledger and real published storefront routes", async () => {
+    getThemeSettingsMock.mockResolvedValueOnce({
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      revision: 8,
+    });
+
+    const onSectionChange = vi.fn();
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="review" onSectionChange={onSectionChange} />,
+      ),
+    );
+    await flush();
+
+    expect(host.textContent).toContain("Draft ledger");
+    expect(host.textContent).toContain("Published style is current");
+    expect(host.textContent).toContain("Review published routes");
+    expect(
+      host.querySelector<HTMLAnchorElement>('a[href="https://shop.example.test/"]'),
+    ).toBeTruthy();
+    expect(
+      host.querySelector<HTMLAnchorElement>(
+        'a[href="https://shop.example.test/search"]',
+      ),
+    ).toBeTruthy();
+
+    const colors = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Colors",
+    );
+    act(() => colors?.click());
+    expect(onSectionChange).toHaveBeenCalledWith("colors");
   });
 });

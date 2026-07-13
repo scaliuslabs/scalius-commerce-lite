@@ -82,8 +82,8 @@ export function themeSettingsDraftsEqual(
   left: StorefrontThemeSettings,
   right: StorefrontThemeSettings,
 ): boolean {
-  return JSON.stringify(normalizeThemeSettingsDraft(left)) ===
-    JSON.stringify(normalizeThemeSettingsDraft(right));
+  return JSON.stringify(normalizeThemeSettingsForComparison(left)) ===
+    JSON.stringify(normalizeThemeSettingsForComparison(right));
 }
 
 /** Replays only locally changed semantic leaves onto the latest revision. */
@@ -142,4 +142,13 @@ export function rebaseThemeSettingsDraft({
 
 function changed(left: string, right: string): boolean {
   return left !== right;
+}
+
+function normalizeThemeSettingsForComparison(
+  theme: StorefrontThemeSettings,
+): StorefrontThemeSettings {
+  return {
+    ...theme,
+    colors: normalizeThemeColors(theme.colors),
+  };
 }

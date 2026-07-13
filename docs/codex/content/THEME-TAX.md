@@ -251,6 +251,29 @@ changes.
   “This palette fails text contrast”) while keeping technical detail in
   progressive disclosure.
 
+## Implemented theme workspace slice (2026-07-14)
+
+- Theme editing is now divided into URL-backed Design system, Colors, and
+  Review & publish workspaces. Refresh, history, and copied links restore the
+  selected workspace, while the compact horizontal rail remains usable on a
+  narrow admin viewport.
+- The Design system view pairs the bounded controls with an explicit coverage
+  map. It distinguishes shared storefront foundations, listing-card treatment,
+  and the protected product-detail boundary instead of implying every control
+  redesigns every route.
+- Review & publish compares this tab against the current published revision as
+  an exact semantic change ledger, names the next revision a publish will
+  create, and keeps contrast/invalid-color failures as a publish gate.
+- A valid configured Storefront URL produces direct review links to the real
+  published home and search routes. Unsafe, credential-bearing, relative, or
+  unreadable URLs produce a local configuration action without disabling theme
+  editing. The workspace explicitly says these links show the published
+  revision and does not present them as an unpublished draft preview.
+- Durable cross-device drafts, isolated draft route/device previews, revision
+  history, and rollback remain platform authority work. This slice makes those
+  boundaries visible; it does not simulate them in the browser or add another
+  theme settings store.
+
 ## Verification bar
 
 - Tax calculation matrix and immutable order/refund snapshot behavior across
