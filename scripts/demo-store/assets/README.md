@@ -34,9 +34,15 @@ SHA-256. Replacing source bytes cannot silently reuse a filename.
 
 - Accepted public-source policies are CC0 1.0, Public Domain Mark 1.0, CC BY
   4.0, and the Pexels license. Merchant-owned and original generated work have
-  explicit local provenance types.
+  explicit local provenance types. Source kind and license are paired
+  semantically: merchant-owned uses `Proprietary-Merchant-Owned`, Pexels uses
+  `Pexels`, Commons/Openverse may use only CC0/PDM/CC BY 4.0, and generated
+  originals use `Generated-Original`.
 - CC BY requires saved attribution. CC BY-SA is rejected unless a later policy
   deliberately implements derivative/share-alike compliance.
+- Acquisition and verification values must be real `YYYY-MM-DD` calendar
+  dates, ordered `acquiredAt <= verifiedAt <= today`. Date-shaped values such
+  as `2026-02-30`, reversed reviews, and future verification are rejected.
 - Wikimedia Commons records must identify the individual file page and original
   download URL. Per-file license/extmetadata must be reviewed; search metadata
   alone is not approval. A later downloader should query only a few candidates
@@ -98,7 +104,54 @@ Normalized images are rechecked as exact-size WebP files below 20 MiB.
 
 Public-source records additionally require HTTPS `sourcePageUrl` and
 `originalFileUrl`. Generated-original records require `generation.prompt` and
-`generation.model`; this milestone does not generate any assets.
+`generation.model`; this tooling does not generate any assets.
+
+## Register a generated original privately
+
+`register-generated.mjs` inspects one already-generated local image or video,
+computes its SHA-256, MIME, bytes, and intrinsic dimensions, and atomically
+upserts one or more exact demo-manifest logical keys. It performs no network
+request, model call, Media upload, or other API write.
+
+Both the source and manifest must be private. Paths outside the repository are
+accepted; paths inside the repository must be under the Git-ignored
+`.wrangler/` tree. The checked-in `asset-sources.json` and every other
+repository path are refused, and `--manifest` has no default.
+
+```sh
+node scripts/demo-store/assets/register-generated.mjs \
+  --manifest .wrangler/demo-store-assets/generated-sources.json \
+  --source-dir .wrangler/demo-store-assets/source \
+  --file .wrangler/demo-store-assets/source/vale-chalk.png \
+  --logical-key vale-everyday-runners:variant-chalk \
+  --prompt-file .wrangler/demo-store-assets/prompts/vale-chalk.txt \
+  --model gpt-image-2 \
+  --creator "Scalius demo studio" \
+  --rights-url https://www.scalius.com/asset-rights \
+  --reviewed-by demo-reviewer \
+  --acquired-at 2026-07-13 \
+  --verified-at 2026-07-13 \
+  --confirm-no-watermark \
+  --confirm-no-visible-branding \
+  --confirm-no-trademarked-character \
+  --confirm-no-identifiable-endorser \
+  --confirm-option-appearance
+```
+
+Repeat `--logical-key` only when the same source truthfully serves every named
+slot after its profile transformation. The helper verifies key existence and
+image/video kind, but visual suitability remains a human review decision. A
+single source normally must not back primary and variant gallery entries, or
+detail and lifestyle entries, because that creates duplicate or misleading
+buyer media.
+
+Use the resulting private manifest explicitly for readiness and staging:
+
+```sh
+node scripts/demo-store/assets/cli.mjs --report-only \
+  --manifest .wrangler/demo-store-assets/generated-sources.json \
+  --source-dir .wrangler/demo-store-assets/source
+```
 
 ## Wikimedia Commons candidate discovery
 
