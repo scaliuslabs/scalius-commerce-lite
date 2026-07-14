@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
-  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -211,10 +210,6 @@ export function NavigationBuilder({
   const selected = useMemo(
     () => (selectedId ? findNavigationLocation(navigation, selectedId) : null),
     [navigation, selectedId],
-  );
-  const activeDrag = useMemo(
-    () => (activeDragId ? findNavigationLocation(navigation, activeDragId) : null),
-    [activeDragId, navigation],
   );
   const dragAnnouncements = useMemo<Announcements>(() => ({
     onDragStart({ active }) {
@@ -840,27 +835,6 @@ export function NavigationBuilder({
               </>
             )}
             </ScrollArea>
-
-            <DragOverlay dropAnimation={null}>
-              {activeDrag ? (
-                <div className="flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-2 rounded-md border bg-background px-3 py-2 shadow-lg">
-                  <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {getNavigationItemLabel(activeDrag.item)}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {getNavigationItemHref(activeDrag.item) || "Label only"}
-                    </p>
-                  </div>
-                  {activeDrag.item.subMenu?.length ? (
-                    <Badge variant="outline" className="shrink-0 font-normal">
-                      Branch · {countNavigationItems(activeDrag.item.subMenu) + 1} items
-                    </Badge>
-                  ) : null}
-                </div>
-              ) : null}
-            </DragOverlay>
           </DndContext>
         </section>
       )}

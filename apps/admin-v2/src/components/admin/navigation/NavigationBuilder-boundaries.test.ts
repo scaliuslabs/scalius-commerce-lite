@@ -38,7 +38,6 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain('dragIntent.operation !== "inside"');
     expect(source).toContain("}, 500)");
     expect(source).toContain("navigationScreenReaderInstructions");
-    expect(source).toContain("DragOverlay");
     expect(source).toContain("applyNavigationDrag");
     expect(mapSource).toContain("useSortable");
     expect(mapSource).toContain("getSortableStyle");
@@ -46,6 +45,7 @@ describe("navigation workspace boundaries", () => {
     expect(mapSource).toContain("h-10 w-10");
     expect(mapSource).toContain("Clear search to arrange menu items");
     expect(mapSource).toContain('isDragSource && "opacity-40"');
+    expect(mapSource).toContain("getSortableStyle(transform, transition");
     expect(mapSource).toContain("data-navigation-insertion-line");
     expect(mapSource).toContain("data-navigation-inside-target");
     expect(mapSource).toContain("dragIntent.depth * NAVIGATION_TREE_INDENT");
@@ -53,6 +53,7 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("moveNavigationItemToParentAtIndexById");
     expect(mapSource).toContain("data-navigation-move-action");
     expect(source).not.toContain("Placement options");
+    expect(source).not.toContain("DragOverlay");
     expect(source).not.toContain("Make child");
     expect(source).not.toContain("Up a level");
     expect(source).toContain("Add child");
