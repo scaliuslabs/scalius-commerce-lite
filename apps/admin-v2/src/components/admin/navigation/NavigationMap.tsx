@@ -72,7 +72,7 @@ function SortableNavigationRow({
     },
   });
   const isDragSource = isDragging || isActiveDrag;
-  const sortableStyle = getSortableStyle(isDragSource ? null : transform, transition, {
+  const sortableStyle = getSortableStyle(transform, transition, {
     paddingLeft: `${Math.min(depth, 3) * NAVIGATION_TREE_INDENT + 2}px`,
   });
 

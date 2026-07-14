@@ -24,8 +24,9 @@ official sortable-tree example, Atlassian's production tree guidance, and the
 existing Scalius Contact & Social reorder interaction:
 
 - keep an always-visible drag handle;
-- leave the original row in place at `40%` opacity and move a compact drag
-  preview, so the source and cancel destination remain obvious;
+- keep one row at `40%` opacity as it follows the pointer, matching the proven
+  Contact & Social sortable feedback. Do not combine a stationary source,
+  sortable sibling displacement, and a second overlay; those layers collide;
 - keep every non-dragged branch visible; only descendants travelling with an
   expanded dragged branch may collapse temporarily;
 - divide a target row into three generous operations: top quarter is **before**,
