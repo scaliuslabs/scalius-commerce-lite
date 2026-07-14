@@ -16,7 +16,7 @@ const confirmationFlags = new Map([
 const valueFlags = new Set([
   "--manifest", "--source-dir", "--file", "--logical-key", "--prompt", "--prompt-file",
   "--model", "--creator", "--rights-url", "--reviewed-by", "--acquired-at", "--verified-at",
-  "--crop-position",
+  "--crop-position", "--retained-product-id", "--replaces-media-id",
 ]);
 
 function usage() {
@@ -25,6 +25,7 @@ function usage() {
     "  --logical-key EXACT_KEY [--logical-key EXACT_KEY ...]",
     "  (--prompt TEXT | --prompt-file FILE) --model MODEL --creator CREATOR --rights-url HTTPS_URL",
     "  --reviewed-by REVIEWER --acquired-at YYYY-MM-DD --verified-at YYYY-MM-DD",
+    "  [--retained-product-id PRODUCT_ID --replaces-media-id CURRENT_MEDIA_ID]",
     "  --confirm-no-watermark --confirm-no-visible-branding --confirm-no-trademarked-character",
     "  --confirm-no-identifiable-endorser --confirm-option-appearance [--crop-position POSITION]",
   ].join("\n");
@@ -53,6 +54,12 @@ export function parseGeneratedRegistrationArgs(argv) {
   for (const reviewField of confirmationFlags.values()) {
     if (!options.confirmations[reviewField]) throw new Error(`Every visual-rights confirmation is required; missing ${reviewField}`);
   }
+  if (Boolean(options.retainedProductId) !== Boolean(options.replacesMediaId)) {
+    throw new Error("Retained replacement requires both --retained-product-id and --replaces-media-id");
+  }
+  if (options.retainedProductId && options.logicalKeys.length !== 1) {
+    throw new Error("Retained replacement registration accepts exactly one logical key");
+  }
   return options;
 }
 
@@ -75,6 +82,12 @@ async function main() {
       reviewedBy: options.reviewedBy,
       ...options.confirmations,
     },
+    ...(options.retainedProductId ? {
+      retainedReplacement: {
+        productId: options.retainedProductId,
+        mediaId: options.replacesMediaId,
+      },
+    } : {}),
   });
   process.stdout.write(`${JSON.stringify({
     manifest: result.manifestPath,

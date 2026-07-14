@@ -23,8 +23,8 @@ afterEach(async () => {
 });
 
 const expectedAssets = [
-  { logicalKey: "product:test:primary", kind: "image" },
-  { logicalKey: "product:test:variant-sand", kind: "image" },
+  { logicalKey: "product:test:primary", owner: "product:test", kind: "image" },
+  { logicalKey: "product:test:variant-sand", owner: "product:test", kind: "image" },
 ];
 
 function registration(directory, sourceFile, logicalKeys) {
@@ -173,5 +173,31 @@ describe("private generated-asset registration", () => {
     expect(() => parseGeneratedRegistrationArgs(base)).toThrow("missing optionAppearanceVerified");
     expect(parseGeneratedRegistrationArgs([...base, "--confirm-option-appearance"]).logicalKeys)
       .toEqual(["product:test:primary"]);
+    expect(() => parseGeneratedRegistrationArgs([
+      ...base,
+      "--confirm-option-appearance",
+      "--retained-product-id", "prod_retained_123",
+    ])).toThrow("requires both");
+  });
+
+  it("records only an exact retained-product replacement authority", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "scalius-generated-assets-"));
+    temporaryDirectories.push(directory);
+    const sourceDir = path.join(directory, "sources");
+    await mkdir(sourceDir);
+    const sourceFile = path.join(sourceDir, "replacement.png");
+    await createImage(sourceFile, "#d6c4aa");
+    const input = registration(directory, sourceFile, ["product:test:primary"]);
+    input.retainedProducts = [{ logicalKey: "product:test", retainedProductId: "prod_retained_123" }];
+    input.retainedReplacement = { productId: "prod_retained_123", mediaId: "media_current_123" };
+    const result = await registerGeneratedAssets(input);
+    const saved = JSON.parse(await readFile(result.manifestPath, "utf8"));
+    expect(saved.assets[0].retainedReplacement).toEqual({
+      productId: "prod_retained_123",
+      mediaId: "media_current_123",
+    });
+
+    input.retainedReplacement.productId = "prod_wrong_123";
+    await expect(registerGeneratedAssets(input)).rejects.toThrow("does not match");
   });
 });
