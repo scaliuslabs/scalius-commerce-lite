@@ -34,11 +34,17 @@ describe("settings section normalization", () => {
   });
 
   it("normalizes nested header and footer panels for deep links", () => {
+    expect(normalizeGeneralSettingsPanel("header", "announcement")).toBe(
+      "announcement",
+    );
     expect(normalizeGeneralSettingsPanel("header", "navigation")).toBe(
       "navigation",
     );
     expect(normalizeGeneralSettingsPanel("footer", "social")).toBe("social");
     expect(normalizeGeneralSettingsPanel("header", "unknown")).toBe(
+      "branding",
+    );
+    expect(normalizeGeneralSettingsPanel("header", "top-bar")).toBe(
       "branding",
     );
     expect(normalizeGeneralSettingsPanel("seo", "navigation")).toBeUndefined();
