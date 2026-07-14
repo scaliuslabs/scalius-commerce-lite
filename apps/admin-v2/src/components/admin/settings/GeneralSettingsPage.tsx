@@ -14,6 +14,7 @@ import type {
   GeneralSettingsPanel,
   GeneralSettingsSection,
 } from "./general-settings-sections";
+import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
 
 const HeaderBuilder = lazy(() =>
   import("../header-builder").then((m) => ({
@@ -62,6 +63,8 @@ function TabSpinner() {
 interface GeneralSettingsPageProps {
   headerConfig?: HeaderConfig | null;
   footerConfig?: FooterConfig | null;
+  headerReadiness?: NavigationConfigSectionReadiness;
+  footerReadiness?: NavigationConfigSectionReadiness;
   panel?: GeneralSettingsPanel;
   section: GeneralSettingsSection;
   onPanelChange: (panel: GeneralSettingsPanel) => void;
@@ -86,6 +89,8 @@ const tabs = [
 export default function GeneralSettingsPage({
   headerConfig,
   footerConfig,
+  headerReadiness,
+  footerReadiness,
   panel,
   section,
   onPanelChange,
@@ -162,6 +167,7 @@ export default function GeneralSettingsPage({
                   <HeaderBuilder
                     activePanel={headerPanel}
                     initialConfig={headerConfig}
+                    readiness={headerReadiness}
                     onPanelChange={onPanelChange}
                   />
                 </Suspense>
@@ -174,6 +180,7 @@ export default function GeneralSettingsPage({
                   <FooterBuilder
                     activePanel={footerPanel}
                     initialConfig={footerConfig}
+                    readiness={footerReadiness}
                     onPanelChange={onPanelChange}
                   />
                 </Suspense>

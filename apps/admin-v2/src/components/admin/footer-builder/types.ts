@@ -3,6 +3,7 @@
 import type { SocialLink, LogoConfig } from "~/components/admin/shared/builder-types";
 import type { NavigationItem } from "~/components/admin/navigation/types";
 import type { MediaFile } from "~/components/admin/media-manager/types";
+import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
 
 export type { SocialLink, LogoConfig, NavigationItem, MediaFile };
 
@@ -41,6 +42,7 @@ export type FooterBuilderPanel = (typeof FOOTER_BUILDER_PANELS)[number];
 export interface FooterBuilderProps {
   activePanel?: FooterBuilderPanel;
   initialConfig?: FooterConfig | null;
+  readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: FooterBuilderPanel) => void;
   onSave?: string | ((config: FooterConfig) => Promise<void>);
 }

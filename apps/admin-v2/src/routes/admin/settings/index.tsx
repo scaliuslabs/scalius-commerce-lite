@@ -6,6 +6,7 @@ import { generalSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { HeaderConfig } from "~/components/admin/header-builder/types";
 import type { FooterConfig } from "~/components/admin/footer-builder/types";
+import type { GeneralSettingsPayload } from "~/lib/api-functions/settings";
 import {
   normalizeGeneralSettingsPanel,
   normalizeGeneralSettingsSection,
@@ -33,7 +34,7 @@ function SettingsPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
   const { data } = useSuspenseQuery(generalSettingsQueryOptions());
-  const result = data as unknown as {
+  const result = data as unknown as GeneralSettingsPayload & {
     headerConfig?: HeaderConfig | null;
     footerConfig?: FooterConfig | null;
   };
@@ -65,6 +66,8 @@ function SettingsPage() {
     <GeneralSettingsPage
       headerConfig={result.headerConfig ?? null}
       footerConfig={result.footerConfig ?? null}
+      headerReadiness={result.navigationReadiness?.header}
+      footerReadiness={result.navigationReadiness?.footer}
       panel={search.panel}
       section={search.section}
       onPanelChange={handlePanelChange}

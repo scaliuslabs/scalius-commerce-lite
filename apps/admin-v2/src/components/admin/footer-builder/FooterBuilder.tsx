@@ -1,5 +1,5 @@
 // src/components/admin/footer-builder/FooterBuilder.tsx
-import { useState, lazy, Suspense, useMemo } from "react";
+import { useState, lazy, Suspense, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveFooterConfig } from "~/lib/api-functions/settings";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
+import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";
@@ -56,6 +57,7 @@ export function normalizeFooterConfig(config?: FooterConfig | null): FooterConfi
 export function FooterBuilder({
   activePanel,
   initialConfig,
+  readiness,
   onPanelChange,
   onSave,
 }: FooterBuilderProps) {
@@ -72,6 +74,14 @@ export function FooterBuilder({
     useState<FooterBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
   const [navigationEditorEpoch, setNavigationEditorEpoch] = useState(0);
+  const [legacyFormatSaved, setLegacyFormatSaved] = useState(false);
+  const navigationSaveRequired =
+    readiness?.state === "legacy_normalized" && !legacyFormatSaved;
+  const navigationInvalid = readiness?.state === "invalid";
+
+  useEffect(() => {
+    setLegacyFormatSaved(false);
+  }, [readiness?.state]);
 
   const handlePanelChange = (panel: string) => {
     const nextPanel = panel as FooterBuilderPanel;
@@ -85,7 +95,7 @@ export function FooterBuilder({
   };
 
   const handleSave = async () => {
-    if (isLoading) return;
+    if (isLoading || navigationInvalid) return;
 
     setIsLoading(true);
     try {
@@ -104,6 +114,7 @@ export function FooterBuilder({
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       markSaved();
+      if (readiness?.state === "legacy_normalized") setLegacyFormatSaved(true);
       setNavigationEditorEpoch((current) => current + 1);
       toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
@@ -124,12 +135,32 @@ export function FooterBuilder({
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className={cn("h-2 w-2 rounded-full", isDirty ? "bg-amber-500" : "bg-emerald-500")} />
-          {isDirty ? "Unsaved changes" : "All changes saved"}
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full",
+              navigationInvalid
+                ? "bg-destructive"
+                : isDirty || navigationSaveRequired
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
+            )}
+          />
+          {navigationInvalid
+            ? "Editing locked"
+            : navigationSaveRequired
+              ? "Save required"
+              : isDirty
+                ? "Unsaved changes"
+                : "All changes saved"}
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <NavigationConfigReadinessNotice
+        section="footer"
+        readiness={legacyFormatSaved ? { state: "ready" } : readiness}
+      />
+
+      {!navigationInvalid ? <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
@@ -201,18 +232,24 @@ export function FooterBuilder({
             </Suspense>
           )}
         </TabsContent>
-      </Tabs>
+      </Tabs> : null}
 
-      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+      {!navigationInvalid ? <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
         <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>
-        <Button onClick={handleSave} disabled={isLoading || !isDirty} size="sm">
+        <Button
+          onClick={handleSave}
+          disabled={isLoading || (!isDirty && !navigationSaveRequired)}
+          size="sm"
+        >
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save changes
+          {navigationSaveRequired && !isDirty
+            ? "Save typed format"
+            : "Save changes"}
         </Button>
-      </div>
+      </div> : null}
     </div>
   );
 }
