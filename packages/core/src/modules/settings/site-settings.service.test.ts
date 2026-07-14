@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ConflictError,
-  ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
 
@@ -53,20 +52,78 @@ describe("general site settings", () => {
     });
   });
 
-  it("fails explicitly when persisted site settings are malformed", async () => {
+  it("isolates a malformed header while preserving the valid footer", async () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           limit: vi.fn(async () => [{
             headerConfig: "{not-json",
-            footerConfig: "{}",
+            footerConfig: JSON.stringify({
+              menus: [{
+                id: "help",
+                title: "Help",
+                links: [{
+                  id: "returns",
+                  target: { type: "internal_path", path: "/returns" },
+                  labelMode: "custom",
+                  customLabel: "Returns",
+                }],
+              }],
+            }),
           }]),
         })),
       })),
     };
 
-    await expect(getGeneralSettings(db as never))
-      .rejects.toBeInstanceOf(ServiceUnavailableError);
+    await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
+      headerConfig: { navigation: [] },
+      footerConfig: {
+        menus: [{
+          id: "help",
+          links: [{ resolution: { title: "Returns", href: "/returns" } }],
+        }],
+      },
+      navigationReadiness: {
+        header: { state: "invalid" },
+        footer: { state: "ready" },
+      },
+    });
+  });
+
+  it("returns strictly normalized legacy demo navigation without writing on read", async () => {
+    const update = vi.fn();
+    const insert = vi.fn();
+    const db = {
+      update,
+      insert,
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          limit: vi.fn(async () => [{
+            headerConfig: JSON.stringify({
+              navigation: [{ id: "home", title: "Home", href: "/" }],
+            }),
+            footerConfig: JSON.stringify({ menus: [] }),
+          }]),
+        })),
+      })),
+    };
+
+    await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
+      headerConfig: {
+        navigation: [{
+          id: "home",
+          target: { type: "internal_path", path: "/" },
+          customLabel: "Home",
+          resolution: { title: "Home", href: "/" },
+        }],
+      },
+      navigationReadiness: {
+        header: { state: "legacy_normalized" },
+        footer: { state: "ready" },
+      },
+    });
+    expect(update).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it("rejects unsafe navigation targets before writing header settings", async () => {

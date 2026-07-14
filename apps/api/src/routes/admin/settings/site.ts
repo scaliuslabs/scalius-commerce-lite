@@ -185,6 +185,11 @@ app.openapi(saveCurrencyRoute, async (c) => {
 // GENERAL (header + footer config)
 // ─────────────────────────────────────────
 
+const navigationConfigReadinessSchema = z.object({
+  state: z.enum(["ready", "legacy_normalized", "invalid"]),
+  message: z.string().optional(),
+});
+
 const getGeneralRoute = createRoute({
   method: "get",
   path: "/general",
@@ -199,6 +204,10 @@ const getGeneralRoute = createRoute({
             z.object({
               headerConfig: z.record(z.string(), z.unknown()),
               footerConfig: z.record(z.string(), z.unknown()),
+              navigationReadiness: z.object({
+                header: navigationConfigReadinessSchema,
+                footer: navigationConfigReadinessSchema,
+              }),
             }),
           ),
         },

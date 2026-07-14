@@ -69245,11 +69245,59 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "navigationReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "header": {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ready",
+                                    "legacy_normalized",
+                                    "invalid"
+                                  ]
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "state"
+                              ]
+                            },
+                            "footer": {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ready",
+                                    "legacy_normalized",
+                                    "invalid"
+                                  ]
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "state"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "header",
+                            "footer"
+                          ]
                         }
                       },
                       "required": [
                         "headerConfig",
-                        "footerConfig"
+                        "footerConfig",
+                        "navigationReadiness"
                       ]
                     }
                   },

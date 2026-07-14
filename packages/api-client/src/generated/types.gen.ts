@@ -20235,6 +20235,16 @@ export type GetApiV1AdminSettingsGeneralResponses = {
             footerConfig: {
                 [key: string]: unknown;
             };
+            navigationReadiness: {
+                header: {
+                    state: 'ready' | 'legacy_normalized' | 'invalid';
+                    message?: string;
+                };
+                footer: {
+                    state: 'ready' | 'legacy_normalized' | 'invalid';
+                    message?: string;
+                };
+            };
         };
     };
 };

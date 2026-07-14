@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
-import { parseNavigationConfig } from "./navigation.validation";
+import {
+  normalizeLegacyNavigationConfig,
+  parseNavigationConfig,
+  readPersistedNavigationConfig,
+} from "./navigation.validation";
 
 describe("navigation configuration validation", () => {
   it("accepts stable resource authority and canonicalizes query projections", () => {
@@ -189,5 +193,105 @@ describe("navigation configuration validation", () => {
         labelMode: "resource",
       }],
     })).toThrow("Only resource targets");
+  });
+
+  it("strictly normalizes the former demo item shape to one typed authority", () => {
+    expect(normalizeLegacyNavigationConfig("header", {
+      topBar: { text: "Demo", isEnabled: true },
+      navigation: [{
+        id: "shop",
+        title: "Shop",
+        href: "/products",
+        subMenu: [
+          { id: "support", title: "Support", href: "#" },
+          {
+            id: "external",
+            title: "Journal",
+            href: "https://example.com/journal",
+          },
+        ],
+      }],
+    })).toMatchObject({
+      topBar: { text: "Demo", isEnabled: true },
+      navigation: [{
+        id: "shop",
+        target: { type: "internal_path", path: "/products" },
+        labelMode: "custom",
+        customLabel: "Shop",
+        subMenu: [
+          {
+            id: "support",
+            target: { type: "label" },
+            customLabel: "Support",
+          },
+          {
+            id: "external",
+            target: { type: "external_url", url: "https://example.com/journal" },
+            customLabel: "Journal",
+          },
+        ],
+      }],
+    });
+  });
+
+  it("normalizes legacy footer links while preserving the menu presentation", () => {
+    expect(normalizeLegacyNavigationConfig("footer", {
+      tagline: "Made locally",
+      menus: [{
+        id: "help",
+        title: "Help",
+        links: [{ id: "returns", title: "Returns", href: "/returns" }],
+      }],
+    })).toMatchObject({
+      tagline: "Made locally",
+      menus: [{
+        id: "help",
+        title: "Help",
+        links: [{
+          id: "returns",
+          target: { type: "internal_path", path: "/returns" },
+          labelMode: "custom",
+          customLabel: "Returns",
+        }],
+      }],
+    });
+  });
+
+  it("never normalizes mixed or unsafe legacy authority", () => {
+    expect(() => normalizeLegacyNavigationConfig("header", {
+      navigation: [{
+        id: "mixed",
+        title: "Copied title",
+        href: "/copied",
+        target: { type: "internal_path", path: "/typed" },
+        labelMode: "custom",
+        customLabel: "Typed label",
+      }],
+    })).toThrow("not safe to normalize");
+
+    expect(() => normalizeLegacyNavigationConfig("header", {
+      navigation: [{
+        id: "unsafe",
+        title: "Unsafe",
+        href: "javascript:alert(1)",
+      }],
+    })).toThrow(ValidationError);
+  });
+
+  it("isolates malformed persisted sections and marks in-memory legacy cutover", () => {
+    expect(readPersistedNavigationConfig("header", "{not-json"))
+      .toMatchObject({ state: "invalid", config: {} });
+
+    expect(readPersistedNavigationConfig("header", JSON.stringify({
+      navigation: [{ id: "home", title: "Home", href: "/" }],
+    }))).toMatchObject({
+      state: "legacy_normalized",
+      config: {
+        navigation: [{
+          id: "home",
+          target: { type: "internal_path", path: "/" },
+        }],
+      },
+    });
   });
 });
