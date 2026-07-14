@@ -1,5 +1,5 @@
 // src/components/admin/header-builder/HeaderBuilder.tsx
-import { useState, lazy, Suspense, useMemo } from "react";
+import { useState, lazy, Suspense, useEffect, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
 import { saveHeaderConfig } from "~/lib/api-functions/settings";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
+import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
@@ -65,6 +66,7 @@ export function normalizeHeaderConfig(config?: HeaderConfig | null): HeaderConfi
 export function HeaderBuilder({
   activePanel,
   initialConfig,
+  readiness,
   onPanelChange,
   onSave,
 }: HeaderBuilderProps) {
@@ -82,6 +84,14 @@ export function HeaderBuilder({
     useState<HeaderBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
   const [navigationEditorEpoch, setNavigationEditorEpoch] = useState(0);
+  const [legacyFormatSaved, setLegacyFormatSaved] = useState(false);
+  const navigationSaveRequired =
+    readiness?.state === "legacy_normalized" && !legacyFormatSaved;
+  const navigationInvalid = readiness?.state === "invalid";
+
+  useEffect(() => {
+    setLegacyFormatSaved(false);
+  }, [readiness?.state]);
 
   const handlePanelChange = (panel: string) => {
     const nextPanel = panel as HeaderBuilderPanel;
@@ -95,7 +105,7 @@ export function HeaderBuilder({
   };
 
   const handleSave = async () => {
-    if (isLoading) return;
+    if (isLoading || navigationInvalid) return;
 
     if (!config.logo.src) {
       toast.error("Logo Required", { description: "Please select a logo before saving." });
@@ -117,6 +127,7 @@ export function HeaderBuilder({
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       markSaved();
+      if (readiness?.state === "legacy_normalized") setLegacyFormatSaved(true);
       setNavigationEditorEpoch((current) => current + 1);
       toast.success("Header saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
@@ -137,12 +148,32 @@ export function HeaderBuilder({
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className={cn("h-2 w-2 rounded-full", isDirty ? "bg-amber-500" : "bg-emerald-500")} />
-          {isDirty ? "Unsaved changes" : "All changes saved"}
+          <span
+            className={cn(
+              "h-2 w-2 rounded-full",
+              navigationInvalid
+                ? "bg-destructive"
+                : isDirty || navigationSaveRequired
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
+            )}
+          />
+          {navigationInvalid
+            ? "Editing locked"
+            : navigationSaveRequired
+              ? "Save required"
+              : isDirty
+                ? "Unsaved changes"
+                : "All changes saved"}
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <NavigationConfigReadinessNotice
+        section="header"
+        readiness={legacyFormatSaved ? { state: "ready" } : readiness}
+      />
+
+      {!navigationInvalid ? <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
@@ -223,16 +254,20 @@ export function HeaderBuilder({
             </Suspense>
           )}
         </TabsContent>
-      </Tabs>
+      </Tabs> : null}
 
-      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+      {!navigationInvalid ? <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
         <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>
         <Button
           onClick={handleSave}
-          disabled={isLoading || !config.logo.src || !isDirty}
+          disabled={
+            isLoading ||
+            !config.logo.src ||
+            (!isDirty && !navigationSaveRequired)
+          }
           className="relative min-w-[124px]"
           size="sm"
         >
@@ -242,10 +277,12 @@ export function HeaderBuilder({
             </div>
           ) : null}
           <span className={cn(isLoading ? "opacity-0" : "opacity-100")}>
-            Save changes
+            {navigationSaveRequired && !isDirty
+              ? "Save typed format"
+              : "Save changes"}
           </span>
         </Button>
-      </div>
+      </div> : null}
     </div>
   );
 }

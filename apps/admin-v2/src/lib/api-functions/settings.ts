@@ -89,6 +89,18 @@ export interface FooterConfigInput {
 export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
   footerConfig: SettingsPayload;
+  navigationReadiness: {
+    header: NavigationConfigSectionReadiness;
+    footer: NavigationConfigSectionReadiness;
+  };
+}
+export type NavigationConfigReadinessState =
+  | "ready"
+  | "legacy_normalized"
+  | "invalid";
+export interface NavigationConfigSectionReadiness {
+  state: NavigationConfigReadinessState;
+  message?: string;
 }
 export type SeoSettingsPayload = ApiEnvelopeData<
   GetApiV1AdminSettingsSeoResponses[200]

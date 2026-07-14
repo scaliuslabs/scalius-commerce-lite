@@ -3,6 +3,7 @@
 import type { SocialLink, LogoConfig } from "~/components/admin/shared/builder-types";
 import type { NavigationItem } from "~/components/admin/navigation/types";
 import type { MediaFile } from "~/components/admin/media-manager/types";
+import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
 
 export type { SocialLink, LogoConfig, NavigationItem, MediaFile };
 
@@ -58,6 +59,7 @@ export type HeaderBuilderPanel = (typeof HEADER_BUILDER_PANELS)[number];
 export interface HeaderBuilderProps {
   activePanel?: HeaderBuilderPanel;
   initialConfig?: HeaderConfig | null;
+  readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: HeaderBuilderPanel) => void;
   onSave?: string | ((config: HeaderConfig) => Promise<void>);
 }
