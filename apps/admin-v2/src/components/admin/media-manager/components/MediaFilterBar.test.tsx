@@ -25,7 +25,13 @@ describe("MediaFilterBar selection controls", () => {
   let root: Root;
   const onSelectAll = vi.fn();
 
-  function Harness({ persistentSelection = false }: { persistentSelection?: boolean }) {
+  function Harness({
+    persistentSelection = false,
+    allowManagement = true,
+  }: {
+    persistentSelection?: boolean;
+    allowManagement?: boolean;
+  }) {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedCount, setSelectedCount] = useState(0);
 
@@ -39,6 +45,7 @@ describe("MediaFilterBar selection controls", () => {
         visibleCount={5}
         folders={[]}
         isMutating={false}
+        allowManagement={allowManagement}
         onSearch={vi.fn()}
         onFiltersChange={vi.fn()}
         onUpload={vi.fn()}
@@ -124,6 +131,17 @@ describe("MediaFilterBar selection controls", () => {
     expect(host.textContent).toContain("0 selected");
     expect(buttonByName(host, "Select all shown")).toBeTruthy();
     expect(buttonByName(host, "Add 0").disabled).toBe(true);
+  });
+
+  it("keeps library-management commands out of multi-file pickers", () => {
+    act(() => root.render(<Harness persistentSelection allowManagement={false} />));
+    act(() => buttonByName(host, "Select").click());
+    act(() => buttonByName(host, "Select all shown").click());
+
+    expect(host.textContent).toContain("5 selected");
+    expect(buttonByName(host, "Add 5")).toBeTruthy();
+    expect(host.textContent).not.toContain("Move to trash");
+    expect(host.textContent).not.toContain("Move to folder");
   });
 
   it("separates selection commands into an accessible bulk-action toolbar", () => {

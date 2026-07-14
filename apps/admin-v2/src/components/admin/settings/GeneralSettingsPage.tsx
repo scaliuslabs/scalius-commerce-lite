@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useState, lazy, Suspense, type ReactNode } from "react";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
@@ -57,6 +57,40 @@ function TabSpinner() {
     <div className="flex items-center justify-center py-16">
       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
     </div>
+  );
+}
+
+function SettingsEditorBoundary({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <ErrorBoundary
+      fallback={
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
+        >
+          <p className="font-medium">{label} settings could not be opened.</p>
+          <p className="mt-1 text-muted-foreground">
+            Other settings remain available. Reload the page to try this editor
+            again.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-3 font-medium underline underline-offset-4"
+          >
+            Reload page
+          </button>
+        </div>
+      }
+    >
+      {children}
+    </ErrorBoundary>
   );
 }
 
@@ -162,109 +196,133 @@ export default function GeneralSettingsPage({
 
           <div className="min-w-0">
             <TabsContent value="header" className="mt-0">
-              {mountedTabs.has("header") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <HeaderBuilder
-                    activePanel={headerPanel}
-                    initialConfig={headerConfig}
-                    readiness={headerReadiness}
-                    onPanelChange={onPanelChange}
-                  />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Header">
+                {mountedTabs.has("header") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <HeaderBuilder
+                      activePanel={headerPanel}
+                      initialConfig={headerConfig}
+                      readiness={headerReadiness}
+                      onPanelChange={onPanelChange}
+                    />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="footer" className="mt-0">
-              {mountedTabs.has("footer") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <FooterBuilder
-                    activePanel={footerPanel}
-                    initialConfig={footerConfig}
-                    readiness={footerReadiness}
-                    onPanelChange={onPanelChange}
-                  />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Footer">
+                {mountedTabs.has("footer") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <FooterBuilder
+                      activePanel={footerPanel}
+                      initialConfig={footerConfig}
+                      readiness={footerReadiness}
+                      onPanelChange={onPanelChange}
+                    />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="seo" className="mt-0">
-              {mountedTabs.has("seo") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <SeoSettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="SEO">
+                {mountedTabs.has("seo") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <SeoSettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="storefront" className="mt-0">
-              {mountedTabs.has("storefront") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <StorefrontUrlBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Storefront">
+                {mountedTabs.has("storefront") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <StorefrontUrlBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="email" className="mt-0">
-              {mountedTabs.has("email") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <EmailSettingsForm />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Email">
+                {mountedTabs.has("email") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <EmailSettingsForm />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="currency" className="mt-0">
-              {mountedTabs.has("currency") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <CurrencySettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Currency">
+                {mountedTabs.has("currency") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <CurrencySettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="media" className="mt-0">
-              {mountedTabs.has("media") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <MediaSettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Media">
+                {mountedTabs.has("media") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <MediaSettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="business" className="mt-0">
-              {mountedTabs.has("business") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <BusinessSettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Business">
+                {mountedTabs.has("business") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <BusinessSettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="countries" className="mt-0">
-              {mountedTabs.has("countries") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <AllowedCountriesBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Countries">
+                {mountedTabs.has("countries") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <AllowedCountriesBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="auth" className="mt-0">
-              {mountedTabs.has("auth") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <AuthSettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Auth & Access">
+                {mountedTabs.has("auth") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <AuthSettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="security" className="mt-0">
-              {mountedTabs.has("security") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <SecuritySettingsBuilder />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Security">
+                {mountedTabs.has("security") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <SecuritySettingsBuilder />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
 
             <TabsContent value="scanner" className="mt-0">
-              {mountedTabs.has("scanner") && (
-                <Suspense fallback={<TabSpinner />}>
-                  <ScannerTokenGenerator />
-                </Suspense>
-              )}
+              <SettingsEditorBoundary label="Scanner">
+                {mountedTabs.has("scanner") && (
+                  <Suspense fallback={<TabSpinner />}>
+                    <ScannerTokenGenerator />
+                  </Suspense>
+                )}
+              </SettingsEditorBoundary>
             </TabsContent>
           </div>
         </Tabs>

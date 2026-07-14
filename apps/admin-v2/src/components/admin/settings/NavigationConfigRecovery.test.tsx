@@ -133,4 +133,49 @@ describe("navigation configuration recovery", () => {
     expect(host.textContent).not.toContain("Save changes");
     expect(host.textContent).toContain("other settings remain available");
   });
+
+  it("uses the canonical announcement panel key for the real tab interaction", async () => {
+    const onPanelChange = vi.fn();
+    const config = {
+      ...defaultHeaderConfig,
+      logo: { src: "/logo.svg", alt: "Store" },
+    };
+
+    render(
+      <HeaderBuilder
+        activePanel="branding"
+        initialConfig={config}
+        onPanelChange={onPanelChange}
+      />,
+    );
+
+    const announcementTab = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+    ).find((button) => button.textContent?.trim() === "Announcement");
+    if (!announcementTab) throw new Error("Expected Announcement tab");
+
+    await act(async () => {
+      announcementTab.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+    });
+
+    expect(onPanelChange).toHaveBeenCalledWith("announcement");
+
+    render(
+      <HeaderBuilder
+        activePanel="announcement"
+        initialConfig={config}
+        onPanelChange={onPanelChange}
+      />,
+    );
+
+    expect(announcementTab.getAttribute("data-state")).toBe("active");
+    expect(host.textContent).toContain("Announcement bar");
+    expect(host.textContent).toContain("Message");
+  });
 });
