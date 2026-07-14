@@ -1,10 +1,11 @@
 # Rich demo store blueprint
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-14
 
-Status: the checked-in manifest and network-free planning gate are implemented;
-authenticated write/reconcile phases are still disabled. The deployed result
-belongs in [LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) only after the API writes,
+Status: the checked-in manifest, network-free gates, Media bridge, and guarded
+authenticated apply CLI are implemented. This is capability, not evidence that
+the current store has been reconciled. Record a deployed result in
+[LIVE-DEMO-RUN.md](LIVE-DEMO-RUN.md) only after the API writes,
 storefront/admin browser run, and release checks have passed.
 
 Run `pnpm demo:store --plan` before any import work. It validates and prints the
@@ -39,29 +40,30 @@ error bodies are not recorded. The session is closed best-effort even when a
 read or evidence write fails. `--diff` does not enable any write phase, and
 credential flags are rejected so secrets cannot enter shell history.
 
-### Apply executor milestone (not CLI-enabled)
+### Guarded apply milestone
 
-The checked-in apply engine now has a second, stricter gate behind `--diff`.
-It accepts only a complete staged-asset report whose SHA-256 manifest
-fingerprint matches the current 5/50/177 intent and whose 237 exact logical
-media records are all ready, uniquely identified, hashed, dimensioned, and
-typed. Header/footer intent is rejected because those settings APIs do not yet
-have revision claims. The public `pnpm demo:store` command still rejects
-`--apply`; completing this report does not by itself authorize writes.
+`pnpm demo:store --apply` is an interactive, fail-closed operator path behind
+the read-only planning, compile, diff, and Media gates. It accepts only a
+complete upload-bridge report whose SHA-256 manifest fingerprint matches the
+current 5/50/177 intent and whose 237 exact logical media records are all ready,
+uniquely identified, hashed, dimensioned, and typed. The operator must confirm
+the reset phrase and complete intent fingerprint after two fresh authority
+reads; completing Media readiness alone does not authorize writes.
 
 The internal executor consumes one pure compiler authority and binds its
 references from fresh snapshots and verified staged assets; it does not rebuild
-request payloads in the apply layer. It runs sequential create-only vocabulary,
-category, product, inactive collection, and desktop/mobile hero commands
-through admin APIs only.
-Theme intent remains outside this milestone. Creates are resolved
-again by exact slug/name/type after success, timeout, or conflict; updates carry
-the current category revision, product aggregate revision, collection version,
-theme revision, or hero revision. A 409 is reported as a conflict and is never
-blindly retried. Every command is re-read and verified after a nominal success,
+request payloads in the apply layer. It runs quarantine, create-only vocabulary
+reconciliation, inactive category/product/collection/hero staging, product
+activation, category publication, collection activation, and desktop/mobile
+hero activation sequentially through admin APIs. Creates are resolved again by
+exact slug/name/type after success, timeout, or conflict; revisioned updates
+carry current monotonic authority. A 409 is reported as a conflict and is never
+blindly retried. Every command is re-read and verified after nominal success,
 and later dependent phases stop when an earlier phase conflicts.
-The staged-only executor refuses active non-retained products, collections, or
-heroes until the explicit quarantine lifecycle has deactivated them.
+
+Theme, Header/Footer navigation, and standalone promotion publication are
+excluded from the checked-in run. Theme intent is empty; navigation and
+standalone promotions remain blocked until their writes have monotonic CAS.
 
 Product creation uses stable request-scoped option/value/SKU/media association
 IDs, starts inactive, and writes optioned initial stock through the existing
@@ -78,19 +80,19 @@ fingerprints the complete catalog intent, including copy, prices, offers, and
 merchandising, so a media-ready report cannot authorize changed product data.
 
 Rider and Halo are stronger boundaries: exact retained IDs and option topology
-must match the fresh snapshot, all stock/reservation/version facts must be
-present, every existing ready media association must remain represented, and no
-option-matrix or variant-stock command is generated for either product. Their
-base copy/media command preserves current activation, non-Brand attributes,
-association IDs, SKU images, inventory, reservations, and barcodes.
+must match the fresh snapshot, and all stock/reservation/version facts must be
+present. The compiler emits their complete retained option matrices so exact
+SKU IDs, option/value IDs, inventory, reservations, ledger history, and barcodes
+survive while approved generated-original Media replacements are rebound to
+exact SKUs. A null exact image remains product-primary fallback; the flow does
+not restore axis inference or serialized image mappings.
 
-Collections are created inactive with deterministic membership (balanced
+Collections are staged inactive with deterministic membership (balanced
 3/3/2/2/2 New & Noteworthy selection, explicit Weekend Ready, first 12 current
-offers, and category-backed dynamic collections). Hero sliders are likewise
-saved inactive with separate desktop/mobile staged assets. Publication,
-activation, unversioned header/footer writes, and CLI exposure remain later
-milestones after staged browser verification; the executor reports
-`staged_complete`, never stable-release completion.
+offers, and category-backed dynamic collections), then activated after catalog
+publication. Hero sliders are likewise staged with separate desktop/mobile
+assets and activated last. Apply success still is not stable-release completion;
+the deployed buyer/merchant run and release checks remain separate evidence.
 
 ## Target and acceptance contract
 
