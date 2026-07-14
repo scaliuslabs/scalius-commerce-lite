@@ -5,6 +5,7 @@ const filters = readFileSync(new URL("./MediaFilterBar.tsx", import.meta.url), "
 const folders = readFileSync(new URL("./FolderBrowser.tsx", import.meta.url), "utf8");
 const preview = readFileSync(new URL("./MediaPreview.tsx", import.meta.url), "utf8");
 const card = readFileSync(new URL("./MediaCard.tsx", import.meta.url), "utf8");
+const workspace = readFileSync(new URL("../MediaWorkspace.tsx", import.meta.url), "utf8");
 
 describe("media workspace polish boundaries", () => {
   it("keeps bulk commands explicit and touch-sized on compact screens", () => {
@@ -19,6 +20,15 @@ describe("media workspace polish boundaries", () => {
     expect(folders).toContain('className="flex w-full gap-1 overflow-x-auto p-2 md:hidden"');
     expect(folders).toContain('className="hidden flex-1 md:block"');
     expect(folders).toContain('aria-current={currentFolderId === id ? "page" : undefined}');
+  });
+
+  it("keeps top-level media controls touch-sized on mobile and dense on desktop", () => {
+    expect(workspace.match(/h-9 px-2\.5 text-xs sm:h-7/g)).toHaveLength(2);
+    expect(workspace).toContain('className="h-9 sm:h-8"');
+  });
+
+  it("keeps library-management commands out of picker workspaces", () => {
+    expect(workspace).toContain("allowManagement={!picker}");
   });
 
   it("protects unsaved preview metadata before close or navigation", () => {

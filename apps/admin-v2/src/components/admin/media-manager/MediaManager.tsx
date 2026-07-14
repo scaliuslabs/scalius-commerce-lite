@@ -23,6 +23,7 @@ export function MediaManager({
   const manager = useMediaManager({
     autoLoad: false,
     capability,
+    initialSelectedFiles: selectedFiles,
     onSelect: onSelect ? (file) => { onSelect(file); setOpen(false); } : undefined,
     onSelectMultiple: onSelectMultiple ? (files) => { onSelectMultiple(files); setOpen(false); } : undefined,
   });

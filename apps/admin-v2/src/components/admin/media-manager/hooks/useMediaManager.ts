@@ -8,6 +8,7 @@ import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } fro
 interface UseMediaManagerOptions {
   autoLoad: boolean;
   capability: MediaCapability;
+  initialSelectedFiles?: MediaFile[];
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
 }
@@ -27,7 +28,13 @@ async function bounded<T>(values: T[], task: (value: T) => Promise<void>, concur
   await Promise.all(workers);
 }
 
-export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultiple }: UseMediaManagerOptions) {
+export function useMediaManager({
+  autoLoad,
+  capability,
+  initialSelectedFiles = [],
+  onSelect,
+  onSelectMultiple,
+}: UseMediaManagerOptions) {
   const media = useMediaFiles(false);
   const folders = useFolders(autoLoad);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
@@ -96,7 +103,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
 
   const replaceSelection = useCallback((ids: string[]) => {
     selectionAnchorId.current = null;
-    setSelectedFileIds(ids);
+    setSelectedFileIds([...new Set(ids)]);
   }, []);
 
   const beginSelection = useCallback(() => {
@@ -151,7 +158,21 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
   }, [onSelect, onSelectMultiple, selectionMode, toggleSelection]);
 
   const completedUploads = upload.queue.flatMap((item) => item.result ? [item.result] : []);
-  const selectedFiles = resolveSelectedMedia(selectedFileIds, media.files, completedUploads);
+  const initialSelectionSource = initialSelectedFiles.map((file) => ({
+    ...file,
+    id: file.id.replace(/^temp_/, ""),
+  }));
+  const selectedFiles = resolveSelectedMedia<MediaFile>(
+    selectedFileIds,
+    media.files,
+    completedUploads,
+    initialSelectionSource,
+  );
+  const selectedLibraryFiles = resolveSelectedMedia<LibraryMediaFile>(
+    selectedFileIds,
+    media.files,
+    completedUploads,
+  );
 
   const mutateOne = useCallback(async (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
     setIsMutating(true);
@@ -171,12 +192,12 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
   }, [load]);
 
   const mutateSelected = useCallback(async (action: "trash" | "restore" | "permanent") => {
-    if (!selectedFiles.length) return;
+    if (!selectedLibraryFiles.length) return;
     setIsMutating(true);
     let succeeded = 0;
     const failures: string[] = [];
     const failedIds: string[] = [];
-    await bounded(selectedFiles, async (file) => {
+    await bounded(selectedLibraryFiles, async (file) => {
       try {
         if (action === "trash") await MediaApiClient.trashFile(file);
         else if (action === "restore") await MediaApiClient.restoreFile(file);
@@ -193,13 +214,13 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     setIsMutating(false);
     if (succeeded) toast.success(`${succeeded} asset${succeeded === 1 ? "" : "s"} updated`);
     if (failures.length) toast.error(`${failures.length} asset${failures.length === 1 ? "" : "s"} not changed`, { description: failures.slice(0, 3).join("\n") });
-  }, [load, selectedFiles]);
+  }, [load, selectedLibraryFiles]);
 
   const moveSelected = useCallback(async (folderId: string | null) => {
-    if (!selectedFiles.length) return;
+    if (!selectedLibraryFiles.length) return;
     setIsMutating(true);
     try {
-      await MediaApiClient.moveFiles(selectedFiles, folderId);
+      await MediaApiClient.moveFiles(selectedLibraryFiles, folderId);
       setSelectedFileIds([]);
       selectionAnchorId.current = null;
       toast.success("Assets moved");
@@ -209,7 +230,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     } finally {
       setIsMutating(false);
     }
-  }, [load, selectedFiles]);
+  }, [load, selectedLibraryFiles]);
 
   const updateFile = useCallback(async (file: LibraryMediaFile, updates: Parameters<typeof MediaApiClient.updateFile>[1]) => {
     try {
@@ -240,6 +261,7 @@ export function useMediaManager({ autoLoad, capability, onSelect, onSelectMultip
     selectionMode,
     setSelectionMode,
     selectedFiles,
+    selectedLibraryFiles,
     previewFile,
     setPreviewFile,
     showPreview,

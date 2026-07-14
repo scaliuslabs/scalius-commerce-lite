@@ -24,6 +24,7 @@ interface MediaFilterBarProps {
   folders: MediaFolder[];
   isMutating: boolean;
   allowSelection?: boolean;
+  allowManagement: boolean;
   onSearch: (value: string) => void;
   onFiltersChange: (updates: Partial<MediaFilterOptions>) => void;
   onUpload: (files: FileList | null) => Promise<void>;
@@ -95,7 +96,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
           {props.selectedCount > 0 && <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-xs sm:h-7" onClick={props.onClearSelection}><X className="mr-1 h-3.5 w-3.5" />Clear</Button>}
           {props.onCancelSelection && <Button type="button" variant="ghost" size="sm" className="h-9 px-2 text-xs sm:h-7" onClick={props.onCancelSelection}>Cancel</Button>}
 
-          {props.selectedCount > 0 && props.view === "ready" && (
+          {props.allowManagement && props.selectedCount > 0 && props.view === "ready" && (
             <>
               <div className="flex items-center">
                 <Select value={targetFolder} onValueChange={setTargetFolder}>
@@ -107,7 +108,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
               <Button type="button" variant="outline" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("trash")}><Trash2 className="mr-1 h-3.5 w-3.5" />Move to trash</Button>
             </>
           )}
-          {props.selectedCount > 0 && props.view === "trash" && (
+          {props.allowManagement && props.selectedCount > 0 && props.view === "trash" && (
             <>
               <Button type="button" variant="outline" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("restore")}><RotateCcw className="mr-1 h-3.5 w-3.5" />Restore</Button>
               <Button type="button" variant="destructive" size="sm" className="h-9 px-2 text-xs sm:h-7" disabled={props.isMutating} onClick={() => props.onLifecycle("permanent")}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete permanently</Button>
