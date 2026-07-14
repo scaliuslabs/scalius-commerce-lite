@@ -35,43 +35,53 @@ function assertRemoteShape(file, entry, { reused = false } = {}) {
   if (!file.url || !/^https?:\/\//u.test(file.url) || !file.filename?.trim()) throw new Error(`${entry.logicalKey} remote Media projection is incomplete.`);
 }
 
-function validateRetainedReuse(manifest, entries, state) {
+function validateRetainedMediaPlan(manifest, entries, state) {
   const mediaById = exactMap(state.media, "id", "Ready Media");
   const detailById = exactMap(state.retainedDetails, "id", "Retained product details");
   const coveredDirectIds = new Set();
   const coveredPosterIds = new Set();
   const reusedIds = new Set();
-  for (const entry of entries.filter((item) => item.remoteReuse)) {
+  const replacementAuthority = new Map();
+  for (const entry of entries.filter((item) => item.remoteReuse || item.retainedReplacement)) {
+    const authority = entry.remoteReuse ?? entry.retainedReplacement;
     const product = manifest.products.find((item) => item.logicalKey === entry.expected.owner);
-    if (!product?.retainedProductId || product.retainedProductId !== entry.remoteReuse.productId) {
-      throw new Error(`${entry.logicalKey} remote reuse does not name its retained product authority.`);
+    if (!product?.retainedProductId || product.retainedProductId !== authority.productId) {
+      throw new Error(`${entry.logicalKey} retained Media plan does not name its retained product authority.`);
     }
     const detail = detailById.get(product.retainedProductId);
     const directIds = new Set((detail?.media ?? []).filter((item) => item.status === "ready").map((item) => item.mediaId));
     const posterIds = new Set((detail?.media ?? []).map((item) => item.posterMediaId).filter(Boolean));
     const isPoster = entry.expected.role.startsWith("poster");
-    if (isPoster ? !posterIds.has(entry.remoteReuse.mediaId) : !directIds.has(entry.remoteReuse.mediaId)) {
-      throw new Error(`${entry.logicalKey} remote reuse is not attached to the retained product in the expected role.`);
+    if (isPoster ? !posterIds.has(authority.mediaId) : !directIds.has(authority.mediaId)) {
+      throw new Error(`${entry.logicalKey} retained Media plan is not attached to the retained product in the expected role.`);
     }
-    if (reusedIds.has(entry.remoteReuse.mediaId)) throw new Error(`${entry.logicalKey} duplicates a retained Media reuse identity.`);
-    reusedIds.add(entry.remoteReuse.mediaId);
-    if (isPoster) coveredPosterIds.add(entry.remoteReuse.mediaId);
-    else coveredDirectIds.add(entry.remoteReuse.mediaId);
-    const remote = mediaById.get(entry.remoteReuse.mediaId);
+    if (reusedIds.has(authority.mediaId)) throw new Error(`${entry.logicalKey} duplicates a retained Media identity.`);
+    reusedIds.add(authority.mediaId);
+    if (isPoster) coveredPosterIds.add(authority.mediaId);
+    else coveredDirectIds.add(authority.mediaId);
+    const remote = mediaById.get(authority.mediaId);
     if (!remote) throw new Error(`${entry.logicalKey} retained Media ID is not ready.`);
-    assertRemoteShape(remote, entry, { reused: true });
+    if (remote.status !== "ready" || remote.kind !== entry.expected.kind) {
+      throw new Error(`${entry.logicalKey} retained Media authority has the wrong kind or status.`);
+    }
+    if (entry.remoteReuse) assertRemoteShape(remote, entry, { reused: true });
+    if (entry.retainedReplacement) replacementAuthority.set(entry.logicalKey, {
+      productId: authority.productId,
+      mediaId: authority.mediaId,
+    });
   }
   for (const product of manifest.products.filter((item) => item.retainedProductId)) {
     const detail = detailById.get(product.retainedProductId);
     for (const association of detail?.media ?? []) {
       if (association.status === "ready" && !coveredDirectIds.has(association.mediaId)) {
-        throw new Error(`Retained product ${product.slug} has an existing ready Media ID without an explicit logical-key reuse mapping.`);
+        throw new Error(`Retained product ${product.slug} has an existing ready Media ID without an explicit logical-key reuse or replacement mapping.`);
       }
     }
     for (const posterMediaId of new Set((detail?.media ?? []).map((item) => item.posterMediaId).filter(Boolean))) {
-      if (!coveredPosterIds.has(posterMediaId)) throw new Error(`Retained product ${product.slug} has an existing poster Media ID without an explicit logical-key reuse mapping.`);
+      if (!coveredPosterIds.has(posterMediaId)) throw new Error(`Retained product ${product.slug} has an existing poster Media ID without an explicit logical-key reuse or replacement mapping.`);
     }
   }
+  return replacementAuthority;
 }
 
 async function writeAtomic(filePath, value) {
@@ -164,7 +174,7 @@ export async function runMediaUploadBridge({
   const resume = await readUploadJournal(journalPath, local.fingerprint);
   const journal = (record) => appendUploadJournal(journalPath, record, local.fingerprint);
   let remote = await readState(readClient, manifest);
-  validateRetainedReuse(manifest, local.entries, remote);
+  const replacementAuthority = validateRetainedMediaPlan(manifest, local.entries, remote);
   let mediaById = exactMap(remote.media, "id", "Ready Media");
   let mediaByFilename = new Map();
   for (const file of remote.media) {
@@ -274,6 +284,9 @@ export async function runMediaUploadBridge({
       width: result.width,
       height: result.height,
       importAction: result.action,
+      ...(replacementAuthority.has(entry.logicalKey) ? {
+        retainedReplacement: replacementAuthority.get(entry.logicalKey),
+      } : {}),
       ...(posterLogicalKey ? { posterLogicalKey, posterMediaId } : {}),
       ...(pairByPoster.has(entry.logicalKey) ? { posterForLogicalKey: pairByPoster.get(entry.logicalKey) } : {}),
     };

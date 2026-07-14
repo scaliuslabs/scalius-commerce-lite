@@ -85,7 +85,7 @@ function variantImageId(product, variant, existing) {
     );
     return matchingMedia
       ? productAssociationId(product, matchingMedia, existing)
-      : commandRef(`current-variant:${variant.logicalKey}`, "imageId");
+      : null;
   }
   const axisIndex = product.options.findIndex((axis) => axis.name === intent.axis);
   const value = variant.optionValues[axisIndex];
@@ -180,6 +180,9 @@ function productBasePayload(product, categoryId, { isActive, expectedAggregateRe
       content: section.html,
       sortOrder: section.sortOrder,
     })),
+    ...(existing ? {
+      acknowledgedSkuImageRemovalIds: commandRef(`current-product:${product.slug}`, "removedSkuImageIds"),
+    } : {}),
   };
 }
 
@@ -263,19 +266,26 @@ function productCommands(manifest, current) {
           retainedProductId: product.retainedProductId,
           preserveSkuIds: true,
           preserveOptionValueIds: true,
-          preserveMediaAssociationIds: true,
+          preserveMediaAssociationIds: false,
+          preserveSkuImageSemantics: true,
           preserveInventoryLedger: true,
           preserveReservations: true,
         } : undefined,
       }));
-      if (product.options.length > 0 && !retained) {
+      if (product.options.length > 0) {
         commands.push(command(`${product.logicalKey}:matrix`, "products", "PUT", `${API}/products/${productId}/options/matrix`, {
           ...productOptionMatrix(product, true),
           expectedAggregateRevision: commandRef(baseLogicalKey, "aggregateRevision"),
         }, {
           dependsOn: [baseLogicalKey],
           preconditions: { expectedAggregateRevision: commandRef(baseLogicalKey, "aggregateRevision") },
-          preservation: retained ? { adoptCurrentVariantFacts: true, noStockReset: true } : undefined,
+          preservation: retained ? {
+            preserveSkuIds: true,
+            preserveInventoryLedger: true,
+            preserveReservations: true,
+            adoptCurrentVariantFacts: true,
+            noStockReset: true,
+          } : undefined,
         }));
       } else if (!retained && current.resumeSimpleSlugs?.includes(product.slug)) {
         const variant = product.variants[0];

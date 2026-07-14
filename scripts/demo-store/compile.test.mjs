@@ -91,13 +91,25 @@ describe("demo-store admin command compiler", () => {
       expect(base.preservation).toMatchObject({
         preserveSkuIds: true,
         preserveOptionValueIds: true,
-        preserveMediaAssociationIds: true,
+        preserveMediaAssociationIds: false,
+        preserveSkuImageSemantics: true,
         preserveInventoryLedger: true,
         preserveReservations: true,
       });
-      expect(compiled.commands.find((item) => item.logicalKey === `product:${slug}:matrix`)).toBeUndefined();
+      expect(findCommand(compiled, `product:${slug}:matrix`).preservation).toMatchObject({
+        preserveSkuIds: true,
+        preserveInventoryLedger: true,
+        preserveReservations: true,
+        noStockReset: true,
+      });
       expect(base.body.isActive).toEqual({ $ref: `current-product:${slug}`, field: "isActive" });
+      expect(base.body.acknowledgedSkuImageRemovalIds).toEqual({
+        $ref: `current-product:${slug}`,
+        field: "removedSkuImageIds",
+      });
     }
+    const haloMatrix = findCommand(compiled, "product:halo-arc-table-lamp:matrix");
+    expect(haloMatrix.body.variants.every((variant) => variant.imageId === null)).toBe(true);
   });
 
   it("adopts operational SKU authority for existing matrices and seeds simple stock only with resume provenance", () => {

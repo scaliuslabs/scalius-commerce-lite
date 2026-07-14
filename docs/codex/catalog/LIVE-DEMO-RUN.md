@@ -10,7 +10,7 @@ Only these products should remain active after cleanup:
 
 | Product | Product ID | Category | Coverage |
 | --- | --- | --- | --- |
-| Halo Arc Table Lamp | `prod_FOHvuxr0Hr11AA_hyLUpH` | Home & Living | Mixed image/video gallery; merchant-defined Finish and Plug options; 3 active of 4 possible SKUs; percentage SKU discount; partial exact-SKU image assignment with automatic fallback |
+| Halo Arc Table Lamp | `prod_FOHvuxr0Hr11AA_hyLUpH` | Home & Living | Mixed image/video gallery; merchant-defined Finish and Plug options; 3 active of 4 possible SKUs; percentage SKU discount; all SKUs use the product-primary fallback because no finish-specific image exists |
 | Rider Court Trainers | `prod_9XNNERD2XpAOIoI1SN6gx` | Footwear | Four real product images; merchant-defined Size and Color options; 6 active SKUs; per-SKU stock; partial exact-SKU image assignment with product-primary fallback |
 
 The product copy and image metadata came from public DummyJSON demo data and were rewritten for this store. A 23.56 MB MP4 was successfully uploaded during the media-path proof, demonstrating the multipart path above the old 10 MB ceiling. The final curated live Media library contains the seven product image slots, the product video, and the dedicated brand asset used by the demo storefront; temporary duplicate proof assets were removed.
@@ -129,6 +129,13 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Header social links were normalized to explicit HTTPS URLs and nonblank labels (`Facebook`, `X`, `LinkedIn`, `GitHub`, `YouTube`, and `WhatsApp`) before the strict navigation validator release.
 
 ## Release proof
+
+- The retained Rider/Halo media pipeline now has a fail-closed
+  generated-original replacement path. The upload bridge requires exact old
+  product/Media authority and complete direct/poster coverage; apply preserves
+  product/SKU, option/value, inventory ledger, reservations, and exact SKU image
+  semantics while retiring only the unapproved asset associations. The full
+  demo-store suite passes (14 files, 104 tests).
 
 - Latest navigation fault-isolation correction: API
   `bbdf8d40-9844-4189-a303-e50b06b28244` and admin

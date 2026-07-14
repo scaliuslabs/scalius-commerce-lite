@@ -53,6 +53,32 @@ bounded SHA-256 verifier, and requires it to equal the source provenance hash.
 Every current ready direct association on a retained product must have exactly
 one explicit reuse mapping.
 
+When current bytes do not have defensible ownership/license evidence, generated
+original replacements are the only automated path. Register the generated
+source normally and add `retainedReplacement` with the exact current product and
+Media IDs instead of `remoteReuse`. The bridge proves that every old direct and
+poster Media ID is covered, uploads the replacement sequentially, and carries
+the old authority into the readiness report. The product apply then removes the
+old associations with an exact SKU-image acknowledgement and rebinds the same
+SKUs through the full option matrix. Product IDs, SKU IDs, option/value IDs,
+stock, reservations, ledger history, and buyer-facing exact-image semantics are
+preserved; only the unapproved asset and product-media association identity are
+retired.
+
+```json
+{
+  "logicalKey": "rider-court-trainers:primary",
+  "retainedReplacement": {
+    "productId": "prod_9XNNERD2XpAOIoI1SN6gx",
+    "mediaId": "media_exact_current_id"
+  }
+}
+```
+
+Reuse and replacement are mutually exclusive for a logical key. Partial
+coverage, a wrong product/role/kind, an unknown old ID, or an unrelated current
+association stops before upload.
+
 ## Resume and poster evidence
 
 The server upload session is authoritative. The local JSONL journal records the

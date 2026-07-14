@@ -202,21 +202,35 @@ describe("revision-safe product commands", () => {
     });
   });
 
-  it("binds retained Rider through the compiler without option or stock mutations", () => {
+  it("binds retained Rider with exact media acknowledgements and preserved SKU authority", () => {
     const report = readinessReport();
     const readiness = assertStagedAssetReadiness(demoStoreManifest, report);
     const snapshot = completeSnapshot(report);
     const rider = demoStoreManifest.products.find((product) => product.slug === "rider-court-trainers");
     const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: snapshot });
     const commands = compiled.commands.filter((command) => command.logicalKey.startsWith(`${rider.logicalKey}:`));
-    const bound = createApplyBinder({ manifest: demoStoreManifest, readiness, snapshot }).bind(commands[0]);
-    expect(commands).toHaveLength(1);
-    expect(bound.path).toBe(`/api/v1/admin/products/${rider.retainedProductId}`);
-    expect(bound.body).not.toHaveProperty("optionMatrix");
-    expect(JSON.stringify(bound.body)).not.toContain("stock");
-    expect(bound.body.isActive).toBe(true);
-    expect(bound.body.media.map((item) => item.id)).toEqual(snapshot.productDetails.find((item) => item.slug === rider.slug).media.map((item) => item.id));
-    expect(bound.body.media.every((item) => typeof item.mediaId === "string" && item.mediaId.startsWith("media_demo_"))).toBe(true);
+    const binder = createApplyBinder({
+      manifest: demoStoreManifest,
+      readiness,
+      snapshot,
+      outputs: new Map([[`${rider.logicalKey}:base`, {
+        id: rider.retainedProductId,
+        aggregateRevision: 5,
+      }]]),
+    });
+    const base = binder.bind(commands.find((command) => command.logicalKey.endsWith(":base")));
+    const matrix = binder.bind(commands.find((command) => command.logicalKey.endsWith(":matrix")));
+    const current = snapshot.productDetails.find((item) => item.slug === rider.slug);
+    expect(commands).toHaveLength(2);
+    expect(base.path).toBe(`/api/v1/admin/products/${rider.retainedProductId}`);
+    expect(base.body).not.toHaveProperty("optionMatrix");
+    expect(base.body.acknowledgedSkuImageRemovalIds).toEqual([]);
+    expect(base.body.isActive).toBe(true);
+    expect(base.body.media.map((item) => item.id)).toEqual(current.media.map((item) => item.id));
+    expect(base.body.media.every((item) => typeof item.mediaId === "string" && item.mediaId.startsWith("media_demo_"))).toBe(true);
+    expect(matrix.body.expectedAggregateRevision).toBe(5);
+    expect(matrix.body.variants.map((variant) => variant.id)).toEqual(current.variants.map((variant) => variant.id));
+    expect(matrix.body.variants.map((variant) => variant.stock)).toEqual(current.variants.map((variant) => variant.stock));
   });
 
   it("binds existing matrices with current SKU stock, barcode, and identity", () => {
@@ -359,7 +373,7 @@ describe("apply orchestration", () => {
     expect(executeCommand).not.toHaveBeenCalled();
   });
 
-  it("binds the compiler plan in staged order and excludes activation, publication, and retained matrices", async () => {
+  it("binds the compiler plan in staged order and excludes activation and publication", async () => {
     const report = readinessReport();
     const snapshot = completeSnapshot(report);
     const seen = [];
@@ -394,8 +408,8 @@ describe("apply orchestration", () => {
     expect(result.status).toBe("staged_complete");
     expect([...new Set(seen.map((item) => item.phase))]).toEqual(["categories", "products", "collections", "presentation"]);
     expect(result.excludedPhases).toEqual(["activation", "publication"]);
-    expect(seen.some((item) => item.command.logicalKey === "product:rider-court-trainers:matrix")).toBe(false);
-    expect(seen.some((item) => item.command.logicalKey === "product:halo-arc-table-lamp:matrix")).toBe(false);
+    expect(seen.some((item) => item.command.logicalKey === "product:rider-court-trainers:matrix")).toBe(true);
+    expect(seen.some((item) => item.command.logicalKey === "product:halo-arc-table-lamp:matrix")).toBe(true);
     expect(seen.some((item) => item.command.phase === "activation" || item.command.phase === "publication")).toBe(false);
     expect(seen.every((item) => !JSON.stringify(item.command).includes('"$ref"'))).toBe(true);
   });

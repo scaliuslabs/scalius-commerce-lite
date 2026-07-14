@@ -24,7 +24,7 @@ describe("demo store manifest", () => {
     expect(DEMO_STORE_CONTRACT).toMatchObject({ categories: 5, products: 50, skus: 177 });
   });
 
-  it("models the omitted Halo combination and partial exact-image fallbacks", () => {
+  it("models the omitted Halo combination and product-primary image fallback", () => {
     const halo = demoStoreManifest.products.find((product) => product.slug === "halo-arc-table-lamp");
     const rove = demoStoreManifest.products.find((product) => product.slug === "rove-packable-flats");
 
@@ -33,10 +33,7 @@ describe("demo store manifest", () => {
       ["Matte", "US"],
       ["Gloss", "EU"],
     ]);
-    expect(halo.variantImageIntent).toEqual({
-      mode: "combinations",
-      exactCombinations: [["Matte", "EU"]],
-    });
+    expect(halo.variantImageIntent).toEqual({ mode: "fallback" });
     expect(rove.variantImageIntent).toEqual({
       mode: "axis",
       axis: "Color",
