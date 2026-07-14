@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { buildExpectedAssets } from "./expected-assets.mjs";
 import { inspectLocalAsset } from "./inspect-local-asset.mjs";
 import { validateSourceManifest } from "./provenance.mjs";
+import { demoStoreManifest } from "../manifest.mjs";
 
 export const DEFAULT_REPO_ROOT = path.resolve(
   fileURLToPath(new URL("../../../", import.meta.url)),
@@ -96,7 +97,9 @@ export async function registerGeneratedAssets({
   verifiedAt,
   cropPosition = "centre",
   rightsReview,
+  retainedReplacement,
   expectedAssets = buildExpectedAssets(),
+  retainedProducts = demoStoreManifest.products.filter((product) => product.retainedProductId),
   today,
   repoRoot = DEFAULT_REPO_ROOT,
 }) {
@@ -118,6 +121,18 @@ export async function registerGeneratedAssets({
 
   const expectedByKey = new Map(expectedAssets.map((asset) => [asset.logicalKey, asset]));
   const keys = exactLogicalKeys(logicalKeys, expectedByKey);
+  if (retainedReplacement) {
+    if (keys.length !== 1) throw new Error("Retained replacement registration accepts exactly one logical key");
+    if (!/^[A-Za-z0-9_-]{8,160}$/u.test(retainedReplacement.productId ?? "")
+      || !/^[A-Za-z0-9_-]{8,160}$/u.test(retainedReplacement.mediaId ?? "")) {
+      throw new Error("Retained replacement requires exact productId and mediaId values");
+    }
+    const owner = expectedByKey.get(keys[0])?.owner;
+    const retainedProduct = retainedProducts.find((product) => product.logicalKey === owner);
+    if (!retainedProduct || retainedProduct.retainedProductId !== retainedReplacement.productId) {
+      throw new Error("Retained replacement does not match the logical key's retained product authority");
+    }
+  }
   const inspected = await inspectLocalAsset(resolvedSourceFile);
   for (const key of keys) {
     const expectedKind = expectedByKey.get(key).kind;
@@ -154,6 +169,7 @@ export async function registerGeneratedAssets({
       cropPosition,
       generation: { prompt, model },
       rightsReview,
+      ...(retainedReplacement ? { retainedReplacement } : {}),
     });
   }
 
