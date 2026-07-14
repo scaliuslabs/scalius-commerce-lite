@@ -50,6 +50,10 @@ function sha(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function opaqueId(prefix, seed) {
+  return `${prefix}_${`${seed}${"x".repeat(21)}`.slice(0, 21)}`;
+}
+
 async function fixture(manifest, remoteReuse = {}, retainedReplacement = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "scalius-media-upload-"));
   directories.push(directory);
@@ -126,22 +130,25 @@ describe("demo-store Media upload bridge", () => {
 
   it("reuses exact retained image, video, and poster identities without uploading", async () => {
     const retainedId = "prod_retained_123";
+    const primaryMediaId = opaqueId("media", "primary-1");
+    const videoMediaId = opaqueId("media", "video-1");
+    const posterMediaId = opaqueId("media", "poster-1");
     const manifest = manifestWith(product("retained", [
       media("retained:primary", "primary"),
       media("retained:video", "video", "video"),
       media("retained:poster", "poster"),
     ], retainedId));
     const reuse = {
-      "retained:primary": { productId: retainedId, mediaId: "media_primary_1" },
-      "retained:video": { productId: retainedId, mediaId: "media_video_1" },
-      "retained:poster": { productId: retainedId, mediaId: "media_poster_1" },
+      "retained:primary": { productId: retainedId, mediaId: primaryMediaId },
+      "retained:video": { productId: retainedId, mediaId: videoMediaId },
+      "retained:poster": { productId: retainedId, mediaId: posterMediaId },
     };
     const input = await fixture(manifest, reuse);
     const recordByKey = new Map(input.sourceManifest.assets.map((record) => [record.logicalKey, record]));
     const remoteMedia = [
-      { id: "media_primary_1", filename: "current-primary.png", kind: "image", mimeType: "image/png", size: recordByKey.get("retained:primary").original.bytes, url: "https://cdn.test/primary", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null },
-      { id: "media_video_1", filename: "current-video.mp4", kind: "video", mimeType: "video/mp4", size: recordByKey.get("retained:video").original.bytes, url: "https://cdn.test/video", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: "media_poster_1" },
-      { id: "media_poster_1", filename: "current-poster.png", kind: "image", mimeType: "image/png", size: recordByKey.get("retained:poster").original.bytes, url: "https://cdn.test/poster", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null },
+      { id: primaryMediaId, filename: "current-primary.png", kind: "image", mimeType: "image/png", size: recordByKey.get("retained:primary").original.bytes, url: "https://cdn.test/primary", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null },
+      { id: videoMediaId, filename: "current-video.mp4", kind: "video", mimeType: "video/mp4", size: recordByKey.get("retained:video").original.bytes, url: "https://cdn.test/video", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId },
+      { id: posterMediaId, filename: "current-poster.png", kind: "image", mimeType: "image/png", size: recordByKey.get("retained:poster").original.bytes, url: "https://cdn.test/poster", status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null },
     ];
     const state = {
       capturedAt: "2026-07-13T00:00:00.000Z",
@@ -150,8 +157,8 @@ describe("demo-store Media upload bridge", () => {
         id: retainedId,
         slug: "retained",
         media: [
-          { mediaId: "media_primary_1", status: "ready", posterMediaId: null },
-          { mediaId: "media_video_1", status: "ready", posterMediaId: "media_poster_1" },
+          { mediaId: primaryMediaId, status: "ready", posterMediaId: null },
+          { mediaId: videoMediaId, status: "ready", posterMediaId },
         ],
       }],
     };
@@ -170,7 +177,7 @@ describe("demo-store Media upload bridge", () => {
     expect(mediaClient.initiate).not.toHaveBeenCalled();
     expect(mediaClient.uploadPart).not.toHaveBeenCalled();
     expect(mediaClient.update).not.toHaveBeenCalled();
-    expect(result.report.assets.find((asset) => asset.logicalKey === "retained:video")).toMatchObject({ posterLogicalKey: "retained:poster", posterMediaId: "media_poster_1" });
+    expect(result.report.assets.find((asset) => asset.logicalKey === "retained:video")).toMatchObject({ posterLogicalKey: "retained:poster", posterMediaId });
     expect(JSON.parse(await readFile(input.outputPath, "utf8")).status).toBe("complete");
   });
 
@@ -179,23 +186,29 @@ describe("demo-store Media upload bridge", () => {
     const input = await fixture(manifest);
     const events = [];
     const remoteMedia = [];
+    const sessionIndexes = new Map();
+    const mediaIndexes = new Map();
     let sequence = 0;
     const mediaClient = {
       getSession: vi.fn(),
       initiate: vi.fn(async (request) => {
         sequence += 1;
+        const sessionId = opaqueId("mup", `session-${sequence}`);
+        const mediaId = opaqueId("media", `new-${sequence}`);
+        sessionIndexes.set(sessionId, sequence - 1);
+        mediaIndexes.set(mediaId, sequence - 1);
         events.push(`initiate:${request.filename}`);
-        return { id: `session_${sequence}`, mediaId: `media_new_${sequence}`, filename: request.filename, mimeType: request.mimeType, size: request.size, expectedParts: 2, partSize: Math.ceil(request.size / 2), state: "initiated", uploadedParts: [] };
+        return { id: sessionId, mediaId, filename: request.filename, mimeType: request.mimeType, size: request.size, expectedParts: 2, partSize: Math.ceil(request.size / 2), state: "initiated", uploadedParts: [] };
       }),
       uploadPart: vi.fn(async (sessionId, partNumber) => { events.push(`part:${sessionId}:${partNumber}`); }),
       complete: vi.fn(async (sessionId) => {
         events.push(`complete:${sessionId}`);
-        const index = Number(sessionId.split("_")[1]) - 1;
+        const index = sessionIndexes.get(sessionId);
         const staged = input.stagedReport.assets[index];
-        return { id: `media_new_${index + 1}`, filename: staged.output.filename, kind: "image", mimeType: "image/webp", size: staged.output.bytes, url: `https://cdn.test/${index + 1}`, status: "ready", version: 1, createdAt: "2026-07-13T00:00:00.000Z", width: null, height: null, posterMediaId: null };
+        return { id: opaqueId("media", `new-${index + 1}`), filename: staged.output.filename, kind: "image", mimeType: "image/webp", size: staged.output.bytes, url: `https://cdn.test/${index + 1}`, status: "ready", version: 1, createdAt: "2026-07-13T00:00:00.000Z", width: null, height: null, posterMediaId: null };
       }),
       update: vi.fn(async (_id, update) => {
-        const index = Number(_id.split("_").at(-1)) - 1;
+        const index = mediaIndexes.get(_id);
         events.push(`update:${_id}`);
         const staged = input.stagedReport.assets[index];
         const file = { id: _id, filename: staged.output.filename, kind: "image", mimeType: "image/webp", size: staged.output.bytes, url: `https://cdn.test/${index + 1}`, status: "ready", version: update.expectedVersion + 1, createdAt: "2026-07-13T00:00:00.000Z", width: update.width, height: update.height, altText: update.altText, posterMediaId: null };
@@ -214,9 +227,13 @@ describe("demo-store Media upload bridge", () => {
       requiredAssetCount: 2,
     });
     expect(result.summary).toMatchObject({ total: 2, uploaded: 2, reused: 0 });
+    const firstSessionId = opaqueId("mup", "session-1");
+    const secondSessionId = opaqueId("mup", "session-2");
+    const firstMediaId = opaqueId("media", "new-1");
+    const secondMediaId = opaqueId("media", "new-2");
     expect(events).toEqual([
-      expect.stringMatching(/^initiate:/u), "part:session_1:1", "part:session_1:2", "complete:session_1", "update:media_new_1",
-      expect.stringMatching(/^initiate:/u), "part:session_2:1", "part:session_2:2", "complete:session_2", "update:media_new_2",
+      expect.stringMatching(/^initiate:/u), `part:${firstSessionId}:1`, `part:${firstSessionId}:2`, `complete:${firstSessionId}`, `update:${firstMediaId}`,
+      expect.stringMatching(/^initiate:/u), `part:${secondSessionId}:1`, `part:${secondSessionId}:2`, `complete:${secondSessionId}`, `update:${secondMediaId}`,
     ]);
     expect(result.report.assets.every((asset) => asset.status === "ready" && asset.sha256.length === 64)).toBe(true);
   });
@@ -224,14 +241,17 @@ describe("demo-store Media upload bridge", () => {
   it("uploads generated replacements for retained Media with exact old authority", async () => {
     const retainedId = "prod_retained_123";
     const logicalKey = "retained:primary";
+    const oldMediaId = opaqueId("media", "old-primary");
+    const newMediaId = opaqueId("media", "new-primary");
+    const sessionId = opaqueId("mup", "replacement");
     const manifest = manifestWith(product("retained", [media(logicalKey, "primary")], retainedId));
     const replacements = {
-      [logicalKey]: { productId: retainedId, mediaId: "media_old_primary" },
+      [logicalKey]: { productId: retainedId, mediaId: oldMediaId },
     };
     const input = await fixture(manifest, {}, replacements);
     const staged = input.stagedReport.assets[0];
     const old = {
-      id: "media_old_primary", filename: "old.png", kind: "image", mimeType: "image/png",
+      id: oldMediaId, filename: "old.png", kind: "image", mimeType: "image/png",
       size: 12, url: "https://cdn.test/old", status: "ready", version: 1,
       createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null,
     };
@@ -239,20 +259,20 @@ describe("demo-store Media upload bridge", () => {
     const mediaClient = {
       getSession: vi.fn(),
       initiate: vi.fn(async (request) => ({
-        id: "session_replacement", mediaId: "media_new_primary", filename: request.filename,
+        id: sessionId, mediaId: newMediaId, filename: request.filename,
         mimeType: request.mimeType, size: request.size, expectedParts: 1,
         partSize: request.size, state: "initiated", uploadedParts: [],
       })),
       uploadPart: vi.fn(),
       complete: vi.fn(async () => ({
-        id: "media_new_primary", filename: staged.output.filename, kind: "image",
+        id: newMediaId, filename: staged.output.filename, kind: "image",
         mimeType: "image/webp", size: staged.output.bytes, url: "https://cdn.test/new",
         status: "ready", version: 1, createdAt: "2026-07-13T00:00:00.000Z",
         width: null, height: null, posterMediaId: null,
       })),
       update: vi.fn(async (_id, update) => {
         const file = {
-          id: "media_new_primary", filename: staged.output.filename, kind: "image",
+          id: newMediaId, filename: staged.output.filename, kind: "image",
           mimeType: "image/webp", size: staged.output.bytes, url: "https://cdn.test/new",
           status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z",
           width: update.width, height: update.height, altText: update.altText, posterMediaId: null,
@@ -285,8 +305,8 @@ describe("demo-store Media upload bridge", () => {
     expect(hashRemote).not.toHaveBeenCalled();
     expect(result.report.assets[0]).toMatchObject({
       logicalKey,
-      mediaId: "media_new_primary",
-      retainedReplacement: { productId: retainedId, mediaId: "media_old_primary" },
+      mediaId: newMediaId,
+      retainedReplacement: { productId: retainedId, mediaId: oldMediaId },
     });
   });
 
