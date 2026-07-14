@@ -130,6 +130,25 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 
 ## Release proof
 
+- Latest navigation fault-isolation correction: API
+  `bbdf8d40-9844-4189-a303-e50b06b28244` and admin
+  `0269a685-2d44-4cee-9274-69b0365121c4`. Storefront was not redeployed;
+  the public layout projection is API-owned. The disposable store's former
+  `{title, href}` Header/Footer links were migrated to typed resource/path
+  targets without changing branding, social, or footer content. Persisted
+  Header and Footer documents now fail independently, exact legacy documents
+  normalize only in memory until an explicit save, and one unreadable section
+  can no longer take down all Settings or the storefront homepage. The live
+  Announcement panel changes the canonical URL to `panel=announcement` and
+  survives reload. Navigation drag now uses one transformed 40%-opacity source
+  row with sortable sibling displacement and no second overlay; live keyboard
+  drag geometry settled into separate 44 px rows with one visible Shop label,
+  then cancelled without dirtying the form. Focused navigation/settings gates
+  passed 109 tests, Core/API/Admin typechecks ran sequentially, SDK generation
+  completed, and `pnpm release:check` passed the storefront, discovery, feed,
+  UCP, product-schema, cache, and auth surfaces. The only operations warning
+  remains the documented logs-only alert-email configuration.
+
 - Latest navigation/provider/cache correction: API
   `6fa538e5-2b3d-4728-8e3f-dbc35e283e80` and admin
   `1c93bdeb-59cf-4c1b-bbf8-523cee26b447`. Storefront was not redeployed because
