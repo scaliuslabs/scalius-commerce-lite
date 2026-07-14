@@ -17,6 +17,7 @@ interface MediaCardProps {
   posterUrl?: string | null;
   selected: boolean;
   selectionMode: boolean;
+  allowManagement: boolean;
   view: MediaLibraryView;
   onActivate: (event: MouseEvent<HTMLButtonElement>) => void;
   onPreview: (event: MouseEvent) => void;
@@ -24,7 +25,7 @@ interface MediaCardProps {
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
 }
 
-export function MediaCard({ file, posterUrl, selected, selectionMode, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
+export function MediaCard({ file, posterUrl, selected, selectionMode, allowManagement, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
   const duration = formatDuration(file.durationMs);
@@ -88,7 +89,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
         <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
           <Eye className="h-3.5 w-3.5" />
         </Button>
-        <DropdownMenu>
+        {allowManagement && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
               <MoreHorizontal className="h-3.5 w-3.5" />
@@ -104,7 +105,7 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, view, onAc
               </>
             )}
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu>}
       </div>}
     </article>
   );

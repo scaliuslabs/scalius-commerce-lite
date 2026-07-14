@@ -96,7 +96,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
             onAddSelected={picker && multiple ? mm.addSelected : undefined}
           />
           <div className="min-h-0 flex-1">
-            <MediaGallery files={mm.files} selectedFileIds={mm.selectedFileIds} selectionMode={mm.selectionMode} view={mm.view} isLoading={mm.isLoading} isLoadingMore={mm.isLoadingMore} hasMore={mm.hasMore} loadError={mm.loadError} onFileSelect={mm.handleFileSelect} onFilePreview={(file, event) => { event.stopPropagation(); mm.setPreviewFile(file); mm.setShowPreview(true); }} onToggleSelection={mm.toggleSelection} onLifecycle={lifecycle} onLoadMore={mm.loadMore} onRetry={() => void mm.refresh()} />
+            <MediaGallery files={mm.files} selectedFileIds={mm.selectedFileIds} selectionMode={mm.selectionMode} allowManagement={!picker} view={mm.view} isLoading={mm.isLoading} isLoadingMore={mm.isLoadingMore} hasMore={mm.hasMore} loadError={mm.loadError} onFileSelect={mm.handleFileSelect} onFilePreview={(file, event) => { event.stopPropagation(); mm.setPreviewFile(file); mm.setShowPreview(true); }} onToggleSelection={mm.toggleSelection} onLifecycle={lifecycle} onLoadMore={mm.loadMore} onRetry={() => void mm.refresh()} />
           </div>
         </main>
       </div>
