@@ -39,7 +39,10 @@ import {
   parseSeoReturnPolicySettings,
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
-import { parseNavigationConfig } from "../navigation/navigation.validation";
+import {
+  parseNavigationConfig,
+  readPersistedNavigationConfig,
+} from "../navigation/navigation.validation";
 import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
@@ -295,25 +298,27 @@ export async function saveCurrencySettings(
 
 export async function getGeneralSettings(db: Database) {
   const [row] = await db.select().from(siteSettings).limit(1);
-  const parsePersistedConfig = (
-    type: "header" | "footer",
-    val: string | null | undefined,
-  ) => {
-    if (!val) return {};
-    try {
-      return parseNavigationConfig(type, JSON.parse(val));
-    } catch {
-      throw new ServiceUnavailableError(
-        `Stored ${type} configuration is invalid. Re-save it in Settings.`,
-      );
-    }
-  };
-  return resolveNavigationConfigs(
+  const headerRead = readPersistedNavigationConfig("header", row?.headerConfig);
+  const footerRead = readPersistedNavigationConfig("footer", row?.footerConfig);
+  const resolved = await resolveNavigationConfigs(
     db,
-    parsePersistedConfig("header", row?.headerConfig),
-    parsePersistedConfig("footer", row?.footerConfig),
+    headerRead.config,
+    footerRead.config,
     "admin",
   );
+  return {
+    ...resolved,
+    navigationReadiness: {
+      header: {
+        state: headerRead.state,
+        ...(headerRead.message ? { message: headerRead.message } : {}),
+      },
+      footer: {
+        state: footerRead.state,
+        ...(footerRead.message ? { message: footerRead.message } : {}),
+      },
+    },
+  };
 }
 
 export async function saveHeaderConfig(

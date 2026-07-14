@@ -40,22 +40,21 @@ import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
 import { buildDefaultNavigation } from "../navigation/navigation.service";
 import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
-import { parseNavigationConfig } from "../navigation/navigation.validation";
-import { ServiceUnavailableError } from "@scalius/core/errors";
+import { readPersistedNavigationConfig } from "../navigation/navigation.validation";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
-function parsePersistedNavigationConfig(
-  type: "header" | "footer",
-  json: string,
-): Record<string, unknown> {
-  try {
-    return parseNavigationConfig(type, JSON.parse(json));
-  } catch {
-    throw new ServiceUnavailableError(
-      `Stored ${type} configuration is invalid. Re-save it in Settings.`,
-    );
-  }
+export function readStorefrontNavigationConfigs(
+  headerValue: string | null | undefined,
+  footerValue: string | null | undefined,
+): {
+  headerConfig: Record<string, unknown>;
+  footerConfig: Record<string, unknown>;
+} {
+  return {
+    headerConfig: readPersistedNavigationConfig("header", headerValue).config,
+    footerConfig: readPersistedNavigationConfig("footer", footerValue).config,
+  };
 }
 
 export function resolveStorefrontThemeSettings(
@@ -366,12 +365,13 @@ export async function getLayoutData(
   const siteSettingsData = (settingsResults as Record<string, unknown>[])[0] as
     | Record<string, string | null>
     | undefined;
-  const storedHeaderConfig = siteSettingsData?.headerConfig
-    ? parsePersistedNavigationConfig("header", siteSettingsData.headerConfig)
-    : {};
-  const storedFooterConfig = siteSettingsData?.footerConfig
-    ? parsePersistedNavigationConfig("footer", siteSettingsData.footerConfig)
-    : {};
+  const {
+    headerConfig: storedHeaderConfig,
+    footerConfig: storedFooterConfig,
+  } = readStorefrontNavigationConfigs(
+    siteSettingsData?.headerConfig,
+    siteSettingsData?.footerConfig,
+  );
   const {
     headerConfig: resolvedHeaderConfig,
     footerConfig: resolvedFooterConfig,

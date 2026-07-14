@@ -22,6 +22,28 @@ export const MAX_SOCIAL_LINKS = 8;
 const stableIdSchema = z.string().trim().min(1).max(100);
 const navigationLabelSchema = z.string().trim().min(1).max(80);
 
+interface LegacyNavigationItem {
+    id: string;
+    title: string;
+    href?: string;
+    subMenu?: LegacyNavigationItem[];
+}
+
+const legacyNavigationItemSchema: z.ZodType<LegacyNavigationItem> = z.lazy(() =>
+    z.object({
+        id: stableIdSchema,
+        title: navigationLabelSchema,
+        href: z.string().optional(),
+        subMenu: z.array(legacyNavigationItemSchema).optional(),
+    }).strict()
+);
+
+const legacyFooterMenuSchema = z.object({
+    id: stableIdSchema,
+    title: z.string().trim().min(1).max(60),
+    links: z.array(legacyNavigationItemSchema),
+}).passthrough();
+
 const httpsUrlSchema = z.string().trim().max(2_048).transform((value, context) => {
     try {
         const url = new URL(value);
@@ -239,6 +261,133 @@ export function parseNavigationConfig(
     }
 
     return parsed;
+}
+
+function normalizeLegacyNavigationItem(
+    item: LegacyNavigationItem,
+): NavigationTargetItem {
+    const parsedHref = parseNavigationHref(item.href);
+    if (!parsedHref.ok) {
+        throw new ValidationError(parsedHref.reason);
+    }
+
+    const target: NavigationTargetItem["target"] = parsedHref.kind === "external"
+        ? { type: "external_url", url: parsedHref.href ?? "" }
+        : parsedHref.kind === "internal"
+            ? { type: "internal_path", path: parsedHref.href ?? "" }
+            : { type: "label" };
+
+    return {
+        id: item.id,
+        target,
+        labelMode: "custom",
+        customLabel: item.title,
+        ...(item.subMenu?.length
+            ? { subMenu: item.subMenu.map(normalizeLegacyNavigationItem) }
+            : {}),
+    };
+}
+
+/**
+ * Strict, explicit demo-data cutover from the former `{ title, href }` item
+ * shape to typed targets. This helper never writes and deliberately rejects
+ * mixed/dual-authority items; callers must persist its validated result through
+ * an existing navigation save command.
+ */
+export function normalizeLegacyNavigationConfig(
+    type: "header" | "footer",
+    config: unknown,
+): Record<string, unknown> {
+    const configResult = z.record(z.string(), z.unknown()).safeParse(config);
+    if (!configResult.success) {
+        throw new ValidationError("Legacy navigation configuration must be an object.");
+    }
+
+    if (type === "header") {
+        const navigationResult = z.array(legacyNavigationItemSchema)
+            .safeParse(configResult.data.navigation);
+        if (!navigationResult.success) {
+            throw new ValidationError(
+                "Legacy header navigation is not safe to normalize.",
+                navigationResult.error.issues,
+            );
+        }
+        return parseNavigationConfig("header", {
+            ...configResult.data,
+            navigation: navigationResult.data.map(normalizeLegacyNavigationItem),
+        });
+    }
+
+    const menusResult = z.array(legacyFooterMenuSchema)
+        .safeParse(configResult.data.menus);
+    if (!menusResult.success) {
+        throw new ValidationError(
+            "Legacy footer navigation is not safe to normalize.",
+            menusResult.error.issues,
+        );
+    }
+    return parseNavigationConfig("footer", {
+        ...configResult.data,
+        menus: menusResult.data.map((menu) => ({
+            ...menu,
+            links: menu.links.map(normalizeLegacyNavigationItem),
+        })),
+    });
+}
+
+export type PersistedNavigationConfigState =
+    | "ready"
+    | "legacy_normalized"
+    | "invalid";
+
+export interface PersistedNavigationConfigRead {
+    config: Record<string, unknown>;
+    state: PersistedNavigationConfigState;
+    message?: string;
+}
+
+/**
+ * Read one persisted section without allowing its corruption to poison the
+ * sibling section. Legacy conversion is in-memory only; explicit save commands
+ * remain the sole write path for the typed result.
+ */
+export function readPersistedNavigationConfig(
+    type: "header" | "footer",
+    rawValue: string | null | undefined,
+): PersistedNavigationConfigRead {
+    if (!rawValue) return { config: {}, state: "ready" };
+
+    let decoded: unknown;
+    try {
+        decoded = JSON.parse(rawValue);
+    } catch {
+        return {
+            config: {},
+            state: "invalid",
+            message: `Stored ${type} configuration is invalid. Re-save this section in Settings.`,
+        };
+    }
+
+    try {
+        return { config: parseNavigationConfig(type, decoded), state: "ready" };
+    } catch {
+        // The typed authority failed. Only the exact former demo shape gets a
+        // second, strict normalization attempt.
+    }
+
+    try {
+        return {
+            config: normalizeLegacyNavigationConfig(type, decoded),
+            state: "legacy_normalized",
+            message: `Legacy ${type} navigation was normalized in memory. Save this section to persist typed targets.`,
+        };
+    } catch {
+        return {
+            config: {},
+            state: "invalid",
+            message: `Stored ${type} configuration is invalid. Re-save this section in Settings.`,
+        };
+    }
 }
 
 export type SaveNavigationConfigInput = z.infer<typeof saveNavigationConfigSchema>;

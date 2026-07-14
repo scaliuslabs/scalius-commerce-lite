@@ -107,6 +107,10 @@ function createTestApp() {
   mocks.getGeneralSettings.mockResolvedValue({
     headerConfig: {},
     footerConfig: {},
+    navigationReadiness: {
+      header: { state: "ready" },
+      footer: { state: "ready" },
+    },
   });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
@@ -276,6 +280,43 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(500);
     expect(body).toMatchObject({ success: false });
+  });
+
+  it("returns section-local navigation diagnostics without failing general settings", async () => {
+    const { app, env } = createTestApp();
+    mocks.getGeneralSettings.mockResolvedValueOnce({
+      headerConfig: { navigation: [] },
+      footerConfig: {
+        menus: [{ id: "help", title: "Help", links: [] }],
+      },
+      navigationReadiness: {
+        header: {
+          state: "invalid",
+          message: "Stored header configuration is invalid.",
+        },
+        footer: { state: "ready" },
+      },
+    });
+
+    const response = await app.request(
+      "/api/v1/admin/settings/general",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      success: true,
+      data: {
+        headerConfig: { navigation: [] },
+        footerConfig: { menus: [{ id: "help" }] },
+        navigationReadiness: {
+          header: { state: "invalid" },
+          footer: { state: "ready" },
+        },
+      },
+    });
   });
 
   it("exposes return policy settings on SEO reads", async () => {
