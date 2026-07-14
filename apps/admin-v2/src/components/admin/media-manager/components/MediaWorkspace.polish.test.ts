@@ -28,7 +28,7 @@ describe("media workspace polish boundaries", () => {
   });
 
   it("keeps library-management commands out of picker workspaces", () => {
-    expect(workspace).toContain("allowManagement={!picker}");
+    expect(workspace.match(/allowManagement=\{!picker\}/g)).toHaveLength(2);
   });
 
   it("protects unsaved preview metadata before close or navigation", () => {

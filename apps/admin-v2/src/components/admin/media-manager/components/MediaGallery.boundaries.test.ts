@@ -25,4 +25,9 @@ describe("media gallery presentation boundaries", () => {
     expect(gallery).toContain("props.onToggleSelection(file.id, event.shiftKey)");
     expect(gallery).toContain("props.onFileSelect(file, event.shiftKey)");
   });
+
+  it("forwards standalone-library management authority to every card", () => {
+    expect(gallery).toContain("allowManagement={props.allowManagement}");
+    expect(card).toContain("{allowManagement && <DropdownMenu>");
+  });
 });

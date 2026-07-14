@@ -9,6 +9,7 @@ interface MediaGalleryProps {
   files: LibraryMediaFile[];
   selectedFileIds: string[];
   selectionMode: boolean;
+  allowManagement: boolean;
   view: MediaLibraryView;
   isLoading: boolean;
   isLoadingMore: boolean;
@@ -62,6 +63,7 @@ export function MediaGallery(props: MediaGalleryProps) {
             posterUrl={resolveSavedPoster(file, props.files).posterUrl}
             selected={props.selectedFileIds.includes(file.id)}
             selectionMode={props.selectionMode}
+            allowManagement={props.allowManagement}
             view={props.view}
             onActivate={(event) => props.onFileSelect(file, event.shiftKey)}
             onPreview={(event) => props.onFilePreview(file, event)}
