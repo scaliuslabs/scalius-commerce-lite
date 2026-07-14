@@ -50,7 +50,7 @@ function sha(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function fixture(manifest, remoteReuse = {}) {
+async function fixture(manifest, remoteReuse = {}, retainedReplacement = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "scalius-media-upload-"));
   directories.push(directory);
   const stagedDir = path.join(directory, "staged");
@@ -86,6 +86,7 @@ async function fixture(manifest, remoteReuse = {}) {
         optionAppearanceVerified: true,
       },
       ...(remoteReuse[expected.logicalKey] ? { remoteReuse: remoteReuse[expected.logicalKey] } : {}),
+      ...(retainedReplacement[expected.logicalKey] ? { retainedReplacement: retainedReplacement[expected.logicalKey] } : {}),
     };
     records.push(record);
     stagedAssets.push({
@@ -218,6 +219,75 @@ describe("demo-store Media upload bridge", () => {
       expect.stringMatching(/^initiate:/u), "part:session_2:1", "part:session_2:2", "complete:session_2", "update:media_new_2",
     ]);
     expect(result.report.assets.every((asset) => asset.status === "ready" && asset.sha256.length === 64)).toBe(true);
+  });
+
+  it("uploads generated replacements for retained Media with exact old authority", async () => {
+    const retainedId = "prod_retained_123";
+    const logicalKey = "retained:primary";
+    const manifest = manifestWith(product("retained", [media(logicalKey, "primary")], retainedId));
+    const replacements = {
+      [logicalKey]: { productId: retainedId, mediaId: "media_old_primary" },
+    };
+    const input = await fixture(manifest, {}, replacements);
+    const staged = input.stagedReport.assets[0];
+    const old = {
+      id: "media_old_primary", filename: "old.png", kind: "image", mimeType: "image/png",
+      size: 12, url: "https://cdn.test/old", status: "ready", version: 1,
+      createdAt: "2026-07-13T00:00:00.000Z", width: 1200, height: 900, posterMediaId: null,
+    };
+    const remoteMedia = [old];
+    const mediaClient = {
+      getSession: vi.fn(),
+      initiate: vi.fn(async (request) => ({
+        id: "session_replacement", mediaId: "media_new_primary", filename: request.filename,
+        mimeType: request.mimeType, size: request.size, expectedParts: 1,
+        partSize: request.size, state: "initiated", uploadedParts: [],
+      })),
+      uploadPart: vi.fn(),
+      complete: vi.fn(async () => ({
+        id: "media_new_primary", filename: staged.output.filename, kind: "image",
+        mimeType: "image/webp", size: staged.output.bytes, url: "https://cdn.test/new",
+        status: "ready", version: 1, createdAt: "2026-07-13T00:00:00.000Z",
+        width: null, height: null, posterMediaId: null,
+      })),
+      update: vi.fn(async (_id, update) => {
+        const file = {
+          id: "media_new_primary", filename: staged.output.filename, kind: "image",
+          mimeType: "image/webp", size: staged.output.bytes, url: "https://cdn.test/new",
+          status: "ready", version: 2, createdAt: "2026-07-13T00:00:00.000Z",
+          width: update.width, height: update.height, altText: update.altText, posterMediaId: null,
+        };
+        remoteMedia.push(file);
+        return file;
+      }),
+    };
+    const state = () => ({
+      capturedAt: "2026-07-13T00:00:00.000Z",
+      media: remoteMedia,
+      retainedDetails: [{
+        id: retainedId,
+        slug: "retained",
+        media: [{ id: "pmed_old_primary", mediaId: old.id, status: "ready", posterMediaId: null }],
+      }],
+    });
+    const hashRemote = vi.fn();
+    const result = await runMediaUploadBridge({
+      manifest,
+      ...input,
+      readClient: {},
+      mediaClient,
+      readState: vi.fn(async () => state()),
+      hashRemote,
+      now: () => new Date("2026-07-13T01:00:00.000Z"),
+      requiredAssetCount: 1,
+    });
+    expect(result.summary).toMatchObject({ total: 1, uploaded: 1, reused: 0 });
+    expect(hashRemote).not.toHaveBeenCalled();
+    expect(result.report.assets[0]).toMatchObject({
+      logicalKey,
+      mediaId: "media_new_primary",
+      retainedReplacement: { productId: retainedId, mediaId: "media_old_primary" },
+    });
   });
 
   it("rejects all credential and session arguments", () => {

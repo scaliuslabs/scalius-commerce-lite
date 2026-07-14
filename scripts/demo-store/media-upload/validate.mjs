@@ -29,15 +29,23 @@ function assertGeneratedLicense(record) {
   }
 }
 
-function assertRemoteReuse(record, expected) {
-  if (record.remoteReuse === undefined) return null;
-  const reuse = record.remoteReuse;
-  if (!reuse || typeof reuse !== "object" || Array.isArray(reuse)) throw new Error(`${record.logicalKey}.remoteReuse must be an object.`);
-  if (!/^[A-Za-z0-9_-]{8,160}$/u.test(reuse.productId ?? "") || !/^[A-Za-z0-9_-]{8,160}$/u.test(reuse.mediaId ?? "")) {
-    throw new Error(`${record.logicalKey}.remoteReuse requires exact productId and mediaId values.`);
+function retainedMediaAuthority(record, expected) {
+  const fields = ["remoteReuse", "retainedReplacement"].filter((field) => record[field] !== undefined);
+  if (fields.length > 1) throw new Error(`${record.logicalKey} cannot both reuse and replace retained Media.`);
+  if (fields.length === 0) return { remoteReuse: null, retainedReplacement: null };
+  const field = fields[0];
+  const authority = record[field];
+  if (!authority || typeof authority !== "object" || Array.isArray(authority)) {
+    throw new Error(`${record.logicalKey}.${field} must be an object.`);
   }
-  if (!expected.owner.startsWith("product:")) throw new Error(`${record.logicalKey}.remoteReuse is allowed only for retained product media.`);
-  return { productId: reuse.productId, mediaId: reuse.mediaId };
+  if (!/^[A-Za-z0-9_-]{8,160}$/u.test(authority.productId ?? "") || !/^[A-Za-z0-9_-]{8,160}$/u.test(authority.mediaId ?? "")) {
+    throw new Error(`${record.logicalKey}.${field} requires exact productId and mediaId values.`);
+  }
+  if (!expected.owner.startsWith("product:")) throw new Error(`${record.logicalKey}.${field} is allowed only for retained product media.`);
+  return {
+    remoteReuse: field === "remoteReuse" ? { productId: authority.productId, mediaId: authority.mediaId } : null,
+    retainedReplacement: field === "retainedReplacement" ? { productId: authority.productId, mediaId: authority.mediaId } : null,
+  };
 }
 
 export async function validateCompleteStagedInputs({ manifest, sourceManifest, stagedReport, stagedDir, requiredAssetCount = 237 }) {
@@ -79,6 +87,7 @@ export async function validateCompleteStagedInputs({ manifest, sourceManifest, s
     const info = await stat(filePath);
     if (info.size !== output.bytes) throw new Error(`${expected.logicalKey} staged byte size changed.`);
     if (await fileSha256(filePath) !== output.sha256) throw new Error(`${expected.logicalKey} staged SHA-256 changed.`);
+    const retainedAuthority = retainedMediaAuthority(record, expected);
     entries.push({
       logicalKey: expected.logicalKey,
       expected,
@@ -86,7 +95,7 @@ export async function validateCompleteStagedInputs({ manifest, sourceManifest, s
       staged,
       output,
       filePath,
-      remoteReuse: assertRemoteReuse(record, expected),
+      ...retainedAuthority,
     });
   }
 
@@ -95,6 +104,7 @@ export async function validateCompleteStagedInputs({ manifest, sourceManifest, s
     sourceSha256: entry.record.sha256,
     outputSha256: entry.output.sha256,
     remoteReuse: entry.remoteReuse,
+    retainedReplacement: entry.retainedReplacement,
   })))).digest("hex");
   return { entries, fingerprint };
 }

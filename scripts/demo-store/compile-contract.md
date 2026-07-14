@@ -26,14 +26,17 @@ write-disabled inspection gate. It never enables execution.
 
 ## Retained resources
 
-Rider and Halo are always guarded base-only updates. Their command intents carry
-explicit preservation markers for SKU/option/media identities, inventory
-ledger, and reservations, and the compiler emits no option-matrix or SKU
-command for either product. Current activation, attributes, media-association
-IDs, and section IDs remain reference tokens until the apply binder resolves
-them from a fresh complete product read. Applying a retained command with an
-unresolved preservation reference is a compiler-consumer defect and must fail
-closed.
+Rider and Halo are guarded base plus option-matrix updates. Their command
+intents preserve product, SKU, option/value, stock, reservation, and inventory
+ledger authority. The base command computes the exact removed media
+associations referenced by live SKUs and acknowledges only those removals; the
+matrix then rebinds the same SKU IDs to the intended generated images while
+adopting current operational facts. This allows unprovable demo assets to be
+retired without resetting inventory or weakening the exact-SKU-image model.
+Current activation, attributes, SKU/option/value identities, and section IDs
+remain reference tokens until the apply binder resolves them from a fresh
+complete product read. Any missing topology, replacement authority, or
+unresolved preservation reference fails closed.
 
 Existing non-retained option matrices adopt current SKU, stock, tracking,
 weight, barcode, option, value, and variant identities by exact option

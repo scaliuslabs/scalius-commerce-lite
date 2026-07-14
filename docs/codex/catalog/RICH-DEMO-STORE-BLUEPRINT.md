@@ -190,7 +190,7 @@ materials with proportions suited to apartments and everyday rooms.”
 
 | # | Product / slug | BDT | Options and SKU count | Media and exact-SKU image rule | Inventory / offer / delivery | Additional sections |
 | ---: | --- | ---: | --- | --- | --- | --- |
-| 1 | Halo Arc Table Lamp / `halo-arc-table-lamp` | 2,490 | Finish{Matte,Gloss}[none] x Plug{EU,US}[none], omit Gloss/US = 3 | Keep current image+video and exact Matte/EU assignment; add poster and one detail image; other rows fallback | Preserve live counts and Matte/EU 10% SKU offer | 3 |
+| 1 | Halo Arc Table Lamp / `halo-arc-table-lamp` | 2,490 | Finish{Matte,Gloss}[none] x Plug{EU,US}[none], omit Gloss/US = 3 | Replace the unapproved image/video, add an explicit poster and detail image, and let every SKU use the product-primary fallback; do not preserve a redundant exact assignment to the same featured image | Preserve live counts and Matte/EU 10% SKU offer | 3 |
 | 2 | Mira Pleated Bedside Lamp / `mira-pleated-bedside-lamp` | 3,290 | Shade{Oat,Ink}[color] x Plug{EU,US}[none] = 4 | 4: P,V:Oat,V:Ink,D; exact by Shade | steady; no offer | 0 |
 | 3 | Soma Handloom Cushion Cover / `soma-handloom-cushion-cover` | 1,290 | Size{45 cm,50 cm}[size] x Weave{Indigo,Clay}[pattern] = 4 | 4: P,V:Indigo,V:Clay,D; exact by Weave | deep; Indigo-45 SKU 10% | 2 |
 | 4 | Noor Ceramic Vase / `noor-ceramic-vase` | 2,190 | simple = 1 | 4: P,D,D,L; fallback | simple; no offer | 0 |

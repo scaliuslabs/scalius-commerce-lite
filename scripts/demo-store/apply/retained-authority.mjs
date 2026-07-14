@@ -29,7 +29,14 @@ export function assertRetainedProductAuthority(manifest, snapshot, readiness) {
     for (const variant of detail.variants ?? []) {
       if (![variant.stock, variant.reservedStock, variant.stockVersion].every(Number.isSafeInteger)) throw new Error(`Retained stock authority is incomplete for ${product.slug}.`);
     }
-    const stagedIds = new Set(product.media.filter((item) => item.role !== "poster").map((item) => readiness.assets.get(item.logicalKey)?.mediaId));
-    if ((detail.media ?? []).some((item) => item.status === "ready" && !stagedIds.has(item.mediaId))) throw new Error(`Retained media would be removed for ${product.slug}.`);
+    const allowedMediaIds = new Set(product.media
+      .filter((item) => item.role !== "poster")
+      .flatMap((item) => {
+        const asset = readiness.assets.get(item.logicalKey);
+        return [asset?.mediaId, asset?.retainedReplacement?.mediaId].filter(Boolean);
+      }));
+    if ((detail.media ?? []).some((item) => item.status === "ready" && !allowedMediaIds.has(item.mediaId))) {
+      throw new Error(`Retained media would be removed without exact replacement authority for ${product.slug}.`);
+    }
   }
 }

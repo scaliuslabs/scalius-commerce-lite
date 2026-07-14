@@ -76,6 +76,18 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
         if (!brand) throw new Error("The filterable Brand attribute must exist before product apply.");
         return [...(detail.attributes ?? []).filter((item) => item.attributeId !== brand?.id), { attributeId: brand.id, value: product.brand }];
       }
+      if (reference.field === "removedSkuImageIds") {
+        const desiredMediaIds = new Set(product.media
+          .filter((item) => item.role !== "poster")
+          .map((item) => readiness.assets.get(item.logicalKey)?.mediaId)
+          .filter(Boolean));
+        const removedAssociationIds = new Set((detail.media ?? [])
+          .filter((item) => !desiredMediaIds.has(item.mediaId))
+          .map((item) => item.id));
+        return [...new Set((detail.variants ?? [])
+          .map((variant) => variant.imageId)
+          .filter((imageId) => imageId && removedAssociationIds.has(imageId)))];
+      }
       return fieldValue(detail, reference.field);
     }
     if (key.startsWith("bound-product-media:")) {
