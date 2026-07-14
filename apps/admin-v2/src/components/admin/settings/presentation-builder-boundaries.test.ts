@@ -45,6 +45,7 @@ describe("header and footer builder workflow boundaries", () => {
   it("keeps nested presentation workspaces addressable", () => {
     const route = source("../../../routes/admin/settings/index.tsx");
     const settingsPage = source("./GeneralSettingsPage.tsx");
+    const headerBuilder = source("../header-builder/HeaderBuilder.tsx");
 
     expect(route).toContain("normalizeGeneralSettingsPanel");
     expect(route).toContain("panel: normalizeGeneralSettingsPanel");
@@ -52,5 +53,8 @@ describe("header and footer builder workflow boundaries", () => {
     expect(settingsPage).toContain("activePanel={headerPanel}");
     expect(settingsPage).toContain("activePanel={footerPanel}");
     expect(settingsPage).toContain("onPanelChange={onPanelChange}");
+    expect(headerBuilder).toContain('<TabsTrigger\n            value="announcement"');
+    expect(headerBuilder).toContain('<TabsContent value="announcement"');
+    expect(headerBuilder).not.toContain('value="top-bar"');
   });
 });

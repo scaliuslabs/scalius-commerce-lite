@@ -152,7 +152,7 @@ export function HeaderBuilder({
             Branding
           </TabsTrigger>
           <TabsTrigger
-            value="top-bar"
+            value="announcement"
             className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
           >
             <Megaphone className="h-4 w-4" />
@@ -185,7 +185,7 @@ export function HeaderBuilder({
           />
         </TabsContent>
 
-        <TabsContent value="top-bar" className="mt-0 min-w-0">
+        <TabsContent value="announcement" className="mt-0 min-w-0">
           <TopBarSection
             topBar={config.topBar}
             onChange={(topBar) => setConfig((prev) => ({ ...prev, topBar }))}
