@@ -81,7 +81,11 @@ const DEFAULT_OPTIONS: ImageOptimizationOptions = {
   height: 600,
   quality: 85,
   format: "auto",
-  fit: "cover",
+  // Preserve the whole merchant asset unless the presentation explicitly
+  // opts into a crop (hero banners and intentionally cropped thumbnails do).
+  // Cloudflare's native default is also scale-down, so this avoids surprising
+  // destructive crops and unnecessary upscaling in generic admin previews.
+  fit: "scale-down",
   sharpen: 1,
 };
 
