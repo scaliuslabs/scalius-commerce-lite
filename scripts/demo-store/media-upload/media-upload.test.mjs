@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildExpectedAssets } from "../assets/expected-assets.mjs";
 import { deterministicAssetFilename } from "../assets/profiles.mjs";
 import { parseMediaUploadArgs } from "./cli.mjs";
+import { createMediaUploadClient } from "./client.mjs";
 import { runMediaUploadBridge } from "./run.mjs";
 import { validateCompleteStagedInputs } from "./validate.mjs";
 
@@ -121,6 +122,30 @@ async function fixture(manifest, remoteReuse = {}, retainedReplacement = {}) {
 }
 
 describe("demo-store Media upload bridge", () => {
+  it("paces durable Media commands instead of concentrating D1 writes", async () => {
+    const sleeps = [];
+    const fetchImpl = vi.fn(async (_url, init) => new Response(JSON.stringify({
+      success: true,
+      data: init.method === "POST"
+        ? { session: { id: opaqueId("mup", "paced"), mediaId: opaqueId("media", "paced") } }
+        : { session: { id: opaqueId("mup", "paced"), mediaId: opaqueId("media", "paced") } },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const client = createMediaUploadClient({
+      adminOrigin: "https://dashboard.test",
+      cookieHeader: "session=opaque",
+      fetchImpl,
+      minimumRequestIntervalMs: 250,
+      sleep: async (milliseconds) => { sleeps.push(milliseconds); },
+      now: () => 1_000,
+    });
+
+    await client.initiate({ filename: "demo.webp", mimeType: "image/webp", size: 100 });
+    await client.getSession(opaqueId("mup", "paced"));
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleeps).toEqual([250]);
+  });
+
   it("rejects partial staging before any remote work", async () => {
     const manifest = manifestWith(product("test", [media("test:primary", "primary")]));
     const input = await fixture(manifest);

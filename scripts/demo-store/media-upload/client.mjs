@@ -12,9 +12,28 @@ async function responseJson(response, label) {
   try { return text ? JSON.parse(text) : null; } catch { throw new Error(`${label} response was not valid JSON.`); }
 }
 
-export function createMediaUploadClient({ adminOrigin, cookieHeader, fetchImpl = fetch, timeoutMs = 30_000 }) {
+export function createMediaUploadClient({
+  adminOrigin,
+  cookieHeader,
+  fetchImpl = fetch,
+  timeoutMs = 30_000,
+  minimumRequestIntervalMs = 250,
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  now = () => Date.now(),
+}) {
+  if (!Number.isSafeInteger(minimumRequestIntervalMs) || minimumRequestIntervalMs < 0 || minimumRequestIntervalMs > 5_000) {
+    throw new Error("Media upload request interval must be between 0 and 5000 milliseconds.");
+  }
+  let nextRequestAt = 0;
+
+  async function pace() {
+    const waitMs = Math.max(0, nextRequestAt - now());
+    if (waitMs > 0) await sleep(waitMs);
+  }
+
   async function request(path, init, label) {
     let response;
+    await pace();
     try {
       response = await fetchImpl(`${adminOrigin}${MEDIA_API}${path}`, {
         ...init,
@@ -24,6 +43,8 @@ export function createMediaUploadClient({ adminOrigin, cookieHeader, fetchImpl =
       });
     } catch (error) {
       throw new Error(`${label} ended without a definitive response.`, { cause: error });
+    } finally {
+      nextRequestAt = now() + minimumRequestIntervalMs;
     }
     if (!response.ok) {
       await response.body?.cancel();

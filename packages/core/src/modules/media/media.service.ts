@@ -22,7 +22,7 @@ import {
     validateMediaFileMetadata,
     validateMediaSignature,
 } from "@scalius/shared/media-policy";
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gt, inArray, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import {
@@ -218,12 +218,21 @@ export async function listMediaFiles(db: Database, input: {
             (sortBy === "filename" && (typeof cursor.value !== "string" || cursor.value.length > 255)) ||
             (sortBy !== "filename" && (typeof cursor.value !== "number" || !Number.isSafeInteger(cursor.value) || cursor.value < 0))
         ) throw new ValidationError("Media cursor value is invalid.");
-        const cursorValue = sortBy === "createdAt"
-            ? new Date(Number(cursor.value))
-            : cursor.value;
-        const compare = sortOrder === "asc"
-            ? or(sql`${sortColumn} > ${cursorValue}`, and(eq(sortColumn, cursorValue), sql`${media.id} > ${cursor.id}`))
-            : or(sql`${sortColumn} < ${cursorValue}`, and(eq(sortColumn, cursorValue), sql`${media.id} < ${cursor.id}`));
+        const idCompare = sortOrder === "asc" ? gt(media.id, cursor.id) : lt(media.id, cursor.id);
+        const compare = sortBy === "createdAt"
+            ? (() => {
+                const value = new Date(Number(cursor.value));
+                return sortOrder === "asc"
+                    ? or(gt(media.createdAt, value), and(eq(media.createdAt, value), idCompare))
+                    : or(lt(media.createdAt, value), and(eq(media.createdAt, value), idCompare));
+            })()
+            : sortBy === "size"
+                ? sortOrder === "asc"
+                    ? or(gt(media.size, Number(cursor.value)), and(eq(media.size, Number(cursor.value)), idCompare))
+                    : or(lt(media.size, Number(cursor.value)), and(eq(media.size, Number(cursor.value)), idCompare))
+                : sortOrder === "asc"
+                    ? or(gt(media.filename, String(cursor.value)), and(eq(media.filename, String(cursor.value)), idCompare))
+                    : or(lt(media.filename, String(cursor.value)), and(eq(media.filename, String(cursor.value)), idCompare));
         if (compare) conditions.push(compare);
     }
 
