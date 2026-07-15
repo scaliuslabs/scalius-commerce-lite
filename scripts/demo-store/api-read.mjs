@@ -123,16 +123,17 @@ export async function readAdminSnapshot(client, manifest) {
   const accountSecurity = await client.get("/api/v1/admin/auth/account-security", "Account security");
   if (!accountSecurity || typeof accountSecurity !== "object") throw new Error("Account security did not confirm an authenticated admin session.");
 
-  const [categories, products, media, attributes, collections, general, theme, heroes] = await Promise.all([
-    listPaged(client, { path: "/api/v1/admin/categories", collectionKey: "categories", label: "Categories", params: { sort: "createdAt", order: "asc" } }),
-    listPaged(client, { path: "/api/v1/admin/products", collectionKey: "products", label: "Products", params: { sort: "createdAt", order: "asc" } }),
-    listCursor(client, { path: "/api/v1/admin/media", collectionKey: "files", label: "Media", params: { view: "ready", sortBy: "createdAt", sortOrder: "asc" } }),
-    listPaged(client, { path: "/api/v1/admin/attributes", collectionKey: "attributes", label: "Attributes", params: { sort: "createdAt", order: "asc" } }),
-    listPaged(client, { path: "/api/v1/admin/collections", collectionKey: "collections", label: "Collections", params: { sort: "createdAt", order: "asc" } }),
-    client.get("/api/v1/admin/settings/general", "General settings"),
-    client.get("/api/v1/admin/settings/theme", "Theme settings"),
-    client.get("/api/v1/admin/settings/hero-sliders", "Hero settings"),
-  ]);
+  // This is an operational reconciliation, not a latency-sensitive UI read.
+  // Keep D1-backed requests sequential so a large demo run cannot create a
+  // cross-route read burst while the catalog is already being prepared.
+  const categories = await listPaged(client, { path: "/api/v1/admin/categories", collectionKey: "categories", label: "Categories", params: { sort: "createdAt", order: "asc" } });
+  const products = await listPaged(client, { path: "/api/v1/admin/products", collectionKey: "products", label: "Products", params: { sort: "createdAt", order: "asc" } });
+  const media = await listCursor(client, { path: "/api/v1/admin/media", collectionKey: "files", label: "Media", params: { view: "ready", sortBy: "createdAt", sortOrder: "asc" } });
+  const attributes = await listPaged(client, { path: "/api/v1/admin/attributes", collectionKey: "attributes", label: "Attributes", params: { sort: "createdAt", order: "asc" } });
+  const collections = await listPaged(client, { path: "/api/v1/admin/collections", collectionKey: "collections", label: "Collections", params: { sort: "updatedAt", order: "asc" } });
+  const general = await client.get("/api/v1/admin/settings/general", "General settings");
+  const theme = await client.get("/api/v1/admin/settings/theme", "Theme settings");
+  const heroes = await client.get("/api/v1/admin/settings/hero-sliders", "Hero settings");
 
   const productBySlug = exactUniqueBySlug(products, "Products");
   const desiredProductSlugs = new Set(manifest.products.map((product) => product.slug));
