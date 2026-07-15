@@ -276,7 +276,7 @@ The cleanup bullets below describe the two-product proof store that preceded the
 - The obsolete `storefront-test` -> `testdash` Worker chain was removed after dependency inspection. This also removed `testdash` from the payment-events, order-notifications, and auth-otp production producer lists; a subsequent queue topology check showed only the source-owned API and ops-monitor producers.
 - Latest navigation-source release: API
   `2931f2ad-a71d-45ac-8bf3-5d7efa5f8d8f` and admin
-  `1abad8b2-ce37-4b6d-89e2-9fde4a687dee`. A live Computer Use run in the
+  `14b4cb39-58c8-4f3d-bbd8-23e0fa514dfd`. A live Computer Use run in the
   Abdur Rob Chrome profile reproduced a merchant-only defect that deterministic
   catalog seeding could not: a newly selected category was staged as “Label
   only” with “Checking resource” until the page was reloaded. Resource picker
@@ -286,12 +286,21 @@ The cleanup bullets below describe the two-product proof store that preceded the
   category picker is limited to published categories, and category/product/
   collection picker previews honor valid canonical routes. After a fresh
   deployed-bundle reload, the same visible workflow staged Desk & Mobile Tech
-  with its real label, `/categories/desk-mobile-tech`, and readiness `ready`.
+  with its real label and `/categories/desk-mobile-tech`. Shopify's current
+  menu editor was inspected read-only in the merchant's existing session: it
+  keeps healthy destinations quiet and reserves row copy for an action or an
+  exceptional state. The Scalius editor now follows that rule: it no longer
+  exposes internal `ready` or `resource_draft_or_internal` values, and instead
+  uses concise merchant-facing exceptions such as `Not public`, `In trash`,
+  and `Unavailable`.
   The form is intentionally still unsaved while Computer Use is blocked by a
   locked Mac; no broken or partial navigation was published. The navigation
-  suite passed 57 tests, Core/Admin typechecks ran sequentially, both deploys
-  completed, and `pnpm release:check` passed after one transient queue-info
-  retry.
+  suite passed 57 tests, the follow-up readiness-copy slice passed 13 focused
+  tests, Core/Admin typechecks ran sequentially, and the deployments completed.
+  Both exact production queue probes passed. Wrangler's aggregate queue probe
+  then timed out twice despite those successful exact reads; the independent
+  `pnpm release:check --skip-wrangler` product/API/storefront/discovery/UCP gate
+  passed after the queue topology was verified separately.
 - Demo operating rule: the guarded API executor is a reproducible bulk-fixture
   mechanism, not merchant-workflow proof. Every representative product create/
   edit, media assignment, navigation/settings publication, checkout, order,

@@ -70,6 +70,8 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain("normalizedQuery || activeDragId || dragStatus");
     expect(source).toContain('window.setTimeout(() => setDragStatus(""), 3500)');
     expect(source).toContain("Arrange and edit storefront links.");
+    expect(source).toContain('return "Not public"');
+    expect(source).not.toContain('readiness.replaceAll("_", " ")');
     expect(source).not.toContain("Drag vertically to reorder siblings");
   });
 

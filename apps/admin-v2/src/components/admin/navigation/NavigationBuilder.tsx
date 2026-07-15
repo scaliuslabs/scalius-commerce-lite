@@ -92,6 +92,26 @@ function itemLabel(item: NavigationItem | undefined, fallback = "menu item"): st
   return item ? getNavigationItemLabel(item) : fallback;
 }
 
+function navigationDestinationHint(item: NavigationItem): string | null {
+  if (item.target.type === "label") return "Non-clickable group";
+  if (item.target.type !== "resource") return null;
+
+  switch (item.resolution?.readiness) {
+    case "ready":
+      return null;
+    case "resource_draft_or_internal":
+      return "Not public";
+    case "resource_trashed":
+      return "In trash";
+    case "resource_missing":
+      return "Unavailable";
+    case undefined:
+      return "Checking resource";
+    default:
+      return "Unavailable";
+  }
+}
+
 const navigationScreenReaderInstructions: ScreenReaderInstructions = {
   draggable:
     "Press Space to pick up a menu branch. Use Up and Down to choose a sibling position, then Space to drop or Escape to cancel. Use the Move action for an exact parent and position.",
@@ -462,6 +482,7 @@ export function NavigationBuilder({
         ? parseNavigationHref(row.item.resolution?.href)
         : parseNavigationHref(editableDestination);
       const previewHref = getNavigationItemHref(row.item);
+      const destinationHint = navigationDestinationHint(row.item);
       const canAddChild = row.depth + 1 < MAX_NAV_DEPTH;
       const descendantCount = countNavigationItems(row.item.subMenu ?? []);
       const label = getNavigationItemLabel(row.item);
@@ -523,13 +544,11 @@ export function NavigationBuilder({
             <div className="grid min-w-0 gap-1.5">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor={`nav-${row.item.id}-destination`}>Destination</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {resourceTarget
-                    ? row.item.resolution?.readiness.replaceAll("_", " ") ?? "Checking resource"
-                    : row.item.target.type === "label"
-                      ? "Non-clickable group"
-                      : "Custom destination"}
-                </span>
+                {destinationHint ? (
+                  <span className="text-[11px] text-muted-foreground">
+                    {destinationHint}
+                  </span>
+                ) : null}
               </div>
               <div className="flex min-w-0 gap-1.5">
                 <Input

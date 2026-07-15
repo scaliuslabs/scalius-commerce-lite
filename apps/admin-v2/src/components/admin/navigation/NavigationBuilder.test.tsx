@@ -158,4 +158,62 @@ describe("NavigationBuilder", () => {
     expect(document.body.textContent).toContain("Top level · Level 1 · Position 2 of 2");
     expect(host.querySelector("details")).toBeNull();
   });
+
+  it("keeps healthy resource internals quiet and explains only exceptional states", async () => {
+    const readyCategory: NavigationItem = {
+      id: "home",
+      target: {
+        type: "resource",
+        resourceType: "category",
+        resourceId: "cat_home",
+      },
+      labelMode: "resource",
+      lastKnownLabel: "Home & Living",
+      resolution: {
+        title: "Home & Living",
+        href: "/categories/home-living",
+        readiness: "ready",
+        available: true,
+      },
+    };
+
+    await act(async () =>
+      root.render(
+        <NavigationBuilder
+          navigation={[readyCategory]}
+          onChange={vi.fn()}
+          getStorefrontPath={(path) => `https://store.example${path}`}
+        />,
+      ),
+    );
+    act(() =>
+      (host.querySelector(
+        '[aria-label="Edit Home & Living, level 1"]',
+      ) as HTMLButtonElement).click(),
+    );
+
+    expect(host.textContent).not.toContain("ready");
+    expect((host.querySelector("#nav-home-destination") as HTMLInputElement).value)
+      .toBe("/categories/home-living");
+
+    await act(async () =>
+      root.render(
+        <NavigationBuilder
+          navigation={[{
+            ...readyCategory,
+            resolution: {
+              title: "Home & Living",
+              readiness: "resource_draft_or_internal",
+              available: false,
+            },
+          }]}
+          onChange={vi.fn()}
+          getStorefrontPath={(path) => `https://store.example${path}`}
+        />,
+      ),
+    );
+
+    expect(host.textContent).toContain("Not public");
+    expect(host.textContent).not.toContain("resource_draft_or_internal");
+  });
 });
