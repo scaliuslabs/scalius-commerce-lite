@@ -48,8 +48,8 @@ function productBaseMatches(command, current) {
     comparableList(command.body.attributes, ["attributeId", "value"]),
   )) return false;
   if (!equal(
-    comparableList(current.additionalInfo, ["id", "title", "content", "sortOrder"]),
-    comparableList(command.body.additionalInfo, ["id", "title", "content", "sortOrder"]),
+    comparableList(current.additionalInfo, ["title", "content", "sortOrder"]),
+    comparableList(command.body.additionalInfo, ["title", "content", "sortOrder"]),
   )) return false;
   return true;
 }

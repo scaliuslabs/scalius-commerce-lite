@@ -230,6 +230,13 @@ describe("complete desired-state runtime", () => {
       ...structuredClone(base.body),
       discountAmount: 0,
     })).toBe(true);
+    expect(await runtime.matchesDesired(base, {
+      ...structuredClone(base.body),
+      additionalInfo: [{
+        ...base.body.additionalInfo[0],
+        id: "prc_server_generated",
+      }],
+    })).toBe(true);
     expect(await runtime.matchesDesired(base, { ...structuredClone(base.body), metaDescription: "Drift" })).toBe(false);
     expect(await runtime.matchesDesired(base, {
       ...structuredClone(base.body),
