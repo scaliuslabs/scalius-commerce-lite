@@ -92,6 +92,12 @@ describe("retained product generated-Media replacement", () => {
       manifest: { products: [product], collections: [] },
       readiness,
       snapshot: snapshot(),
+      outputs: new Map([
+        ["product:retained:matrix", {
+          id: product.retainedProductId,
+          aggregateRevision: 1,
+        }],
+      ]),
     });
     const bound = binder.bind({
       logicalKey: "product:retained:activate",
@@ -112,5 +118,31 @@ describe("retained product generated-Media replacement", () => {
     });
     expect(bound.expectedRevision).toBe(7);
     expect(bound.body.expectedAggregateRevision).toBe(7);
+  });
+
+  it("keeps a newer in-run product stage revision over the initial snapshot", () => {
+    const binder = createApplyBinder({
+      manifest: { products: [product], collections: [] },
+      readiness,
+      snapshot: snapshot(),
+      outputs: new Map([
+        ["product:retained:matrix", {
+          id: product.retainedProductId,
+          aggregateRevision: 9,
+        }],
+      ]),
+    });
+    const bound = binder.bind({
+      logicalKey: "product:retained:activate",
+      method: "PUT",
+      path: "/api/v1/admin/products/prod_retained_123",
+      body: {
+        expectedAggregateRevision: {
+          $ref: "product:retained:matrix",
+          field: "aggregateRevision",
+        },
+      },
+    });
+    expect(bound.body.expectedAggregateRevision).toBe(9);
   });
 });

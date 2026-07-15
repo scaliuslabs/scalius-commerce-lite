@@ -42,8 +42,63 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
   if (brands.length > 1) throw new Error("Brand attribute identity is ambiguous.");
   const brand = brands.find((attribute) => attribute.name === "Brand" && attribute.filterable === true);
 
+  function freshestAuthority(output, current, revisionField, key) {
+    if (!output && !current) return null;
+    if (output?.id && current?.id && output.id !== current.id) {
+      throw new Error(`Resolved authority identity changed for ${key}.`);
+    }
+    const authority = { ...(current ?? {}), ...(output ?? {}) };
+    const outputRevision = output?.[revisionField];
+    const currentRevision = current?.[revisionField];
+    if (Number.isSafeInteger(currentRevision)
+      && (!Number.isSafeInteger(outputRevision) || currentRevision > outputRevision)) {
+      authority[revisionField] = currentRevision;
+    }
+    return authority;
+  }
+
+  function stageAuthority(key) {
+    const productStage = key.match(/^(product:[^:]+):(?:base|matrix|simple-sku)$/u);
+    if (productStage) {
+      const slug = productStage[1].slice("product:".length);
+      return freshestAuthority(
+        outputs.get(key),
+        context.detailsBySlug.get(slug),
+        "aggregateRevision",
+        key,
+      );
+    }
+    const categoryStage = key.match(/^category:([^:]+)$/u);
+    if (categoryStage) {
+      return freshestAuthority(
+        outputs.get(key),
+        context.categoriesBySlug.get(categoryStage[1]),
+        "revision",
+        key,
+      );
+    }
+    const collectionStage = (manifest.collections ?? []).find((item) => item.logicalKey === key);
+    if (collectionStage) {
+      return freshestAuthority(
+        outputs.get(key),
+        context.collectionsByName.get(collectionStage.name),
+        "version",
+        key,
+      );
+    }
+    const heroStage = key.match(/^hero-slider:([^:]+)$/u);
+    if (heroStage) {
+      const current = (snapshot.presentation?.heroes ?? snapshot.heroes ?? [])
+        .find((hero) => hero.type === heroStage[1]);
+      return freshestAuthority(outputs.get(key), current, "revision", key);
+    }
+    return null;
+  }
+
   function resolveReference(reference) {
     const key = reference.$ref;
+    const staged = stageAuthority(key);
+    if (staged) return fieldValue(staged, reference.field);
     if (outputs.has(key)) return fieldValue(outputs.get(key), reference.field);
     if (key === "attribute:brand") {
       if (!brand) throw new Error("The filterable Brand attribute must exist before product apply.");
@@ -61,13 +116,6 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
       const category = context.categoriesBySlug.get(key.slice("category:".length));
       if (!category) throw new Error(`Category reference is unresolved: ${key}.`);
       return fieldValue(category, reference.field);
-    }
-    const productStage = key.match(/^(product:[^:]+):(?:base|matrix|simple-sku)$/u);
-    if (productStage) {
-      const slug = productStage[1].slice("product:".length);
-      const detail = context.detailsBySlug.get(slug);
-      if (!detail) throw new Error(`Product stage reference is unresolved: ${key}.`);
-      return fieldValue(detail, reference.field);
     }
     if (key.startsWith("current-product:")) {
       const slug = key.slice("current-product:".length);
