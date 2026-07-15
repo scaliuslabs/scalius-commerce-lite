@@ -69,6 +69,17 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
   });
 
+  it("authorizes category publication readiness and status endpoints", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/categories/cat_1/publish-readiness",
+      "GET",
+    )).toEqual({ permission: PERMISSIONS.CATEGORIES_VIEW });
+    expect(getRoutePermission(
+      "/api/v1/admin/categories/cat_1/status",
+      "PATCH",
+    )).toEqual({ permission: PERMISSIONS.CATEGORIES_EDIT });
+  });
+
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
