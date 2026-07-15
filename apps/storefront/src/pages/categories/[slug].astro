@@ -128,6 +128,7 @@ const activeFilterCount = Object.keys(currentFilters).filter(
 // Include product name for richer analytics data
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
 const analyticsProductData = products.map((p) => ({
   id: p.id,
@@ -406,6 +407,7 @@ const collectionJsonLd =
                     <ProductCard
                       product={product}
                       currencySymbol={currencySymbol}
+                      currencyCode={currencyCode}
                     />
                   ))}
                 </div>

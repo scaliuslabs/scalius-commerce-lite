@@ -97,6 +97,7 @@ const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy 
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
 // Include product name for richer analytics data
 const analyticsProductData = products.map((p) => ({
@@ -276,7 +277,7 @@ const analyticsProductData = products.map((p) => ({
               <Fragment>
                 <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
                   {products.map((product) => (
-                    <ProductCard product={product} currencySymbol={currencySymbol} />
+                    <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />
                   ))}
                 </div>
 
