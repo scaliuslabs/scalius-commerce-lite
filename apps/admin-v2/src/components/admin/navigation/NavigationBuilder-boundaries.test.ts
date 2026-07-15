@@ -32,7 +32,8 @@ describe("navigation workspace boundaries", () => {
     expect(source).toContain('from "@dnd-kit/core"');
     expect(source).toContain("PointerSensor");
     expect(source).toContain("KeyboardSensor");
-    expect(source).toContain("sortableKeyboardCoordinates");
+    expect(source).toContain("createNavigationKeyboardCoordinates");
+    expect(source).toContain("onDragOver={updateDragIntent}");
     expect(source).toContain("pointerWithin");
     expect(source).toContain("getNavigationDropOperationAtPoint");
     expect(source).toContain('dragIntent.operation !== "inside"');
