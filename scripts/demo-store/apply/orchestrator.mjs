@@ -10,6 +10,26 @@ export class DemoApplyPhaseBlockedError extends Error {
   }
 }
 
+function supersedingCompletionKey(phase, logicalKey) {
+  if (["quarantine", "stage_products"].includes(phase)) {
+    const product = logicalKey.match(/^(product:[^:]+):(?:base|matrix|simple-sku)$/u);
+    if (product) return `${product[1]}:activate`;
+  }
+  if (["quarantine", "stage_collections"].includes(phase)) {
+    const collection = logicalKey.match(/^(collection:[^:]+)(?::quarantine)?$/u);
+    if (collection) return `${collection[1]}:activate`;
+  }
+  if (["quarantine", "stage_heroes"].includes(phase)) {
+    const hero = logicalKey.match(/^(hero-slider:[^:]+)(?::quarantine)?$/u);
+    if (hero) return `${hero[1]}:activate`;
+  }
+  if (phase === "stage_categories") {
+    const category = logicalKey.match(/^(category:[^:]+)$/u);
+    if (category) return `${category[1]}:publish`;
+  }
+  return null;
+}
+
 export async function runDemoApplyLifecycle({
   manifest,
   publicationIntent = {},
@@ -35,6 +55,8 @@ export async function runDemoApplyLifecycle({
     }
     const outcomes = [];
     for (const intent of phase.commands) {
+      const supersedingKey = supersedingCompletionKey(phase.name, intent.logicalKey);
+      if (supersedingKey && resume.completed.has(supersedingKey)) continue;
       const command = await bindCommand(intent, { outputs, completed: resume.completed, phase: phase.name });
       const outcome = await executeCommand(command, { phase: phase.name });
       if (!["applied", "already_applied", "adopted_after_ambiguous_response"].includes(outcome.status)) {
