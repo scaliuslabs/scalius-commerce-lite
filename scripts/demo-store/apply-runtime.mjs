@@ -19,13 +19,26 @@ function equalFields(current, desired, fields) {
   return fields.every((field) => (current?.[field] ?? null) === (desired?.[field] ?? null));
 }
 
+function comparableDiscount(value) {
+  return {
+    discountType: value?.discountType === "flat" ? "flat" : "percentage",
+    discountPercentage: value?.discountPercentage ?? 0,
+    discountAmount: value?.discountAmount ?? 0,
+  };
+}
+
+function discountMatches(current, desired) {
+  return equal(comparableDiscount(current), comparableDiscount(desired));
+}
+
 function productBaseMatches(command, current) {
   const scalarFields = [
-    "slug", "name", "description", "price", "categoryId", "isActive", "discountType",
-    "discountPercentage", "discountAmount", "freeDelivery", "metaTitle", "metaDescription",
+    "slug", "name", "description", "price", "categoryId", "isActive",
+    "freeDelivery", "metaTitle", "metaDescription",
     "canonicalPath", "noIndex", "excludeFromSitemap", "excludeFromProductFeed", "productCondition",
   ];
   if (!equalFields(current, command.body, scalarFields)) return false;
+  if (!discountMatches(current, command.body)) return false;
   if (!equal(
     comparableList(current.media, ["id", "mediaId", "altText", "isPrimary"]),
     comparableList(command.body.media, ["id", "mediaId", "altText", "isPrimary"]),
@@ -63,9 +76,7 @@ function optionMatrixMatches(command, current) {
     weight: variant.weight ?? null,
     barcode: variant.barcode ?? null,
     barcodeType: variant.barcodeType ?? null,
-    discountType: variant.discountType ?? null,
-    discountPercentage: variant.discountPercentage ?? null,
-    discountAmount: variant.discountAmount ?? null,
+    ...comparableDiscount(variant),
   })).sort((left, right) => left.id.localeCompare(right.id));
   const actualVariants = (current.variants ?? []).filter((variant) => !variant.deletedAt).map((variant) => ({
     id: variant.id,
@@ -78,9 +89,7 @@ function optionMatrixMatches(command, current) {
     weight: variant.weight ?? null,
     barcode: variant.barcode ?? null,
     barcodeType: variant.barcodeType ?? null,
-    discountType: variant.discountType ?? null,
-    discountPercentage: variant.discountPercentage ?? null,
-    discountAmount: variant.discountAmount ?? null,
+    ...comparableDiscount(variant),
   })).sort((left, right) => left.id.localeCompare(right.id));
   return equal(actualVariants, desiredVariants);
 }
@@ -136,10 +145,11 @@ export function createApplyRuntime(readClient) {
       if (command.logicalKey.endsWith(":simple-sku")) {
         const variant = current.variants?.find((item) => item.id === command.identity.variantId)
           ?? current.variants?.find((item) => item.isDefault === true && !item.deletedAt);
-        return variant && equalFields(variant, command.body, [
-          "imageId", "weight", "sku", "price", "stock", "trackInventory", "discountType",
-          "discountPercentage", "discountAmount",
-        ]);
+        return Boolean(variant)
+          && equalFields(variant, command.body, [
+            "imageId", "weight", "sku", "price", "stock", "trackInventory",
+          ])
+          && discountMatches(variant, command.body);
       }
       if (command.logicalKey.startsWith("product:")) return productBaseMatches(command, current);
       if (command.logicalKey.startsWith("collection:")) {

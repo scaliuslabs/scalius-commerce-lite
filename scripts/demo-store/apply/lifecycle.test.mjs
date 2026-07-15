@@ -226,7 +226,16 @@ describe("complete desired-state runtime", () => {
       },
     };
     expect(await runtime.matchesDesired(base, structuredClone(base.body))).toBe(true);
+    expect(await runtime.matchesDesired(base, {
+      ...structuredClone(base.body),
+      discountAmount: 0,
+    })).toBe(true);
     expect(await runtime.matchesDesired(base, { ...structuredClone(base.body), metaDescription: "Drift" })).toBe(false);
+    expect(await runtime.matchesDesired(base, {
+      ...structuredClone(base.body),
+      discountPercentage: 9,
+      discountAmount: 0,
+    })).toBe(false);
 
     const matrix = {
       logicalKey: "product:demo:matrix",
@@ -248,8 +257,39 @@ describe("complete desired-state runtime", () => {
       }],
     };
     expect(await runtime.matchesDesired(matrix, current)).toBe(true);
+    current.variants[0].discountAmount = 0;
+    expect(await runtime.matchesDesired(matrix, current)).toBe(true);
     current.variants[0].price = 1299;
     expect(await runtime.matchesDesired(matrix, current)).toBe(false);
+  });
+
+  it("accepts canonical zeroes for an inactive simple-SKU discount arm", async () => {
+    const runtime = createDemoLifecycleRuntime({});
+    const command = {
+      logicalKey: "product:demo:simple-sku",
+      identity: { variantId: "variant_default" },
+      body: {
+        imageId: null,
+        weight: null,
+        sku: "DEMO",
+        price: 1200,
+        stock: 8,
+        trackInventory: true,
+        discountType: "percentage",
+        discountPercentage: 0,
+        discountAmount: null,
+      },
+    };
+    const current = {
+      variants: [{
+        ...command.body,
+        id: "variant_default",
+        isDefault: true,
+        discountAmount: 0,
+        deletedAt: null,
+      }],
+    };
+    expect(await runtime.matchesDesired(command, current)).toBe(true);
   });
 });
 
