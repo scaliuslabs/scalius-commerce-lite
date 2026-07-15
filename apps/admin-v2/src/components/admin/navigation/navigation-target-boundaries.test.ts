@@ -9,22 +9,27 @@ function readSource(relativePath: string) {
 describe("typed navigation target boundaries", () => {
   it("offers all commerce resources and writes stable IDs instead of copied hrefs", () => {
     const source = readSource("./AddNavItemDialog.tsx");
+    const resourceSource = readSource("./navigation-source.ts");
 
     expect(source).toContain('| "product"');
     expect(source).toContain('| "collection"');
-    expect(source).toContain('resourceType: "page"');
-    expect(source).toContain('resourceType: "category"');
-    expect(source).toContain('resourceType: activeType');
-    expect(source).toContain('labelMode: "resource"');
+    expect(source).toContain("createResourceNavigationItem");
+    expect(source).toContain('status: "published"');
+    expect(resourceSource).toContain("resourceType: source.type");
+    expect(resourceSource).toContain("resourceId: source.id");
+    expect(resourceSource).toContain("resolution:");
     expect(source).not.toContain("href: cat.url");
     expect(source).not.toContain("href: page.url");
   });
 
   it("keeps filtered categories as a stable category plus query projection", () => {
     const source = readSource("./AddNavItemDialog.tsx");
+    const resourceSource = readSource("./navigation-source.ts");
 
-    expect(source).toContain('resourceType: "category"');
-    expect(source).toContain("...(query ? { query } : {})");
-    expect(source).toContain('labelMode: "custom"');
+    expect(source).toContain("createResourceNavigationItem(category");
+    expect(source).toContain("customLabel: dynamicLabel");
+    expect(source).toContain("query,");
+    expect(resourceSource).toContain("parseNavigationQuery(options.query)");
+    expect(resourceSource).toContain('labelMode: customLabel ? "custom" : "resource"');
   });
 });

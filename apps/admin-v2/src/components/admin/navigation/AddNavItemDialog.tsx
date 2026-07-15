@@ -46,7 +46,9 @@ import {
 import { nanoid } from "nanoid";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
+import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import type { NavigationItem, NavigationSource } from "./types";
+import { createResourceNavigationItem } from "./navigation-source";
 import { getCategories } from "~/lib/api-functions/categories";
 import {
   getAttributes,
@@ -182,7 +184,12 @@ export function AddNavItemDialog({
 
       try {
         const data = await getCategories({
-          data: { page, limit: PAGE_SIZE, search: search || undefined },
+          data: {
+            page,
+            limit: PAGE_SIZE,
+            search: search || undefined,
+            status: "published",
+          },
         });
 
         const cats: NavigationSource[] = data.categories.map((c) => ({
@@ -190,7 +197,8 @@ export function AddNavItemDialog({
           name: c.name,
           slug: c.slug,
           type: "category",
-          url: `/categories/${c.slug}`,
+          url: normalizeResourceCanonicalPath("category", c.canonicalPath)
+            ?? `/categories/${c.slug}`,
         }));
 
         const pagination = data.pagination;
@@ -451,40 +459,18 @@ export function AddNavItemDialog({
 
     if (activeType === "category") {
       selectedCategoryMap.forEach((cat) => {
-        newItems.push({
-          id: nanoid(),
-          target: { type: "resource", resourceType: "category", resourceId: cat.id },
-          labelMode: "resource",
-          lastKnownLabel: cat.name,
-          subMenu: [],
-        });
+        newItems.push(createResourceNavigationItem(cat, { id: nanoid() }));
       });
     } else if (activeType === "page") {
       selectedPageMap.forEach((page) => {
-        newItems.push({
-          id: nanoid(),
-          target: { type: "resource", resourceType: "page", resourceId: page.id },
-          labelMode: "resource",
-          lastKnownLabel: page.name,
-          subMenu: [],
-        });
+        newItems.push(createResourceNavigationItem(page, { id: nanoid() }));
       });
     } else if (activeType === "product" || activeType === "collection") {
       const sourceMap = activeType === "product"
         ? selectedProductMap
         : selectedCollectionMap;
       sourceMap.forEach((resource) => {
-        newItems.push({
-          id: nanoid(),
-          target: {
-            type: "resource",
-            resourceType: activeType,
-            resourceId: resource.id,
-          },
-          labelMode: "resource",
-          lastKnownLabel: resource.name,
-          subMenu: [],
-        });
+        newItems.push(createResourceNavigationItem(resource, { id: nanoid() }));
       });
     } else if (activeType === "dynamic") {
       const category = allCategories.find((item) => item.id === dynamicCategory);
@@ -493,19 +479,11 @@ export function AddNavItemDialog({
         ? `?${generatedUrl.split("?")[1]}`
         : undefined;
       if (category && dynamicLabel.trim()) {
-        newItems.push({
+        newItems.push(createResourceNavigationItem(category, {
           id: nanoid(),
-          target: {
-            type: "resource",
-            resourceType: "category",
-            resourceId: category.id,
-            ...(query ? { query } : {}),
-          },
-          labelMode: "custom",
-          customLabel: dynamicLabel.trim(),
-          lastKnownLabel: category.name,
-          subMenu: [],
-        });
+          customLabel: dynamicLabel,
+          query,
+        }));
       }
     } else if (activeType === "custom") {
       if (customLabel.trim() && customUrlResult.ok && customUrlResult.href) {
