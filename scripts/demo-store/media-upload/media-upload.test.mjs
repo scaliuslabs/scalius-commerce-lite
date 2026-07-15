@@ -8,6 +8,7 @@ import { buildExpectedAssets } from "../assets/expected-assets.mjs";
 import { deterministicAssetFilename } from "../assets/profiles.mjs";
 import { parseMediaUploadArgs } from "./cli.mjs";
 import { createMediaUploadClient } from "./client.mjs";
+import { hashRemoteMedia } from "./remote.mjs";
 import { runMediaUploadBridge } from "./run.mjs";
 import { validateCompleteStagedInputs } from "./validate.mjs";
 
@@ -122,6 +123,35 @@ async function fixture(manifest, remoteReuse = {}, retainedReplacement = {}) {
 }
 
 describe("demo-store Media upload bridge", () => {
+  it("retries only bounded read-only remote verification failures", async () => {
+    const bytes = Buffer.from("verified remote media");
+    const sleeps = [];
+    const fetchImpl = vi.fn()
+      .mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"))
+      .mockResolvedValueOnce(new Response(bytes, {
+        status: 200,
+        headers: { "content-length": String(bytes.length) },
+      }));
+
+    await expect(hashRemoteMedia({
+      url: "https://cdn.test/demo.webp",
+      filename: "demo.webp",
+    }, bytes.length, {
+      fetchImpl,
+      maxAttempts: 3,
+      sleep: async (milliseconds) => { sleeps.push(milliseconds); },
+    })).resolves.toBe(sha(bytes));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleeps).toEqual([1_000]);
+
+    const permanentFetch = vi.fn(async () => new Response(null, { status: 404 }));
+    await expect(hashRemoteMedia({
+      url: "https://cdn.test/missing.webp",
+      filename: "missing.webp",
+    }, bytes.length, { fetchImpl: permanentFetch })).rejects.toThrow("HTTP 404");
+    expect(permanentFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("paces durable Media commands instead of concentrating D1 writes", async () => {
     const sleeps = [];
     const fetchImpl = vi.fn(async (_url, init) => new Response(JSON.stringify({

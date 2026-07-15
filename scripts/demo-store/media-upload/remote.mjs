@@ -38,34 +38,68 @@ export async function readFreshMediaState(readClient, manifest) {
   return { capturedAt: new Date().toISOString(), media, retainedDetails };
 }
 
-export async function hashRemoteMedia(file, expectedBytes, { fetchImpl = fetch, timeoutMs = 30_000 } = {}) {
+const RETRYABLE_REMOTE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+export async function hashRemoteMedia(file, expectedBytes, {
+  fetchImpl = fetch,
+  timeoutMs = 30_000,
+  maxAttempts = 3,
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+} = {}) {
   let url;
   try { url = new URL(file.url); } catch { throw new Error("Remote Media URL is invalid."); }
   const loopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
   if (url.protocol !== "https:" && !(loopback && url.protocol === "http:")) throw new Error("Remote Media URL must use HTTPS.");
-  const response = await fetchImpl(url, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
-  if (response.status !== 200 || !response.body) {
-    await response.body?.cancel();
-    throw new Error(`Remote Media verification failed with HTTP ${response.status}.`);
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 3) {
+    throw new Error("Remote Media verification attempts must be between 1 and 3.");
   }
-  const declared = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared !== expectedBytes) {
-    await response.body.cancel();
-    throw new Error("Remote Media byte size does not match provenance.");
-  }
-  const digest = createHash("sha256");
-  let received = 0;
-  const reader = response.body.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > expectedBytes) {
-      await reader.cancel();
-      throw new Error("Remote Media exceeded its expected byte size.");
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response;
+    try {
+      response = await fetchImpl(url, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        throw new Error(`Remote Media verification timed out or failed after ${attempt} attempts for ${file.filename}.`, { cause: error });
+      }
+      await sleep(attempt * 1_000);
+      continue;
     }
-    digest.update(value);
+    if (response.status !== 200 || !response.body) {
+      await response.body?.cancel();
+      if (RETRYABLE_REMOTE_STATUS.has(response.status) && attempt < maxAttempts) {
+        await sleep(attempt * 1_000);
+        continue;
+      }
+      throw new Error(`Remote Media verification failed with HTTP ${response.status} for ${file.filename}.`);
+    }
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared !== expectedBytes) {
+      await response.body.cancel();
+      throw new Error("Remote Media byte size does not match provenance.");
+    }
+    const digest = createHash("sha256");
+    let received = 0;
+    const reader = response.body.getReader();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > expectedBytes) {
+          await reader.cancel();
+          throw new Error("Remote Media exceeded its expected byte size.");
+        }
+        digest.update(value);
+      }
+    } catch (error) {
+      if (attempt === maxAttempts || error?.message === "Remote Media exceeded its expected byte size.") throw error;
+      await reader.cancel().catch(() => undefined);
+      await sleep(attempt * 1_000);
+      continue;
+    }
+    if (received !== expectedBytes) throw new Error("Remote Media byte size does not match provenance.");
+    return digest.digest("hex");
   }
-  if (received !== expectedBytes) throw new Error("Remote Media byte size does not match provenance.");
-  return digest.digest("hex");
+  throw new Error(`Remote Media verification failed for ${file.filename}.`);
 }
