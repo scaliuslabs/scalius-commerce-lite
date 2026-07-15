@@ -322,6 +322,22 @@ The cleanup bullets below describe the two-product proof store that preceded the
   passed API readiness, auth, storefront/cache headers, six sitemap checks,
   both feeds, UCP search/lookup/product, and Product JSON-LD. The visible
   Computer Use run remains paused solely because the Mac session is locked.
+- Latest navigation-keyboard release: admin
+  `19d49358-8c67-492f-ba1e-d5865b6e8106`. The visible Computer Use run in the
+  Abdur Rob Chrome profile exposed a tree-specific defect in dnd-kit's generic
+  sortable keyboard coordinates: Space/Arrow could leave a menu row colliding
+  with itself instead of selecting the intended sibling insertion edge. The
+  builder now uses navigation-specific coordinates constrained to the active
+  sibling list; ArrowUp targets the previous sibling's before edge and
+  ArrowDown targets the next sibling's after edge, while changing parents stays
+  an explicit pointer or Move-dialog action. Collision-target changes also
+  refresh the visible intent so the status does not briefly claim the item is
+  already in place. Twenty-six focused navigation tests and the Admin typecheck
+  passed sequentially. After deployment, the visible six-link draft moved
+  Kitchen & Table before Desk & Mobile Tech and then restored it after Desk &
+  Mobile Tech with correct preview/status text in both directions. The draft
+  remains intentionally unpublished pending action-time confirmation for the
+  public Save.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks

@@ -11,13 +11,13 @@ import {
   type DragCancelEvent,
   type DragEndEvent,
   type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
   type CollisionDetection,
   type ScreenReaderInstructions,
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
@@ -72,6 +72,7 @@ import {
   type NavigationDropOperation,
 } from "./navigation-workspace";
 import { openNavigationPreview } from "./navigation-preview";
+import { createNavigationKeyboardCoordinates } from "./navigation-keyboard";
 import type { NavigationBuilderProps, NavigationItem } from "./types";
 import {
   getNavigationItemHref,
@@ -132,7 +133,7 @@ function getActivatorClientY(event: Event): number | null {
 }
 
 function getNavigationDropOperation(
-  event: DragMoveEvent | DragEndEvent,
+  event: DragMoveEvent | DragOverEvent | DragEndEvent,
 ): NavigationDropOperation {
   const overRect = event.over?.rect;
   if (!overRect) return "before";
@@ -183,12 +184,16 @@ export function NavigationBuilder({
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const autoExpandTimerRef = useRef<number | null>(null);
 
+  const navigationKeyboardCoordinates = useMemo(
+    () => createNavigationKeyboardCoordinates(navigation),
+    [navigation],
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
+      coordinateGetter: navigationKeyboardCoordinates,
     }),
   );
 
@@ -417,7 +422,7 @@ export function NavigationBuilder({
     setDragStatus(`Moving ${itemLabel(location?.item)}.`);
   }, [navigation, normalizedQuery]);
 
-  const handleDragMove = useCallback((event: DragMoveEvent) => {
+  const updateDragIntent = useCallback((event: DragMoveEvent | DragOverEvent) => {
     if (normalizedQuery) return;
     const intent = getNavigationDragIntent(
       navigation,
@@ -805,7 +810,8 @@ export function NavigationBuilder({
             collisionDetection={navigationCollisionDetection}
             accessibility={dragAccessibility}
             onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
+            onDragMove={updateDragIntent}
+            onDragOver={updateDragIntent}
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
