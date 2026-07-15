@@ -46,6 +46,45 @@ Homepage merchandising uses five active collections: New & Noteworthy (`koK4xysg
 
 Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome profile.
 
+### Visible merchant-workflow checkpoint (2026-07-15)
+
+The 5-category/50-product fixture is a deterministic catalog baseline, not a
+substitute for merchant-workflow proof. A separate visible production run now
+drives the real admin controls through the Abdur Rob Chrome profile. Do not
+claim this product was created until the final submit is explicitly confirmed
+and observed; the current draft is intentionally unsaved.
+
+- The live editor contains an unsaved `Aranya Oak Entry Shelf` draft in Home &
+  Living with BDT 6,490 base pricing, five individually selected Kori Oak media
+  assets, and the clean product view selected as featured media. The picker did
+  not bulk-select any asset.
+- Additional Sections was exercised with `Materials & installation` and `Care
+  & warranty`. Adding the second section collapsed the first and opened the new
+  title and rich-text editor together, matching the accepted accordion
+  contract.
+- Merchant-defined `Length` (`60 cm`, `90 cm`) and `Finish` (`Natural`,
+  `Walnut`) axes generated four combinations. `90 cm / Walnut` was deliberately
+  omitted, leaving three active SKUs. The draft carries BDT 6,490/6,990/8,990
+  SKU prices and 18/12/7 on-hand quantities.
+- `60 cm / Walnut` uses a 10% SKU discount; `90 cm / Natural` uses a BDT 500
+  fixed SKU discount. The expanded first SKU shows automatic Code 128 barcode
+  generation on save, 2.4 kg weight, and stock tracking enabled.
+- Natural and Walnut 60 cm SKUs have exact same-product image references. The
+  90 cm Natural SKU intentionally keeps `Automatic product image`, proving that
+  partial exact-SKU assignment remains a first-class state rather than
+  restoring serialized axis or sibling inference.
+- The next visible action is mapping `Finish` to the catalog `color` field,
+  then finishing search metadata and readiness review. Computer Use paused only
+  because macOS locked; resume the existing Chrome draft after unlock rather
+  than replacing it with an API write.
+- An ambient in-app screenshot initially looked horizontally cropped. An
+  explicit 800 x 800 CSS viewport recheck rendered the entire 96vw picker,
+  folder rail, filters, three-column result grid, and Close/Add controls without
+  overflow. Treat the earlier image as unproven until the exact smaller
+  breakpoint is reproduced; do not ship a speculative layout rewrite. The
+  responsive picker still requires explicit 768/767 and phone-width screenshot
+  evidence before release sign-off.
+
 - Buyer selected Rider Court Trainers `Size 40 / Color Sand` and added one unit to cart.
 - Cart showed the correct trainer image, option labels, BDT 8,990 price, BDT 110 shipping, and BDT 9,100 total.
 - COD checkout completed again after the 2026-07-13 coordinated release as order `FWW6XI` for `Scalius Demo Buyer`.
