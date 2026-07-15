@@ -21,6 +21,7 @@ function snapshot(mediaIds = ["media_old_primary", "media_old_variant"]) {
     productDetails: [{
       id: product.retainedProductId,
       slug: product.slug,
+      aggregateRevision: 7,
       attributes: [],
       options: [{ name: "Color", position: 0, values: [{ value: "Black" }] }],
       variants: [{
@@ -84,5 +85,32 @@ describe("retained product generated-Media replacement", () => {
       },
     });
     expect(bound.body.acknowledgedSkuImageRemovalIds).toEqual(["pmed_old_variant"]);
+  });
+
+  it("binds a superseded product stage to the fresh product revision", () => {
+    const binder = createApplyBinder({
+      manifest: { products: [product], collections: [] },
+      readiness,
+      snapshot: snapshot(),
+    });
+    const bound = binder.bind({
+      logicalKey: "product:retained:activate",
+      method: "PUT",
+      path: "/api/v1/admin/products/prod_retained_123",
+      body: {
+        expectedAggregateRevision: {
+          $ref: "product:retained:matrix",
+          field: "aggregateRevision",
+        },
+      },
+      preconditions: {
+        expectedAggregateRevision: {
+          $ref: "product:retained:matrix",
+          field: "aggregateRevision",
+        },
+      },
+    });
+    expect(bound.expectedRevision).toBe(7);
+    expect(bound.body.expectedAggregateRevision).toBe(7);
   });
 });

@@ -62,6 +62,13 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
       if (!category) throw new Error(`Category reference is unresolved: ${key}.`);
       return fieldValue(category, reference.field);
     }
+    const productStage = key.match(/^(product:[^:]+):(?:base|matrix|simple-sku)$/u);
+    if (productStage) {
+      const slug = productStage[1].slice("product:".length);
+      const detail = context.detailsBySlug.get(slug);
+      if (!detail) throw new Error(`Product stage reference is unresolved: ${key}.`);
+      return fieldValue(detail, reference.field);
+    }
     if (key.startsWith("current-product:")) {
       const slug = key.slice("current-product:".length);
       const detail = context.detailsBySlug.get(slug);
