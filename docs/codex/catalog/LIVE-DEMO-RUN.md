@@ -274,6 +274,31 @@ The cleanup bullets below describe the two-product proof store that preceded the
 - Production ops and release checks passed after all four current deployments. Discovery proof covered six sitemap checks, Google and Meta feeds with nine valid variant rows, UCP search/lookup, product JSON-LD, storefront cache headers, and auth gates. All eight queue bindings had only the intended API/ops-monitor producers and API consumers.
 - The final storefront pass opened the cart in a fresh Chrome tab and exposed its screen-reader description with no console warning. The deployed Taxes rate editor also showed the deterministic priority-layer explanation and loaded without an error.
 - The obsolete `storefront-test` -> `testdash` Worker chain was removed after dependency inspection. This also removed `testdash` from the payment-events, order-notifications, and auth-otp production producer lists; a subsequent queue topology check showed only the source-owned API and ops-monitor producers.
+- Latest navigation-source release: API
+  `2931f2ad-a71d-45ac-8bf3-5d7efa5f8d8f` and admin
+  `1abad8b2-ce37-4b6d-89e2-9fde4a687dee`. A live Computer Use run in the
+  Abdur Rob Chrome profile reproduced a merchant-only defect that deterministic
+  catalog seeding could not: a newly selected category was staged as “Label
+  only” with “Checking resource” until the page was reloaded. Resource picker
+  choices now receive an immediate admin-only `resolution` projection while
+  the stable resource ID remains storage authority; server validation strips
+  that projection and the central D1 resolver recomputes it on read. The
+  category picker is limited to published categories, and category/product/
+  collection picker previews honor valid canonical routes. After a fresh
+  deployed-bundle reload, the same visible workflow staged Desk & Mobile Tech
+  with its real label, `/categories/desk-mobile-tech`, and readiness `ready`.
+  The form is intentionally still unsaved while Computer Use is blocked by a
+  locked Mac; no broken or partial navigation was published. The navigation
+  suite passed 57 tests, Core/Admin typechecks ran sequentially, both deploys
+  completed, and `pnpm release:check` passed after one transient queue-info
+  retry.
+- Demo operating rule: the guarded API executor is a reproducible bulk-fixture
+  mechanism, not merchant-workflow proof. Every representative product create/
+  edit, media assignment, navigation/settings publication, checkout, order,
+  inventory, and mobile path must also be exercised through the visible admin
+  or storefront UI. Use Computer Use for the real Chrome/profile proof and
+  browser inspection only for diagnostics or repeatable assertions; never use
+  a direct write to hide a broken merchant interface.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks

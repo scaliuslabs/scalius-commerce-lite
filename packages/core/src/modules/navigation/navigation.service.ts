@@ -15,6 +15,7 @@ import type {
     NavigationTargetItem,
     ResolvedNavigationItem,
 } from "@scalius/shared/navigation-target";
+import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 
 // ─────────────────────────────────────────
 // Types
@@ -44,6 +45,7 @@ export async function getNavigationItems(db: Database) {
             id: categories.id,
             name: categories.name,
             slug: categories.slug,
+            canonicalPath: categories.canonicalPath,
             type: sql<string>`'category'`.as("type"),
         })
         .from(categories)
@@ -56,7 +58,8 @@ export async function getNavigationItems(db: Database) {
         name: cat.name,
         slug: cat.slug,
         type: cat.type,
-        url: `/categories/${cat.slug}`,
+        url: normalizeResourceCanonicalPath("category", cat.canonicalPath)
+            ?? `/categories/${cat.slug}`,
     }));
 
     const pagesData = await db
@@ -81,14 +84,23 @@ export async function getNavigationItems(db: Database) {
     }));
 
     const productsData = await db
-        .select({ id: products.id, name: products.name, slug: products.slug })
+        .select({
+            id: products.id,
+            name: products.name,
+            slug: products.slug,
+            canonicalPath: products.canonicalPath,
+        })
         .from(products)
         .where(sql`${products.deletedAt} IS NULL AND ${products.isActive} = true`)
         .orderBy(products.name)
         .limit(100);
 
     const collectionsData = await db
-        .select({ id: collections.id, name: collections.name })
+        .select({
+            id: collections.id,
+            name: collections.name,
+            canonicalPath: collections.canonicalPath,
+        })
         .from(collections)
         .where(sql`${collections.deletedAt} IS NULL AND ${collections.isActive} = true`)
         .orderBy(collections.name)
@@ -102,14 +114,16 @@ export async function getNavigationItems(db: Database) {
             name: product.name,
             slug: product.slug,
             type: "product",
-            url: `/products/${product.slug}`,
+            url: normalizeResourceCanonicalPath("product", product.canonicalPath)
+                ?? `/products/${product.slug}`,
         })),
         collections: collectionsData.map((collection) => ({
             id: collection.id,
             name: collection.name,
             slug: collection.id,
             type: "collection",
-            url: `/collections/${collection.id}`,
+            url: normalizeResourceCanonicalPath("collection", collection.canonicalPath)
+                ?? `/collections/${collection.id}`,
         })),
     };
 }
