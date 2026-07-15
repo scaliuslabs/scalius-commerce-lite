@@ -352,6 +352,96 @@ describe("resume authority", () => {
     });
   });
 
+  it("does not regress a resource to staging after its final activation completed", async () => {
+    const fingerprint = demoApplyIntentFingerprint(demoStoreManifest);
+    const baseRecord = createResumeRecord({
+      intentFingerprint: fingerprint,
+      phase: "stage_products",
+      logicalKey: "product:vale-everyday-runners:base",
+      status: "applied",
+      authority: { id: "prod_vale", aggregateRevision: 1 },
+    });
+    const activationRecord = createResumeRecord({
+      intentFingerprint: fingerprint,
+      phase: "activate_products",
+      logicalKey: "product:vale-everyday-runners:activate",
+      status: "applied",
+      authority: { id: "prod_vale", aggregateRevision: 2 },
+    });
+    const executed = [];
+    const result = await runDemoApplyLifecycle({
+      manifest: demoStoreManifest,
+      authorization: { confirmed: true, intentFingerprint: fingerprint },
+      lifecycle: {
+        phases: [{
+          name: "quarantine",
+          state: "ready",
+          blockers: [],
+          commands: [{ logicalKey: "product:vale-everyday-runners:base" }],
+        }, {
+          name: "activate_products",
+          state: "ready",
+          blockers: [],
+          commands: [{ logicalKey: "product:vale-everyday-runners:activate" }],
+        }],
+      },
+      resumeRecords: [baseRecord, activationRecord],
+      executeCommand: async (command) => {
+        executed.push(command.logicalKey);
+        return {
+          logicalKey: command.logicalKey,
+          status: "already_applied",
+          authority: { id: "prod_vale", aggregateRevision: 2 },
+        };
+      },
+    });
+    expect(executed).toEqual(["product:vale-everyday-runners:activate"]);
+    expect(result.phases[0]).toMatchObject({ name: "quarantine", outcomes: [] });
+  });
+
+  it("treats category, collection, and hero publication as superseding staging", async () => {
+    const fingerprint = demoApplyIntentFingerprint(demoStoreManifest);
+    const records = [
+      ["publish_categories", "category:footwear:publish", { id: "cat_footwear", revision: 3 }],
+      ["activate_collections", "collection:new-noteworthy:activate", { id: "col_new", version: 4 }],
+      ["activate_heroes", "hero-slider:desktop:activate", { id: "slider_desktop", revision: 5 }],
+    ].map(([phase, logicalKey, authority]) => createResumeRecord({
+      intentFingerprint: fingerprint,
+      phase,
+      logicalKey,
+      status: "applied",
+      authority,
+    }));
+    const executed = [];
+    await runDemoApplyLifecycle({
+      manifest: demoStoreManifest,
+      authorization: { confirmed: true, intentFingerprint: fingerprint },
+      lifecycle: {
+        phases: [{
+          name: "quarantine", state: "ready", blockers: [], commands: [
+            { logicalKey: "collection:new-noteworthy:quarantine" },
+            { logicalKey: "hero-slider:desktop:quarantine" },
+          ],
+        }, {
+          name: "stage_categories", state: "ready", blockers: [],
+          commands: [{ logicalKey: "category:footwear" }],
+        }, {
+          name: "stage_collections", state: "ready", blockers: [],
+          commands: [{ logicalKey: "collection:new-noteworthy" }],
+        }, {
+          name: "stage_heroes", state: "ready", blockers: [],
+          commands: [{ logicalKey: "hero-slider:desktop" }],
+        }],
+      },
+      resumeRecords: records,
+      executeCommand: async (command) => {
+        executed.push(command.logicalKey);
+        throw new Error("A superseded staging command must not execute.");
+      },
+    });
+    expect(executed).toEqual([]);
+  });
+
   it("fails closed on another intent, changed identity, or backwards revision", () => {
     const fingerprint = demoApplyIntentFingerprint(demoStoreManifest);
     const record = createResumeRecord({
