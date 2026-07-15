@@ -4,14 +4,23 @@ import type { Product } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageUrl } from "@/lib/product-media";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatPriceShort } from "@scalius/shared/currency";
 
 interface Props {
   product: Product;
   currencySymbol?: string;
+  currencyCode?: string;
 }
 
-const { product, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
+const {
+  product,
+  currencySymbol = DEFAULT_CURRENCY.symbol,
+  currencyCode = DEFAULT_CURRENCY.code,
+} = Astro.props;
+const formatMoney = (price: number) => formatPriceShort(price, {
+  symbol: currencySymbol,
+  code: currencyCode,
+});
 
 const hasDiscount = product.discountedPrice < product.price;
 const pricePrefix = product.priceVaries ? "From " : "";
@@ -101,12 +110,12 @@ const productImageUrl = getProductImageUrl(product.imageUrl, {
         {
           hasDiscount && (
             <span class="text-[10px] sm:text-xs text-muted-foreground line-through font-medium leading-none">
-              {currencySymbol}{product.price.toLocaleString()}
+              {formatMoney(product.price)}
             </span>
           )
         }
         <span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
-          {pricePrefix}{currencySymbol}{product.discountedPrice.toLocaleString()}
+          {pricePrefix}{formatMoney(product.discountedPrice)}
         </span>
       </div>
 

@@ -14,6 +14,10 @@ const carousel = readFileSync(
   storefrontSourcePath("components/sliders/ProductCarousel.tsx"),
   "utf8",
 );
+const productCard = readFileSync(
+  storefrontSourcePath("components/cards/ProductCard.astro"),
+  "utf8",
+);
 
 describe("collection storefront workflow boundaries", () => {
   it("uses the authoritative total and exposes an accessible mobile filter dialog", () => {
@@ -37,5 +41,15 @@ describe("collection storefront workflow boundaries", () => {
 
   it("does not autoplay the carousel for reduced-motion users", () => {
     expect(carousel).toContain('prefers-reduced-motion: reduce');
+  });
+
+  it("uses the shared short money formatter across homepage presentations", () => {
+    for (const source of [productCard, carousel]) {
+      expect(source).toContain("formatPriceShort");
+      expect(source).not.toContain("discountedPrice.toLocaleString()");
+      expect(source).not.toContain("price.toLocaleString()");
+    }
+    expect(carousel).toContain('const pricePrefix = product.priceVaries ? "From " : "";');
+    expect(carousel).toContain("{pricePrefix}{formatMoney(product.discountedPrice)}");
   });
 });

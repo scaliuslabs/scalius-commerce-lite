@@ -9,9 +9,14 @@ import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 interface Props {
   collection: CollectionWithProducts;
   currencySymbol?: string;
+  currencyCode?: string;
 }
 
-const { collection, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
+const {
+  collection,
+  currencySymbol = DEFAULT_CURRENCY.symbol,
+  currencyCode = DEFAULT_CURRENCY.code,
+} = Astro.props;
 
 // Data is pre-populated from consolidated API
 const config = collection.config || {};
@@ -72,7 +77,7 @@ const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
     <div
       class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
     >
-      {products.map((product) => <ProductCard product={product} currencySymbol={currencySymbol} />)}
+      {products.map((product) => <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />)}
     </div>
 
     <div class="mt-4 flex justify-center sm:hidden">

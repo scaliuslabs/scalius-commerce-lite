@@ -74,6 +74,7 @@ const discoverySettings = normalizeSeoDiscoverySettings(
   layoutData?.seo?.discovery,
 );
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const firstProductImage = products.find((product) => product.imageUrl)?.imageUrl ?? null;
 const activeFilterCount = Object.keys(currentFilters)
   .filter((key) => (
@@ -280,7 +281,7 @@ const collectionJsonLd =
             <>
               <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
                 {products.map((product) => (
-                  <ProductCard product={product} currencySymbol={currencySymbol} />
+                  <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />
                 ))}
               </div>
 

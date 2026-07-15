@@ -84,6 +84,19 @@ and observed; the current draft is intentionally unsaved.
   breakpoint is reproduced; do not ship a speculative layout rewrite. The
   responsive picker still requires explicit 768/767 and phone-width screenshot
   evidence before release sign-off.
+- The first buyer-side homepage pass exposed mixed money precision in the two
+  product-card presentations: percentage discounts could render values such as
+  `৳2,658.8`, while the carousel also omitted `From` for products whose SKU
+  prices vary. Both presentations now use the shared ISO-aware short formatter:
+  whole BDT values stay compact, fractional BDT values retain two decimals, and
+  zero-/three-decimal currencies follow their saved currency code. The carousel
+  now preserves the same `From` contract as the grid. The implementation and
+  currency-code propagation are covered by the shared currency and storefront
+  boundary tests; the repository suite passed 645 files/4,390 tests and the
+  Storefront Astro check passed 306 files with zero diagnostics. Storefront
+  `b7a11049-c7bd-42c8-a620-b9804d03a8a9` is live at 100%; a cache-bypassed
+  browser read observed exact `৳2,658.80`, `৳1,047.20`, and `৳2,566.80`
+  values plus `From ৳1,161` and `From ৳5,841` across the grid and carousel.
 
 - Buyer selected Rider Court Trainers `Size 40 / Color Sand` and added one unit to cart.
 - Cart showed the correct trainer image, option labels, BDT 8,990 price, BDT 110 shipping, and BDT 9,100 total.

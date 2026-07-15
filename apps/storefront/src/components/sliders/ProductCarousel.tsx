@@ -15,7 +15,7 @@ import { cn } from "@scalius/shared/utils";
 import { Button } from "@/components/ui/button";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageUrl } from "@/lib/product-media";
-import { getCurrencySymbol } from "@/lib/currency";
+import { formatPriceShort, getCurrencyCode, getCurrencySymbol } from "@/lib/currency";
 
 function ProductCarouselCard({ product }: { product: Product }) {
   const productImageUrl = getProductImageUrl(product.imageUrl, {
@@ -27,6 +27,11 @@ function ProductCarouselCard({ product }: { product: Product }) {
   });
 
   const hasDiscount = product.discountedPrice < product.price;
+  const formatMoney = (price: number) => formatPriceShort(price, {
+    symbol: getCurrencySymbol(),
+    code: getCurrencyCode(),
+  });
+  const pricePrefix = product.priceVaries ? "From " : "";
   const discountBadge = formatDiscountBadge(
     product.discountType,
     product.discountPercentage,
@@ -80,11 +85,11 @@ function ProductCarouselCard({ product }: { product: Product }) {
           <div className="flex flex-col gap-0">
             {hasDiscount && (
               <span className="text-[10px] sm:text-xs text-muted-foreground line-through font-medium leading-none">
-                {getCurrencySymbol()}{product.price.toLocaleString()}
+                {formatMoney(product.price)}
               </span>
             )}
             <span className="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
-              {getCurrencySymbol()}{product.discountedPrice.toLocaleString()}
+              {pricePrefix}{formatMoney(product.discountedPrice)}
             </span>
           </div>
           {/* Mobile View Button */}
