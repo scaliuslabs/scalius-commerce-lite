@@ -6,37 +6,41 @@ This is fresh operational evidence for the disposable Scalius demo store. It rec
 
 ## Rich-demo readiness milestone
 
-The replacement rich-demo dataset is fully prepared and all 237 approved assets are now present in the live Media authority, but the 50-product catalog has **not** been applied. The private 0600 journal contains 771 validated events and 237 exact ready logical keys. The ignored `.wrangler/demo-store-assets/apply-readiness.json` output is still absent, so the catalog executor remains correctly blocked. The target plan remains 50 products, 5 categories, 177 SKUs, 49 ordered additional sections, 18 offers, and 3 hero stories. Every generated asset and retained-media replacement was visually reviewed, including all 3 product videos.
+The rich demo catalog is now applied and independently reconciled in production. The guarded executor verified 108 terminal commands for intent fingerprint `d37c6699938eae1db28ebf53f3823521b485d65d93d625b2eec5c963082aeaa1`. A fresh write-disabled diff then proved:
 
-The upload's final fresh read exposed two independent production conditions. First, default `createdAt` Media page 2 passed a JavaScript `Date` through a raw SQL bind, which D1 rejected with HTTP 500 only after the library exceeded 100 assets. API deployment `56ae2b3b-bbba-4138-a62a-fdaa0768a904` now uses column-mapped keyset comparators; a same-second asc/desc pagination test passes, and the live Media UI advanced from 24 to 48 shown without error. Second, D1 briefly returned `D1 DB is overloaded. Requests queued for too long.` across readiness, auth, and dashboard reads. The Worker deployment stayed healthy and unchanged during that window; direct D1 reads and repeated `/readyz` samples then recovered. The resumable uploader now keeps a 250 ms quiet interval between durable Media commands so a demo run cannot concentrate writes. Do not represent the transient provider overload as a bad frontend deployment or a cache issue.
+- 5 categories match; 0 update/create/conflict.
+- 50 products match; 0 update/create/conflict.
+- the filterable Brand attribute matches.
+- 5 collections match; 0 update/create/conflict.
+- 246 ready Media assets exist, including all 237 manifest intents.
+- 177 sellable SKUs, 46 optioned products, 4 simple products, 49 ordered rich sections, 18 offer cases, and 3 responsive hero stories are represented by the checked-in manifest.
 
-Resume only after a bounded D1 readiness check succeeds, and keep the sequence strictly serial:
+Private operational evidence remains ignored under `.wrangler/demo-store-apply/` and `.wrangler/demo-store-evidence/`. The latest complete apply evidence is `run-2026-07-15T14-42-45-778Z-4cf1f909`; the independent read-only evidence is `run-2026-07-15T14-46-12-389Z-a194f298`. Session cleanup returned a best-effort warning, so do not claim the short-lived remote session was explicitly deleted; no credential or cookie is stored in the repository.
 
-1. Prove API and D1 readiness with `pnpm ops:check --samples 2 --timeout-ms 20000`; do not proceed while `/readyz` or D1 returns 503.
-2. Resume the authenticated Media bridge to reconcile the 237 journaled assets, verify all cursor pages/poster links, and atomically create apply readiness:
-   `pnpm exec node scripts/demo-store/media-upload/cli.mjs --upload --manifest .wrangler/demo-store-assets/asset-sources.json --staged-report .wrangler/demo-store-assets/readiness.json --staged-dir .wrangler/demo-store-assets/staged --journal .wrangler/demo-store-assets/media-upload.jsonl --output .wrangler/demo-store-assets/apply-readiness.json --admin-url https://dashboard.scalius.com`
-3. Inspect the authenticated reconciliation with `pnpm demo:store --diff --admin-url https://dashboard.scalius.com`.
-4. Run the guarded apply with `pnpm demo:store --apply --media-readiness .wrangler/demo-store-assets/apply-readiness.json --admin-url https://dashboard.scalius.com`, supplying the interactive credentials, exact reset phrase, and full fingerprint only at its prompts.
-5. Run `pnpm release:check` and the relevant `pnpm ops:check` mode sequentially.
-6. Complete authenticated desktop and mobile browser QA across the admin, storefront, catalog media/video, cart, checkout, orders, inventory, discovery, and cache-sensitive public surfaces before calling the run complete.
+The run exposed and fixed four reusable production/operations defects:
+
+1. Media page-2 keyset pagination passed a JavaScript `Date` through raw SQL. API `56ae2b3b-bbba-4138-a62a-fdaa0768a904` replaced it with typed column comparators; same-second ascending/descending pagination and a live 24-to-48-item page advance pass.
+2. A transient Cloudflare D1 overload returned 503 from readiness/login and caused dependent admin 500s. The Worker itself remained healthy. Reads recovered, and the Media bridge now leaves a 250 ms quiet interval between durable commands. Treat that incident as provider/database overload, not a cache or frontend deployment defect.
+3. Category `/{id}/status` and `/{id}/publish-readiness` were absent from the RBAC route map even though the API routes existed. API `dc15f3b6-bdd0-4502-8cf2-f78d11f28769` authorizes them with category edit/view authority; four live readiness samples passed after deployment.
+4. Apply verification now compares canonical discount zero/null representations and rich-section semantics, not provisional IDs. Resume planning treats final activation/publication as superseding earlier staging, preserves monotonic identity, prefers the freshest live or in-run revision, and still re-verifies final state idempotently. An interrupted resume was recovered without SKU, stock, media, or catalog drift.
+
+Keep future checks strictly serial on this 16 GB host. Do not run workspace typechecks or deployments in parallel. Re-run `pnpm demo:store --diff`, `pnpm release:check`, and the relevant `pnpm ops:check` mode after catalog/API changes, then complete authenticated desktop/mobile merchant and buyer QA before declaring the broader platform goal complete.
 
 ## Buyer-visible demo catalog
 
-Only these products should remain active after cleanup:
+The buyer-visible catalog now contains ten products in each category:
 
-| Product | Product ID | Category | Coverage |
+| Category | Category ID | Brand | Product count |
 | --- | --- | --- | --- |
-| Halo Arc Table Lamp | `prod_FOHvuxr0Hr11AA_hyLUpH` | Home & Living | Mixed image/video gallery; merchant-defined Finish and Plug options; 3 active of 4 possible SKUs; percentage SKU discount; all SKUs use the product-primary fallback because no finish-specific image exists |
-| Rider Court Trainers | `prod_9XNNERD2XpAOIoI1SN6gx` | Footwear | Four real product images; merchant-defined Size and Color options; 6 active SKUs; per-SKU stock; partial exact-SKU image assignment with product-primary fallback |
+| Footwear | `cat_CrF6miTP8nEXe8bal5X0I` | Northline | 10 |
+| Home & Living | `cat_mZl8SzAouadS92gJPIr7l` | Hearth & Form | 10 |
+| Bags & Carry | `cat_omCePbAazVwcQk_EiG9F9` | Fieldwork | 10 |
+| Kitchen & Table | `cat_OnDtPFx_9NcxR1uUZk2-G` | Common Table | 10 |
+| Desk & Mobile Tech | `cat_9xgNEHjtr0rXhmdPbLWDV` | Orbit Works | 10 |
 
-The product copy and image metadata came from public DummyJSON demo data and were rewritten for this store. A 23.56 MB MP4 was successfully uploaded during the media-path proof, demonstrating the multipart path above the old 10 MB ceiling. The final curated live Media library contains the seven product image slots, the product video, and the dedicated brand asset used by the demo storefront; temporary duplicate proof assets were removed.
+Representative coverage includes Rider Court Trainers with partial exact-SKU imagery, Vale Everyday Runners with Size/Color axes and one SKU-scoped discount, Halo Arc Table Lamp with image/video media and one omitted combination, simple products with generated/default SKU identity, zero-stock sold-out cases, product- and SKU-level fixed/percentage offers, free-delivery products, and products with multiple ordered rich sections. A missing exact SKU image intentionally falls back only to the product featured image; no axis/sibling inference or serialized image mapping is restored.
 
-Keep these categories active and published:
-
-- Home & Living — `cat_mZl8SzAouadS92gJPIr7l`
-- Footwear — `cat_CrF6miTP8nEXe8bal5X0I`
-
-Homepage merchandising uses the active dynamic collection Curated Essentials — `XXEtmfVkKoOW6OHdliihF` — backed only by those two categories. Its featured-grid section was browser-verified with both products, real images, option-aware prices, and the Halo SKU discount.
+Homepage merchandising uses five active collections: New & Noteworthy (`koK4xysgKEG80rLh5PX5D`), Everyday Carry (`dRVGIixN6blpVyglB13nZ`), Home Refresh (`k-aIzpW83WwJc28n4GBXa`), Weekend Ready (`FsxykVB-cGK7MrTjy0a6y`), and Offers Worth Opening (`-4ohM04Ejx6wuMxGceltD`). Desktop and mobile hero authorities are active with three stories—The Everyday Edit, A softer home, and Carry the day—each using separate reviewed desktop/mobile media.
 
 ## Browser commerce proof
 
@@ -132,19 +136,23 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - The second provider-identity slice bundles 19 hash-verified first-party marks across payments, analytics, Meta CAPI, Firebase, WhatsApp, delivery, fraud, and SMS. SSLCommerz's source PNG was cropped only to its transparent alpha bounds and records both source and derivative hashes. FraudGuard remains a neutral shield because the configured `fraudguard.slope.com.bd` identity cannot be tied to the similarly named `fraudguard.shop`; no lookalike mark was shipped.
 - The complete settings cache audit now records 32 mutation surfaces. Storefront URL saves clear both `gw:site_settings` and the separately read `gw:storefront_url`, and Firebase access-token KV keys include a credential fingerprint so private-key rotation cannot reuse an old project-scoped token. The known Partytown KV eventual-consistency/outbox boundary remains documented.
 
-## Cleanup decisions and state
+## Historical cleanup decisions and retained audit state
+
+The cleanup bullets below describe the two-product proof store that preceded the 2026-07-15 rich-catalog publication. They remain useful for protected audit identities and old-order evidence, but their active-product/category/inventory counts are superseded by the current 5-category/50-product authority above.
 
 - All five obsolete collections were moved to trash through the admin bulk action.
-- Thirty obsolete products were moved to trash. The active catalog now contains exactly the two media-complete products above.
+- Thirty obsolete products were moved to trash before the rich-catalog publication.
 - Never permanently delete `prod_KyaDjWL28lOsRaynv9oOu` (inventory movement history) or `prod_ZeaunlIJFh94Bs8NXqesN` (inventory and historical order evidence). Keep both in trash.
 - The safe permanent-delete retry exposed an ambiguous unqualified D1 history-guard join. The guard now compiles with explicit physical-table column qualification. All 31 safe obsolete products were then permanently deleted; only the two protected audit products remain in product trash.
-- The 12 obsolete active categories were moved to trash atomically. Eleven safe categories were permanently deleted; Shoes remains in category trash because the protected audit products still reference it. Home & Living and Footwear are the only active categories, each with an active-product count of one.
+- The 12 obsolete active categories were moved to trash atomically. Eleven safe categories were permanently deleted; Shoes remains in category trash because the protected audit products still reference it. Home & Living and Footwear were the only active categories at that historical checkpoint; the current five published categories are listed above.
 - Category product-count SQL initially compiled an alias as a nonexistent physical table. The correlated count now reads the real `products` table with explicit column qualification, and the live list loads correctly.
 - The manual collection picker no longer accepts category IDs. Its first live retry failed closed because duplicate `name` columns in the D1 batch shifted the product DTO. The joined category name now has an explicit result alias; the live picker shows exactly Halo Arc Table Lamp / Home & Living and Rider Court Trainers / Footwear.
-- The live inventory projection contains 9 current SKUs only: 84 on hand, 1 committed, and 83 available. Rider 40 / Sand remains 14 on hand, 1 committed, 13 available.
+- The historical two-product inventory projection contained 9 current SKUs: 84 on hand, 1 committed, and 83 available. Current rich-catalog inventory must be read from the live Inventory authority rather than inferred from this old count.
 - Header social links were normalized to explicit HTTPS URLs and nonblank labels (`Facebook`, `X`, `LinkedIn`, `GitHub`, `YouTube`, and `WhatsApp`) before the strict navigation validator release.
 
 ## Release proof
+
+- Rich-demo publication checkpoint: API `dc15f3b6-bdd0-4502-8cf2-f78d11f28769` is live at 100% with category publication/readiness RBAC coverage. Core and API typechecks passed sequentially; 50 focused RBAC/auth tests passed; four post-deploy `/readyz` samples returned 200. The guarded demo apply then verified 108 terminal commands, and the independent read-only diff proved 5 categories, 50 products, 1 Brand attribute, and 5 collections exactly match with zero conflicts. Full release and browser checks continue below; this checkpoint alone is not the broader platform release sign-off.
 
 - The retained Rider/Halo media pipeline now has a fail-closed
   generated-original replacement path. The upload bridge requires exact old
@@ -255,12 +263,12 @@ Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome 
 - Latest API after the live D1 and media-key fixes: `6c0c3abc-01a9-4b2c-91f9-c1eefe2121a2`.
 - Latest admin settings/media/discount/tax release: `50d1053e-bc47-404d-8cf2-c002f4e6109a`. Latest storefront product-tab release: `37ca2b0a-cd8d-4ca7-b408-18fc1f5a06c2`. Their target-only TypeScript/Astro checks, production builds, deployment verification, authenticated desktop/mobile browser smoke, cache warming, and the repository `pnpm release:check` all passed.
 - Latest payment/discount/media/hero release: API `c88b6b70-ab50-46a1-9b17-5d4c25a93b10`, admin `59daa54a-68ee-41c1-a9ad-d100b78bb52e`, storefront `aff120d8-f1fa-429f-ab0b-246518c626f3`. The sequential gate covered 138 focused tests; Shared, Core, API, Admin, and Storefront diagnostics; SDK generation; binding checks; API/Admin/Storefront production builds; deploy verification; authenticated browser smokes; and a passing post-deploy `pnpm release:check`.
-- The checked-in rich-store plan passes `pnpm demo:store --plan`: 5 categories, 50 products, 177 SKUs, 46 optioned plus 4 simple products, 237 media intents, 49 ordered additional sections, 5 collections, 18 offers, and 3 hero stories. `pnpm demo:store --compile` also passes and emits 122 ordered commands. The authenticated executor, rights-safe assets, and live Media upload are complete; production catalog writes remain blocked until the resumed verification creates the exact readiness file and the diff/guarded-apply sequence succeeds.
-- `pnpm demo:store --diff` is implemented as a write-disabled authenticated reconciliation: hidden interactive credentials, bounded reads, exact slug/retained-ID matching, private ignored evidence exports, safe allowlisted JSONL resume metadata, and best-effort session cleanup. Apply remains fail-closed and has not been invoked because the page-2 Media regression stopped final readiness creation; credentials and confirmations must enter only through its interactive prompts.
-- Rights-safe media preparation is complete through the private offline staging boundary. All 237 records are provenance-approved, staged, and ready with zero missing owners or source records. Every generated record and every retained Rider/Halo replacement was visually reviewed; the set includes three reviewed H.264 product videos. No staged asset has been uploaded or made public yet because the first authenticated upload stopped before writes on D1 overload error `7429`.
+- The checked-in rich-store plan passes `pnpm demo:store --plan`: 5 categories, 50 products, 177 SKUs, 46 optioned plus 4 simple products, 237 media intents, 49 ordered additional sections, 5 collections, 18 offers, and 3 hero stories. `pnpm demo:store --compile` emits the ordered lifecycle commands, and the live executor verified the final 108 terminal commands after resume reconciliation.
+- `pnpm demo:store --diff` remains a write-disabled authenticated reconciliation with hidden interactive credentials, bounded reads, exact slug/retained-ID matching, ignored private evidence, safe allowlisted JSONL resume authority, and best-effort session cleanup. The 2026-07-15 post-apply diff proved 5 category, 50 product, 1 attribute, and 5 collection matches with no drift or conflicts.
+- Rights-safe media preparation and publication are complete. All 237 manifest records are provenance-approved, visually reviewed, remotely hash/dimension verified, and present among 246 ready live assets; the set includes three reviewed H.264 product videos.
 - The asset boundary now enforces source-kind/license pairing, real calendar dates, generated prompt/model provenance, byte-derived SHA/MIME/dimensions, and explicit visual-rights review. Its private registration CLI refuses checked-in manifests and atomically writes only ignored `.wrangler` evidence.
-- A separate Media-only bridge requires all 237 staged records before it can upload sequentially. It now has a 771-event 0600 resume journal covering all 237 ready logical keys, verifies remote hashes and dimensions, applies the exact retained Rider/Halo replacement authority, records poster relationships, paces durable commands, and has no product/publication write surface. Final `.wrangler/demo-store-assets/apply-readiness.json` creation is the next safe resume step.
-- Demo publication has an explicit fail-closed lifecycle: quarantine, inactive staging, product activation, category publication, collection activation, promotion, Theme, Navigation, and heroes. The guarded CLI apply is enabled for the supported product/category/collection/hero phases. Header/Footer navigation, Theme, and standalone promotion writes remain intentionally skipped where the current publication intent lacks safe revision/CAS authority; they are not silently written from stale state.
+- The separate Media-only bridge requires all 237 staged records before upload, verifies remote hashes/dimensions and retained Rider/Halo replacement authority, records poster relationships, paces durable commands, and has no product/publication write surface. Its private readiness output is now complete and was consumed by the verified apply.
+- Demo publication has an explicit fail-closed lifecycle: quarantine, inactive staging, product activation, category publication, collection activation, promotion, Theme, Navigation, and heroes. Product/category/collection/hero phases completed. Header/Footer navigation, Theme, and standalone promotion writes remain intentionally excluded where the publication intent lacks safe revision/CAS authority; they were not silently written from stale state.
 - Migrations `0022` (analytics lifecycle), `0023` (hero slider revisions), and `0024` (theme revisions) applied successfully before the current release.
 - Full local release gate before deployment: 540 test files and 3,779 tests passed; TypeScript/Astro diagnostics, lint, SDK generation, and Worker binding checks passed.
 - Production ops and release checks passed after all four current deployments. Discovery proof covered six sitemap checks, Google and Meta feeds with nine valid variant rows, UCP search/lookup, product JSON-LD, storefront cache headers, and auth gates. All eight queue bindings had only the intended API/ops-monitor producers and API consumers.
