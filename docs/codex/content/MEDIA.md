@@ -1,6 +1,6 @@
 # Media Authority, Video, and Workflow Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-15
 
 ## Current truth
 
@@ -232,6 +232,29 @@ buffered in a Worker invocation.
   multipart limits, and protected storefront product-page composition are
   unchanged.
 
+### Image presentation default follow-up (2026-07-15)
+
+- The shared Cloudflare optimizer preserves the complete source asset by
+  default with `fit=scale-down`. Generic callers no longer receive an already
+  cropped 600 x 600 bitmap before their `object-contain` or inspection UI can
+  render it. This also avoids enlarging a small logo or merchant image merely
+  to satisfy a generic preview box.
+- Cropping is an explicit presentation decision. Hero banners, social cards,
+  and deliberately cropped thumbnails request `fit=cover` at the call site;
+  logos, product cards/stages, Media inspection, and other whole-asset surfaces
+  request or inherit non-cropping behavior. CSS may still crop inside a known
+  presentation frame, but a generic transformed URL must not irreversibly
+  discard source pixels.
+- This matches Cloudflare's documented `scale-down` default (whole image,
+  preserved aspect ratio, no upscaling) and Shopify's admin Image component,
+  whose default `objectFit` is `contain`. Shopify uses an explicit merchant
+  focal point when a theme intentionally crops. Scalius does not yet model
+  focal-point coordinates, so it must not pretend an arbitrary center crop is
+  merchant intent.
+- Focused shared tests protect the safe default, explicit cover behavior, and
+  idempotence of already transformed URLs. Admin and storefront were rebuilt
+  and deployed together because both bundle the shared optimizer.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)
@@ -252,6 +275,12 @@ buffered in a Worker invocation.
 - [Cloudflare's Workers multipart guide](https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/)
   confirms `createMultipartUpload`, `uploadPart`, `complete`, and `abort` can
   support objects beyond one Worker request-body limit.
+- [Cloudflare Image Transformation features](https://developers.cloudflare.com/images/optimization/features/)
+  documents `scale-down` as the non-cropping, non-upscaling default and requires
+  `cover` when an exact cropped frame is intended.
+- [Shopify's admin Image component](https://shopify.dev/docs/api/app-home-ui-extension/latest/web-components/media-and-visuals/image)
+  defaults `objectFit` to `contain`; [Shopify focal-point guidance](https://shopify.dev/docs/api/liquid/objects/focal_point)
+  keeps a merchant-selected subject visible when a theme intentionally crops.
 - [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
   cap an isolate at 128 MB and explicitly recommend streaming instead of
   buffering large bodies. Free/Pro request bodies also cap at 100 MB, so a

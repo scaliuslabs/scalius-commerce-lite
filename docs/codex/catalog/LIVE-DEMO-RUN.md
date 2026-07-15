@@ -308,6 +308,20 @@ The cleanup bullets below describe the two-product proof store that preceded the
   or storefront UI. Use Computer Use for the real Chrome/profile proof and
   browser inspection only for diagnostics or repeatable assertions; never use
   a direct write to hide a broken merchant interface.
+- Latest image-presentation release: admin
+  `fdfc8f50-46a7-4937-a337-addd6ba31707` and storefront
+  `49845ea0-772f-4ec3-bb59-6847974d0c85`. The shared optimizer no longer
+  silently pre-crops unspecified assets to a square: its generic default is
+  Cloudflare's non-upscaling `fit=scale-down`, while hero/social/intentional
+  thumbnail crops remain explicit `cover` call sites. This keeps whole logos,
+  merchant images, and inspection previews recoverable before CSS presentation.
+  All 207 Shared tests passed with new default/explicit-cover/idempotence
+  coverage; Shared, Admin, and Storefront checks ran sequentially; both Workers
+  deployed at 100%; critical storefront pages warmed; production HTML retained
+  explicit contain/cover transforms; and the 30-second read-only release gate
+  passed API readiness, auth, storefront/cache headers, six sitemap checks,
+  both feeds, UCP search/lookup/product, and Product JSON-LD. The visible
+  Computer Use run remains paused solely because the Mac session is locked.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks
