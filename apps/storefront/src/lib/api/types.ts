@@ -192,6 +192,7 @@ export interface ProductVariant {
   reservedStock?: number;
   isDefault?: boolean;
   trackInventory?: boolean;
+  lowStockThreshold?: number | null;
   barcode?: string | null;
   barcodeType?: "ean13" | "upc" | "isbn" | "gtin" | "custom" | string | null;
   discountType: "percentage" | "flat" | null;

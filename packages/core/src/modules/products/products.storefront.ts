@@ -1146,6 +1146,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             reservedStock: productVariants.reservedStock,
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
+            lowStockThreshold: productVariants.lowStockThreshold,
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
@@ -1249,7 +1250,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
 
-    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
+    interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; price: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountPercentage: number | null; discountAmount: number | null; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
     const productImage = resolveProductImageRepresentation(mediaItems);
     const publicMedia = mediaItems.map((item) => ({
