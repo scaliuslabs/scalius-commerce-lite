@@ -118,6 +118,7 @@ Last reviewed: 2026-07-17
 - The production inventory and barcode-label routes were authenticated-smoked
   on desktop and at a 390 px viewport. Direct and multi-SKU entry, URL reload,
   quantity shortcuts, legacy wide-Code-128 diagnostics, wider A4 recovery,
-  physical preview, and horizontal-overflow/console-error checks passed. The
-  production API health/ready/OpenAPI operations check also passed with all
-  declared bindings ready.
+  custom-stock validation, partially used-sheet placement, physical preview,
+  and horizontal-overflow/console-error checks passed. The production API
+  health/ready/OpenAPI operations check also passed with all declared bindings
+  ready.

@@ -165,8 +165,9 @@ feeds, structured data, or external marketplaces.
   persisted rows selected in the product SKU matrix.
 - Production authenticated smoke: direct SKU load, second-SKU selection,
   reload-safe URL state, `On hand` quantity expansion, A4 2 x 7 recovery for a
-  legacy long Code 128 value, 390 px responsive layout, no horizontal overflow,
-  and no browser console warning/error.
+  legacy long Code 128 value, custom-stock bounds and print blocking,
+  numeric/interactive start-cell selection, 390 px responsive layout, no
+  horizontal overflow, and no browser console warning/error.
 - Production API smoke: health, four readiness samples, 295-route OpenAPI, and
   current Worker deployment all passed on 2026-07-17.
 - Existing long Scalius Code 128 values are preserved because changing a
