@@ -6,6 +6,8 @@ export interface InventoryVariant {
   productId: string;
   productName: string | null;
   sku: string;
+  barcode: string | null;
+  barcodeType: string | null;
   optionLabel: string | null;
   price: number;
   stock: number;
@@ -13,6 +15,26 @@ export interface InventoryVariant {
   available: number;
   lowStockThreshold: number | null;
   version: number;
+}
+
+export interface InventoryLabelVariant {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  optionLabel: string | null;
+  price: number;
+  stock: number;
+  reservedStock: number;
+  available: number;
+  barcode: string | null;
+  barcodeType: string | null;
+  trackInventory: boolean;
+}
+
+export interface InventoryLabelPreview {
+  variants: InventoryLabelVariant[];
+  missingVariantIds: string[];
 }
 
 export interface InventoryStats {
@@ -181,6 +203,12 @@ export const getInventory = createServerFn({ method: "GET" })
   .validator((data: InventoryQueryInput) => data)
   .handler(async ({ data }) => {
     return apiGet<InventoryOverviewPayload>("/inventory", toQueryParams(data));
+  });
+
+export const getInventoryLabelPreview = createServerFn({ method: "POST" })
+  .validator((data: { variantIds: string[] }) => data)
+  .handler(async ({ data }) => {
+    return apiPost<InventoryLabelPreview>("/inventory/labels/preview", data);
   });
 
 export const adjustInventory = createServerFn({ method: "POST" })

@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { stream } from "hono/streaming";
-import { getInventoryOverview, listInventoryMovements, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema } from "@scalius/core/modules/inventory";
+import { getInventoryOverview, getInventoryLabelVariants, listInventoryMovements, adjustInventory, adjustInventorySchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT } from "@scalius/core/modules/inventory";
 import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -27,6 +27,8 @@ const inventoryVariantSchema = z.object({
     productId: z.string(),
     productName: z.string().nullable(),
     sku: z.string(),
+    barcode: z.string().nullable(),
+    barcodeType: z.string().nullable(),
     optionLabel: z.string().nullable(),
     price: z.number(),
     stock: z.number(),
@@ -189,6 +191,21 @@ const scannerLookupSchema = z.object({
         imageUrl: z.string().nullable(),
         imageMediaId: z.string().nullable(),
     }).passthrough(),
+});
+
+const inventoryLabelVariantSchema = z.object({
+    id: z.string(),
+    productId: z.string(),
+    productName: z.string(),
+    sku: z.string(),
+    optionLabel: z.string().nullable(),
+    price: z.number(),
+    stock: z.number().int(),
+    reservedStock: z.number().int(),
+    available: z.number().int(),
+    barcode: z.string().nullable(),
+    barcodeType: z.string().nullable(),
+    trackInventory: z.boolean(),
 });
 
 // ── List Inventory ──
@@ -374,6 +391,47 @@ app.openapi(acknowledgeAlertRoute, async (c) => {
         throw new NotFoundError("Active low-stock alert not found");
     }
     return ok(c, {});
+});
+
+// ── Barcode label projection ──
+
+const labelPreviewRoute = createRoute({
+    method: "post",
+    path: "/labels/preview",
+    tags: ["Admin - Inventory"],
+    summary: "Get exact SKU facts for a barcode label batch",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        variantIds: z.array(z.string().trim().min(1).max(100))
+                            .min(1)
+                            .max(INVENTORY_LABEL_VARIANT_LIMIT),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Exact active SKU label projection",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        variants: z.array(inventoryLabelVariantSchema),
+                        missingVariantIds: z.array(z.string()),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(labelPreviewRoute, async (c) => {
+    const db = c.get("db");
+    const { variantIds } = c.req.valid("json");
+    return ok(c, await getInventoryLabelVariants(db, variantIds));
 });
 
 // ── Adjust Inventory ──

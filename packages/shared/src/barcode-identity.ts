@@ -9,20 +9,32 @@ export const BARCODE_TYPES = [
 
 export type BarcodeType = (typeof BARCODE_TYPES)[number];
 
-export const INTERNAL_CODE128_BARCODE_PREFIX = "SCALIUS:C128:";
+export const INTERNAL_CODE128_BARCODE_PREFIX = "99";
+
+const FNV64_OFFSET = 14_695_981_039_346_656_037n;
+const FNV64_PRIME = 1_099_511_628_211n;
+const FNV64_MASK = (1n << 64n) - 1n;
+const INTERNAL_CODE128_MODULUS = 1_000_000_000_000n;
 
 /**
- * Builds the platform-owned scan identity for a newly persisted SKU. The
- * colon-delimited namespace cannot be produced by the admin's ordinary SKU
- * generator, while the stable variant id makes retries deterministic.
+ * Builds the platform-owned scan identity for a newly persisted SKU. Fourteen
+ * numeric digits let a Code 128 renderer use compact Code Set C, which keeps
+ * the symbol reliable on common 40–50 mm labels. The stable variant id makes
+ * retries deterministic; the global database identity guard rejects the
+ * extremely unlikely collision with another SKU or merchant barcode.
  */
 export function generateInternalCode128Barcode(variantId: string): string {
-  const stableIdentity = variantId.startsWith("var_") ? variantId.slice(4) : variantId;
-  const barcode = `${INTERNAL_CODE128_BARCODE_PREFIX}${stableIdentity}`;
-  if (!stableIdentity || barcode.length > 50) {
-    throw new Error("A stable variant id of 37 characters or fewer is required.");
+  const stableIdentity = variantId.trim();
+  if (!stableIdentity) {
+    throw new Error("A stable variant id is required.");
   }
-  return barcode;
+  let hash = FNV64_OFFSET;
+  for (let index = 0; index < stableIdentity.length; index += 1) {
+    hash ^= BigInt(stableIdentity.charCodeAt(index));
+    hash = (hash * FNV64_PRIME) & FNV64_MASK;
+  }
+  const digits = (hash % INTERNAL_CODE128_MODULUS).toString().padStart(12, "0");
+  return `${INTERNAL_CODE128_BARCODE_PREFIX}${digits}`;
 }
 
 /**

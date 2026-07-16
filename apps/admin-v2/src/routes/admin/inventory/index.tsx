@@ -12,7 +12,7 @@ export function validateInventorySearch(search: Record<string, unknown>) {
   return { section: normalizeInventoryWorkspaceSection(search.section) };
 }
 
-export const Route = createFileRoute("/admin/inventory")({
+export const Route = createFileRoute("/admin/inventory/")({
   validateSearch: validateInventorySearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => {

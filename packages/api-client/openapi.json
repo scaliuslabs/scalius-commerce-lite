@@ -53247,6 +53247,14 @@
                               "sku": {
                                 "type": "string"
                               },
+                              "barcode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "barcodeType": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "optionLabel": {
                                 "type": "string",
                                 "nullable": true
@@ -53276,6 +53284,8 @@
                               "productId",
                               "productName",
                               "sku",
+                              "barcode",
+                              "barcodeType",
                               "optionLabel",
                               "price",
                               "stock",
@@ -53932,6 +53942,143 @@
                   "required": [
                     "success",
                     "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/inventory/labels/preview": {
+      "post": {
+        "tags": [
+          "Admin - Inventory"
+        ],
+        "summary": "Get exact SKU facts for a barcode label batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "variantIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "minItems": 1,
+                    "maxItems": 150
+                  }
+                },
+                "required": [
+                  "variantIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact active SKU label projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "productName": {
+                                "type": "string"
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "optionLabel": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "stock": {
+                                "type": "integer"
+                              },
+                              "reservedStock": {
+                                "type": "integer"
+                              },
+                              "available": {
+                                "type": "integer"
+                              },
+                              "barcode": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "barcodeType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "trackInventory": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "productId",
+                              "productName",
+                              "sku",
+                              "optionLabel",
+                              "price",
+                              "stock",
+                              "reservedStock",
+                              "available",
+                              "barcode",
+                              "barcodeType",
+                              "trackInventory"
+                            ]
+                          }
+                        },
+                        "missingVariantIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "variants",
+                        "missingVariantIds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
                   ]
                 }
               }

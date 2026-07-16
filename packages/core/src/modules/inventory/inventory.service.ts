@@ -25,6 +25,7 @@ const ALLOWED_MOVEMENT_TYPES: ReadonlySet<string> = new Set([
     "preorder_deducted",
 ]);
 const MAX_MOVEMENT_CURSOR_LENGTH = 512;
+export const INVENTORY_LABEL_VARIANT_LIMIT = 150;
 
 type InventoryMovementCursor = {
     createdAt: number;
@@ -211,6 +212,63 @@ export async function getInventoryLedgerHealth(db: Database) {
     return result ?? { legacyRows: 0, v2Rows: 0, v2Variants: 0, invalidV2Rows: 0 };
 }
 
+export async function getInventoryLabelVariants(
+    db: Database,
+    requestedVariantIds: readonly string[],
+) {
+    const variantIds = Array.from(new Set(
+        requestedVariantIds.map((id) => id.trim()).filter(Boolean),
+    ));
+    if (variantIds.length === 0) {
+        throw new ValidationError("Select at least one SKU to print labels.");
+    }
+    if (variantIds.length > INVENTORY_LABEL_VARIANT_LIMIT) {
+        throw new ValidationError(
+            `A label batch can contain at most ${INVENTORY_LABEL_VARIANT_LIMIT} SKUs.`,
+        );
+    }
+    if (variantIds.some((id) => id.length > 100)) {
+        throw new ValidationError("A selected SKU identity is invalid.");
+    }
+
+    const variantIdSet = JSON.stringify(variantIds);
+    const rows = await db
+        .select({
+            id: productVariants.id,
+            productId: productVariants.productId,
+            productName: products.name,
+            sku: productVariants.sku,
+            optionLabel: variantOptionLabelSql(productVariants.id),
+            price: productVariants.price,
+            stock: productVariants.stock,
+            reservedStock: productVariants.reservedStock,
+            available: sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`,
+            barcode: productVariants.barcode,
+            barcodeType: productVariants.barcodeType,
+            trackInventory: productVariants.trackInventory,
+        })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(
+            sql`${productVariants.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})
+            )`,
+            isNull(productVariants.deletedAt),
+            isNull(products.deletedAt),
+            operationalSkuRowPredicate(),
+        ))
+        .all();
+
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    return {
+        variants: variantIds.flatMap((id) => {
+            const row = rowById.get(id);
+            return row ? [row] : [];
+        }),
+        missingVariantIds: variantIds.filter((id) => !rowById.has(id)),
+    };
+}
+
 export async function getInventoryOverview(db: Database, params: {
     section: string;
     search: string;
@@ -280,6 +338,7 @@ export async function getInventoryOverview(db: Database, params: {
         if (search) {
             conditions.push(or(
                 like(productVariants.sku, `%${search}%`),
+                like(productVariants.barcode, `%${search}%`),
                 sql`${products.name} LIKE ${"%" + search + "%"}`
             ));
         }
@@ -299,6 +358,8 @@ export async function getInventoryOverview(db: Database, params: {
                 productId: productVariants.productId,
                 productName: products.name,
                 sku: productVariants.sku,
+                barcode: productVariants.barcode,
+                barcodeType: productVariants.barcodeType,
                 optionLabel: variantOptionLabelSql(productVariants.id),
                 price: productVariants.price,
                 stock: productVariants.stock,

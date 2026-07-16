@@ -15481,6 +15481,8 @@ export type GetApiV1AdminInventoryResponses = {
                 productId: string;
                 productName: string | null;
                 sku: string;
+                barcode: string | null;
+                barcodeType: string | null;
                 optionLabel: string | null;
                 price: number;
                 stock: number;
@@ -15651,6 +15653,43 @@ export type PatchApiV1AdminInventoryAlertsResponses = {
 };
 
 export type PatchApiV1AdminInventoryAlertsResponse = PatchApiV1AdminInventoryAlertsResponses[keyof PatchApiV1AdminInventoryAlertsResponses];
+
+export type PostApiV1AdminInventoryLabelsPreviewData = {
+    body?: {
+        variantIds: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/labels/preview';
+};
+
+export type PostApiV1AdminInventoryLabelsPreviewResponses = {
+    /**
+     * Exact active SKU label projection
+     */
+    200: {
+        success: true;
+        data: {
+            variants: Array<{
+                id: string;
+                productId: string;
+                productName: string;
+                sku: string;
+                optionLabel: string | null;
+                price: number;
+                stock: number;
+                reservedStock: number;
+                available: number;
+                barcode: string | null;
+                barcodeType: string | null;
+                trackInventory: boolean;
+            }>;
+            missingVariantIds: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminInventoryLabelsPreviewResponse = PostApiV1AdminInventoryLabelsPreviewResponses[keyof PostApiV1AdminInventoryLabelsPreviewResponses];
 
 export type PostApiV1AdminInventoryByVariantIdAdjustData = {
     body?: {
