@@ -36,6 +36,10 @@ import {
 import { TOAST_CONFIG } from "../config";
 import type { ProductOptionDefinition } from "@/lib/api";
 import { resolveVariantCartMedia } from "../lib/cart-media";
+import {
+  getProductActionsPresentation,
+  type ProductActionPresentation,
+} from "../lib/product-actions";
 
 const state = {
   variants: [] as Variant[],
@@ -349,6 +353,11 @@ function updateStockAndActions() {
     exact &&
     getBuyerStockSummary([exact]).canPurchaseAny,
   );
+  const actions = getProductActionsPresentation({
+    productName: cache.container?.dataset.productName ?? "Product",
+    exactVariantAvailable: exactAvailable,
+    anyVariantAvailable: summary.canPurchaseAny,
+  });
   cache.unavailableNotice?.classList.toggle(
     "hidden",
     !state.unavailableRequestedVariant,
@@ -369,26 +378,24 @@ function updateStockAndActions() {
   setButton(
     cache.addButton,
     cache.addLabel,
-    !exactAvailable,
-    exactAvailable ? "Add to Cart" : "Select Options",
+    actions.addToCart,
   );
   setButton(
     cache.buyButton,
     cache.buyLabel,
-    !summary.canPurchaseAny,
-    summary.canPurchaseAny ? "Buy Now" : "Unavailable",
+    actions.buyNow,
   );
 }
 
 function setButton(
   button: HTMLButtonElement | null,
   label: HTMLElement | null,
-  disabled: boolean,
-  text: string,
+  presentation: ProductActionPresentation,
 ) {
   if (!button) return;
-  button.disabled = disabled;
-  if (label) label.textContent = text;
+  button.disabled = presentation.disabled;
+  button.setAttribute("aria-label", presentation.ariaLabel);
+  if (label) label.textContent = presentation.label;
 }
 
 function updatePrice() {

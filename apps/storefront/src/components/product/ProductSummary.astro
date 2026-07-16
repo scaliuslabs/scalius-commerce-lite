@@ -20,6 +20,7 @@ import {
   shouldShowStartingVariantPrice,
   type VariantOptionAvailability,
 } from "./lib/variant-state-machine";
+import { getProductActionsPresentation } from "./lib/product-actions";
 
 interface Props {
   product: Product;
@@ -57,8 +58,12 @@ const initialSelection = initialUnavailableVariant
 const initialSelectedVariant = initialVariant ?? resolveExactVariantSelection(variants, initialSelection)?.variant ?? null;
 const stockVariant = initialUnavailableVariant ?? initialSelectedVariant;
 const buyerStockSummary = getBuyerStockSummary(stockVariant ? [stockVariant] : variants);
-const purchaseUnavailable = !buyerStockSummary.canPurchaseAny;
 const addToCartAvailable = Boolean(initialSelectedVariant && !initialUnavailableVariant && getBuyerStockSummary([initialSelectedVariant]).canPurchaseAny);
+const actionPresentation = getProductActionsPresentation({
+  productName: product.name,
+  exactVariantAvailable: addToCartAvailable,
+  anyVariantAvailable: buyerStockSummary.canPurchaseAny,
+});
 const stockStatus = buyerStockSummary.tone === "available"
   ? { text: buyerStockSummary.text, color: "text-primary", bg: "bg-primary/10" }
   : { text: buyerStockSummary.text, color: "text-destructive", bg: "bg-destructive/10" };
@@ -202,11 +207,11 @@ function optionAriaLabel(
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <div class="grid grid-cols-2 gap-2 pt-1 lg:pt-3">
-        <button type="button" data-action="add-to-cart" disabled={!addToCartAvailable} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary/5 px-2 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:py-2.5" aria-label={addToCartAvailable ? `Add ${product.name} to cart` : `Select an available ${product.name} option to add to cart`}>
-          <ShoppingCart className="mr-1.5 h-4 w-4" /><span data-action-label="add-to-cart">{addToCartAvailable ? "Add to Cart" : "Select Options"}</span>
+        <button type="button" data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary/5 px-2 py-2 text-sm font-medium text-primary shadow-sm transition-all hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 lg:py-2.5" aria-label={actionPresentation.addToCart.ariaLabel}>
+          <ShoppingCart className="mr-1.5 h-4 w-4" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
-        <button type="button" data-action="buy-now" disabled={purchaseUnavailable} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:opacity-50 lg:py-2.5" aria-label={purchaseUnavailable ? "Product unavailable" : "Buy now"}>
-          <Check className="mr-1.5 h-4 w-4" /><span data-action-label="buy-now">{purchaseUnavailable ? "Unavailable" : "Buy Now"}</span>
+        <button type="button" data-action="buy-now" disabled={actionPresentation.buyNow.disabled} class="flex min-h-10 items-center justify-center rounded-lg border border-primary bg-primary px-2 py-2 text-sm font-medium text-primary-foreground shadow-md transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:opacity-50 lg:py-2.5" aria-label={actionPresentation.buyNow.ariaLabel}>
+          <Check className="mr-1.5 h-4 w-4" /><span data-action-label="buy-now">{actionPresentation.buyNow.label}</span>
         </button>
       </div>
     </div>
