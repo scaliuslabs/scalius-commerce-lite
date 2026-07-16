@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  cacheStatusBuildId,
   getBuildCommandForTarget,
   getDeployCommandForTarget,
   getSequentialWorkspaceCommand,
   getTypecheckCommandForTarget,
   parseOnlyTarget,
+  parseStorefrontBuildId,
   sampleApiReadiness,
+  warmStorefrontPath,
 } from "./deploy.mjs";
 
 function readyResponse() {
@@ -129,5 +132,75 @@ describe("deploy target wiring", () => {
     expect(() => getTypecheckCommandForTarget("removed-worker")).toThrow(
       "Unknown deploy target: removed-worker",
     );
+  });
+});
+
+describe("storefront post-deploy warming", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("parses the generated build and cache-status contracts", () => {
+    expect(parseStorefrontBuildId('export const BUILD_ID = "src-current";')).toBe(
+      "src-current",
+    );
+    expect(cacheStatusBuildId("HIT; v=4; build=src-current; gen=2")).toBe(
+      "src-current",
+    );
+    expect(cacheStatusBuildId("unknown")).toBeNull();
+  });
+
+  it("retries an old edge build until the expected build is served", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response("old", {
+        status: 200,
+        headers: { "X-Cache-Status": "HIT; v=4; build=src-old" },
+      }))
+      .mockResolvedValueOnce(new Response("current", {
+        status: 200,
+        headers: { "X-Cache-Status": "MISS; v=4; build=src-current" },
+      }));
+    const sleepImpl = vi.fn().mockResolvedValue(undefined);
+
+    const result = await warmStorefrontPath(
+      "https://storefront.example.test",
+      "/products/example",
+      {
+        expectedBuildId: "src-current",
+        maxAttempts: 3,
+        retryDelayMs: 1,
+        fetchImpl,
+        sleepImpl,
+      },
+    );
+
+    expect(result).toMatchObject({ attempt: 2, servedBuildId: "src-current" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(sleepImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails verification when the old build persists", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () =>
+      new Response("old", {
+        status: 200,
+        headers: { "X-Cache-Status": "HIT; v=4; build=src-old" },
+      }),
+    );
+
+    await expect(warmStorefrontPath(
+      "https://storefront.example.test",
+      "/search",
+      {
+        expectedBuildId: "src-current",
+        maxAttempts: 2,
+        retryDelayMs: 0,
+        fetchImpl,
+      },
+    )).rejects.toThrow("served build src-old; expected src-current");
   });
 });
