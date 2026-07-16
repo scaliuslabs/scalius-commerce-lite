@@ -1,6 +1,6 @@
 # Catalog Live Demo Run
 
-Last verified: 2026-07-15 (Asia/Dhaka)
+Last verified: 2026-07-16 (Asia/Dhaka)
 
 This is fresh operational evidence for the disposable Scalius demo store. It records only facts needed to reproduce or safely continue the run. Production code, D1 state, and a new browser/API check remain authoritative.
 
@@ -46,37 +46,71 @@ Homepage merchandising uses five active collections: New & Noteworthy (`koK4xysg
 
 Authenticated admin and storefront flows were exercised in the Abdur Rob Chrome profile.
 
-### Visible merchant-workflow checkpoint (2026-07-15)
+### Visible merchant-workflow checkpoint (2026-07-16)
 
 The 5-category/50-product fixture is a deterministic catalog baseline, not a
-substitute for merchant-workflow proof. A separate visible production run now
-drives the real admin controls through the Abdur Rob Chrome profile. Do not
-claim this product was created until the final submit is explicitly confirmed
-and observed; the current draft is intentionally unsaved.
+substitute for merchant-workflow proof. The current visible production run uses
+the Abdur Rob Chrome profile and keeps the final live write behind explicit
+action-time confirmation.
 
-- The live editor contains an unsaved `Aranya Oak Entry Shelf` draft in Home &
-  Living with BDT 6,490 base pricing, five individually selected Kori Oak media
-  assets, and the clean product view selected as featured media. The picker did
-  not bulk-select any asset.
-- Additional Sections was exercised with `Materials & installation` and `Care
-  & warranty`. Adding the second section collapsed the first and opened the new
-  title and rich-text editor together, matching the accepted accordion
-  contract.
-- Merchant-defined `Length` (`60 cm`, `90 cm`) and `Finish` (`Natural`,
-  `Walnut`) axes generated four combinations. `90 cm / Walnut` was deliberately
-  omitted, leaving three active SKUs. The draft carries BDT 6,490/6,990/8,990
-  SKU prices and 18/12/7 on-hand quantities.
-- `60 cm / Walnut` uses a 10% SKU discount; `90 cm / Natural` uses a BDT 500
-  fixed SKU discount. The expanded first SKU shows automatic Code 128 barcode
-  generation on save, 2.4 kg weight, and stock tracking enabled.
-- Natural and Walnut 60 cm SKUs have exact same-product image references. The
-  90 cm Natural SKU intentionally keeps `Automatic product image`, proving that
-  partial exact-SKU assignment remains a first-class state rather than
-  restoring serialized axis or sibling inference.
-- The next visible action is mapping `Finish` to the catalog `color` field,
-  then finishing search metadata and readiness review. Computer Use paused only
-  because macOS locked; resume the existing Chrome draft after unlock rather
-  than replacing it with an API write.
+- The existing `Kori Oak Floating Shelf` edit route is fully staged but remains
+  unsaved. Its primary description now covers use cases, solid-oak/steel
+  construction, natural material variation, both length/finish choices, wall
+  suitability, included hardware, and safe installation. `Installation`, `Load
+  & materials`, and `In the box` retain ordered rich content. Do not claim these
+  copy changes are live until `Save changes` is explicitly confirmed and the
+  post-save product/storefront reads prove them.
+- Kori retains merchant-defined `Length` (`60 cm`, `90 cm`) and `Finish`
+  (`Natural`, `Walnut`) axes, mapped to catalog size and color respectively.
+  All four combinations remain active. Natural and Walnut SKUs use exact
+  same-product images, every SKU tracks stock, and all four persisted internal
+  Code 128 barcodes are present.
+- The staged SKU weights are 2,800 g for both 60 cm variants and 3,900 g for
+  both 90 cm variants. The live editor exposed the reusable ambiguity that the
+  advanced field said only `Weight`; commit `01743f914` changes it to
+  `Weight (g)`, adds a SKU-specific accessible name and example, and passes the
+  focused 21-test matrix suite. That UI correction is committed but not yet
+  deployed.
+- Kori's saved search title/description remain valid. The expanded readiness
+  rail reports canonical, product sitemap, feed image, catalog feed, Product
+  schema, and Breadcrumb schema as ready; `noIndex`, sitemap exclusion, and feed
+  exclusion are all off.
+- The Additional Sections frame briefly exposed only its loading shell while
+  the lazy chunk settled, then rendered all three saved sections without data
+  loss. Treat this as a short loading-affordance opportunity, not a missing-data
+  defect.
+- A separate unsaved `Aranya Oak Entry Shelf` New Product tab is only a visible
+  workflow exercise. It reuses Kori media/options and would incorrectly create
+  a 51st duplicate-style product, so do not submit it. Close or discard it only
+  with the required browser confirmation; the authoritative demo target remains
+  exactly 50 products and ten per category.
+- The latest read-only production sweep re-proved the Media manager at desktop:
+  five assets per row, product images using contain rather than crop, `Select`
+  entering with zero chosen assets, one independently selectable asset, and
+  Escape returning to the library. The visible page reported 24 items in the
+  first keyset page; this does not supersede the reconciled 246-ready-asset
+  authority.
+- Inventory loaded 177 sellable SKUs with 2,698 on hand, 2 committed, 2,696
+  available, zero low-stock alerts needing review, and two sold-out SKUs. Its
+  URL-addressable `variants`, `alerts`, and `movements` tabs all rendered. The
+  movement ledger reported 193 verified v2 movements across 187 current or
+  retained-audit SKU identities, including explicit stocktake notes and actor
+  attribution.
+- The Orders list retained its search/filter state in the URL, cleared back to
+  two orders, and keyboard navigation opened `SSF6FY` at the real detail route.
+  The detail showed immutable totals, exact Rider `41 / Sand` identity, COD,
+  pending fulfillment, notification attempts, unavailable-provider readiness,
+  and return eligibility without redirect or console warning/error. Computer
+  Use returned a stale pre-navigation pixel capture while exposing the correct
+  detail accessibility tree; the Chrome connector independently rendered the
+  detail pixels and DOM, proving a capture artifact rather than a product bug.
+- `SSF6FY` links to `cust_IGMsKuuzxrR7F6Qw4ySzS` Customer History. The unified
+  Customers directory now visibly contains both checkout buyers as `Guest`,
+  with one order each, zero paid spend for their unpaid orders, correct last
+  order dates, and stable history routes. At 390×844 the table becomes two
+  purpose-built cards with contact details, order/paid-spend/date metrics,
+  actions, and no horizontal overflow. The inspected desktop and mobile states
+  emitted no console warning/error.
 - An ambient in-app screenshot initially looked horizontally cropped. An
   explicit 800 x 800 CSS viewport recheck rendered the entire 96vw picker,
   folder rail, filters, three-column result grid, and Close/Add controls without
