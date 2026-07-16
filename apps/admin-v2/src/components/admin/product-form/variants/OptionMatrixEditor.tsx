@@ -990,8 +990,17 @@ function AdvancedSkuFields({ variant, onChange }: { variant: DraftVariant; onCha
         ) : null}
       </label>
       <label className="space-y-1 text-xs text-muted-foreground">
-        Weight
-        <Input type="number" min={0} value={variant.weight ?? ""} onChange={(event) => onChange({ weight: event.target.value === "" ? null : Math.max(0, event.target.valueAsNumber || 0) })} className="h-8 text-sm" />
+        Weight (g)
+        <Input
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={variant.weight ?? ""}
+          aria-label={`Weight in grams for ${variant.sku}`}
+          placeholder="e.g. 500"
+          onChange={(event) => onChange({ weight: event.target.value === "" ? null : Math.max(0, event.target.valueAsNumber || 0) })}
+          className="h-8 text-sm"
+        />
       </label>
       <label className="flex h-8 items-center gap-2 text-xs">
         <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
