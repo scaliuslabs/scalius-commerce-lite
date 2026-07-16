@@ -994,6 +994,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/inventory": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
+  "/api/v1/admin/inventory/labels/preview": {
+    POST: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
   "/api/v1/admin/inventory/alerts": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },

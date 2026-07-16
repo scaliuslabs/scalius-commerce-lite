@@ -1,5 +1,6 @@
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   ArrowDown,
   ArrowUp,
@@ -8,6 +9,7 @@ import {
   ImageIcon,
   Info,
   Plus,
+  Printer,
   Search,
   Trash2,
   X,
@@ -375,6 +377,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           onRestoreCombination={restoreCombination}
           onRestoreAll={restoreAllCombinations}
           committedByVariantId={committedByVariantId}
+          printingDisabled={!productId || dirty}
         />
       ) : !combinationsPending ? (
         <div className="rounded-md border border-dashed px-3 py-5 text-center text-xs text-muted-foreground">
@@ -481,7 +484,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
   );
 }
 
-function VariantMatrix({ options, variants, images, expandedId, onExpandedChange, onChange, onRemove, missingCombinations, onRestoreCombination, onRestoreAll, committedByVariantId }: {
+function VariantMatrix({ options, variants, images, expandedId, onExpandedChange, onChange, onRemove, missingCombinations, onRestoreCombination, onRestoreAll, committedByVariantId, printingDisabled }: {
   options: DraftOption[];
   variants: DraftVariant[];
   images: ProductSkuImageChoice[];
@@ -493,6 +496,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
   onRestoreCombination: (valueIds: string[]) => void;
   onRestoreAll: () => void;
   committedByVariantId: ReadonlyMap<string, number>;
+  printingDisabled: boolean;
 }) {
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   const [query, setQuery] = React.useState("");
@@ -517,6 +521,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
     setSelected((current) => new Set([...current].filter((id) => available.has(id))));
   }, [variants]);
   const allVisibleSelected = visibleVariants.length > 0 && visibleVariants.every((variant) => selected.has(variant.id));
+  const selectedPersistedIds = [...selected].filter((id) => id.startsWith("var_"));
   const toggleSelected = (id: string, checked: boolean) => {
     setSelected((current) => {
       const next = new Set(current);
@@ -620,6 +625,19 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           >
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Omit selected
           </Button>
+          {selectedPersistedIds.length > 0 ? (
+            printingDisabled ? (
+              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" disabled title="Save product changes before printing labels">
+                <Printer className="mr-1 h-3.5 w-3.5" /> Save before printing
+              </Button>
+            ) : (
+              <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+                <Link to="/admin/inventory/labels" search={{ variants: selectedPersistedIds.join(",") }}>
+                  <Printer className="mr-1 h-3.5 w-3.5" /> Print labels
+                </Link>
+              </Button>
+            )
+          ) : null}
           <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setSelected(new Set())}>Clear selection</Button>
         </div>
       ) : null}
@@ -642,7 +660,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               <th className="w-[11%] p-2 text-left">Price</th>
               <th className="w-[11%] p-2 text-left">On hand</th>
               <th className="w-[23%] p-2 text-left">Discount</th>
-              <th className="w-11 p-2"><span className="sr-only">Actions</span></th>
+              <th className="w-20 p-2"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -672,6 +690,14 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     </td>
                     <td className="p-1.5"><DiscountInput variant={variant} onChange={(patch) => onChange(variant.id, patch)} /></td>
                     <td className="p-1.5 text-center">
+                      <div className="flex items-center justify-center gap-0.5">
+                      {variant.id.startsWith("var_") && !printingDisabled ? (
+                        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                          <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
+                            <Printer className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
@@ -684,6 +710,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
+                      </div>
                     </td>
                   </tr>
                   {expanded ? (
@@ -727,6 +754,13 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
+              {variant.id.startsWith("var_") && !printingDisabled ? (
+                <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                  <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
+                    <Printer className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 gap-1.5">
               <label className="space-y-1 text-xs text-muted-foreground">SKU<CompactInput value={variant.sku} onChange={(sku) => onChange(variant.id, { sku })} ariaLabel="SKU" /></label>

@@ -30,13 +30,13 @@ describe("barcode validation", () => {
     expect(BARCODE_TYPES).toEqual(["ean13", "upc", "isbn", "gtin", "code128", "custom"]);
   });
 
-  it("generates a deterministic internal Code 128 identity outside the ordinary SKU alphabet", () => {
-    expect(generateInternalCode128Barcode("var_abc-123")).toBe(
-      "SCALIUS:C128:abc-123",
-    );
-    expect(generateInternalCode128Barcode("var_abc-123")).toContain(":");
+  it("generates a deterministic compact numeric internal Code 128 identity", () => {
+    const generated = generateInternalCode128Barcode("var_abc-123");
+    expect(generated).toMatch(/^99\d{12}$/);
+    expect(generateInternalCode128Barcode("var_abc-123")).toBe(generated);
+    expect(generateInternalCode128Barcode("var_abc-124")).not.toBe(generated);
     expect(getBarcodeValidationError(
-      generateInternalCode128Barcode("var_abc-123"),
+      generated,
       "code128",
     )).toBeNull();
   });

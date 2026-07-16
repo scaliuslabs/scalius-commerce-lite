@@ -20,6 +20,7 @@ This is the durable working record for the Products, Categories, Attributes, Col
 - [DOMAIN.md](DOMAIN.md) — schema, services, inventory ledger, variants, attributes, collections, currency, and D1 limits.
 - [ATTRIBUTES.md](ATTRIBUTES.md) — attribute authority, admin assignment/value workflows, public facet versus fact semantics, verified defects, and release tests.
 - [INVENTORY.md](INVENTORY.md) — inventory authority, adjustment/stocktake semantics, movement history, RBAC, currency boundary, and remaining scale gaps.
+- [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md) — researched label-printing UX, A4/thermal workflows, symbology rules, print architecture, and verification contract.
 - [STOREFRONT.md](STOREFRONT.md) — buyer catalog, caching, pricing, discovery, feeds, UCP, category/search UX, and protected product-page boundaries.
 - [PRODUCT-EDITOR-UX.md](PRODUCT-EDITOR-UX.md) — product create/edit interaction, conflict, keyboard, and responsive UX contract.
 - [VARIANT-IMAGES.md](VARIANT-IMAGES.md) — stable variant-media authority, editor mapping behavior, storefront precedence, and migration boundaries.

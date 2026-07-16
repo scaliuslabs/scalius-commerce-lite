@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown, Check, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, ArrowUpDown, History, AlertTriangle, Search, RefreshCw, Plus, Minus, X, ArrowUp, ArrowDown, Check, Download, ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -33,6 +33,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -253,6 +254,7 @@ export function InventoryManager({
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [sort, setSort] = useState<{ field: SortField; order: SortOrder }>({ field: "available", order: "asc" });
   const [adjustingVariant, setAdjustingVariant] = useState<InventoryVariant | null>(null);
+  const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
 
   const queryClient = useQueryClient();
   const search = useDebounce(localSearch, 300);
@@ -508,8 +510,8 @@ export function InventoryManager({
                   <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     type="search"
-                    placeholder="Search name or SKU..."
-                    aria-label="Search inventory by product name or SKU"
+                    placeholder="Search name, SKU, or barcode…"
+                    aria-label="Search inventory by product name, SKU, or barcode"
                     value={localSearch}
                     onChange={(e) => {
                       setLocalSearch(e.target.value);
@@ -538,6 +540,15 @@ export function InventoryManager({
                   </Button>
                 )}
               </div>
+              <Button asChild variant={selectedVariantIds.length > 0 ? "default" : "outline"} size="sm" className="h-8 shrink-0 text-xs">
+                <Link
+                  to="/admin/inventory/labels"
+                  search={selectedVariantIds.length > 0 ? { variants: selectedVariantIds.join(",") } : {}}
+                >
+                  <Printer className="mr-1.5 h-3.5 w-3.5" />
+                  {selectedVariantIds.length > 0 ? `Print ${selectedVariantIds.length} selected` : "Print labels"}
+                </Link>
+              </Button>
             </div>
 
             <div className="flex min-w-0 items-center gap-2 md:hidden">
@@ -567,6 +578,10 @@ export function InventoryManager({
               isRefreshing={loading}
               hasActiveFilters={Boolean(hasActiveFilters)}
               canAdjust={inventoryActions.canAdjustStock}
+              selectedVariantIds={selectedVariantIds}
+              onSelectedChange={(id, selected) => setSelectedVariantIds((current) => selected
+                ? current.includes(id) ? current : [...current, id]
+                : current.filter((candidate) => candidate !== id))}
               onAdjust={setAdjustingVariant}
               onRetry={() => void variantsQuery.refetch()}
             />
@@ -579,7 +594,23 @@ export function InventoryManager({
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
-                    <TableHead className="py-2 text-xs h-8 pl-3 w-[250px]">
+                    <TableHead className="h-8 w-9 py-2 pl-3 pr-0">
+                      <Checkbox
+                        aria-label="Select all SKUs on this page"
+                        checked={variants.length > 0 && variants.every((variant) => selectedVariantIds.includes(variant.id))
+                          ? true
+                          : variants.some((variant) => selectedVariantIds.includes(variant.id))
+                            ? "indeterminate"
+                            : false}
+                        onCheckedChange={(checked) => {
+                          const pageIds = variants.map((variant) => variant.id);
+                          setSelectedVariantIds((current) => checked === true
+                            ? Array.from(new Set([...current, ...pageIds])).slice(0, 150)
+                            : current.filter((id) => !pageIds.includes(id)));
+                        }}
+                      />
+                    </TableHead>
+                    <TableHead className="py-2 text-xs h-8 w-[250px]">
                       <Button variant="ghost" className="px-0 hover:bg-transparent -ml-1 h-6 text-xs font-medium" onClick={() => handleSort("productName")}>
                         Product {sort.field === "productName" && (sort.order === "asc" ? <ArrowUp className="ml-1 h-3 w-3 inline" /> : <ArrowDown className="ml-1 h-3 w-3 inline" />)}
                       </Button>
@@ -604,7 +635,7 @@ export function InventoryManager({
                 <TableBody>
                   {variantsQuery.isError ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <p className="text-xs font-medium text-destructive">Inventory could not be loaded.</p>
                         <Button
                           type="button"
@@ -619,13 +650,13 @@ export function InventoryManager({
                     </TableRow>
                   ) : isInitialLoad ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center">
+                      <TableCell colSpan={9} className="h-24 text-center">
                         <RefreshCw className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : variants.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground">
+                      <TableCell colSpan={9} className="h-24 text-center text-xs text-muted-foreground">
                         {hasActiveFilters ? "No variants match your filters." : "No variants found."}
                       </TableCell>
                     </TableRow>
@@ -634,7 +665,16 @@ export function InventoryManager({
                       const badge = getStockBadge(v.available, v.lowStockThreshold);
                       return (
                         <TableRow key={v.id} className="hover:bg-muted/50">
-                          <TableCell className="py-2 pl-3">
+                          <TableCell className="w-9 py-2 pl-3 pr-0">
+                            <Checkbox
+                              checked={selectedVariantIds.includes(v.id)}
+                              aria-label={`Select ${v.productName || "Unknown product"}, SKU ${v.sku}`}
+                              onCheckedChange={(checked) => setSelectedVariantIds((current) => checked === true
+                                ? current.includes(v.id) ? current : [...current, v.id]
+                                : current.filter((candidate) => candidate !== v.id))}
+                            />
+                          </TableCell>
+                          <TableCell className="py-2">
                             <Link to={`/admin/products/${v.productId}` as string} className="block w-[230px] truncate text-sm font-medium text-primary hover:underline">
                               {v.productName || "Unknown Product"}
                             </Link>
@@ -657,10 +697,17 @@ export function InventoryManager({
                               {badge.label}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-2 text-right pr-3 flex justify-end">
-                            {inventoryActions.canAdjustStock ? (
-                              <InventoryAdjustButton variant={v} onAdjust={setAdjustingVariant} />
-                            ) : null}
+                          <TableCell className="py-2 text-right pr-3">
+                            <div className="flex justify-end gap-1">
+                              <Button asChild variant="ghost" size="icon" className="h-7 w-7" aria-label={`Print barcode label for ${v.productName || "Unknown product"}, SKU ${v.sku}`}>
+                                <Link to="/admin/inventory/labels" search={{ variants: v.id }}>
+                                  <Printer className="h-3.5 w-3.5" />
+                                </Link>
+                              </Button>
+                              {inventoryActions.canAdjustStock ? (
+                                <InventoryAdjustButton variant={v} onAdjust={setAdjustingVariant} />
+                              ) : null}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -1044,6 +1091,8 @@ function InventoryVariantMobileList({
   isRefreshing,
   hasActiveFilters,
   canAdjust,
+  selectedVariantIds,
+  onSelectedChange,
   onAdjust,
   onRetry,
 }: {
@@ -1053,6 +1102,8 @@ function InventoryVariantMobileList({
   isRefreshing: boolean;
   hasActiveFilters: boolean;
   canAdjust: boolean;
+  selectedVariantIds: string[];
+  onSelectedChange: (id: string, selected: boolean) => void;
   onAdjust: (variant: InventoryVariant) => void;
   onRetry: () => void;
 }) {
@@ -1087,7 +1138,13 @@ function InventoryVariantMobileList({
             return (
               <li key={variant.id} className="overflow-hidden rounded-md border bg-card">
                 <div className="flex min-w-0 items-start justify-between gap-3 px-3 py-2.5">
-                  <div className="min-w-0">
+                  <Checkbox
+                    checked={selectedVariantIds.includes(variant.id)}
+                    onCheckedChange={(checked) => onSelectedChange(variant.id, checked === true)}
+                    aria-label={`Select ${productName}, SKU ${variant.sku}`}
+                    className="mt-0.5 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
                     <Link
                       to={`/admin/products/${variant.productId}` as string}
                       className="block break-words text-sm font-medium leading-5 text-primary hover:underline"
@@ -1123,11 +1180,16 @@ function InventoryVariantMobileList({
                   </div>
                 </dl>
 
-                {canAdjust ? (
-                  <div className="flex justify-end border-t px-2 py-1">
+                <div className="flex justify-end gap-1 border-t px-2 py-1">
+                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-sm font-medium">
+                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${productName}, SKU ${variant.sku}`}>
+                      <Printer className="mr-1 h-3 w-3" /> Label
+                    </Link>
+                  </Button>
+                  {canAdjust ? (
                     <InventoryAdjustButton variant={variant} onAdjust={onAdjust} />
+                  ) : null}
                   </div>
-                ) : null}
               </li>
             );
           })}

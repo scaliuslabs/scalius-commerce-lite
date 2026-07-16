@@ -25,6 +25,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
 
   // Inventory
   "/admin/inventory": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  "/admin/inventory/labels": { permission: PERMISSIONS.PRODUCTS_VIEW },
 
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },

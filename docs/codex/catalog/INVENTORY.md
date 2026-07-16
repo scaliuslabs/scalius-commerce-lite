@@ -76,19 +76,23 @@ Last reviewed: 2026-07-13
 
 ## Remaining release gaps
 
-1. Actor names are resolved from the current admin account because movement
+1. Barcode values are generated and scanner-searchable, but the merchant label
+   composer described in [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md)
+   is not yet implemented. Inventory does not currently expose barcode fields,
+   exact-SKU selection, physical page preview, or print/PDF output.
+2. Actor names are resolved from the current admin account because movement
    rows do not contain an immutable actor-name snapshot. Renames intentionally
    show the current name and deleted accounts show Former admin; changing that
    policy requires an explicit audit schema decision rather than copying PII
    into read projections.
-2. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
+3. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
    validate every row first, use stable SKU/barcode identity, require one
    idempotency key per import, chunk lookup sets below D1's parameter ceiling,
    and avoid partial inventory commits.
-3. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
+4. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
    diagnostics may report them, but reconciliation must not invent missing
    counter edges.
-4. The narrow-screen SKU projection is locally source-tested and linted, but the
+5. The narrow-screen SKU projection is locally source-tested and linted, but the
    deployed authenticated 320/360/390/430 px browser flow still needs verification.
    Low-stock alerts and movement-history responsive behavior were not redesigned
    in this slice and remain separate browser-audit targets.

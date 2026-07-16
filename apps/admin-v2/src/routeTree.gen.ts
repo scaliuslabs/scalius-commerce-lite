@@ -25,7 +25,6 @@ import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as ApiScannerTokenRouteImport } from './routes/api/scanner-token'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
-import { Route as AdminInventoryRouteImport } from './routes/admin/inventory'
 import { Route as AdminAttributesRouteImport } from './routes/admin/attributes'
 import { Route as AdminAccessDeniedRouteImport } from './routes/admin/access-denied'
 import { Route as AdminAbandonedCheckoutsRouteImport } from './routes/admin/abandoned-checkouts'
@@ -33,6 +32,7 @@ import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
 import { Route as AdminOrdersIndexRouteImport } from './routes/admin/orders/index'
+import { Route as AdminInventoryIndexRouteImport } from './routes/admin/inventory/index'
 import { Route as AdminDiscountsIndexRouteImport } from './routes/admin/discounts/index'
 import { Route as AdminCustomersIndexRouteImport } from './routes/admin/customers/index'
 import { Route as AdminCollectionsIndexRouteImport } from './routes/admin/collections/index'
@@ -53,6 +53,7 @@ import { Route as AdminProductsNewRouteImport } from './routes/admin/products/ne
 import { Route as AdminPagesTrashRouteImport } from './routes/admin/pages/trash'
 import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
 import { Route as AdminOrdersNewRouteImport } from './routes/admin/orders/new'
+import { Route as AdminInventoryLabelsRouteImport } from './routes/admin/inventory/labels'
 import { Route as AdminDiscountsNewRouteImport } from './routes/admin/discounts/new'
 import { Route as AdminCustomersNewRouteImport } from './routes/admin/customers/new'
 import { Route as AdminCollectionsTrashRouteImport } from './routes/admin/collections/trash'
@@ -153,11 +154,6 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
   path: '/media',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminInventoryRoute = AdminInventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminAttributesRoute = AdminAttributesRouteImport.update({
   id: '/attributes',
   path: '/attributes',
@@ -191,6 +187,11 @@ const AdminPagesIndexRoute = AdminPagesIndexRouteImport.update({
 const AdminOrdersIndexRoute = AdminOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInventoryIndexRoute = AdminInventoryIndexRouteImport.update({
+  id: '/inventory/',
+  path: '/inventory/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminDiscountsIndexRoute = AdminDiscountsIndexRouteImport.update({
@@ -296,6 +297,11 @@ const AdminPagesNewRoute = AdminPagesNewRouteImport.update({
 const AdminOrdersNewRoute = AdminOrdersNewRouteImport.update({
   id: '/orders/new',
   path: '/orders/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInventoryLabelsRoute = AdminInventoryLabelsRouteImport.update({
+  id: '/inventory/labels',
+  path: '/inventory/labels',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminDiscountsNewRoute = AdminDiscountsNewRouteImport.update({
@@ -407,7 +413,6 @@ export interface FileRoutesByFullPath {
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
-  '/admin/inventory': typeof AdminInventoryRoute
   '/admin/media': typeof AdminMediaRoute
   '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -424,6 +429,7 @@ export interface FileRoutesByFullPath {
   '/admin/collections/trash': typeof AdminCollectionsTrashRoute
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
@@ -444,6 +450,7 @@ export interface FileRoutesByFullPath {
   '/admin/collections/': typeof AdminCollectionsIndexRoute
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
+  '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/orders/': typeof AdminOrdersIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
@@ -470,7 +477,6 @@ export interface FileRoutesByTo {
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
-  '/admin/inventory': typeof AdminInventoryRoute
   '/admin/media': typeof AdminMediaRoute
   '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -487,6 +493,7 @@ export interface FileRoutesByTo {
   '/admin/collections/trash': typeof AdminCollectionsTrashRoute
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
@@ -507,6 +514,7 @@ export interface FileRoutesByTo {
   '/admin/collections': typeof AdminCollectionsIndexRoute
   '/admin/customers': typeof AdminCustomersIndexRoute
   '/admin/discounts': typeof AdminDiscountsIndexRoute
+  '/admin/inventory': typeof AdminInventoryIndexRoute
   '/admin/orders': typeof AdminOrdersIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
@@ -535,7 +543,6 @@ export interface FileRoutesById {
   '/admin/abandoned-checkouts': typeof AdminAbandonedCheckoutsRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/attributes': typeof AdminAttributesRoute
-  '/admin/inventory': typeof AdminInventoryRoute
   '/admin/media': typeof AdminMediaRoute
   '/api/scanner-token': typeof ApiScannerTokenRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -552,6 +559,7 @@ export interface FileRoutesById {
   '/admin/collections/trash': typeof AdminCollectionsTrashRoute
   '/admin/customers/new': typeof AdminCustomersNewRoute
   '/admin/discounts/new': typeof AdminDiscountsNewRoute
+  '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
@@ -572,6 +580,7 @@ export interface FileRoutesById {
   '/admin/collections/': typeof AdminCollectionsIndexRoute
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
+  '/admin/inventory/': typeof AdminInventoryIndexRoute
   '/admin/orders/': typeof AdminOrdersIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
@@ -601,7 +610,6 @@ export interface FileRouteTypes {
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
-    | '/admin/inventory'
     | '/admin/media'
     | '/api/scanner-token'
     | '/auth/forgot-password'
@@ -618,6 +626,7 @@ export interface FileRouteTypes {
     | '/admin/collections/trash'
     | '/admin/customers/new'
     | '/admin/discounts/new'
+    | '/admin/inventory/labels'
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/pages/trash'
@@ -638,6 +647,7 @@ export interface FileRouteTypes {
     | '/admin/collections/'
     | '/admin/customers/'
     | '/admin/discounts/'
+    | '/admin/inventory/'
     | '/admin/orders/'
     | '/admin/pages/'
     | '/admin/products/'
@@ -664,7 +674,6 @@ export interface FileRouteTypes {
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
-    | '/admin/inventory'
     | '/admin/media'
     | '/api/scanner-token'
     | '/auth/forgot-password'
@@ -681,6 +690,7 @@ export interface FileRouteTypes {
     | '/admin/collections/trash'
     | '/admin/customers/new'
     | '/admin/discounts/new'
+    | '/admin/inventory/labels'
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/pages/trash'
@@ -701,6 +711,7 @@ export interface FileRouteTypes {
     | '/admin/collections'
     | '/admin/customers'
     | '/admin/discounts'
+    | '/admin/inventory'
     | '/admin/orders'
     | '/admin/pages'
     | '/admin/products'
@@ -728,7 +739,6 @@ export interface FileRouteTypes {
     | '/admin/abandoned-checkouts'
     | '/admin/access-denied'
     | '/admin/attributes'
-    | '/admin/inventory'
     | '/admin/media'
     | '/api/scanner-token'
     | '/auth/forgot-password'
@@ -745,6 +755,7 @@ export interface FileRouteTypes {
     | '/admin/collections/trash'
     | '/admin/customers/new'
     | '/admin/discounts/new'
+    | '/admin/inventory/labels'
     | '/admin/orders/new'
     | '/admin/pages/new'
     | '/admin/pages/trash'
@@ -765,6 +776,7 @@ export interface FileRouteTypes {
     | '/admin/collections/'
     | '/admin/customers/'
     | '/admin/discounts/'
+    | '/admin/inventory/'
     | '/admin/orders/'
     | '/admin/pages/'
     | '/admin/products/'
@@ -910,13 +922,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMediaRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/inventory': {
-      id: '/admin/inventory'
-      path: '/inventory'
-      fullPath: '/admin/inventory'
-      preLoaderRoute: typeof AdminInventoryRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/attributes': {
       id: '/admin/attributes'
       path: '/attributes'
@@ -964,6 +969,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/admin/orders/'
       preLoaderRoute: typeof AdminOrdersIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/inventory/': {
+      id: '/admin/inventory/'
+      path: '/inventory'
+      fullPath: '/admin/inventory/'
+      preLoaderRoute: typeof AdminInventoryIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/discounts/': {
@@ -1106,6 +1118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrdersNewRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/inventory/labels': {
+      id: '/admin/inventory/labels'
+      path: '/inventory/labels'
+      fullPath: '/admin/inventory/labels'
+      preLoaderRoute: typeof AdminInventoryLabelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/discounts/new': {
       id: '/admin/discounts/new'
       path: '/discounts/new'
@@ -1239,7 +1258,6 @@ interface AdminRouteChildren {
   AdminAbandonedCheckoutsRoute: typeof AdminAbandonedCheckoutsRoute
   AdminAccessDeniedRoute: typeof AdminAccessDeniedRoute
   AdminAttributesRoute: typeof AdminAttributesRoute
-  AdminInventoryRoute: typeof AdminInventoryRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminAnalyticsNewRoute: typeof AdminAnalyticsNewRoute
@@ -1248,6 +1266,7 @@ interface AdminRouteChildren {
   AdminCollectionsTrashRoute: typeof AdminCollectionsTrashRoute
   AdminCustomersNewRoute: typeof AdminCustomersNewRoute
   AdminDiscountsNewRoute: typeof AdminDiscountsNewRoute
+  AdminInventoryLabelsRoute: typeof AdminInventoryLabelsRoute
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminPagesNewRoute: typeof AdminPagesNewRoute
   AdminPagesTrashRoute: typeof AdminPagesTrashRoute
@@ -1267,6 +1286,7 @@ interface AdminRouteChildren {
   AdminCollectionsIndexRoute: typeof AdminCollectionsIndexRoute
   AdminCustomersIndexRoute: typeof AdminCustomersIndexRoute
   AdminDiscountsIndexRoute: typeof AdminDiscountsIndexRoute
+  AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
   AdminOrdersIndexRoute: typeof AdminOrdersIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
@@ -1288,7 +1308,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAbandonedCheckoutsRoute: AdminAbandonedCheckoutsRoute,
   AdminAccessDeniedRoute: AdminAccessDeniedRoute,
   AdminAttributesRoute: AdminAttributesRoute,
-  AdminInventoryRoute: AdminInventoryRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminAnalyticsNewRoute: AdminAnalyticsNewRoute,
@@ -1297,6 +1316,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCollectionsTrashRoute: AdminCollectionsTrashRoute,
   AdminCustomersNewRoute: AdminCustomersNewRoute,
   AdminDiscountsNewRoute: AdminDiscountsNewRoute,
+  AdminInventoryLabelsRoute: AdminInventoryLabelsRoute,
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminPagesNewRoute: AdminPagesNewRoute,
   AdminPagesTrashRoute: AdminPagesTrashRoute,
@@ -1316,6 +1336,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCollectionsIndexRoute: AdminCollectionsIndexRoute,
   AdminCustomersIndexRoute: AdminCustomersIndexRoute,
   AdminDiscountsIndexRoute: AdminDiscountsIndexRoute,
+  AdminInventoryIndexRoute: AdminInventoryIndexRoute,
   AdminOrdersIndexRoute: AdminOrdersIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,

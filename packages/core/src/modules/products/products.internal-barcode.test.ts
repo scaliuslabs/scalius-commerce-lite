@@ -8,11 +8,12 @@ import {
 import {
     createProductOptionMatrixSchema,
 } from "./products.option-matrix";
+import { generateInternalCode128Barcode } from "@scalius/shared/barcode-identity";
 
 describe("internal SKU barcodes", () => {
     it("assigns a stable internal Code 128 identity only when a new SKU has no barcode", () => {
         expect(resolveNewVariantBarcode("var_abc-123", null, null)).toEqual({
-            barcode: "SCALIUS:C128:abc-123",
+            barcode: generateInternalCode128Barcode("var_abc-123"),
             barcodeType: "code128",
         });
 
@@ -36,7 +37,7 @@ describe("internal SKU barcodes", () => {
     it("gives newly created simple products the same scanner-ready identity", () => {
         expect(defaultProductSkuValues("prod_abc-123", 1250)).toMatchObject({
             id: "var_default_prod_abc-123",
-            barcode: "SCALIUS:C128:default_prod_abc-123",
+            barcode: generateInternalCode128Barcode("var_default_prod_abc-123"),
             barcodeType: "code128",
         });
 

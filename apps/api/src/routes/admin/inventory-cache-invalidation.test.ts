@@ -5,6 +5,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
   getInventoryOverview: vi.fn(),
+  getInventoryLabelVariants: vi.fn(),
   listInventoryMovements: vi.fn(),
   adjustInventory: vi.fn(),
   adjustStock: vi.fn(),
@@ -19,12 +20,14 @@ vi.mock("@scalius/core/modules/inventory", async () => {
   const { z } = await import("@hono/zod-openapi");
   return {
     getInventoryOverview: mocks.getInventoryOverview,
+    getInventoryLabelVariants: mocks.getInventoryLabelVariants,
     listInventoryMovements: mocks.listInventoryMovements,
     adjustInventory: mocks.adjustInventory,
     adjustStock: mocks.adjustStock,
     setStock: mocks.setStock,
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
     inventoryOperationKeySchema: z.string().min(16).max(128),
+    INVENTORY_LABEL_VARIANT_LIMIT: 150,
     adjustInventorySchema: z.object({
       operationKey: z.string().min(16),
       delta: z.number().int().refine((value) => value !== 0),
@@ -90,6 +93,10 @@ function createTestApp() {
   });
   mocks.acknowledgeLowStockAlert.mockResolvedValue(true);
   mocks.invalidateProductAvailabilityCaches.mockResolvedValue(undefined);
+  mocks.getInventoryLabelVariants.mockResolvedValue({
+    variants: [],
+    missingVariantIds: [],
+  });
 
   app.onError((error, c) => {
     const { body, status } = errorResponseFromError(error);
@@ -125,6 +132,16 @@ async function postJson(
 describe("admin inventory cache invalidation", () => {
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("returns a read-only exact-SKU label projection without cache invalidation", async () => {
+    const { app, db, env } = createTestApp();
+    const variantIds = ["var_2", "var_1"];
+    const response = await postJson(app, env, "/labels/preview", { variantIds });
+
+    expect(response.status).toBe(200);
+    expect(mocks.getInventoryLabelVariants).toHaveBeenCalledWith(db, variantIds);
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
   it.each([
