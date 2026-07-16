@@ -97,6 +97,30 @@ and observed; the current draft is intentionally unsaved.
   `b7a11049-c7bd-42c8-a620-b9804d03a8a9` is live at 100%; a cache-bypassed
   browser read observed exact `৳2,658.80`, `৳1,047.20`, and `৳2,566.80`
   values plus `From ৳1,161` and `From ৳5,841` across the grid and carousel.
+- A 390 x 844 buyer pass on Rider Court Trainers proved the page and cart stay
+  at 390 CSS pixels with no horizontal overflow. The information rail is
+  genuinely sticky: it flows before its threshold, holds 56 px below the
+  measured header throughout the active details container, and releases at the
+  container boundary. No protected product-page visual change was needed.
+- The same pass found a hydrated accessibility mismatch: after selecting an
+  exact SKU, the visible Add to Cart label changed but its accessible name still
+  instructed the buyer to select an option; Buy Now was also actionable before
+  an exact option combination existed. Storefront
+  `eb681eb4-933e-4fb5-8589-70098c835b44` now derives both SSR and hydrated
+  action states from one pure presentation helper. Before selection both
+  actions are disabled with truthful guidance; after selecting Size 40 / Sand,
+  the live controls expose `Add Rider Court Trainers to cart` and `Buy Rider
+  Court Trainers now`, the price is `৳8,990.00`, and the Sand media ID is used
+  by both the product hero and cart thumbnail. The 390 px cart opened with one
+  exact option line and no browser warnings/errors. Fourteen focused product
+  tests and the 308-file Storefront check passed.
+- Post-deploy warming initially accepted mixed old/new `build=` response
+  markers during Worker propagation and called every 200 response warmed. The
+  deploy gate now reads the generated Storefront build ID, retries each critical
+  HTML path until `X-Cache-Status` proves that exact build, and fails deployment
+  verification if an old build or HTTP error persists. Three gate cases cover
+  parsing, recovery, and terminal failure. Live checks for `/search`, Halo, and
+  Rider all served `src-9043915681b4411f` after propagation.
 
 - Buyer selected Rider Court Trainers `Size 40 / Color Sand` and added one unit to cart.
 - Cart showed the correct trainer image, option labels, BDT 8,990 price, BDT 110 shipping, and BDT 9,100 total.

@@ -48,6 +48,8 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
+const STOREFRONT_WARM_MAX_ATTEMPTS = 6;
+const STOREFRONT_WARM_RETRY_DELAY_MS = 1_000;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
 const API_READYZ_TIMEOUT_MS = 10_000;
@@ -362,40 +364,80 @@ export async function sampleApiReadiness(apiBaseUrl, {
   return { readyCount, samples };
 }
 
-async function warmStorefrontPath(url, path) {
+export function parseStorefrontBuildId(source) {
+  const match = source.match(/export const BUILD_ID = ["']([^"']+)["'];/);
+  if (!match?.[1]) {
+    throw new Error("Could not read the generated Storefront BUILD_ID.");
+  }
+  return match[1];
+}
+
+export function cacheStatusBuildId(cacheStatus) {
+  return cacheStatus.match(/(?:^|[;,\s])build=([^;,\s]+)/i)?.[1] ?? null;
+}
+
+export async function warmStorefrontPath(url, path, {
+  expectedBuildId,
+  maxAttempts = STOREFRONT_WARM_MAX_ATTEMPTS,
+  retryDelayMs = STOREFRONT_WARM_RETRY_DELAY_MS,
+  timeoutMs = 20_000,
+  fetchImpl = fetch,
+  sleepImpl = sleep,
+} = {}) {
+  if (!expectedBuildId) {
+    throw new Error(`Cannot verify ${path} without the expected Storefront build ID.`);
+  }
+
   const warmUrl = new URL(path, url).toString();
-  const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  let lastFailure = "no response";
 
-  try {
-    const response = await fetch(warmUrl, {
-      method: "GET",
-      headers: {
-        "Cache-Control": "no-cache",
-        "X-Cache-Warm": "deploy",
-      },
-      signal: controller.signal,
-    });
-    await response.arrayBuffer();
-    const durationMs = Date.now() - startedAt;
-    const cacheStatus = response.headers.get("X-Cache-Status") ?? "unknown";
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      console.warn(
-        `⚠ Warm ${path} returned ${response.status} in ${durationMs}ms (${cacheStatus}).`,
-      );
-      return;
+    try {
+      const response = await fetchImpl(warmUrl, {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache",
+          "X-Cache-Warm": "deploy",
+        },
+        signal: controller.signal,
+      });
+      await response.arrayBuffer();
+      const durationMs = Date.now() - startedAt;
+      const cacheStatus = response.headers.get("X-Cache-Status") ?? "unknown";
+      const servedBuildId = cacheStatusBuildId(cacheStatus);
+
+      if (response.ok && servedBuildId === expectedBuildId) {
+        console.log(
+          `✓ Warmed ${path} in ${durationMs}ms (${cacheStatus})${
+            attempt > 1 ? ` after ${attempt} attempts` : ""
+          }.`,
+        );
+        return { attempt, cacheStatus, servedBuildId };
+      }
+
+      lastFailure = response.ok
+        ? `served build ${servedBuildId ?? "unknown"}; expected ${expectedBuildId} (${cacheStatus})`
+        : `returned HTTP ${response.status} (${cacheStatus})`;
+      console.warn(`⚠ Warm ${path} attempt ${attempt}/${maxAttempts}: ${lastFailure}.`);
+    } catch (error) {
+      lastFailure = errorMessage(error);
+      console.warn(`⚠ Warm ${path} attempt ${attempt}/${maxAttempts}: ${lastFailure}.`);
+    } finally {
+      clearTimeout(timeout);
     }
 
-    console.log(`✓ Warmed ${path} in ${durationMs}ms (${cacheStatus}).`);
-  } catch (error) {
-    const durationMs = Date.now() - startedAt;
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`⚠ Warm ${path} failed after ${durationMs}ms: ${message}`);
-  } finally {
-    clearTimeout(timeout);
+    if (attempt < maxAttempts && retryDelayMs > 0) {
+      await sleepImpl(retryDelayMs);
+    }
   }
+
+  throw new Error(
+    `Storefront warm verification failed for ${path}: ${lastFailure}`,
+  );
 }
 
 function buildApiUrl(apiBaseUrl, path) {
@@ -516,7 +558,7 @@ async function collectStorefrontWarmPaths(generatedConfig) {
   return [...paths];
 }
 
-async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig) {
+async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId) {
   const warmPaths = await collectStorefrontWarmPaths(generatedConfig);
 
   console.log("\n▶ Warm Storefront critical HTML caches");
@@ -526,7 +568,7 @@ async function warmStorefrontAfterDeploy(storefrontUrl, generatedConfig) {
     const chunk = warmPaths.slice(index, index + STOREFRONT_WARM_CONCURRENCY);
     await Promise.all(
       chunk.map((path) =>
-        warmStorefrontPath(storefrontUrl, path),
+        warmStorefrontPath(storefrontUrl, path, { expectedBuildId }),
       ),
     );
   }
@@ -536,6 +578,9 @@ async function verifyStorefrontDeploy() {
   const storefrontDir = resolve(root, "apps", "storefront");
   const generatedConfigPath = resolve(storefrontDir, "dist", "server", "wrangler.json");
   const generatedConfig = readJsonFile(generatedConfigPath);
+  const expectedBuildId = parseStorefrontBuildId(
+    readFileSync(resolve(storefrontDir, "src", "config", "build-id.ts"), "utf8"),
+  );
 
   const deployments = runJson(
     `${pnpm} exec wrangler deployments list --config dist/server/wrangler.json --json`,
@@ -554,7 +599,7 @@ async function verifyStorefrontDeploy() {
     throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
   }
   await verifyHttpOk(new URL("/health", storefrontUrl).toString(), "Verify live Storefront /health");
-  await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig);
+  await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId);
 }
 
 async function verifyApiDeploy(config) {
