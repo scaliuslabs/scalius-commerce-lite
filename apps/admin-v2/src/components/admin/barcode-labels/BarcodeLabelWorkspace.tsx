@@ -42,6 +42,7 @@ import {
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelPreset,
+  getLabelPresetIssue,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
   MAX_LABEL_SKUS,
@@ -50,6 +51,7 @@ import {
   type BarcodeSymbol,
   type LabelContentOptions,
   type LabelCopy,
+  type LabelPageCell,
   type LabelPreset,
   type LabelPresetId,
 } from "./barcode-label-model";
@@ -62,6 +64,48 @@ type BarcodeLabelWorkspaceProps = {
 };
 
 type PrintMode = "job" | "test";
+
+const DEFAULT_CUSTOM_PRESET: LabelPreset = { ...getLabelPreset("custom") };
+
+function MillimetreInput({
+  id,
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id} className="text-[11px] font-normal text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => {
+            const next = event.target.valueAsNumber;
+            if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next)));
+          }}
+          className="h-8 pr-8 text-sm tabular-nums"
+        />
+        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mm</span>
+      </div>
+    </div>
+  );
+}
 
 function BarcodeGraphic({
   symbol,
@@ -186,15 +230,17 @@ function PrintPages({
   formatPrice,
   test,
 }: {
-  pages: LabelCopy[][];
+  pages: LabelPageCell[][];
   preset: LabelPreset;
   content: LabelContentOptions;
   formatPrice: (price: number | string) => string;
   test: boolean;
 }) {
   const capacity = preset.columns * preset.rows;
+  const firstCopy = pages.flat().find((copy): copy is LabelCopy => copy !== null);
+  const firstOccupiedIndex = Math.max(0, pages[0]?.findIndex((copy) => copy !== null) ?? 0);
   const printPages = test
-    ? [Array.from({ length: capacity }, (_, index) => index === 0 ? pages[0]?.[0] ?? null : null)]
+    ? [Array.from({ length: capacity }, (_, index) => index === firstOccupiedIndex ? firstCopy ?? null : null)]
     : pages.map((page) => Array.from({ length: capacity }, (_, index) => page[index] ?? null));
   const dimensions = getLabelDimensions(preset);
 
@@ -251,11 +297,15 @@ function PaperPreview({
   preset,
   content,
   formatPrice,
+  startOffset,
+  onStartOffsetChange,
 }: {
-  page: LabelCopy[];
+  page: LabelPageCell[];
   preset: LabelPreset;
   content: LabelContentOptions;
   formatPrice: (price: number | string) => string;
+  startOffset: number;
+  onStartOffsetChange: (value: number) => void;
 }) {
   const capacity = preset.columns * preset.rows;
   const cells = Array.from({ length: capacity }, (_, index) => page[index] ?? null);
@@ -273,14 +323,25 @@ function PaperPreview({
         aria-label={`Preview of ${preset.name}`}
       >
         {cells.map((copy, index) => (
-          <div
+          <button
+            type="button"
             key={copy?.key ?? `preview-empty-${index}`}
-            className={cn("min-h-0 overflow-hidden bg-white", preset.cropMarks && "border border-dashed border-zinc-300")}
+            className={cn(
+              "group relative min-h-0 overflow-hidden bg-white text-left focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
+              preset.cropMarks && "border border-dashed border-zinc-300",
+              index === startOffset && capacity > 1 && "ring-2 ring-inset ring-emerald-500",
+            )}
+            aria-label={`Start printing at cell ${index + 1}`}
+            aria-pressed={index === startOffset}
+            disabled={capacity <= 1}
+            onClick={() => onStartOffsetChange(index)}
           >
             {copy ? (
               <LabelArtwork copy={copy} content={content} price={formatPrice(copy.variant.price)} compact />
+            ) : capacity > 1 ? (
+              <span className="grid h-full place-items-center text-[8px] text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">{index + 1}</span>
             ) : null}
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -297,6 +358,8 @@ export function BarcodeLabelWorkspace({
   const search = useDebounce(searchInput, 250);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [presetId, setPresetId] = useState<LabelPresetId>("a4-cut-3x8");
+  const [customPreset, setCustomPreset] = useState<LabelPreset>(DEFAULT_CUSTOM_PRESET);
+  const [startOffset, setStartOffset] = useState(0);
   const [content, setContent] = useState<LabelContentOptions>(DEFAULT_LABEL_CONTENT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
@@ -305,9 +368,16 @@ export function BarcodeLabelWorkspace({
     try {
       const saved = window.localStorage.getItem(LABEL_PREFERENCE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as { presetId?: LabelPresetId; content?: Partial<LabelContentOptions> };
+        const parsed = JSON.parse(saved) as {
+          presetId?: LabelPresetId;
+          content?: Partial<LabelContentOptions>;
+          customPreset?: Partial<LabelPreset>;
+        };
         if (LABEL_PRESETS.some((preset) => preset.id === parsed.presetId)) setPresetId(parsed.presetId!);
         if (parsed.content) setContent((current) => ({ ...current, ...parsed.content }));
+        if (parsed.customPreset) {
+          setCustomPreset((current) => ({ ...current, ...parsed.customPreset, id: "custom", name: current.name, detail: current.detail }));
+        }
       }
     } catch {
       // Device-local preferences are optional; printing remains available.
@@ -319,11 +389,11 @@ export function BarcodeLabelWorkspace({
   useEffect(() => {
     if (!preferencesLoaded) return;
     try {
-      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content }));
+      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset }));
     } catch {
       // Ignore blocked or exhausted local storage.
     }
-  }, [content, preferencesLoaded, presetId]);
+  }, [content, customPreset, preferencesLoaded, presetId]);
 
   const previewQuery = useQuery({
     queryKey: ["inventory", "label-preview", selectedVariantIds],
@@ -360,17 +430,26 @@ export function BarcodeLabelWorkspace({
     });
   }, [selectedVariants]);
 
-  const preset = getLabelPreset(presetId);
+  const preset = presetId === "custom" ? customPreset : getLabelPreset(presetId);
+  const capacity = preset.columns * preset.rows;
+  const presetIssue = getLabelPresetIssue(preset);
+  useEffect(() => {
+    setStartOffset((current) => Math.min(current, Math.max(0, capacity - 1)));
+  }, [capacity]);
   const copies = useMemo(() => buildLabelCopies(selectedVariants, quantities), [quantities, selectedVariants]);
-  const pages = useMemo(() => paginateLabelCopies(copies.slice(0, MAX_LABEL_COPIES), preset), [copies, preset]);
+  const pages = useMemo(
+    () => paginateLabelCopies(copies.slice(0, MAX_LABEL_COPIES), preset, startOffset),
+    [copies, preset, startOffset],
+  );
   const activeFitIssues = useMemo(() => selectedVariants.flatMap((variant) => {
+    if (presetIssue) return [];
     if ((quantities[variant.id] ?? 0) <= 0) return [];
     const symbol = resolveBarcodeSymbol(variant.barcode, variant.barcodeType);
     const issue = getBarcodeFitIssue(symbol, preset);
     return issue ? [{ variant, issue }] : [];
-  }), [preset, quantities, selectedVariants]);
+  }), [preset, presetIssue, quantities, selectedVariants]);
   const tooManyCopies = copies.length > MAX_LABEL_COPIES;
-  const canPrint = copies.length > 0 && !tooManyCopies && activeFitIssues.length === 0;
+  const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
   const pickerVariants = pickerQuery.data?.variants ?? [];
   const pickerPagination = pickerQuery.data?.pagination;
 
@@ -596,6 +675,45 @@ export function BarcodeLabelWorkspace({
                     </SelectContent>
                   </Select>
                 </div>
+                {presetId === "custom" ? (
+                  <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 p-2.5">
+                    <MillimetreInput id="custom-page-width" label="Page width" value={customPreset.pageWidthMm} min={20} max={320} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, pageWidthMm: value }))} />
+                    <MillimetreInput id="custom-page-height" label="Page height" value={customPreset.pageHeightMm} min={15} max={450} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, pageHeightMm: value }))} />
+                    <div className="space-y-1">
+                      <Label htmlFor="custom-columns" className="text-[11px] font-normal text-muted-foreground">Columns</Label>
+                      <Input id="custom-columns" type="number" min={1} max={10} value={customPreset.columns} onChange={(event) => setCustomPreset((current) => ({ ...current, columns: Math.max(1, Math.min(10, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-8 text-sm tabular-nums" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="custom-rows" className="text-[11px] font-normal text-muted-foreground">Rows</Label>
+                      <Input id="custom-rows" type="number" min={1} max={20} value={customPreset.rows} onChange={(event) => setCustomPreset((current) => ({ ...current, rows: Math.max(1, Math.min(20, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-8 text-sm tabular-nums" />
+                    </div>
+                    <MillimetreInput id="custom-margin-x" label="Side margin" value={customPreset.marginXmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginXmm: value }))} />
+                    <MillimetreInput id="custom-margin-y" label="Top margin" value={customPreset.marginYmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginYmm: value }))} />
+                    <MillimetreInput id="custom-gap-x" label="Column gap" value={customPreset.gapXmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapXmm: value }))} />
+                    <MillimetreInput id="custom-gap-y" label="Row gap" value={customPreset.gapYmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapYmm: value }))} />
+                    <div className="col-span-2 flex items-center justify-between border-t pt-2">
+                      <Label htmlFor="custom-crop-marks" className="text-xs font-normal">Cut guides</Label>
+                      <Switch id="custom-crop-marks" checked={customPreset.cropMarks} onCheckedChange={(cropMarks) => setCustomPreset((current) => ({ ...current, cropMarks }))} />
+                    </div>
+                  </div>
+                ) : null}
+                {capacity > 1 ? (
+                  <div className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2">
+                    <div className="min-w-0">
+                      <Label htmlFor="barcode-start-cell" className="text-xs">Start at cell</Label>
+                      <p className="truncate text-[10px] text-muted-foreground">{startOffset === 0 ? "New sheet" : `Skip ${startOffset} already-used ${startOffset === 1 ? "label" : "labels"}`}</p>
+                    </div>
+                    <Input
+                      id="barcode-start-cell"
+                      type="number"
+                      min={1}
+                      max={capacity}
+                      value={startOffset + 1}
+                      onChange={(event) => setStartOffset(Math.max(0, Math.min(capacity - 1, Math.trunc(event.target.valueAsNumber || 1) - 1)))}
+                      className="h-8 w-20 text-center text-sm tabular-nums"
+                    />
+                  </div>
+                ) : null}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3">
                   {([
                     ["showProduct", "Product"],
@@ -612,6 +730,7 @@ export function BarcodeLabelWorkspace({
                 <div className="rounded-md bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
                   <div className="flex items-center justify-between"><span>Page</span><span className="font-medium text-foreground">{preset.pageWidthMm} × {preset.pageHeightMm} mm</span></div>
                   <div className="mt-1 flex items-center justify-between"><span>Labels per page</span><span className="font-medium text-foreground">{preset.columns * preset.rows}</span></div>
+                  {startOffset > 0 ? <div className="mt-1 flex items-center justify-between"><span>First label</span><span className="font-medium text-foreground">Cell {startOffset + 1}</span></div> : null}
                   <div className="mt-1 flex items-center justify-between"><span>Output</span><span className="font-medium text-foreground">{Math.min(copies.length, MAX_LABEL_COPIES)} labels · {pages.length} pages</span></div>
                 </div>
               </CardContent>
@@ -620,14 +739,27 @@ export function BarcodeLabelWorkspace({
             <Card>
               <CardHeader className="flex-row items-center justify-between space-y-0 px-3 py-2.5">
                 <CardTitle className="text-sm">Page preview</CardTitle>
-                <span className="text-[11px] text-muted-foreground">Actual dimensions print at 100%</span>
+                <span className="text-[11px] text-muted-foreground">{capacity > 1 ? "Click a cell to start" : "Print at 100%"}</span>
               </CardHeader>
               <CardContent className="border-t bg-zinc-100 p-4 dark:bg-zinc-950">
-                {pages[0]?.length ? <PaperPreview page={pages[0]} preset={preset} content={content} formatPrice={formatPrice} /> : <div className="grid aspect-[210/297] place-items-center border border-dashed bg-white text-center text-xs text-zinc-500">Select a SKU and set at least one label.</div>}
+                {pages[0]?.length ? (
+                  <PaperPreview
+                    page={pages[0]}
+                    preset={preset}
+                    content={content}
+                    formatPrice={formatPrice}
+                    startOffset={startOffset}
+                    onStartOffsetChange={setStartOffset}
+                  />
+                ) : <div className="grid aspect-[210/297] place-items-center border border-dashed bg-white text-center text-xs text-zinc-500">Select a SKU and set at least one label.</div>}
               </CardContent>
             </Card>
 
-            {tooManyCopies ? (
+            {presetIssue ? (
+              <div className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {presetIssue}
+              </div>
+            ) : tooManyCopies ? (
               <div className="flex gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> A print job is limited to {MAX_LABEL_COPIES} labels. Reduce the quantities before printing.
               </div>

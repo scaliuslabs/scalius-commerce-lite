@@ -5,6 +5,7 @@ import {
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelPreset,
+  getLabelPresetIssue,
   isbn10ToBooklandEan13,
   MAX_LABEL_COPIES,
   paginateLabelCopies,
@@ -69,6 +70,21 @@ describe("barcode label page composition", () => {
     const copies = buildLabelCopies([variant], { [variant.id]: 25 });
     expect(copies).toHaveLength(25);
     expect(paginateLabelCopies(copies, getLabelPreset("a4-cut-3x8")).map((page) => page.length)).toEqual([24, 1]);
+  });
+
+  it("keeps used sheet cells empty before placing the first printable label", () => {
+    const copies = buildLabelCopies([variant], { [variant.id]: 23 });
+    const pages = paginateLabelCopies(copies, getLabelPreset("a4-cut-3x8"), 3);
+    expect(pages).toHaveLength(2);
+    expect(pages[0].slice(0, 3)).toEqual([null, null, null]);
+    expect(pages[0].filter(Boolean)).toHaveLength(21);
+    expect(pages[1].filter(Boolean)).toHaveLength(2);
+  });
+
+  it("rejects custom grids whose physical cells are too small to use safely", () => {
+    const custom = { ...getLabelPreset("custom"), columns: 10, marginXmm: 20 };
+    expect(getLabelPresetIssue(custom)).toContain("at least 20 mm of width");
+    expect(getLabelPresetIssue({ ...custom, columns: 3 })).toBeNull();
   });
 
   it("surfaces one copy beyond the cap so the UI can block an oversized job", () => {

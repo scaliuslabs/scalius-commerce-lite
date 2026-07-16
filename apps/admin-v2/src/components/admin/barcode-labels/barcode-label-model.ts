@@ -6,7 +6,7 @@ export const MAX_LABEL_COPIES = 1_000;
 export type BarcodeRenderFormat = "CODE128" | "EAN13" | "UPC" | "EAN8" | "ITF14";
 
 export type LabelPreset = {
-  id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-adhesive-2x7" | "thermal-50x25" | "thermal-40x30";
+  id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-adhesive-2x7" | "thermal-50x25" | "thermal-40x30" | "custom";
   name: string;
   detail: string;
   pageWidthMm: number;
@@ -97,6 +97,21 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
     cropMarks: false,
     thermal: true,
   },
+  {
+    id: "custom",
+    name: "Custom stock",
+    detail: "Set page, grid, margins, and gaps",
+    pageWidthMm: 210,
+    pageHeightMm: 297,
+    columns: 3,
+    rows: 8,
+    marginXmm: 8,
+    marginYmm: 8,
+    gapXmm: 2,
+    gapYmm: 2,
+    cropMarks: true,
+    thermal: false,
+  },
 ] as const;
 
 export type LabelPresetId = LabelPreset["id"];
@@ -131,6 +146,18 @@ export function getLabelDimensions(preset: LabelPreset) {
     widthMm: (preset.pageWidthMm - (2 * preset.marginXmm) - ((preset.columns - 1) * preset.gapXmm)) / preset.columns,
     heightMm: (preset.pageHeightMm - (2 * preset.marginYmm) - ((preset.rows - 1) * preset.gapYmm)) / preset.rows,
   };
+}
+
+export function getLabelPresetIssue(preset: LabelPreset): string | null {
+  if (preset.pageWidthMm < 20 || preset.pageWidthMm > 320) return "Page width must be between 20 and 320 mm.";
+  if (preset.pageHeightMm < 15 || preset.pageHeightMm > 450) return "Page height must be between 15 and 450 mm.";
+  if (!Number.isInteger(preset.columns) || preset.columns < 1 || preset.columns > 10) return "Columns must be a whole number from 1 to 10.";
+  if (!Number.isInteger(preset.rows) || preset.rows < 1 || preset.rows > 20) return "Rows must be a whole number from 1 to 20.";
+  if (preset.marginXmm < 0 || preset.marginYmm < 0 || preset.gapXmm < 0 || preset.gapYmm < 0) return "Margins and gaps cannot be negative.";
+  const dimensions = getLabelDimensions(preset);
+  if (dimensions.widthMm < 20) return "Each label needs at least 20 mm of width. Reduce columns, margins, or horizontal gaps.";
+  if (dimensions.heightMm < 15) return "Each label needs at least 15 mm of height. Reduce rows, margins, or vertical gaps.";
+  return null;
 }
 
 function gtinCheckDigit(inputWithoutCheckDigit: string): string {
@@ -242,12 +269,23 @@ export function buildLabelCopies(
   return copies;
 }
 
-export function paginateLabelCopies(copies: readonly LabelCopy[], preset: LabelPreset): LabelCopy[][] {
+export type LabelPageCell = LabelCopy | null;
+
+export function paginateLabelCopies(
+  copies: readonly LabelCopy[],
+  preset: LabelPreset,
+  startOffset = 0,
+): LabelPageCell[][] {
   const perPage = preset.columns * preset.rows;
   if (perPage < 1) return [];
-  const pages: LabelCopy[][] = [];
-  for (let index = 0; index < copies.length; index += perPage) {
-    pages.push(copies.slice(index, index + perPage));
+  const safeOffset = Math.max(0, Math.min(perPage - 1, Math.trunc(startOffset)));
+  const cells: LabelPageCell[] = [
+    ...Array.from({ length: copies.length > 0 ? safeOffset : 0 }, () => null),
+    ...copies,
+  ];
+  const pages: LabelPageCell[][] = [];
+  for (let index = 0; index < cells.length; index += perPage) {
+    pages.push(cells.slice(index, index + perPage));
   }
   return pages;
 }

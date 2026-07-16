@@ -1,6 +1,6 @@
 # Inventory and Catalog Settings Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-17
 
 ## Authority and architecture
 
@@ -63,6 +63,14 @@ Last reviewed: 2026-07-13
   control. Search, stock-state filtering, pagination, and sorting continue to use
   the one existing query state; mobile adds an explicit sort selector because its
   projection intentionally has no table headers.
+- Barcode-label printing is now a first-class read-only inventory workflow.
+  Inventory search includes exact barcode values; each SKU row has a direct
+  print action; page selection supports one batch; and the same URL-addressable
+  workspace is available from persisted product SKU selections. The workspace
+  provides exact-SKU quantities, A4/cut-sheet/thermal/custom stock, partially
+  used sheet offsets, vector barcode preview, test output, and native browser
+  print/PDF without mutating inventory or barcode identity. See
+  [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md).
 
 ## Catalog settings truth
 
@@ -76,26 +84,21 @@ Last reviewed: 2026-07-13
 
 ## Remaining release gaps
 
-1. Barcode values are generated and scanner-searchable, but the merchant label
-   composer described in [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md)
-   is not yet implemented. Inventory does not currently expose barcode fields,
-   exact-SKU selection, physical page preview, or print/PDF output.
-2. Actor names are resolved from the current admin account because movement
+1. Actor names are resolved from the current admin account because movement
    rows do not contain an immutable actor-name snapshot. Renames intentionally
    show the current name and deleted accounts show Former admin; changing that
    policy requires an explicit audit schema decision rather than copying PII
    into read projections.
-3. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
+2. No bounded, atomic CSV/bulk stocktake import exists. Any future import must
    validate every row first, use stable SKU/barcode identity, require one
    idempotency key per import, chunk lookup sets below D1's parameter ceiling,
    and avoid partial inventory commits.
-4. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
+3. Ledger v1 rows remain a deliberate non-foldable history boundary. Health
    diagnostics may report them, but reconciliation must not invent missing
    counter edges.
-5. The narrow-screen SKU projection is locally source-tested and linted, but the
-   deployed authenticated 320/360/390/430 px browser flow still needs verification.
-   Low-stock alerts and movement-history responsive behavior were not redesigned
-   in this slice and remain separate browser-audit targets.
+4. Low-stock alerts and movement-history responsive behavior were not
+   redesigned in the label-printing slice and remain separate browser-audit
+   targets.
 
 ## Verification for this slice
 
@@ -112,3 +115,9 @@ Last reviewed: 2026-07-13
 - The generated OpenAPI client, repository typecheck, API/admin production
   builds, migration metadata, and focused core/API/admin/database tests pass
   from the clean inventory release commit.
+- The production inventory and barcode-label routes were authenticated-smoked
+  on desktop and at a 390 px viewport. Direct and multi-SKU entry, URL reload,
+  quantity shortcuts, legacy wide-Code-128 diagnostics, wider A4 recovery,
+  physical preview, and horizontal-overflow/console-error checks passed. The
+  production API health/ready/OpenAPI operations check also passed with all
+  declared bindings ready.
