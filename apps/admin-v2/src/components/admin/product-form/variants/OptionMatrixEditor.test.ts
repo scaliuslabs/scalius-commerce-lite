@@ -243,6 +243,12 @@ describe("option matrix editor density and stock disclosure", () => {
     expect(editorSource).not.toContain("committed ·");
   });
 
+  it("states the persisted SKU weight unit in the compact editor", () => {
+    expect(editorSource).toContain("Weight (g)");
+    expect(editorSource).toContain("Weight in grams for ${variant.sku}");
+    expect(editorSource).toContain('placeholder="e.g. 500"');
+  });
+
   it("uses exact selected-SKU assignments and an explicit automatic fallback", () => {
     expect(editorSource).toContain("Automatic product image");
     expect(editorSource).toContain("Using automatic product image");
