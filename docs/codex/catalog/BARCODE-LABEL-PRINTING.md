@@ -1,6 +1,6 @@
 # Barcode label printing
 
-Last reviewed: 2026-07-16
+Last reviewed: 2026-07-17
 
 ## Decision
 
@@ -20,10 +20,12 @@ points open the same workspace:
 
 The workspace keeps three layers visible on desktop: selected SKUs and label
 counts, format/content controls, and a sticky live paper preview. On narrow
-screens those layers become a short progressive sequence, but Back never loses
-selection or quantities. A returning merchant with a saved device preference
-can reach the browser print dialog after one review; a first-time merchant can
-see every decision before printing.
+screens those layers stack into one responsive workspace. Exact SKU selection
+is reload-safe in the URL; quantities and partially used-sheet position are
+intentionally job-local so a later print run cannot silently reuse an old stock
+count or skip fresh labels. A returning merchant with a saved device
+format/content preference can reach the browser print dialog after one review;
+a first-time merchant can see every decision before printing.
 
 ## Competitive evidence
 
@@ -64,9 +66,9 @@ see every decision before printing.
   printable barcode exists.
 - Each selected row shows product, merchant option label, SKU, barcode type,
   barcode value, stock, and label quantity.
-- Quantity shortcuts are `One each`, `On hand`, `Available`, and `Custom`.
-  Zero is allowed and removes that SKU from the print count without losing it
-  from the batch.
+- Quantity shortcuts are `One each`, `On hand`, and `Available`; every SKU also
+  has an exact editable quantity. Zero is allowed and removes that SKU from the
+  print count without losing it from the batch.
 - A job is bounded to 150 SKUs and 1,000 rendered labels. The UI calculates
   page count before rendering and blocks an excessive job instead of freezing
   the browser.
@@ -82,23 +84,30 @@ Primary presets:
 3. **A4 adhesive — 2 x 7.** Fourteen larger labels with no crop marks.
 4. **Thermal 50 x 25 mm.** One label per page for common roll printers.
 5. **Thermal 40 x 30 mm.** One label per page for compact retail labels.
-6. **Custom.** Page size, label width/height, rows, columns, margins, and gaps
-   remain advanced disclosure, not the default screen.
+6. **Custom.** Page size, rows, columns, symmetric margins, gaps, and cut guides
+   remain advanced disclosure, not the default screen. The derived label cell
+   must remain at least 20 x 15 mm.
 
 Label content is restrained: barcode symbol and human-readable value are
-mandatory; product name, variant, SKU, price, and store name are optional. The
+mandatory; product name, variant, SKU, and price are optional. The
 preview reports when the chosen media cannot hold the selected symbology at a
 safe size. Truncating descriptive text is allowed; truncating, horizontally
 scaling, or clipping the symbol or quiet zones is not.
+
+For partially used multi-label sheets, `Start at cell` skips the already-used
+slots. The scaled page preview is also an interactive cell picker, while the
+numeric field remains the compact keyboard/mobile fallback. This offset is
+applied to the real print page and test page, but is never persisted into the
+next job.
 
 ### Print
 
 - The primary action is **Print or save PDF** and opens the native browser
   dialog. SVG symbols remain vector output; the UI does not rasterize them into
   screenshots.
-- The first run for a device/preset offers **Print test page**, with outlines,
-  orientation marks, a ruler, and one real scan sample. It instructs Actual
-  Size/100% and disables browser headers/footers.
+- **Test page** prints the real first symbol in the chosen starting cell, all
+  stock outlines, cell numbers, and the Actual Size/100% plus browser
+  header/footer instruction before a full batch.
 - The screen shows page size, labels per page, total labels, and total pages
   beside the action. It never guesses printer connection or readiness.
 - Device-local last-used format/content preferences are appropriate because
@@ -144,10 +153,26 @@ feeds, structured data, or external marketplaces.
 - Print CSS owns physical millimetre dimensions and `@page`; preview scaling is
   screen-only. Print output hides the admin shell and preserves black bars,
   white background, quiet zones, and human-readable text.
-- Tests cover symbology mapping/check digits, ISBN-10 conversion, custom-value
-  rejection, quantity/page math, job caps, exact-SKU ordering, missing SKU
-  diagnostics, responsive structure, keyboard selection, print-only CSS, and a
-  generated-label scan round trip.
+- Focused tests cover symbology mapping, ISBN-10 conversion, custom-value
+  rejection, physical fit diagnostics, quantity/page/start-cell math, custom
+  stock bounds, job caps, exact-SKU ordering, missing-SKU diagnostics, the
+  read-only API boundary, and the bounded `json_each()` projection.
+
+## Implemented and live-verified
+
+- Admin route: `/admin/inventory/labels?variants=<exact variant ids>`.
+- Entry points: inventory row, inventory page selection, direct workspace, and
+  persisted rows selected in the product SKU matrix.
+- Production authenticated smoke: direct SKU load, second-SKU selection,
+  reload-safe URL state, `On hand` quantity expansion, A4 2 x 7 recovery for a
+  legacy long Code 128 value, 390 px responsive layout, no horizontal overflow,
+  and no browser console warning/error.
+- Production API smoke: health, four readiness samples, 295-route OpenAPI, and
+  current Worker deployment all passed on 2026-07-17.
+- Existing long Scalius Code 128 values are preserved because changing a
+  printed identity would invalidate physical stock labels. They may require the
+  wider A4 preset. Newly generated internal identities are compact 14-digit
+  numeric Code 128 values that use Code Set C and fit the thermal presets.
 
 ## Interface direction
 
@@ -178,4 +203,3 @@ Physical output, not decorative chrome, is the signature element.
 | Remove zero-count rows      Print test   Print or save PDF    |
 +---------------------------------------------------------------+
 ```
-
