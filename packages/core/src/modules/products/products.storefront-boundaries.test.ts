@@ -298,6 +298,17 @@ describe("storefront product query boundaries", () => {
         expect(detailBody).not.toContain("contextualAltText: item.contextualAltText");
     });
 
+    it("carries the merchant low-stock threshold into the buyer detail projection", () => {
+        const source = readFileSync(
+            `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,
+            "utf8",
+        );
+        const detailBody = getFunctionBody(source, "getStorefrontProductBySlug");
+
+        expect(detailBody).toContain("lowStockThreshold: productVariants.lowStockThreshold");
+        expect(detailBody).toContain("lowStockThreshold: number | null");
+    });
+
     it("keeps products, categories, and collections on one result-scoped catalog core", () => {
         const source = readFileSync(
             `${PRODUCTS_MODULE_DIR}/products.storefront.ts`,

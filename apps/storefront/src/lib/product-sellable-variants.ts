@@ -9,6 +9,7 @@ type BuyerVariant = Pick<
   | "stock"
   | "reservedStock"
   | "trackInventory"
+  | "lowStockThreshold"
 >;
 
 export type BuyerProductMode =
@@ -100,7 +101,7 @@ export function resolveBuyerVariants<TVariant extends BuyerVariant>(
 export function getBuyerStockSummary(
   variants: readonly Pick<
     BuyerVariant,
-    "stock" | "reservedStock" | "trackInventory"
+    "stock" | "reservedStock" | "trackInventory" | "lowStockThreshold"
   >[],
 ): {
   canPurchaseAny: boolean;
@@ -115,17 +116,27 @@ export function getBuyerStockSummary(
     return { canPurchaseAny: true, text: "In Stock", tone: "available" };
   }
 
-  const totalAvailable = variants.reduce(
-    (sum, variant) =>
-      sum + Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
-    0,
+  const availableVariants = variants
+    .map((variant) => ({
+      ...variant,
+      available: Math.max(0, variant.stock - (variant.reservedStock ?? 0)),
+    }))
+    .filter((variant) => variant.available > 0);
+
+  if (availableVariants.length === 0) {
+    return { canPurchaseAny: false, text: "Out of Stock", tone: "unavailable" };
+  }
+
+  const everyAvailableVariantIsLow = availableVariants.every((variant) =>
+    typeof variant.lowStockThreshold === "number"
+    && Number.isFinite(variant.lowStockThreshold)
+    && variant.lowStockThreshold > 0
+    && variant.available <= variant.lowStockThreshold,
   );
 
-  if (totalAvailable > 50) {
-    return { canPurchaseAny: true, text: "In Stock", tone: "available" };
-  }
-  if (totalAvailable > 0) {
-    return { canPurchaseAny: true, text: "Low Stock", tone: "available" };
-  }
-  return { canPurchaseAny: false, text: "Out of Stock", tone: "unavailable" };
+  return {
+    canPurchaseAny: true,
+    text: everyAvailableVariantIsLow ? "Low Stock" : "In Stock",
+    tone: "available",
+  };
 }

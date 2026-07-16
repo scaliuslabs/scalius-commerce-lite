@@ -12,6 +12,7 @@ type TestVariant = {
   stock: number;
   reservedStock?: number;
   trackInventory?: boolean;
+  lowStockThreshold?: number | null;
 };
 
 function variant(overrides: Partial<TestVariant> = {}): TestVariant {
@@ -23,6 +24,7 @@ function variant(overrides: Partial<TestVariant> = {}): TestVariant {
     stock: 0,
     reservedStock: 0,
     trackInventory: true,
+    lowStockThreshold: null,
     ...overrides,
   };
 }
@@ -145,10 +147,28 @@ describe("product sellable variant resolution", () => {
 
     expect(getBuyerStockSummary([
       variant({ id: "var_red_m", optionCombinationKey: "m", stock: 3, reservedStock: 1 }),
+    ])).toMatchObject({ canPurchaseAny: true, text: "In Stock" });
+
+    expect(getBuyerStockSummary([
+      variant({ id: "var_red_m", optionCombinationKey: "m", stock: 3, reservedStock: 1, lowStockThreshold: 2 }),
     ])).toMatchObject({ canPurchaseAny: true, text: "Low Stock" });
 
     expect(getBuyerStockSummary([
       variant({ id: "var_red_m", optionCombinationKey: "m", stock: 1, reservedStock: 1 }),
     ])).toMatchObject({ canPurchaseAny: false, text: "Out of Stock" });
+  });
+
+  it("shows aggregate low stock only when every purchasable SKU is below its saved threshold", () => {
+    expect(getBuyerStockSummary([
+      variant({ id: "var_low", stock: 3, lowStockThreshold: 5 }),
+      variant({ id: "var_healthy", stock: 8, lowStockThreshold: 5 }),
+      variant({ id: "var_sold_out", stock: 0, lowStockThreshold: 5 }),
+    ])).toMatchObject({ canPurchaseAny: true, text: "In Stock" });
+
+    expect(getBuyerStockSummary([
+      variant({ id: "var_low_one", stock: 3, lowStockThreshold: 5 }),
+      variant({ id: "var_low_two", stock: 2, reservedStock: 1, lowStockThreshold: 5 }),
+      variant({ id: "var_sold_out", stock: 0, lowStockThreshold: null }),
+    ])).toMatchObject({ canPurchaseAny: true, text: "Low Stock" });
   });
 });
