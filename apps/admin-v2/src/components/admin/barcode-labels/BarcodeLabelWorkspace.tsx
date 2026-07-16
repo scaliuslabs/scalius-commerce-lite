@@ -688,7 +688,7 @@ export function BarcodeLabelWorkspace({
                       <Input id="custom-rows" type="number" min={1} max={20} value={customPreset.rows} onChange={(event) => setCustomPreset((current) => ({ ...current, rows: Math.max(1, Math.min(20, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-8 text-sm tabular-nums" />
                     </div>
                     <MillimetreInput id="custom-margin-x" label="Side margin" value={customPreset.marginXmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginXmm: value }))} />
-                    <MillimetreInput id="custom-margin-y" label="Top margin" value={customPreset.marginYmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginYmm: value }))} />
+                    <MillimetreInput id="custom-margin-y" label="Vertical margin" value={customPreset.marginYmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginYmm: value }))} />
                     <MillimetreInput id="custom-gap-x" label="Column gap" value={customPreset.gapXmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapXmm: value }))} />
                     <MillimetreInput id="custom-gap-y" label="Row gap" value={customPreset.gapYmm} min={0} max={20} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, gapYmm: value }))} />
                     <div className="col-span-2 flex items-center justify-between border-t pt-2">
