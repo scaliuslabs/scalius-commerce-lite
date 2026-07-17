@@ -109,7 +109,7 @@ export function getOrderColumns(
           order.shipmentRecovery != null && order.shipmentRecovery.state !== "none";
         const hasRecoveryLock = hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
         const customerRoute = opts.orderActions.canEditOrders
-          ? hasRecoveryLock
+          ? hasRecoveryLock || !order.fullEditReadiness.allowed
             ? "/admin/orders/$orderId"
             : "/admin/orders/$orderId/edit"
           : "/admin/orders/$orderId";
@@ -395,13 +395,14 @@ export function getOrderColumns(
               </Tooltip>
             </TooltipProvider>
 
-            {!opts.showTrashed && opts.orderActions.canEditOrders && !hasActiveRefundOperation && !shipmentLocked && (
+            {!opts.showTrashed && opts.orderActions.canEditOrders && order.fullEditReadiness.allowed && !hasActiveRefundOperation && !shipmentLocked && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
                       onClick={() => opts.onEdit(order.id)}
+                      aria-label={`Edit order ${order.id}`}
                       className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:scale-105 hover:shadow-sm active:scale-95"
                     >
                       <Pencil className="h-4 w-4" />

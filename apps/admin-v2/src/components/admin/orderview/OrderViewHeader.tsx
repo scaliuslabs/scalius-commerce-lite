@@ -75,7 +75,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const editLocked = refundLocked || shipmentLocked;
+  const editLocked = refundLocked || shipmentLocked || !order.fullEditReadiness.allowed;
   const getStatusBadge = (status: string) => {
     const { badgeClass } = getStatusBadgeClass(status);
     return (
@@ -267,7 +267,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                   ? "Complete or reconcile the active refund before editing this order."
                   : shipmentLocked
                     ? order.shipmentRecovery?.message ?? "Resolve shipment recovery before editing this order."
-                    : undefined
+                    : order.fullEditReadiness.reason ?? undefined
               }
             >
               {editLocked ? (

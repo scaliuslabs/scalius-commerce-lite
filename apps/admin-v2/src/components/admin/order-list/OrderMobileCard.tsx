@@ -106,7 +106,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   const hasRecoveryLock =
     hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
   const customerRoute = orderActions.canEditOrders
-    ? hasRecoveryLock
+    ? hasRecoveryLock || !order.fullEditReadiness.allowed
       ? "/admin/orders/$orderId"
       : "/admin/orders/$orderId/edit"
     : "/admin/orders/$orderId";
@@ -278,12 +278,13 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
               </Link>
             </Button>
 
-            {!showTrashed && orderActions.canEditOrders && !hasActiveRefundOperation && !shipmentLocked && (
+            {!showTrashed && orderActions.canEditOrders && order.fullEditReadiness.allowed && !hasActiveRefundOperation && !shipmentLocked && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
                 onClick={() => onEdit(order.id)}
+                aria-label={`Edit order ${order.id}`}
               >
                 <Pencil className="h-4 w-4" />
               </Button>

@@ -14,14 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   type OrderCalculation,
   getOrderCalculation,
@@ -31,17 +24,11 @@ import {
 } from "../../../store/orderStore";
 import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "@/hooks/use-currency";
-import { getAdminOrderStatusTransitions } from "@/lib/admin-order-status-policy";
 
 export function SummarySection() {
-  const { form, isEdit, refs, handleKeyDown } = useOrderForm();
+  const { form, refs, handleKeyDown } = useOrderForm();
   const { symbol } = useCurrency();
   const [calculations, setCalculations] = useState<OrderCalculation>(getOrderCalculation());
-  const persistedStatus = useRef(form.getValues("status") ?? "pending").current;
-  const availableStatuses = [
-    persistedStatus,
-    ...getAdminOrderStatusTransitions(persistedStatus),
-  ];
 
   useEffect(() => {
     return subscribe(setCalculations);
@@ -108,9 +95,7 @@ export function SummarySection() {
                         field.onChange(value);
                         updateDiscountAmount(value);
                       }}
-                      onKeyDown={(e) =>
-                        handleKeyDown(e, isEdit ? refs.statusButtonRef : refs.submitButtonRef)
-                      }
+                      onKeyDown={(e) => handleKeyDown(e, refs.submitButtonRef)}
                     />
                   </FormControl>
                   <FormDescription>
@@ -171,49 +156,6 @@ export function SummarySection() {
         </CardContent>
       </Card>
 
-      {isEdit && (
-        <Card>
-          <CardHeader className="pb-3 pt-4 px-4">
-            <CardTitle className="text-base">Order Status</CardTitle>
-            <CardDescription className="text-sm">
-              Use this for operational progress. Returns and refunds have their own evidence-backed workflows.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      setTimeout(() => refs.submitButtonRef.current?.focus(), 100);
-                    }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger ref={refs.statusButtonRef} className="w-full">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="rounded-xl bg-background">
-                      {availableStatuses.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status.charAt(0).toUpperCase() +
-                            status.slice(1).toLowerCase().replace("_", " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-      )}
     </>
   );
 }

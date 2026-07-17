@@ -104565,6 +104565,22 @@
                                   "lastProbeAt",
                                   "providerStatus"
                                 ]
+                              },
+                              "fullEditReadiness": {
+                                "type": "object",
+                                "properties": {
+                                  "allowed": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "allowed",
+                                  "reason"
+                                ]
                               }
                             },
                             "required": [
@@ -104593,7 +104609,8 @@
                               "latestShipment",
                               "shipmentRecovery",
                               "paymentRecovery",
-                              "activeRefundOperation"
+                              "activeRefundOperation",
+                              "fullEditReadiness"
                             ]
                           }
                         },
@@ -105504,6 +105521,22 @@
                                   "lastProbeAt",
                                   "providerStatus"
                                 ]
+                              },
+                              "fullEditReadiness": {
+                                "type": "object",
+                                "properties": {
+                                  "allowed": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "allowed",
+                                  "reason"
+                                ]
                               }
                             },
                             "required": [
@@ -105532,7 +105565,8 @@
                               "latestShipment",
                               "shipmentRecovery",
                               "paymentRecovery",
-                              "activeRefundOperation"
+                              "activeRefundOperation",
+                              "fullEditReadiness"
                             ]
                           }
                         },
@@ -107819,6 +107853,22 @@
                             "providerStatus"
                           ]
                         },
+                        "fullEditReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "allowed": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "allowed",
+                            "reason"
+                          ]
+                        },
                         "supportRequests": {
                           "type": "array",
                           "items": {
@@ -107983,6 +108033,7 @@
                         "paymentRecovery",
                         "refundAttempts",
                         "activeRefundOperation",
+                        "fullEditReadiness",
                         "supportRequests"
                       ]
                     }
@@ -108150,6 +108201,10 @@
                     "type": "number",
                     "minimum": 0
                   },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
                   "status": {
                     "type": "string",
                     "minLength": 1
@@ -108167,6 +108222,7 @@
                   "items",
                   "discountAmount",
                   "shippingCharge",
+                  "expectedVersion",
                   "status"
                 ]
               }
@@ -110436,6 +110492,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
                             "customerName": {
                               "type": "string"
                             },
@@ -110496,6 +110556,7 @@
                           },
                           "required": [
                             "id",
+                            "version",
                             "customerName",
                             "customerPhone",
                             "customerEmail",
@@ -110513,6 +110574,22 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "fullEditReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "allowed": {
+                              "type": "boolean"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "allowed",
+                            "reason"
+                          ]
                         },
                         "productsWithVariants": {
                           "type": "array",
@@ -110750,6 +110827,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
                             "customerName": {
                               "type": "string"
                             },
@@ -110837,6 +110918,7 @@
                           },
                           "required": [
                             "id",
+                            "version",
                             "customerName",
                             "customerPhone",
                             "customerEmail",
@@ -110859,6 +110941,7 @@
                       },
                       "required": [
                         "order",
+                        "fullEditReadiness",
                         "productsWithVariants",
                         "defaultValues"
                       ]

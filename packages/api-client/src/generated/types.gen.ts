@@ -30303,6 +30303,10 @@ export type GetApiV1AdminOrdersResponses = {
                     lastProbeAt: string | number | null;
                     providerStatus: string | null;
                 } | null;
+                fullEditReadiness: {
+                    allowed: boolean;
+                    reason: string | null;
+                };
             }>;
             pagination: {
                 page: number;
@@ -30603,6 +30607,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     lastProbeAt: string | number | null;
                     providerStatus: string | null;
                 } | null;
+                fullEditReadiness: {
+                    allowed: boolean;
+                    reason: string | null;
+                };
             }>;
             pagination: {
                 page: number;
@@ -31243,6 +31251,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 refundReference?: string | null;
                 lastError?: string | null;
             } | null;
+            fullEditReadiness: {
+                allowed: boolean;
+                reason: string | null;
+            };
             supportRequests: Array<{
                 id: string;
                 orderId: string;
@@ -31288,6 +31300,7 @@ export type PutApiV1AdminOrdersByIdData = {
         }>;
         discountAmount: number | null;
         shippingCharge: number;
+        expectedVersion: number;
         status: string;
     };
     path: {
@@ -31847,6 +31860,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
         data: {
             order: {
                 id: string;
+                version: number;
                 customerName: string;
                 customerPhone: string;
                 customerEmail: string | null;
@@ -31861,6 +31875,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 [key: string]: unknown;
+            };
+            fullEditReadiness: {
+                allowed: boolean;
+                reason: string | null;
             };
             productsWithVariants: Array<{
                 id: string;
@@ -31912,6 +31930,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
             }>;
             defaultValues: {
                 id: string;
+                version: number;
                 customerName: string;
                 customerPhone: string;
                 customerEmail: string | null;

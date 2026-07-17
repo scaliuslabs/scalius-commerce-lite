@@ -164,6 +164,10 @@ export interface Order {
   shipmentRecovery?: ShipmentRecovery;
   paymentRecovery?: PaymentRecovery;
   supportRequests?: OrderSupportRequest[];
+  fullEditReadiness: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 export interface OrderShipment {

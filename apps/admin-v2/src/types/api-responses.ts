@@ -322,6 +322,10 @@ export interface Order {
   deletedAt: Date | null;
   itemCount?: number;
   latestShipment?: unknown;
+  fullEditReadiness: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 export interface OrderItem {
@@ -349,6 +353,7 @@ export interface OrderDetail extends Order {
 export interface OrderFormData {
   order: {
     id: string;
+    version: number;
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
@@ -372,6 +377,7 @@ export interface OrderFormData {
   }>;
   defaultValues: {
     id: string;
+    version: number;
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;

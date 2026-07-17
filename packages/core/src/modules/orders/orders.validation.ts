@@ -52,6 +52,10 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
 /** Schema for updating an existing order (PUT /api/orders/:id) */
 export const updateOrderSchema = createOrderSchema.extend({
+    expectedVersion: z
+        .number()
+        .int("Order version must be a whole number")
+        .min(1, "Order version is required"),
     status: z.string().min(1, "Status is required"),
 });
 

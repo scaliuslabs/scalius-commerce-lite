@@ -337,6 +337,7 @@ const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
 
 const orderFormDataSchema = z.object({
     id: z.string(),
+    version: z.number().int().min(1),
     customerName: z.string(),
     customerPhone: z.string(),
     customerEmail: z.string().nullable(),
@@ -351,6 +352,11 @@ const orderFormDataSchema = z.object({
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
+
+const orderFullEditReadinessSchema = z.object({
+    allowed: z.boolean(),
+    reason: z.string().nullable(),
+});
 
 const formDataItemSchema = z.object({
     productId: z.string(),
@@ -1186,6 +1192,7 @@ const getFormDataRoute = createRoute({
                 "application/json": {
                     schema: successEnvelope(z.object({
                         order: orderFormDataSchema,
+                        fullEditReadiness: orderFullEditReadinessSchema,
                         productsWithVariants: z.array(formDataProductSchema),
                         defaultValues: orderFormDataSchema.extend({
                             discountAmount: z.number().nullable(),
@@ -1206,6 +1213,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
     const [order] = await db
         .select({
             id: orders.id,
+            version: orders.version,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
@@ -1224,6 +1232,9 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         .where(eq(orders.id, orderId));
 
     if (!order) throw new NotFoundError("Order not found");
+
+    const fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
+    if (!fullEditReadiness) throw new NotFoundError("Order not found");
 
     const [items, allProducts] = await Promise.all([
         db
@@ -1286,6 +1297,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
 
     return ok(c, {
         order,
+        fullEditReadiness,
         productsWithVariants,
         defaultValues: {
             ...order,
