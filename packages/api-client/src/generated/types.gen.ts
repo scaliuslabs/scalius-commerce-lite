@@ -30198,9 +30198,9 @@ export type GetApiV1AdminOrdersData = {
          */
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         /**
-         * Show trashed orders
+         * Show archived orders
          */
-        trashed?: 'true' | 'false';
+        archived?: 'true' | 'false';
         /**
          * Sort field. Use relevance with a search query to order by FTS rank.
          */
@@ -30243,6 +30243,7 @@ export type GetApiV1AdminOrdersResponses = {
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
+                version: number;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -30548,6 +30549,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 fulfillmentStatus: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
+                version: number;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -30745,17 +30747,19 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportResponses = {
 
 export type GetApiV1AdminOrdersPaymentRecoveryExportResponse = GetApiV1AdminOrdersPaymentRecoveryExportResponses[keyof GetApiV1AdminOrdersPaymentRecoveryExportResponses];
 
-export type PostApiV1AdminOrdersBulkDeleteData = {
+export type PostApiV1AdminOrdersArchiveData = {
     body?: {
-        orderIds: Array<string>;
-        permanent?: boolean;
+        orders: Array<{
+            id: string;
+            expectedVersion: number;
+        }>;
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/orders/bulk-delete';
+    url: '/api/v1/admin/orders/archive';
 };
 
-export type PostApiV1AdminOrdersBulkDeleteErrors = {
+export type PostApiV1AdminOrdersArchiveErrors = {
     /**
      * Validation error
      */
@@ -30802,16 +30806,16 @@ export type PostApiV1AdminOrdersBulkDeleteErrors = {
     };
 };
 
-export type PostApiV1AdminOrdersBulkDeleteError = PostApiV1AdminOrdersBulkDeleteErrors[keyof PostApiV1AdminOrdersBulkDeleteErrors];
+export type PostApiV1AdminOrdersArchiveError = PostApiV1AdminOrdersArchiveErrors[keyof PostApiV1AdminOrdersArchiveErrors];
 
-export type PostApiV1AdminOrdersBulkDeleteResponses = {
+export type PostApiV1AdminOrdersArchiveResponses = {
     /**
      * No content
      */
     204: void;
 };
 
-export type PostApiV1AdminOrdersBulkDeleteResponse = PostApiV1AdminOrdersBulkDeleteResponses[keyof PostApiV1AdminOrdersBulkDeleteResponses];
+export type PostApiV1AdminOrdersArchiveResponse = PostApiV1AdminOrdersArchiveResponses[keyof PostApiV1AdminOrdersArchiveResponses];
 
 export type PostApiV1AdminOrdersBulkShipData = {
     body?: {
@@ -31001,84 +31005,6 @@ export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse = PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses[keyof PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses];
-
-export type DeleteApiV1AdminOrdersByIdData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}';
-};
-
-export type DeleteApiV1AdminOrdersByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminOrdersByIdError = DeleteApiV1AdminOrdersByIdErrors[keyof DeleteApiV1AdminOrdersByIdErrors];
-
-export type DeleteApiV1AdminOrdersByIdResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminOrdersByIdResponse = DeleteApiV1AdminOrdersByIdResponses[keyof DeleteApiV1AdminOrdersByIdResponses];
 
 export type GetApiV1AdminOrdersByIdData = {
     body?: never;
@@ -31386,7 +31312,9 @@ export type PutApiV1AdminOrdersByIdResponses = {
 export type PutApiV1AdminOrdersByIdResponse = PutApiV1AdminOrdersByIdResponses[keyof PutApiV1AdminOrdersByIdResponses];
 
 export type PostApiV1AdminOrdersByIdRestoreData = {
-    body?: never;
+    body?: {
+        expectedVersion: number;
+    };
     path: {
         id: string;
     };
@@ -31462,84 +31390,6 @@ export type PostApiV1AdminOrdersByIdRestoreResponses = {
 };
 
 export type PostApiV1AdminOrdersByIdRestoreResponse = PostApiV1AdminOrdersByIdRestoreResponses[keyof PostApiV1AdminOrdersByIdRestoreResponses];
-
-export type DeleteApiV1AdminOrdersByIdPermanentData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/orders/{id}/permanent';
-};
-
-export type DeleteApiV1AdminOrdersByIdPermanentErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminOrdersByIdPermanentError = DeleteApiV1AdminOrdersByIdPermanentErrors[keyof DeleteApiV1AdminOrdersByIdPermanentErrors];
-
-export type DeleteApiV1AdminOrdersByIdPermanentResponses = {
-    /**
-     * No content
-     */
-    204: void;
-};
-
-export type DeleteApiV1AdminOrdersByIdPermanentResponse = DeleteApiV1AdminOrdersByIdPermanentResponses[keyof DeleteApiV1AdminOrdersByIdPermanentResponses];
 
 export type GetApiV1AdminOrdersByIdItemsData = {
     body?: never;

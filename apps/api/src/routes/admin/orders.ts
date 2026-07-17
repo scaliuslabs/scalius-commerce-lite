@@ -4,7 +4,8 @@ import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import {
     createOrderSchema,
     updateOrderSchema,
-    bulkDeleteOrderSchema,
+    archiveOrdersSchema,
+    restoreOrderSchema,
     bulkShipOrderSchema
 } from "@scalius/core/modules/orders/orders.validation";
 import {
@@ -394,7 +395,7 @@ const listOrdersRoute = createRoute({
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
-            trashed: z.enum(["true", "false"]).optional().openapi({ description: "Show trashed orders" }),
+            archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum([
                 "relevance",
                 "customerName",
@@ -438,7 +439,7 @@ app.openapi(listOrdersRoute, async (c) => {
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
         paymentRecovery: query.paymentRecovery,
-        showTrashed: query.trashed === "true",
+        showArchived: query.archived === "true",
         sort: effectiveSort,
         order: query.order as "asc" | "desc",
         startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
@@ -622,15 +623,15 @@ app.openapi(createOrderRoute, async (c) => {
     return created(c, result);
 });
 
-// ─── POST /bulk-delete ───────────────────────────────────────────────────────
+// ─── POST /archive ───────────────────────────────────────────────────────────
 
-const bulkDeleteRoute = createRoute({
+const archiveOrdersRoute = createRoute({
     method: "post",
-    path: "/bulk-delete",
+    path: "/archive",
     tags: ["Admin - Orders"],
-    summary: "Bulk delete orders",
+    summary: "Archive completed orders without changing commerce state",
     request: {
-        body: { content: { "application/json": { schema: bulkDeleteOrderSchema } } }
+        body: { content: { "application/json": { schema: archiveOrdersSchema } } }
     },
     responses: {
         204: noContentResponse,
@@ -639,14 +640,10 @@ const bulkDeleteRoute = createRoute({
     }
 });
 
-app.openapi(bulkDeleteRoute, async (c) => {
+app.openapi(archiveOrdersRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
-        orderIds: data.orderIds,
-    });
-    await OrdersService.bulkDeleteOrders(db, data.orderIds, data.permanent);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
+    await OrdersService.archiveOrders(db, data.orders);
     return noContent(c);
 });
 
@@ -818,42 +815,16 @@ app.openapi(updateOrderRoute, async (c) => {
     return ok(c, result);
 });
 
-// ─── DELETE /:id ─────────────────────────────────────────────────────────────
-
-const deleteOrderRoute = createRoute({
-    method: "delete",
-    path: "/{id}",
-    tags: ["Admin - Orders"],
-    summary: "Soft delete an order",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        204: noContentResponse,
-        ...adminOrderResourceMutationErrorResponses,
-    }
-});
-
-app.openapi(deleteOrderRoute, async (c) => {
-    const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
-        orderIds: [orderId],
-    });
-    await OrdersService.deleteOrder(db, orderId);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
-    return noContent(c);
-});
-
 // ─── POST /:id/restore ──────────────────────────────────────────────────────
 
 const restoreOrderRoute = createRoute({
     method: "post",
     path: "/{id}/restore",
     tags: ["Admin - Orders"],
-    summary: "Restore a soft-deleted order",
+    summary: "Restore an archived order to the active workspace",
     request: {
         params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: restoreOrderSchema } } },
     },
     responses: {
         204: noContentResponse,
@@ -864,35 +835,8 @@ const restoreOrderRoute = createRoute({
 app.openapi(restoreOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    await OrdersService.restoreOrder(db, orderId);
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    return noContent(c);
-});
-
-// ─── DELETE /:id/permanent ───────────────────────────────────────────────────
-
-const permanentDeleteRoute = createRoute({
-    method: "delete",
-    path: "/{id}/permanent",
-    tags: ["Admin - Orders"],
-    summary: "Permanently delete an order",
-    request: {
-        params: z.object({ id: z.string() }),
-    },
-    responses: {
-        204: noContentResponse,
-        ...adminOrderResourceMutationErrorResponses,
-    }
-});
-
-app.openapi(permanentDeleteRoute, async (c) => {
-    const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const subjects = await resolveProductAvailabilityCacheSubjects(db, {
-        orderIds: [orderId],
-    });
-    await OrdersService.permanentlyDeleteOrder(db, orderId);
-    await invalidateProductAvailabilityCacheSubjects(subjects, c, db);
+    const data = c.req.valid("json");
+    await OrdersService.restoreOrder(db, orderId, data.expectedVersion);
     return noContent(c);
 });
 

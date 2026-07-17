@@ -1,6 +1,9 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import type { OrderListItem } from "@scalius/core/modules/orders";
+import {
+  getOrderArchiveStatusBlockedReason,
+  type OrderListItem,
+} from "@scalius/core/modules/orders";
 import { Badge } from "~/components/ui/badge";
 import {
   FulfillmentStatusBadge,
@@ -19,8 +22,7 @@ import {
   Eye,
   Pencil,
   Undo,
-  XCircle,
-  Trash2,
+  Archive,
   ExternalLink,
 } from "lucide-react";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -58,9 +60,8 @@ interface OrderColumnOptions {
   shipmentStatuses: Record<string, OrderShipment>;
   updatingStatusIds: Set<string>;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onRestore: (id: string) => void;
-  onPermanentDelete: (id: string) => void;
+  onArchive: (id: string, expectedVersion: number) => void;
+  onRestore: (id: string, expectedVersion: number) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
   onShipmentStatusUpdated: (updatedShipment: {
     id: string;
@@ -375,8 +376,18 @@ export function getOrderColumns(
       ),
       cell: ({ row }) => {
         const order = row.original;
+        const hasActivePaymentSetup = order.paymentRecovery?.activeProcessing === true;
         const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
         const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+        const archiveStatusReason = getOrderArchiveStatusBlockedReason(order.status);
+        const archiveBlockedReason = archiveStatusReason
+          ?? (hasActivePaymentSetup
+            ? "Wait for active payment setup before archiving"
+            : hasActiveRefundOperation
+              ? "Resolve refund recovery before archiving"
+              : shipmentLocked
+                ? "Resolve shipment recovery before archiving"
+                : null);
         return (
           <div className="flex items-center justify-end gap-1">
             <TooltipProvider>
@@ -421,7 +432,8 @@ export function getOrderColumns(
                       <TooltipTrigger asChild>
                         <button
                           type="button"
-                          onClick={() => opts.onRestore(order.id)}
+                          onClick={() => opts.onRestore(order.id, order.version)}
+                          aria-label={`Restore order ${order.id}`}
                           className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--muted)] text-[var(--primary)] transition-all duration-200 hover:bg-[var(--muted)]/80 hover:scale-105 hover:shadow-sm active:scale-95"
                         >
                           <Undo className="h-4 w-4" />
@@ -432,39 +444,22 @@ export function getOrderColumns(
                   </TooltipProvider>
                 )}
 
-                {opts.orderActions.canDeleteOrders && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={() => opts.onPermanentDelete(order.id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--destructive)]/10 text-[var(--destructive)] transition-all duration-200 hover:bg-[var(--destructive)]/20 hover:scale-105 hover:shadow-sm active:scale-95"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>Delete Permanently</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
               </>
-            ) : opts.orderActions.canDeleteOrders && (hasActiveRefundOperation || shipmentLocked) ? (
+            ) : opts.orderActions.canDeleteOrders && archiveBlockedReason ? (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
                       disabled
+                      aria-label={`Archive order ${order.id}: ${archiveBlockedReason}`}
                       className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-full bg-[var(--destructive)]/5 text-[var(--muted-foreground)]"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Archive className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {hasActiveRefundOperation
-                      ? "Resolve refund recovery before deleting"
-                      : "Resolve shipment recovery before deleting"}
+                    {archiveBlockedReason}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -474,13 +469,14 @@ export function getOrderColumns(
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => opts.onDelete(order.id)}
+                      onClick={() => opts.onArchive(order.id, order.version)}
+                      aria-label={`Archive order ${order.id}`}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--destructive)]/10 text-[var(--destructive)] transition-all duration-200 hover:bg-[var(--destructive)]/20 hover:scale-105 hover:shadow-sm active:scale-95"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Archive className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>Move to Trash</TooltipContent>
+                  <TooltipContent>Archive Order</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             ) : null}
@@ -492,7 +488,7 @@ export function getOrderColumns(
     },
   ];
 
-  if (opts.orderActions.canSelectOrdersForBulkActions) {
+  if (opts.orderActions.canSelectOrdersForBulkActions && !opts.showTrashed) {
     columns.unshift(
       createSelectColumn<OrderListItem>({
         getLabel: (r) => (r as OrderListItem).customerName,

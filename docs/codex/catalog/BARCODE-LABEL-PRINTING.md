@@ -170,7 +170,7 @@ feeds, structured data, or external marketplaces.
   legacy long Code 128 value, custom-stock bounds and print blocking,
   numeric/interactive start-cell selection, 390 px responsive layout, no
   horizontal overflow, and no browser console warning/error.
-- Production API smoke: health, four readiness samples, 295-route OpenAPI, and
+- Production API smoke: health, four readiness samples, 294-route OpenAPI, and
   current Worker deployment all passed on 2026-07-17.
 - The authenticated production run on admin version
   `a406c31e-2f09-4522-9fbf-15c2e0831123` opened an individual QuietKey SKU

@@ -32,7 +32,6 @@ import {
     applyClaimedInventoryEntryBatch,
     applyInventoryForStatusChange,
     isStockDeductStatus,
-    isStockReservableStatus,
     isStockRestoreStatus,
 } from "../inventory/inventory-transitions";
 import {
@@ -50,7 +49,7 @@ import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
-import type { CreateOrderInput } from "./orders.validation";
+import type { ArchiveOrdersInput, CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type {
     OrderDetails,
@@ -110,21 +109,12 @@ import {
     markAdminOrderCreateAttemptFailed,
     resolveAdminOrderCreateAttempt,
 } from "./admin-order-create-attempts";
+import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 
 // ─────────────────────────────────────────
 // Service functions
 // ─────────────────────────────────────────
 
-const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
-    OrderStatus.PENDING,
-    OrderStatus.PROCESSING,
-    OrderStatus.CONFIRMED,
-    OrderStatus.SHIPPED,
-    OrderStatus.DELIVERED,
-    OrderStatus.COMPLETED,
-    OrderStatus.REFUNDED,
-    OrderStatus.PARTIALLY_REFUNDED,
-]);
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
@@ -894,17 +884,6 @@ function normalizeListPositiveInteger(value: number | undefined, fallback: numbe
     return max == null ? minBounded : Math.min(minBounded, max);
 }
 
-function assertTrashRestoreInventoryActionAllowed(status: string, inventoryAction: string): void {
-    if (inventoryAction === "reserved" && isStockReservableStatus(status)) return;
-    if (inventoryAction === "deducted" && TRASH_RESTORE_DEDUCTED_STATUSES.has(status)) return;
-    if (inventoryAction === "restored" && isStockRestoreStatus(status)) return;
-    if (inventoryAction === "none") return;
-
-    throw new ValidationError(
-        `Cannot restore order with status "${status}" and inventory action "${inventoryAction}". Reconcile inventory or move the order to a compatible status first.`,
-    );
-}
-
 function buildPhoneSearchCondition(searchTerms: string[]): SQL | undefined {
     if (searchTerms.length === 0) return undefined;
 
@@ -941,7 +920,7 @@ export async function listOrders(db: Database, options: {
     paymentRecovery?: OrderPaymentRecoveryFilter;
     page?: number;
     limit?: number;
-    showTrashed?: boolean;
+    showArchived?: boolean;
     sort?: OrderListSort;
     order?: "asc" | "desc";
     startDate?: Date;
@@ -956,7 +935,7 @@ export async function listOrders(db: Database, options: {
         paymentRecovery,
         page: rawPage = 1,
         limit: rawLimit = 10,
-        showTrashed = false,
+        showArchived = false,
         sort = "updatedAt",
         order = "desc",
         startDate,
@@ -968,10 +947,12 @@ export async function listOrders(db: Database, options: {
 
     const whereConditions: SQL[] = [];
 
-    if (showTrashed) {
-        whereConditions.push(sql`${orders.deletedAt} IS NOT NULL`);
+    if (showArchived) {
+        whereConditions.push(sql`${orders.deletedAt} IS NULL`);
+        whereConditions.push(sql`${orders.archivedAt} IS NOT NULL`);
     } else {
         whereConditions.push(sql`${orders.deletedAt} IS NULL`);
+        whereConditions.push(sql`${orders.archivedAt} IS NULL`);
     }
 
     let rankExpression: SQL | undefined = undefined;
@@ -1098,6 +1079,7 @@ export async function listOrders(db: Database, options: {
             fulfillmentStatus: orders.fulfillmentStatus,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
+            version: orders.version,
             city: orders.city,
             zone: orders.zone,
             area: orders.area,
@@ -1123,7 +1105,7 @@ export async function listOrders(db: Database, options: {
         id: string; customerName: string; customerPhone: string; customerEmail: string | null;
         customerId: string | null; totalAmount: number; shippingCharge: number; discountAmount: number;
         status: string; paymentStatus: string; paymentMethod: string | null; fulfillmentStatus: string;
-        createdAt: number; updatedAt: number;
+        createdAt: number; updatedAt: number; version: number;
         city: string | null; zone: string | null; area: string | null;
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
@@ -2556,192 +2538,126 @@ async function updateCustomerStatsService(db: Database, customerId: string) {
     }).where(eq(customers.id, customerId));
 }
 
-export async function deleteOrder(db: Database, id: string) {
-    const orderToDelete = await db.select({
-        id: orders.id,
-        inventoryAction: orders.inventoryAction,
-        shipmentClaimId: orders.shipmentClaimId,
-        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-    }).from(orders).where(sql`${orders.id} = ${id} AND ${orders.deletedAt} IS NULL`).get();
-    if (!orderToDelete) throw new NotFoundError("Order not found");
-    assertNoActiveShipmentClaim(orderToDelete);
-    await assertNoActiveRefundAttempt(db, id);
-    await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
-    await assertNoActiveReturnReceipt(db, id);
-    if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
-        await applyInventoryForStatusChange(db, id, "cancelled");
-    }
-    await db.update(orders).set({ deletedAt: sql`unixepoch()`, inventoryAction: "restored", version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` }).where(eq(orders.id, id));
-}
-
-export async function restoreOrder(db: Database, id: string) {
-    // Load the order to check its current inventory state
+export async function restoreOrder(db: Database, id: string, expectedVersion: number) {
     const order = await db
         .select({
             id: orders.id,
-            status: orders.status,
-            inventoryAction: orders.inventoryAction,
-            inventoryPool: orders.inventoryPool,
+            archivedAt: orders.archivedAt,
             deletedAt: orders.deletedAt,
             version: orders.version,
-            shipmentClaimId: orders.shipmentClaimId,
-            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
         .where(eq(orders.id, id))
         .get();
 
     if (!order) throw new NotFoundError("Order not found");
-    assertNoActiveShipmentClaim(order);
-    if (!order.deletedAt) throw new ValidationError("Order is not deleted");
-    await assertNoActiveRefundAttempt(db, id);
-    await assertNoActivePaymentSessionAttempt(db, id);
-
-    let nextInventoryAction = order.inventoryAction as "none" | "reserved" | "deducted" | "restored";
-    let reservedEntries: ReservationEntry[] = [];
-
-    if (order.inventoryAction === "restored") {
-        if (isStockReservableStatus(order.status)) {
-            const items = await db
-                .select({ variantId: orderItems.variantId, quantity: orderItems.quantity })
-                .from(orderItems)
-                .where(eq(orderItems.orderId, id));
-
-            const pool = (order.inventoryPool as "regular" | "preorder" | "backorder") ?? "regular";
-            const entries: ReservationEntry[] = items
-                .filter((i): i is typeof i & { variantId: string } => i.variantId !== null)
-                .map((i) => ({
-                    variantId: i.variantId,
-                    quantity: i.quantity,
-                    pool,
-                }));
-
-            if (entries.length > 0) {
-                const batchItems = entries.map(e => ({
-                    variantId: e.variantId,
-                    quantity: e.quantity,
-                    orderId: id,
-                }));
-                const reserveResult = await reserveStockBatch(
-                    db,
-                    batchItems,
-                    pool,
-                    { reservationKey: adminOrderInventoryClaimKey(id, order.version, "trash-restore") },
-                );
-                if (!reserveResult.success) {
-                    throw new ValidationError(
-                        `Cannot restore order: ${reserveResult.error ?? "insufficient stock to re-reserve inventory"}`,
-                    );
-                }
-                reservedEntries = entries;
-                nextInventoryAction = "reserved";
-            } else {
-                nextInventoryAction = "none";
-            }
-        } else {
-            assertTrashRestoreInventoryActionAllowed(order.status, order.inventoryAction);
-            nextInventoryAction = "restored";
-        }
-    } else {
-        assertTrashRestoreInventoryActionAllowed(order.status, order.inventoryAction);
+    if (order.deletedAt) throw new ValidationError("This legacy-deleted order cannot be restored from the archive.");
+    if (!order.archivedAt) throw new ValidationError("Order is not archived");
+    if (order.version !== expectedVersion) {
+        throw new ConflictError("Order was modified by another request. Reload and try again.");
     }
 
-    const restoreResult = await db.update(orders)
-        .set({ deletedAt: null, inventoryAction: nextInventoryAction, version: sql`${orders.version} + 1`, updatedAt: sql`unixepoch()` })
+    const restored = await db
+        .update(orders)
+        .set({
+            archivedAt: null,
+            version: sql`${orders.version} + 1`,
+            updatedAt: sql`unixepoch()`,
+        })
         .where(and(
             eq(orders.id, id),
-            eq(orders.version, order.version),
-            isNotNull(orders.deletedAt),
-            noActiveRefundAttemptForOrderIdCondition(id),
-            noActivePaymentSessionAttemptForOrderIdCondition(id),
+            eq(orders.version, expectedVersion),
+            isNull(orders.deletedAt),
+            isNotNull(orders.archivedAt),
         ))
         .returning({ id: orders.id });
 
-    if (restoreResult.length === 0) {
-        if (reservedEntries.length > 0) {
-            const releaseResult = await releaseReservedStockBatch(db, reservedEntries, id, {
-                releaseKey: adminOrderInventoryClaimKey(id, order.version, "trash-restore-cas-rollback"),
-            });
-            if (!releaseResult.success) {
-                console.error(`[orders.admin] Failed to compensate restore reservation for ${id}:`, releaseResult.error);
-            }
+    if (restored.length === 0) {
+        throw new ConflictError("Order was modified by another request. Reload and try again.");
+    }
+}
+
+/**
+ * Removes completed commerce records from the default admin list without
+ * changing their lifecycle or destroying evidence. Archive/restore never
+ * touches payment, fulfillment, returns, refunds, inventory, or order items.
+ */
+export async function archiveOrders(
+    db: Database,
+    requestedOrders: ArchiveOrdersInput["orders"],
+) {
+    if (requestedOrders.length === 0 || requestedOrders.length > 90) {
+        throw new ValidationError("Archive between 1 and 90 orders at a time.");
+    }
+
+    const requestById = new Map<string, number>();
+    for (const request of requestedOrders) {
+        if (requestById.has(request.id)) {
+            throw new ValidationError("Each order can appear only once.");
         }
-        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+        requestById.set(request.id, request.expectedVersion);
     }
-}
 
-export async function permanentlyDeleteOrder(db: Database, id: string) {
-    const orderToDelete = await db.select({
-        inventoryAction: orders.inventoryAction,
-        deletedAt: orders.deletedAt,
-        shipmentClaimId: orders.shipmentClaimId,
-        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-    }).from(orders).where(eq(orders.id, id)).get();
-    if (!orderToDelete) throw new NotFoundError("Order not found");
-    assertNoActiveShipmentClaim(orderToDelete);
-    await assertNoActiveRefundAttempt(db, id);
-    await assertNoActivePaymentSessionAttemptsForOrders(db, [id]);
-    await assertOrderItemsHaveNoReturnHistory(db, id);
-    await assertOrderHasNoIssuedInvoice(db, id);
-    if (!orderToDelete.deletedAt) throw new ValidationError("Order must be soft-deleted before permanent deletion");
-    if (orderToDelete.inventoryAction === "reserved" || orderToDelete.inventoryAction === "deducted") {
-        await applyInventoryForStatusChange(db, id, "cancelled");
-    }
-    await db.delete(orderItems).where(eq(orderItems.orderId, id));
-    await db.delete(orders).where(eq(orders.id, id));
-}
-
-export async function bulkDeleteOrders(db: Database, orderIds: string[], permanent: boolean = false) {
-    if (orderIds.length === 0) return;
-
-    // Batch-read ALL affected orders in ONE query (Fix N+1)
+    const requestedIds = [...requestById.keys()];
     const affectedOrders = await db
         .select({
             id: orders.id,
-            inventoryAction: orders.inventoryAction,
+            status: orders.status,
+            version: orders.version,
+            archivedAt: orders.archivedAt,
+            deletedAt: orders.deletedAt,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
         })
         .from(orders)
-        .where(inArray(orders.id, orderIds));
+        .where(inArray(orders.id, requestedIds));
 
-    const claimedOrders = affectedOrders.filter((order) => hasActiveShipmentClaim(order));
-    if (claimedOrders.length > 0) {
-        throw new ConflictError(`Orders have active shipment creation in progress: ${claimedOrders.map((order) => order.id).join(", ")}`);
+    if (affectedOrders.length !== requestedIds.length) {
+        throw new NotFoundError("One or more orders no longer exist. Reload and try again.");
     }
-    await assertNoActiveRefundAttemptsForOrders(db, affectedOrders.map((order) => order.id));
-    await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id));
+
     for (const order of affectedOrders) {
-        if (permanent) {
-            await assertOrderItemsHaveNoReturnHistory(db, order.id);
-            await assertOrderHasNoIssuedInvoice(db, order.id);
+        if (order.deletedAt) {
+            throw new ValidationError("A legacy-deleted order cannot be archived.");
         }
-        else await assertNoActiveReturnReceipt(db, order.id);
+        if (order.archivedAt) {
+            throw new ValidationError("One or more orders are already archived. Reload and try again.");
+        }
+        if (order.version !== requestById.get(order.id)) {
+            throw new ConflictError("One or more orders changed. Reload and review them before archiving.");
+        }
+        const statusReason = getOrderArchiveStatusBlockedReason(order.status);
+        if (statusReason) throw new ValidationError(statusReason, { orderId: order.id });
+        assertNoActiveShipmentClaim(order);
+        await assertNoActiveReturnReceipt(db, order.id);
     }
 
-    // Apply inventory transitions for orders that need it
-    // (applyInventoryForStatusChange reads order items internally and uses CAS operations)
-    for (const order of affectedOrders) {
-        if (order.inventoryAction === "reserved" || order.inventoryAction === "deducted") {
-            await applyInventoryForStatusChange(db, order.id, "cancelled");
-        }
-    }
+    await assertNoActiveRefundAttemptsForOrders(db, requestedIds);
+    await assertNoActivePaymentSessionAttemptsForOrders(db, requestedIds);
 
-    // Batch the final delete/soft-delete statements atomically (Fix atomicity)
-    if (permanent) {
-        const deleteStmts: SQLiteBatchItem[] = [
-            db.delete(orderItems).where(inArray(orderItems.orderId, orderIds)),
-            db.delete(orders).where(inArray(orders.id, orderIds)),
-        ];
-        await safeBatch(db, deleteStmts);
-    } else {
-        await db.update(orders)
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const statements = requestedOrders.map(({ id, expectedVersion }) =>
+        db
+            .update(orders)
             .set({
-                deletedAt: sql`unixepoch()`,
-                inventoryAction: "restored",
+                archivedAt: sql`unixepoch()`,
                 version: sql`${orders.version} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
-            .where(inArray(orders.id, orderIds));
+            .where(and(
+                eq(orders.id, id),
+                eq(orders.version, expectedVersion),
+                isNull(orders.deletedAt),
+                isNull(orders.archivedAt),
+                sql`${orders.status} IN ('cancelled', 'completed', 'returned', 'refunded')`,
+                sql`(${orders.shipmentClaimId} IS NULL OR ${orders.shipmentClaimExpiresAt} IS NULL OR ${orders.shipmentClaimExpiresAt} <= ${nowSeconds})`,
+                noActiveRefundAttemptForOrderIdCondition(id),
+                noActivePaymentSessionAttemptForOrderIdCondition(id),
+            ))
+            .returning({ id: orders.id }),
+    );
+    const results = await safeBatch(db, statements as SQLiteBatchItem[]) as { id: string }[][];
+    if (results.some((result) => !result || result.length === 0)) {
+        throw new ConflictError("One or more orders changed. Reload and try again.");
     }
 }

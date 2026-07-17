@@ -13,6 +13,7 @@ import {
   createDataSelector,
   createListSearchValidator,
   getCanonicalPageForPagination,
+  normalizeBooleanSearchParam,
   normalizeDateSearchParam,
   normalizeOptionalEnumSearchParam,
   normalizeOptionalSearchString,
@@ -21,7 +22,10 @@ import {
 } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import type { Row } from "@tanstack/react-table";
-import type { OrderListItem } from "@scalius/core/modules/orders";
+import {
+  isOrderArchiveStatusEligible,
+  type OrderListItem,
+} from "@scalius/core/modules/orders";
 import type { DateRange } from "react-day-picker";
 import { formatDateShort } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -30,7 +34,7 @@ import { warmRouteQuery } from "~/lib/route-query-warming";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import {
   useUpdateOrderStatus,
-  useBulkDeleteOrders,
+  useArchiveOrders,
   useBulkShipOrders,
   useRestoreOrder,
 } from "~/lib/api-mutations/orders";
@@ -46,9 +50,9 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import type { BulkShipOrdersPayload } from "~/lib/api-functions/orders";
 import type { BulkShipResultSummary } from "~/components/admin/order-list/BulkShipDialog";
 
-const DeleteOrderDialog = lazy(() =>
-  import("~/components/admin/order-list/DeleteOrderDialog").then((module) => ({
-    default: module.DeleteOrderDialog,
+const ArchiveOrderDialog = lazy(() =>
+  import("~/components/admin/order-list/ArchiveOrderDialog").then((module) => ({
+    default: module.ArchiveOrderDialog,
   })),
 );
 
@@ -108,7 +112,8 @@ const PAYMENT_RECOVERY_FILTERS = [
   "needs_attention",
 ] as const;
 
-type SearchParams = ListSearchParams<OrderSort> & {
+type SearchParams = Omit<ListSearchParams<OrderSort>, "trashed"> & {
+  archived: boolean;
   status?: string;
   paymentStatus?: (typeof PAYMENT_STATUS_FILTERS)[number];
   paymentMethod?: (typeof PAYMENT_METHOD_FILTERS)[number];
@@ -119,8 +124,10 @@ type SearchParams = ListSearchParams<OrderSort> & {
 };
 
 function validateOrderSearch(search: SearchValidatorInput<SearchParams>): SearchParams {
+  const { trashed: _legacyTrashed, ...baseSearch } = baseSearchValidator(search);
   return {
-    ...baseSearchValidator(search),
+    ...baseSearch,
+    archived: normalizeBooleanSearchParam(search.archived),
     status: normalizeOptionalSearchString(search.status),
     paymentStatus: normalizeOptionalEnumSearchParam(
       search.paymentStatus,
@@ -157,7 +164,7 @@ function mapParams(deps: SearchParams) {
     paymentRecovery: deps.paymentRecovery,
     sort: deps.sort,
     order: deps.order,
-    showTrashed: deps.trashed,
+    showArchived: deps.archived,
     startDate: deps.startDate,
     endDate: deps.endDate,
   };
@@ -255,7 +262,7 @@ export const Route = createFileRoute("/admin/orders/")({
   head: ({ match }) => ({
     meta: [
       {
-        title: `${match.search.trashed ? "Trash" : "Orders"} | Scalius Admin`,
+        title: `${match.search.archived ? "Archived Orders" : "Orders"} | Scalius Admin`,
       },
     ],
   }),
@@ -270,7 +277,7 @@ function OrdersPage() {
   const navigate = useNavigate();
   const { symbol } = useCurrency();
   const orderActions = useOrderActionPermissions();
-  const showTrashed = search.trashed;
+  const showTrashed = search.archived;
 
   // ── Local state ───────────────────────────────────────────────
   const [shipmentStatuses, setShipmentStatuses] = useState<
@@ -279,8 +286,11 @@ function OrdersPage() {
   const [updatingStatusIds, setUpdatingStatusIds] = useState<Set<string>>(
     new Set(),
   );
-  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
-  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
+  const [orderToArchive, setOrderToArchive] = useState<{
+    id: string;
+    expectedVersion: number;
+  } | null>(null);
+  const [isBulkArchiveOpen, setIsBulkArchiveOpen] = useState(false);
   const [isShippingDialogOpen, setIsShippingDialogOpen] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
   const [lastBulkShipResult, setLastBulkShipResult] =
@@ -301,7 +311,7 @@ function OrdersPage() {
       || search.startDate
       || search.endDate,
   );
-  const isDeleteDialogOpen = !!orderToDelete || isBulkDeleteOpen;
+  const isArchiveDialogOpen = !!orderToArchive || isBulkArchiveOpen;
 
   // Date range — derive from URL params
   const dateRange: DateRange | undefined =
@@ -330,7 +340,7 @@ function OrdersPage() {
 
   // ── Mutations ─────────────────────────────────────────────────
   const statusMutation = useUpdateOrderStatus();
-  const bulkDeleteMut = useBulkDeleteOrders();
+  const archiveMut = useArchiveOrders();
   const bulkShipMut = useBulkShipOrders();
   const restoreMut = useRestoreOrder();
 
@@ -477,41 +487,28 @@ function OrdersPage() {
     [navigate, orderActions.canEditOrders],
   );
 
-  const handleDelete = useCallback(
-    (id: string) => {
+  const handleArchive = useCallback(
+    (id: string, expectedVersion: number) => {
       if (!orderActions.canDeleteOrders) {
-        toast.error("Delete unavailable", {
-          description: "Your role can view orders but cannot delete them.",
+        toast.error("Archive unavailable", {
+          description: "Your role can view orders but cannot archive them.",
         });
         return;
       }
-      setOrderToDelete(id);
-    },
-    [orderActions.canDeleteOrders],
-  );
-
-  const handlePermanentDelete = useCallback(
-    (id: string) => {
-      if (!orderActions.canDeleteOrders) {
-        toast.error("Delete unavailable", {
-          description: "Your role can view orders but cannot delete them.",
-        });
-        return;
-      }
-      setOrderToDelete(id);
+      setOrderToArchive({ id, expectedVersion });
     },
     [orderActions.canDeleteOrders],
   );
 
   const handleRestore = useCallback(
-    (id: string) => {
+    (id: string, expectedVersion: number) => {
       if (!orderActions.canRestoreOrders) {
         toast.error("Restore unavailable", {
-          description: "Your role can view deleted orders but cannot restore them.",
+          description: "Your role can view archived orders but cannot restore them.",
         });
         return;
       }
-      restoreMut.mutate(id);
+      restoreMut.mutate({ id, expectedVersion });
     },
     [restoreMut, orderActions.canRestoreOrders],
   );
@@ -551,37 +548,37 @@ function OrdersPage() {
     [],
   );
 
-  // ── Delete handlers ───────────────────────────────────────────
+  // ── Archive handlers ──────────────────────────────────────────
 
-  const handleSingleDelete = useCallback(() => {
-    if (!orderToDelete) return;
+  const handleSingleArchive = useCallback(() => {
+    if (!orderToArchive) return;
     if (!orderActions.canDeleteOrders) {
-      toast.error("Delete unavailable", {
-        description: "Your role can view orders but cannot delete them.",
+      toast.error("Archive unavailable", {
+        description: "Your role can view orders but cannot archive them.",
       });
       return;
     }
-    bulkDeleteMut.mutate(
-      { orderIds: [orderToDelete], permanent: showTrashed },
+    archiveMut.mutate(
+      { orders: [orderToArchive] },
       {
         onSettled: () => {
-          setOrderToDelete(null);
+          setOrderToArchive(null);
         },
       },
     );
-  }, [orderToDelete, showTrashed, bulkDeleteMut, orderActions.canDeleteOrders]);
+  }, [orderToArchive, archiveMut, orderActions.canDeleteOrders]);
 
-  const handleBulkDeleteClick = useCallback(() => {
+  const handleBulkArchiveClick = useCallback(() => {
     if (!orderActions.canBulkDeleteOrders) {
-      toast.error("Bulk delete unavailable", {
-        description: "Your role can view orders but cannot delete them.",
+      toast.error("Bulk archive unavailable", {
+        description: "Your role can view orders but cannot archive them.",
       });
       return;
     }
-    setIsBulkDeleteOpen(true);
+    setIsBulkArchiveOpen(true);
   }, [orderActions.canBulkDeleteOrders]);
 
-  // NOTE: handleBulkDeleteConfirm and handleBulkShipmentSubmit are defined
+  // NOTE: handleBulkArchiveConfirm and handleBulkShipmentSubmit are defined
   // after useServerTable to avoid using selectedIds/clearSelection before declaration.
 
   // ── Initialize shipment statuses from query data ──────────────
@@ -598,9 +595,8 @@ function OrdersPage() {
         shipmentStatuses,
         updatingStatusIds,
         onEdit: handleEdit,
-        onDelete: handleDelete,
+        onArchive: handleArchive,
         onRestore: handleRestore,
-        onPermanentDelete: handlePermanentDelete,
         onStatusUpdate: handleStatusUpdate,
         onShipmentStatusUpdated: handleShipmentStatusUpdated,
         orderActions,
@@ -611,9 +607,8 @@ function OrdersPage() {
       shipmentStatuses,
       updatingStatusIds,
       handleEdit,
-      handleDelete,
+      handleArchive,
       handleRestore,
-      handlePermanentDelete,
       handleStatusUpdate,
       handleShipmentStatusUpdated,
       orderActions,
@@ -687,39 +682,60 @@ function OrdersPage() {
     },
     [selectedIds, table],
   );
-  const deletePaymentRecoveryCount = isBulkDeleteOpen
-    ? selectedPaymentRecoveryOrders.length
-    : orderToDelete
-      ? table
-          .getRowModel()
-          .rows.some((row) => row.original.id === orderToDelete && hasPaymentRecoveryState(row.original))
-        ? 1
-        : 0
-      : 0;
-  const deleteActivePaymentSetupCount = isBulkDeleteOpen
+  const selectedArchiveBlockedOrders = useMemo(
+    () => {
+      const selectedOrderIds = new Set(selectedIds);
+      return table
+        .getRowModel()
+        .rows.map((row) => row.original)
+        .filter((order) =>
+          selectedOrderIds.has(order.id) && !isOrderArchiveStatusEligible(order.status));
+    },
+    [selectedIds, table],
+  );
+  const selectedArchiveRequests = useMemo(() => {
+    const selectedOrderIds = new Set(selectedIds);
+    return table
+      .getRowModel()
+      .rows.map((row) => row.original)
+      .filter((order) => selectedOrderIds.has(order.id))
+      .map((order) => ({ id: order.id, expectedVersion: order.version }));
+  }, [selectedIds, table]);
+  const archiveActivePaymentSetupCount = isBulkArchiveOpen
     ? selectedActivePaymentSetupOrders.length
-    : orderToDelete
+    : orderToArchive
       ? table
           .getRowModel()
-          .rows.some((row) => row.original.id === orderToDelete && hasActivePaymentSetup(row.original))
+          .rows.some((row) => row.original.id === orderToArchive.id && hasActivePaymentSetup(row.original))
         ? 1
         : 0
       : 0;
-  const deleteActiveRefundCount = isBulkDeleteOpen
+  const archiveActiveRefundCount = isBulkArchiveOpen
     ? selectedActiveRefundOrders.length
-    : orderToDelete
+    : orderToArchive
       ? table
           .getRowModel()
-          .rows.some((row) => row.original.id === orderToDelete && hasActiveRefundOperation(row.original))
+          .rows.some((row) => row.original.id === orderToArchive.id && hasActiveRefundOperation(row.original))
         ? 1
         : 0
       : 0;
-  const deleteShipmentLockCount = isBulkDeleteOpen
+  const archiveShipmentLockCount = isBulkArchiveOpen
     ? selectedShipmentLockedOrders.length
-    : orderToDelete
+    : orderToArchive
       ? table
           .getRowModel()
-          .rows.some((row) => row.original.id === orderToDelete && hasActiveShipmentLock(row.original))
+          .rows.some((row) => row.original.id === orderToArchive.id && hasActiveShipmentLock(row.original))
+        ? 1
+        : 0
+      : 0;
+  const archiveStatusBlockedCount = isBulkArchiveOpen
+    ? selectedArchiveBlockedOrders.length
+    : orderToArchive
+      ? table
+          .getRowModel()
+          .rows.some((row) =>
+            row.original.id === orderToArchive.id
+            && !isOrderArchiveStatusEligible(row.original.status))
         ? 1
         : 0
       : 0;
@@ -920,11 +936,17 @@ function OrdersPage() {
     toast.success(`${rows.length} orders exported successfully.`);
   }, [search, table]);
 
-  // ── Bulk delete handler (after useServerTable for selectedIds/clearSelection) ──
-  const handleBulkDeleteConfirm = useCallback(() => {
+  // ── Bulk archive handler (after useServerTable for selected revisions) ──
+  const handleBulkArchiveConfirm = useCallback(() => {
     if (!orderActions.canBulkDeleteOrders) {
-      toast.error("Bulk delete unavailable", {
-        description: "Your role can view orders but cannot delete them.",
+      toast.error("Bulk archive unavailable", {
+        description: "Your role can view orders but cannot archive them.",
+      });
+      return;
+    }
+    if (selectedArchiveBlockedOrders.length > 0) {
+      toast.error("Finish orders before archiving", {
+        description: `${selectedArchiveBlockedOrders.length} selected order(s) still have operational work.`,
       });
       return;
     }
@@ -946,24 +968,24 @@ function OrdersPage() {
       });
       return;
     }
-    bulkDeleteMut.mutate(
-      { orderIds: selectedIds, permanent: showTrashed },
+    archiveMut.mutate(
+      { orders: selectedArchiveRequests },
       {
         onSuccess: () => {
           clearSelection();
-          setIsBulkDeleteOpen(false);
+          setIsBulkArchiveOpen(false);
         },
         onSettled: () => {
-          setIsBulkDeleteOpen(false);
+          setIsBulkArchiveOpen(false);
         },
       },
     );
   }, [
-    showTrashed,
-    bulkDeleteMut,
-    selectedIds,
+    archiveMut,
+    selectedArchiveRequests,
     clearSelection,
     orderActions.canBulkDeleteOrders,
+    selectedArchiveBlockedOrders,
     selectedActiveRefundOrders,
     selectedShipmentLockedOrders,
     selectedActivePaymentSetupOrders,
@@ -1081,8 +1103,7 @@ function OrdersPage() {
             if (r) r.toggleSelected(!r.getIsSelected());
           }}
           onEdit={handleEdit}
-          onDelete={handleDelete}
-          onPermanentDelete={handlePermanentDelete}
+          onArchive={handleArchive}
           onRestore={handleRestore}
           onStatusUpdate={handleStatusUpdate}
           onShipmentStatusUpdated={handleShipmentStatusUpdated}
@@ -1096,8 +1117,7 @@ function OrdersPage() {
       showTrashed,
       table,
       handleEdit,
-      handleDelete,
-      handlePermanentDelete,
+      handleArchive,
       handleRestore,
       handleStatusUpdate,
       handleShipmentStatusUpdated,
@@ -1125,7 +1145,7 @@ function OrdersPage() {
       onPaymentRecoveryFilterChange={onPaymentRecoveryFilterChange}
       dateRange={dateRange}
       onDateRangeChange={onDateRangeChange}
-      onBulkDelete={handleBulkDeleteClick}
+      onBulkArchive={handleBulkArchiveClick}
       onBulkShip={() => {
         if (isShipping || selectedIds.length === 0) return;
         if (!orderActions.canBulkShipOrders) {
@@ -1161,11 +1181,12 @@ function OrdersPage() {
         setLastBulkShipResult(null);
         setIsShippingDialogOpen(true);
       }}
-      isBulkActionBusy={isShipping || bulkDeleteMut.isPending}
+      isBulkActionBusy={isShipping || archiveMut.isPending}
       selectedPaymentRecoveryCount={selectedPaymentRecoveryOrders.length}
       selectedActivePaymentSetupCount={selectedActivePaymentSetupOrders.length}
       selectedActiveRefundCount={selectedActiveRefundOrders.length}
       selectedShipmentLockCount={selectedShipmentLockedOrders.length}
+      selectedArchiveBlockedCount={selectedArchiveBlockedOrders.length}
       onExportCSV={handleExportCSV}
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
@@ -1182,7 +1203,7 @@ function OrdersPage() {
         <CardHeader className="space-y-1 pb-3">
           <div className="flex items-center gap-3">
             <CardTitle className="text-xl font-bold tracking-tight text-foreground">
-              {showTrashed ? "Trash" : "Orders"}
+              {showTrashed ? "Archived Orders" : "Orders"}
             </CardTitle>
             {!showTrashed && (
               <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
@@ -1209,12 +1230,12 @@ function OrdersPage() {
             emptyState={{
               icon: ShoppingBag,
               title: showTrashed
-                ? "No orders in trash"
+                ? "No archived orders"
                 : hasActiveFilters
                   ? "No orders found"
                   : "No orders found",
               description: showTrashed
-                ? "Deleted orders will appear here"
+                ? "Completed or cancelled orders you archive will appear here"
                 : hasActiveFilters
                   ? "Try adjusting your search or filters"
                   : "New orders will appear here",
@@ -1223,26 +1244,25 @@ function OrdersPage() {
         </CardContent>
       </Card>
 
-      {/* Delete confirmation */}
-      {isDeleteDialogOpen && (
+      {/* Archive confirmation */}
+      {isArchiveDialogOpen && (
         <Suspense fallback={null}>
-          <DeleteOrderDialog
-            isOpen={isDeleteDialogOpen}
+          <ArchiveOrderDialog
+            isOpen={isArchiveDialogOpen}
             onOpenChange={(isOpen) => {
               if (!isOpen) {
-                setOrderToDelete(null);
-                setIsBulkDeleteOpen(false);
+                setOrderToArchive(null);
+                setIsBulkArchiveOpen(false);
               }
             }}
-            isDeleting={bulkDeleteMut.isPending}
-            onConfirm={isBulkDeleteOpen ? handleBulkDeleteConfirm : handleSingleDelete}
-            showTrashed={showTrashed}
-            isBulk={isBulkDeleteOpen}
+            isArchiving={archiveMut.isPending}
+            onConfirm={isBulkArchiveOpen ? handleBulkArchiveConfirm : handleSingleArchive}
+            isBulk={isBulkArchiveOpen}
             itemCount={selectedIds.length}
-            paymentRecoveryCount={deletePaymentRecoveryCount}
-            activePaymentSetupCount={deleteActivePaymentSetupCount}
-            activeRefundCount={deleteActiveRefundCount}
-            shipmentLockCount={deleteShipmentLockCount}
+            activePaymentSetupCount={archiveActivePaymentSetupCount}
+            activeRefundCount={archiveActiveRefundCount}
+            shipmentLockCount={archiveShipmentLockCount}
+            statusBlockedCount={archiveStatusBlockedCount}
           />
         </Suspense>
       )}

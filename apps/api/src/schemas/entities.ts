@@ -266,6 +266,7 @@ export const orderSummarySchema = z
     fulfillmentStatus: z.string().nullable(),
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
+    version: z.number().int().min(1),
     city: z.string().nullable(),
     zone: z.string().nullable(),
     area: z.string().nullable(),

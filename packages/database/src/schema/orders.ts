@@ -75,6 +75,9 @@ export const orders = sqliteTable("orders", {
     updatedAt: integer("updated_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
+    /** Merchant workspace visibility only; never changes buyer, payment, inventory, or reporting truth. */
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+    /** Legacy lifecycle cleanup marker used by abandoned/incomplete-order cleanup. */
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     invoiceNumber: integer("invoice_number"),
 }, (table) => [
@@ -83,6 +86,8 @@ export const orders = sqliteTable("orders", {
     index("orders_customer_id_idx").on(table.customerId),
     index("orders_account_owner_customer_id_idx").on(table.accountOwnerCustomerId),
     index("orders_created_at_idx").on(table.createdAt),
+    index("orders_archived_at_idx").on(table.archivedAt),
+    index("orders_archive_list_idx").on(table.deletedAt, table.archivedAt, table.updatedAt),
     index("orders_deleted_at_idx").on(table.deletedAt),
     index("orders_list_updated_at_idx").on(table.deletedAt, table.updatedAt),
     index("orders_payment_status_list_idx").on(

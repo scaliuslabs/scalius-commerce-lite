@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createOrderSchema, updateOrderSchema } from "./orders.validation";
+import {
+    archiveOrdersSchema,
+    createOrderSchema,
+    restoreOrderSchema,
+    updateOrderSchema,
+} from "./orders.validation";
 
 function orderInput(quantity: number) {
     return {
@@ -71,5 +76,32 @@ describe("manual-order create idempotency", () => {
         expect(createOrderSchema.safeParse(base).success).toBe(false);
         expect(createOrderSchema.safeParse({ ...base, requestKey: "retry-me" }).success).toBe(false);
         expect(createOrderSchema.safeParse({ ...base, requestKey: crypto.randomUUID() }).success).toBe(true);
+    });
+});
+
+describe("order archive concurrency", () => {
+    it("requires a bounded unique set of browser-loaded revisions", () => {
+        expect(archiveOrdersSchema.safeParse({ orders: [] }).success).toBe(false);
+        expect(archiveOrdersSchema.safeParse({
+            orders: [{ id: "ord_1", expectedVersion: 2 }],
+        }).success).toBe(true);
+        expect(archiveOrdersSchema.safeParse({
+            orders: [
+                { id: "ord_1", expectedVersion: 2 },
+                { id: "ord_1", expectedVersion: 2 },
+            ],
+        }).success).toBe(false);
+        expect(archiveOrdersSchema.safeParse({
+            orders: Array.from({ length: 91 }, (_, index) => ({
+                id: `ord_${index}`,
+                expectedVersion: 1,
+            })),
+        }).success).toBe(false);
+    });
+
+    it("requires the archived order revision on restore", () => {
+        expect(restoreOrderSchema.safeParse({}).success).toBe(false);
+        expect(restoreOrderSchema.safeParse({ expectedVersion: 0 }).success).toBe(false);
+        expect(restoreOrderSchema.safeParse({ expectedVersion: 3 }).success).toBe(true);
     });
 });

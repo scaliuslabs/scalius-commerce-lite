@@ -7,27 +7,26 @@ const ORDERS_ADMIN_SOURCE = fileURLToPath(
 );
 
 describe("admin order list boundaries", () => {
-  it("guards full item replacement and hard deletion once return evidence exists", () => {
+  it("guards full item replacement and exposes archive without hard deletion", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const updateSource = source.slice(
       source.indexOf("export async function updateOrder"),
       source.indexOf("async function updateCustomerStatsService"),
     );
-    const permanentDeleteSource = source.slice(
-      source.indexOf("export async function permanentlyDeleteOrder"),
-      source.indexOf("export async function bulkDeleteOrders"),
-    );
-    const bulkDeleteSource = source.slice(
-      source.indexOf("export async function bulkDeleteOrders"),
-    );
+    const archiveSource = source.slice(source.indexOf("export async function archiveOrders"));
 
     expect(updateSource).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
     expect(updateSource).toContain("await assertOrderHasNoIssuedInvoice(db, id)");
-    expect(permanentDeleteSource).toContain("await assertOrderItemsHaveNoReturnHistory(db, id)");
-    expect(permanentDeleteSource).toContain("await assertOrderHasNoIssuedInvoice(db, id)");
-    expect(bulkDeleteSource).toMatch(
-      /if \(permanent\) \{[\s\S]*?assertOrderItemsHaveNoReturnHistory\(db, order\.id\);[\s\S]*?assertOrderHasNoIssuedInvoice\(db, order\.id\);[\s\S]*?\}\s*else await assertNoActiveReturnReceipt\(db, order\.id\);/,
-    );
+    expect(source).not.toContain("export async function permanentlyDeleteOrder");
+    expect(source).not.toContain("export async function bulkDeleteOrders");
+    expect(source).not.toContain("db.delete(orders)");
+    expect(archiveSource).toContain("getOrderArchiveStatusBlockedReason");
+    expect(archiveSource).toContain("eq(orders.version, expectedVersion)");
+    expect(archiveSource).toContain("isNull(orders.deletedAt)");
+    expect(archiveSource).toContain("archivedAt: sql`unixepoch()`");
+    expect(archiveSource).toContain("isNull(orders.archivedAt)");
+    expect(archiveSource).not.toContain("applyInventoryForStatusChange");
+    expect(archiveSource).not.toContain("inventoryAction:");
   });
 
   it("returns the order CAS version required by item-return creation", () => {
@@ -124,7 +123,7 @@ describe("admin order list boundaries", () => {
     expect(source).toContain("paymentRecovery: buildPaymentRecoverySummary(");
     expect(source).toContain("activePaymentSessionAttemptExistsCondition");
     expect(source).toContain("staleOrFailedPaymentSessionAttemptExistsCondition");
-    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, [id])");
+    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, requestedIds)");
     expect(summarySource).toContain('state: "awaiting_payment"');
     expect(summarySource).toContain('state: "processing"');
     expect(summarySource).toContain('state: "needs_attention"');
@@ -139,8 +138,7 @@ describe("admin order list boundaries", () => {
 
     expect(source).toContain('from "../payments/payment-session-attempts"');
     expect(source).toContain("await assertNoActivePaymentSessionAttempt(db, id)");
-    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, [id])");
-    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, affectedOrders.map((order) => order.id))");
+    expect(source).toContain("await assertNoActivePaymentSessionAttemptsForOrders(db, requestedIds)");
     expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(orderId)");
     expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(id)");
     expect(source).toContain("noActivePaymentSessionAttemptForOrderIdCondition(id),");

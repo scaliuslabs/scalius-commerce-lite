@@ -9,12 +9,13 @@ import type {
   GetApiV1AdminOrdersByIdShipmentsResponse,
   GetApiV1AdminOrdersData,
   GetApiV1AdminOrdersResponse,
-  PostApiV1AdminOrdersBulkDeleteData,
+  PostApiV1AdminOrdersArchiveData,
   PostApiV1AdminOrdersByIdFulfillData,
   PostApiV1AdminOrdersByIdFulfillResponse,
   PostApiV1AdminOrdersByIdRefundData,
   PostApiV1AdminOrdersByIdRefundResponse,
   PostApiV1AdminOrdersByIdRestoreResponse,
+  PostApiV1AdminOrdersByIdRestoreData,
   PostApiV1AdminOrdersByIdShipmentsData,
   PostApiV1AdminOrdersByIdShipmentsResponse,
   PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponse,
@@ -73,10 +74,9 @@ type ApiBody<T extends { body?: unknown }> = JsonSerializable<
 
 type OrderListQuery = NonNullable<GetApiV1AdminOrdersData["query"]>;
 
-export interface OrdersQueryInput extends Omit<OrderListQuery, "trashed"> {
+export interface OrdersQueryInput extends Omit<OrderListQuery, "archived"> {
   [key: string]: string | number | boolean | null | undefined;
-  showTrashed?: boolean;
-  trashed?: boolean;
+  showArchived?: boolean;
   paymentRecovery?:
     | "recoverable"
     | "awaiting_payment"
@@ -114,8 +114,7 @@ export interface IssueOrderPaymentRecoveryLinkInput {
 }
 export type IssueOrderPaymentRecoveryLinkPayload =
   ApiData<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponse>;
-export type BulkDeleteOrdersInput =
-  ApiBody<PostApiV1AdminOrdersBulkDeleteData>;
+export type ArchiveOrdersInput = ApiBody<PostApiV1AdminOrdersArchiveData>;
 export type BulkShipOrdersInput = ApiBody<PostApiV1AdminOrdersBulkShipData>;
 export type BulkShipOrdersPayload =
   ApiData<PostApiV1AdminOrdersBulkShipResponse>;
@@ -243,7 +242,7 @@ function buildOrdersParams(data: OrdersQueryInput): Record<string, string> {
   if (data.paymentRecovery) params.paymentRecovery = data.paymentRecovery;
   if (data.sort) params.sort = data.sort;
   if (data.order) params.order = data.order;
-  if (data.showTrashed || data.trashed) params.trashed = "true";
+  if (data.showArchived) params.archived = "true";
   if (data.startDate) params.startDate = data.startDate;
   if (data.endDate) params.endDate = data.endDate;
   return params;
@@ -359,17 +358,18 @@ export const reconcileOrderReturn = createServerFn({ method: "POST" })
   });
 
 export const restoreOrder = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: { id: string } & ApiBody<PostApiV1AdminOrdersByIdRestoreData>) => data)
   .handler(async ({ data }) => {
     return apiPost<PostApiV1AdminOrdersByIdRestoreResponse>(
       `/orders/${data.id}/restore`,
+      { expectedVersion: data.expectedVersion },
     );
   });
 
-export const bulkDeleteOrders = createServerFn({ method: "POST" })
-  .validator((data: BulkDeleteOrdersInput) => data)
+export const archiveOrders = createServerFn({ method: "POST" })
+  .validator((data: ArchiveOrdersInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<void>("/orders/bulk-delete", data);
+    return apiPost<void>("/orders/archive", data);
   });
 
 export const bulkShipOrders = createServerFn({ method: "POST" })

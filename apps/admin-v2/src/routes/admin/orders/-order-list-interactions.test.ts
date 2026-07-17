@@ -63,7 +63,7 @@ describe("order list interactions", () => {
     expect(routeSource).not.toContain("data: { orderId, shipment:");
     expect(routeSource).not.toContain("item.shipment");
     expect(routeSource).toContain("deselectIds(shippedOrderIds)");
-    expect(routeSource).toContain("isBulkActionBusy={isShipping || bulkDeleteMut.isPending}");
+    expect(routeSource).toContain("isBulkActionBusy={isShipping || archiveMut.isPending}");
     expect(routeSource).toContain("if (isShipping && !isOpen) return");
     expect(routeSource).toContain("selectedActivePaymentSetupOrders.length > 0");
     expect(routeSource).toContain("const selectedActiveRefundOrders = useMemo");
@@ -92,9 +92,9 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("selectedShipmentLockCount?: number");
     expect(toolbarSource).toContain("selectedShipmentLockCount > 0");
     expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkShipBlockedByRecovery}");
-    expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkDeleteBlockedByRecovery}");
-    expect(toolbarSource).toContain("Resolve active refund recovery before changing these orders.");
-    expect(toolbarSource).toContain("Resolve active shipment recovery before changing these orders.");
+    expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkArchiveBlocked}");
+    expect(toolbarSource).toContain("Resolve active refund recovery before archiving these orders.");
+    expect(toolbarSource).toContain("Resolve active shipment recovery before archiving these orders.");
     expect(toolbarSource).toContain("`Resolve Refund (${selectedActiveRefundCount})`");
     expect(toolbarSource).toContain("`Resolve Shipment (${selectedShipmentLockCount})`");
 
@@ -256,14 +256,14 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("function PaymentMethodLabel");
   });
 
-  it("surfaces active refund locks in desktop/mobile rows and delete dialog", () => {
+  it("surfaces active refund locks in desktop/mobile rows and archive dialog", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
     const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
     const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
     const dialogSource = readFileSync(
       fileURLToPath(
         new URL(
-          "../../../components/admin/order-list/DeleteOrderDialog.tsx",
+          "../../../components/admin/order-list/ArchiveOrderDialog.tsx",
           import.meta.url,
         ),
       ),
@@ -286,8 +286,8 @@ describe("order list interactions", () => {
     expect(columnsSource).toContain("order.activeRefundOperation?.active !== true");
     expect(columnsSource).toContain("order.shipmentRecovery?.activeLock !== true");
     expect(columnsSource).toContain("Complete or reconcile the refund before changing this order.");
-    expect(columnsSource).toContain("Resolve refund recovery before deleting");
-    expect(columnsSource).toContain("Resolve shipment recovery before deleting");
+    expect(columnsSource).toContain("Resolve refund recovery before archiving");
+    expect(columnsSource).toContain("Resolve shipment recovery before archiving");
 
     expect(mobileSource).toContain("RefundRecoveryBadge");
     expect(mobileSource).toContain("ShipmentRecoveryBadge");
@@ -296,20 +296,21 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("orderActions.canChangeOrderStatus &&");
     expect(mobileSource).toContain("!hasActiveRefundOperation &&");
     expect(mobileSource).toContain("!shipmentLocked");
-    expect(mobileSource).toContain("Resolve refund recovery before deleting");
-    expect(mobileSource).toContain("Resolve shipment recovery before deleting");
+    expect(mobileSource).toContain("Resolve refund recovery before archiving");
+    expect(mobileSource).toContain("Resolve shipment recovery before archiving");
 
     expect(dialogSource).toContain("activeRefundCount?: number");
     expect(dialogSource).toContain("shipmentLockCount?: number");
     expect(dialogSource).toContain("shipmentLockCount > 0");
-    expect(dialogSource).toContain("disabled={isDeleting || isBlocked}");
+    expect(dialogSource).toContain("disabled={isArchiving || isBlocked}");
     expect(dialogSource).toContain("active refund recovery. Complete or reconcile");
     expect(dialogSource).toContain("active shipment recovery. Resolve the shipment");
+    expect(dialogSource).not.toContain("before deleting");
 
-    expect(routeSource).toContain("const deleteActiveRefundCount = isBulkDeleteOpen");
-    expect(routeSource).toContain("const deleteShipmentLockCount = isBulkDeleteOpen");
-    expect(routeSource).toContain("activeRefundCount={deleteActiveRefundCount}");
-    expect(routeSource).toContain("shipmentLockCount={deleteShipmentLockCount}");
+    expect(routeSource).toContain("const archiveActiveRefundCount = isBulkArchiveOpen");
+    expect(routeSource).toContain("const archiveShipmentLockCount = isBulkArchiveOpen");
+    expect(routeSource).toContain("activeRefundCount={archiveActiveRefundCount}");
+    expect(routeSource).toContain("shipmentLockCount={archiveShipmentLockCount}");
     expect(statusSelectorSource).toContain("disabledReason?: string");
     expect(statusSelectorSource).toContain("disabledReason: disabledReasonOverride");
   });
@@ -387,5 +388,32 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("orderActions.canChangeOrderStatus");
     expect(mobileSource).toContain("orderActions.canManageOrderShipments");
     expect(mobileSource).toContain("!order.fullEditReadiness.allowed");
+  });
+
+  it("archives by browser-loaded revision and exposes no permanent-delete action", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
+    const columnsSource = readFileSync(ORDER_COLUMNS_SOURCE, "utf8");
+    const mobileSource = readFileSync(ORDER_MOBILE_CARD_SOURCE, "utf8");
+    const serverFunctionsSource = readFileSync(ORDER_SERVER_FUNCTIONS_SOURCE, "utf8");
+
+    expect(routeSource).toContain("expectedVersion: order.version");
+    expect(routeSource).toContain("archiveMut.mutate");
+    expect(routeSource).toContain("restoreMut.mutate({ id, expectedVersion })");
+    expect(routeSource).toContain("archived: normalizeBooleanSearchParam(search.archived)");
+    expect(routeSource).toContain("showArchived: deps.archived");
+    expect(routeSource).not.toContain("search.trashed");
+    expect(toolbarSource).toContain("search={showTrashed ? undefined : { archived: true }}");
+    expect(columnsSource).toContain("onArchive(order.id, order.version)");
+    expect(mobileSource).toContain("onArchive(order.id, order.version)");
+    expect(columnsSource).toContain("aria-label={`Archive order ${order.id}`}");
+    expect(columnsSource).toContain("aria-label={`Restore order ${order.id}`}");
+    expect(mobileSource).toContain("aria-label={`Archive order ${order.id}`}");
+    expect(mobileSource).toContain("aria-label={`Restore order ${order.id}`}");
+    expect(columnsSource).not.toContain("onPermanentDelete");
+    expect(mobileSource).not.toContain("onPermanentDelete");
+    expect(serverFunctionsSource).toContain('apiPost<void>("/orders/archive", data)');
+    expect(serverFunctionsSource).not.toContain("/orders/bulk-delete");
+    expect(serverFunctionsSource).not.toContain("/permanent");
   });
 });
