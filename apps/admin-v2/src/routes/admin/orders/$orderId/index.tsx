@@ -128,6 +128,7 @@ function toOrderViewModel(
     shipmentRecovery: order.shipmentRecovery,
     paymentRecovery: order.paymentRecovery,
     supportRequests: order.supportRequests ?? [],
+    fullEditReadiness: order.fullEditReadiness,
   };
 }
 

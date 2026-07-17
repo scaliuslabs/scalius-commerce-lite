@@ -22,6 +22,10 @@ export interface EditOrderFormProduct {
 export interface EditOrderFormRouteData {
   productsWithVariants: EditOrderFormProduct[];
   defaultValues: Record<string, unknown>;
+  fullEditReadiness: {
+    allowed: boolean;
+    reason: string | null;
+  };
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -127,10 +131,25 @@ export function buildEditOrderFormRouteData(payload: unknown): EditOrderFormRout
   if (!Array.isArray(defaultValues.items)) {
     throw new Error("Order form defaults did not include order items.");
   }
+  const fullEditReadiness = requireRecord(
+    data.fullEditReadiness,
+    "Order edit readiness",
+  );
+  if (
+    typeof fullEditReadiness.allowed !== "boolean"
+    || (fullEditReadiness.reason !== null
+      && typeof fullEditReadiness.reason !== "string")
+  ) {
+    throw new Error("Order edit readiness response was unusable.");
+  }
   return {
     productsWithVariants: data.productsWithVariants.map(
       normalizeEditOrderFormProduct,
     ),
     defaultValues,
+    fullEditReadiness: {
+      allowed: fullEditReadiness.allowed,
+      reason: fullEditReadiness.reason as string | null,
+    },
   };
 }

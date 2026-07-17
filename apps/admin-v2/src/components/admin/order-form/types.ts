@@ -57,6 +57,7 @@ export interface Product {
 
   export const orderFormSchema = z.object({
     id: z.string().optional(),
+    version: z.number().int().min(1).optional(),
     customerName: z
       .string()
       .min(3, "Customer name must be at least 3 characters")

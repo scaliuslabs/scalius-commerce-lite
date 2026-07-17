@@ -102,7 +102,9 @@ describe("order detail permission boundaries", () => {
     expect(returnsSource).toContain("actions.canChangeOrderStatus");
     expect(returnsSource).not.toContain("canRefundOrders");
     expect(returnsSource).not.toContain("useRefundOrder");
-    expect(fullEditSummarySource).toContain("getAdminOrderStatusTransitions");
-    expect(fullEditSummarySource).not.toContain("Object.values(OrderStatus)");
+    expect(fullEditSummarySource).not.toContain("getAdminOrderStatusTransitions");
+    expect(fullEditSummarySource).not.toContain('name="status"');
+    expect(headerSource).toContain("order.fullEditReadiness.allowed");
+    expect(headerSource).toContain("order.fullEditReadiness.reason");
   });
 });

@@ -244,6 +244,11 @@ export const orderListActiveRefundOperationSchema = z.object({
   providerStatus: z.string().nullable(),
 });
 
+export const orderFullEditReadinessSchema = z.object({
+  allowed: z.boolean(),
+  reason: z.string().nullable(),
+});
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z
   .object({
@@ -273,6 +278,7 @@ export const orderSummarySchema = z
     shipmentRecovery: orderShipmentRecoverySchema,
     paymentRecovery: orderPaymentRecoverySchema,
     activeRefundOperation: orderListActiveRefundOperationSchema.nullable(),
+    fullEditReadiness: orderFullEditReadinessSchema,
   })
 
 /** Order item — returned inside order detail. */
@@ -410,6 +416,7 @@ export const orderDetailSchema = z
     paymentRecovery: orderPaymentRecoverySchema,
     refundAttempts: z.array(orderRefundAttemptSchema),
     activeRefundOperation: activeRefundOperationSchema.nullable(),
+    fullEditReadiness: orderFullEditReadinessSchema,
     supportRequests: z.array(orderSupportRequestSchema),
   })
 

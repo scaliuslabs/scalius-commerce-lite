@@ -84,6 +84,11 @@ export interface OrderPaymentRecoverySummary {
     updatedAt: Date | null;
 }
 
+export interface AdminOrderFullEditReadiness {
+    allowed: boolean;
+    reason: string | null;
+}
+
 export interface OrderListItem {
     id: string;
     customerName: string;
@@ -110,6 +115,7 @@ export interface OrderListItem {
     shipmentRecovery: OrderShipmentRecoverySummary;
     paymentRecovery: OrderPaymentRecoverySummary;
     activeRefundOperation: ActiveRefundOperationView | null;
+    fullEditReadiness: AdminOrderFullEditReadiness;
 }
 
 export interface OrderDetails extends OrderListItem {

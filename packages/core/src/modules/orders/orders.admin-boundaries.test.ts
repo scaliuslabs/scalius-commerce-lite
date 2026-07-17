@@ -39,6 +39,21 @@ describe("admin order list boundaries", () => {
     expect(detailSource).toContain("version: orders.version");
   });
 
+  it("requires the browser-loaded version and edit readiness before full replacement", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const updateSource = source.slice(
+      source.indexOf("export async function updateOrder"),
+      source.indexOf("async function updateCustomerStatsService"),
+    );
+
+    expect(updateSource).toContain("existingOrder.version !== data.expectedVersion");
+    expect(updateSource).toContain("const expectedVersion = data.expectedVersion");
+    expect(updateSource).toContain("await getAdminOrderFullEditReadiness(db, id)");
+    expect(updateSource).toContain("eq(orders.version, expectedVersion)");
+    expect(updateSource).toContain("Use the order status action for operational progress");
+    expect(updateSource).not.toContain("assertGenericAdminOrderStatusTransition");
+  });
+
   it("retries only transient D1 failures while reading order details", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const detailStart = source.indexOf("export async function getOrderDetails");

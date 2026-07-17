@@ -19,6 +19,7 @@ const errorSource = readFileSync(
   fileURLToPath(new URL("./-OrderFormRouteError.tsx", import.meta.url)),
   "utf8",
 );
+const editable = { allowed: true, reason: null };
 
 describe("order form route data", () => {
   it("preserves a truthful empty product catalog", () => {
@@ -64,10 +65,17 @@ describe("order form route data", () => {
     expect(buildEditOrderFormRouteData({
       productsWithVariants: [],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     })).toEqual({
       productsWithVariants: [],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     });
+
+    expect(() => buildEditOrderFormRouteData({
+      productsWithVariants: [],
+      defaultValues: { id: "order_1", items: [] },
+    })).toThrow("Order edit readiness response was unavailable or unusable");
   });
 
   it("normalizes only an omitted optional SKU-option collection", () => {
@@ -82,6 +90,7 @@ describe("order form route data", () => {
     expect(buildEditOrderFormRouteData({
       productsWithVariants: [product],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     }).productsWithVariants[0]?.variants[0]?.selectedOptions).toEqual([]);
 
     expect(() => buildEditOrderFormRouteData({
@@ -94,16 +103,19 @@ describe("order form route data", () => {
         }],
       }],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     })).toThrow("included unusable SKU options");
 
     expect(() => buildEditOrderFormRouteData({
       productsWithVariants: [{ ...product, variants: undefined }],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     })).toThrow("included an unusable product row");
 
     expect(() => buildEditOrderFormRouteData({
       productsWithVariants: [{ ...product, variants: [null] }],
       defaultValues: { id: "order_1", items: [] },
+      fullEditReadiness: editable,
     })).toThrow("included an unusable SKU row");
   });
 });

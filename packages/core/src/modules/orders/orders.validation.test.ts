@@ -31,7 +31,7 @@ describe.each([
 ] as const)("%s manual-order quantity validation", (_name, schema, isUpdate) => {
     const input = (quantity: number) => ({
         ...orderInput(quantity),
-        ...(isUpdate ? { status: "pending" } : {}),
+        ...(isUpdate ? { expectedVersion: 1, status: "pending" } : {}),
     });
 
     it.each([1, 99])("accepts boundary quantity %s", (quantity) => {
@@ -48,5 +48,16 @@ describe.each([
                 ]),
             );
         }
+    });
+});
+
+describe("manual-order update concurrency", () => {
+    it("requires a positive integer version from the form that was loaded", () => {
+        const base = { ...orderInput(1), status: "pending" };
+
+        expect(updateOrderSchema.safeParse(base).success).toBe(false);
+        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 0 }).success).toBe(false);
+        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 1.5 }).success).toBe(false);
+        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 3 }).success).toBe(true);
     });
 });

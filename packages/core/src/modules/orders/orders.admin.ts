@@ -6,6 +6,8 @@ import {
     orders,
     orderItems,
     orderInvoices,
+    orderReturns,
+    orderTaxSnapshots,
     customers,
     customerHistory,
     products,
@@ -15,12 +17,14 @@ import {
     deliveryProviders,
     paymentSessionAttempts,
     orderPayments,
+    refundAttempts,
     paymentPlans,
     OrderStatus,
     PaymentMethod,
     PaymentPlanStatus,
     PaymentRecordStatus,
     PaymentStatus,
+    FulfillmentStatus,
     ItemFulfillmentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
@@ -48,9 +52,9 @@ import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { validateTransition } from "./order-state-machine";
 import type {
     OrderDetails,
+    AdminOrderFullEditReadiness,
     OrderPaymentRecoveryFilter,
     OrderPaymentRecoverySummary,
     OrderShipmentRecoverySummary,
@@ -95,7 +99,6 @@ import {
     assertNoActiveReturnReceipt,
     assertOrderItemsHaveNoReturnHistory,
 } from "./order-returns";
-import { assertGenericAdminOrderStatusTransition } from "./admin-status-policy";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { retryTransientD1 } from "../../utils/transient-d1";
 
@@ -116,6 +119,122 @@ const TRASH_RESTORE_DEDUCTED_STATUSES = new Set<string>([
 type SQLiteBatchItem = BatchItem<"sqlite">;
 const ADMIN_CREATE_ROLLBACK_RELEASE_KEY = "admin-order-create-rollback:v1";
 const MAX_ORDER_LIST_LIMIT = 100;
+
+export interface AdminOrderFullEditSource {
+    status: string;
+    paymentStatus: string | null;
+    paidAmount: number | null;
+    fulfillmentStatus: string | null;
+    shipmentClaimId: string | null;
+    shipmentClaimExpiresAt: Date | number | string | null;
+    hasTaxSnapshot: number | boolean;
+    hasPaymentHistory: number | boolean;
+    hasShipmentHistory: number | boolean;
+    hasRefundHistory: number | boolean;
+    hasReturnHistory: number | boolean;
+    hasInvoiceHistory: number | boolean;
+}
+
+const FULL_EDITABLE_ORDER_STATUSES = new Set<string>([
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.CONFIRMED,
+]);
+
+export function buildAdminOrderFullEditReadiness(
+    order: AdminOrderFullEditSource,
+): AdminOrderFullEditReadiness {
+    if (!FULL_EDITABLE_ORDER_STATUSES.has(order.status)) {
+        return {
+            allowed: false,
+            reason: "The full editor is available only before shipment, cancellation, completion, return, or refund. Use the dedicated order actions instead.",
+        };
+    }
+    if (
+        order.paymentStatus !== PaymentStatus.UNPAID
+        || (order.paidAmount ?? 0) !== 0
+        || Boolean(order.hasPaymentHistory)
+        || Boolean(order.hasRefundHistory)
+    ) {
+        return {
+            allowed: false,
+            reason: "Payment or refund evidence already exists. Use payment, refund, or replacement-order workflows instead of rewriting the order.",
+        };
+    }
+    if (
+        order.fulfillmentStatus !== FulfillmentStatus.PENDING
+        || Boolean(order.hasShipmentHistory)
+        || hasActiveShipmentClaim(order)
+    ) {
+        return {
+            allowed: false,
+            reason: "Fulfillment or shipment evidence already exists. Use the shipment, return, or replacement-order workflows instead.",
+        };
+    }
+    if (order.hasTaxSnapshot) {
+        return {
+            allowed: false,
+            reason: "This checkout order has immutable tax and line snapshots. Use a refund, return, or replacement order so the original receipt remains accurate.",
+        };
+    }
+    if (Boolean(order.hasReturnHistory) || Boolean(order.hasInvoiceHistory)) {
+        return {
+            allowed: false,
+            reason: "Return or invoice evidence already exists. Create an amendment or replacement order instead of rewriting this order.",
+        };
+    }
+    return { allowed: true, reason: null };
+}
+
+function adminOrderFullEditEvidenceSelection() {
+    return {
+        hasTaxSnapshot: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderTaxSnapshots}
+            WHERE ${orderTaxSnapshots.orderId} = ${orders.id}
+        )`,
+        hasPaymentHistory: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orders.id}
+        )`,
+        hasShipmentHistory: sql<number>`EXISTS (
+            SELECT 1 FROM ${deliveryShipments}
+            WHERE ${deliveryShipments.orderId} = ${orders.id}
+        )`,
+        hasRefundHistory: sql<number>`EXISTS (
+            SELECT 1 FROM ${refundAttempts}
+            WHERE ${refundAttempts.orderId} = ${orders.id}
+        )`,
+        hasReturnHistory: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderReturns}
+            WHERE ${orderReturns.orderId} = ${orders.id}
+        )`,
+        hasInvoiceHistory: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderInvoices}
+            WHERE ${orderInvoices.orderId} = ${orders.id}
+        )`,
+    };
+}
+
+export async function getAdminOrderFullEditReadiness(
+    db: Database,
+    orderId: string,
+): Promise<AdminOrderFullEditReadiness | null> {
+    const order = await db
+        .select({
+            status: orders.status,
+            paymentStatus: orders.paymentStatus,
+            paidAmount: orders.paidAmount,
+            fulfillmentStatus: orders.fulfillmentStatus,
+            shipmentClaimId: orders.shipmentClaimId,
+            shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            ...adminOrderFullEditEvidenceSelection(),
+        })
+        .from(orders)
+        .where(and(eq(orders.id, orderId), isNull(orders.deletedAt)))
+        .get();
+
+    return order ? buildAdminOrderFullEditReadiness(order) : null;
+}
 
 async function assertOrderHasNoIssuedInvoice(db: Database, orderId: string): Promise<void> {
     const invoice = await db
@@ -978,6 +1097,8 @@ export async function listOrders(db: Database, options: {
             areaName: orders.areaName,
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            paidAmount: orders.paidAmount,
+            ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
         .where(whereClause)
@@ -997,6 +1118,9 @@ export async function listOrders(db: Database, options: {
         city: string | null; zone: string | null; area: string | null;
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
+        paidAmount: number | null;
+        hasTaxSnapshot: number; hasPaymentHistory: number; hasShipmentHistory: number;
+        hasRefundHistory: number; hasReturnHistory: number; hasInvoiceHistory: number;
     }[];
     const count = countArr[0]?.count ?? 0;
 
@@ -1135,6 +1259,7 @@ export async function listOrders(db: Database, options: {
                 nowSeconds,
             ),
             activeRefundOperation: activeRefundOperations.get(order.id) ?? null,
+            fullEditReadiness: buildAdminOrderFullEditReadiness(order),
         };
     });
 
@@ -1379,6 +1504,7 @@ async function getOrderDetailsOnce(
         FROM ${orderItems}
         WHERE ${orderItems.orderId} = ${orders.id}
       )`,
+            ...adminOrderFullEditEvidenceSelection(),
         })
         .from(orders)
         .where(eq(orders.id, id))
@@ -1486,6 +1612,7 @@ async function getOrderDetailsOnce(
         activeRefundOperation: summarizeActiveRefundOperation(refundAttemptViews, "admin"),
         supportRequests,
         paymentRecovery: buildPaymentRecoverySummary(order, [], nowSeconds),
+        fullEditReadiness: buildAdminOrderFullEditReadiness(order),
     };
 }
 
@@ -1755,6 +1882,7 @@ interface UpdateOrderItem {
 }
 
 interface UpdateOrderData {
+    expectedVersion: number;
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
@@ -2021,8 +2149,6 @@ async function compensatePreWriteInventory(
 }
 
 export async function updateOrder(db: Database, id: string, data: UpdateOrderData): Promise<{ id: string }> {
-    const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
-
     const existingOrder = await db
         .select({
             id: orders.id,
@@ -2044,6 +2170,20 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         .get();
 
     if (!existingOrder) throw new NotFoundError("Order not found");
+    if (existingOrder.version !== data.expectedVersion) {
+        throw new ConflictError(
+            "This order changed after you opened it. Reload the editor and review the latest values before saving.",
+        );
+    }
+    const expectedVersion = data.expectedVersion;
+    const fullEditReadiness = await getAdminOrderFullEditReadiness(db, id);
+    if (!fullEditReadiness) throw new NotFoundError("Order not found");
+    if (!fullEditReadiness.allowed) {
+        throw new ConflictError(
+            fullEditReadiness.reason ?? "This order can no longer be changed in the full editor.",
+        );
+    }
+    const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
         throw new ValidationError("Order has an unknown current status.");
@@ -2051,6 +2191,11 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
     const nextStatus = normalizeOrderStatus(data.status);
     if (!nextStatus) {
         throw new ValidationError("Unknown order status.");
+    }
+    if (nextStatus !== currentStatus) {
+        throw new ValidationError(
+            "Use the order status action for operational progress. The full editor only changes customer, item, shipping-charge, and discount details.",
+        );
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, id);
@@ -2065,12 +2210,6 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         data.discountAmount,
         currency,
     );
-
-    // Validate status transition if status is changing
-    if (nextStatus !== currentStatus) {
-        assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
-        validateTransition("order", currentStatus, nextStatus);
-    }
 
     const existingItems = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
     const trackedNewItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
@@ -2114,7 +2253,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 db,
                 toReservationBatchItems(positiveEntries, id),
                 pool,
-                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-positive") },
+                { reservationKey: adminOrderInventoryClaimKey(id, expectedVersion, "reserve-positive") },
             );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
@@ -2127,7 +2266,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 db,
                 toReservationBatchItems(positiveEntries, id),
                 pool,
-                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-positive-deducted") },
+                { reservationKey: adminOrderInventoryClaimKey(id, expectedVersion, "reserve-positive-deducted") },
             );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock for updated items");
@@ -2139,11 +2278,11 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                     orderId: id,
                     operation: "deduct",
                     entries: positiveEntries,
-                    claimKey: adminOrderInventoryClaimKey(id, existingOrder.version, "deduct-positive"),
+                    claimKey: adminOrderInventoryClaimKey(id, expectedVersion, "deduct-positive"),
                     pool,
                 });
             } catch (error: unknown) {
-                await compensatePreWriteInventory(db, id, existingOrder.version, acquiredReservations, [], [], []);
+                await compensatePreWriteInventory(db, id, expectedVersion, acquiredReservations, [], [], []);
                 acquiredReservations = [];
                 throw new ValidationError(
                     error instanceof Error ? error.message : "Failed to deduct additional stock for updated items",
@@ -2158,7 +2297,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 db,
                 toReservationBatchItems(newEntries, id),
                 pool,
-                { reservationKey: adminOrderInventoryClaimKey(id, existingOrder.version, "reserve-reactivation") },
+                { reservationKey: adminOrderInventoryClaimKey(id, expectedVersion, "reserve-reactivation") },
             );
             if (!reserveResult.success) {
                 throw new ValidationError(reserveResult.error ?? "Insufficient stock to reactivate order");
@@ -2171,7 +2310,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await releaseReservationsForOrderEdit(
                     db,
                     id,
-                    existingOrder.version,
+                    expectedVersion,
                     oldEntries,
                     "release-all",
                     "Failed to release order reservations",
@@ -2183,7 +2322,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await releaseReservationsForOrderEdit(
                     db,
                     id,
-                    existingOrder.version,
+                    expectedVersion,
                     negativeEntries,
                     "release-negative",
                     "Failed to release removed reservations",
@@ -2195,7 +2334,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await restoreDeductedForOrderEdit(
                     db,
                     id,
-                    existingOrder.version,
+                    expectedVersion,
                     oldEntries,
                     "restore-all",
                     "Failed to restore deducted stock",
@@ -2207,7 +2346,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await restoreDeductedForOrderEdit(
                     db,
                     id,
-                    existingOrder.version,
+                    expectedVersion,
                     negativeEntries,
                     "restore-negative",
                     "Failed to restore removed deducted stock",
@@ -2229,7 +2368,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
             }
         }
 
-        const committedOrderVersion = existingOrder.version + 1;
+        const committedOrderVersion = expectedVersion + 1;
         const atomicEditStatements: SQLiteBatchItem[] = [];
         if (newCustomerId) {
             atomicEditStatements.push(buildGuardedCustomerInsert(
@@ -2238,7 +2377,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 newCustomerId,
                 data,
                 totalAmount,
-                existingOrder.version,
+                expectedVersion,
             ));
         }
 
@@ -2277,7 +2416,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 updatedAt: sql`unixepoch()`,
             }).where(and(
                 eq(orders.id, id),
-                eq(orders.version, existingOrder.version),
+                eq(orders.version, expectedVersion),
                 noActiveRefundAttemptForOrderIdCondition(id),
                 noActivePaymentSessionAttemptForOrderIdCondition(id),
             )).returning({ id: orders.id }),
@@ -2324,7 +2463,7 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
                 await compensatePreWriteInventory(
                     db,
                     id,
-                    existingOrder.version,
+                    expectedVersion,
                     acquiredReservations,
                     deductedEntries,
                     releasedReservations,

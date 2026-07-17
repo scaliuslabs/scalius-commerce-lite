@@ -57,9 +57,13 @@ function toUpdateOrderInput(
   values: OrderFormValues,
   id: string,
 ): UpdateOrderInput {
+  if (!values.version) {
+    throw new Error("Order version is missing. Reload the editor before saving.");
+  }
   return {
     ...toCreateOrderInput(values),
     id,
+    expectedVersion: values.version,
     status: values.status ?? OrderStatus.PENDING,
   };
 }
@@ -183,9 +187,17 @@ export function OrderForm({
         toast.error("Missing order ID. Please refresh and try again.");
         return;
       }
-      updateMutation.mutate(toUpdateOrderInput(enrichedValues, orderId), {
-        onSuccess,
-      });
+      try {
+        updateMutation.mutate(toUpdateOrderInput(enrichedValues, orderId), {
+          onSuccess,
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Reload the editor before saving this order.",
+        );
+      }
     } else {
       createMutation.mutate(toCreateOrderInput(enrichedValues), { onSuccess });
     }

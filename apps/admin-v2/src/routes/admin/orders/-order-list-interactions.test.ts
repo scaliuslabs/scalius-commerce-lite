@@ -378,6 +378,7 @@ describe("order list interactions", () => {
     expect(columnsSource).toContain("opts.orderActions.canChangeOrderStatus");
     expect(columnsSource).toContain("opts.orderActions.canManageOrderShipments");
     expect(columnsSource).toContain("opts.orderActions.canSelectOrdersForBulkActions");
+    expect(columnsSource).toContain("!order.fullEditReadiness.allowed");
 
     expect(mobileSource).toContain("orderActions.canSelectOrdersForBulkActions");
     expect(mobileSource).toContain("orderActions.canEditOrders");
@@ -385,5 +386,6 @@ describe("order list interactions", () => {
     expect(mobileSource).toContain("orderActions.canRestoreOrders");
     expect(mobileSource).toContain("orderActions.canChangeOrderStatus");
     expect(mobileSource).toContain("orderActions.canManageOrderShipments");
+    expect(mobileSource).toContain("!order.fullEditReadiness.allowed");
   });
 });

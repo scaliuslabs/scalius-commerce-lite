@@ -1,6 +1,6 @@
 # Order Operations Audit
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-17
 
 Status: code-backed audit and implementation contract. This file does not claim that a workflow is production-proven merely because a component or endpoint exists.
 
@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, and invoice issuance now have explicit authorities. Remaining P0 work is concentrated in stale full-edit/amendment safety, manual-create idempotency, and permanent deletion of commerce evidence.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, and safe full-edit locking now have explicit authorities. Remaining P0 work is concentrated in a durable order-amendment model, manual-create idempotency, and permanent deletion of commerce evidence.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -39,19 +39,38 @@ The release path should immediately narrow generic mutation authority. Financial
 
 ### P0-2 — Full edit can overwrite a newer edit and rewrite settled commerce facts
 
-**Implemented:** `orders.version` and internal CAS guards protect a single request from a concurrent mutation that lands after that request reads the row.
+**Resolved for the current full editor:** form data now carries `orders.version`, every full-edit request requires `expectedVersion`, and a stale form receives a typed `409` before location, inventory, customer, or order writes begin. The final order mutation and compensating inventory claim keys use that browser-loaded version.
 
-**Gap:** the edit response and update request do not carry `expectedVersion`. A stale browser tab therefore reads the latest version at submit time and can overwrite a change committed after the form originally loaded. Full edit is also available for paid, shipped, delivered, completed, and invoiced orders when no active recovery claim exists. It replaces all line items, may change prices/quantities/customer/address/total, and can do so after payment or shipment evidence exists.
+Full edit has one server-derived readiness projection used by list, detail, form-data, and the write service. It is limited to unpaid, unfulfilled `pending | processing | confirmed` orders with no tax snapshot, payment, shipment, refund, return, or invoice evidence and no active shipment claim. Protected orders show a compact reason and point back to their dedicated workflow. The full form no longer changes order status.
 
-More seriously, full edit writes `taxAmountMinor: 0`, `taxLabel: null`, and `pricesIncludeTax: false`. It does not rebuild the immutable order tax snapshot. Editing a taxed storefront order can therefore leave row-level money, the persisted tax snapshot, invoice presentation, and payment amount describing different transactions.
+This intentionally locks storefront checkout orders because they own immutable tax and line snapshots that the current generic editor cannot recalculate without destroying historical evidence. It remains available for unsettled manual orders. The policy is stricter than Shopify's recalculating editor and simpler than Medusa's requested/confirmed edit object or Vendure's modification preview; Scalius should relax it only after it has a durable amendment record, authoritative tax re-quote, payment delta, stable line identity, and explicit confirmation/reconciliation.
+
+Primary benchmark evidence reviewed on 2026-07-17:
+
+- [Shopify order-edit considerations](https://help.shopify.com/en/manual/fulfillment/managing-orders/editing-orders/considerations) separates unfulfilled-line edits from fulfilled evidence and requires the merchant to resolve any resulting payment/refund delta.
+- [Medusa order edits](https://docs.medusajs.com/user-guide/orders/edit) stage changes as a request that is confirmed or rejected instead of mutating the settled order immediately.
+- [Vendure order modification](https://docs.vendure.io/current/core/user-guide/orders/orders#modifying-an-order) previews the price difference and routes it into additional-payment or refund handling.
 
 **Decision:**
 
-- Add required `expectedVersion` to form data and every full-edit request; return a typed `409` with reload/compare guidance.
+- Keep `expectedVersion` required in form data and every full-edit request; never replace it with a version reread at submit time.
 - Lock line, quantity, price, discount, tax, currency, and address mutations after payment capture, fulfillment, invoice finalization, return activity, or refund activity. Use explicit amendments, adjustments, or replacement orders where policy permits.
 - Never zero tax facts as a side effect of editing. Manual orders must use the same authoritative tax engine and immutable money snapshots as checkout orders.
 - Preserve stable order-line identity. Fulfillment, return, refund, tax, and shipment references must survive amendments; replacing every row is not a viable settled-order model.
-- Add focused tests for two stale editors, paid-order edits, shipped-line edits, taxed-order edits, and invoice-issued edits.
+- Current focused tests cover the version contract and pure readiness matrix. Add a D1 integration test for two stale editors when the full-edit fixture is available.
+
+**Live release proof — 2026-07-17:** API version
+`172513a3-992c-41c8-958f-7729813b238f` and admin version
+`788b3fcd-30ae-43c3-8bfa-3107082b88ea` were deployed and exercised through
+the authenticated dashboard. A new pending, unpaid manual order (`VHS0T4`) was
+created through the form and remained editable. Two browser editors then loaded
+the same version: the first saved the note `Manual order edit CAS verified
+2026-07-17`; the second attempted `STALE WRITE MUST NOT LAND`; a fresh server
+load retained only the first value. A checkout order with a tax snapshot showed
+the protected-order state on desktop and at 390 x 844 with no horizontal
+overflow. The follow-up list-link correction was deployed as admin version
+`f9f07953-60a6-4c57-9068-aa68d42c8801`; protected customer names now open the
+read-only order workspace while editable manual orders still open the editor.
 
 ### P0-3 — Manual order creation is not idempotent
 
@@ -146,24 +165,29 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 - Admin-created item rows do not persist the same complete product/variant/money snapshot expected of an immutable order. Renames and product deletion can weaken historical display.
 - Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters; trash/restore semantics are also not clearly represented. Prefer ledger/query-derived stats or atomic deltas with reconciliation.
 - UI calculation uses floating-point/two-decimal presentation while the server uses the saved currency precision. Expose a server quote/preview using the same minor-unit calculator and return field-level differences before commit.
+- Live creation correctly submits the chosen SKU, but the just-added row can
+  temporarily show an em dash for its variant label because the table reads the
+  loader's original product projection rather than the lazily loaded SKU
+  projection. The edit form reloads the saved `Color: White` value correctly.
+  Keep the selected SKU projection in the form row so the merchant sees the
+  exact choice immediately; do not infer it from position or product defaults.
 
 ### 3. Full edit
 
 **Implemented**
 
-- The form reloads customer/address/items/shipping/discount/status and performs inventory compensation and a server-side CAS during the request.
-- Active refund, hosted-payment setup, and shipment creation claims block edits.
+- The form reloads customer/address/items/shipping/discount and performs inventory compensation using the browser-loaded CAS version.
+- Payment, tax, fulfillment, shipment, refund, return, invoice, terminal-state, and active-claim evidence block the full editor with one server-derived reason. Status changes use their dedicated action.
 
 **Proven**
 
-- SKU validation and several inventory compensation branches are covered. There is no end-to-end proof for the stale-form, settled-order, tax, or shipment-line boundaries.
+- SKU validation, several inventory compensation branches, required positive update versions, and the edit-readiness evidence matrix have focused tests. API/core/admin typechecks and lint cover the generated contract.
 
 **Gaps**
 
-- Missing client `expectedVersion` and settled-order amendment boundaries (P0-2).
-- Status in full edit bypasses dedicated status permission and exposes every enum value (P0-1).
+- A full amendment workflow with preview, stable lines, tax re-quote, payment delta, confirmation, history, and reconciliation remains absent. The safe lock is a release boundary, not a claim that post-checkout editing is complete.
 - Form-data loads every active product and then queries all variants with one `IN (...)`. This is unbounded, violates D1's 100-parameter constraint for larger catalogs, and makes edit latency grow with the entire catalog. Existing deleted/retired lines can also become impossible to represent in the picker.
-- The edit loader redirects to the list for every error, so not-found, permission failure, timeout, and service outage are indistinguishable. Use a truthful route error with retry/back.
+- The edit loader has a truthful retry/back error boundary and a dedicated protected-order state.
 - Replacing all item rows destroys stable line identity and cascades item tax snapshots. Use line-level add/change/remove commands or versioned amendments.
 - A committed write can be followed by an inventory-action update outside the main batch. If that final update fails, the order and inventory facts require reconciliation. Persist a visible recovery state and repair command.
 
@@ -432,7 +456,8 @@ Representative commands: create manual order, amend draft, confirm, cancel pre-s
 **Missing focused proof**
 
 - manual-create idempotency and unknown-response replay;
-- stale full-edit rejection and settled-order amendment locks;
+- a D1-backed concurrent full-edit fixture beyond the authenticated production
+  two-editor smoke;
 - tax-preserving manual create/edit and immutable order-line snapshots;
 - individual/bulk trash, restore, insufficient-stock restore, concurrent restore, and history-preserving privacy/purge behavior;
 - invoice allocation concurrency, atomicity, immutable prefix/business snapshot, authorization, deterministic rendering, and PDF failure UI;
