@@ -140,6 +140,37 @@ export const checkoutAttempts = sqliteTable("checkout_attempts", {
     index("checkout_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
 ]);
 
+/**
+ * Durable idempotency authority for manual admin order creation.
+ *
+ * Request keys are hashed before persistence. A committed row and its response
+ * are written in the same D1 batch as the order/customer/item facts, so a lost
+ * HTTP response can replay the original order without reserving or deducting
+ * stock again.
+ */
+export const adminOrderCreateAttempts = sqliteTable("admin_order_create_attempts", {
+    id: text("id").primaryKey(),
+    actorId: text("actor_id"),
+    requestKeyHash: text("request_key_hash").notNull(),
+    requestHash: text("request_hash").notNull(),
+    orderId: text("order_id").notNull(),
+    status: text("status", { enum: ["processing", "committed", "failed"] })
+        .notNull()
+        .default("processing"),
+    responsePayload: text("response_payload"),
+    attempts: integer("attempts").notNull().default(0),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    lastError: text("last_error"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("admin_order_create_attempts_key_unique").on(table.requestKeyHash),
+    uniqueIndex("admin_order_create_attempts_order_unique").on(table.orderId),
+    index("admin_order_create_attempts_status_claim_idx").on(table.status, table.claimExpiresAt),
+    index("admin_order_create_attempts_actor_created_idx").on(table.actorId, table.createdAt),
+]);
+
 export const orderReceipts = sqliteTable("order_receipts", {
     tokenHash: text("token_hash").primaryKey(),
     orderId: text("order_id")
@@ -849,6 +880,7 @@ export const abandonedCheckouts = sqliteTable(
 
 export type Order = InferSelectModel<typeof orders>;
 export type CheckoutAttempt = InferSelectModel<typeof checkoutAttempts>;
+export type AdminOrderCreateAttempt = InferSelectModel<typeof adminOrderCreateAttempts>;
 export type OrderItem = InferSelectModel<typeof orderItems>;
 export type InvoiceSequence = InferSelectModel<typeof invoiceSequences>;
 export type OrderInvoice = InferSelectModel<typeof orderInvoices>;

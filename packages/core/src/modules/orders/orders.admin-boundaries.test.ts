@@ -181,6 +181,26 @@ describe("admin order list boundaries", () => {
     expect(source).not.toContain("trackingByVariantId.get(item.variantId) ?? true");
   });
 
+  it("commits manual-order idempotency evidence with the order write", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const createSource = source.slice(
+      source.indexOf("export async function createOrder"),
+      source.indexOf("interface UpdateOrderItem"),
+    );
+
+    expect(createSource).toContain("buildAdminOrderCreateAttemptIdentity(data, actorId)");
+    expect(createSource).toContain("claimAdminOrderCreateAttempt<{ id: string }>");
+    expect(createSource).toContain("buildAdminOrderCreateAttemptGuard(db, attempt)");
+    expect(createSource).toContain("writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response))");
+    expect(createSource).toContain("resolveAdminOrderCreateAttempt<{ id: string }>");
+    expect(createSource.indexOf("resolveAdminOrderCreateAttempt<{ id: string }>")).toBeLessThan(
+      createSource.indexOf("releaseReservedStockBatch(db, reservationEntries, orderId"),
+    );
+    expect(createSource.indexOf("isAdminOrderCreateAttemptGuardError(batchError)")).toBeLessThan(
+      createSource.indexOf("releaseReservedStockBatch(db, reservationEntries, orderId"),
+    );
+  });
+
   it("recomputes admin order payment state when totals are created or edited", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 

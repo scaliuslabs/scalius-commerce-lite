@@ -104756,6 +104756,10 @@
                   "shippingCharge": {
                     "type": "number",
                     "minimum": 0
+                  },
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid"
                   }
                 },
                 "required": [
@@ -104769,7 +104773,8 @@
                   "notes",
                   "items",
                   "discountAmount",
-                  "shippingCharge"
+                  "shippingCharge",
+                  "requestKey"
                 ]
               }
             }

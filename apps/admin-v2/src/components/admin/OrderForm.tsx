@@ -33,8 +33,13 @@ import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import {
+  clearAdminOrderRequestKey,
+  getOrCreateAdminOrderRequestKey,
+  rememberSubmittedAdminOrderRequestKey,
+} from "./order-form/create-order-request-key";
 
-function toCreateOrderInput(values: OrderFormValues): CreateOrderInput {
+function toOrderContentInput(values: OrderFormValues) {
   return {
     customerName: values.customerName,
     customerPhone: values.customerPhone,
@@ -53,6 +58,16 @@ function toCreateOrderInput(values: OrderFormValues): CreateOrderInput {
   };
 }
 
+function toCreateOrderInput(
+  values: OrderFormValues,
+  requestKey: string,
+): CreateOrderInput {
+  return {
+    requestKey,
+    ...toOrderContentInput(values),
+  };
+}
+
 function toUpdateOrderInput(
   values: OrderFormValues,
   id: string,
@@ -61,7 +76,7 @@ function toUpdateOrderInput(
     throw new Error("Order version is missing. Reload the editor before saving.");
   }
   return {
-    ...toCreateOrderInput(values),
+    ...toOrderContentInput(values),
     id,
     expectedVersion: values.version,
     status: values.status ?? OrderStatus.PENDING,
@@ -80,6 +95,9 @@ export function OrderForm({
     : orderActions.canCreateOrders;
   const createMutation = useCreateOrder();
   const updateMutation = useUpdateOrder();
+  const createRequestKey = React.useRef<string | null>(
+    isEdit ? null : getOrCreateAdminOrderRequestKey(),
+  );
   const form = useForm<OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
@@ -178,6 +196,9 @@ export function OrderForm({
     };
 
     const onSuccess = () => {
+      if (!isEdit && createRequestKey.current) {
+        clearAdminOrderRequestKey(createRequestKey.current);
+      }
       void navigate({ to: "/admin/orders" });
     };
 
@@ -199,7 +220,13 @@ export function OrderForm({
         );
       }
     } else {
-      createMutation.mutate(toCreateOrderInput(enrichedValues), { onSuccess });
+      const requestKey = createRequestKey.current ?? getOrCreateAdminOrderRequestKey();
+      createRequestKey.current = requestKey;
+      rememberSubmittedAdminOrderRequestKey(requestKey);
+      createMutation.mutate(
+        toCreateOrderInput(enrichedValues, requestKey),
+        { onSuccess },
+      );
     }
   }, [createMutation, defaultValues?.id, isEdit, locations, navigate, updateMutation]);
 
@@ -287,6 +314,13 @@ export function OrderForm({
         saveDisabledReason={isEdit
           ? "You do not have permission to edit orders."
           : "You do not have permission to create orders."}
+        onDiscard={isEdit
+          ? undefined
+          : () => {
+              if (createRequestKey.current) {
+                clearAdminOrderRequestKey(createRequestKey.current);
+              }
+            }}
         onSave={() => form.handleSubmit(handleSubmit)()}
       />
     </>

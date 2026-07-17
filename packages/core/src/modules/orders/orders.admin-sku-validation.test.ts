@@ -19,6 +19,15 @@ const settingsMocks = vi.hoisted(() => ({
 const mediaMocks = vi.hoisted(() => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
 }));
+const createAttemptMocks = vi.hoisted(() => ({
+    buildIdentity: vi.fn(),
+    claim: vi.fn(),
+    guard: vi.fn(() => ({ kind: "attempt-guard" })),
+    commit: vi.fn(() => ({ kind: "attempt-commit" })),
+    resolve: vi.fn(),
+    markFailed: vi.fn(),
+    isGuardError: vi.fn(() => false),
+}));
 
 vi.mock("../inventory", () => ({
     reserveStockBatch: inventoryMocks.reserveStockBatch,
@@ -43,6 +52,16 @@ vi.mock("../products/products.media", async (importOriginal) => ({
     loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
 }));
 
+vi.mock("./admin-order-create-attempts", () => ({
+    buildAdminOrderCreateAttemptIdentity: createAttemptMocks.buildIdentity,
+    claimAdminOrderCreateAttempt: createAttemptMocks.claim,
+    buildAdminOrderCreateAttemptGuard: createAttemptMocks.guard,
+    buildAdminOrderCreateAttemptCommit: createAttemptMocks.commit,
+    resolveAdminOrderCreateAttempt: createAttemptMocks.resolve,
+    markAdminOrderCreateAttemptFailed: createAttemptMocks.markFailed,
+    isAdminOrderCreateAttemptGuardError: createAttemptMocks.isGuardError,
+}));
+
 import { createOrder, resolveAdminOrderItemInventory } from "./orders.admin";
 
 beforeEach(() => {
@@ -58,6 +77,24 @@ beforeEach(() => {
         usdExchangeRate: "1",
     });
     mediaMocks.loadProductMediaProjections.mockResolvedValue(new Map());
+    createAttemptMocks.buildIdentity.mockResolvedValue({
+        actorId: "admin_test",
+        requestKeyHash: "request-key-hash",
+        requestHash: "request-hash",
+    });
+    createAttemptMocks.claim.mockResolvedValue({
+        status: "claimed",
+        attempt: {
+            id: "attempt_1",
+            actorId: "admin_test",
+            requestKeyHash: "request-key-hash",
+            requestHash: "request-hash",
+            orderId: "order_manual_test",
+            claimId: "claim_1",
+        },
+    });
+    createAttemptMocks.resolve.mockResolvedValue(null);
+    createAttemptMocks.markFailed.mockResolvedValue(undefined);
 });
 
 interface SkuRow {
@@ -190,6 +227,7 @@ function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationR
 
 function createOrderInput(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput {
     return {
+        requestKey: crypto.randomUUID(),
         customerName: "Test Customer",
         customerPhone: "01775528888",
         customerEmail: null,
@@ -407,7 +445,7 @@ describe("resolveAdminOrderItemInventory", () => {
             },
         ]);
 
-        const issues = await expectSkuIssues(createOrder(db, createOrderInput()));
+        const issues = await expectSkuIssues(createOrder(db, createOrderInput(), "admin_test"));
 
         expect(issues).toEqual([
             expect.objectContaining({
@@ -450,7 +488,7 @@ describe("resolveAdminOrderItemInventory", () => {
                     price: 100,
                 },
             ],
-        }));
+        }), "admin_test");
 
         const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
             !Array.isArray(values) && "cityName" in values && "zoneName" in values,
@@ -499,7 +537,7 @@ describe("resolveAdminOrderItemInventory", () => {
             ],
         );
 
-        await expect(createOrder(db, createOrderInput()))
+        await expect(createOrder(db, createOrderInput(), "admin_test"))
             .rejects.toThrow("Selected zone is no longer available for the chosen city.");
 
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
@@ -533,7 +571,7 @@ describe("resolveAdminOrderItemInventory", () => {
             ],
             shippingCharge: 60,
             discountAmount: null,
-        }));
+        }), "admin_test");
 
         const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
             !Array.isArray(values) && "shippingCharge" in values && "balanceDue" in values,
@@ -622,7 +660,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 }],
                 shippingCharge,
                 discountAmount,
-            }));
+            }), "admin_test");
 
             const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
                 !Array.isArray(values) && "currencyCode" in values,
@@ -665,13 +703,13 @@ describe("resolveAdminOrderItemInventory", () => {
                     price: 100,
                 },
             ],
-        }))).rejects.toBe(batchError);
+        }), "admin_test")).rejects.toBe(batchError);
 
         expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
             db,
             [{ variantId: "var_tracked", quantity: 2, orderId: expect.any(String) }],
             "regular",
-            { reservationKey: expect.stringMatching(/^admin-order-create:v1:/) },
+            { reservationKey: expect.stringMatching(/^admin-order-create:v2:/) },
         );
         expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
             db,
@@ -701,7 +739,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 quantity: 2,
                 price: 100,
             }],
-        }));
+        }), "admin_test");
 
         expect(transitionMocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
             db,
@@ -745,7 +783,7 @@ describe("resolveAdminOrderItemInventory", () => {
                     price: 100,
                 },
             ],
-        }));
+        }), "admin_test");
 
         await expect(failure).rejects.toMatchObject({
             name: "ServiceUnavailableError",

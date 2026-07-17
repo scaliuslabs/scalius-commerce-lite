@@ -31,7 +31,9 @@ describe.each([
 ] as const)("%s manual-order quantity validation", (_name, schema, isUpdate) => {
     const input = (quantity: number) => ({
         ...orderInput(quantity),
-        ...(isUpdate ? { expectedVersion: 1, status: "pending" } : {}),
+        ...(isUpdate
+            ? { expectedVersion: 1, status: "pending" }
+            : { requestKey: crypto.randomUUID() }),
     });
 
     it.each([1, 99])("accepts boundary quantity %s", (quantity) => {
@@ -59,5 +61,15 @@ describe("manual-order update concurrency", () => {
         expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 0 }).success).toBe(false);
         expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 1.5 }).success).toBe(false);
         expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 3 }).success).toBe(true);
+    });
+});
+
+describe("manual-order create idempotency", () => {
+    it("requires a UUID request key", () => {
+        const base = orderInput(1);
+
+        expect(createOrderSchema.safeParse(base).success).toBe(false);
+        expect(createOrderSchema.safeParse({ ...base, requestKey: "retry-me" }).success).toBe(false);
+        expect(createOrderSchema.safeParse({ ...base, requestKey: crypto.randomUUID() }).success).toBe(true);
     });
 });

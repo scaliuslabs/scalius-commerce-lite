@@ -101,6 +101,15 @@ import {
 } from "./order-returns";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { retryTransientD1 } from "../../utils/transient-d1";
+import {
+    buildAdminOrderCreateAttemptCommit,
+    buildAdminOrderCreateAttemptGuard,
+    buildAdminOrderCreateAttemptIdentity,
+    claimAdminOrderCreateAttempt,
+    isAdminOrderCreateAttemptGuardError,
+    markAdminOrderCreateAttemptFailed,
+    resolveAdminOrderCreateAttempt,
+} from "./admin-order-create-attempts";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -1631,88 +1640,127 @@ async function getOrderDetailsOnce(
  *   3. Convert reservations to permanent deductions (admin orders are immediately active)
  *   4. If batch fails, release all reservations (no orphaned holds)
  */
-export async function createOrder(db: Database, data: CreateOrderInput): Promise<{ id: string }> {
-    const currentCurrency = await getCurrencySettings(db);
-    const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
-    const money = calculateManualOrderMoney(
-        data.items,
-        data.shippingCharge,
-        data.discountAmount,
-        currency,
-    );
-    const totalAmount = money.totalAmount;
-    const initialPaymentState = computeOrderPaymentState({
-        totalAmount,
-        paidAmount: 0,
-        currency,
-    });
-
-    const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
-
-    // Get or create customer (read outside batch, writes inside)
-    const existingCustomer = await db
-        .select()
-        .from(customers)
-        .where(eq(customers.phone, data.customerPhone))
-        .get();
-
-    let customerId = existingCustomer?.id;
-
-    // Pre-compute customer stats if existing customer
-    let customerStats: { totalOrders: number; totalSpent: number; lastOrderAt: Date | null } | null = null;
-    if (existingCustomer) {
-        const customerOrders = await db
-            .select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
-            .from(orders)
-            .where(and(
-                eq(orders.customerId, existingCustomer.id),
-                isNull(orders.deletedAt),
-            ));
-
-        const allOrders = [
-            ...customerOrders,
-            { paidAmount: initialPaymentState.paidAmount, createdAt: new Date() },
-        ];
-        customerStats = calculateCustomerStats(allOrders);
-    }
-
-    // ── Pre-validate and reserve inventory ─────────────────────────────
-    // Reserve stock BEFORE inserting the order. This validates availability
-    // and holds stock atomically. If any variant has insufficient stock,
-    // the order creation fails immediately with a clear error.
-    const orderId = generateOrderId();
-    const trackedItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
-    const reservationEntries: ReservationEntry[] = trackedItems
-        .filter((item) => item.inventoryTracked)
-        .map((item) => ({
-            variantId: item.variantId,
-            quantity: item.quantity,
-            pool: "regular" as const,
-        }));
-
-    if (reservationEntries.length > 0) {
-        const batchItems = reservationEntries.map(e => ({
-            variantId: e.variantId,
-            quantity: e.quantity,
-            orderId,
-        }));
-        const reserveResult = await reserveStockBatch(
-            db,
-            batchItems,
-            "regular",
-            { reservationKey: `admin-order-create:v1:${orderId}` },
+export async function createOrder(
+    db: Database,
+    data: CreateOrderInput,
+    actorId: string | null,
+): Promise<{ id: string }> {
+    const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
+    const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
+    if (claim.status === "replay") return claim.response;
+    if (claim.status === "processing") {
+        throw new ServiceUnavailableError(
+            "This manual order is still being created. Retry the same form in a moment.",
         );
-        if (!reserveResult.success) {
-            throw new ValidationError(
-                reserveResult.error ?? "Insufficient stock for one or more items",
-            );
-        }
     }
+    const attempt = claim.attempt;
+    const orderId = attempt.orderId;
+    const response = { id: orderId };
+
+    // Claim first so a lost-response retry can replay the original order even
+    // when catalog, delivery, or customer facts changed after the commit.
+    const prepared = await (async () => {
+        const currentCurrency = await getCurrencySettings(db);
+        const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
+        const money = calculateManualOrderMoney(
+            data.items,
+            data.shippingCharge,
+            data.discountAmount,
+            currency,
+        );
+        const totalAmount = money.totalAmount;
+        const initialPaymentState = computeOrderPaymentState({
+            totalAmount,
+            paidAmount: 0,
+            currency,
+        });
+        const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
+        const existingCustomer = await db
+            .select()
+            .from(customers)
+            .where(eq(customers.phone, data.customerPhone))
+            .get();
+
+        let customerStats: { totalOrders: number; totalSpent: number; lastOrderAt: Date | null } | null = null;
+        if (existingCustomer) {
+            const customerOrders = await db
+                .select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
+                .from(orders)
+                .where(and(
+                    eq(orders.customerId, existingCustomer.id),
+                    isNull(orders.deletedAt),
+                ));
+            customerStats = calculateCustomerStats([
+                ...customerOrders,
+                { paidAmount: initialPaymentState.paidAmount, createdAt: new Date() },
+            ]);
+        }
+
+        const trackedItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
+        const reservationEntries: ReservationEntry[] = trackedItems
+            .filter((item) => item.inventoryTracked)
+            .map((item) => ({
+                variantId: item.variantId,
+                quantity: item.quantity,
+                pool: "regular" as const,
+            }));
+        if (reservationEntries.length > 0) {
+            const batchItems = reservationEntries.map(e => ({
+                variantId: e.variantId,
+                quantity: e.quantity,
+                orderId,
+            }));
+            const reserveResult = await reserveStockBatch(
+                db,
+                batchItems,
+                "regular",
+                { reservationKey: `admin-order-create:v2:${orderId}` },
+            );
+            if (!reserveResult.success) {
+                throw new ValidationError(
+                    reserveResult.error ?? "Insufficient stock for one or more items",
+                );
+            }
+        }
+
+        return {
+            currency,
+            money,
+            totalAmount,
+            initialPaymentState,
+            cityName,
+            zoneName,
+            areaName,
+            existingCustomer,
+            customerStats,
+            trackedItems,
+            reservationEntries,
+        };
+    })().catch(async (error) => {
+        await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
+        throw error;
+    });
+    const {
+        currency,
+        money,
+        totalAmount,
+        initialPaymentState,
+        cityName,
+        zoneName,
+        areaName,
+        existingCustomer,
+        customerStats,
+        trackedItems,
+        reservationEntries,
+    } = prepared;
+    let customerId = existingCustomer?.id;
 
     // ── Atomic batch: customer + order + items ──────────────────────────
     // D1 batch() executes all statements in a single atomic operation.
     // If any statement fails, none are committed.
-    const writeBatch: SQLiteBatchItem[] = [];
+    const writeBatch: SQLiteBatchItem[] = [
+        buildAdminOrderCreateAttemptGuard(db, attempt),
+    ];
 
     if (!existingCustomer) {
         customerId = "cust_" + nanoid();
@@ -1834,9 +1882,24 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         );
     }
 
+    writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response));
+
     try {
         await safeBatch(db, writeBatch);
     } catch (batchError) {
+        const replay = await resolveAdminOrderCreateAttempt<{ id: string }>(
+            db,
+            attemptIdentity,
+        ).catch(() => null);
+        if (replay) return replay.response;
+        if (isAdminOrderCreateAttemptGuardError(batchError)) {
+            // A reclaimed request owns the same stable reservation identity.
+            // Do not release stock underneath the new owner.
+            throw new ConflictError(
+                "Another request owns this manual-order creation. Retry the same form to recover its result.",
+            );
+        }
+
         // DB write failed -- prove any reservations we made were released.
         if (reservationEntries.length > 0) {
             const releaseResult = await releaseReservedStockBatch(db, reservationEntries, orderId, {
@@ -1851,6 +1914,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
                 throw new ServiceUnavailableError("Manual order inventory cleanup is temporarily unavailable. Please try again.");
             }
         }
+        await markAdminOrderCreateAttemptFailed(db, attempt, batchError).catch(() => undefined);
         throw batchError;
     }
 
@@ -1870,7 +1934,7 @@ export async function createOrder(db: Database, data: CreateOrderInput): Promise
         }
     }
 
-    return { id: orderId };
+    return response;
 }
 
 interface UpdateOrderItem {

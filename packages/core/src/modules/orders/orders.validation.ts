@@ -5,8 +5,7 @@
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
-/** Schema for creating a new order (POST /api/orders) */
-export const createOrderSchema = z.object({
+const orderContentSchema = z.object({
     customerName: z
         .string()
         .min(3, "Customer name must be at least 3 characters")
@@ -48,10 +47,15 @@ export const createOrderSchema = z.object({
         .min(0, "Shipping charge must be greater than or equal to 0"),
 });
 
+/** Schema for creating a new order (POST /api/orders). */
+export const createOrderSchema = orderContentSchema.extend({
+    requestKey: z.uuid("A valid manual-order request key is required"),
+});
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
 /** Schema for updating an existing order (PUT /api/orders/:id) */
-export const updateOrderSchema = createOrderSchema.extend({
+export const updateOrderSchema = orderContentSchema.extend({
     expectedVersion: z
         .number()
         .int("Order version must be a whole number")

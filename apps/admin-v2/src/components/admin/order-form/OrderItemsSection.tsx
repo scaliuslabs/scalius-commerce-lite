@@ -71,6 +71,9 @@ export function OrderItemsSection() {
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
   const [isLoadingVariants, setIsLoadingVariants] = React.useState(false);
   const [quantity, setQuantity] = React.useState<number>(1);
+  const [resolvedVariantsById, setResolvedVariantsById] = React.useState<
+    Record<string, ProductVariant>
+  >({});
   const variantLoadTokenRef = React.useRef(0);
 
   React.useEffect(() => {
@@ -253,6 +256,14 @@ export function OrderItemsSection() {
       },
     ];
 
+    // Keep the exact lazy-loaded SKU projection beside the form row. The
+    // initial product page may not contain this SKU, but the merchant should
+    // still see the choice immediately after adding it.
+    setResolvedVariantsById((current) => ({
+      ...current,
+      [variant.id]: variant,
+    }));
+
     form.setValue("items", newItems, { shouldDirty: true, shouldValidate: true });
     updateOrderItems(newItems); // Sync with nanostore
 
@@ -293,7 +304,7 @@ export function OrderItemsSection() {
           )}
         </div>
 
-        <OrderItemsTable />
+        <OrderItemsTable resolvedVariantsById={resolvedVariantsById} />
       </CardContent>
     </Card>
   );

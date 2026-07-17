@@ -30341,6 +30341,7 @@ export type PostApiV1AdminOrdersData = {
         }>;
         discountAmount: number | null;
         shippingCharge: number;
+        requestKey: string;
     };
     path?: never;
     query?: never;

@@ -12,8 +12,18 @@ import type { OrderItem } from "./types";
 import { useOrderForm } from "./OrderFormContext";
 import { updateOrderItems } from "@/store/orderStore";
 import { useCurrency } from "@/hooks/use-currency";
+import type { Product } from "./types";
+import { orderItemVariantLabel } from "./order-item-presentation";
 
-export function OrderItemsTable() {
+type ProductVariant = Product["variants"][number];
+
+interface OrderItemsTableProps {
+  resolvedVariantsById?: Record<string, ProductVariant>;
+}
+
+export function OrderItemsTable({
+  resolvedVariantsById = {},
+}: OrderItemsTableProps) {
   const { form, products } = useOrderForm();
   const { symbol } = useCurrency();
   
@@ -62,9 +72,11 @@ export function OrderItemsTable() {
           ) : (
             (items as OrderItem[]).map((item, index) => {
               const product = products.find((p) => p.id === item.productId);
-              const variant = product?.variants.find(
-                (v) => v.id === item.variantId
-              );
+              const variant = item.variantId
+                ? resolvedVariantsById[item.variantId] ?? product?.variants.find(
+                    (v) => v.id === item.variantId,
+                  )
+                : undefined;
 
               return (
                 <TableRow key={item.variantId ? `${item.productId}-${item.variantId}` : item.productId}>
@@ -72,10 +84,7 @@ export function OrderItemsTable() {
                     {product?.name ?? "Unknown Product"}
                   </TableCell>
                   <TableCell>
-                    {variant
-                      ? variant.selectedOptions.map((option) => `${option.name}: ${option.value}`).join(", ") ||
-                        (product?.variants.length ? "Variant" : "—")
-                      : "—"}
+                    {orderItemVariantLabel(variant)}
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{symbol}{item.price.toLocaleString()}</TableCell>
