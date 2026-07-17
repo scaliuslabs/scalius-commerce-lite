@@ -34,7 +34,13 @@ import { heroSlidersRoutes } from "./hero-sliders";
 const sliderRecord = {
   id: "slider_1",
   type: "desktop",
-  images: [{ id: "img_1", url: "https://cdn.example.com/hero.jpg", title: "Hero", link: "/" }],
+  images: [{
+    id: "img_1",
+    url: "https://cdn.example.com/hero.jpg",
+    title: "Hero",
+    link: "/",
+    focalPoint: { x: 50, y: 50 },
+  }],
   isActive: true,
   revision: 1,
   createdAt: 1,

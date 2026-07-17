@@ -10,11 +10,24 @@ export const HERO_SLIDE_PRESENTATION = {
 
 export type HeroSlideViewport = keyof typeof HERO_SLIDE_PRESENTATION;
 
+export interface HeroSlideFocalPoint {
+  /** Horizontal position as a percentage of the source image width. */
+  x: number;
+  /** Vertical position as a percentage of the source image height. */
+  y: number;
+}
+
+export const HERO_SLIDE_DEFAULT_FOCAL_POINT: Readonly<HeroSlideFocalPoint> = {
+  x: 50,
+  y: 50,
+};
+
 export interface HeroSlide {
   id: string;
   url: string;
   title: string;
   link: string;
+  focalPoint: HeroSlideFocalPoint;
 }
 
 export type HeroSlidesValidationResult =
@@ -35,6 +48,44 @@ function normalizeImageUrl(value: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function normalizeFocalCoordinate(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
+    return undefined;
+  }
+  return Number(value.toFixed(2));
+}
+
+function normalizeFocalPoint(value: unknown): HeroSlideFocalPoint | undefined {
+  // Existing documents without a merchant choice intentionally keep the
+  // historical center crop until they are edited.
+  if (value === undefined || value === null) {
+    return { ...HERO_SLIDE_DEFAULT_FOCAL_POINT };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const row = value as Record<string, unknown>;
+  const x = normalizeFocalCoordinate(row.x);
+  const y = normalizeFocalCoordinate(row.y);
+  return x === undefined || y === undefined ? undefined : { x, y };
+}
+
+/** CSS projection for non-destructive previews that crop with object-fit. */
+export function getHeroSlideObjectPosition(
+  focalPoint: HeroSlideFocalPoint,
+): string {
+  return `${focalPoint.x}% ${focalPoint.y}%`;
+}
+
+/** Cloudflare URL gravity projection for an intentional cover transform. */
+export function getHeroSlideCloudflareGravity(
+  focalPoint: HeroSlideFocalPoint,
+): `${number}x${number}` {
+  const x = Number((focalPoint.x / 100).toFixed(4));
+  const y = Number((focalPoint.y / 100).toFixed(4));
+  return `${x}x${y}`;
 }
 
 /**
@@ -94,12 +145,18 @@ export function validateAndNormalizeHeroSlides(
       errors.push(`Slide ${position} destination: ${parsedLink.reason}`);
     }
 
-    if (id && url && title && parsedLink.ok) {
+    const focalPoint = normalizeFocalPoint(row.focalPoint);
+    if (!focalPoint) {
+      errors.push(`Slide ${position} focal point must use horizontal and vertical percentages from 0 to 100.`);
+    }
+
+    if (id && url && title && parsedLink.ok && focalPoint) {
       slides.push({
         id,
         url,
         title,
         link: parsedLink.href ?? "",
+        focalPoint,
       });
     }
   });

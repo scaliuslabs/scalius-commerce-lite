@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
+import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -33,6 +34,7 @@ export interface HeroSliderImage {
   title?: string;
   link: string;
   id?: string;
+  focalPoint: HeroSlideFocalPoint;
 }
 
 export interface HeroSlider {

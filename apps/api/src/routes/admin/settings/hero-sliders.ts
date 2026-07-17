@@ -32,6 +32,17 @@ const sliderImageSchema = z.object({
     url: z.string().url().max(2_048),
     title: z.string().min(1).max(HERO_SLIDE_TITLE_LIMIT),
     link: z.string().max(2_048),
+    focalPoint: z.object({
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+    }).optional(),
+});
+
+const normalizedSliderImageSchema = sliderImageSchema.extend({
+    focalPoint: z.object({
+        x: z.number().min(0).max(100),
+        y: z.number().min(0).max(100),
+    }),
 });
 
 const createHeroSliderSchema = z.object({
@@ -51,7 +62,7 @@ const updateHeroSliderSchema = z.object({
 const heroSliderSchema = z.object({
     id: z.string(),
     type: z.enum(["desktop", "mobile"]),
-    images: z.array(sliderImageSchema),
+    images: z.array(normalizedSliderImageSchema),
     isActive: z.boolean(),
     revision: z.number().int().min(1),
     createdAt: z.union([z.string(), z.number()]),

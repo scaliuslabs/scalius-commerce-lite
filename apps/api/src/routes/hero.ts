@@ -16,6 +16,10 @@ const heroImageSchema = z.object({
   url: z.string().url(),
   title: z.string(),
   link: z.string(),
+  focalPoint: z.object({
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+  }),
 });
 type HeroImage = z.infer<typeof heroImageSchema>;
 

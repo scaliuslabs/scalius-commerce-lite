@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   HERO_SLIDE_LIMIT,
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
+  getHeroSlideCloudflareGravity,
+  getHeroSlideObjectPosition,
   parseStoredHeroSlides,
   validateAndNormalizeHeroSlides,
 } from "./hero-slider";
@@ -30,8 +33,35 @@ describe("hero slider document", () => {
           url: "https://cdn.example.com/hero%20image.jpg",
           title: "New arrivals",
           link: "/collections/new",
+          focalPoint: HERO_SLIDE_DEFAULT_FOCAL_POINT,
         },
       ],
+    });
+  });
+
+  it("normalizes a merchant focal point and projects it to CSS and Cloudflare gravity", () => {
+    const result = validateAndNormalizeHeroSlides([{
+      ...baseSlide,
+      focalPoint: { x: 24.1234, y: 81.9876 },
+    }]);
+    expect(result).toMatchObject({
+      ok: true,
+      slides: [{ focalPoint: { x: 24.12, y: 81.99 } }],
+    });
+    if (!result.ok) throw new Error("Expected a valid focal point");
+    const focalPoint = result.slides[0]?.focalPoint;
+    if (!focalPoint) throw new Error("Expected one normalized slide");
+    expect(getHeroSlideObjectPosition(focalPoint)).toBe("24.12% 81.99%");
+    expect(getHeroSlideCloudflareGravity(focalPoint)).toBe("0.2412x0.8199");
+  });
+
+  it("rejects focal points outside the source image", () => {
+    expect(validateAndNormalizeHeroSlides([{
+      ...baseSlide,
+      focalPoint: { x: -1, y: 50 },
+    }])).toEqual({
+      ok: false,
+      errors: ["Slide 1 focal point must use horizontal and vertical percentages from 0 to 100."],
     });
   });
 

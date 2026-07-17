@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import {
   HERO_SLIDE_LIMIT,
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
   validateAndNormalizeHeroSlides,
 } from "@scalius/shared/hero-slider";
@@ -112,6 +113,7 @@ export function SliderTab({
           url: file.url,
           title: file.altText?.trim() || file.filename,
           link: "",
+          focalPoint: { ...HERO_SLIDE_DEFAULT_FOCAL_POINT },
         })),
       ],
     });
@@ -155,7 +157,7 @@ export function SliderTab({
           </div>
           <span className="hidden h-4 w-px bg-border sm:block" />
           <span className="text-xs text-muted-foreground">
-            Source target {presentation.width} × {presentation.height} · center-cropped to fill
+            Target {presentation.width} × {presentation.height} · focus controls the crop
           </span>
           <Badge variant="outline" className="h-5 font-normal">Revision {slider.revision}</Badge>
         </div>

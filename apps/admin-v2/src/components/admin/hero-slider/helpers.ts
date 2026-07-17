@@ -1,4 +1,5 @@
 import type { MediaFile } from "~/components/admin/media-manager/types";
+import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
 
 export type { MediaFile };
 
@@ -7,6 +8,7 @@ export interface SliderImage {
   url: string;
   title: string;
   link: string;
+  focalPoint: HeroSlideFocalPoint;
 }
 
 export interface HeroSlider {

@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
 import { apiGet, apiPost, apiPut } from "../api.server";
 
 export type HeroSliderType = "desktop" | "mobile";
@@ -8,6 +9,7 @@ export interface SliderImage {
   url: string;
   title: string;
   link: string;
+  focalPoint: HeroSlideFocalPoint;
 }
 
 export interface HeroSliderRecord {

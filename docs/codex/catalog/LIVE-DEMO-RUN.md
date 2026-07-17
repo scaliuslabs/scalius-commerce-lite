@@ -39,6 +39,29 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   resources expose the exact `Add 2 items` action. The verification dialog was
   cancelled without changing the header.
 
+### Hero crop-authority checkpoint (2026-07-17)
+
+- API `99a06ae1-57fc-4ea8-a5bc-1bef6e6ca0e7`, admin
+  `49253be7-f990-4824-b954-eda9e0bfd604`, and storefront
+  `4fd2de3f-6cea-4dd0-89ff-0977687b12ab` are live at 100%.
+- The desktop hero editor normalized the three legacy slides to center without
+  changing their source assets, exposed a compact Focus popover on each real
+  crop preview, and rendered the complete source image for click positioning.
+  Horizontal/vertical keyboard range controls and Center reset were visible;
+  the admin console had no warning or error.
+- A visible revision-guarded write changed the first desktop slide from
+  `50/50` to `51/50`, advanced revision `5` to `6`, and returned to **All
+  changes saved**. The public homepage then delivered the matching Cloudflare
+  URL with `fit=cover,gravity=0.51x0.5` and the CSS fallback
+  `object-position: 51% 50%`; the storefront console had no warning or error.
+- Focused proof is 32 passing tests across shared normalization/Cloudflare
+  projection, core revision authority, admin workflow boundaries, public hero
+  cache behavior, and the generated OpenAPI surface. Shared, core, API, admin,
+  and storefront typechecks and lints all passed sequentially. The complete
+  HTTP release gate then passed; the aggregate Wrangler queue-info preflight
+  retained its known truncated-output failure even though `wrangler whoami`
+  and each exact deployment verification succeeded.
+
 The run exposed and fixed four reusable production/operations defects:
 
 1. Media page-2 keyset pagination passed a JavaScript `Date` through raw SQL. API `56ae2b3b-bbba-4138-a62a-fdaa0768a904` replaced it with typed column comparators; same-second ascending/descending pagination and a live 24-to-48-item page advance pass.
