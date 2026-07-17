@@ -4,6 +4,7 @@ import {
   buildLabelCopies,
   getBarcodeFitIssue,
   getLabelDimensions,
+  getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
   isbn10ToBooklandEan13,
@@ -60,6 +61,11 @@ describe("barcode label symbology", () => {
 });
 
 describe("barcode label page composition", () => {
+  it("keeps quantity shortcuts explainable with their exact inventory source", () => {
+    expect(getLabelInventorySummary(variant)).toBe("18 on hand · 17 available");
+    expect(getLabelInventorySummary({ ...variant, trackInventory: false })).toBe("Inventory not tracked");
+  });
+
   it("uses physical page dimensions for the A4 cut-sheet grid", () => {
     const dimensions = getLabelDimensions(getLabelPreset("a4-cut-3x8"));
     expect(dimensions.widthMm).toBeCloseTo(63.33, 1);

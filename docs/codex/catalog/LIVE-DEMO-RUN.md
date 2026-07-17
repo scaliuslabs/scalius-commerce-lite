@@ -1,6 +1,6 @@
 # Catalog Live Demo Run
 
-Last verified: 2026-07-16 (Asia/Dhaka)
+Last verified: 2026-07-17 (Asia/Dhaka)
 
 This is fresh operational evidence for the disposable Scalius demo store. It records only facts needed to reproduce or safely continue the run. Production code, D1 state, and a new browser/API check remain authoritative.
 
@@ -16,6 +16,28 @@ The rich demo catalog is now applied and independently reconciled in production.
 - 177 sellable SKUs, 46 optioned products, 4 simple products, 49 ordered rich sections, 18 offer cases, and 3 responsive hero stories are represented by the checked-in manifest.
 
 Private operational evidence remains ignored under `.wrangler/demo-store-apply/` and `.wrangler/demo-store-evidence/`. The latest complete apply evidence is `run-2026-07-15T14-42-45-778Z-4cf1f909`; the independent read-only evidence is `run-2026-07-15T14-46-12-389Z-a194f298`. Session cleanup returned a best-effort warning, so do not claim the short-lived remote session was explicitly deleted; no credential or cookie is stored in the repository.
+
+### Buyer-support and label-printing checkpoint (2026-07-17)
+
+- Published `Shipping & delivery` (`/shipping-delivery`) with the current
+  Standard Delivery (BDT 110), Collection Point (BDT 50), and Express Delivery
+  (BDT 200) choices, without inventing delivery dates or universal coverage.
+- Published `Returns & order support` (`/returns-order-support`) with the saved
+  request policy: cancellation review before shipment, eligible return review
+  after shipment, refund review, one active request, and no automatic approval
+  or immediate inventory/payment mutation.
+- Footer Navigation now has a fourth typed `Help` column referencing those two
+  Page resources. Reload preserved `4 Help · 2 items`; both public pages render
+  their own canonical title/H1 and the new footer links.
+- Admin version `ae10969c-8564-4ef7-9f12-eab6952cc3a6` is live at 100%. The
+  Barcode labels workspace retained an exact SKU in the URL, displayed its
+  Code 128 identity plus `8 on hand · 8 available`, mapped the On hand shortcut
+  to quantity 8, and returned to One each. The job remained read-only.
+- The same deployment corrected the typed navigation destination picker:
+  Category/Page sources no longer present a false empty state during initial
+  loading, `Dynamic` is now `Filtered category`, and two selected Collection
+  resources expose the exact `Add 2 items` action. The verification dialog was
+  cancelled without changing the header.
 
 The run exposed and fixed four reusable production/operations defects:
 

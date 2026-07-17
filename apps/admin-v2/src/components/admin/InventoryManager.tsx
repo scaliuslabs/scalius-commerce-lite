@@ -699,7 +699,7 @@ export function InventoryManager({
                           </TableCell>
                           <TableCell className="py-2 text-right pr-3">
                             <div className="flex justify-end gap-1">
-                              <Button asChild variant="ghost" size="icon" className="h-7 w-7" aria-label={`Print barcode label for ${v.productName || "Unknown product"}, SKU ${v.sku}`}>
+                              <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="Print barcode label" aria-label={`Print barcode label for ${v.productName || "Unknown product"}, SKU ${v.sku}`}>
                                 <Link to="/admin/inventory/labels" search={{ variants: v.id }}>
                                   <Printer className="h-3.5 w-3.5" />
                                 </Link>
@@ -1181,7 +1181,7 @@ function InventoryVariantMobileList({
                 </dl>
 
                 <div className="flex justify-end gap-1 border-t px-2 py-1">
-                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-sm font-medium">
+                  <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-sm font-medium" title="Print barcode label">
                     <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${productName}, SKU ${variant.sku}`}>
                       <Printer className="mr-1 h-3 w-3" /> Label
                     </Link>

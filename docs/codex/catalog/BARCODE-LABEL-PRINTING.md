@@ -18,6 +18,19 @@ points open the same workspace:
 - the product SKU matrix may open a batch for its selected persisted SKUs;
 - opening the workspace directly provides a searchable SKU picker.
 
+The individual printer icon must not send output immediately. It is a compact
+entry point, not a destructive shortcut: it opens the same workspace with the
+exact persisted SKU selected, quantity `1`, the workstation's last-used stock,
+and a real preview. This retains the speed of a row action while still letting
+the merchant catch the wrong paper, an unsafe symbol fit, stale stock-based
+quantity, or a partially used sheet before opening the native print dialog.
+
+Do not replace the workspace with a linear wizard. Format choice changes symbol
+fit, content changes the physical artwork, the starting cell changes pagination,
+and quantity changes page count. Keeping selection, output controls, diagnostics,
+and preview in one responsive view makes those dependencies observable and lets
+experienced merchants finish without repeatedly moving forward and backward.
+
 The workspace keeps three layers visible on desktop: selected SKUs and label
 counts, format/content controls, and a sticky live paper preview. On narrow
 screens those layers stack into one responsive workspace. Exact SKU selection
@@ -34,6 +47,10 @@ a first-time merchant can see every decision before printing.
   per-variant quantities, print settings, and final Print. The browser print
   dialog also provides Save as PDF. It supports named Dymo, Avery, and Zebra
   media, but label printing remains a separately installed app.
+  Shopify's official limitations also include no arbitrary custom label size and
+  manual per-variant quantity selection. Scalius should preserve custom
+  millimetre stock and safe `On hand`/`Available` batch quantities instead of
+  copying those constraints.
 - [Square barcode labels](https://squareup.com/help/us/en/article/6093-create-and-print-bar-code-labels-with-square-for-retail)
   can start from a custom item set, category, or purchase order; offers SKU or
   GTIN selection, label preview, test printing, PDF download, and per-item
@@ -173,6 +190,9 @@ feeds, structured data, or external marketplaces.
   legacy long Code 128 value, custom-stock bounds and print blocking,
   numeric/interactive start-cell selection, 390 px responsive layout, no
   horizontal overflow, and no browser console warning/error.
+- The selected-SKU row exposes the exact on-hand and available counts beside
+  the scan identity. The batch shortcuts therefore have visible source facts;
+  they are not unexplained transformations of the editable print quantity.
 - Production API smoke: health, four readiness samples, 294-route OpenAPI, and
   current Worker deployment all passed on 2026-07-17.
 - The authenticated production run on admin version

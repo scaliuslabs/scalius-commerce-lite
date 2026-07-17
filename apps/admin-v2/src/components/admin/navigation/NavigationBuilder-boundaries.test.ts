@@ -123,6 +123,10 @@ describe("navigation workspace boundaries", () => {
     expect(dialogSource).toContain("parseNavigationHref(customUrl)");
     expect(dialogSource).toContain("availableSlots");
     expect(dialogSource).toContain("onCheckedChange={() => toggleCategory(cat)}");
+    expect(dialogSource).toContain("getAddNavigationItemsLabel(selectedItemCount)");
+    expect(dialogSource).toContain('label: "Filtered category"');
+    expect(dialogSource).toContain('void fetchCategories("", 1, false)');
+    expect(dialogSource).toContain("Categories could not be loaded.");
     expect(dialogSource).not.toContain("`/pages/${p.slug}`");
   });
 

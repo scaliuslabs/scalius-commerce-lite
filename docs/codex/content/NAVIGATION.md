@@ -1,8 +1,8 @@
 # Navigation, Header, and Footer Audit
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-17
 
-## Typed resource target cutover (implemented, awaiting demo regeneration)
+## Typed resource target cutover (implemented and deployed)
 
 The interim header/footer JSON no longer treats copied URLs as resource
 authority. Items persist one typed resource/internal/external/label target;
@@ -17,10 +17,22 @@ exclusion when deciding buyer readiness. Page resources use the routed
 `/<slug>` path; valid current canonical paths drive product, category, and
 collection links.
 
-This cutover is not deployed. Existing demo `header_config` and `footer_config`
-rows containing `{title, href}` items must be regenerated into the typed shape
-before deployment. Reads intentionally fail closed on old rows; there is no
-permanent compatibility branch or second URL authority.
+The demo `header_config` and `footer_config` rows were regenerated into the
+typed shape before deployment. Reads intentionally fail closed on old rows;
+there is no permanent compatibility branch or second URL authority.
+
+## 2026-07-17 destination-picker correction
+
+The shared Add menu items dialog now opens the first Category/Page result set
+immediately instead of briefly presenting a false empty state during the
+initial debounce. A failed source request has a Retry action and cannot be
+mistaken for a genuinely empty store. Product, Category, Page, and Collection
+multi-selection all drive the same exact footer action (`Add N items`), while a
+single Custom link, Label only, or Filtered category target keeps `Add item`.
+The former `Dynamic` label is now `Filtered category`, which names the actual
+buyer destination without exposing an implementation term. Source types no
+longer use decorative rainbow text; hierarchy and selection state carry the
+interface.
 
 ## 2026-07-14 interaction correction and large-menu behavior
 

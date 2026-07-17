@@ -49,6 +49,7 @@ import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import type { NavigationItem, NavigationSource } from "./types";
 import { createResourceNavigationItem } from "./navigation-source";
+import { getAddNavigationItemsLabel } from "./add-nav-item-dialog-model";
 import { getCategories } from "~/lib/api-functions/categories";
 import {
   getAttributes,
@@ -87,6 +88,7 @@ interface PaginatedState {
   isLoading: boolean;
   isLoadingMore: boolean;
   search: string;
+  error: string | null;
 }
 
 const initialPaginatedState: PaginatedState = {
@@ -97,6 +99,7 @@ const initialPaginatedState: PaginatedState = {
   isLoading: false,
   isLoadingMore: false,
   search: "",
+  error: null,
 };
 
 interface AddNavItemDialogProps {
@@ -168,6 +171,7 @@ export function AddNavItemDialog({
   >({});
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [sourceLoadError, setSourceLoadError] = useState(false);
 
   // Refs for debounce timers
   const catSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,9 +181,9 @@ export function AddNavItemDialog({
   const fetchCategories = useCallback(
     async (search: string, page: number, append: boolean) => {
       if (append) {
-        setCatState((prev) => ({ ...prev, isLoadingMore: true }));
+        setCatState((prev) => ({ ...prev, isLoadingMore: true, error: null }));
       } else {
-        setCatState((prev) => ({ ...prev, isLoading: true }));
+        setCatState((prev) => ({ ...prev, isLoading: true, error: null }));
       }
 
       try {
@@ -211,10 +215,16 @@ export function AddNavItemDialog({
           isLoading: false,
           isLoadingMore: false,
           search,
+          error: null,
         }));
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error fetching categories:", error);
-        setCatState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
+        setCatState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isLoadingMore: false,
+          error: "Categories could not be loaded.",
+        }));
       }
     },
     [],
@@ -224,9 +234,9 @@ export function AddNavItemDialog({
   const fetchPages = useCallback(
     async (search: string, page: number, append: boolean) => {
       if (append) {
-        setPageState((prev) => ({ ...prev, isLoadingMore: true }));
+        setPageState((prev) => ({ ...prev, isLoadingMore: true, error: null }));
       } else {
-        setPageState((prev) => ({ ...prev, isLoading: true }));
+        setPageState((prev) => ({ ...prev, isLoading: true, error: null }));
       }
 
       try {
@@ -248,10 +258,16 @@ export function AddNavItemDialog({
           isLoading: false,
           isLoadingMore: false,
           search,
+          error: null,
         }));
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error fetching pages:", error);
-        setPageState((prev) => ({ ...prev, isLoading: false, isLoadingMore: false }));
+        setPageState((prev) => ({
+          ...prev,
+          isLoading: false,
+          isLoadingMore: false,
+          error: "Pages could not be loaded.",
+        }));
       }
     },
     [],
@@ -261,8 +277,12 @@ export function AddNavItemDialog({
   useEffect(() => {
     if (!open) return;
     if (catSearchTimerRef.current) clearTimeout(catSearchTimerRef.current);
+    if (!catSearchInput) {
+      void fetchCategories("", 1, false);
+      return;
+    }
     catSearchTimerRef.current = setTimeout(() => {
-      fetchCategories(catSearchInput, 1, false);
+      void fetchCategories(catSearchInput, 1, false);
     }, 300);
     return () => {
       if (catSearchTimerRef.current) clearTimeout(catSearchTimerRef.current);
@@ -273,8 +293,12 @@ export function AddNavItemDialog({
   useEffect(() => {
     if (!open) return;
     if (pageSearchTimerRef.current) clearTimeout(pageSearchTimerRef.current);
+    if (!pageSearchInput) {
+      void fetchPages("", 1, false);
+      return;
+    }
     pageSearchTimerRef.current = setTimeout(() => {
-      fetchPages(pageSearchInput, 1, false);
+      void fetchPages(pageSearchInput, 1, false);
     }, 300);
     return () => {
       if (pageSearchTimerRef.current) clearTimeout(pageSearchTimerRef.current);
@@ -287,6 +311,7 @@ export function AddNavItemDialog({
 
     const fetchData = async () => {
       setIsLoading(true);
+      setSourceLoadError(false);
       try {
         const [navData, attrData] = await Promise.all([
           getNavigationItems(),
@@ -306,6 +331,7 @@ export function AddNavItemDialog({
         );
       } catch (error: unknown) {
         if (import.meta.env.DEV) console.error("Error fetching data:", error);
+        setSourceLoadError(true);
       } finally {
         setIsLoading(false);
       }
@@ -333,6 +359,7 @@ export function AddNavItemDialog({
       setDynamicFilters([]);
       setDynamicLabel("");
       setPreviewCount(null);
+      setSourceLoadError(false);
     }
   }, [open]);
 
@@ -542,14 +569,13 @@ export function AddNavItemDialog({
     category: {
       icon: FolderOpen,
       label: "Category",
-      color: "text-blue-500",
     },
-    page: { icon: FileText, label: "Page", color: "text-green-500" },
-    product: { icon: Package, label: "Product", color: "text-rose-500" },
-    collection: { icon: Layers3, label: "Collection", color: "text-cyan-500" },
-    dynamic: { icon: Sparkles, label: "Dynamic", color: "text-purple-500" },
-    custom: { icon: Link2, label: "Custom Link", color: "text-orange-500" },
-    label: { icon: Type, label: "Label Only", color: "text-gray-500" },
+    page: { icon: FileText, label: "Page" },
+    product: { icon: Package, label: "Product" },
+    collection: { icon: Layers3, label: "Collection" },
+    dynamic: { icon: Sparkles, label: "Filtered category" },
+    custom: { icon: Link2, label: "Custom link" },
+    label: { icon: Type, label: "Label only" },
   };
   const isCatalogResource = activeType === "product" || activeType === "collection";
   const catalogSources = activeType === "product" ? productSources : collectionSources;
@@ -569,6 +595,17 @@ export function AddNavItemDialog({
     source.name.toLocaleLowerCase().includes(normalizedCatalogSearch) ||
     source.slug.toLocaleLowerCase().includes(normalizedCatalogSearch)
   ));
+  const selectedItemCount = activeType === "category"
+    ? selectedCategoryMap.size
+    : activeType === "page"
+      ? selectedPageMap.size
+      : activeType === "product"
+        ? selectedProductMap.size
+        : activeType === "collection"
+          ? selectedCollectionMap.size
+          : canAdd()
+            ? 1
+            : 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -576,7 +613,7 @@ export function AddNavItemDialog({
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-5 w-5" />
-            Add Navigation Item
+            Add menu items
             {parentLabel && (
               <Badge variant="secondary" className="font-normal">
                 to "{parentLabel}"
@@ -584,9 +621,9 @@ export function AddNavItemDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            Choose what to add. {Number.isFinite(availableSlots)
-              ? `${availableSlots} ${availableSlots === 1 ? "space" : "spaces"} remaining in this menu.`
-              : "You can add several published resources at once."}
+            Choose a destination. {Number.isFinite(availableSlots)
+              ? `${availableSlots} ${availableSlots === 1 ? "space" : "spaces"} left.`
+              : "Select one or several published resources."}
           </DialogDescription>
         </DialogHeader>
 
@@ -602,10 +639,7 @@ export function AddNavItemDialog({
                   variant={activeType === type ? "default" : "outline"}
                   size="sm"
                   onClick={() => setActiveType(type)}
-                  className={cn(
-                    "flex items-center gap-2 shrink-0",
-                    activeType !== type && info.color,
-                  )}
+                  className="flex shrink-0 items-center gap-2"
                 >
                   <Icon className="h-4 w-4" />
                   {info.label}
@@ -639,6 +673,13 @@ export function AddNavItemDialog({
                   {catState.isLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : catState.error ? (
+                    <div className="grid min-h-40 place-items-center gap-3 rounded-lg border border-dashed p-6 text-center">
+                      <p className="text-sm text-muted-foreground">{catState.error}</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void fetchCategories(catSearchInput, 1, false)}>
+                        Retry
+                      </Button>
                     </div>
                   ) : catState.items.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
@@ -752,6 +793,13 @@ export function AddNavItemDialog({
                   {pageState.isLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : pageState.error ? (
+                    <div className="grid min-h-40 place-items-center gap-3 rounded-lg border border-dashed p-6 text-center">
+                      <p className="text-sm text-muted-foreground">{pageState.error}</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => void fetchPages(pageSearchInput, 1, false)}>
+                        Retry
+                      </Button>
                     </div>
                   ) : pageState.items.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
@@ -920,7 +968,15 @@ export function AddNavItemDialog({
               {/* Dynamic Link */}
               {activeType === "dynamic" && (
                 <div className="space-y-4">
-                  <div className="space-y-2">
+                  {sourceLoadError ? (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                      Filtered-category sources could not be loaded. Close and reopen the picker to retry.
+                    </div>
+                  ) : allCategories.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      Publish a category before creating a filtered category link.
+                    </div>
+                  ) : <div className="space-y-2">
                     <Label>Category</Label>
                     <Select
                       value={dynamicCategory}
@@ -937,7 +993,8 @@ export function AddNavItemDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
+                    <p className="text-xs text-muted-foreground">Start with a category, then optionally narrow it with product attributes.</p>
+                  </div>}
 
                   {dynamicCategory && (
                     <>
@@ -1167,11 +1224,7 @@ export function AddNavItemDialog({
           </Button>
           <Button onClick={handleAdd} disabled={!canAdd()}>
             <Plus className="h-4 w-4 mr-2" />
-            Add Item
-            {(activeType === "category" && selectedCategoryMap.size > 1) ||
-            (activeType === "page" && selectedPageMap.size > 1)
-              ? "s"
-              : ""}
+            {getAddNavigationItemsLabel(selectedItemCount)}
           </Button>
         </DialogFooter>
       </DialogContent>

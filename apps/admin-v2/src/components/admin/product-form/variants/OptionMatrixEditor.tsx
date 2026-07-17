@@ -692,7 +692,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     <td className="p-1.5 text-center">
                       <div className="flex items-center justify-center gap-0.5">
                       {variant.id.startsWith("var_") && !printingDisabled ? (
-                        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Print barcode label">
                           <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
                             <Printer className="h-3.5 w-3.5" />
                           </Link>
@@ -755,7 +755,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
               {variant.id.startsWith("var_") && !printingDisabled ? (
-                <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" title="Print barcode label">
                   <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={`Print barcode label for ${variant.sku}`}>
                     <Printer className="h-3.5 w-3.5" />
                   </Link>
