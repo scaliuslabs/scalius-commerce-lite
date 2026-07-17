@@ -248,9 +248,11 @@ buffered in a Worker invocation.
 - This matches Cloudflare's documented `scale-down` default (whole image,
   preserved aspect ratio, no upscaling) and Shopify's admin Image component,
   whose default `objectFit` is `contain`. Shopify uses an explicit merchant
-  focal point when a theme intentionally crops. Scalius does not yet model
-  focal-point coordinates, so it must not pretend an arbitrary center crop is
-  merchant intent.
+  focal point when a theme intentionally crops. Scalius hero slides now model
+  that source-relative authority and project it to both preview
+  `object-position` and Cloudflare cover-transform gravity. Other cropped
+  surfaces must add an equally explicit domain control before describing a
+  center crop as merchant intent.
 - Focused shared tests protect the safe default, explicit cover behavior, and
   idempotence of already transformed URLs. Admin and storefront were rebuilt
   and deployed together because both bundle the shared optimizer.

@@ -882,6 +882,10 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     link: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -895,6 +899,10 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     link: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -908,6 +916,10 @@ export type GetApiV1HeroSlidersResponses = {
                     url: string;
                     title: string;
                     link: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
                 }>;
                 isActive: boolean;
                 [key: string]: unknown;
@@ -917,6 +929,10 @@ export type GetApiV1HeroSlidersResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isMobile?: boolean;
             [key: string]: unknown;
@@ -977,6 +993,10 @@ export type GetApiV1HeroSlidersByIdResponses = {
                     url: string;
                     title: string;
                     link: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
                 }>;
                 isActive: boolean;
                 createdAt: string | null;
@@ -25672,6 +25692,10 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isActive: boolean;
             revision: number;
@@ -25693,6 +25717,10 @@ export type PostApiV1AdminSettingsHeroSlidersData = {
             url: string;
             title: string;
             link: string;
+            focalPoint?: {
+                x: number;
+                y: number;
+            };
         }>;
         isActive?: boolean;
     };
@@ -25797,6 +25825,10 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isActive: boolean;
             revision: number;
@@ -25917,6 +25949,10 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isActive: boolean;
             revision: number;
@@ -26024,6 +26060,10 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isActive: boolean;
             revision: number;
@@ -26045,6 +26085,10 @@ export type PutApiV1AdminSettingsHeroSlidersByIdData = {
             url: string;
             title: string;
             link: string;
+            focalPoint?: {
+                x: number;
+                y: number;
+            };
         }>;
         isActive?: boolean;
     };
@@ -26151,6 +26195,10 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 url: string;
                 title: string;
                 link: string;
+                focalPoint: {
+                    x: number;
+                    y: number;
+                };
             }>;
             isActive: boolean;
             revision: number;

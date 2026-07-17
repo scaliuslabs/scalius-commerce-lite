@@ -15,6 +15,7 @@ import {
   getApiV1HeroSliders,
 } from "@scalius/api-client/sdk";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
 
 /**
  * Defines the structure for the hero slider data, containing separate
@@ -24,14 +25,14 @@ export interface HeroSliderData {
   desktop: {
     id: string;
     type: "desktop";
-    images: { url: string; title?: string; link: string; id?: string }[];
+    images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
   } | null;
   mobile: {
     id: string;
     type: "mobile";
-    images: { url: string; title?: string; link: string; id?: string }[];
+    images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
   } | null;
-  images: { url: string; title?: string; link: string; id?: string }[];
+  images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
   isMobile: boolean;
 }
 

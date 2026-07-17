@@ -14,6 +14,10 @@ const rowSource = readFileSync(
   resolve(import.meta.dirname, "SlideRow.tsx"),
   "utf8",
 );
+const focalPointEditorSource = readFileSync(
+  resolve(import.meta.dirname, "HeroFocalPointEditor.tsx"),
+  "utf8",
+);
 const carouselSource = readFileSync(
   resolve(
     import.meta.dirname,
@@ -46,5 +50,15 @@ describe("hero slider workflow boundaries", () => {
     expect(rowSource).not.toContain("aspect-16/5");
     expect(carouselSource).toContain("HERO_SLIDE_PRESENTATION[type]");
     expect(carouselSource).not.toContain('type === "desktop" ? 1300 : 640');
+  });
+
+  it("keeps merchant crop focus consistent from the editor to Cloudflare delivery", () => {
+    expect(rowSource).toContain("HeroFocalPointEditor");
+    expect(rowSource).toContain("getHeroSlideObjectPosition(image.focalPoint)");
+    expect(focalPointEditorSource).toContain("Click the subject that must stay visible.");
+    expect(focalPointEditorSource).toContain('type="range"');
+    expect(focalPointEditorSource).toContain("HERO_SLIDE_DEFAULT_FOCAL_POINT");
+    expect(carouselSource).toContain("getHeroSlideCloudflareGravity(focalPoint)");
+    expect(carouselSource).toContain("getHeroSlideObjectPosition(focalPoint)");
   });
 });

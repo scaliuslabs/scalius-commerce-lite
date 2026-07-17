@@ -36,6 +36,16 @@ describe("getOptimizedImageUrl", () => {
     expect(url).toContain("fit=cover");
   });
 
+  it("preserves an explicit relative focal point in a cover transform", () => {
+    const url = getOptimizedImageUrl(
+      "https://cdn.example.com/heroes/summer.jpg",
+      { width: 1920, height: 600, fit: "cover", gravity: "0.25x0.7" },
+      imageContext,
+    );
+
+    expect(url).toContain("fit=cover,gravity=0.25x0.7");
+  });
+
   it("does not rewrite an existing transform without a new presentation request", () => {
     const existing =
       "https://cdn.example.com/cdn-cgi/image/width=320,fit=contain/products/item.jpg";

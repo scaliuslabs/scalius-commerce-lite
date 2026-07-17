@@ -1,7 +1,13 @@
 ---
 // Optimized carousel component for best performance and LCP
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
-import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
+import {
+  HERO_SLIDE_DEFAULT_FOCAL_POINT,
+  HERO_SLIDE_PRESENTATION,
+  getHeroSlideCloudflareGravity,
+  getHeroSlideObjectPosition,
+  type HeroSlideFocalPoint,
+} from "@scalius/shared/hero-slider";
 
 interface Props {
   images: {
@@ -9,6 +15,7 @@ interface Props {
     title?: string;
     link: string;
     id?: string;
+    focalPoint?: HeroSlideFocalPoint;
   }[];
   height: number;
   type: "desktop" | "mobile";
@@ -43,6 +50,7 @@ if (images.length === 0) return;
         images.map((image: Props["images"][0], index: number) => {
           const SlideFrame = image.link ? "a" : "div";
           const isExternal = image.link?.startsWith("https://");
+          const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           return (
             <div
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
@@ -61,11 +69,13 @@ if (images.length === 0) return;
                   height: height,
                   quality: index === 0 ? 90 : 80,
                   fit: "cover",
+                  gravity: getHeroSlideCloudflareGravity(focalPoint),
                 })}
                 alt={image.title || `Slide ${index + 1}`}
                 width={presentation.width}
                 height={height}
                 class="w-full h-full object-cover"
+                style={`object-position: ${getHeroSlideObjectPosition(focalPoint)};`}
                 loading={index === 0 ? "eager" : "lazy"}
                 fetchpriority={index === 0 ? "high" : "auto"}
                 decoding={index === 0 ? "sync" : "async"}

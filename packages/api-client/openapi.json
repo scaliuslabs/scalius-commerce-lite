@@ -2731,13 +2731,33 @@
                                   },
                                   "link": {
                                     "type": "string"
+                                  },
+                                  "focalPoint": {
+                                    "type": "object",
+                                    "properties": {
+                                      "x": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "y": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "x",
+                                      "y"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "url",
                                   "title",
-                                  "link"
+                                  "link",
+                                  "focalPoint"
                                 ]
                               }
                             },
@@ -2789,13 +2809,33 @@
                                   },
                                   "link": {
                                     "type": "string"
+                                  },
+                                  "focalPoint": {
+                                    "type": "object",
+                                    "properties": {
+                                      "x": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "y": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "x",
+                                      "y"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "url",
                                   "title",
-                                  "link"
+                                  "link",
+                                  "focalPoint"
                                 ]
                               }
                             },
@@ -2847,13 +2887,33 @@
                                   },
                                   "link": {
                                     "type": "string"
+                                  },
+                                  "focalPoint": {
+                                    "type": "object",
+                                    "properties": {
+                                      "x": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "y": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "x",
+                                      "y"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "url",
                                   "title",
-                                  "link"
+                                  "link",
+                                  "focalPoint"
                                 ]
                               }
                             },
@@ -2888,13 +2948,33 @@
                               },
                               "link": {
                                 "type": "string"
+                              },
+                              "focalPoint": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "url",
                               "title",
-                              "link"
+                              "link",
+                              "focalPoint"
                             ]
                           }
                         },
@@ -3020,13 +3100,33 @@
                                   },
                                   "link": {
                                     "type": "string"
+                                  },
+                                  "focalPoint": {
+                                    "type": "object",
+                                    "properties": {
+                                      "x": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      },
+                                      "y": {
+                                        "type": "number",
+                                        "minimum": 0,
+                                        "maximum": 100
+                                      }
+                                    },
+                                    "required": [
+                                      "x",
+                                      "y"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "url",
                                   "title",
-                                  "link"
+                                  "link",
+                                  "focalPoint"
                                 ]
                               }
                             },
@@ -87747,13 +87847,33 @@
                                 "link": {
                                   "type": "string",
                                   "maxLength": 2048
+                                },
+                                "focalPoint": {
+                                  "type": "object",
+                                  "properties": {
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    }
+                                  },
+                                  "required": [
+                                    "x",
+                                    "y"
+                                  ]
                                 }
                               },
                               "required": [
                                 "id",
                                 "url",
                                 "title",
-                                "link"
+                                "link",
+                                "focalPoint"
                               ]
                             }
                           },
@@ -88108,6 +88228,25 @@
                         "link": {
                           "type": "string",
                           "maxLength": 2048
+                        },
+                        "focalPoint": {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
                         }
                       },
                       "required": [
@@ -88181,13 +88320,33 @@
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
+                              },
+                              "focalPoint": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "url",
                               "title",
-                              "link"
+                              "link",
+                              "focalPoint"
                             ]
                           }
                         },
@@ -88607,13 +88766,33 @@
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
+                              },
+                              "focalPoint": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "url",
                               "title",
-                              "link"
+                              "link",
+                              "focalPoint"
                             ]
                           }
                         },
@@ -88974,6 +89153,25 @@
                         "link": {
                           "type": "string",
                           "maxLength": 2048
+                        },
+                        "focalPoint": {
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "y": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 100
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
                         }
                       },
                       "required": [
@@ -89046,13 +89244,33 @@
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
+                              },
+                              "focalPoint": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "url",
                               "title",
-                              "link"
+                              "link",
+                              "focalPoint"
                             ]
                           }
                         },
@@ -89488,13 +89706,33 @@
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
+                              },
+                              "focalPoint": {
+                                "type": "object",
+                                "properties": {
+                                  "x": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  },
+                                  "y": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                  }
+                                },
+                                "required": [
+                                  "x",
+                                  "y"
+                                ]
                               }
                             },
                             "required": [
                               "id",
                               "url",
                               "title",
-                              "link"
+                              "link",
+                              "focalPoint"
                             ]
                           }
                         },

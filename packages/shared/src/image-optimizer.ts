@@ -36,7 +36,7 @@ export interface ImageOptimizationOptions {
   quality?: number;
   format?: "auto" | "webp" | "avif" | "json";
   fit?: "scale-down" | "contain" | "cover" | "crop" | "pad";
-  gravity?: "auto" | "left" | "right" | "top" | "bottom" | "center";
+  gravity?: "auto" | "face" | "left" | "right" | "top" | "bottom" | "center" | `${number}x${number}`;
   sharpen?: number; // 0-10
   blur?: number; // 0-250
 }

@@ -6,8 +6,12 @@ import { Label } from "~/components/ui/label";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
-import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
+import {
+  HERO_SLIDE_PRESENTATION,
+  getHeroSlideObjectPosition,
+} from "@scalius/shared/hero-slider";
 import type { SliderImage } from "./helpers";
+import { HeroFocalPointEditor } from "./HeroFocalPointEditor";
 
 interface SlideRowProps {
   image: SliderImage;
@@ -59,6 +63,7 @@ export function SlideRow({
           src={getOptimizedImageUrl(image.url)}
           alt={image.title || "Slide"}
           className="h-full w-full object-cover"
+          style={{ objectPosition: getHeroSlideObjectPosition(image.focalPoint) }}
           loading="lazy"
           decoding="async"
         />
@@ -66,6 +71,13 @@ export function SlideRow({
         <div className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white backdrop-blur-sm">
           {index + 1}
         </div>
+        <HeroFocalPointEditor
+          imageId={image.id}
+          imageUrl={image.url}
+          imageText={image.title}
+          focalPoint={image.focalPoint}
+          onChange={(focalPoint) => onUpdate(image.id, { focalPoint })}
+        />
       </div>
 
       <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-[minmax(180px,0.8fr)_minmax(260px,1.2fr)]">

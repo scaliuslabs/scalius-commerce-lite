@@ -60,13 +60,18 @@ describe("hero slider revision authority", () => {
         url: "https://cdn.example.com/hero.jpg",
         title: "  New arrivals  ",
         link: "#",
+        focalPoint: { x: 26.125, y: 72.875 },
       }],
       isActive: true,
     });
     expect(updated).toMatchObject({
       revision: 2,
       isActive: true,
-      images: [{ title: "New arrivals", link: "" }],
+      images: [{
+        title: "New arrivals",
+        link: "",
+        focalPoint: { x: 26.13, y: 72.88 },
+      }],
     });
 
     await expect(updateHeroSlider(db, created.id, {
