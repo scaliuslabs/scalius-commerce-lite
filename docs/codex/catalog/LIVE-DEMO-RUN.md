@@ -448,6 +448,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
   Mobile Tech with correct preview/status text in both directions. The draft
   remains intentionally unpublished pending action-time confirmation for the
   public Save.
+- Latest catalog-presentation release: admin
+  `686fdfc9-9815-4ff7-8bdb-ff546a38c40d` and storefront
+  `5978e08d-1939-4c06-9254-c0ef1c311503`. A fresh authenticated
+  `pnpm demo:store --diff` first isolated one real content drift: the Dhara
+  Cotton Throw paragraph had been repeated twelve times. The description was
+  repaired through the visible product editor and the next reconciliation
+  proved exact matches for all 5 categories, 50 products, 5 collections, and
+  all 237 media intents with no conflicts. Product and variant imagery now
+  preserves the complete merchant asset with explicit `contain` behavior in
+  the admin product list/view/editor, order and discount pickers, scanner,
+  storefront cart, and account/order history; editorial heroes remain
+  intentional crops. Focused source-boundary tests, Admin TypeScript/lint, and
+  Storefront Astro/lint checks passed sequentially. Live 390 px Chrome proof
+  confirmed 50 mobile-admin products without horizontal overflow, exact
+  variant images in the cart, ISO-precise fractional BDT totals
+  (`৳2,658.80`, `৳5,317.60`), accessible quantity/removal controls, and no
+  browser warning/error. The test cart was cleared afterward. The first
+  storefront deploy verification caught a still-propagating homepage Worker
+  build while product pages already served the new build; a direct cache/build
+  probe recovered to `src-b7ae9c72b6606ef5`, and the required sequential
+  redeploy then passed health, 100% version, and all critical cache warm checks.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks

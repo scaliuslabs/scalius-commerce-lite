@@ -870,7 +870,11 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
       <PopoverTrigger asChild>
         <button type="button" className="relative flex h-8 w-10 items-center justify-center overflow-hidden rounded border bg-background" aria-label={triggerLabel}>
           {selected
-            ? <img src={getOptimizedImageUrl(selected.url)} alt="" className="h-full w-full object-cover" />
+            ? <img
+                src={getOptimizedImageUrl(selected.url, { width: 80, height: 80, quality: 75, fit: "contain" })}
+                alt=""
+                className="h-full w-full object-contain object-center"
+              />
             : <ImageIcon className="h-4 w-4 text-muted-foreground" />}
           {usesPrimaryFallback ? (
             <span
@@ -926,7 +930,11 @@ function VariantImagePicker({ value, images, onChange, label = "Choose SKU image
                 )}
                 title={image.status === "trashed" ? "In trash · existing assignments remain" : image.altText || "Product image"}
               >
-                <img src={getOptimizedImageUrl(image.url)} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={getOptimizedImageUrl(image.url, { width: 96, height: 96, quality: 75, fit: "contain" })}
+                  alt=""
+                  className="h-full w-full object-contain object-center"
+                />
                 {image.status === "trashed" ? <span className="absolute inset-x-0 bottom-0 bg-amber-950/80 py-0.5 text-xs text-white">Trash</span> : null}
               </button>
             );

@@ -398,9 +398,14 @@ function ProductMediaPreview({ item, productName, featured = false }: {
   if (item.kind === "image") {
     return (
       <img
-        src={getOptimizedImageUrl(item.url)}
+        src={getOptimizedImageUrl(item.url, {
+          width: featured ? 960 : 240,
+          height: featured ? 960 : 240,
+          quality: featured ? 85 : 75,
+          fit: "contain",
+        })}
         alt={item.altText || productName}
-        className="h-full w-full object-cover"
+        className="h-full w-full object-contain object-center"
         loading="lazy"
         decoding="async"
       />
@@ -422,7 +427,13 @@ function ProductMediaPreview({ item, productName, featured = false }: {
   return (
     <>
       {item.posterUrl ? (
-        <img src={getOptimizedImageUrl(item.posterUrl)} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+        <img
+          src={getOptimizedImageUrl(item.posterUrl, { width: 240, height: 240, quality: 75, fit: "contain" })}
+          alt=""
+          className="h-full w-full object-contain object-center"
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <div className="flex h-full items-center justify-center"><Video className="h-5 w-5 text-muted-foreground" /></div>
       )}

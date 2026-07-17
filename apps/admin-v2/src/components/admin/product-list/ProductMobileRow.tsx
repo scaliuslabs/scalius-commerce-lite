@@ -63,9 +63,14 @@ export function ProductMobileRow({
         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
           {product.primaryImage ? (
             <img
-              src={getOptimizedImageUrl(product.primaryImage)}
+              src={getOptimizedImageUrl(product.primaryImage, {
+                width: 96,
+                height: 96,
+                quality: 75,
+                fit: "contain",
+              })}
               alt=""
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain object-center"
               loading="lazy"
               decoding="async"
             />

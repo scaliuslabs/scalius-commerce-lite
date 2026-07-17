@@ -420,7 +420,7 @@ describe("admin route graph boundaries", () => {
       "routes/admin/collections/trash.tsx",
       "routes/admin/customers/index.tsx",
       "routes/admin/discounts/index.tsx",
-      "routes/admin/inventory.tsx",
+      "routes/admin/inventory/index.tsx",
       "routes/admin/orders/index.tsx",
       "routes/admin/pages/index.tsx",
       "routes/admin/pages/trash.tsx",
@@ -1222,7 +1222,7 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const inventorySource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "inventory.tsx"),
+      join(ADMIN_SRC_ROOT, "routes", "admin", "inventory", "index.tsx"),
       "utf8",
     );
 

@@ -774,7 +774,13 @@ const orderId = Astro.params.id ?? "";
     const items = document.getElementById("orderItems");
     if (items) {
       items.innerHTML = detail.items.map((item) => {
-        const imageUrl = getProductImageUrl(item.productImage);
+        const imageUrl = getProductImageUrl(item.productImage, {
+          width: 128,
+          height: 128,
+          quality: 80,
+          format: "auto",
+          fit: "contain",
+        });
         const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
         const unitPrice = savedLine && savedMoneySummary
           ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
@@ -783,7 +789,7 @@ const orderId = Astro.params.id ?? "";
           ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
           : formatMoney(item.lineTotal);
         return `<article class="flex gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
-          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" class="h-16 w-16 rounded-lg object-cover">` : `<div class="h-16 w-16 rounded-lg bg-muted"></div>`}
+          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" class="h-16 w-16 rounded-lg bg-muted object-contain object-center">` : `<div class="h-16 w-16 rounded-lg bg-muted"></div>`}
           <div class="min-w-0 flex-1">
             <h3 class="font-semibold text-foreground">${escapeHtml(item.productName || "Product unavailable")}</h3>
             <p class="mt-1 text-xs text-muted-foreground">${escapeHtml(item.variantLabel || "Standard")}</p>

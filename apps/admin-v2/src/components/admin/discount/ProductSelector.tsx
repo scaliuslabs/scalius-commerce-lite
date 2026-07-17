@@ -305,7 +305,9 @@ export function ProductSelector({
                             <img
                               src={product.primaryImage}
                               alt=""
-                              className="h-6 w-6 rounded object-cover shrink-0"
+                              className="h-6 w-6 shrink-0 rounded bg-muted object-contain object-center"
+                              loading="lazy"
+                              decoding="async"
                             />
                           ) : (
                             <div className="h-6 w-6 rounded bg-muted flex items-center justify-center shrink-0">
