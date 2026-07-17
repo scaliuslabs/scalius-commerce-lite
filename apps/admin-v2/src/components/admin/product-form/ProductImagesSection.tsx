@@ -233,9 +233,14 @@ function ProductMediaTile({
       <div className="relative aspect-square overflow-hidden bg-muted/30">
         {previewUrl ? (
           <img
-            src={getOptimizedImageUrl(previewUrl)}
+            src={getOptimizedImageUrl(previewUrl, {
+              width: 320,
+              height: 320,
+              quality: 80,
+              fit: "contain",
+            })}
             alt=""
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain object-center"
             loading="lazy"
             decoding="async"
           />

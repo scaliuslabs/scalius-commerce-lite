@@ -17,7 +17,7 @@ import {
   type CheckoutLanguageData,
   saveAbandonedCheckout,
 } from "@/lib/api";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatPriceShort } from "@scalius/shared/currency";
 import { trackFbAddToCart, trackFbInitiateCheckout } from "@/lib/analytics";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -330,8 +330,7 @@ function updateDiscountUI() {
     removeButton.style.display = "block";
 
     discountRowEl.style.display = "flex";
-    const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-    discountAmountEl.textContent = `-${sym}${(discount.discountAmount || 0).toLocaleString()}`;
+    discountAmountEl.textContent = `-${formatPriceShort(discount.discountAmount || 0)}`;
     appliedDiscountCodeEl.textContent = discount.code;
     appliedDiscountCodeEl.parentElement!.classList.remove("hidden");
   } else {
@@ -600,12 +599,11 @@ export async function updateTotals() {
 
   if (!subtotalEl || !shippingEl || !totalEl || !discountHiddenInput) return;
 
-  const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-  subtotalEl.textContent = `${sym}${totalAmount.toLocaleString()}`;
+  subtotalEl.textContent = formatPriceShort(totalAmount);
   shippingEl.textContent =
     hasFreeDeliveryItem && shippingFee === 0
       ? "Free"
-      : `${sym}${shippingFee.toLocaleString()}`;
+      : formatPriceShort(shippingFee);
 
   let finalTotal = totalAmount + shippingFee;
 
@@ -621,7 +619,7 @@ export async function updateTotals() {
     discountHiddenInput.value = "";
   }
 
-  totalEl.textContent = `${sym}${Math.max(0, finalTotal).toLocaleString()}`;
+  totalEl.textContent = formatPriceShort(Math.max(0, finalTotal));
   updateDiscountUI();
 }
 
@@ -659,7 +657,6 @@ export async function renderCartItems() {
     clearHostedPaymentRecoverySession();
   }
 
-  const csym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
   cartItemsContainer.innerHTML = Object.entries(items)
     .map(([cartKey, item]) => {
       // Escape all user-supplied strings to prevent XSS via innerHTML
@@ -670,7 +667,7 @@ export async function renderCartItems() {
           height: 96,
           quality: 75,
           format: "auto",
-          fit: "cover",
+          fit: "contain",
         }),
       );
       const jsCartKey = inlineJsString(cartKey);
@@ -688,19 +685,19 @@ export async function renderCartItems() {
 
       return `
       <div class="py-2.5 sm:py-3 first:pt-0"><div class="flex gap-2.5 sm:gap-3">
-          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-cover" /></div>
+          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-contain object-center" /></div>
           <div class="flex-1 min-w-0">
             <div class="flex justify-between">
               <div class="min-w-0"><h3 class="font-medium truncate text-sm sm:text-base text-foreground">${safeName}</h3><div class="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">${variantInfo}</div></div>
-              <button class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button aria-label="Remove ${safeName} from cart" class="text-muted-foreground hover:text-destructive transition-colors ml-1.5 sm:ml-2 p-0.5" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
             <div class="flex items-center justify-between mt-1.5 sm:mt-2">
               <div class="flex items-center gap-1.5 sm:gap-2">
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
+                <button aria-label="Decrease ${safeName} quantity" class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
                 <span class="w-5 sm:w-6 text-center text-xs sm:text-sm text-foreground">${item.quantity}</span>
-                <button class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
+                <button aria-label="Increase ${safeName} quantity" class="w-6 h-6 sm:w-7 sm:h-7 rounded-md sm:rounded-lg ring-1 sm:ring-2 ring-border flex items-center justify-center hover:bg-muted text-xs sm:text-sm text-foreground" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
-              <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${csym}${(item.price * item.quantity).toLocaleString()}</div><div class="text-xs text-muted-foreground">${csym}${item.price.toLocaleString()} each</div></div>
+              <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} each</div></div>
             </div>
             ${issueBlock}
           </div>

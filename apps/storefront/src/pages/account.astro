@@ -355,12 +355,12 @@ const layoutData = await getLayoutData();
           height: 96,
           quality: 80,
           format: "auto",
-          fit: "cover",
+          fit: "contain",
         },
       );
 
       return `<div class="flex items-start gap-4 py-3">
-        <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 rounded-md object-cover border border-border shrink-0 bg-card" loading="lazy" />
+        <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 shrink-0 rounded-md border border-border bg-card object-contain object-center" loading="lazy" />
         <div class="flex-1 min-w-0">
           <p class="text-sm font-semibold text-foreground truncate">${escapeHtml(item.productName || "Product")}</p>
           ${item.variantLabel

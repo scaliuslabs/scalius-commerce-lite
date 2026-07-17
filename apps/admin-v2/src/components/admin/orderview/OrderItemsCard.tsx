@@ -10,6 +10,7 @@ import {
   resolveSavedOrderMoneySummary,
   type SavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 
 interface OrderItemsCardProps {
   order: Order;
@@ -40,9 +41,16 @@ const OrderItemRow = ({
     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
       {item.productImage ? (
         <img
-          src={item.productImage}
+          src={getOptimizedImageUrl(item.productImage, {
+            width: 128,
+            height: 128,
+            quality: 80,
+            fit: "contain",
+          })}
           alt={item.productName?.toString() || ""}
-          className="h-full w-full object-cover object-center"
+          className="h-full w-full object-contain object-center"
+          loading="lazy"
+          decoding="async"
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">

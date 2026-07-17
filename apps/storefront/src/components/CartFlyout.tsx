@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
-import { getCurrencySymbol } from "@/lib/currency";
+import { formatPriceShort } from "@/lib/currency";
 import { getProductImageUrl } from "@/lib/product-media";
 
 export const cartOpenState = atom<boolean>(false);
@@ -270,11 +270,11 @@ export default function CartFlyout() {
                             height: 96,
                             quality: 75,
                             format: "auto",
-                            fit: "cover",
+                            fit: "contain",
                           },
                         )}
                         alt={item.name}
-                        className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
+                        className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
                       />
                     </div>
@@ -309,8 +309,7 @@ export default function CartFlyout() {
 
                         {/* Price */}
                         <div className="text-[12px] sm:text-sm font-bold text-foreground tabular-nums text-right shrink-0">
-                          {getCurrencySymbol()}
-                          {(item.price * item.quantity).toLocaleString()}
+                          {formatPriceShort(item.price * item.quantity)}
                         </div>
                       </div>
 
@@ -318,6 +317,7 @@ export default function CartFlyout() {
                       <div className="flex items-end justify-between mt-1">
                         <div className="flex items-center border border-input rounded-md bg-muted/50 h-6 sm:h-7 overflow-hidden">
                           <button
+                            aria-label={`Decrease ${item.name} quantity`}
                             onClick={() => {
                               disableAutoClose();
                               const newQ = Math.max(0, item.quantity - 1);
@@ -334,6 +334,7 @@ export default function CartFlyout() {
                             {item.quantity}
                           </span>
                           <button
+                            aria-label={`Increase ${item.name} quantity`}
                             onClick={() => {
                               disableAutoClose();
                               updateCartItemByKey(key, {
@@ -347,6 +348,7 @@ export default function CartFlyout() {
                         </div>
 
                         <button
+                          aria-label={`Remove ${item.name} from cart`}
                           onClick={() => {
                             disableAutoClose();
                             removeCartItemByKey(key);
@@ -386,8 +388,7 @@ export default function CartFlyout() {
                   Subtotal (excl. shipping)
                 </div>
                 <div className="text-xl font-bold text-foreground tabular-nums tracking-tight">
-                  {getCurrencySymbol()}
-                  {cart.totalAmount.toLocaleString()}
+                  {formatPriceShort(cart.totalAmount)}
                 </div>
               </div>
               <Button
@@ -440,8 +441,7 @@ export default function CartFlyout() {
                   </button>
                 </div>
                 <div className="text-lg font-extrabold text-foreground tabular-nums leading-none">
-                  {getCurrencySymbol()}
-                  {cart.totalAmount.toLocaleString()}
+                  {formatPriceShort(cart.totalAmount)}
                 </div>
               </div>
 

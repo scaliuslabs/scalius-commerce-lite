@@ -165,7 +165,9 @@ export function ManualSheet({
                 <img
                   src={product.productImage}
                   alt={product.productName}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain object-center"
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <Package className="h-6 w-6 text-zinc-600" />

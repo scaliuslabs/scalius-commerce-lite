@@ -408,6 +408,16 @@ not casually rebuild them inside the initial product-table migration.
   bounded page query.
 - Image resizing is used only for image/poster URLs. MP4/WebM bypass the image
   optimizer and retain range-request/CDN behavior.
+- Product and exact-SKU imagery is merchandise evidence, so catalog lists,
+  editor tiles, SKU pickers, scanner sheets, order lines, carts, and customer
+  history use bounded `contain`/`scale-down` transforms with `object-contain`.
+  They must not crop a merchant asset merely to fill a square. Request a pixel
+  size close to the rendered box (normally about 2x CSS size), not the generic
+  600 px fallback for a 32–64 px thumbnail.
+- `cover` remains an explicit editorial choice for hero campaigns, category
+  art, and other surfaces whose contract includes a reviewed crop. It is not a
+  generic thumbnail default. Admin and storefront boundary tests enforce this
+  distinction for the high-traffic product-image surfaces.
 - Gallery HTML does not contain eager `<source src>` values for every video.
   Only selected video metadata is requested.
 - Media mutations that affect presentation resolve dependent product IDs by the
