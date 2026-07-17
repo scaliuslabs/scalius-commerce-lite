@@ -141,6 +141,14 @@ export function getLabelPreset(id: LabelPresetId): LabelPreset {
   return LABEL_PRESETS.find((preset) => preset.id === id) ?? LABEL_PRESETS[0];
 }
 
+export function getLabelInventorySummary(
+  variant: Pick<InventoryLabelVariant, "available" | "stock" | "trackInventory">,
+): string {
+  return variant.trackInventory
+    ? `${variant.stock} on hand · ${variant.available} available`
+    : "Inventory not tracked";
+}
+
 export function getLabelDimensions(preset: LabelPreset) {
   return {
     widthMm: (preset.pageWidthMm - (2 * preset.marginXmm) - ((preset.columns - 1) * preset.gapXmm)) / preset.columns,

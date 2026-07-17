@@ -41,6 +41,7 @@ import {
   DEFAULT_LABEL_CONTENT,
   getBarcodeFitIssue,
   getLabelDimensions,
+  getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
   LABEL_PRESETS,
@@ -544,9 +545,9 @@ export function BarcodeLabelWorkspace({
                 </div>
                 {selectedVariants.length > 0 ? (
                   <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setAllQuantities("one")}>One each</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setAllQuantities("available")}>Available</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match each SKU's on-hand stock" onClick={() => setAllQuantities("onHand")}>On hand</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match each SKU's available stock" onClick={() => setAllQuantities("available")}>Available</Button>
                   </div>
                 ) : null}
               </CardHeader>
@@ -576,6 +577,7 @@ export function BarcodeLabelWorkspace({
                               <span className="font-mono">{variant.sku}</span>
                               <span className="font-mono">{variant.barcode ?? "No barcode"}</span>
                               <span>{variant.barcodeType?.toUpperCase() ?? "UNPRINTABLE"}</span>
+                              <span>{getLabelInventorySummary(variant)}</span>
                             </div>
                             {fitIssue ? <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">{fitIssue}</p> : null}
                           </div>
