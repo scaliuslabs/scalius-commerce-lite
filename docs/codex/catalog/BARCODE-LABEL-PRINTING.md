@@ -205,6 +205,11 @@ feeds, structured data, or external marketplaces.
   printed identity would invalidate physical stock labels. They may require the
   wider A4 preset. Newly generated internal identities are compact 14-digit
   numeric Code 128 values that use Code Set C and fit the thermal presets.
+- Admin deployment `9c8ac2c1-8d09-4266-9981-05cc05b06f70` was re-verified on
+  2026-07-17 at desktop and 390 px widths. An exact rich-demo SKU remained
+  reload-safe in the URL, the physical preview and print actions were ready,
+  no horizontal overflow was present, and singular job summaries rendered as
+  `1 label · 1 page`.
 
 ## Interface direction
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
 import {
   buildLabelCopies,
+  formatLabelCount,
+  formatPageCount,
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
@@ -61,6 +63,15 @@ describe("barcode label symbology", () => {
 });
 
 describe("barcode label page composition", () => {
+  it("uses correct singular and plural job summaries", () => {
+    expect(formatLabelCount(0)).toBe("0 labels");
+    expect(formatLabelCount(1)).toBe("1 label");
+    expect(formatLabelCount(2)).toBe("2 labels");
+    expect(formatPageCount(0)).toBe("0 pages");
+    expect(formatPageCount(1)).toBe("1 page");
+    expect(formatPageCount(2)).toBe("2 pages");
+  });
+
   it("keeps quantity shortcuts explainable with their exact inventory source", () => {
     expect(getLabelInventorySummary(variant)).toBe("18 on hand · 17 available");
     expect(getLabelInventorySummary({ ...variant, trackInventory: false })).toBe("Inventory not tracked");

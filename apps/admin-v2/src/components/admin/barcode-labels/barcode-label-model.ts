@@ -137,6 +137,14 @@ export const DEFAULT_LABEL_CONTENT: LabelContentOptions = {
   showPrice: true,
 };
 
+export function formatLabelCount(count: number): string {
+  return `${count} ${count === 1 ? "label" : "labels"}`;
+}
+
+export function formatPageCount(count: number): string {
+  return `${count} ${count === 1 ? "page" : "pages"}`;
+}
+
 export function getLabelPreset(id: LabelPresetId): LabelPreset {
   return LABEL_PRESETS.find((preset) => preset.id === id) ?? LABEL_PRESETS[0];
 }

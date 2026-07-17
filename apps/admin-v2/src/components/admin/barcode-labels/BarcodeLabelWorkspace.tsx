@@ -39,6 +39,8 @@ import { cn } from "@scalius/shared/utils";
 import {
   buildLabelCopies,
   DEFAULT_LABEL_CONTENT,
+  formatLabelCount,
+  formatPageCount,
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
@@ -524,8 +526,8 @@ export function BarcodeLabelWorkspace({
           </div>
           <div className="flex items-center gap-2 self-end sm:self-auto">
             <div className="hidden text-right text-xs text-muted-foreground sm:block">
-              <div><span className="font-medium text-foreground">{Math.min(copies.length, MAX_LABEL_COPIES)}</span> labels</div>
-              <div>{pages.length} {pages.length === 1 ? "page" : "pages"}</div>
+              <div>{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))}</div>
+              <div>{formatPageCount(pages.length)}</div>
             </div>
             <Button type="button" variant="outline" size="sm" disabled={!canPrint} onClick={() => startPrint("test")}>
               <FileText className="mr-1.5 h-3.5 w-3.5" /> Test page
@@ -733,7 +735,7 @@ export function BarcodeLabelWorkspace({
                   <div className="flex items-center justify-between"><span>Page</span><span className="font-medium text-foreground">{preset.pageWidthMm} × {preset.pageHeightMm} mm</span></div>
                   <div className="mt-1 flex items-center justify-between"><span>Labels per page</span><span className="font-medium text-foreground">{preset.columns * preset.rows}</span></div>
                   {startOffset > 0 ? <div className="mt-1 flex items-center justify-between"><span>First label</span><span className="font-medium text-foreground">Cell {startOffset + 1}</span></div> : null}
-                  <div className="mt-1 flex items-center justify-between"><span>Output</span><span className="font-medium text-foreground">{Math.min(copies.length, MAX_LABEL_COPIES)} labels · {pages.length} pages</span></div>
+                  <div className="mt-1 flex items-center justify-between"><span>Output</span><span className="font-medium text-foreground">{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))} · {formatPageCount(pages.length)}</span></div>
                 </div>
               </CardContent>
             </Card>
