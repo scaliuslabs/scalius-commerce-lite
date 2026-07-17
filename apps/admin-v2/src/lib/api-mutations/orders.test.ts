@@ -30,7 +30,7 @@ vi.mock("sonner", () => ({
 
 vi.mock("../api-functions/orders", () => ({
   approveOrderReturn: vi.fn(),
-  bulkDeleteOrders: vi.fn(),
+  archiveOrders: vi.fn(),
   bulkShipOrders: vi.fn(),
   cancelOrderReturn: vi.fn(),
   createFulfillmentShipment: vi.fn(),

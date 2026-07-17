@@ -172,9 +172,8 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_CREATE },
   },
-  "/api/v1/admin/orders/bulk-delete": {
+  "/api/v1/admin/orders/archive": {
     POST: { permission: PERMISSIONS.ORDERS_DELETE },
-    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
   "/api/v1/admin/orders/bulk-ship": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
@@ -192,10 +191,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     PUT: { permission: PERMISSIONS.ORDERS_EDIT },
     PATCH: { permission: PERMISSIONS.ORDERS_EDIT },
-    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
-  },
-  "/api/v1/admin/orders/*/permanent": {
-    DELETE: { permission: PERMISSIONS.ORDERS_DELETE },
   },
   "/api/v1/admin/orders/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },

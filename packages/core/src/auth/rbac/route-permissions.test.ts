@@ -123,6 +123,15 @@ describe("route permissions", () => {
     ).toEqual({ permission: PERMISSIONS.ORDERS_REFUND });
   });
 
+  it("allows archival but exposes no normal order hard-delete authority", () => {
+    expect(getRoutePermission("/api/v1/admin/orders/archive", "POST"))
+      .toEqual({ permission: PERMISSIONS.ORDERS_DELETE });
+    expect(getRoutePermission("/api/v1/admin/orders/order_1", "DELETE"))
+      .toBeNull();
+    expect(getRoutePermission("/api/v1/admin/orders/order_1/permanent", "DELETE"))
+      .toBeNull();
+  });
+
   it("gates shipment recovery repair behind shipment management permission", () => {
     expect(
       getRoutePermission(

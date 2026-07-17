@@ -1,6 +1,9 @@
 import React from "react";
 import { Link } from "@tanstack/react-router";
-import type { OrderListItem } from "@scalius/core/modules/orders";
+import {
+  getOrderArchiveStatusBlockedReason,
+  type OrderListItem,
+} from "@scalius/core/modules/orders";
 
 /** Minimal shipment shape used in the order list — compatible with ShipmentStatus */
 interface OrderShipment {
@@ -27,8 +30,7 @@ import {
   Eye,
   Pencil,
   Undo,
-  XCircle,
-  Trash2,
+  Archive,
 } from "lucide-react";
 import { OrderStatusSelector } from "./OrderStatusSelector";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
@@ -52,9 +54,8 @@ interface OrderMobileCardProps {
   showTrashed: boolean;
   onToggleSelection: (id: string) => void;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onPermanentDelete: (id: string) => void;
-  onRestore: (id: string) => void;
+  onArchive: (id: string, expectedVersion: number) => void;
+  onRestore: (id: string, expectedVersion: number) => void;
   onStatusUpdate: (orderId: string, newStatus: string) => void;
   onShipmentStatusUpdated: (updatedShipment: { id: string; orderId: string; [key: string]: unknown }) => void;
   orderActions: OrderActionPermissions;
@@ -89,8 +90,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   showTrashed,
   onToggleSelection,
   onEdit,
-  onDelete,
-  onPermanentDelete,
+  onArchive,
   onRestore,
   onStatusUpdate,
   onShipmentStatusUpdated,
@@ -99,10 +99,20 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
   const { symbol } = useCurrency();
   const hasPaymentRecovery =
     order.paymentRecovery != null && order.paymentRecovery.state !== "none";
+  const hasActivePaymentSetup = order.paymentRecovery?.activeProcessing === true;
   const hasActiveRefundOperation = order.activeRefundOperation?.active === true;
   const hasShipmentRecovery =
     order.shipmentRecovery != null && order.shipmentRecovery.state !== "none";
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
+  const archiveStatusReason = getOrderArchiveStatusBlockedReason(order.status);
+  const archiveBlockedReason = archiveStatusReason
+    ?? (hasActivePaymentSetup
+      ? "Wait for active payment setup before archiving"
+      : hasActiveRefundOperation
+        ? "Resolve refund recovery before archiving"
+        : shipmentLocked
+          ? "Resolve shipment recovery before archiving"
+          : null);
   const hasRecoveryLock =
     hasPaymentRecovery || hasActiveRefundOperation || hasShipmentRecovery;
   const customerRoute = orderActions.canEditOrders
@@ -130,7 +140,7 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
         {/* Header Row */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-start gap-3">
-            {orderActions.canSelectOrdersForBulkActions && (
+            {orderActions.canSelectOrdersForBulkActions && !showTrashed && (
               <div
                 onClick={(e) => {
                   e.preventDefault();
@@ -297,44 +307,35 @@ export const OrderMobileCard = React.memo(function OrderMobileCard({
                     variant="ghost"
                     size="sm"
                     className="h-8 w-8 p-0 text-primary"
-                    onClick={() => onRestore(order.id)}
+                    onClick={() => onRestore(order.id, order.version)}
+                    aria-label={`Restore order ${order.id}`}
                   >
                     <Undo className="h-4 w-4" />
                   </Button>
                 )}
-                {orderActions.canDeleteOrders && !hasActiveRefundOperation && !shipmentLocked && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-destructive"
-                    onClick={() => onPermanentDelete(order.id)}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                )}
               </>
-            ) : orderActions.canDeleteOrders && (hasActiveRefundOperation || shipmentLocked) ? (
+            ) : orderActions.canDeleteOrders && archiveBlockedReason ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 cursor-not-allowed p-0 text-[var(--muted-foreground)]"
                 title={
-                  hasActiveRefundOperation
-                    ? "Resolve refund recovery before deleting"
-                    : "Resolve shipment recovery before deleting"
+                  archiveBlockedReason
                 }
+                aria-label={`Archive order ${order.id}: ${archiveBlockedReason}`}
                 disabled
               >
-                <Trash2 className="h-4 w-4" />
+                <Archive className="h-4 w-4" />
               </Button>
             ) : orderActions.canDeleteOrders ? (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0 text-destructive"
-                onClick={() => onDelete(order.id)}
+                onClick={() => onArchive(order.id, order.version)}
+                aria-label={`Archive order ${order.id}`}
               >
-                <Trash2 className="h-4 w-4" />
+                <Archive className="h-4 w-4" />
               </Button>
             ) : null}
           </div>

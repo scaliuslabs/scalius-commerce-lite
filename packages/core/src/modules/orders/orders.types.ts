@@ -104,6 +104,8 @@ export interface OrderListItem {
     fulfillmentStatus: string;
     createdAt: Date;
     updatedAt: Date;
+    /** Browser-loaded CAS token for archive/restore and other list mutations. */
+    version: number;
     itemCount: number;
     city: string;
     zone: string;
@@ -119,8 +121,6 @@ export interface OrderListItem {
 }
 
 export interface OrderDetails extends OrderListItem {
-    /** CAS token required by item-return creation and full order edits. */
-    version: number;
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;

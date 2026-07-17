@@ -8,7 +8,7 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 |------|---------|---------|
 | `index.ts` | barrel re-exports | Public API surface |
 | `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `StorefrontOrderCommitPayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin and storefront order flows |
-| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `deleteOrder()`, `restoreOrder()`, `permanentlyDeleteOrder()`, `bulkDeleteOrders()` | Admin dashboard queries and write operations |
+| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `archiveOrders()`, `restoreOrder()` | Admin dashboard queries and evidence-preserving write operations |
 | `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
 | `cart-validation.ts` | `validateStorefrontCartItems()` | Batched buyer-cart freshness checks for active products, concrete variants, stock availability, and server-authoritative prices |
 | `checkout-attempts.ts` | `buildCheckoutAttemptIdentity()`, `claimCheckoutAttempt()`, `markCheckoutAttemptCommitted()`, `markCheckoutAttemptFailed()` | D1-backed storefront submit idempotency ledger |
@@ -162,12 +162,13 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 
 Admin bulk-shipping UI must submit one `/bulk-ship` request with all selected order ids and render the aggregate per-order result. Do not loop over `/:id/shipments` from the browser for selected rows.
 
-### Delete Flow
+### Archive Flow
 
-- **Soft delete**: Releases inventory via `applyInventoryForStatusChange(db, id, "cancelled")` if reserved or deducted, sets `deletedAt`, sets `inventoryAction` to `"restored"`
-- **Permanent delete**: Releases inventory, deletes order items first (FK ordering), then deletes order
-- **Restore**: Clears `deletedAt`, but does not secretly change order status. `incomplete`, `pending`, `processing`, and `confirmed` orders with `inventoryAction = "restored"` re-reserve variant inventory and become `reserved`; if there are no variant items they become `none`. `cancelled`, `returned`, and `refunded` restored orders remain `restored`. Shipped/delivered/completed/partially-refunded restored orders reject until inventory/status are explicitly reconciled. Existing `reserved` or `deducted` actions are accepted only for compatible statuses, and re-reservations are compensated if the final restore CAS fails.
-- **Bulk delete**: Iterates and applies inventory release per order. For permanent: deletes items first, then orders (FK ordering fixed).
+- **Archive** is admin-list visibility only. It sets `archivedAt` with the browser-loaded order-version CAS and never changes status, inventory, payment, fulfillment, items, buyer access, invoices, returns, refunds, or support evidence.
+- Only `cancelled`, `completed`, `returned`, and `refunded` orders are eligible. Active shipment claims, refund attempts, return receipts, and hosted-payment setup block archive.
+- **Restore** clears `archivedAt` with the current version CAS. No inventory reservation or lifecycle transition is required because archive never released stock or changed the order.
+- Bulk archive accepts 1–90 unique `{ id, expectedVersion }` records and applies one guarded D1 batch. Ordinary admin APIs expose no order hard-delete endpoint.
+- `deletedAt` remains a separate legacy cleanup marker for stale incomplete hosted-payment checkout cleanup. It is not merchant archive state.
 
 ### Stale Hosted-Payment Cleanup
 
@@ -205,10 +206,8 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id` | `updateOrder()` | Full order update with inventory adjustment |
-| DELETE | `/:id` | `deleteOrder()` | Soft delete |
-| POST | `/:id/restore` | `restoreOrder()` | Restore soft-deleted order with status/inventory safety checks |
-| DELETE | `/:id/permanent` | `permanentlyDeleteOrder()` | Hard delete |
-| POST | `/bulk-delete` | `bulkDeleteOrders()` | Bulk soft/permanent delete |
+| POST | `/:id/restore` | `restoreOrder()` | Restore archived order visibility with version CAS |
+| POST | `/archive` | `archiveOrders()` | Bounded versioned archive without commerce mutation |
 | POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
 | PUT | `/:id/status` | `updateOrderStatus()` | Status change with inventory + COD paid-state guard + notifications |
 | GET | `/:id/items` | direct query | Items with product details and images |
@@ -236,7 +235,7 @@ Payment-related queue messages (`payment.stripe.confirmed`, `payment.sslcommerz.
 
 Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until `reconcileOrderShipment()` repairs local order status, inventory state, shipment status, and then clears only the matching claim. The repair path must use persisted provider evidence on the shipment; it must not create another provider shipment.
 
-Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/delete/refresh/bulk delete/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
+Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/archive/refresh/bulk archive/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
 
 Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz and Polar because those are the receipt-page retry gateways, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
 

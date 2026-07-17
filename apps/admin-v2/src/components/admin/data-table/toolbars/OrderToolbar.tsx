@@ -12,7 +12,7 @@ import {
 import {
   Calendar as CalendarIcon,
   Plus,
-  Trash2,
+  Archive,
   Truck,
   Package,
   Download,
@@ -92,13 +92,14 @@ interface OrderToolbarProps {
   dateRange: DateRange | undefined;
   onDateRangeChange: (range: DateRange | undefined) => void;
   // Bulk actions
-  onBulkDelete: () => void;
+  onBulkArchive: () => void;
   onBulkShip: () => void;
   isBulkActionBusy?: boolean;
   selectedPaymentRecoveryCount?: number;
   selectedActivePaymentSetupCount?: number;
   selectedActiveRefundCount?: number;
   selectedShipmentLockCount?: number;
+  selectedArchiveBlockedCount?: number;
   // Export & refresh
   onExportCSV: () => void;
   // Auto-refresh
@@ -238,23 +239,25 @@ export function OrderToolbar({
   onPaymentRecoveryFilterChange,
   dateRange,
   onDateRangeChange,
-  onBulkDelete,
+  onBulkArchive,
   onBulkShip,
   isBulkActionBusy = false,
   selectedPaymentRecoveryCount = 0,
   selectedActivePaymentSetupCount = 0,
   selectedActiveRefundCount = 0,
   selectedShipmentLockCount = 0,
+  selectedArchiveBlockedCount = 0,
   onExportCSV,
   autoRefreshEnabled,
   onToggleAutoRefresh,
   countdown,
   orderActions,
 }: OrderToolbarProps) {
-  const showBulkDelete = selectedCount > 0 && orderActions.canBulkDeleteOrders;
+  const showBulkArchive = selectedCount > 0 && !showTrashed && orderActions.canBulkDeleteOrders;
   const showBulkShip =
     selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
-  const bulkDeleteBlockedByRecovery =
+  const bulkArchiveBlocked =
+    selectedArchiveBlockedCount > 0 ||
     selectedActiveRefundCount > 0 ||
     selectedActivePaymentSetupCount > 0 ||
     selectedShipmentLockCount > 0;
@@ -262,36 +265,50 @@ export function OrderToolbar({
     selectedPaymentRecoveryCount > 0 ||
     selectedActiveRefundCount > 0 ||
     selectedShipmentLockCount > 0;
-  const recoveryBlockTitle = selectedActiveRefundCount > 0
-    ? "Resolve active refund recovery before changing these orders."
+  const archiveBlockTitle = selectedArchiveBlockedCount > 0
+    ? "Complete, cancel, return, or fully refund selected orders before archiving."
+    : selectedActiveRefundCount > 0
+    ? "Resolve active refund recovery before archiving these orders."
     : selectedActivePaymentSetupCount > 0
-      ? "Wait for active hosted payment setup before deleting these orders."
+      ? "Wait for active hosted payment setup before archiving these orders."
       : selectedShipmentLockCount > 0
-        ? "Resolve active shipment recovery before changing these orders."
-      : "Resolve hosted payment recovery before creating shipments.";
-  const recoveryBlockLabel = selectedActiveRefundCount > 0
+        ? "Resolve active shipment recovery before archiving these orders."
+        : undefined;
+  const archiveBlockLabel = selectedArchiveBlockedCount > 0
+    ? `Finish Orders (${selectedArchiveBlockedCount})`
+    : selectedActiveRefundCount > 0
     ? `Resolve Refund (${selectedActiveRefundCount})`
     : selectedActivePaymentSetupCount > 0
       ? `Payment Running (${selectedActivePaymentSetupCount})`
       : selectedShipmentLockCount > 0
         ? `Resolve Shipment (${selectedShipmentLockCount})`
+        : "Archive";
+  const shipBlockTitle = selectedActiveRefundCount > 0
+    ? "Resolve active refund recovery before creating shipments."
+    : selectedShipmentLockCount > 0
+      ? "Resolve active shipment recovery before creating shipments."
+      : "Resolve hosted payment recovery before creating shipments.";
+  const shipBlockLabel = selectedActiveRefundCount > 0
+    ? `Resolve Refund (${selectedActiveRefundCount})`
+    : selectedShipmentLockCount > 0
+      ? `Resolve Shipment (${selectedShipmentLockCount})`
       : `Resolve Payment (${selectedPaymentRecoveryCount})`;
   const bulkActions: ReactNode =
-    showBulkDelete || showBulkShip ? (
+    showBulkArchive || showBulkShip ? (
       <div className="flex flex-wrap items-center gap-2">
-        {showBulkDelete && (
+        {showBulkArchive && (
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
-            onClick={onBulkDelete}
-            disabled={isBulkActionBusy || bulkDeleteBlockedByRecovery}
-            title={bulkDeleteBlockedByRecovery ? recoveryBlockTitle : undefined}
+            onClick={onBulkArchive}
+            disabled={isBulkActionBusy || bulkArchiveBlocked}
+            title={bulkArchiveBlocked ? archiveBlockTitle : undefined}
             className="h-9 px-3 text-xs"
           >
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            {bulkDeleteBlockedByRecovery
-              ? recoveryBlockLabel
-              : `${showTrashed ? "Delete Permanently" : "Move to Trash"} (${selectedCount})`}
+            <Archive className="mr-1.5 h-3.5 w-3.5" />
+            {bulkArchiveBlocked
+              ? archiveBlockLabel
+              : `Archive (${selectedCount})`}
           </Button>
         )}
         {showBulkShip && (
@@ -302,14 +319,14 @@ export function OrderToolbar({
             disabled={isBulkActionBusy || bulkShipBlockedByRecovery}
             title={
               bulkShipBlockedByRecovery
-                ? recoveryBlockTitle
+                ? shipBlockTitle
                 : undefined
             }
             className="h-9 px-3 text-xs"
           >
             <Truck className="mr-1.5 h-3.5 w-3.5" />
             {bulkShipBlockedByRecovery
-              ? recoveryBlockLabel
+              ? shipBlockLabel
               : isBulkActionBusy
                 ? "Shipping..."
                 : `Ship Orders (${selectedCount})`}
@@ -337,7 +354,7 @@ export function OrderToolbar({
       >
         <Link
           to="/admin/orders"
-          search={showTrashed ? undefined : { trashed: true }}
+          search={showTrashed ? undefined : { archived: true }}
         >
           {showTrashed ? (
             <>
@@ -345,7 +362,7 @@ export function OrderToolbar({
             </>
           ) : (
             <>
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> View Trash
+              <Archive className="mr-1.5 h-3.5 w-3.5" /> Archived
             </>
           )}
         </Link>

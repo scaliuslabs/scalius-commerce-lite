@@ -6,7 +6,7 @@ Status: code-backed audit and implementation contract. This file does not claim 
 
 ## Scope and evidence labels
 
-This audit covers the order list, manual creation, full edit, detail workspace, invoices, trash/restore/permanent deletion, bulk actions, order/COD/payment/fulfillment states, payment recovery, refunds, returns, shipments and reconciliation, notifications, support requests, RBAC, responsive/accessibility behavior, failure states, API contracts, domain persistence, and focused tests.
+This audit covers the order list, manual creation, full edit, detail workspace, invoices, archive/restore/evidence retention, bulk actions, order/COD/payment/fulfillment states, payment recovery, refunds, returns, shipments and reconciliation, notifications, support requests, RBAC, responsive/accessibility behavior, failure states, API contracts, domain persistence, and focused tests.
 
 Evidence labels used below:
 
@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, and manual-create idempotency now have explicit authorities. Remaining P0 work is concentrated in a durable order-amendment model and permanent deletion of commerce evidence.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, manual-create idempotency, and evidence-preserving archival now have explicit authorities. Remaining high-risk work is concentrated in a durable order-amendment model, tax-correct manual orders, bounded catalog picking, and complete permission/activity proof.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -107,13 +107,39 @@ The current post-commit deduction failure is fail-safe for overselling because s
 
 ### P0-4 — Permanent deletion destroys regulated and operational evidence
 
-**Implemented:** individual permanent delete requires a soft-deleted order and blocks active shipment, refund, and payment-session claims.
+**Resolved in the archive-authority slice:** ordinary hard-delete routes, services,
+bulk contracts, and UI actions were removed. Merchant archive is now a reversible,
+versioned visibility command backed by dedicated `orders.archivedAt`; it never
+changes status, payment, fulfillment, inventory, items, customer history,
+invoices, returns, refunds, support records, or buyer receipt/account access.
+Only `cancelled | completed | returned | refunded` orders can be archived, and
+active shipment, refund, return-receipt, or hosted-payment setup work blocks the
+command. The active and archived list views use `/admin/orders` URL state
+`?archived=true`, while legacy `deletedAt` remains isolated to stale incomplete
+checkout cleanup.
 
-**Gap:** deleting the order cascades away receipts, recovery challenges, tax snapshots, payments, refund attempts, support requests/events, payment plans, COD tracking, notification outbox/receipts, and delivery shipments. The inventory ledger may retain an orphaned textual order ID, but that is not a usable order audit record.
+The archive request requires each order's current `version`, rejects duplicates,
+and caps a batch at 90 before its guarded D1 batch. Focused policy, validation,
+RBAC, OpenAPI, admin-interaction, generated-client, and source-boundary tests
+prove that normal order APIs expose no DELETE or permanent endpoint and that
+archive cannot call inventory transitions or delete evidence.
 
-Bulk permanent delete is worse: the service does not require `deletedAt`, so a direct API call can permanently delete active orders. It also accepts an unbounded ID array, performs inventory transitions sequentially before the final delete batch, and can leave a partially processed set if an intermediate transition fails.
+Production proof on 2026-07-17 applied migration `0032_tricky_diamondback`,
+deployed API version `9efe08ed-f624-41b7-822e-7eb754a950f7` and admin version
+`cef08865-a42f-4a8e-9592-4b7c75e2e0bf`, then cancelled, archived, and restored
+demo order `FWW6XI`. D1 inspection proved archive/restore advanced only the
+order version and `archivedAt`: status, `inventoryAction`, on-hand, reserved,
+and SKU stock version remained unchanged. The archived URL view, restore UI,
+accessible row action, API health/readiness, admin auth gate, storefront home,
+search, discovery XML/feed, UCP catalog, and a Product JSON-LD route all passed.
+The full HTTP release smoke reports 294 OpenAPI paths; its deployment-history
+subprocess was skipped only after the identical Wrangler deployment-list
+command and authenticated Worker versions were proved separately.
 
-**Decision:** remove hard deletion of commerce orders from normal product UI and API. Retain immutable order/payment/refund/inventory/shipment/tax evidence and support PII redaction/anonymization under an explicit retention policy. If a demo-only purge is still required, isolate it behind environment gating, super-admin step-up, a separate maintenance command, and a typed dry-run report. Never use the ordinary `orders.delete` permission for evidence destruction.
+PII redaction/anonymization still requires an explicit retention policy and an
+auditable command. If a demo-only purge is ever required, isolate it behind
+environment gating, super-admin step-up, a maintenance command, and a typed
+dry-run report; ordinary `orders.delete` must never mean evidence destruction.
 
 ### P0-5 — Invoice allocation and historical invoices are not immutable
 
@@ -146,7 +172,7 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 
 **Implemented**
 
-- Server pagination, URL-backed search/filter/sort, active/trash views, date range, order/payment/payment-method/fulfillment/recovery filters, mobile cards, and 60-second visibility-aware auto-refresh.
+- Server pagination, URL-backed search/filter/sort, active/archive views, date range, order/payment/payment-method/fulfillment/recovery filters, mobile cards, and 60-second visibility-aware auto-refresh.
 - Row status controls use the shared transition map; refund/shipment recovery locks are surfaced.
 - Payment-recovery export is server-backed and capped at 5,000 rows with truthful cap headers.
 - Bulk shipment returns per-order results; failed rows remain selected.
@@ -159,9 +185,9 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 **Gaps**
 
 - Normal “Export CSV” exports only the currently loaded table page, not all filtered results. Label it “Export current page” immediately or add a server-backed bounded export with row count/cap metadata.
-- Row action buttons on desktop and mobile are icon-only without accessible names for edit, restore, permanent delete, and delete. Tooltips are not a substitute for an accessible name.
+- Some desktop/mobile row actions still need a complete accessible-name audit. Tooltips are not a substitute for an accessible name.
 - Recovery and payment labels use text as small as 10px in several places. Operational states must remain legible at browser zoom and under common low-vision settings.
-- Bulk delete/ship schemas accept empty, duplicate, and unbounded arrays. Normalize unique IDs and cap chunks below D1's 100-bound-parameter limit; return per-ID results instead of one opaque failure for deletion.
+- Bulk ship still needs the same strict duplicate and bounded-input audit already applied to archive.
 - List refreshes can move rows while the user is selecting or editing filters. Preserve selection only for still-visible IDs, announce refresh changes, and avoid auto-refresh while a destructive dialog is open.
 - No saved views, column selection, or queue presets. These are P2 productivity features after correctness work.
 
@@ -187,7 +213,7 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 - Manual orders do not use the configured tax engine: tax is persisted as zero with no tax label or immutable tax snapshot. This makes totals and invoices unsuitable for taxed stores.
 - Submitted line prices are trusted staff overrides, but the UI does not distinguish catalog price from override or require a reason. Make override explicit, show original price, require the appropriate permission, and record actor/reason/before/after.
 - Admin-created item rows do not persist the same complete product/variant/money snapshot expected of an immutable order. Renames and product deletion can weaken historical display.
-- Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters; trash/restore semantics are also not clearly represented. Prefer ledger/query-derived stats or atomic deltas with reconciliation.
+- Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters. Archive no longer changes these facts; prefer ledger/query-derived stats or atomic deltas with reconciliation.
 - UI calculation uses floating-point/two-decimal presentation while the server uses the saved currency precision. Expose a server quote/preview using the same minor-unit calculator and return field-level differences before commit.
 
 ### 3. Full edit
@@ -243,36 +269,36 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 - PDF generation failure only logs in development; production users receive no error or retry guidance.
 - Client HTML-to-canvas PDF remains a convenience renderer. The immutable hashed payload is authoritative, but a deterministic server-generated PDF artifact is still a useful future compliance/export feature.
 
-### 6. Trash, restore, and permanent delete
+### 6. Archive, restore, and evidence retention
 
 **Implemented**
 
-- Soft delete restores reserved/deducted inventory and marks `deletedAt`; restore conditionally re-reserves stock and uses a version CAS. Active refund/payment/shipment claims block these actions.
+- Archive/restore changes only `archivedAt`, advances the order version with a CAS, and leaves every commerce and buyer-visible fact unchanged.
+- Archive is limited to terminal `cancelled | completed | returned | refunded` orders and blocks active shipment, refund, return-receipt, and hosted-payment setup work.
+- Individual and bulk UI use the same versioned `/archive` command; archived rows expose restore only. Normal API/RBAC mappings have no order DELETE or permanent-delete route.
 
 **Proven**
 
-- There are focused tests around many underlying inventory transitions, but no focused behavioral suite proving individual/bulk soft delete, restore compensation, insufficient-stock restore, permanent-delete preservation, and concurrent trash/restore.
+- Focused policy, validation, RBAC, OpenAPI, source-boundary, generated-client, and desktop/mobile interaction tests cover the archive/restore contract and absence of evidence deletion.
 
 **Gaps**
 
-- Permanent evidence destruction and bulk bypass (P0-4).
-- “Restore” can fail when stock cannot be re-reserved; the UI needs a specific conflict explanation and a deliberate resolution path, not a generic toast.
-- Soft-delete, cancellation, refund, return, and customer privacy are different concepts. Trash should be an admin visibility/archive state, not a financial or fulfillment action. Do not silently use trash to perform an unrecorded cancellation.
-- Destructive commands need actor, reason, expected version, request key, dry-run impact summary, and retained activity evidence.
+- Add a persisted order activity event for archive/restore actor and optional reason; the order CAS currently preserves conflict safety but is not a complete activity timeline.
+- Design PII redaction and retention separately from archive. It must preserve financial/fulfillment evidence and provide a typed impact preview.
+- Add a D1-backed concurrency test that races archive/restore with an operational command; the guarded queries fail closed, but source and policy tests are not full persistence proof.
 
 ### 7. Bulk actions
 
 **Implemented**
 
-- Bulk ship returns success/failure per order and enqueues shipped notifications only for newly shipped results. UI keeps failures selected. Bulk soft/permanent delete is available according to permissions.
+- Bulk ship returns success/failure per order and enqueues shipped notifications only for newly shipped results. UI keeps failures selected. Bulk archive is a bounded, duplicate-free, versioned atomic visibility command.
 
 **Proven**
 
-- UI busy/partial-failure behavior and shipment notification boundaries have focused tests. Deletion atomicity and history preservation do not.
+- UI busy/partial-failure behavior, shipment notification boundaries, and archive contract/history-preservation boundaries have focused tests.
 
 **Gaps**
 
-- Bulk permanent delete is unsafe (P0-4).
 - Bulk ship is sequential and has no operation-level idempotency key or resumable job record. Retrying an unknown response relies on downstream claims but offers no merchant-visible batch reconciliation.
 - Bulk commands need a durable operation with snapshot count, actor, provider/options, per-order state, retryability, and downloadable result. Keep provider calls bounded and never hold D1 connections across network work.
 - “Select all” means the current page. Do not imply all filtered orders unless a server-side selection token is implemented.
@@ -400,7 +426,7 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 
 - Full update under `orders.edit` must not change status and bypass `orders.change_status`.
 - Invoice GET under `orders.view` must not allocate a number.
-- Permanent evidence destruction must not share ordinary delete permission.
+- Archive/restore permissions govern visibility only; future PII redaction or maintenance purge must use distinct step-up authority.
 - Consider dedicated permissions for payment recovery/manual payment/COD, support resolution, and notification retry/resend.
 - Every sensitive command needs server-derived actor ID, expected revision, request key, reason where appropriate, and an append-only event.
 - Add a permission matrix test that invokes every order route with the nearest lower-privilege role, not only source mapping assertions.
@@ -477,7 +503,7 @@ Representative commands: create manual order, amend draft, confirm, cancel pre-s
 - a D1-backed concurrent full-edit fixture beyond the authenticated production
   two-editor smoke;
 - tax-preserving manual create/edit and immutable order-line snapshots;
-- individual/bulk trash, restore, insufficient-stock restore, concurrent restore, and history-preserving privacy/purge behavior;
+- D1-backed archive/restore concurrency and history-preserving privacy/redaction behavior;
 - invoice allocation concurrency, atomicity, immutable prefix/business snapshot, authorization, deterministic rendering, and PDF failure UI;
 - generic status allowlist and proof that workflow-owned states cannot be reached through CRUD;
 - per-quantity partial fulfillment and the return receipt/disposition lifecycle;
@@ -492,9 +518,9 @@ Source-string boundary tests are useful wiring alarms but do not replace service
 
 ### Phase 0 — close bypasses before adding UI
 
-1. Add failing tests for generic status bypass, `orders.edit` status bypass, active bulk permanent delete, invoice same-order concurrency, stale edit, and manual-create replay.
+1. Add failing tests for generic status bypass, `orders.edit` status bypass, hard-delete removal, invoice same-order concurrency, stale edit, and manual-create replay — completed for the named boundaries.
 2. Restrict generic status mutations and remove workflow-owned states/post-shipment reversal from generic UI/API.
-3. Disable ordinary hard delete; retain soft archive and design PII redaction/demo purge separately.
+3. Disable ordinary hard delete; retain visibility-only archive and design PII redaction/demo purge separately — completed.
 4. Manual-create idempotency — completed with actor-scoped durable replay.
 5. Make invoice reads non-mutating; implement atomic explicit finalization and immutable snapshots.
 

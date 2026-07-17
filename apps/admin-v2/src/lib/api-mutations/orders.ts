@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   approveOrderReturn,
-  bulkDeleteOrders,
+  archiveOrders,
   bulkShipOrders,
   cancelOrderReturn,
   createFulfillmentShipment,
@@ -23,7 +23,7 @@ import {
   updateOrder,
   updateOrderCod,
   updateOrderStatus,
-  type BulkDeleteOrdersInput,
+  type ArchiveOrdersInput,
   type BulkShipOrdersInput,
   type BulkShipOrdersPayload,
   type CreateFulfillmentShipmentInput,
@@ -510,11 +510,12 @@ export function useReconcileOrderReturn() {
 export function useRestoreOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => restoreOrder({ data: { id } }),
-    onSuccess: (_data, id) => {
+    mutationFn: (input: { id: string; expectedVersion: number }) =>
+      restoreOrder({ data: input }),
+    onSuccess: (_data, input) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(input.id) });
       toast.success("Order restored");
     },
     onError: (err) =>
@@ -522,20 +523,16 @@ export function useRestoreOrder() {
   });
 }
 
-export function useBulkDeleteOrders() {
+export function useArchiveOrders() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: BulkDeleteOrdersInput) => bulkDeleteOrders({ data }),
+    mutationFn: (data: ArchiveOrdersInput) => archiveOrders({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
-      toast.success(
-        variables.permanent
-          ? `${variables.orderIds.length} orders permanently deleted`
-          : `${variables.orderIds.length} orders moved to trash`,
-      );
+      toast.success(`${variables.orders.length} order${variables.orders.length === 1 ? "" : "s"} archived`);
     },
     onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to delete orders")),
+      toast.error(getServerFnError(err, "Failed to archive orders")),
   });
 }

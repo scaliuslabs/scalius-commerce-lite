@@ -65,12 +65,44 @@ export const updateOrderSchema = orderContentSchema.extend({
 
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
 
-export const bulkDeleteOrderSchema = z.object({
-    orderIds: z.array(z.string()),
-    permanent: z.boolean().default(false),
+const orderRevisionSchema = z.object({
+    id: z.string().min(1, "Order is required"),
+    expectedVersion: z
+        .number()
+        .int("Order version must be a whole number")
+        .min(1, "Order version is required"),
 });
 
-export type BulkDeleteOrderInput = z.infer<typeof bulkDeleteOrderSchema>;
+/**
+ * Archive is an organizational visibility change, not a commerce-state
+ * mutation. Requiring every browser-loaded revision prevents a stale list from
+ * hiding an order that changed while the merchant was reviewing it.
+ */
+export const archiveOrdersSchema = z.object({
+    orders: z
+        .array(orderRevisionSchema)
+        .min(1, "Select at least one order")
+        .max(90, "Archive at most 90 orders at a time")
+        .superRefine((entries, ctx) => {
+            const seen = new Set<string>();
+            entries.forEach((entry, index) => {
+                if (seen.has(entry.id)) {
+                    ctx.addIssue({
+                        code: "custom",
+                        message: "Each order can appear only once",
+                        path: [index, "id"],
+                    });
+                }
+                seen.add(entry.id);
+            });
+        }),
+});
+
+export type ArchiveOrdersInput = z.infer<typeof archiveOrdersSchema>;
+
+export const restoreOrderSchema = orderRevisionSchema.pick({ expectedVersion: true });
+
+export type RestoreOrderInput = z.infer<typeof restoreOrderSchema>;
 
 export const bulkShipOrderSchema = z.object({
     orderIds: z.array(z.string()),
