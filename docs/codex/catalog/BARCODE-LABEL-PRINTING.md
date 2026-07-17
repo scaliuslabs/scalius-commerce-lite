@@ -43,9 +43,12 @@ a first-time merchant can see every decision before printing.
   provides dense 2x7 and 4x12 page grids, one-per-unit quantities, PDF, and ZPL.
   Those outputs are operationally capable but expose format choices more than
   most small merchants need on every run.
-- Vendure's current ProductVariant core model exposes SKU but no first-class
-  barcode or label-printing workspace; its extension points are the intended
-  route for such a feature. [Medusa's variant guide](https://docs.medusajs.com/user-guide/products/variants)
+- [Vendure's current ProductVariant core model](https://docs.vendure.io/current/core/core-concepts/products)
+  exposes SKU but no first-class barcode or label-printing workspace; its
+  [custom-field guide](https://docs.vendure.io/current/core/developer-guide/custom-fields)
+  explicitly uses GTIN as a variant extension example. Its extension points
+  are therefore the intended route for such a feature.
+  [Medusa's variant guide](https://docs.medusajs.com/user-guide/products/variants)
   exposes barcode, EAN, and UPC editing, and its
   [POS recipe](https://docs.medusajs.com/resources/recipes/pos) demonstrates
   barcode lookup/scanner integration, but the current core admin guide does not
