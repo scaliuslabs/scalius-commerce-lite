@@ -45,11 +45,13 @@ a first-time merchant can see every decision before printing.
   most small merchants need on every run.
 - Vendure's current ProductVariant core model exposes SKU but no first-class
   barcode or label-printing workspace; its extension points are the intended
-  route for such a feature. Medusa stores searchable variant barcode/EAN/UPC
-  values and imports them by CSV, but its current admin guide does not provide a
-  core label composer. Searches of Saleor's current core and dashboard sources
-  found no first-class barcode or label-printing workflow. These platforms are
-  architecture references, not a UX bar for this feature.
+  route for such a feature. [Medusa's variant guide](https://docs.medusajs.com/user-guide/products/variants)
+  exposes barcode, EAN, and UPC editing, and its
+  [POS recipe](https://docs.medusajs.com/resources/recipes/pos) demonstrates
+  barcode lookup/scanner integration, but the current core admin guide does not
+  provide a label composer. Searches of Saleor's current core and dashboard
+  sources found no first-class barcode or label-printing workflow. These
+  platforms are architecture references, not a UX bar for this feature.
 - [Avery print guidance](https://www.avery.com/help/article/practice-test-sheet?page=1)
   requires an initial plain-paper alignment test and Actual Size/100% scale.
   [GS1 guidance](https://www.gs1.org/standards/barcodes/10-steps-to-barcode-your-product/english)
@@ -170,6 +172,12 @@ feeds, structured data, or external marketplaces.
   horizontal overflow, and no browser console warning/error.
 - Production API smoke: health, four readiness samples, 295-route OpenAPI, and
   current Worker deployment all passed on 2026-07-17.
+- The authenticated production run on admin version
+  `a406c31e-2f09-4522-9fbf-15c2e0831123` opened an individual QuietKey SKU
+  from its inventory-row print action, resolved the saved internal Code 128
+  value, and rendered one real label in the A4 adhesive 2 x 7 preview. Quantity,
+  start-cell, test-page, and print/PDF actions were enabled without mutating
+  inventory.
 - Existing long Scalius Code 128 values are preserved because changing a
   printed identity would invalidate physical stock labels. They may require the
   wider A4 preset. Newly generated internal identities are compact 14-digit

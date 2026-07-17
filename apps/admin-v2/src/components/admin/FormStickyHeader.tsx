@@ -22,6 +22,7 @@ export interface FormActionBarProps {
   /** Optional explanation exposed on a disabled save action. */
   saveDisabledReason?: string;
   saveLabel?: string;
+  onDiscard?: () => void;
   onSave: () => void;
 }
 
@@ -41,6 +42,7 @@ export function FormActionBar({
   canSave,
   saveDisabledReason,
   saveLabel,
+  onDiscard,
   onSave,
 }: FormActionBarProps) {
   const defaultSaveLabel = isSubmitting
@@ -84,7 +86,7 @@ export function FormActionBar({
               asChild
               className="h-8 text-xs"
             >
-              <Link to={cancelUrl}>Discard</Link>
+              <Link to={cancelUrl} onClick={onDiscard}>Discard</Link>
             </Button>
           )}
 

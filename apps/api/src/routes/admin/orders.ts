@@ -616,7 +616,8 @@ const createOrderRoute = createRoute({
 app.openapi(createOrderRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await OrdersService.createOrder(db, data);
+    const user = c.get("user") as { id?: string } | undefined;
+    const result = await OrdersService.createOrder(db, data, user?.id ?? null);
     await invalidateProductAvailabilityCaches(db, { orderIds: [result.id] }, c);
     return created(c, result);
 });

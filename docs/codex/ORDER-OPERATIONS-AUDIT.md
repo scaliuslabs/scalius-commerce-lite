@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, and safe full-edit locking now have explicit authorities. Remaining P0 work is concentrated in a durable order-amendment model, manual-create idempotency, and permanent deletion of commerce evidence.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, and manual-create idempotency now have explicit authorities. Remaining P0 work is concentrated in a durable order-amendment model and permanent deletion of commerce evidence.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -72,13 +72,36 @@ overflow. The follow-up list-link correction was deployed as admin version
 `f9f07953-60a6-4c57-9068-aa68d42c8801`; protected customer names now open the
 read-only order workspace while editable manual orders still open the editor.
 
-### P0-3 — Manual order creation is not idempotent
+### P0-3 — Manual order creation idempotency is resolved
 
-**Implemented:** inventory reservation and the order/customer/item batch use defensive compensation. The inventory claim key is unique to the newly generated order ID.
+**Implemented:** the create contract requires a client UUID `requestKey`. The
+browser persists only a submitted opaque key in tab-local storage for 24-hour
+lost-response recovery; untouched drafts do not write anything, successful
+creation and explicit discard clear the key, and no customer/order facts enter
+browser storage.
 
-**Gap:** the create contract has no merchant request key. If the response is lost after commit, a retry generates a new order ID, a new claim key, another order, and another stock deduction. The same risk exists for keyboard retry, reverse-proxy retry, and impatient double submission outside the single mounted form state.
+Core hashes the request key with the authenticated actor and hashes a canonical
+request projection. `admin_order_create_attempts` owns one stable order ID,
+lease, status, and replay response. A matching committed retry returns the
+original response before mutable catalog, delivery, customer, or inventory
+validation. A changed payload conflicts; active work returns retry guidance;
+failed/stale work reclaims the same order and reservation identity. The attempt
+guard, order/customer/items, and committed replay response share one D1 batch.
+If a lease was reclaimed, the expired worker fails before releasing the new
+owner's shared reservation.
 
-**Decision:** require a client-generated `requestKey` and canonical request hash, persist an admin-create attempt record with a unique key, and return the original result on a matching replay. Reject a reused key with a different payload. Keep the key through API, core, inventory, notification, and audit events. Test response-loss replay and concurrent same-key calls.
+Focused tests cover actor scoping, canonical equivalence, committed replay,
+active contention, failed reclaim, changed-payload rejection, browser recovery
+expiry/clear behavior, SKU/inventory compensation, and the atomic wiring
+boundary.
+
+**Live release proof — 2026-07-17:** migration `0031_rich_calypso.sql` and API
+version `76d9a874-5b5a-4e7e-be6f-909c65087686` were deployed. Admin version
+`a406c31e-2f09-4522-9fbf-15c2e0831123` created order `EYCHVY` through the
+authenticated form. A read-only remote D1 query proved its attempt was
+`committed`, had one attempt, retained a replay response, and released the
+claim. The same live run proved the lazy-selected `Color: Black` SKU appears
+immediately in the unsaved line instead of the former em dash.
 
 The current post-commit deduction failure is fail-safe for overselling because stock remains reserved, but the endpoint still returns success after logging the error. Persist and show a reconciliation state instead of leaving the merchant unaware.
 
@@ -148,14 +171,15 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 
 - Customer/contact/address fields, Bangladesh city/zone/area selection, line creation, lazy variant loading, quantity/price editing, shipping, additional discount, keyboard submit, unsaved-change guard, and a sticky action bar.
 - Server validates active product/SKU ownership, rejects missing/deleted/mismatched SKUs, performs currency-aware rounding, prevents a discount above subtotal plus shipping, reserves inventory, commits order/items/customer changes in a batch, and converts the reservation to a deduction.
+- Actor-scoped request idempotency replays the original committed result after a lost response and preserves one stock/order identity across retries.
+- Lazy-loaded SKU projections are retained beside unsaved lines, so the exact merchant option label remains visible immediately after adding it.
 
 **Proven**
 
-- SKU validation, tracked/untracked item behavior, reservation failure, compensation, quantity boundaries, and a number of inventory-claim paths have focused core tests.
+- SKU validation, tracked/untracked item behavior, reservation failure, compensation, quantity boundaries, idempotent replay/reclaim/conflict, browser request-key recovery, and a number of inventory-claim paths have focused tests.
 
 **Gaps**
 
-- No idempotency key (P0-3).
 - The picker loads only the first 100 products and then searches locally. Products outside that window cannot be ordered. Loading failure is swallowed and shown as an empty catalog. Use a debounced server picker with explicit loading, retry, empty, and unavailable states.
 - The API schema permits an empty item array. Decide whether this is a draft/quote feature; otherwise require at least one sellable line on the server.
 - Manual creation silently defaults to COD/unpaid because payment method/status/terms are not in the form contract. The merchant is not told that every manual order becomes COD.
@@ -165,12 +189,6 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 - Admin-created item rows do not persist the same complete product/variant/money snapshot expected of an immutable order. Renames and product deletion can weaken historical display.
 - Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters; trash/restore semantics are also not clearly represented. Prefer ledger/query-derived stats or atomic deltas with reconciliation.
 - UI calculation uses floating-point/two-decimal presentation while the server uses the saved currency precision. Expose a server quote/preview using the same minor-unit calculator and return field-level differences before commit.
-- Live creation correctly submits the chosen SKU, but the just-added row can
-  temporarily show an em dash for its variant label because the table reads the
-  loader's original product projection rather than the lazily loaded SKU
-  projection. The edit form reloads the saved `Color: White` value correctly.
-  Keep the selected SKU projection in the form row so the merchant sees the
-  exact choice immediately; do not infer it from position or product defaults.
 
 ### 3. Full edit
 
@@ -445,6 +463,7 @@ Representative commands: create manual order, amend draft, confirm, cancel pre-s
 
 - state-machine validation: [order-state-machine.test.ts](../../packages/core/src/modules/orders/order-state-machine.test.ts)
 - storefront checkout/ingest idempotency and inventory: [checkout-attempts.test.ts](../../packages/core/src/modules/orders/checkout-attempts.test.ts), [orders.ingest.test.ts](../../packages/core/src/modules/orders/orders.ingest.test.ts)
+- admin manual-create idempotency and browser recovery: [admin-order-create-attempts.test.ts](../../packages/core/src/modules/orders/admin-order-create-attempts.test.ts), [create-order-request-key.test.ts](../../apps/admin-v2/src/components/admin/order-form/create-order-request-key.test.ts)
 - admin SKU validation and inventory compensation: [orders.admin-sku-validation.test.ts](../../packages/core/src/modules/orders/orders.admin-sku-validation.test.ts)
 - fulfillment claims, reconciliation, and COD: [orders.fulfillment.test.ts](../../packages/core/src/modules/orders/orders.fulfillment.test.ts)
 - payment recovery: [order-payment-recovery.test.ts](../../packages/core/src/modules/orders/order-payment-recovery.test.ts), [order-payment-recovery-link.test.ts](../../packages/core/src/modules/orders/order-payment-recovery-link.test.ts), [orders-payment-recovery-link.test.ts](../../apps/api/src/routes/admin/orders-payment-recovery-link.test.ts)
@@ -455,7 +474,6 @@ Representative commands: create manual order, amend draft, confirm, cancel pre-s
 
 **Missing focused proof**
 
-- manual-create idempotency and unknown-response replay;
 - a D1-backed concurrent full-edit fixture beyond the authenticated production
   two-editor smoke;
 - tax-preserving manual create/edit and immutable order-line snapshots;
@@ -477,7 +495,7 @@ Source-string boundary tests are useful wiring alarms but do not replace service
 1. Add failing tests for generic status bypass, `orders.edit` status bypass, active bulk permanent delete, invoice same-order concurrency, stale edit, and manual-create replay.
 2. Restrict generic status mutations and remove workflow-owned states/post-shipment reversal from generic UI/API.
 3. Disable ordinary hard delete; retain soft archive and design PII redaction/demo purge separately.
-4. Add manual-create idempotency.
+4. Manual-create idempotency — completed with actor-scoped durable replay.
 5. Make invoice reads non-mutating; implement atomic explicit finalization and immutable snapshots.
 
 ### Phase 1 — versioned, truthful order mutation
