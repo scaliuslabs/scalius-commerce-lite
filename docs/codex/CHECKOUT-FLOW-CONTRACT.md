@@ -1,6 +1,6 @@
 # Checkout Flow Contract
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 
 This note defines the merchant-facing checkout controls, their buyer-facing
 effects, and the server authority that prevents a stale storefront from
@@ -16,6 +16,7 @@ their own owners.
 | Payment flow (`checkoutMode`) | `site_settings.checkout_mode`: `all`, `guest_cod_only`, or `gateways_only` | Public checkout config exposes every compatible method, COD only, or online gateways only. | Order creation and payment-session creation reject a method excluded by the current flow even if a stale tab submits it. |
 | Require an online advance (`partialPaymentEnabled`) | `site_settings.partial_payment_enabled` | COD is hidden and an enabled online gateway is required. | Order creation rejects COD; payment-session creation derives the current deposit intent from trusted settings and order state. |
 | Advance amount (`partialPaymentAmount`) | `site_settings.partial_payment_amount` | Buyer pays `min(configured advance, order total)` online. Any remaining balance is due on delivery. | Saves require a finite positive amount and a usable online gateway. SSLCommerz's BDT range is applied only when SSLCommerz is one of the usable methods. |
+| Product free delivery (`products.free_delivery`) | Fresh cart validation derives `hasFreeDeliveryProduct` from sellable product rows. | A cart containing a free-delivery product presents every active delivery method as `Free`; the normal fee remains available as compact explanatory text. | Delivery preflight forces the shipping charge to zero and does not trust a caller-supplied fee. |
 
 The admin reads and replaces this document through the dedicated
 `GET/PUT /api/v1/admin/settings/checkout-flow` contract. Every `PUT` includes
@@ -43,6 +44,10 @@ order gate is `assertCheckoutOrderPolicy()`.
   full order total online; no negative or zero balance is created.
 - Disabling guest checkout does not weaken phone matching: the checkout phone
   must match the signed-in customer's phone.
+- Shipping method cards, the order summary, discount evaluation, abandoned-
+  checkout snapshots, and payment handoff must use
+  `getEffectiveCartShippingFee()`. A raw method fee must not reappear in one
+  projection after cart validation has established the free-delivery waiver.
 
 ## Fail-Closed Readiness
 
@@ -105,6 +110,27 @@ prerequisites are ready.
   - `packages/core/src/modules/settings/checkout-config.service.test.ts`
   - `packages/database/__tests__/checkout-flow-revision-migration.test.ts`
   - `apps/api/src/routes/orders-create.test.ts`
+  - `apps/storefront/src/store/cart.test.ts`
+  - `apps/storefront/src/lib/cart/presentation-boundaries.test.ts`
+  - `apps/storefront/src/lib/cart/client-init.test.ts`
+
+## Buyer shipping-fee projection (2026-07-19)
+
+- The rich-store buyer run exposed a contradictory checkout: Kori Oak Floating
+  Shelf correctly made the summary shipping amount `Free`, while the method
+  cards still showed BDT 110, 50, and 200.
+- Storefront version `65305d28-a65b-4b8a-b091-e6d20bca76f9` uses the shared
+  effective-fee authority in method cards, totals, discount validation,
+  abandoned-checkout data, and online-payment transfer.
+- Authenticated live checks proved three states: an exact free-delivery SKU
+  shows all methods as `Free` with their normal fees available to assistive
+  technology/tooltips; an ordinary SKU shows BDT 110/50/200 and a BDT 110
+  summary; and a mixed cart follows the current cart-level waiver with zero
+  shipping everywhere. The local test cart was cleared afterwards.
+- Eighty-one focused cart/order tests, the 310-file Astro diagnostic, focused
+  lint, deployment verification, `/health`, cache warming, and the complete
+  `pnpm release:check` passed. The only release-check warnings remain the
+  previously recorded ops-monitor email configuration.
 
 ## Remaining Release Gaps
 

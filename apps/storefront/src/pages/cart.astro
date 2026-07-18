@@ -604,6 +604,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 <script>
   import { initCartFunctionality } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
+  import { getEffectiveCartShippingFee } from "@/store/cart";
   import {
     clearCheckoutTransferSession,
     writeCheckoutTransferSession,
@@ -620,10 +621,6 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
     zoneName?: string | null;
     area?: string | null;
     areaName?: string | null;
-  };
-
-  type CartItemForShipping = {
-    freeDelivery?: boolean;
   };
 
   window.__scaliusCartPageAbortController?.abort();
@@ -903,17 +900,16 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
         // Fall back to the first shipping method's fee when no selection has been made
         const defaultShippingFee = parseFloat(meta?.dataset.defaultShippingFee || "0");
         const defaultShippingId = meta?.dataset.defaultShippingId || undefined;
-        let shippingFee = window.lastShippingEventDetail?.fee ?? defaultShippingFee;
+        const selectedShippingFee = window.lastShippingEventDetail?.fee ?? defaultShippingFee;
         const shippingMethodId = window.lastShippingEventDetail?.id ?? defaultShippingId;
 
-        // Zero out shipping if any cart item has free delivery
         const cartDataForShipping = JSON.parse(
           (document.getElementById('cartItemsInput') as HTMLInputElement)?.value || '{}'
-        ) as Record<string, CartItemForShipping>;
-        const hasFreeDeliveryItem = Object.values(cartDataForShipping).some(
-          (item) => item.freeDelivery
         );
-        if (hasFreeDeliveryItem) shippingFee = 0;
+        const shippingFee = getEffectiveCartShippingFee(
+          cartDataForShipping,
+          selectedShippingFee,
+        );
 
         checkoutData["shippingCharge"] = String(shippingFee);
         if (shippingMethodId) checkoutData["shippingMethodId"] = shippingMethodId;

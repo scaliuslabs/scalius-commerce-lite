@@ -1,6 +1,6 @@
 # Catalog Live Demo Run
 
-Last verified: 2026-07-17 (Asia/Dhaka)
+Last verified: 2026-07-19 (Asia/Dhaka)
 
 This is fresh operational evidence for the disposable Scalius demo store. It records only facts needed to reproduce or safely continue the run. Production code, D1 state, and a new browser/API check remain authoritative.
 
@@ -16,6 +16,20 @@ The rich demo catalog is now applied and independently reconciled in production.
 - 177 sellable SKUs, 46 optioned products, 4 simple products, 49 ordered rich sections, 18 offer cases, and 3 responsive hero stories are represented by the checked-in manifest.
 
 Private operational evidence remains ignored under `.wrangler/demo-store-apply/` and `.wrangler/demo-store-evidence/`. The latest complete apply evidence is `run-2026-07-15T14-42-45-778Z-4cf1f909`; the independent read-only evidence is `run-2026-07-15T14-46-12-389Z-a194f298`. Session cleanup returned a best-effort warning, so do not claim the short-lived remote session was explicitly deleted; no credential or cookie is stored in the repository.
+
+### Free-delivery checkout projection (2026-07-19)
+
+- A fresh Kori Oak Floating Shelf buyer run proved exact Walnut/Natural SKU
+  media, cart creation, and the checkout summary, then exposed method cards
+  showing their normal fees while the summary truthfully showed `Free`.
+- Storefront `65305d28-a65b-4b8a-b091-e6d20bca76f9` now projects the same
+  effective cart shipping fee into method cards, totals, discounts, abandoned
+  checkout state, and payment handoff. Normal fees remain compact explanatory
+  metadata when waived.
+- Live production checks covered free-only, paid-only, and mixed carts; all
+  three agreed across method cards and summary totals. The temporary test cart
+  was cleared. Eighty-one focused tests, the 310-file Astro check, lint,
+  deployment verification, cache warming, and `pnpm release:check` passed.
 
 ### Buyer-support and label-printing checkpoint (2026-07-17)
 

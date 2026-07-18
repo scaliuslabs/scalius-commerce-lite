@@ -6,6 +6,7 @@ import {
   removeCartItemByKey,
   updateCartItemByKey,
   applyDiscount,
+  getEffectiveCartShippingFee,
   removeDiscount,
   type CartItem,
   type VariantCartItem,
@@ -158,7 +159,13 @@ function getCheckoutFormData(): CheckoutFormData {
     discount,
   };
 
-  data.shipping = window.lastShippingEventDetail;
+  const selectedShipping = window.lastShippingEventDetail;
+  data.shipping = selectedShipping
+    ? {
+        ...selectedShipping,
+        fee: getEffectiveCartShippingFee(items, selectedShipping.fee),
+      }
+    : undefined;
 
   return data;
 }
@@ -577,18 +584,9 @@ function renderCartItemIssues(cartKey: string): string {
 
 export async function updateTotals() {
   const { items, totalAmount, discount } = cartStore.get();
-
-  // Check if any item in the cart has free delivery
-  const hasFreeDeliveryItem = Object.values(items).some(
-    (item) => item.freeDelivery,
-  );
-
-  let shippingFee = window.lastShippingEventDetail?.fee ?? 0;
-
-  // If there's a free delivery item, the shipping cost for the entire order is 0.
-  if (hasFreeDeliveryItem) {
-    shippingFee = 0;
-  }
+  const selectedMethodFee = window.lastShippingEventDetail?.fee ?? 0;
+  const shippingFee = getEffectiveCartShippingFee(items, selectedMethodFee);
+  const shippingFeeIsWaived = selectedMethodFee > 0 && shippingFee === 0;
 
   const subtotalEl = document.getElementById("subtotal");
   const shippingEl = document.getElementById("shippingCost");
@@ -601,7 +599,7 @@ export async function updateTotals() {
 
   subtotalEl.textContent = formatPriceShort(totalAmount);
   shippingEl.textContent =
-    hasFreeDeliveryItem && shippingFee === 0
+    shippingFeeIsWaived || shippingFee === 0
       ? "Free"
       : formatPriceShort(shippingFee);
 
@@ -806,7 +804,10 @@ async function handleApplyDiscount() {
   applyBtn.disabled = true;
 
   try {
-    const shippingCost = window.lastShippingEventDetail?.fee ?? 0;
+    const shippingCost = getEffectiveCartShippingFee(
+      items,
+      window.lastShippingEventDetail?.fee ?? 0,
+    );
     const result = await validateDiscount(
       code,
       totalAmount,
