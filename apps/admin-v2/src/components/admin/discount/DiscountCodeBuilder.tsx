@@ -49,6 +49,7 @@ import {
   fromDateInputValue,
   getDiscountTypeLabel,
   hydrateSelectedOptionLabels,
+  needsDiscountWriteNormalization,
   parseOptionalNumber,
   toDateInputValue,
   toDiscountWritePayload,
@@ -183,6 +184,12 @@ export function DiscountCodeBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+  const requiresNormalization = useMemo(
+    () => Boolean(discountId && defaultValues && needsDiscountWriteNormalization(type, defaultValues)),
+    // Like initialValues, this is the loaded revision's immutable baseline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const form = useForm<DiscountEditorValues>({
     resolver: zodResolver(discountEditorSchema),
     defaultValues: initialValues,
@@ -214,6 +221,7 @@ export function DiscountCodeBuilder({
   const readinessIssues = validation.success
     ? []
     : Array.from(new Set(validation.error.issues.map((issue) => issue.message)));
+  const hasPendingChanges = form.formState.isDirty || requiresNormalization;
 
   const handleProductsChange = useCallback(
     (next: DiscountProductOption[]) => {
@@ -294,7 +302,7 @@ export function DiscountCodeBuilder({
   return (
     <Form {...form}>
       <UnsavedChangesGuard
-        isDirty={form.formState.isDirty}
+        isDirty={hasPendingChanges}
         isSubmitting={isSubmitting}
       />
       <form
@@ -356,6 +364,17 @@ export function DiscountCodeBuilder({
               >
                 Reload latest
               </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {requiresNormalization ? (
+          <Alert>
+            <RefreshCw aria-hidden="true" />
+            <AlertTitle>Saved rule needs repair</AlertTitle>
+            <AlertDescription>
+              This rule contains legacy values checkout no longer accepts. Saving keeps the
+              visible offer and cleans the stored rule.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -712,7 +731,11 @@ export function DiscountCodeBuilder({
                     ) : (
                       <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />
                     )}
-                    {readinessIssues.length === 0 ? "Ready to save" : "Needs attention"}
+                    {readinessIssues.length === 0
+                      ? requiresNormalization
+                        ? "Repair ready to save"
+                        : "Ready to save"
+                      : "Needs attention"}
                   </div>
                   {readinessIssues.length > 0 ? (
                     <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -752,7 +775,7 @@ export function DiscountCodeBuilder({
                   </FormItem>
                 )}
               />
-              {form.formState.isDirty ? (
+              {hasPendingChanges ? (
                 <span className="hidden text-xs text-muted-foreground sm:inline">Unsaved changes</span>
               ) : null}
             </div>
@@ -780,7 +803,7 @@ export function DiscountCodeBuilder({
                 disabled={
                   isSubmitting ||
                   revisionConflict !== null ||
-                  !form.formState.isDirty
+                  !hasPendingChanges
                 }
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}

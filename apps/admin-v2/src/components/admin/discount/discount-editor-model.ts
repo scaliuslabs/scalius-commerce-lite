@@ -117,6 +117,41 @@ export interface DiscountEditorDefaults {
   isActive?: boolean;
   appliesToProducts?: string[];
   appliesToCollections?: string[];
+  maxUsesPerOrder?: number | null;
+  combineWithProductDiscounts?: boolean;
+  combineWithOrderDiscounts?: boolean;
+  combineWithShippingDiscounts?: boolean;
+  customerSegment?: string | null;
+}
+
+export function needsDiscountWriteNormalization(
+  type: DiscountEditorType,
+  defaults: DiscountEditorDefaults,
+): boolean {
+  const normalizedValueType =
+    type === "free_shipping"
+      ? "free"
+      : defaults.valueType === "fixed_amount"
+        ? "fixed_amount"
+        : "percentage";
+  const savedDiscountValue = Number(defaults.discountValue);
+  const hasIgnoredScope =
+    type !== "amount_off_products" &&
+    ((defaults.appliesToProducts?.length ?? 0) > 0 ||
+      (defaults.appliesToCollections?.length ?? 0) > 0);
+
+  return (
+    defaults.valueType !== normalizedValueType ||
+    (type === "free_shipping" && savedDiscountValue !== 1) ||
+    (defaults.maxUsesPerOrder !== null &&
+      defaults.maxUsesPerOrder !== undefined &&
+      defaults.maxUsesPerOrder !== 1) ||
+    Boolean(defaults.combineWithProductDiscounts) ||
+    Boolean(defaults.combineWithOrderDiscounts) ||
+    Boolean(defaults.combineWithShippingDiscounts) ||
+    Boolean(defaults.customerSegment?.trim()) ||
+    hasIgnoredScope
+  );
 }
 
 export function hydrateSelectedOptionLabels<T extends { id: string; name: string }>(

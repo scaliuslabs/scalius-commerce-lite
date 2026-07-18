@@ -49,6 +49,9 @@ describe("unified discount builder workflow", () => {
     expect(builder).toContain("safe-area-inset-bottom");
     expect(builder).toContain("bg-card");
     expect(builder).not.toContain("bg-white");
+    expect(builder).toContain("Saved rule needs repair");
+    expect(builder).toContain("hasPendingChanges");
+    expect(builder).toContain("needsDiscountWriteNormalization");
   });
 
   it("claims the loaded revision and preserves input when a newer rule wins", () => {

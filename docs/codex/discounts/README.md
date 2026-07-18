@@ -78,6 +78,34 @@ Source, focused tests, and deployed behavior remain authoritative.
   values and requires an explicit latest-version reload. A stale one-click
   activation rolls back its optimistic state, explains the refresh, and reloads
   the authoritative row.
+- Hidden legacy values that the current editor intentionally normalizes (for
+  example a free-delivery rule with a zero numeric placeholder, obsolete
+  combination flags, ignored order-wide scope, segment text, or a non-one
+  per-order limit) are a pending repair, not a clean no-op form. The editor
+  explains that saving preserves the visible offer, enables the versioned Save
+  action even when no visible field changed, and writes the current canonical
+  one-code rule. It must never show a list warning while silently disabling the
+  only safe repair path.
+
+## Live workflow checkpoint (2026-07-19)
+
+- Production discount `NN7HXMAX` reproduced the legacy-repair mismatch: the
+  list correctly flagged one invalid saved free-delivery value while the editor
+  normalized it invisibly and disabled Save.
+- The deployed editor now showed `Saved rule needs repair`, `Repair ready to
+  save`, and an enabled Save action. One explicit save advanced the rule through
+  its normal revisioned write, retained the active free-delivery outcome and
+  BDT 1,000 merchandise minimum, and removed the list diagnostic.
+- The repaired list was verified in dark mode at 1440 px and a real 390 x 844
+  viewport with no horizontal overflow. The mobile card retains code, outcome,
+  minimum, schedule, usage, lifecycle, and a direct edit action without
+  compressing the desktop table.
+- The same deployment exercise exposed an old-tab lazy-module failure after an
+  asset rollout. Route-specific error boundaries now share the platform's
+  one-time stale-chunk reload authority instead of trapping the merchant behind
+  a generic Try Again button. The recovery is signature-bounded in session
+  storage so one stale asset triggers at most one automatic reload while a
+  persistent real error remains visible and manually recoverable.
 
 ## Deliberate remaining gaps
 
