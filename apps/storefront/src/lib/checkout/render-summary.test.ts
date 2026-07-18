@@ -410,7 +410,15 @@ describe("initCheckoutPage", () => {
 
     await initCheckoutPage();
 
-    expect(document.querySelector('[data-method="cod"]')?.classList.contains("border-primary")).toBe(true);
+    const paymentMethods = document.getElementById("paymentMethods");
+    const codMethod = document.querySelector('[data-method="cod"]');
+    expect(paymentMethods?.getAttribute("role")).toBe("radiogroup");
+    expect(paymentMethods?.getAttribute("aria-label")).toBe("Payment methods");
+    expect(codMethod).toBeInstanceOf(HTMLButtonElement);
+    expect(codMethod?.getAttribute("role")).toBe("radio");
+    expect(codMethod?.getAttribute("aria-checked")).toBe("true");
+    expect((codMethod as HTMLButtonElement).type).toBe("button");
+    expect(codMethod?.classList.contains("border-primary")).toBe(true);
     expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
     expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
 
