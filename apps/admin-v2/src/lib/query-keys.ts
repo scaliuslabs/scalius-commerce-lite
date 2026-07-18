@@ -75,6 +75,8 @@ export const queryKeys = {
     all: ["orders"] as const,
     list: (params?: Record<string, unknown>) => listKey("orders", params),
     detail: (id: string) => ["orders", "detail", id] as const,
+    catalogProducts: (params: Record<string, unknown>) =>
+      ["orders", "catalog-products", params] as const,
     formData: (id: string) => ["orders", "form-data", id] as const,
     items: (orderId: string) => ["orders", "items", orderId] as const,
     payments: (orderId: string) => ["orders", "payments", orderId] as const,

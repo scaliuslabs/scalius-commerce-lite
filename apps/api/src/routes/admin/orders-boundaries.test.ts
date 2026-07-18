@@ -36,14 +36,33 @@ describe("admin orders route boundaries", () => {
         expect(source).toContain("paymentRecovery: query.paymentRecovery");
     });
 
-    it("hydrates order-editor SKUs with their normalized option selections", () => {
+    it("hydrates only exact order-line SKUs with their normalized option selections", () => {
         const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
         const formDataRoute = source.split("// ─── GET /:id/form-data")[1] ?? "";
 
         expect(formDataRoute).toContain("loadVariantSelectedOptions(");
+        expect(formDataRoute).toContain("const orderProductIds");
+        expect(formDataRoute).toContain("const orderVariantIds");
+        expect(formDataRoute).toContain("json_each(${JSON.stringify(orderProductIds)})");
+        expect(formDataRoute).toContain("json_each(${JSON.stringify(orderVariantIds)})");
         expect(formDataRoute).toContain("allVariants.map((variant) => variant.id)");
         expect(formDataRoute).toContain("selectedOptions: selectedOptionsByVariant.get(variant.id) ?? []");
+        expect(formDataRoute).not.toContain("const allProductIds = allProducts.map");
         expect(source).toContain("selectedOptions: z.array(selectedProductOptionSchema)");
+    });
+
+    it("keeps manual-order catalog discovery active-only and bounded", () => {
+        const source = readFileSync(ADMIN_ORDERS_ROUTE_SOURCE, "utf8");
+        const catalogRoute = source.split("// ─── GET /catalog-products")[1]
+            ?.split("// ─── GET / (List)")[0] ?? "";
+
+        expect(catalogRoute).toContain('path: "/catalog-products"');
+        expect(catalogRoute).toContain(".max(20)");
+        expect(catalogRoute).toContain(".max(100)");
+        expect(catalogRoute).toContain("activeOnly: true");
+        expect(catalogRoute).toContain('sort: "name"');
+        expect(source.indexOf("const catalogProductsRoute"))
+            .toBeLessThan(source.indexOf("const getOrderRoute"));
     });
 
     it("keeps order-list refund recovery visibility as a compact summary", () => {

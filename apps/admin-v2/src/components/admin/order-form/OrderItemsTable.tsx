@@ -18,10 +18,12 @@ import { orderItemVariantLabel } from "./order-item-presentation";
 type ProductVariant = Product["variants"][number];
 
 interface OrderItemsTableProps {
+  resolvedProductsById?: Record<string, Product>;
   resolvedVariantsById?: Record<string, ProductVariant>;
 }
 
 export function OrderItemsTable({
+  resolvedProductsById = {},
   resolvedVariantsById = {},
 }: OrderItemsTableProps) {
   const { form, products } = useOrderForm();
@@ -71,7 +73,8 @@ export function OrderItemsTable({
             </TableRow>
           ) : (
             (items as OrderItem[]).map((item, index) => {
-              const product = products.find((p) => p.id === item.productId);
+              const product = resolvedProductsById[item.productId]
+                ?? products.find((p) => p.id === item.productId);
               const variant = item.variantId
                 ? resolvedVariantsById[item.variantId] ?? product?.variants.find(
                     (v) => v.id === item.variantId,

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import * as OrdersService from "@scalius/core/modules/orders";
+import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import {
     createOrderSchema,
@@ -20,7 +21,7 @@ import {
     media,
     orders,
 } from "@scalius/database/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NotFoundError, ServiceUnavailableError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
@@ -40,6 +41,7 @@ import {
     orderPaymentRecoverySchema,
     orderRefundAttemptSchema,
     orderSummarySchema,
+    productSummarySchema,
     productVariantSchema,
     selectedProductOptionSchema,
 } from "../../schemas/entities";
@@ -370,6 +372,8 @@ const formDataProductSchema = z.object({
     id: z.string(),
     name: z.string(),
     price: z.number(),
+    isActive: z.boolean(),
+    deletedAt: nullableTimestampSchema,
     discountPercentage: z.number().nullable(),
     discountType: z.string().nullable(),
     discountAmount: z.number().nullable(),
@@ -377,6 +381,46 @@ const formDataProductSchema = z.object({
         selectedOptions: z.array(selectedProductOptionSchema),
     })),
 }).passthrough();
+
+// ─── GET /catalog-products ──────────────────────────────────────────────────
+
+const catalogProductsRoute = createRoute({
+    method: "get",
+    path: "/catalog-products",
+    tags: ["Admin - Orders"],
+    summary: "Search active products for manual order forms",
+    request: {
+        query: z.object({
+            page: z.coerce.number().int().min(1).default(1),
+            limit: z.coerce.number().int().min(1).max(20).default(10),
+            search: z.string().trim().max(100).optional().default(""),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Paginated active product catalog",
+            content: {
+                "application/json": {
+                    schema: paginatedEnvelope("products", productSummarySchema),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(catalogProductsRoute, async (c) => {
+    const query = c.req.valid("query");
+    const result = await ProductsAdmin.listProducts(c.get("db"), {
+        page: query.page,
+        limit: query.limit,
+        search: query.search || undefined,
+        activeOnly: true,
+        sort: "name",
+        order: "asc",
+    });
+    return ok(c, result);
+});
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
 
@@ -1178,43 +1222,52 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
 
     if (!order) throw new NotFoundError("Order not found");
 
-    const fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
+    let fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
     if (!fullEditReadiness) throw new NotFoundError("Order not found");
 
-    const [items, allProducts] = await Promise.all([
-        db
-            .select({
-                id: orderItems.id,
-                productId: orderItems.productId,
-                variantId: orderItems.variantId,
-                quantity: orderItems.quantity,
-                price: orderItems.price,
-            })
-            .from(orderItems)
-            .where(eq(orderItems.orderId, orderId)),
-        db
+    const items = await db
+        .select({
+            id: orderItems.id,
+            productId: orderItems.productId,
+            variantId: orderItems.variantId,
+            quantity: orderItems.quantity,
+            price: orderItems.price,
+            productName: orderItems.productName,
+            variantLabel: orderItems.variantLabel,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, orderId));
+
+    // The edit payload contains only the exact catalog identities already on
+    // the order. New item discovery is independently paginated by
+    // /catalog-products, so this read stays bounded by the order rather than
+    // growing with the merchant's entire catalog.
+    const orderProductIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+    const orderVariantIds = [...new Set(items.map((item) => item.variantId).filter((id): id is string => Boolean(id)))];
+    const allProducts = orderProductIds.length > 0
+        ? await db
             .select({
                 id: products.id,
                 name: products.name,
                 price: products.price,
+                isActive: products.isActive,
+                deletedAt: products.deletedAt,
                 discountPercentage: products.discountPercentage,
                 discountType: products.discountType,
                 discountAmount: products.discountAmount,
             })
             .from(products)
-            .where(isNull(products.deletedAt)),
-    ]);
-
-    // Fetch all variants in a single batched query instead of N+1
-    const allProductIds = allProducts.map((p) => p.id);
-    const allVariants = allProductIds.length > 0
+            .where(sql`${products.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(orderProductIds)})
+            )`)
+        : [];
+    const allVariants = orderVariantIds.length > 0
         ? await db
             .select()
             .from(productVariants)
-            .where(and(
-                inArray(productVariants.productId, allProductIds),
-                isNull(productVariants.deletedAt),
-            ))
+            .where(sql`${productVariants.id} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(orderVariantIds)})
+            )`)
         : [];
 
     const selectedOptionsByVariant = await loadVariantSelectedOptions(
@@ -1233,6 +1286,27 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         const existing = variantsByProductId.get(variant.productId) ?? [];
         existing.push(variant);
         variantsByProductId.set(variant.productId, existing);
+    }
+
+    if (fullEditReadiness.allowed) {
+        const productById = new Map(allProducts.map((product) => [product.id, product]));
+        const variantById = new Map(allVariants.map((variant) => [variant.id, variant]));
+        const hasUnavailableOriginalLine = items.some((item) => {
+            const product = productById.get(item.productId);
+            const variant = item.variantId ? variantById.get(item.variantId) : null;
+            return !product
+                || !product.isActive
+                || Boolean(product.deletedAt)
+                || !variant
+                || variant.productId !== item.productId
+                || Boolean(variant.deletedAt);
+        });
+        if (hasUnavailableOriginalLine) {
+            fullEditReadiness = {
+                allowed: false,
+                reason: "One or more original SKUs are no longer active. The historical order remains viewable, but its contents cannot be safely rewritten.",
+            };
+        }
     }
 
     const productsWithVariants = allProducts.map((product) => ({

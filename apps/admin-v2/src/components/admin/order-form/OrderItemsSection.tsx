@@ -1,5 +1,5 @@
 import React from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Card,
@@ -14,10 +14,13 @@ import { ItemSelection } from "./ItemSelection";
 import { OrderItemsTable } from "./OrderItemsTable";
 import { updateOrderItems } from "@/store/orderStore";
 import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
+import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
+import { useDebounce } from "@/hooks/use-debounce";
+import type { ProductListItemDto } from "@/lib/api-functions/products";
 import type { Product } from "./types";
 
-const productsPerPage = 10;
-const initialProductsToShow = 10;
+const ORDER_CATALOG_PAGE_SIZE = 10;
+const ORDER_CATALOG_SEARCH_DEBOUNCE_MS = 300;
 type ProductVariant = Product["variants"][number];
 type RawProductVariant = Omit<ProductVariant, "weight"> & {
   weight: number | string | null;
@@ -55,16 +58,49 @@ function normalizeVariants(result: unknown): ProductVariant[] {
   return variants.filter((variant) => !variant.deletedAt).map(normalizeVariant);
 }
 
+function normalizeCatalogProduct(product: ProductListItemDto): Product {
+  return {
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    discountPercentage: product.discountPercentage ?? null,
+    discountType: product.discountType ?? null,
+    discountAmount: product.discountAmount ?? null,
+    variantCount: product.variantCount ?? 0,
+    variants: [],
+  };
+}
+
 export function OrderItemsSection() {
-  const { form, products: allProducts, refs } = useOrderForm();
+  const { form, refs } = useOrderForm();
   const queryClient = useQueryClient();
 
-  // State for product searching and selection
   const [searchTerm, setSearchTerm] = React.useState("");
-  const [filteredProducts, setFilteredProducts] = React.useState<Product[]>([]);
-  const [displayedProducts, setDisplayedProducts] = React.useState<Product[]>([]);
-  const [page, setPage] = React.useState(1);
-  const [hasMore, setHasMore] = React.useState(false);
+  const debouncedSearch = useDebounce(
+    searchTerm.trim(),
+    ORDER_CATALOG_SEARCH_DEBOUNCE_MS,
+  );
+  const productQuery = useInfiniteQuery(
+    orderCatalogProductsQueryOptions({
+      search: debouncedSearch,
+      limit: ORDER_CATALOG_PAGE_SIZE,
+    }),
+  );
+  const displayedProducts = React.useMemo(() => {
+    const byId = new Map<string, Product>();
+    for (const page of productQuery.data?.pages ?? []) {
+      for (const product of page.products) {
+        byId.set(product.id, normalizeCatalogProduct(product));
+      }
+    }
+    return [...byId.values()];
+  }, [productQuery.data]);
+  const totalProducts = productQuery.data?.pages[0]?.pagination.total ?? 0;
+  const isDebouncing = searchTerm.trim() !== debouncedSearch;
+  const isInitialProductLoading = isDebouncing || productQuery.isPending
+    || (productQuery.isFetching && displayedProducts.length === 0);
+  const isInitialProductError = productQuery.isError
+    && displayedProducts.length === 0;
 
   // State for the currently selected item before it's added to the list
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
@@ -74,45 +110,10 @@ export function OrderItemsSection() {
   const [resolvedVariantsById, setResolvedVariantsById] = React.useState<
     Record<string, ProductVariant>
   >({});
+  const [resolvedProductsById, setResolvedProductsById] = React.useState<
+    Record<string, Product>
+  >({});
   const variantLoadTokenRef = React.useRef(0);
-
-  React.useEffect(() => {
-    if (allProducts.length > 0) {
-      const sortedProducts = [...allProducts].sort((a, b) => (a.id > b.id ? -1 : 1));
-      setFilteredProducts(sortedProducts);
-      setDisplayedProducts(sortedProducts.slice(0, initialProductsToShow));
-      setHasMore(sortedProducts.length > initialProductsToShow);
-    }
-  }, [allProducts]);
-
-  React.useEffect(() => {
-    const lowercasedSearchTerm = searchTerm.toLowerCase().trim();
-    if (lowercasedSearchTerm === "") {
-      const sortedProducts = [...allProducts].sort((a, b) => (a.id > b.id ? -1 : 1));
-      setFilteredProducts(sortedProducts);
-      setDisplayedProducts(sortedProducts.slice(0, initialProductsToShow));
-      setHasMore(sortedProducts.length > initialProductsToShow);
-      setPage(1);
-    } else {
-      const filtered = allProducts.filter((product) =>
-        product.name.toLowerCase().includes(lowercasedSearchTerm)
-      );
-      setFilteredProducts(filtered);
-      setDisplayedProducts(filtered.slice(0, productsPerPage));
-      setHasMore(filtered.length > productsPerPage);
-      setPage(1);
-    }
-  }, [searchTerm, allProducts]);
-
-  const loadMoreProducts = () => {
-    const nextPage = page + 1;
-    const startIndex = (nextPage - 1) * productsPerPage;
-    const endIndex = startIndex + productsPerPage;
-
-    setDisplayedProducts([...displayedProducts, ...filteredProducts.slice(startIndex, endIndex)]);
-    setPage(nextPage);
-    setHasMore(endIndex < filteredProducts.length);
-  };
 
   const focusItemInputs = (needsVariantChoice: boolean) => {
     setTimeout(() => {
@@ -134,6 +135,7 @@ export function OrderItemsSection() {
       knownVariants.length === 0 && (product.variantCount ?? 0) > 0;
 
     setSelectedProduct({ ...product, variants: knownVariants });
+    setResolvedProductsById((current) => ({ ...current, [product.id]: product }));
     setSelectedVariant(knownVariants.length === 1 ? knownVariants[0]!.id : "");
     setQuantity(1);
     setIsLoadingVariants(shouldLoadVariants);
@@ -282,8 +284,14 @@ export function OrderItemsSection() {
             searchTerm={searchTerm}
             setSearchTerm={setSearchTerm}
             displayedProducts={displayedProducts}
-            hasMore={hasMore}
-            loadMoreProducts={loadMoreProducts}
+            hasMore={Boolean(productQuery.hasNextPage)}
+            loadMoreProducts={() => void productQuery.fetchNextPage()}
+            totalProducts={totalProducts}
+            isLoading={isInitialProductLoading}
+            isError={isInitialProductError}
+            isLoadingMore={productQuery.isFetchingNextPage}
+            isLoadMoreError={productQuery.isFetchNextPageError}
+            retry={() => void productQuery.refetch()}
             selectedProduct={selectedProduct}
             selectProduct={selectProduct}
             clearProductSelection={clearProductSelection}
@@ -304,7 +312,10 @@ export function OrderItemsSection() {
           )}
         </div>
 
-        <OrderItemsTable resolvedVariantsById={resolvedVariantsById} />
+        <OrderItemsTable
+          resolvedProductsById={resolvedProductsById}
+          resolvedVariantsById={resolvedVariantsById}
+        />
       </CardContent>
     </Card>
   );

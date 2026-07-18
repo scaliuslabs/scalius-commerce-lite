@@ -41,6 +41,10 @@ import type {
 } from "@scalius/api-client/types";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api.server";
 import type {
+  PaginationPayload,
+  ProductListItemDto,
+} from "./products";
+import type {
   ApproveOrderReturnInput,
   CancelOrderReturnInput,
   CreateOrderReturnInput,
@@ -89,6 +93,15 @@ export type OrderListItemDto = OrdersListPayload["orders"][number];
 export type OrderDetailDto = ApiData<GetApiV1AdminOrdersByIdResponse>;
 export type OrderFormDataPayload =
   ApiData<GetApiV1AdminOrdersByIdFormDataResponse>;
+export interface OrderCatalogProductsInput {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+export interface OrderCatalogProductsPayload {
+  products: ProductListItemDto[];
+  pagination: PaginationPayload;
+}
 export type OrderItemDto = ApiData<GetApiV1AdminOrdersByIdItemsResponse>[number];
 export type CreateOrderInput = ApiBody<PostApiV1AdminOrdersData>;
 export type UpdateOrderInput = { id: string } &
@@ -274,6 +287,16 @@ export const getOrderFormData = createServerFn({ method: "GET" })
   .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
     return apiGet<OrderFormDataPayload>(`/orders/${data.id}/form-data`);
+  });
+
+export const getOrderCatalogProducts = createServerFn({ method: "GET" })
+  .validator((data: OrderCatalogProductsInput) => data)
+  .handler(async ({ data }) => {
+    const params: Record<string, string> = {};
+    if (data.page != null) params.page = String(data.page);
+    if (data.limit != null) params.limit = String(data.limit);
+    if (data.search) params.search = data.search;
+    return apiGet<OrderCatalogProductsPayload>("/orders/catalog-products", params);
   });
 
 export const getOrderItems = createServerFn({ method: "GET" })

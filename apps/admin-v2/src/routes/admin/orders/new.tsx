@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
-import { productsQueryOptions } from "~/lib/api-query-options/products";
 import { deliveryLocationsQueryOptions } from "~/lib/api-query-options/delivery";
 import { OrderFormRouteError } from "./-OrderFormRouteError";
 import {
@@ -24,14 +23,11 @@ const defaultValues = {
 
 export const Route = createFileRoute("/admin/orders/new")({
   loader: async ({ context: { queryClient } }) => {
-    const result = await queryClient.ensureQueryData(
-      productsQueryOptions({ page: 1, limit: 100 }),
-    );
     const locations = await queryClient.ensureQueryData(
       deliveryLocationsQueryOptions({ type: "city" }),
     );
     assertOrderFormLocationLookup(locations);
-    return buildNewOrderFormRouteData(result);
+    return buildNewOrderFormRouteData();
   },
   head: () => ({ meta: [{ title: "New Order | Scalius Admin" }] }),
   errorComponent: NewOrderFormErrorComponent,
@@ -42,7 +38,7 @@ function NewOrderFormErrorComponent({ error, reset }: { error: Error; reset: () 
   return (
     <OrderFormRouteError
       title="New order form could not be loaded"
-      description="Required product or delivery-location data is unavailable. No empty catalog was substituted."
+      description="Required delivery-location data is unavailable. Product search is loaded independently inside the form."
       error={error}
       reset={reset}
     />

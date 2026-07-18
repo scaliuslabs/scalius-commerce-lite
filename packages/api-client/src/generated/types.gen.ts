@@ -30306,6 +30306,129 @@ export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses = {
 
 export type PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponse = PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses[keyof PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses];
 
+export type GetApiV1AdminOrdersCatalogProductsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+    };
+    url: '/api/v1/admin/orders/catalog-products';
+};
+
+export type GetApiV1AdminOrdersCatalogProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersCatalogProductsError = GetApiV1AdminOrdersCatalogProductsErrors[keyof GetApiV1AdminOrdersCatalogProductsErrors];
+
+export type GetApiV1AdminOrdersCatalogProductsResponses = {
+    /**
+     * Paginated active product catalog
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                price: number;
+                description: string | null;
+                isActive: boolean;
+                discountPercentage: number;
+                discountType: string;
+                discountAmount: number;
+                freeDelivery: boolean;
+                aggregateRevision: number;
+                createdAt: string | number;
+                updatedAt: string | number;
+                category: {
+                    name: string;
+                };
+                variantCount: number;
+                mediaCount: number;
+                primaryImage: string | null;
+                sku?: string;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersCatalogProductsResponse = GetApiV1AdminOrdersCatalogProductsResponses[keyof GetApiV1AdminOrdersCatalogProductsResponses];
+
 export type GetApiV1AdminOrdersData = {
     body?: never;
     path?: never;
@@ -31880,6 +32003,8 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 id: string;
                 name: string;
                 price: number;
+                isActive: boolean;
+                deletedAt: string | number | null;
                 discountPercentage: number | null;
                 discountType: string | null;
                 discountAmount: number | null;

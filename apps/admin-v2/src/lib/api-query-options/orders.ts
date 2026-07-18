@@ -1,5 +1,6 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import {
+  getOrderCatalogProducts,
   getOrder,
   getOrderCod,
   getOrderFormData,
@@ -14,6 +15,7 @@ import {
 import { queryKeys } from "../query-keys";
 
 const FAST_STALE_TIME_MS = 1000 * 30;
+const ORDER_CATALOG_STALE_TIME_MS = 1000 * 60 * 2;
 
 export const ordersQueryOptions = (params: OrdersQueryInput) =>
   queryOptions({
@@ -28,6 +30,25 @@ export const orderQueryOptions = (id: string) =>
     queryFn: () => getOrder({ data: { id } }),
     staleTime: 0,
   });
+
+export const orderCatalogProductsQueryOptions = (input: {
+  search?: string;
+  limit?: number;
+}) => {
+  const search = input.search?.trim() ?? "";
+  const limit = input.limit ?? 10;
+  return infiniteQueryOptions({
+    queryKey: queryKeys.orders.catalogProducts({ search, limit }),
+    queryFn: ({ pageParam }) =>
+      getOrderCatalogProducts({ data: { page: pageParam, limit, search } }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination.page < lastPage.pagination.totalPages
+        ? lastPage.pagination.page + 1
+        : undefined,
+    staleTime: ORDER_CATALOG_STALE_TIME_MS,
+  });
+};
 
 export const orderFormDataQueryOptions = (id: string) =>
   queryOptions({

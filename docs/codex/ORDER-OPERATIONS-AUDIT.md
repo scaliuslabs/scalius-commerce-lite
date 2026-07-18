@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, manual-create idempotency, and evidence-preserving archival now have explicit authorities. Remaining high-risk work is concentrated in a durable order-amendment model, tax-correct manual orders, bounded catalog picking, and complete permission/activity proof.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, manual-create idempotency, bounded catalog picking, and evidence-preserving archival now have explicit authorities. Remaining high-risk work is concentrated in a durable order-amendment model, tax-correct manual orders, and complete permission/activity proof.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -213,14 +213,17 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 - Server validates active product/SKU ownership, rejects missing/deleted/mismatched SKUs, performs currency-aware rounding, prevents a discount above subtotal plus shipping, reserves inventory, commits order/items/customer changes in a batch, and converts the reservation to a deduction.
 - Actor-scoped request idempotency replays the original committed result after a lost response and preserves one stock/order identity across retries.
 - Lazy-loaded SKU projections are retained beside unsaved lines, so the exact merchant option label remains visible immediately after adding it.
+- Product discovery is a debounced, paginated server query over active catalog
+  products and their saved SKU/barcode identities. The route returns 10 rows by
+  default, caps a page at 20, and exposes explicit loading, retry, empty, and
+  load-more states instead of turning a failed preload into an empty catalog.
 
 **Proven**
 
-- SKU validation, tracked/untracked item behavior, reservation failure, compensation, quantity boundaries, idempotent replay/reclaim/conflict, browser request-key recovery, and a number of inventory-claim paths have focused tests.
+- SKU validation, tracked/untracked item behavior, reservation failure, compensation, quantity boundaries, idempotent replay/reclaim/conflict, browser request-key recovery, bounded product/SKU/barcode search, and a number of inventory-claim paths have focused tests.
 
 **Gaps**
 
-- The picker loads only the first 100 products and then searches locally. Products outside that window cannot be ordered. Loading failure is swallowed and shown as an empty catalog. Use a debounced server picker with explicit loading, retry, empty, and unavailable states.
 - The API schema permits an empty item array. Decide whether this is a draft/quote feature; otherwise require at least one sellable line on the server.
 - Manual creation silently defaults to COD/unpaid because payment method/status/terms are not in the form contract. The merchant is not told that every manual order becomes COD.
 - The order is saved as `pending` while tracked inventory is immediately converted from reserved to deducted by invoking shipped inventory semantics. This is an invisible lifecycle policy. Let the merchant choose a truthful draft/reserve/confirmed workflow, or clearly define that a manual order is confirmed on creation and represent it consistently.
@@ -236,6 +239,11 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 
 - The form reloads customer/address/items/shipping/discount and performs inventory compensation using the browser-loaded CAS version.
 - Payment, tax, fulfillment, shipment, refund, return, invoice, terminal-state, and active-claim evidence block the full editor with one server-derived reason. Status changes use their dedicated action.
+- Form data resolves only the exact product and SKU identities already saved on
+  the order. Missing, retired, trashed, inactive, or cross-product identities
+  force the existing read-only protection state instead of loading the whole
+  catalog or rendering an editable unknown line. New line discovery reuses the
+  same bounded picker as manual creation.
 
 **Proven**
 
@@ -244,10 +252,21 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 **Gaps**
 
 - A full amendment workflow with preview, stable lines, tax re-quote, payment delta, confirmation, history, and reconciliation remains absent. The safe lock is a release boundary, not a claim that post-checkout editing is complete.
-- Form-data loads every active product and then queries all variants with one `IN (...)`. This is unbounded, violates D1's 100-parameter constraint for larger catalogs, and makes edit latency grow with the entire catalog. Existing deleted/retired lines can also become impossible to represent in the picker.
 - The edit loader has a truthful retry/back error boundary and a dedicated protected-order state.
 - Replacing all item rows destroys stable line identity and cascades item tax snapshots. Use line-level add/change/remove commands or versioned amendments.
 - A committed write can be followed by an inventory-action update outside the main batch. If that final update fails, the order and inventory facts require reconciliation. Persist a visible recovery state and repair command.
+
+**Live catalog-picker proof — 2026-07-19:** API version
+`0ed3aa7e-0239-4d5e-a8c6-1d101364bfdb` and admin version
+`5b521dbc-946f-4e03-85af-f8bbd528afdc` were deployed. The authenticated manual
+order form loaded without a catalog preload, found `Weekender Duffel 35L`
+outside the first page by its exact persisted barcode
+`SCALIUS:C128:SNIthWKh7HMed3pt_rBZ-`, lazily loaded the `Color: Olive` SKU,
+and staged the truthful `৳6,490` line. Closing the product and SKU portals left
+zero dialogs/listboxes, no `aria-hidden` ancestor on the enabled Add Item
+action, and no invisible layer intercepting the form. The shared popover/select
+fix removes stalled exit animations while retaining open-state motion and a
+closed-state visibility/pointer fallback.
 
 ### 4. Detail workspace
 
@@ -543,7 +562,7 @@ Source-string boundary tests are useful wiring alarms but do not replace service
 1. Add `expectedVersion` to detail/form/update and typed conflict UI.
 2. Split draft amendment from settled-order adjustments; lock destructive line/money/tax edits after settlement evidence.
 3. Route manual order calculations through the checkout money/tax snapshot engine.
-4. Replace unbounded create/edit catalog loading with a D1-safe server picker.
+4. Replace unbounded create/edit catalog loading with a D1-safe server picker — completed with one bounded discovery route plus exact edit-line projection.
 5. Persist visible reconciliation state for post-commit inventory follow-up failures.
 
 ### Phase 2 — integrate the active return/inventory work
