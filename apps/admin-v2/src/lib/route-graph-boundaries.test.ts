@@ -1341,7 +1341,7 @@ describe("admin route graph boundaries", () => {
     expect(source).not.toContain("prefetchQuery(");
   });
 
-  it("keeps new-order creation from blocking on product detail fanout", () => {
+  it("keeps new-order creation independent from catalog size", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "new.tsx"),
       "utf8",
@@ -1351,7 +1351,9 @@ describe("admin route graph boundaries", () => {
       source.indexOf("head: ()"),
     );
 
-    expect(loaderSource).toContain("productsQueryOptions({ page: 1, limit: 100 })");
+    expect(loaderSource).not.toContain("productsQueryOptions(");
+    expect(loaderSource).toContain("buildNewOrderFormRouteData()");
+    expect(loaderSource).toContain("deliveryLocationsQueryOptions");
     expect(source).not.toContain("productQueryOptions(");
     expect(loaderSource).not.toContain("Promise.all(");
     expect(loaderSource).not.toContain("for (let");

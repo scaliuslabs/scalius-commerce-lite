@@ -23,21 +23,15 @@ const editable = { allowed: true, reason: null };
 
 describe("order form route data", () => {
   it("preserves a truthful empty product catalog", () => {
-    expect(buildNewOrderFormRouteData({ products: [] })).toEqual({
+    expect(buildNewOrderFormRouteData()).toEqual({
       productsWithVariants: [],
     });
   });
 
-  it("does not convert a failed or malformed product lookup into an empty catalog", () => {
-    expect(() => buildNewOrderFormRouteData(undefined)).toThrow(
-      "Product catalog response was unavailable or unusable",
-    );
-    expect(() => buildNewOrderFormRouteData({})).toThrow(
-      "did not include a product list",
-    );
-    expect(() => buildNewOrderFormRouteData({ products: [{}] })).toThrow(
-      "included an unusable product row",
-    );
+  it("keeps catalog discovery out of the new-order route payload", () => {
+    expect(buildNewOrderFormRouteData()).toEqual({ productsWithVariants: [] });
+    expect(newRouteSource).not.toContain("productsQueryOptions");
+    expect(newRouteSource).toContain("buildNewOrderFormRouteData()");
   });
 
   it("requires an explicit location list while accepting a truthful empty list", () => {
@@ -121,18 +115,17 @@ describe("order form route data", () => {
 });
 
 describe("order form route failure wiring", () => {
-  it("keeps new-order lookup failures on the route error boundary", () => {
+  it("keeps new-order location failures on the route error boundary", () => {
     const loader = newRouteSource.slice(
       newRouteSource.indexOf("loader: async"),
       newRouteSource.indexOf("head: ()"),
     );
-    expect(loader).toContain("productsQueryOptions({ page: 1, limit: 100 })");
     expect(loader).toContain('deliveryLocationsQueryOptions({ type: "city" })');
-    expect(loader).toContain("buildNewOrderFormRouteData(result)");
+    expect(loader).toContain("buildNewOrderFormRouteData()");
     expect(loader).not.toContain("catch");
     expect(loader).not.toContain("productsWithVariants: []");
     expect(newRouteSource).toContain("errorComponent: NewOrderFormErrorComponent");
-    expect(newRouteSource).toContain("No empty catalog was substituted");
+    expect(newRouteSource).toContain("Product search is loaded independently");
   });
 
   it("keeps edit lookup failures on a compact retry/back error boundary", () => {

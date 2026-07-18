@@ -400,6 +400,7 @@ export async function listProducts(db: Database, options: {
     page?: number;
     limit?: number;
     showTrashed?: boolean;
+    activeOnly?: boolean;
     sort?: "name" | "price" | "category" | "createdAt" | "updatedAt";
     order?: "asc" | "desc";
 }) {
@@ -409,6 +410,7 @@ export async function listProducts(db: Database, options: {
         page = 1,
         limit = 10,
         showTrashed = false,
+        activeOnly = false,
         sort = "updatedAt",
         order = "desc",
     } = options;
@@ -421,6 +423,9 @@ export async function listProducts(db: Database, options: {
     } else {
         whereConditions.push(sql`${products.deletedAt} IS NULL`);
     }
+    if (activeOnly) {
+        whereConditions.push(eq(products.isActive, true));
+    }
 
     let rankExpression = undefined;
     if (search) {
@@ -428,7 +433,7 @@ export async function listProducts(db: Database, options: {
 
         const sanitized = sanitizeFtsQuery(search);
         if (sanitized) {
-            const ftsCondition = sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`;
+            const ftsCondition = sql`(${sql.raw("products")}.rowid IN (SELECT rowid FROM products_fts WHERE products_fts MATCH ${sanitized}) OR EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${sql.raw("product_variants")}.rowid IN (SELECT rowid FROM product_variants_fts WHERE product_variants_fts MATCH ${sanitized})))`;
 
             if (barcodeKey) {
                 // Also match by exact barcode value

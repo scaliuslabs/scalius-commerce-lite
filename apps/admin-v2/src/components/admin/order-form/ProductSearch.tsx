@@ -6,7 +6,6 @@ import {
 } from "@/components/ui/popover";
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -14,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, X } from "lucide-react";
+import { AlertCircle, Loader2, Search, X } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
@@ -25,6 +24,12 @@ interface ProductSearchProps {
   displayedProducts: Product[];
   hasMore: boolean;
   loadMoreProducts: () => void;
+  totalProducts: number;
+  isLoading: boolean;
+  isError: boolean;
+  isLoadingMore: boolean;
+  isLoadMoreError: boolean;
+  retry: () => void;
   selectedProduct: Product | null;
   selectProduct: (product: Product) => void;
   clearProductSelection: () => void;
@@ -37,6 +42,12 @@ export function ProductSearch({
   displayedProducts,
   hasMore,
   loadMoreProducts,
+  totalProducts,
+  isLoading,
+  isError,
+  isLoadingMore,
+  isLoadMoreError,
+  retry,
   selectedProduct,
   selectProduct,
   clearProductSelection,
@@ -50,7 +61,7 @@ export function ProductSearch({
     <div className="flex gap-2 items-end">
       <div className="flex-1">
         <label htmlFor="product-search-button" className="mb-2 block font-medium text-sm">
-          Search Products
+          Add product
         </label>
         <Popover
           open={productSearchOpen}
@@ -81,7 +92,7 @@ export function ProductSearch({
                   ) : null}
                 </div>
               ) : (
-                "Search for products..."
+                "Search product, SKU, or barcode..."
               )}
               <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </Button>
@@ -93,7 +104,7 @@ export function ProductSearch({
           >
             <Command shouldFilter={false}>
               <CommandInput
-                placeholder="Search products..."
+                placeholder="Search product, SKU, or barcode..."
                 className="h-10 border-none focus:ring-0"
                 value={searchTerm}
                 onValueChange={setSearchTerm}
@@ -105,16 +116,36 @@ export function ProductSearch({
                 }}
               />
               <CommandList className="max-h-[400px] overflow-auto">
-                <CommandEmpty className="py-6 text-center text-sm">
-                  No products found. Try a different search term.
-                </CommandEmpty>
-                <CommandGroup heading="Products">
-                  {displayedProducts.map((product) => (
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8" role="status">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">
+                      Searching catalog...
+                    </span>
+                  </div>
+                ) : isError ? (
+                  <div className="space-y-3 px-4 py-7 text-center">
+                    <AlertCircle className="mx-auto h-4 w-4 text-destructive" />
+                    <p className="text-sm text-muted-foreground">
+                      The product catalog could not be loaded.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={retry}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : displayedProducts.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No active products match this search.
+                  </div>
+                ) : (
+                  <CommandGroup heading="Products">
+                    {displayedProducts.map((product) => (
                     <CommandItem
                       key={product.id}
                       value={product.name} // Use name for Command's internal filtering
                       onSelect={() => {
                         selectProduct(product);
+                        setSearchTerm("");
                         setProductSearchOpen(false);
                       }}
                       className="flex justify-between py-3 px-4 cursor-pointer hover:bg-accent"
@@ -155,23 +186,35 @@ export function ProductSearch({
                         )}
                       </div>
                     </CommandItem>
-                  ))}
-                  {hasMore && (
+                    ))}
+                  </CommandGroup>
+                )}
+                {!isLoading && !isError && hasMore ? (
                     <div className="p-3 flex justify-center border-t">
                       <Button
-                        variant="link"
+                        type="button"
+                        variant="outline"
                         size="sm"
                         onClick={(e) => {
                           e.preventDefault();
                           loadMoreProducts();
                         }}
                         className="w-full"
+                        disabled={isLoadingMore}
                       >
-                        Load More Products
+                        {isLoadingMore ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Loading...
+                          </>
+                        ) : isLoadMoreError ? (
+                          "Retry loading more"
+                        ) : (
+                          `Load more (${displayedProducts.length} of ${totalProducts})`
+                        )}
                       </Button>
                     </div>
-                  )}
-                </CommandGroup>
+                  ) : null}
               </CommandList>
             </Command>
           </PopoverContent>

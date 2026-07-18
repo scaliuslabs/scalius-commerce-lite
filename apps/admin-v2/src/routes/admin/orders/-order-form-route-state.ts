@@ -1,16 +1,6 @@
 import type { Product } from "~/components/admin/order-form/types";
 import type { ProductVariant } from "~/types/api-responses";
 
-interface ProductListRow {
-  id: string;
-  name: string;
-  price: number;
-  discountPercentage?: number | null;
-  discountType?: "percentage" | "flat" | null;
-  discountAmount?: number | null;
-  variantCount?: number | null;
-}
-
 export interface EditOrderFormProduct {
   id: string;
   name: string;
@@ -33,18 +23,6 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
     throw new Error(`${label} response was unavailable or unusable.`);
   }
   return value as Record<string, unknown>;
-}
-
-function isProductListRow(value: unknown): value is ProductListRow {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    typeof row.id === "string" &&
-    row.id.length > 0 &&
-    typeof row.name === "string" &&
-    typeof row.price === "number" &&
-    Number.isFinite(row.price)
-  );
 }
 
 function isEditOrderFormProduct(value: unknown): value is EditOrderFormProduct {
@@ -87,28 +65,13 @@ function normalizeEditOrderFormProduct(
   };
 }
 
-export function buildNewOrderFormRouteData(payload: unknown): {
+export function buildNewOrderFormRouteData(): {
   productsWithVariants: Product[];
 } {
-  const data = requireRecord(payload, "Product catalog");
-  if (!Array.isArray(data.products)) {
-    throw new Error("Product catalog response did not include a product list.");
-  }
-  if (!data.products.every(isProductListRow)) {
-    throw new Error("Product catalog response included an unusable product row.");
-  }
-
   return {
-    productsWithVariants: data.products.map((product) => ({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      discountPercentage: product.discountPercentage ?? null,
-      discountType: product.discountType ?? null,
-      discountAmount: product.discountAmount ?? null,
-      variantCount: product.variantCount ?? 0,
-      variants: [],
-    })),
+    // Product discovery is a bounded, server-backed query owned by the item
+    // picker. The route only carries exact pre-existing lines on edit forms.
+    productsWithVariants: [],
   };
 }
 

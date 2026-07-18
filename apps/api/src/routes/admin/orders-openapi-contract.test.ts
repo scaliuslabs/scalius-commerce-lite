@@ -41,6 +41,16 @@ function expectResponses(
 }
 
 describe("admin order mutation OpenAPI responses", () => {
+    it("documents the bounded manual-order catalog search", () => {
+        const spec = buildAdminOrdersSpec();
+        expectResponses(spec, "/api/v1/admin/orders/catalog-products", "get", [
+            "200",
+            "400",
+            "401",
+            "403",
+        ]);
+    });
+
     it("requires selectedOptions on every order-form SKU", () => {
         const spec = buildAdminOrdersSpec();
         const operation = spec.paths?.["/api/v1/admin/orders/{id}/form-data"]?.get;
