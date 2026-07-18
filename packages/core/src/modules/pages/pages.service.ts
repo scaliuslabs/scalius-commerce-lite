@@ -2,12 +2,13 @@
 // All DB queries and business logic for the CMS pages domain.
 
 import { pages } from "@scalius/database/schema";
-import { sql, asc, desc, isNull, isNotNull, and, or, lte, eq, ne, type SQL } from "drizzle-orm";
+import { sql, asc, desc, isNull, isNotNull, and, or, lte, gt, eq, ne, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError, ConflictError, ForbiddenError } from "@scalius/core/errors";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { unixToDate } from "@scalius/shared/timestamps";
 import {
     createPageSchema,
     updatePageSchema,
@@ -29,6 +30,25 @@ export interface PageLifecycleAuthority {
     canPublish?: boolean;
 }
 
+export type AdminPageStatus = "draft" | "scheduled" | "published";
+
+export function adminPageStatusCondition(status?: AdminPageStatus): SQL | undefined {
+    if (status === "draft") return eq(pages.isPublished, false);
+    if (status === "scheduled") {
+        return and(
+            eq(pages.isPublished, true),
+            gt(pages.publishedAt, sql`unixepoch()`),
+        ) as SQL;
+    }
+    if (status === "published") {
+        return and(
+            eq(pages.isPublished, true),
+            or(isNull(pages.publishedAt), lte(pages.publishedAt, sql`unixepoch()`)),
+        ) as SQL;
+    }
+    return undefined;
+}
+
 function assertPageLifecycleAuthority(
     requestedPublished: boolean,
     currentPublished: boolean,
@@ -41,17 +61,13 @@ function assertPageLifecycleAuthority(
     }
 }
 
-function pagePublicationTimestamp(value: Date | string | null | undefined) {
-    if (value == null) return null;
-    const timestamp = value instanceof Date
-        ? value.getTime()
-        : new Date(value).getTime();
-    return Number.isFinite(timestamp) ? timestamp : null;
+function pagePublicationTimestamp(value: Date | string | number | null | undefined) {
+    return unixToDate(value)?.getTime() ?? null;
 }
 
 function assertPageScheduleAuthority(
     requestedPublishedAt: Date | string | null | undefined,
-    currentPublishedAt: Date | string | null | undefined,
+    currentPublishedAt: Date | string | number | null | undefined,
     authority: PageLifecycleAuthority,
 ) {
     if (
@@ -89,7 +105,8 @@ export async function listPages(
         limit?: number;
         search?: string;
         showTrashed?: boolean;
-        sort?: "title" | "createdAt" | "updatedAt" | "sortOrder";
+        status?: AdminPageStatus;
+        sort?: "title" | "createdAt" | "updatedAt";
         order?: "asc" | "desc";
     } = {},
 ) {
@@ -98,6 +115,7 @@ export async function listPages(
         limit = 10,
         search = "",
         showTrashed = false,
+        status,
         sort = "updatedAt",
         order = "desc",
     } = options;
@@ -111,6 +129,7 @@ export async function listPages(
         conditions.push(isNotNull(pages.deletedAt));
     } else {
         conditions.push(isNull(pages.deletedAt));
+        conditions.push(adminPageStatusCondition(status));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -126,7 +145,6 @@ export async function listPages(
         switch (sort) {
             case "title": return pages.title;
             case "createdAt": return pages.createdAt;
-            case "sortOrder": return pages.sortOrder;
             default: return pages.updatedAt;
         }
     })();
@@ -263,7 +281,7 @@ export async function createPage(
             excludeFromSitemap: data.excludeFromSitemap ?? false,
             isPublished: data.isPublished,
             publishedAt,
-            sortOrder: data.sortOrder ?? 0,
+            sortOrder: 0,
             hideHeader: data.hideHeader,
             hideFooter: data.hideFooter,
             hideTitle: data.hideTitle,
@@ -447,7 +465,7 @@ export async function bulkPublishPages(
         db.update(pages)
             .set({
                 isPublished: true,
-                publishedAt: sql`coalesce(${pages.publishedAt}, unixepoch())`,
+                publishedAt: sql`unixepoch()`,
                 revision: sql`${pages.revision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })

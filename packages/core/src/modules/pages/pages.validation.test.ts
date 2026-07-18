@@ -23,7 +23,6 @@ const pageInput = {
   noIndex: false,
   excludeFromSitemap: false,
   isPublished: true,
-  sortOrder: 0,
   hideHeader: false,
   hideFooter: false,
   hideTitle: false,
@@ -38,7 +37,6 @@ describe("page validation", () => {
       content: "<p>Draft content</p>",
       metaTitle: null,
       metaDescription: null,
-      sortOrder: 0,
       hideHeader: false,
       hideFooter: false,
       hideTitle: false,
@@ -55,7 +53,6 @@ describe("page validation", () => {
       metaTitle: null,
       metaDescription: null,
       isPublished: true,
-      sortOrder: 0,
       hideHeader: false,
       hideFooter: false,
       hideTitle: false,
@@ -129,5 +126,16 @@ describe("page validation", () => {
     expect(updatePageSchema.safeParse({ title: "Updated Offer" }).success).toBe(false);
     expect(updatePageSchema.safeParse({ expectedRevision: 0, title: "Updated Offer" }).success).toBe(false);
     expect(updatePageSchema.safeParse({ expectedRevision: 1, title: "Updated Offer" }).success).toBe(true);
+  });
+
+  it("rejects invalid publication timestamps at the API boundary", () => {
+    expect(createPageSchema.safeParse({
+      ...pageInput,
+      publishedAt: "not-a-date",
+    }).success).toBe(false);
+    expect(updatePageSchema.safeParse({
+      expectedRevision: 1,
+      publishedAt: "not-a-date",
+    }).success).toBe(false);
   });
 });

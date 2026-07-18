@@ -51,7 +51,7 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 ### Service Functions
 
 **Admin Queries:**
-- `listPages(db, options)` -- paginated list with FTS5 search, sort (`title`/`createdAt`/`updatedAt`/`sortOrder`), trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
+- `listPages(db, options)` -- paginated list with FTS5 search, lifecycle status (`draft`/`scheduled`/`published`), sort (`title`/`createdAt`/`updatedAt`), and trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
 - `getPageById(db, id)` -- single page by ID (non-deleted only)
 - `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
 
@@ -76,8 +76,11 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `metaTitle`, `metaDescription`: nullable strings
 - `isPublished`: boolean (default false)
 - `publishedAt`: optional date (auto-set on publish if not provided)
-- `sortOrder`: number (default 0)
 - `hideHeader`, `hideFooter`, `hideTitle`: boolean (default false)
+
+Navigation owns merchant-visible page ordering. The legacy `pages.sortOrder`
+column is retained only as an internal compatibility value and new pages write
+zero; it is not a form field, write input, or supported admin sort.
 
 Exported types: `CreatePageInput`, `UpdatePageInput`.
 
@@ -87,7 +90,7 @@ Exported types: `CreatePageInput`, `UpdatePageInput`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/admin/pages` | List pages (paginated, searchable, sortable, trash filter) |
+| GET | `/admin/pages` | List pages (paginated, searchable, lifecycle-filtered, sortable, trash filter) |
 | POST | `/admin/pages` | Create page |
 | GET | `/admin/pages/{id}` | Get page by ID |
 | PUT | `/admin/pages/{id}` | Update page |
@@ -103,17 +106,19 @@ Exported types: `CreatePageInput`, `UpdatePageInput`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/pages` | List pages (paginated, published-only by default, cached 1h) |
+| GET | `/pages` | List buyer-resolvable published pages (paginated, cached 1h) |
 | GET | `/pages/slug/{slug}` | Get published page by slug (cached 1h) |
 | GET | `/pages/{id}` | Get page by ID, non-deleted only (cached 1h) |
 
 Public routes return `{ page }` or `{ pages, pagination }` inside the standard `{ success, data }` envelope.
+The public list has no draft/schedule escape hatch: `publishedOnly` is not a
+supported query parameter.
 
 ## Storefront Integration
 
 **Client library** (`apps/storefront/src/lib/api/pages.ts`):
 - `getPageBySlug(slug)` -- fetches via `/pages/slug/{slug}`, edge-cached (24h TTL via `withEdgeCache`)
-- `getAllPages(options)` -- fetches via `/pages`, edge-cached, returns `{ data: Page[], pagination }`
+- `getAllPages(options)` -- fetches the always-published `/pages` list, edge-cached, and returns `{ data: Page[], pagination }`
 
 **Dynamic page route** (`apps/storefront/src/pages/[slug].astro`):
 - Validates slug format before making API calls

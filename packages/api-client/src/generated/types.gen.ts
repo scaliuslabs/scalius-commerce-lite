@@ -1402,10 +1402,6 @@ export type GetApiV1PagesData = {
          * Sort field (prefix with - for descending)
          */
         sort?: 'title' | 'createdAt' | '-title' | '-createdAt';
-        /**
-         * Only return published pages
-         */
-        publishedOnly?: boolean | null;
     };
     url: '/api/v1/pages';
 };
@@ -10293,13 +10289,17 @@ export type GetApiV1AdminPagesData = {
          */
         trashed?: string;
         /**
+         * Lifecycle status
+         */
+        status?: 'draft' | 'scheduled' | 'published';
+        /**
          * Sort field
          */
-        sort?: string;
+        sort?: 'title' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
-        order?: string;
+        order?: 'asc' | 'desc';
     };
     url: '/api/v1/admin/pages';
 };
@@ -10455,7 +10455,6 @@ export type PostApiV1AdminPagesData = {
         } | null;
         publishedAt?: string | string | null;
         isPublished?: boolean;
-        sortOrder?: number;
         hideHeader?: boolean;
         hideFooter?: boolean;
         hideTitle?: boolean;
@@ -11323,7 +11322,6 @@ export type PutApiV1AdminPagesByIdData = {
         excludeFromSitemap?: boolean;
         isPublished?: boolean;
         publishedAt?: string | string | null;
-        sortOrder?: number;
         hideHeader?: boolean;
         hideFooter?: boolean;
         hideTitle?: boolean;

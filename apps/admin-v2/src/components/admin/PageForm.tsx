@@ -19,7 +19,19 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
-import { ExternalLink } from "lucide-react";
+import {
+  CalendarClock,
+  CircleDashed,
+  ExternalLink,
+  Globe2,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { CharacterCounter } from "@/components/ui/character-counter";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
@@ -38,6 +50,12 @@ import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import {
+  defaultPageScheduleDate,
+  publicationFieldsForInput,
+  toDateTimeLocalValue,
+  type PagePublicationMode,
+} from "@/lib/page-publication";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -60,6 +78,10 @@ function serializeFeaturedImage(
 }
 
 function toPageInput(values: PageFormValues): CreatePageInput {
+  const publication = publicationFieldsForInput({
+    mode: values.publicationMode,
+    publishedAt: values.publishedAt,
+  });
   return {
     title: values.title,
     slug: values.slug,
@@ -69,9 +91,7 @@ function toPageInput(values: PageFormValues): CreatePageInput {
     canonicalPath: values.canonicalPath,
     noIndex: values.noIndex,
     excludeFromSitemap: values.excludeFromSitemap,
-    isPublished: values.isPublished,
-    publishedAt: values.publishedAt ? values.publishedAt.toISOString() : null,
-    sortOrder: values.sortOrder,
+    ...publication,
     hideHeader: values.hideHeader,
     hideFooter: values.hideFooter,
     hideTitle: values.hideTitle,
@@ -104,9 +124,8 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
-      isPublished: false,
+      publicationMode: "draft",
       publishedAt: null,
-      sortOrder: 0,
       hideHeader: false,
       hideFooter: false,
       hideTitle: false,
@@ -137,13 +156,6 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/pages",
-    transformValues: (values) => {
-      // Set publishedAt to current date if isPublished is true and publishedAt is not set
-      if (values.isPublished && !values.publishedAt) {
-        return { ...values, publishedAt: new Date() };
-      }
-      return values;
-    },
   });
 
   const handleSubmit = (values: PageFormValues) => {
@@ -169,7 +181,30 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   }, [form, isClient, isEdit]);
 
   const slug = form.watch("slug");
+  const publicationMode = form.watch("publicationMode");
   const storefrontPageUrl = getStorefrontPath(slug ? `/${slug}` : "/");
+
+  const changePublicationMode = React.useCallback((mode: PagePublicationMode) => {
+    form.setValue("publicationMode", mode, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    if (mode === "draft" || mode === "published") {
+      form.setValue("publishedAt", null, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      return;
+    }
+    const current = form.getValues("publishedAt");
+    form.setValue(
+      "publishedAt",
+      current && current.getTime() > Date.now()
+        ? current
+        : defaultPageScheduleDate(),
+      { shouldDirty: true, shouldValidate: true },
+    );
+  }, [form]);
 
   return (
     <FormContainer
@@ -262,34 +297,124 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
         {/* Right Column (1/3) */}
         <div className="space-y-3">
-          {/* Status & Display card */}
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base">Status & Display</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
+          <Card>
+            <CardHeader className="px-4 py-3">
+              <CardTitle className="text-sm">Visibility</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 border-t px-4 py-3">
+              <FormField
+                control={form.control}
+                name="publicationMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Page visibility</FormLabel>
+                    <Select
+                      value={field.value}
+                      disabled={!canPublish}
+                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                    >
+                      <FormControl>
+                        <SelectTrigger aria-label="Page visibility">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="draft">
+                          <span className="flex items-center gap-2"><CircleDashed className="h-3.5 w-3.5" /> Draft</span>
+                        </SelectItem>
+                        <SelectItem value="published">
+                          <span className="flex items-center gap-2"><Globe2 className="h-3.5 w-3.5" /> Publish now</span>
+                        </SelectItem>
+                        <SelectItem value="scheduled">
+                          <span className="flex items-center gap-2"><CalendarClock className="h-3.5 w-3.5" /> Schedule</span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!canPublish ? (
+                      <FormDescription className="text-xs">Publish permission is required to change visibility.</FormDescription>
+                    ) : null}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {publicationMode === "scheduled" ? (
                 <FormField
                   control={form.control}
-                  name="isPublished"
+                  name="publishedAt"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">
-                          Published Status
-                        </FormLabel>
-                        <FormDescription>
-                          {canPublish
-                            ? "Published pages are visible to storefront visitors."
-                            : "You need page publish permission to change this status."}
-                        </FormDescription>
-                      </div>
+                    <FormItem>
+                      <FormLabel className="text-xs">Publication time</FormLabel>
                       <FormControl>
-                        <Switch
-                          checked={field.value}
-                          disabled={!canPublish}
-                          onCheckedChange={field.onChange}
+                        <Input
+                          type="datetime-local"
+                          value={toDateTimeLocalValue(field.value)}
+                          min={toDateTimeLocalValue(new Date())}
+                          onChange={(event) => field.onChange(
+                            event.target.value ? new Date(event.target.value) : null,
+                          )}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {publicationMode === "published" ? (
+                  <><Globe2 className="h-3.5 w-3.5 text-emerald-600" /> Buyers can open this page.</>
+                ) : publicationMode === "scheduled" ? (
+                  <><CalendarClock className="h-3.5 w-3.5 text-sky-600" /> Hidden until the scheduled time.</>
+                ) : (
+                  <><CircleDashed className="h-3.5 w-3.5" /> Only staff can edit this draft.</>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="px-4 py-3">
+              <CardTitle className="text-sm">Page</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 border-t px-4 py-3">
+              <FormField
+                control={form.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">URL</FormLabel>
+                    <div className="flex items-center rounded-md border border-input bg-background shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+                      <span className="pl-3 text-sm text-muted-foreground">/</span>
+                      <FormControl>
+                        <Input
+                          placeholder="page-url"
+                          {...field}
+                          className="border-0 pl-0 shadow-none focus-visible:ring-0"
+                        />
+                      </FormControl>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {isEdit && slug && publicationMode === "published" ? (
+                <Button type="button" variant="outline" size="sm" className="w-full gap-2" asChild>
+                  <a href={storefrontPageUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" /> View live page
+                  </a>
+                </Button>
+              ) : null}
+
+              <div className="divide-y rounded-md border">
+                <FormField
+                  control={form.control}
+                  name="hideTitle"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between px-3 py-2.5">
+                      <FormLabel className="text-sm font-normal">Hide page title</FormLabel>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     </FormItem>
                   )}
                 />
@@ -297,19 +422,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   control={form.control}
                   name="hideHeader"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">Hide Header</FormLabel>
-                        <FormDescription>
-                          Hide the main site header on this page
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
+                    <FormItem className="flex items-center justify-between px-3 py-2.5">
+                      <FormLabel className="text-sm font-normal">Hide header</FormLabel>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     </FormItem>
                   )}
                 />
@@ -317,114 +432,15 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   control={form.control}
                   name="hideFooter"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">Hide Footer</FormLabel>
-                        <FormDescription>
-                          Hide the main site footer on this page
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
+                    <FormItem className="flex items-center justify-between px-3 py-2.5">
+                      <FormLabel className="text-sm font-normal">Hide footer</FormLabel>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="hideTitle"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">Hide Page Title</FormLabel>
-                        <FormDescription>
-                          Hide the page title from the content area
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            {/* URL & Settings card */}
-            <Card>
-              <CardHeader className="pb-3 pt-4 px-4">
-                <CardTitle className="text-base">URL & Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-3">
-                <FormField
-                  control={form.control}
-                  name="slug"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Slug</FormLabel>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">/</span>
-                        <FormControl>
-                          <Input placeholder="page-url-slug" {...field} className="h-9" />
-                        </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="sortOrder"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Sort Order</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          {...field}
-                          className="h-9"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            field.onChange(value === "" ? 0 : parseInt(value, 10));
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Lower values appear first in navigation.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {isEdit && slug && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2 text-sm font-medium"
-                    asChild
-                  >
-                    <a
-                      href={storefrontPageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      View on Storefront
-                    </a>
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
             {/* SEO card (collapsible) */}
             <CollapsibleCard
@@ -575,7 +591,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                 canonicalPath={form.watch("canonicalPath")}
                 noIndex={form.watch("noIndex")}
                 excludeFromSitemap={form.watch("excludeFromSitemap")}
-                isPublished={form.watch("isPublished")}
+                isPublished={form.watch("publicationMode") === "published"}
               />
             </CollapsibleCard>
           </div>

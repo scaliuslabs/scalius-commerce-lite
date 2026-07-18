@@ -62,6 +62,7 @@ export interface PagesQueryInput {
   order?: string;
   showTrashed?: boolean;
   trashed?: boolean;
+  status?: "draft" | "scheduled" | "published";
 }
 
 export interface CreatePageInput {
@@ -75,7 +76,6 @@ export interface CreatePageInput {
   excludeFromSitemap: boolean;
   isPublished: boolean;
   publishedAt?: string | null;
-  sortOrder: number;
   hideHeader: boolean;
   hideFooter: boolean;
   hideTitle: boolean;
@@ -113,6 +113,7 @@ function toPagesParams(input: PagesQueryInput): Record<string, string> {
   if (input.sort) params.sort = input.sort;
   if (input.order) params.order = input.order;
   if (input.showTrashed || input.trashed) params.trashed = "true";
+  if (input.status) params.status = input.status;
   return params;
 }
 

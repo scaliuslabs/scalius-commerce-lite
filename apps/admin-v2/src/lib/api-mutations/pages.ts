@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   bulkDeletePages,
+  bulkPublishPages,
   bulkRestorePages,
+  bulkUnpublishPages,
   createPage,
   deletePage,
   permanentDeletePage,
@@ -113,5 +115,31 @@ export function useBulkRestorePages() {
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore pages")),
+  });
+}
+
+export function useBulkPublishPages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pages: PageRevisionClaim[]) => bulkPublishPages({ data: { pages } }),
+    onSuccess: (_data, pages) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
+      toast.success(`${pages.length} ${pages.length === 1 ? "page" : "pages"} published`);
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to publish pages")),
+  });
+}
+
+export function useBulkUnpublishPages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pages: PageRevisionClaim[]) => bulkUnpublishPages({ data: { pages } }),
+    onSuccess: (_data, pages) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
+      toast.success(`${pages.length} ${pages.length === 1 ? "page" : "pages"} moved to draft`);
+    },
+    onError: (err) =>
+      toast.error(getServerFnError(err, "Failed to unpublish pages")),
   });
 }

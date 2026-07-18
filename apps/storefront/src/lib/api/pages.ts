@@ -82,7 +82,6 @@ export interface PageListOptions {
   page?: number;
   limit?: number;
   sort?: "title" | "createdAt" | "-title" | "-createdAt";
-  publishedOnly?: boolean;
 }
 
 /**

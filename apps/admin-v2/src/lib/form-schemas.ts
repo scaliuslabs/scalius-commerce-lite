@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/analytics.validation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
+import { PAGE_PUBLICATION_MODES } from "@/lib/page-publication";
 import {
   isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
@@ -109,19 +110,29 @@ export const pageFormSchema = z.object({
     .refine((slug) => isValidResourceCanonicalPath("page", `/${slug}`), {
       message: "This URL is reserved by the storefront. Choose another slug.",
     }),
-  content: z.string().min(1, "Content is required"),
-  metaTitle: z.string().nullable(),
-  metaDescription: z.string().nullable(),
+  content: z.string().min(1, "Content is required").max(100_000, "Content is too long"),
+  metaTitle: z.string().trim().max(70, "Meta title must be 70 characters or fewer").nullable(),
+  metaDescription: z.string().trim().max(200, "Meta description must be 200 characters or fewer").nullable(),
   canonicalPath: canonicalPathFormSchema("page", "/returns"),
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
-  isPublished: z.boolean(),
+  publicationMode: z.enum(PAGE_PUBLICATION_MODES),
   publishedAt: z.coerce.date().nullable().optional(),
-  sortOrder: z.number(),
   hideHeader: z.boolean(),
   hideFooter: z.boolean(),
   hideTitle: z.boolean(),
   featuredImage: mediaFileFormSchema.nullable(),
+}).superRefine((value, context) => {
+  if (
+    value.publicationMode === "scheduled" &&
+    (!value.publishedAt || value.publishedAt.getTime() <= Date.now())
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["publishedAt"],
+      message: "Choose a future publication time.",
+    });
+  }
 });
 
 export type PageFormValues = z.infer<typeof pageFormSchema>;

@@ -86,8 +86,9 @@ const listRoute = createRoute({
             limit: z.coerce.number().max(100).default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().default("").openapi({ description: "Search term" }),
             trashed: z.string().optional().openapi({ description: "Show trashed items" }),
-            sort: z.string().optional().default("updatedAt").openapi({ description: "Sort field" }),
-            order: z.string().optional().default("desc").openapi({ description: "Sort order" })
+            status: z.enum(["draft", "scheduled", "published"]).optional().openapi({ description: "Lifecycle status" }),
+            sort: z.enum(["title", "createdAt", "updatedAt"]).optional().default("updatedAt").openapi({ description: "Sort field" }),
+            order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" })
         })
     },
     responses: {
@@ -107,8 +108,9 @@ app.openapi(listRoute, async (c) => {
         limit: q.limit,
         search: q.search || "",
         showTrashed: q.trashed === "true",
-        sort: q.sort as "title" | "createdAt" | "updatedAt" | "sortOrder" | undefined,
-        order: q.order as "asc" | "desc" | undefined
+        status: q.status,
+        sort: q.sort,
+        order: q.order,
     });
     return ok(c, result);
 });
