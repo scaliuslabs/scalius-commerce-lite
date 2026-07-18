@@ -610,6 +610,20 @@ The cleanup bullets below describe the two-product proof store that preceded the
   build while product pages already served the new build; a direct cache/build
   probe recovered to `src-b7ae9c72b6606ef5`, and the required sequential
   redeploy then passed health, 100% version, and all critical cache warm checks.
+- Latest customer-history release: admin
+  `eef9edd8-ec11-46b8-8251-c49dbe291194`. Customer and order timestamps now
+  share the Bangladesh admin-time boundary, so the live guest COD order
+  `NFPLAV` is `Jul 19, 2026, 2:53 AM` in both order detail and customer
+  history instead of appearing on different calendar days. At 390 px the
+  recent-orders table is replaced by a compact semantic order-card projection;
+  the desktop table remains available from the `sm` breakpoint. Production
+  browser proof covered light and dark modes, exact same-tab navigation to
+  `/admin/orders/NFPLAV`, one visible mobile order link, hidden desktop table,
+  zero horizontal overflow, and no route error. Focused boundaries, lint, and
+  the sequential Admin typecheck passed before deployment. The history API
+  still returns the customer's complete order and change-history arrays; that
+  unbounded read is the next scalability defect to replace with honest server
+  pagination rather than another client-only loading illusion.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks
