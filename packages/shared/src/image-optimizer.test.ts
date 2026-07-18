@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getOptimizedImageUrl,
+  getResponsiveSrcSet,
   type ImageContext,
 } from "./image-optimizer";
 
@@ -51,5 +52,31 @@ describe("getOptimizedImageUrl", () => {
       "https://cdn.example.com/cdn-cgi/image/width=320,fit=contain/products/item.jpg";
 
     expect(getOptimizedImageUrl(existing, undefined, imageContext)).toBe(existing);
+  });
+
+  it("does not force natural responsive images into square transforms", () => {
+    const srcset = getResponsiveSrcSet(
+      "https://cdn.example.com/content/wide-story.jpg",
+      [320, 640],
+      { height: null, fit: "scale-down" },
+      imageContext,
+    );
+
+    expect(srcset).toContain("width=320");
+    expect(srcset).toContain("width=640");
+    expect(srcset).not.toContain("height=");
+  });
+
+  it("preserves an explicit responsive crop ratio at every width", () => {
+    const srcset = getResponsiveSrcSet(
+      "https://cdn.example.com/heroes/summer.jpg",
+      [650, 1_300],
+      { width: 1_300, height: 500, fit: "cover" },
+      imageContext,
+    );
+
+    expect(srcset).toContain("width=650,height=250");
+    expect(srcset).toContain("width=1300,height=500");
+    expect(srcset).not.toContain("width=650,height=650");
   });
 });

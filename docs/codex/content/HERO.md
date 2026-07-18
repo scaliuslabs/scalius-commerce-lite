@@ -59,11 +59,14 @@ controls for keyboard precision, or reset to center. Draft previews apply the
 choice before the explicit document save.
 
 The same percentage authority projects to CSS `object-position` for local
-previews and Cloudflare's relative `gravity=XxY` coordinates for the delivered
-cover transform. This avoids pre-cropping source pixels and keeps one stable
-merchant choice across responsive rendering. Desktop and mobile hero documents
-remain separate, so each viewport can select a different source image and focal
-point without adding a second breakpoint-specific position field to a slide.
+previews and Cloudflare's relative `gravity=XxY` coordinates. Admin row/drag
+previews and storefront delivery now build their resized cover URL through the
+same shared viewport transform, so a preview cannot quietly request a generic
+square bitmap while production requests a banner crop. This avoids accidental
+pre-cropping and keeps one stable merchant choice across responsive rendering.
+Desktop and mobile hero documents remain separate, so each viewport can select
+a different source image and focal point without adding a second
+breakpoint-specific position field to a slide.
 
 ## Migration and verification
 

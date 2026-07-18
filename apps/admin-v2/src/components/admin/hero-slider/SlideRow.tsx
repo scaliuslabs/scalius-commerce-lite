@@ -8,6 +8,7 @@ import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import {
   HERO_SLIDE_PRESENTATION,
+  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
 } from "@scalius/shared/hero-slider";
 import type { SliderImage } from "./helpers";
@@ -60,7 +61,13 @@ export function SlideRow({
         style={{ aspectRatio: `${presentation.width} / ${presentation.height}` }}
       >
         <img
-          src={getOptimizedImageUrl(image.url)}
+          src={getOptimizedImageUrl(
+            image.url,
+            getHeroSlideImageTransform(type, image.focalPoint, {
+              width: 560,
+              quality: 80,
+            }),
+          )}
           alt={image.title || "Slide"}
           className="h-full w-full object-cover"
           style={{ objectPosition: getHeroSlideObjectPosition(image.focalPoint) }}
