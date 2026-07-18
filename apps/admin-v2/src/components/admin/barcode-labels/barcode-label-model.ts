@@ -203,6 +203,8 @@ export function getLabelInventorySummary(
 
 export type LabelQuantityShortcut = "one" | "onHand" | "available";
 
+export type LabelOrder = "selected" | "product" | "sku";
+
 export function getLabelShortcutQuantity(
   variant: Pick<InventoryLabelVariant, "available" | "stock" | "trackInventory">,
   currentQuantity: number,
@@ -211,6 +213,49 @@ export function getLabelShortcutQuantity(
   if (mode === "one") return 1;
   if (!variant.trackInventory) return Math.max(0, Math.trunc(currentQuantity));
   return Math.max(0, mode === "onHand" ? variant.stock : variant.available);
+}
+
+function compareLabelText(left: string | null | undefined, right: string | null | undefined): number {
+  return (left ?? "").localeCompare(right ?? "", "en", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+/**
+ * Printing order is a job concern, not catalog identity. Never mutate the API
+ * projection or the URL selection order while arranging physical labels.
+ */
+export function orderLabelVariants(
+  variants: readonly InventoryLabelVariant[],
+  order: LabelOrder,
+): InventoryLabelVariant[] {
+  const ordered = [...variants];
+  if (order === "selected") return ordered;
+
+  return ordered.sort((left, right) => {
+    const primary = order === "product"
+      ? compareLabelText(left.productName, right.productName)
+      : compareLabelText(left.sku, right.sku);
+    if (primary !== 0) return primary;
+
+    const secondary = order === "product"
+      ? compareLabelText(left.optionLabel, right.optionLabel)
+      : compareLabelText(left.productName, right.productName);
+    if (secondary !== 0) return secondary;
+
+    const tertiary = compareLabelText(left.sku, right.sku);
+    return tertiary !== 0 ? tertiary : compareLabelText(left.id, right.id);
+  });
+}
+
+export function getNonPrintingLabelVariantIds(
+  variants: readonly Pick<InventoryLabelVariant, "id">[],
+  quantities: Readonly<Record<string, number>>,
+): string[] {
+  return variants
+    .filter((variant) => Math.max(0, Math.trunc(quantities[variant.id] ?? 1)) === 0)
+    .map((variant) => variant.id);
 }
 
 export function getLabelDimensions(preset: LabelPreset) {
