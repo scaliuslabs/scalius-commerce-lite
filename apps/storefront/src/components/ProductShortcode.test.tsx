@@ -64,6 +64,9 @@ describe("ProductShortcode normalized options", () => {
 
     await act(async () => root.render(<ProductShortcode productData={productData} />));
     expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("primary.jpg");
+    expect([...host.querySelectorAll<HTMLImageElement>("button img")].every((image) => (
+      image.classList.contains("object-contain")
+    ))).toBe(true);
 
     const digital = [...host.querySelectorAll("button")].find((button) => button.textContent === "Digital");
     await act(async () => digital?.click());

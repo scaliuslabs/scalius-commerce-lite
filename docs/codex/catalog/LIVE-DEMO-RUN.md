@@ -31,6 +31,25 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   was cleared. Eighty-one focused tests, the 310-file Astro check, lint,
   deployment verification, cache warming, and `pnpm release:check` passed.
 
+### CMS presentation checkpoint (2026-07-19)
+
+- Replaced the published About page's placeholder paragraph with a structured
+  store story, selection principles, category context, and truthful post-order
+  support summary. The page now uses one title H1, five content H2 headings, a
+  reviewed 2400 × 900 featured asset, and an explicit search title and
+  description.
+- Production `/about` renders its featured image through the 1280 × 640
+  Cloudflare cover projection, preserves the source alt text, has no horizontal
+  overflow, and emits the saved title and 135-character meta description.
+- Storefront version `b4517b1d-82d8-4ea3-be72-807ca117c6fe` replaces fixed
+  gray/white CMS-page and embedded-product colors with the shared theme tokens.
+  Embedded product thumbnails now preserve the whole product with `contain`
+  transforms instead of cropping it to fill a square.
+- The stale published `/home` CMS document contained literal `Hello World`
+  markup even though `/` is the storefront homepage. It was moved to Draft
+  through the merchant editor. Production `/home` now returns 404, `/` remains
+  200, and the pages sitemap lists About, Returns, and Shipping without Home.
+
 ### Buyer-support and label-printing checkpoint (2026-07-17)
 
 - Published `Shipping & delivery` (`/shipping-delivery`) with the current

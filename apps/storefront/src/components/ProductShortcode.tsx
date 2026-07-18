@@ -108,10 +108,10 @@ export default function ProductShortcode({ productData }: { productData: Product
   };
 
   return (
-    <div className="product-shortcode rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md sm:p-6">
+    <div className="product-shortcode rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm transition-all hover:shadow-md sm:p-6">
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <div>
-          <div className="aspect-square overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
+          <div className="aspect-square overflow-hidden rounded-lg border border-border bg-muted/40">
             <img src={getProductImageUrl(currentImage, { width: 600, height: 600, quality: 85, format: "auto", fit: "contain" })} alt={product.name} className="h-full w-full object-contain" loading="lazy" />
           </div>
           {images.filter((image) => hasProductImage(image.url)).length > 1 ? (
@@ -120,24 +120,24 @@ export default function ProductShortcode({ productData }: { productData: Product
                 <button key={image.id} onClick={() => {
                   setCurrentImage(image.url);
                   setCurrentImageMediaId(image.mediaId);
-                }} className={cn("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 sm:h-20 sm:w-20", currentImage === image.url ? "border-primary" : "border-gray-200")}>
-                  <img src={getProductImageUrl(image.url, { width: 120, height: 120, quality: 75, format: "auto", fit: "cover" })} alt={image.alt || product.name} className="h-full w-full object-cover" />
+                }} className={cn("h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-muted/30 sm:h-20 sm:w-20", currentImage === image.url ? "border-primary" : "border-border")}>
+                  <img src={getProductImageUrl(image.url, { width: 120, height: 120, quality: 75, format: "auto", fit: "contain" })} alt={image.alt || product.name} className="h-full w-full object-contain" />
                 </button>
               ))}
             </div>
           ) : null}
         </div>
         <div className="space-y-4">
-          <h3 className="text-xl font-bold text-gray-900 sm:text-2xl">{product.name}</h3>
+          <h3 className="text-xl font-bold text-foreground sm:text-2xl">{product.name}</h3>
           <div className="flex items-center gap-3">
             <span className="text-2xl font-bold text-destructive sm:text-3xl">{starting ? "From " : ""}{formatBuyerPrice(finalPrice)}</span>
-            {matchingVariant && presentation.pricing.hasDiscount ? <span className="text-lg text-gray-500 line-through">{formatBuyerPrice(originalPrice)}</span> : null}
+            {matchingVariant && presentation.pricing.hasDiscount ? <span className="text-lg text-muted-foreground line-through">{formatBuyerPrice(originalPrice)}</span> : null}
           </div>
           {options.map((option) => {
             const availability = getVariantOptionAvailabilityMap(buyerVariants, option.id, option.values.map((value) => value.id), selection);
             return (
               <div key={option.id}>
-                <h4 className="mb-2 text-sm font-medium text-gray-900">{option.name}</h4>
+                <h4 className="mb-2 text-sm font-medium text-foreground">{option.name}</h4>
                 <div className="flex flex-wrap gap-2">
                   {option.values.map((value) => {
                     const status = availability.get(value.id) ?? "sold_out";
@@ -153,7 +153,7 @@ export default function ProductShortcode({ productData }: { productData: Product
             );
           })}
           <div className="flex items-center gap-4">
-            <h4 className="text-sm font-medium text-gray-700">Quantity</h4>
+            <h4 className="text-sm font-medium text-foreground">Quantity</h4>
             <div className="flex items-center">
               <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus className="h-4 w-4" /></Button>
               <Input type="number" value={quantity} readOnly className="h-9 w-14 border-y-0 text-center" />
