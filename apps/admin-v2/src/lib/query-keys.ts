@@ -89,7 +89,10 @@ export const queryKeys = {
     all: ["customers"] as const,
     list: (params?: Record<string, unknown>) => listKey("customers", params),
     detail: (id: string) => ["customers", "detail", id] as const,
-    history: (id: string) => ["customers", "history", id] as const,
+    history: (id: string, params?: Record<string, unknown>) =>
+      params !== undefined
+        ? (["customers", "history", id, params] as const)
+        : (["customers", "history", id] as const),
   },
 
   // ── Discounts ────────────────────────────────────────────────────

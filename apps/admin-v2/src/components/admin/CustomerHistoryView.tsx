@@ -1,7 +1,9 @@
 // src/components/admin/CustomerHistoryView.tsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { formatAdminDate, formatAdminTimestamp } from "~/lib/admin-time";
+import { getCustomerHistory } from "~/lib/api-functions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Table,
@@ -28,6 +30,7 @@ import {
   Building,
   Home,
   ArrowRight,
+  Loader2,
   Archive,
   ClipboardList,
 } from "lucide-react";
@@ -41,6 +44,7 @@ import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import type {
   Customer,
   CustomerHistoryRecord,
+  CustomerHistoryPage,
   CustomerOrderSummary,
 } from "@/types/api-responses";
 
@@ -48,9 +52,19 @@ interface CustomerHistoryViewProps {
   customer: Customer;
   history: CustomerHistoryRecord[];
   orders: CustomerOrderSummary[];
+  pagination: {
+    history: CustomerHistoryPage;
+    orders: CustomerHistoryPage;
+  };
 }
 
-const ORDERS_PER_PAGE = 5;
+function appendUniqueById<Item extends { id: string }>(
+  current: Item[],
+  next: Item[],
+): Item[] {
+  const seen = new Set(current.map((item) => item.id));
+  return [...current, ...next.filter((item) => !seen.has(item.id))];
+}
 
 // --- Helper Functions ---
 
@@ -85,20 +99,47 @@ export function CustomerHistoryView({
   customer,
   history,
   orders,
+  pagination,
 }: CustomerHistoryViewProps) {
   const { symbol } = useCurrency();
-  const [displayedOrdersCount, setDisplayedOrdersCount] =
-    useState(ORDERS_PER_PAGE);
+  const [loadedOrders, setLoadedOrders] = useState(orders);
+  const [loadedHistory, setLoadedHistory] = useState(history);
+  const [ordersPage, setOrdersPage] = useState(pagination.orders);
+  const [historyPage, setHistoryPage] = useState(pagination.history);
 
-  const loadMoreOrders = () => {
-    setDisplayedOrdersCount((count) => count + ORDERS_PER_PAGE);
-  };
+  const moreOrders = useMutation({
+    mutationFn: () =>
+      getCustomerHistory({
+        data: {
+          id: customer.id,
+          ordersPage: ordersPage.page + 1,
+          ordersLimit: ordersPage.limit,
+          historyPage: 1,
+          historyLimit: 1,
+        },
+      }),
+    onSuccess: (data) => {
+      setLoadedOrders((current) => appendUniqueById(current, data.orders));
+      setOrdersPage(data.pagination.orders);
+    },
+  });
 
-  const displayedOrders = React.useMemo(() => {
-    return orders.slice(0, displayedOrdersCount);
-  }, [orders, displayedOrdersCount]);
-
-  const hasMoreOrders = displayedOrdersCount < orders.length;
+  const moreHistory = useMutation({
+    mutationFn: () =>
+      getCustomerHistory({
+        data: {
+          id: customer.id,
+          historyPage: historyPage.page + 1,
+          historyLimit: historyPage.limit,
+          ordersPage: 1,
+          ordersLimit: 1,
+        },
+      }),
+    onSuccess: (data) => {
+      setLoadedHistory((current) => appendUniqueById(current, data.history));
+      setHistoryPage(data.pagination.history);
+    },
+  });
 
   const addressLines = [
     customer.address,
@@ -259,13 +300,13 @@ export function CustomerHistoryView({
                 <ClipboardList className="h-5 w-5" />
                 Recent Orders
               </CardTitle>
-              <Badge variant="outline">{orders.length} total</Badge>
+              <Badge variant="outline">{ordersPage.total} total</Badge>
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
             <div className="divide-y overflow-hidden rounded-md border sm:hidden">
-              {displayedOrders.length > 0 ? (
-                displayedOrders.map((order) => (
+              {loadedOrders.length > 0 ? (
+                loadedOrders.map((order) => (
                   <Link
                     key={order.id}
                     to="/admin/orders/$orderId"
@@ -318,8 +359,8 @@ export function CustomerHistoryView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {displayedOrders.length > 0 ? (
-                    displayedOrders.map((order) => (
+                  {loadedOrders.length > 0 ? (
+                    loadedOrders.map((order) => (
                       <TableRow key={order.id} className="hover:bg-muted/30">
                         <TableCell className="font-medium">
                           <Button
@@ -368,15 +409,24 @@ export function CustomerHistoryView({
                 </TableBody>
               </Table>
             </div>
-            {hasMoreOrders && (
-              <div className="mt-4 text-center">
+            {ordersPage.hasNextPage && (
+              <div className="mt-4 space-y-2 text-center">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={loadMoreOrders}
+                  onClick={() => moreOrders.mutate()}
+                  disabled={moreOrders.isPending}
                 >
-                  Load more ({orders.length - displayedOrdersCount} remaining)
+                  {moreOrders.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Load more ({ordersPage.total - loadedOrders.length} remaining)
                 </Button>
+                {moreOrders.isError ? (
+                  <p className="text-xs text-destructive" role="alert">
+                    Orders could not be loaded. Try again.
+                  </p>
+                ) : null}
               </div>
             )}
           </CardContent>
@@ -390,99 +440,118 @@ export function CustomerHistoryView({
               <History className="h-5 w-5" />
               Change History
             </CardTitle>
-            <Badge variant="outline">{history.length} changes</Badge>
+            <Badge variant="outline">{historyPage.total} changes</Badge>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
-          {history.length > 0 ? (
-            <ScrollArea className="h-[400px] w-full pr-4">
-              {" "}
-              {/* Ensure full width */}
-              {/* Timeline Implementation */}
-              <div className="relative pl-6 space-y-6">
-                {/* Vertical line */}
-                <div
-                  className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-border"
-                  aria-hidden="true"
-                ></div>
+          {loadedHistory.length > 0 ? (
+            <>
+              <ScrollArea className="h-[400px] w-full pr-4">
+                <div className="relative space-y-6 pl-6">
+                  <div
+                    className="absolute bottom-2 left-[11px] top-2 w-0.5 bg-border"
+                    aria-hidden="true"
+                  />
 
-                {history.map((record) => {
-                  const recordAddressLines = [
-                    record.address,
-                    record.areaName || record.area,
-                    record.zoneName || record.zone,
-                    record.cityName || record.city,
-                  ].filter(Boolean);
+                  {loadedHistory.map((record) => {
+                    const recordAddressLines = [
+                      record.address,
+                      record.areaName || record.area,
+                      record.zoneName || record.zone,
+                      record.cityName || record.city,
+                    ].filter(Boolean);
 
-                  return (
-                    <div
-                      key={record.id}
-                      className="relative flex items-start space-x-3"
-                    >
-                      {/* Dot */}
-                      <div className="relative flex items-center justify-center mt-1.5">
-                        <span
-                          className="absolute -left-[19px] h-4 w-4 rounded-full border-2 border-background bg-primary ring-1 ring-border"
-                          aria-hidden="true"
-                        ></span>
-                      </div>
-
-                      {/* Content */}
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-xs">
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "capitalize px-1.5 py-0",
-                              getChangeTypeBadgeVariant(record.changeType),
-                            )}
-                          >
-                            {record.changeType}
-                          </Badge>
-                          <span className="text-muted-foreground whitespace-nowrap">
-                            {formatAdminTimestamp(record.createdAt) ?? "N/A"}
-                          </span>
+                    return (
+                      <div
+                        key={record.id}
+                        className="relative flex items-start space-x-3"
+                      >
+                        <div className="relative mt-1.5 flex items-center justify-center">
+                          <span
+                            className="absolute -left-[19px] h-4 w-4 rounded-full border-2 border-background bg-primary ring-1 ring-border"
+                            aria-hidden="true"
+                          />
                         </div>
-                        <div className="rounded-md border bg-card p-3 text-sm hover:bg-muted/50 transition-colors">
-                          <p className="font-medium">{record.name}</p>
-                          <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                            {record.phone && (
-                              <div className="flex items-center gap-1.5">
-                                <Phone className="h-3 w-3 shrink-0" />
-                                <span>{formatPhoneForDisplay(record.phone)}</span>
-                              </div>
-                            )}
-                            {record.email && (
-                              <div className="flex items-center gap-1.5">
-                                <Mail className="h-3 w-3 shrink-0" />
-                                <span>{record.email}</span>
-                              </div>
-                            )}
-                            {recordAddressLines.length > 0 && (
-                              <div className="flex items-start gap-1.5 mt-1">
-                                <MapPin className="h-3 w-3 mt-px shrink-0" />
-                                <div className="space-y-0.5">
-                                  {record.address && <p>{record.address}</p>}
-                                  {(record.areaName || record.area) && (
-                                    <p>{record.areaName || record.area}</p>
-                                  )}
-                                  {(record.zoneName || record.zone) && (
-                                    <p>{record.zoneName || record.zone}</p>
-                                  )}
-                                  {(record.cityName || record.city) && (
-                                    <p>{record.cityName || record.city}</p>
-                                  )}
+
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                            <Badge
+                              variant="secondary"
+                              className={cn(
+                                "capitalize px-1.5 py-0",
+                                getChangeTypeBadgeVariant(record.changeType),
+                              )}
+                            >
+                              {record.changeType}
+                            </Badge>
+                            <span className="whitespace-nowrap text-muted-foreground">
+                              {formatAdminTimestamp(record.createdAt) ?? "N/A"}
+                            </span>
+                          </div>
+                          <div className="rounded-md border bg-card p-3 text-sm transition-colors hover:bg-muted/50">
+                            <p className="font-medium">{record.name}</p>
+                            <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                              {record.phone && (
+                                <div className="flex items-center gap-1.5">
+                                  <Phone className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    {formatPhoneForDisplay(record.phone)}
+                                  </span>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                              {record.email && (
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="h-3 w-3 shrink-0" />
+                                  <span>{record.email}</span>
+                                </div>
+                              )}
+                              {recordAddressLines.length > 0 && (
+                                <div className="mt-1 flex items-start gap-1.5">
+                                  <MapPin className="mt-px h-3 w-3 shrink-0" />
+                                  <div className="space-y-0.5">
+                                    {record.address && <p>{record.address}</p>}
+                                    {(record.areaName || record.area) && (
+                                      <p>{record.areaName || record.area}</p>
+                                    )}
+                                    {(record.zoneName || record.zone) && (
+                                      <p>{record.zoneName || record.zone}</p>
+                                    )}
+                                    {(record.cityName || record.city) && (
+                                      <p>{record.cityName || record.city}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+              {historyPage.hasNextPage ? (
+                <div className="mt-4 space-y-2 text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => moreHistory.mutate()}
+                    disabled={moreHistory.isPending}
+                  >
+                    {moreHistory.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Load older changes (
+                    {historyPage.total - loadedHistory.length} remaining)
+                  </Button>
+                  {moreHistory.isError ? (
+                    <p className="text-xs text-destructive" role="alert">
+                      Change history could not be loaded. Try again.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="h-48 flex flex-col items-center justify-center gap-2 text-muted-foreground border rounded-md">
               <Archive className="h-10 w-10" />

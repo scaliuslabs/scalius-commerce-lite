@@ -34204,6 +34204,48 @@
             "required": true,
             "name": "id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "historyPage",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "historyLimit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "ordersPage",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 25,
+              "default": 5
+            },
+            "required": false,
+            "name": "ordersLimit",
+            "in": "query"
           }
         ],
         "responses": {
@@ -34457,12 +34499,76 @@
                               "createdAt"
                             ]
                           }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "history": {
+                              "type": "object",
+                              "properties": {
+                                "page": {
+                                  "type": "number"
+                                },
+                                "limit": {
+                                  "type": "number"
+                                },
+                                "total": {
+                                  "type": "number"
+                                },
+                                "totalPages": {
+                                  "type": "number"
+                                },
+                                "hasNextPage": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "page",
+                                "limit",
+                                "total",
+                                "totalPages",
+                                "hasNextPage"
+                              ]
+                            },
+                            "orders": {
+                              "type": "object",
+                              "properties": {
+                                "page": {
+                                  "type": "number"
+                                },
+                                "limit": {
+                                  "type": "number"
+                                },
+                                "total": {
+                                  "type": "number"
+                                },
+                                "totalPages": {
+                                  "type": "number"
+                                },
+                                "hasNextPage": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "page",
+                                "limit",
+                                "total",
+                                "totalPages",
+                                "hasNextPage"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "history",
+                            "orders"
+                          ]
                         }
                       },
                       "required": [
                         "customer",
                         "history",
-                        "orders"
+                        "orders",
+                        "pagination"
                       ]
                     }
                   },

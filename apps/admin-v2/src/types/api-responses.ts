@@ -569,10 +569,22 @@ export interface CustomerOrderSummary {
   createdAt: Date | string | number;
 }
 
+export interface CustomerHistoryPage {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
 export interface CustomerHistoryData {
   customer: Customer;
   history: CustomerHistoryRecord[];
   orders: CustomerOrderSummary[];
+  pagination: {
+    history: CustomerHistoryPage;
+    orders: CustomerHistoryPage;
+  };
 }
 
 // ---------------------------------------------------------------------------

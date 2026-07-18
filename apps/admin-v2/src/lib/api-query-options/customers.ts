@@ -3,6 +3,7 @@ import {
   getCustomer,
   getCustomerHistory,
   getCustomers,
+  type CustomerHistoryQueryInput,
   type CustomersQueryInput,
 } from "../api-functions/customers";
 import { queryKeys } from "../query-keys";
@@ -23,9 +24,19 @@ export const customerQueryOptions = (id: string) =>
     staleTime: 0,
   });
 
-export const customerHistoryQueryOptions = (id: string) =>
+export const CUSTOMER_HISTORY_INITIAL_QUERY = {
+  historyPage: 1,
+  historyLimit: 20,
+  ordersPage: 1,
+  ordersLimit: 5,
+} as const;
+
+export const customerHistoryQueryOptions = (
+  id: string,
+  params: Omit<CustomerHistoryQueryInput, "id"> = CUSTOMER_HISTORY_INITIAL_QUERY,
+) =>
   queryOptions({
-    queryKey: queryKeys.customers.history(id),
-    queryFn: () => getCustomerHistory({ data: { id } }),
+    queryKey: queryKeys.customers.history(id, params),
+    queryFn: () => getCustomerHistory({ data: { id, ...params } }),
     staleTime: 0,
   });
