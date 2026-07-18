@@ -261,6 +261,27 @@ buffered in a Worker invocation.
   idempotence of already transformed URLs. Admin and storefront were rebuilt
   and deployed together because both bundle the shared optimizer.
 
+### Live workflow checkpoint (2026-07-19)
+
+- Production desktop dark-mode verification at 1440 px shows the intended
+  five-column inspection grid with complete `contain` thumbnails, compact
+  metadata, explicit folder scope, and no document-level overflow.
+- Production mobile dark-mode verification at a real 390 x 844 device viewport
+  shows a two-column gallery, horizontal folder rail, touch-visible card
+  controls, and no horizontal overflow (`scrollWidth === innerWidth`).
+- Standalone `Select` was exercised live and entered with zero selected assets.
+  `Select all shown` remains a separate command, while `Cancel` leaves selection
+  mode. This is the required safeguard against accidental whole-page bulk work.
+- The product multi-media picker was exercised with five existing associations:
+  it truthfully highlighted those five, kept explicit `Clear`/`Add 5` actions,
+  rendered five assets per desktop row, and its single `Close` control no longer
+  overlaps a second icon or label.
+- The Videos filter returns four real MP4 assets. The formerly rejected 23.56 MB
+  cafeteria walkthrough opens in the first-class video preview, seeks through
+  the direct player, exposes optional descriptive caption and poster controls,
+  and keeps the 100 MiB video limit visible. The library therefore proves that
+  this file is stored and playable rather than merely accepted by validation.
+
 ## Platform evidence
 
 - [Shopify's current file requirements](https://help.shopify.com/en/manual/shopify-admin/productivity-tools/file-uploads)
