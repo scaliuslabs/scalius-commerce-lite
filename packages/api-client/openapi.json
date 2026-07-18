@@ -53362,6 +53362,9 @@
                               "price": {
                                 "type": "number"
                               },
+                              "effectivePrice": {
+                                "type": "number"
+                              },
                               "stock": {
                                 "type": "number"
                               },
@@ -53388,6 +53391,7 @@
                               "barcodeType",
                               "optionLabel",
                               "price",
+                              "effectivePrice",
                               "stock",
                               "reservedStock",
                               "available",

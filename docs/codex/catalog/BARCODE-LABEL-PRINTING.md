@@ -1,6 +1,6 @@
 # Barcode label printing
 
-Last reviewed: 2026-07-17
+Last reviewed: 2026-07-19
 
 ## Decision
 
@@ -51,6 +51,12 @@ a first-time merchant can see every decision before printing.
   manual per-variant quantity selection. Scalius should preserve custom
   millimetre stock and safe `On hand`/`Available` batch quantities instead of
   copying those constraints.
+- Shopify's current workflow was rechecked on 2026-07-19. Its product-list
+  action still enters a separate print job with a template, exact per-variant
+  quantities, printer settings, and native Print/Save as PDF. This reinforces
+  the shared-workspace decision: Scalius's row icon is an entry point into the
+  job, not an immediate-print action, while A4/plain-paper users do not need a
+  separate app or manual canvas.
 - [Square barcode labels](https://squareup.com/help/us/en/article/6093-create-and-print-bar-code-labels-with-square-for-retail)
   can start from a custom item set, category, or purchase order; offers SKU or
   GTIN selection, label preview, test printing, PDF download, and per-item
@@ -87,7 +93,9 @@ a first-time merchant can see every decision before printing.
 - Selection is exact persisted SKU identity. Draft SKUs must be saved before a
   printable barcode exists.
 - Each selected row shows product, merchant option label, SKU, barcode type,
-  barcode value, stock, and label quantity.
+  barcode value, stock, and label quantity. When inventory is not tracked,
+  `On hand` and `Available` preserve the merchant's manual count instead of
+  silently replacing it with zero.
 - Quantity shortcuts are `One each`, `On hand`, and `Available`; every SKU also
   has an exact editable quantity. Zero is allowed and removes that SKU from the
   print count without losing it from the batch.
@@ -111,7 +119,10 @@ Primary presets:
    must remain at least 20 x 15 mm.
 
 Label content is restrained: barcode symbol and human-readable value are
-mandatory; product name, variant, SKU, and price are optional. The
+mandatory; product name, variant, SKU, and selling price are optional. Selling
+price means the automatic buyer-effective catalog price: a positive SKU
+discount wins, otherwise the product discount applies. It does not pretend to
+include conditional checkout codes or customer-specific promotions. The
 preview reports when the chosen media cannot hold the selected symbology at a
 safe size. Truncating descriptive text is allowed; truncating, horizontally
 scaling, or clipping the symbol or quiet zones is not.
@@ -205,11 +216,24 @@ feeds, structured data, or external marketplaces.
   printed identity would invalidate physical stock labels. They may require the
   wider A4 preset. Newly generated internal identities are compact 14-digit
   numeric Code 128 values that use Code Set C and fit the thermal presets.
+- Retail symbols are revalidated immediately before rendering. A legacy EAN,
+  UPC, GTIN, or ISBN with an invalid checksum remains visible with a correction
+  message but cannot be printed as a valid retail symbol. This is defense in
+  depth beyond the product-write validator.
 - Admin deployment `9c8ac2c1-8d09-4266-9981-05cc05b06f70` was re-verified on
   2026-07-17 at desktop and 390 px widths. An exact rich-demo SKU remained
   reload-safe in the URL, the physical preview and print actions were ready,
   no horizontal overflow was present, and singular job summaries rendered as
   `1 label · 1 page`.
+- The 2026-07-19 correctness pass deployed API version
+  `fca08a00-23ad-4b16-bc27-23fdfff153b8` and admin version
+  `656a229c-1208-4a80-95bc-4baa945f146e`. Authenticated production checks
+  proved an individual exact-SKU entry, a discounted SKU printing its truthful
+  automatic selling price (`৳2,241` from `৳2,490` with 10% SKU discount), a
+  two-SKU `On hand` batch of 20 labels, two-page pagination, start-at-cell 5 on
+  a partially used A4 sheet, and the same usable workflow at 390 px. The final
+  release check passed API readiness, dashboard auth, storefront, discovery,
+  feeds, UCP, and a live product route.
 
 ## Interface direction
 

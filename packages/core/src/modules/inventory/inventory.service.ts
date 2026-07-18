@@ -3,6 +3,7 @@ import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
+import { calculateDiscountedPrice } from "@scalius/shared/price-utils";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 import { variantOptionLabelSql } from "../products/products.option-model";
@@ -26,6 +27,36 @@ const ALLOWED_MOVEMENT_TYPES: ReadonlySet<string> = new Set([
 ]);
 const MAX_MOVEMENT_CURSOR_LENGTH = 512;
 export const INVENTORY_LABEL_VARIANT_LIMIT = 150;
+
+type InventoryLabelPricingFacts = {
+    price: number;
+    variantDiscountType: string | null;
+    variantDiscountPercentage: number | null;
+    variantDiscountAmount: number | null;
+    productDiscountType: string | null;
+    productDiscountPercentage: number | null;
+    productDiscountAmount: number | null;
+};
+
+/**
+ * Barcode price labels must match the automatic catalog price a buyer sees.
+ * A positive SKU discount takes precedence; otherwise the product discount
+ * applies, matching checkout and the buyer catalog projection.
+ */
+export function calculateInventoryLabelEffectivePrice(
+    facts: InventoryLabelPricingFacts,
+): number {
+    const hasVariantDiscount =
+        (facts.variantDiscountType === "percentage" && (facts.variantDiscountPercentage ?? 0) > 0)
+        || (facts.variantDiscountType === "flat" && (facts.variantDiscountAmount ?? 0) > 0);
+
+    return calculateDiscountedPrice(
+        facts.price,
+        hasVariantDiscount ? facts.variantDiscountType : facts.productDiscountType,
+        hasVariantDiscount ? facts.variantDiscountPercentage : facts.productDiscountPercentage,
+        hasVariantDiscount ? facts.variantDiscountAmount : facts.productDiscountAmount,
+    );
+}
 
 type InventoryMovementCursor = {
     createdAt: number;
@@ -240,6 +271,12 @@ export async function getInventoryLabelVariants(
             sku: productVariants.sku,
             optionLabel: variantOptionLabelSql(productVariants.id),
             price: productVariants.price,
+            variantDiscountType: productVariants.discountType,
+            variantDiscountPercentage: productVariants.discountPercentage,
+            variantDiscountAmount: productVariants.discountAmount,
+            productDiscountType: products.discountType,
+            productDiscountPercentage: products.discountPercentage,
+            productDiscountAmount: products.discountAmount,
             stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
             available: sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`,
@@ -263,7 +300,28 @@ export async function getInventoryLabelVariants(
     return {
         variants: variantIds.flatMap((id) => {
             const row = rowById.get(id);
-            return row ? [row] : [];
+            if (!row) return [];
+            const {
+                variantDiscountType,
+                variantDiscountPercentage,
+                variantDiscountAmount,
+                productDiscountType,
+                productDiscountPercentage,
+                productDiscountAmount,
+                ...variant
+            } = row;
+            return [{
+                ...variant,
+                effectivePrice: calculateInventoryLabelEffectivePrice({
+                    price: row.price,
+                    variantDiscountType,
+                    variantDiscountPercentage,
+                    variantDiscountAmount,
+                    productDiscountType,
+                    productDiscountPercentage,
+                    productDiscountAmount,
+                }),
+            }];
         }),
         missingVariantIds: variantIds.filter((id) => !rowById.has(id)),
     };

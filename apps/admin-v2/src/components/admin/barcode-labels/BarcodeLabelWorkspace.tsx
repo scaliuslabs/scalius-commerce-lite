@@ -46,6 +46,7 @@ import {
   getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
+  getLabelShortcutQuantity,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
   MAX_LABEL_SKUS,
@@ -57,6 +58,7 @@ import {
   type LabelPageCell,
   type LabelPreset,
   type LabelPresetId,
+  type LabelQuantityShortcut,
 } from "./barcode-label-model";
 
 const LABEL_PREFERENCE_KEY = "scalius:barcode-label-preferences:v1";
@@ -276,7 +278,7 @@ function PrintPages({
                 <LabelArtwork
                   copy={copy}
                   content={content}
-                  price={formatPrice(copy.variant.price)}
+                  price={formatPrice(copy.variant.effectivePrice)}
                   compact={dimensions.heightMm < 30 || dimensions.widthMm < 50}
                 />
               ) : test ? (
@@ -340,7 +342,7 @@ function PaperPreview({
             onClick={() => onStartOffsetChange(index)}
           >
             {copy ? (
-              <LabelArtwork copy={copy} content={content} price={formatPrice(copy.variant.price)} compact />
+              <LabelArtwork copy={copy} content={content} price={formatPrice(copy.variant.effectivePrice)} compact />
             ) : capacity > 1 ? (
               <span className="grid h-full place-items-center text-[8px] text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">{index + 1}</span>
             ) : null}
@@ -465,10 +467,10 @@ export function BarcodeLabelWorkspace({
     onSelectedVariantIdsChange(selectedVariantIds.filter((candidate) => candidate !== id));
   };
 
-  const setAllQuantities = (mode: "one" | "onHand" | "available") => {
+  const setAllQuantities = (mode: LabelQuantityShortcut) => {
     setQuantities((current) => Object.fromEntries(selectedVariants.map((variant) => [
       variant.id,
-      mode === "one" ? 1 : mode === "onHand" ? Math.max(0, variant.stock) : Math.max(0, variant.available),
+      getLabelShortcutQuantity(variant, current[variant.id] ?? 1, mode),
     ]).concat(Object.entries(current).filter(([id]) => !selectedVariants.some((variant) => variant.id === id)))));
   };
 
@@ -548,8 +550,8 @@ export function BarcodeLabelWorkspace({
                 {selectedVariants.length > 0 ? (
                   <div className="flex items-center gap-1">
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match each SKU's on-hand stock" onClick={() => setAllQuantities("onHand")}>On hand</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match each SKU's available stock" onClick={() => setAllQuantities("available")}>Available</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to on-hand stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to available stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("available")}>Available</Button>
                   </div>
                 ) : null}
               </CardHeader>
@@ -723,7 +725,7 @@ export function BarcodeLabelWorkspace({
                     ["showProduct", "Product"],
                     ["showVariant", "Variant"],
                     ["showSku", "SKU"],
-                    ["showPrice", "Price"],
+                    ["showPrice", "Selling price"],
                   ] as const).map(([key, label]) => (
                     <div key={key} className="flex items-center justify-between gap-2">
                       <Label htmlFor={`label-content-${key}`} className="text-xs font-normal">{label}</Label>
