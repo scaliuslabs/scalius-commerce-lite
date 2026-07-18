@@ -47,6 +47,8 @@ const { headerData } = Astro.props;
           type="button"
           class="p-2 -ml-2 text-foreground rounded-full hover:bg-muted active:bg-accent transition-colors"
           aria-label="Open menu"
+          aria-controls="mobile-menu-panel"
+          aria-expanded="false"
         >
           <Menu className="h-6 w-6 stroke-[1.5]" />
         </button>

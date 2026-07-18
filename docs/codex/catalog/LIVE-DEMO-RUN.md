@@ -31,6 +31,21 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   was cleared. Eighty-one focused tests, the 310-file Astro check, lint,
   deployment verification, cache warming, and `pnpm release:check` passed.
 
+### Mobile header interaction checkpoint (2026-07-19)
+
+- A 390 px production audit found that the visually closed navigation drawer
+  was translated off-screen but still exposed its dialog and 14 controls to
+  keyboard and assistive-technology navigation.
+- Storefront `42db57b6-6e1c-4457-b4db-afd38316788b` now treats the drawer as a
+  real modal interaction. Closed state is `aria-hidden` and inert; the trigger
+  owns the panel and exposes its expanded state; opening focuses Close; Tab and
+  Shift+Tab remain inside the drawer; Escape closes it and returns focus to the
+  trigger; crossing the desktop breakpoint also releases the body scroll lock.
+- Live proof covered closed, open, wrapped Shift+Tab, Escape, focus restoration,
+  and exact 390 px page width without overflow. Five focused header/navigation
+  tests, the 312-file Astro check, targeted lint, deployment verification,
+  cache warming, and `pnpm release:check` passed.
+
 ### CMS presentation checkpoint (2026-07-19)
 
 - Replaced the published About page's placeholder paragraph with a structured
