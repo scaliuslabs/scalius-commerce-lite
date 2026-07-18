@@ -59,9 +59,13 @@ export type HeaderBuilderPanel = (typeof HEADER_BUILDER_PANELS)[number];
 export interface HeaderBuilderProps {
   activePanel?: HeaderBuilderPanel;
   initialConfig?: HeaderConfig | null;
+  initialRevision?: number;
   readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: HeaderBuilderPanel) => void;
-  onSave?: string | ((config: HeaderConfig) => Promise<void>);
+  onSave?: (
+    config: HeaderConfig,
+    expectedRevision: number,
+  ) => Promise<{ revision: number }>;
 }
 
 /**

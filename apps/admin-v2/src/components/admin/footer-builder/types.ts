@@ -42,9 +42,13 @@ export type FooterBuilderPanel = (typeof FOOTER_BUILDER_PANELS)[number];
 export interface FooterBuilderProps {
   activePanel?: FooterBuilderPanel;
   initialConfig?: FooterConfig | null;
+  initialRevision?: number;
   readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: FooterBuilderPanel) => void;
-  onSave?: string | ((config: FooterConfig) => Promise<void>);
+  onSave?: (
+    config: FooterConfig,
+    expectedRevision: number,
+  ) => Promise<{ revision: number }>;
 }
 
 /**

@@ -58,6 +58,7 @@ export interface FaviconConfig {
 export type NavigationItemConfig = NavigationTargetItem;
 
 export interface HeaderConfigInput {
+  expectedRevision: number;
   topBar: {
     text: string;
     isEnabled: boolean;
@@ -74,6 +75,7 @@ export interface HeaderConfigInput {
 }
 
 export interface FooterConfigInput {
+  expectedRevision: number;
   logo: LogoConfig;
   tagline: string;
   description: string;
@@ -89,6 +91,10 @@ export interface FooterConfigInput {
 export interface GeneralSettingsPayload {
   headerConfig: SettingsPayload;
   footerConfig: SettingsPayload;
+  revisions: {
+    header: number;
+    footer: number;
+  };
   navigationReadiness: {
     header: NavigationConfigSectionReadiness;
     footer: NavigationConfigSectionReadiness;
@@ -273,13 +279,13 @@ export const getGeneralSettings = createServerFn({ method: "GET" }).handler(
 export const saveHeaderConfig = createServerFn({ method: "POST" })
   .validator((data: HeaderConfigInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<EmptyPayload>("/settings/header", data);
+    return apiPost<{ revision: number }>("/settings/header", data);
   });
 
 export const saveFooterConfig = createServerFn({ method: "POST" })
   .validator((data: FooterConfigInput) => data)
   .handler(async ({ data }) => {
-    return apiPost<EmptyPayload>("/settings/footer", data);
+    return apiPost<{ revision: number }>("/settings/footer", data);
   });
 
 export const getSeoSettings = createServerFn({ method: "GET" }).handler(

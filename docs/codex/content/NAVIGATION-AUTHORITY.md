@@ -1,10 +1,12 @@
 # Navigation Authority and Large-Store Migration
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-19
 
 Status: normalized named menus/placements remain an accepted future design.
-The demo-era typed-target bridge below is implemented in code but is not
-deployed; existing demo header/footer JSON must be regenerated before deploy.
+The demo-era typed-target bridge below is implemented and deployed. Its
+header/footer documents gained independent D1 revisions and conflict-safe admin
+recovery on 2026-07-19; named menus, immutable publications, placements, and
+reverse dependencies remain the future cutover described here.
 
 This document is the durable architecture decision for reusable navigation. It
 is intentionally separate from the current builder UI: changing row density or
@@ -83,11 +85,12 @@ Filtered category links persist the stable category ID plus a validated query
 projection. Product and collection writes invalidate layout/navigation as well
 as their catalog caches.
 
-Before deployment, regenerate `site_settings.header_config` and
-`site_settings.footer_config` so every navigation/link item uses the typed
-shape. A copied `{ id, title, href }` row must be replaced, not upgraded at
-runtime. This is a demo-data requirement, not a schema migration; this
-implementation performs no production write or deployment.
+The demo `site_settings.header_config` and `site_settings.footer_config` rows
+were regenerated so every navigation/link item uses the typed shape. A copied
+`{ id, title, href }` row remains invalid and is not upgraded at runtime.
+Migration `0033_sour_proudstar.sql` adds independent interim header/footer
+revision counters; it does not create the normalized menu tables proposed in
+this document.
 
 ## Verified benchmark, not visual imitation
 

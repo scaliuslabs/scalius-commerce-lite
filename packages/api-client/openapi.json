@@ -55751,11 +55751,29 @@
                           "additionalProperties": {
                             "nullable": true
                           }
+                        },
+                        "revisions": {
+                          "type": "object",
+                          "properties": {
+                            "header": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "footer": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "header",
+                            "footer"
+                          ]
                         }
                       },
                       "required": [
                         "headerConfig",
-                        "footerConfig"
+                        "footerConfig",
+                        "revisions"
                       ]
                     }
                   },
@@ -56018,7 +56036,8 @@
         "tags": [
           "Admin - Navigation"
         ],
-        "summary": "Save navigation config (header or footer)",
+        "summary": "Deprecated compatibility save for header or footer navigation",
+        "deprecated": true,
         "requestBody": {
           "content": {
             "application/json": {
@@ -56037,11 +56056,16 @@
                     "additionalProperties": {
                       "nullable": true
                     }
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
                   "type",
-                  "config"
+                  "config",
+                  "expectedRevision"
                 ]
               }
             }
@@ -56066,10 +56090,16 @@
                       "properties": {
                         "message": {
                           "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
                         }
                       },
                       "required": [
-                        "message"
+                        "message",
+                        "revision"
                       ]
                     }
                   },
@@ -56203,6 +56233,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -56334,7 +56404,8 @@
         "tags": [
           "Admin - Navigation"
         ],
-        "summary": "Update navigation config by site settings ID",
+        "summary": "Deprecated compatibility update for header or footer navigation",
+        "deprecated": true,
         "parameters": [
           {
             "schema": {
@@ -56363,11 +56434,16 @@
                     "additionalProperties": {
                       "nullable": true
                     }
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
                   "type",
-                  "config"
+                  "config",
+                  "expectedRevision"
                 ]
               }
             }
@@ -56392,10 +56468,16 @@
                       "properties": {
                         "message": {
                           "type": "string"
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
                         }
                       },
                       "required": [
-                        "message"
+                        "message",
+                        "revision"
                       ]
                     }
                   },
@@ -56567,6 +56649,46 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -56658,7 +56780,8 @@
         "tags": [
           "Admin - Navigation"
         ],
-        "summary": "Reset navigation config to empty",
+        "summary": "Deprecated compatibility reset for header or footer navigation",
+        "deprecated": true,
         "parameters": [
           {
             "schema": {
@@ -56681,18 +56804,55 @@
                       "header",
                       "footer"
                     ]
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
-                  "type"
+                  "type",
+                  "expectedRevision"
                 ]
               }
             }
           }
         },
         "responses": {
-          "204": {
-            "description": "No content"
+          "200": {
+            "description": "Navigation config reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Validation error",
@@ -56816,6 +56976,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -69493,6 +69693,23 @@
                             "nullable": true
                           }
                         },
+                        "revisions": {
+                          "type": "object",
+                          "properties": {
+                            "header": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "footer": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "required": [
+                            "header",
+                            "footer"
+                          ]
+                        },
                         "navigationReadiness": {
                           "type": "object",
                           "properties": {
@@ -69544,6 +69761,7 @@
                       "required": [
                         "headerConfig",
                         "footerConfig",
+                        "revisions",
                         "navigationReadiness"
                       ]
                     }
@@ -70246,6 +70464,10 @@
                         "labelMode"
                       ]
                     }
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -70254,7 +70476,8 @@
                   "favicon",
                   "contact",
                   "social",
-                  "navigation"
+                  "navigation",
+                  "expectedRevision"
                 ]
               }
             }
@@ -70276,7 +70499,16 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {}
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ]
                     }
                   },
                   "required": [
@@ -70409,6 +70641,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -70959,12 +71231,17 @@
                         "url"
                       ]
                     }
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
                   "logo",
                   "menus",
-                  "social"
+                  "social",
+                  "expectedRevision"
                 ]
               }
             }
@@ -70986,7 +71263,16 @@
                     },
                     "data": {
                       "type": "object",
-                      "properties": {}
+                      "properties": {
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        }
+                      },
+                      "required": [
+                        "revision"
+                      ]
                     }
                   },
                   "required": [
@@ -71119,6 +71405,46 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

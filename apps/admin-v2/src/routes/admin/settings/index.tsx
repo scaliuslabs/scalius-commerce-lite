@@ -66,6 +66,8 @@ function SettingsPage() {
     <GeneralSettingsPage
       headerConfig={result.headerConfig ?? null}
       footerConfig={result.footerConfig ?? null}
+      headerRevision={result.revisions.header}
+      footerRevision={result.revisions.footer}
       headerReadiness={result.navigationReadiness?.header}
       footerReadiness={result.navigationReadiness?.footer}
       panel={search.panel}

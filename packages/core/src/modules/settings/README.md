@@ -54,9 +54,9 @@ Admin-facing DB operations for site settings. Cache invalidation stays in route 
 |----------|-----------|-------------|
 | `getCurrencySettings` | `(db) => { currencyCode, currencySymbol, usdExchangeRate }` | Reads currency settings from `settings` table |
 | `saveCurrencySettings` | `(db, data) => void` | Upserts currency settings. Validates exchange rate is positive |
-| `getGeneralSettings` | `(db) => { headerConfig, footerConfig }` | Returns parsed JSON from `siteSettings` singleton |
-| `saveHeaderConfig` | `(db, config) => void` | Upserts headerConfig on `siteSettings` singleton (insert with `onConflictDoUpdate` on `singletonKey`) |
-| `saveFooterConfig` | `(db, config) => void` | Upserts footerConfig on `siteSettings` singleton |
+| `getGeneralSettings` | `(db) => { headerConfig, footerConfig, revisions }` | Returns parsed JSON plus independent header/footer revisions from the `siteSettings` singleton |
+| `saveHeaderConfig` | `(db, config, expectedRevision) => { revision }` | Validates and CAS-saves the header document; stale writers receive typed `SITE_PRESENTATION_REVISION_CONFLICT` evidence |
+| `saveFooterConfig` | `(db, config, expectedRevision) => { revision }` | Validates and CAS-saves the footer document independently from the header |
 | `getThemeSettings` | `(db) => { theme, revision }` | Reads the versioned semantic presentation document, upgrades a legacy flat color row, and fails closed for an invalid versioned document |
 | `saveThemeSettings` | `(db, theme, expectedRevision) => { theme, revision }` | Sanitizes and CAS-publishes colors, typography, corners, density, container width, and safe component styles in the singleton theme document |
 | `getSeoSettings` | `(db) => { siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery, returnPolicy }` | Reads SEO fields from `siteSettings` singleton, the default-on discovery policy from `settings` (`category=seo`, `key=discovery`), and merchant return-policy schema facts from `settings` (`category=seo`, `key=return_policy`). Sitemap discovery includes `staticPages`, `products`, `categories`, `collections`, and `pages`; structured-data discovery controls OnlineStore/WebSite/Product/ProductGroup/Breadcrumb/CollectionPage plus offer shipping schema. Return-policy settings stay disabled until the merchant saves complete buyer-visible facts. Admin reads must fail visibly on DB errors; routes must not return default-on settings after a failed read. |
@@ -161,8 +161,8 @@ All under `/api/v1/admin/settings/` -- split across multiple route files:
 | GET | `/currency` | Get currency code/symbol/rate |
 | POST | `/currency` | Save currency settings. Best-effort invalidates `gw:currency`, then invalidates layout and checkout cache groups |
 | GET | `/general` | Get header + footer JSON configs |
-| POST | `/header` | Save header config (topBar, logo, favicon, contact, social, navigation). Upserts siteSettings singleton |
-| POST | `/footer` | Save footer config (logo, tagline, description, copyrightText, menus, social). Upserts siteSettings singleton |
+| POST | `/header` | CAS-save header config (topBar, logo, favicon, contact, social, navigation) with `expectedRevision` |
+| POST | `/footer` | CAS-save footer config (logo, tagline, description, copyrightText, menus, social) with `expectedRevision` |
 | GET | `/theme` | Get the published semantic storefront style and revision |
 | POST | `/theme` | Save storefront color overrides. Invalidates `api:storefront:layout:*` KV keys |
 | GET | `/seo` | Get siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, discovery policy, and merchant return-policy schema settings; fails closed on read errors |

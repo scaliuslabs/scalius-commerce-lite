@@ -16,8 +16,14 @@ import { cn } from "@scalius/shared/utils";
 import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { useQueryClient } from "@tanstack/react-query";
 import { getServerFnError } from "~/lib/api-helpers";
-import { saveHeaderConfig } from "~/lib/api-functions/settings";
+import {
+  getGeneralSettings,
+  saveHeaderConfig,
+} from "~/lib/api-functions/settings";
+import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
+import { rebaseHeaderDraft } from "~/components/admin/shared/presentation-draft";
+import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 
 import { BrandingSection } from "./BrandingSection";
@@ -66,6 +72,7 @@ export function normalizeHeaderConfig(config?: HeaderConfig | null): HeaderConfi
 export function HeaderBuilder({
   activePanel,
   initialConfig,
+  initialRevision = 0,
   readiness,
   onPanelChange,
   onSave,
@@ -77,8 +84,20 @@ export function HeaderBuilder({
     () => normalizeHeaderConfig(initialConfig),
     [initialConfig],
   );
-  const { config, setConfig, isDirty, discard, markSaved } =
-    useConfigDraft(normalizedInitialConfig);
+  const {
+    config,
+    setConfig,
+    isDirty,
+    discard,
+    markSaved,
+    adoptSaved,
+    rebaseOnto,
+  } = useConfigDraft(normalizedInitialConfig);
+  const [revision, setRevision] = useState(initialRevision);
+  const [revisionConflict, setRevisionConflict] = useState<{
+    config: HeaderConfig;
+    revision: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [internalActivePanel, setInternalActivePanel] =
     useState<HeaderBuilderPanel>("branding");
@@ -93,6 +112,10 @@ export function HeaderBuilder({
     setLegacyFormatSaved(false);
   }, [readiness?.state]);
 
+  useEffect(() => {
+    if (!isDirty && !revisionConflict) setRevision(initialRevision);
+  }, [initialRevision, isDirty, revisionConflict]);
+
   const handlePanelChange = (panel: string) => {
     const nextPanel = panel as HeaderBuilderPanel;
     if (activePanel === undefined) setInternalActivePanel(nextPanel);
@@ -104,8 +127,24 @@ export function HeaderBuilder({
     setNavigationEditorEpoch((current) => current + 1);
   };
 
+  const useLatestRevision = () => {
+    if (!revisionConflict) return;
+    adoptSaved(revisionConflict.config);
+    setRevision(revisionConflict.revision);
+    setRevisionConflict(null);
+    setNavigationEditorEpoch((current) => current + 1);
+  };
+
+  const mergeLatestRevision = () => {
+    if (!revisionConflict) return;
+    rebaseOnto(revisionConflict.config, rebaseHeaderDraft);
+    setRevision(revisionConflict.revision);
+    setRevisionConflict(null);
+    setNavigationEditorEpoch((current) => current + 1);
+  };
+
   const handleSave = async () => {
-    if (isLoading || navigationInvalid) return;
+    if (isLoading || navigationInvalid || revisionConflict) return;
 
     if (!config.logo.src) {
       toast.error("Logo Required", { description: "Please select a logo before saving." });
@@ -115,22 +154,49 @@ export function HeaderBuilder({
 
     setIsLoading(true);
     try {
+      const draftBeingSaved = config;
       const storedConfig: HeaderConfig = {
-        ...config,
-        navigation: config.navigation.map(stripNavigationResolution),
+        ...draftBeingSaved,
+        navigation: draftBeingSaved.navigation.map(stripNavigationResolution),
       };
-      if (typeof onSave === "function") {
-        await onSave(storedConfig);
-      } else {
-        await saveHeaderConfig({ data: storedConfig });
-      }
+      const saved = typeof onSave === "function"
+        ? await onSave(storedConfig, revision)
+        : await saveHeaderConfig({
+            data: { ...storedConfig, expectedRevision: revision },
+          });
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
-      markSaved();
+      setRevision(saved.revision);
+      markSaved(draftBeingSaved);
       if (readiness?.state === "legacy_normalized") setLegacyFormatSaved(true);
       setNavigationEditorEpoch((current) => current + 1);
       toast.success("Header saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
+      const conflict = readSitePresentationRevisionConflict(error, "header");
+      if (conflict) {
+        try {
+          const latest = await getGeneralSettings();
+          const latestRevision = latest.revisions.header;
+          setRevisionConflict({
+            config: normalizeHeaderConfig(
+              latest.headerConfig as unknown as HeaderConfig,
+            ),
+            revision: latestRevision,
+          });
+          queryClient.setQueryData(["settings", "general"], latest);
+          toast.error("Header changed elsewhere", {
+            description: "Your draft is safe. Choose how to reconcile it with the latest version.",
+          });
+        } catch (latestError: unknown) {
+          toast.error("Header changed elsewhere", {
+            description: getServerFnError(
+              latestError,
+              "Your draft is safe, but the latest version could not be loaded. Try saving again.",
+            ),
+          });
+        }
+        return;
+      }
       console.error("Error saving header:", error);
       toast.error("Save Failed", { description: getServerFnError(error, "Failed to save header configuration.") });
     } finally {
@@ -172,6 +238,14 @@ export function HeaderBuilder({
         section="header"
         readiness={legacyFormatSaved ? { state: "ready" } : readiness}
       />
+
+      {revisionConflict ? (
+        <PresentationRevisionConflictNotice
+          revision={revisionConflict.revision}
+          onMerge={mergeLatestRevision}
+          onUseLatest={useLatestRevision}
+        />
+      ) : null}
 
       {!navigationInvalid ? <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
@@ -265,6 +339,7 @@ export function HeaderBuilder({
           onClick={handleSave}
           disabled={
             isLoading ||
+            Boolean(revisionConflict) ||
             !config.logo.src ||
             (!isDirty && !navigationSaveRequired)
           }

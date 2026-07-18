@@ -124,10 +124,10 @@ The `AddNavItemDialog` component (`apps/admin-v2/src/components/admin/navigation
 |--------|------|-------------|
 | GET | `/admin/navigation/items` | Fetch categories + pages via `getNavigationItems(db)` |
 | GET | `/admin/navigation/preview-products` | Preview storefront product count for a dynamic category/filter link via `getNavigationPreviewProductCount(db, input)` |
-| GET | `/admin/navigation` | Get header and footer config via `getNavigationMenus(db)` |
-| POST | `/admin/navigation` | Save config via `saveNavigationConfig(db, data)` -- creates settings row if none exists |
-| PUT | `/admin/navigation/{id}` | Update config via `updateNavigationConfig(db, id, data)` |
-| DELETE | `/admin/navigation/{id}` | Reset config via `deleteNavigationConfig(db, id, type)` (`{ type }` in body) |
+| GET | `/admin/navigation` | Compatibility read for header/footer config plus independent revisions |
+| POST | `/admin/navigation` | Deprecated compatibility save; requires `expectedRevision` and delegates to the settings CAS authority |
+| PUT | `/admin/navigation/{id}` | Deprecated compatibility update through the same CAS authority |
+| DELETE | `/admin/navigation/{id}` | Deprecated compatibility reset through the same CAS authority |
 
 After saving, `invalidateSiteSettingsCache(getKv())` is called to bust the KV cache.
 
