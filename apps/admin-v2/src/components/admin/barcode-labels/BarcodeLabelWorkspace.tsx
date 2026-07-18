@@ -41,6 +41,7 @@ import {
   DEFAULT_LABEL_CONTENT,
   formatLabelCount,
   formatPageCount,
+  findCompatibleLabelPreset,
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
@@ -453,6 +454,12 @@ export function BarcodeLabelWorkspace({
     const issue = getBarcodeFitIssue(symbol, preset);
     return issue ? [{ variant, issue }] : [];
   }), [preset, presetIssue, quantities, selectedVariants]);
+  const activeSymbols = useMemo(() => selectedVariants
+    .filter((variant) => (quantities[variant.id] ?? 0) > 0)
+    .map((variant) => resolveBarcodeSymbol(variant.barcode, variant.barcodeType)), [quantities, selectedVariants]);
+  const compatiblePreset = useMemo(() => activeFitIssues.length > 0
+    ? findCompatibleLabelPreset(activeSymbols, preset)
+    : null, [activeFitIssues.length, activeSymbols, preset]);
   const tooManyCopies = copies.length > MAX_LABEL_COPIES;
   const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
   const pickerVariants = pickerQuery.data?.variants ?? [];
@@ -770,9 +777,22 @@ export function BarcodeLabelWorkspace({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> A print job is limited to {MAX_LABEL_COPIES} labels. Reduce the quantities before printing.
               </div>
             ) : activeFitIssues.length > 0 ? (
-              <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{activeFitIssues.length} {activeFitIssues.length === 1 ? "barcode does" : "barcodes do"} not safely fit this preset. Choose a wider label or reduce that SKU’s count to zero.</span>
+              <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{activeFitIssues.length} {activeFitIssues.length === 1 ? "barcode does" : "barcodes do"} not safely fit this format. Choose a wider label or set that SKU’s count to zero.</span>
+                </div>
+                {compatiblePreset ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 border-amber-400 bg-white px-2 text-xs text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900"
+                    onClick={() => setPresetId(compatiblePreset.id)}
+                  >
+                    Use {compatiblePreset.name}
+                  </Button>
+                ) : null}
               </div>
             ) : copies.length > 0 ? (
               <div className="flex gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">

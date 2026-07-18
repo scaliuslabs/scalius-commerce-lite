@@ -26,7 +26,7 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
   {
     id: "a4-cut-3x8",
     name: "A4 cut sheet",
-    detail: "3 × 8 · 24 labels · crop marks",
+    detail: "Plain paper · 3 × 8 · 24 labels",
     pageWidthMm: 210,
     pageHeightMm: 297,
     columns: 3,
@@ -41,7 +41,7 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
   {
     id: "a4-compact-4x10",
     name: "A4 compact",
-    detail: "4 × 10 · 40 labels · crop marks",
+    detail: "Plain paper · 4 × 10 · 40 labels",
     pageWidthMm: 210,
     pageHeightMm: 297,
     columns: 4,
@@ -272,6 +272,21 @@ export function getBarcodeFitIssue(symbol: BarcodeSymbol, preset: LabelPreset): 
     return `Barcode needs about ${Math.ceil(minimumWidth)} mm; this label has ${Math.floor(usableWidth)} mm of safe width.`;
   }
   return null;
+}
+
+export function findCompatibleLabelPreset(
+  symbols: readonly BarcodeSymbol[],
+  currentPreset: LabelPreset,
+): LabelPreset | null {
+  if (symbols.length === 0) return null;
+  const candidates = LABEL_PRESETS.filter((candidate) => (
+    candidate.id !== "custom"
+    && candidate.id !== currentPreset.id
+    && symbols.every((symbol) => getBarcodeFitIssue(symbol, candidate) === null)
+  ));
+  return candidates.find((candidate) => candidate.thermal === currentPreset.thermal)
+    ?? candidates[0]
+    ?? null;
 }
 
 export type LabelCopy = {

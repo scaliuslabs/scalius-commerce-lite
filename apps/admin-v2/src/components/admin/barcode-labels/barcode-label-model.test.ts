@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
 import {
   buildLabelCopies,
+  findCompatibleLabelPreset,
   formatLabelCount,
   formatPageCount,
   getBarcodeFitIssue,
@@ -80,6 +81,16 @@ describe("barcode label symbology", () => {
     const symbol = resolveBarcodeSymbol("SCALIUS:C128:zho3a3mYUeiKOnujSUeDk", "code128");
     expect(getBarcodeFitIssue(symbol, getLabelPreset("thermal-50x25"))).toContain("safe width");
     expect(getBarcodeFitIssue(resolveBarcodeSymbol(variant.barcode, variant.barcodeType), getLabelPreset("thermal-50x25"))).toBeNull();
+  });
+
+  it("recommends the first compatible stock without crossing printer media when avoidable", () => {
+    const longSymbol = resolveBarcodeSymbol("SCALIUS:C128:zho3a3mYUeiKOnujSUeDk", "code128");
+    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("a4-cut-3x8"))?.id).toBe("a4-adhesive-2x7");
+    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("thermal-50x25"))?.id).toBe("a4-adhesive-2x7");
+
+    const widerThermalSymbol = resolveBarcodeSymbol("123456789012345678901234", "code128");
+    expect(getBarcodeFitIssue(widerThermalSymbol, getLabelPreset("thermal-40x30"))).not.toBeNull();
+    expect(findCompatibleLabelPreset([widerThermalSymbol], getLabelPreset("thermal-40x30"))?.id).toBe("thermal-50x25");
   });
 });
 

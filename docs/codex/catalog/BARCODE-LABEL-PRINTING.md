@@ -40,6 +40,12 @@ count or skip fresh labels. A returning merchant with a saved device
 format/content preference can reach the browser print dialog after one review;
 a first-time merchant can see every decision before printing.
 
+If the chosen stock is physically too narrow for any active barcode, printing
+stays blocked and the warning offers the first compatible standard format as a
+one-click recovery. The recommendation keeps thermal jobs on thermal media when
+another supported roll fits; it falls back to wider A4 stock only when no
+supported roll can preserve the symbol and its quiet zones.
+
 ## Competitive evidence
 
 - [Shopify Retail Barcode Labels](https://help.shopify.com/en/manual/sell-in-person/hardware/barcode-printer/retail-barcode-labels)
@@ -143,6 +149,8 @@ next job.
   header/footer instruction before a full batch.
 - The screen shows page size, labels per page, total labels, and total pages
   beside the action. It never guesses printer connection or readiness.
+- Plain-paper presets say so in the format picker. A merchant should not have
+  to infer that `cut sheet` means the ordinary A4 paper-and-scissors workflow.
 - Device-local last-used format/content preferences are appropriate because
   printer and paper choice belong to the workstation. Shared named templates
   can be added later without making the initial workflow depend on a new D1
@@ -234,6 +242,12 @@ feeds, structured data, or external marketplaces.
   a partially used A4 sheet, and the same usable workflow at 390 px. The final
   release check passed API readiness, dashboard auth, storefront, discovery,
   feeds, UCP, and a live product route.
+- Admin version `a29a582a-ab51-410c-aa9a-9f2e5ba8eecb` clarified the ordinary
+  A4/plain-paper presets and made an unsafe symbol fit recoverable in one click.
+  Production proof selected a legacy long Code 128 SKU, blocked it on the A4
+  3 × 8 grid, offered `Use A4 adhesive`, switched to the compatible 2 × 7
+  format, and re-enabled both test printing and Print/Save as PDF. The
+  sequential release check passed afterwards.
 
 ## Interface direction
 
