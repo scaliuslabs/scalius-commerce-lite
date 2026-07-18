@@ -1597,10 +1597,10 @@ describe("admin route graph boundaries", () => {
     }
 
     const formatterSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "formatters.ts"),
+      join(ADMIN_SRC_ROOT, "lib", "admin-time.ts"),
       "utf8",
     );
-    expect(formatterSource).toContain('const ORDER_TIME_ZONE = "Asia/Dhaka"');
+    expect(formatterSource).toContain('export const ADMIN_TIME_ZONE = "Asia/Dhaka"');
     expect(formatterSource).toContain('new Intl.DateTimeFormat("en-US"');
   });
 

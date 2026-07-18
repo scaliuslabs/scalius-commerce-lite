@@ -1,7 +1,7 @@
 // src/components/admin/CustomerHistoryView.tsx
 import React, { useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
-import { formatDate, formatDateShort } from "@scalius/shared/timestamps";
+import { formatAdminDate, formatAdminTimestamp } from "~/lib/admin-time";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   Table,
@@ -131,9 +131,7 @@ export function CustomerHistoryView({
             </h1>
             <p className="text-sm text-muted-foreground">
               Customer since{" "}
-              <span suppressHydrationWarning>
-                {formatDateShort(customer.createdAt)}
-              </span>
+              <span>{formatAdminDate(customer.createdAt) ?? "N/A"}</span>
             </p>
           </div>
         </div>
@@ -253,8 +251,8 @@ export function CustomerHistoryView({
                     <span className="text-xs text-muted-foreground">
                       Last order placed
                     </span>
-                    <p className="font-medium" suppressHydrationWarning>
-                      {formatDateShort(customer.lastOrderAt)}
+                    <p className="font-medium">
+                      {formatAdminDate(customer.lastOrderAt) ?? "N/A"}
                     </p>
                   </div>
                 </div>
@@ -310,9 +308,7 @@ export function CustomerHistoryView({
                           </Button>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
-                          <span suppressHydrationWarning>
-                            {formatDateShort(order.createdAt)}
-                          </span>
+                          <span>{formatAdminDate(order.createdAt) ?? "N/A"}</span>
                         </TableCell>
                         <TableCell className="font-medium">
                           {symbol}
@@ -421,11 +417,8 @@ export function CustomerHistoryView({
                           >
                             {record.changeType}
                           </Badge>
-                          <span
-                            className="text-muted-foreground whitespace-nowrap"
-                            suppressHydrationWarning
-                          >
-                            {formatDate(record.createdAt)}
+                          <span className="text-muted-foreground whitespace-nowrap">
+                            {formatAdminTimestamp(record.createdAt) ?? "N/A"}
                           </span>
                         </div>
                         <div className="rounded-md border bg-card p-3 text-sm hover:bg-muted/50 transition-colors">
