@@ -111,7 +111,7 @@ const featuredImageAlt =
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
 const canonicalUrl = buildResourceCanonicalSeoUrl("page", `/${slug}`, page.canonicalPath);
 const richContentClasses =
-  "prose dark:prose-invert prose-lg prose-gray max-w-none w-full prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl";
+  "prose prose-lg max-w-none w-full dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl";
 ---
 
 <Layout
@@ -145,14 +145,14 @@ const richContentClasses =
       <div class="w-full max-w-7xl mx-auto px-4 py-8">
         <div class="text-center mb-8">
           {!page.hideTitle && (
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-3 tracking-tight">
+            <h1 class="text-3xl sm:text-4xl font-bold text-foreground mb-3 tracking-tight">
               {page.title}
             </h1>
           )}
         </div>
 
         {featuredImageUrl && (
-          <figure class="mb-8 overflow-hidden rounded-lg bg-gray-100">
+          <figure class="mb-8 overflow-hidden rounded-lg bg-muted">
             <img
               src={featuredImageUrl}
               alt={featuredImageAlt}
@@ -167,10 +167,10 @@ const richContentClasses =
           <div class={richContentClasses} set:html={processedContent} />
         </div>
 
-        <div class="text-center mt-10 pt-6 border-t border-gray-100">
+        <div class="text-center mt-10 pt-6 border-t border-border">
           <a
             href="/"
-            class="inline-flex items-center px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-medium"
+            class="inline-flex items-center px-4 py-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
           >
             <svg
               class="w-4 h-4 mr-2"
