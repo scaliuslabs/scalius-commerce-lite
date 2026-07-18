@@ -65,6 +65,24 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   lint passed, deployment verification/cache warming completed, and
   `pnpm release:check` passed.
 
+### Customer/order time checkpoint (2026-07-19)
+
+- The COD order above exposed a real midnight-boundary contradiction: order
+  detail deliberately rendered `NFPLAV` in `Asia/Dhaka` as Jul 19 at 2:53 AM,
+  while Customer History used the browser timezone and called the same order,
+  customer creation, and change event Jul 18.
+- Admin `92107650-cd0c-4a51-b68d-3c79e1f88d24` centralizes the current
+  Bangladesh admin display boundary in `lib/admin-time.ts`. Order detail keeps
+  the same formatter through a compatibility wrapper, while Customer History
+  now uses the shared date/date-time projection without hydration suppression.
+- Authenticated production proof showed `Customer since Jul 19, 2026`, `Last
+  order placed Jul 19, 2026`, the `NFPLAV` row on Jul 19, its creation event at
+  `Jul 19, 2026, 2:53 AM`, and the order detail at that identical timestamp.
+  Both routes had no browser error. The exact UTC day-boundary regression plus
+  route-boundary suite passed 54 tests, the Admin typecheck and targeted lint
+  passed sequentially, deployment verification completed, and
+  `pnpm release:check` passed.
+
 ### CMS presentation checkpoint (2026-07-19)
 
 - Replaced the published About page's placeholder paragraph with a structured
