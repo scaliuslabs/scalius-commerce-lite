@@ -609,7 +609,7 @@ describe("admin route graph boundaries", () => {
     expect(analyticsForm).toContain("isActive: false");
     expect(analyticsForm).toContain("PERMISSIONS.ANALYTICS_TOGGLE");
     expect(analyticsForm).toContain("disabled={!canToggle}");
-    expect(pageForm).toContain("isPublished: false");
+    expect(pageForm).toContain('publicationMode: "draft"');
     expect(pageForm).toContain("PERMISSIONS.PAGES_PUBLISH");
     expect(pageForm).toContain("disabled={!canPublish}");
     expect(discountModel).toContain("isActive: Boolean(defaults.isActive)");

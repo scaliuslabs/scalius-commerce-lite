@@ -43,7 +43,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
       const response = await getAllPages({
         page: currentPage,
         limit: 100,
-        publishedOnly: true,
       });
 
       if (!response || !response.data) {

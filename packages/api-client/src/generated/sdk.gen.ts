@@ -125,7 +125,7 @@ export const getApiV1NavigationById = <ThrowOnError extends boolean = false>(opt
 export const getApiV1Footer = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1FooterData, ThrowOnError>): RequestResult<GetApiV1FooterResponses, GetApiV1FooterErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1FooterResponses, GetApiV1FooterErrors, ThrowOnError>({ url: '/api/v1/footer', ...options });
 
 /**
- * List all pages with pagination
+ * List published pages with pagination
  */
 export const getApiV1Pages = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1PagesData, ThrowOnError>): RequestResult<GetApiV1PagesResponses, GetApiV1PagesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1PagesResponses, GetApiV1PagesErrors, ThrowOnError>({ url: '/api/v1/pages', ...options });
 

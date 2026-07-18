@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { ForbiddenError } from "@scalius/core/errors";
 import {
+    adminPageStatusCondition,
     createPage,
     publicPageVisibilityCondition,
     updatePage,
@@ -20,6 +21,24 @@ describe("publicPageVisibilityCondition", () => {
     });
 });
 
+describe("adminPageStatusCondition", () => {
+    it("maps the three merchant lifecycle filters to database truth", () => {
+        const dialect = new SQLiteSyncDialect();
+        const draft = dialect.sqlToQuery(adminPageStatusCondition("draft")!);
+        const scheduled = dialect.sqlToQuery(adminPageStatusCondition("scheduled")!);
+        const published = dialect.sqlToQuery(adminPageStatusCondition("published")!);
+
+        expect(draft.sql).toContain('"pages"."is_published" = ?');
+        expect(draft.params).toEqual([0]);
+        expect(scheduled.sql).toContain('"pages"."published_at" > unixepoch()');
+        expect(scheduled.params).toEqual([1]);
+        expect(published.sql).toContain('"pages"."published_at" is null');
+        expect(published.sql).toContain('"pages"."published_at" <= unixepoch()');
+        expect(published.params).toEqual([1]);
+        expect(adminPageStatusCondition()).toBeUndefined();
+    });
+});
+
 describe("page publication authority", () => {
     const publishedPage = {
         title: "Published page",
@@ -32,7 +51,6 @@ describe("page publication authority", () => {
         excludeFromSitemap: false,
         isPublished: true,
         publishedAt: null,
-        sortOrder: 0,
         hideHeader: false,
         hideFooter: false,
         hideTitle: false,
@@ -99,5 +117,39 @@ describe("page publication authority", () => {
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);
         expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it("lets an editor preserve an existing Unix-second publication timestamp", async () => {
+        const getUpdated = vi.fn().mockResolvedValue({ revision: 2 });
+        const returning = vi.fn(() => ({ get: getUpdated }));
+        const whereUpdated = vi.fn(() => ({ returning }));
+        const set = vi.fn(() => ({ where: whereUpdated }));
+        const update = vi.fn(() => ({ set }));
+        const db = {
+            select: () => ({
+                from: () => ({
+                    where: () => ({
+                        get: async () => ({
+                            id: "page_1",
+                            slug: "published-page",
+                            isPublished: true,
+                            publishedAt: 1784376000,
+                            revision: 1,
+                            deletedAt: null,
+                        }),
+                    }),
+                }),
+            }),
+            update,
+        };
+
+        await expect(updatePage(db as never, "page_1", {
+            canonicalPath: undefined,
+            expectedRevision: 1,
+            title: "Updated published page",
+            isPublished: true,
+            publishedAt: new Date(1784376000 * 1000),
+        })).resolves.toEqual({ revision: 2 });
+        expect(update).toHaveBeenCalledTimes(1);
     });
 });

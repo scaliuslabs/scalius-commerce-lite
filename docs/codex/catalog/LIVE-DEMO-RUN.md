@@ -106,6 +106,30 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   synchronization fix was deployed and verified. No fake application-managed
   analytics configuration remains in the demo store.
 
+### CMS lifecycle checkpoint (2026-07-19)
+
+- Pages now expose a truthful Draft/Scheduled/Live lifecycle across the editor,
+  URL-backed list filters, badges, title links, buyer links, bulk actions, and
+  discovery readiness. The false public `publishedOnly` switch and merchant
+  navigation-order field were removed; Navigation remains the ordering
+  authority.
+- Production proof created `Lifecycle proof 2026-07-19` as a future-scheduled
+  page and observed a buyer 404, changed it through bulk `Publish now` and
+  observed its canonical live storefront page, then trashed it and observed the
+  buyer 404 again. The disposable page was permanently removed through the
+  bulk confirmation boundary, leaving the demo catalog unchanged.
+- Draft and Live list filters changed the canonical dashboard URL and returned
+  the correct rows after client transition and direct reload. Draft rows had no
+  storefront link; live rows did. Dark-mode surface tokens resolved correctly.
+- API `3969d455-e245-4d6d-9beb-a6b9135aea5b`, Storefront
+  `cf539699-1e75-479d-a905-10a9ca315767`, and Admin
+  `e15663a6-5b84-4fbc-9302-e8d796ff27be` reached 100% production traffic.
+  Core, API, Admin, and Storefront typechecks passed sequentially; the focused
+  lifecycle/route/contract suite passed before deployment. A real-device mobile
+  matrix remains required because the in-app Browser viewport override did not
+  change its reported 1280 px viewport, despite the dedicated compact card
+  implementation being present.
+
 ### Buyer-support and label-printing checkpoint (2026-07-17)
 
 - Published `Shipping & delivery` (`/shipping-delivery`) with the current

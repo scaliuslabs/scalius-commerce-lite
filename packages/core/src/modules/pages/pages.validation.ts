@@ -73,17 +73,20 @@ const pageFieldSchemas = {
 const publishedAtInputSchema = z.date().or(z.string()).nullable();
 const createPublishedAtSchema = publishedAtInputSchema.optional().transform((val) =>
     val instanceof Date ? val : val ? new Date(val) : null,
-);
+).refine((val) => val === null || Number.isFinite(val.getTime()), {
+    message: "Publication time must be a valid date.",
+});
 const updatePublishedAtSchema = publishedAtInputSchema.transform((val) =>
     val instanceof Date ? val : val ? new Date(val) : null,
-).optional();
+).refine((val) => val === null || Number.isFinite(val.getTime()), {
+    message: "Publication time must be a valid date.",
+}).optional();
 
 /** Schema for creating a new page (POST /api/pages) */
 export const createPageSchema = z.object({
     ...pageFieldSchemas,
     publishedAt: createPublishedAtSchema,
     isPublished: z.boolean().default(false),
-    sortOrder: z.number().default(0),
     hideHeader: z.boolean().default(false),
     hideFooter: z.boolean().default(false),
     hideTitle: z.boolean().default(false),
@@ -102,7 +105,6 @@ export const updatePageSchema = z.object({
     excludeFromSitemap: z.boolean().optional(),
     isPublished: z.boolean().optional(),
     publishedAt: updatePublishedAtSchema,
-    sortOrder: z.number().optional(),
     hideHeader: z.boolean().optional(),
     hideFooter: z.boolean().optional(),
     hideTitle: z.boolean().optional(),

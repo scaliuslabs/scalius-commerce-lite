@@ -48,16 +48,15 @@ export interface PageData {
 const pagesQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(10).openapi({ description: "Items per page" }),
   page: z.coerce.number().min(1).default(1).openapi({ description: "Page number" }),
-  sort: z.enum(["title", "createdAt", "-title", "-createdAt"]).default("title").openapi({ description: "Sort field (prefix with - for descending)" }),
-  publishedOnly: z.coerce.boolean().default(true).openapi({ description: "Only return published pages" })
+  sort: z.enum(["title", "createdAt", "-title", "-createdAt"]).default("title").openapi({ description: "Sort field (prefix with - for descending)" })
 });
 
-// GET /pages — list all pages
+// GET /pages — list buyer-resolvable published pages
 const listPagesRoute = createRoute({
   method: "get",
   path: "/",
   tags: ["Pages"],
-  summary: "List all pages with pagination",
+  summary: "List published pages with pagination",
   request: {
     query: pagesQuerySchema
   },

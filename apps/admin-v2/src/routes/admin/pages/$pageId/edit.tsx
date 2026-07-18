@@ -7,6 +7,7 @@ import type { PageFormValues } from "~/lib/form-schemas";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
+import { getPagePublicationMode } from "~/lib/page-publication";
 
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -46,9 +47,8 @@ function toPageFormValues(page: PageDto): PageFormValues {
     canonicalPath: page.canonicalPath,
     noIndex: page.noIndex,
     excludeFromSitemap: page.excludeFromSitemap,
-    isPublished: page.isPublished,
+    publicationMode: getPagePublicationMode(page),
     publishedAt: unixToDate(page.publishedAt) ?? null,
-    sortOrder: page.sortOrder,
     hideHeader: page.hideHeader,
     hideFooter: page.hideFooter,
     hideTitle: page.hideTitle,

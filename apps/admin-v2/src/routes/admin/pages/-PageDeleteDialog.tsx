@@ -13,6 +13,7 @@ import {
 
 interface PageDeleteDialogProps {
   showTrashed: boolean;
+  itemCount?: number;
   isOpen: boolean;
   isActionLoading: boolean;
   onOpenChange: (open: boolean) => void;
@@ -21,11 +22,13 @@ interface PageDeleteDialogProps {
 
 export function PageDeleteDialog({
   showTrashed,
+  itemCount = 1,
   isOpen,
   isActionLoading,
   onOpenChange,
   onConfirm,
 }: PageDeleteDialogProps) {
+  const multiple = itemCount > 1;
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-sm">
@@ -44,8 +47,8 @@ export function PageDeleteDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="pt-1 text-xs">
             {showTrashed
-              ? "This action cannot be undone. Are you sure you want to permanently delete this page?"
-              : "Are you sure you want to move this page to the trash? It can be restored later."}
+              ? `This cannot be undone. Permanently delete ${multiple ? `these ${itemCount} pages` : "this page"}?`
+              : `Move ${multiple ? `these ${itemCount} pages` : "this page"} to trash? ${multiple ? "They" : "It"} can be restored later.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -66,7 +69,7 @@ export function PageDeleteDialog({
             {isActionLoading ? (
               <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
             ) : null}
-            {showTrashed ? "Delete Permanently" : "Move to Trash"}
+            {showTrashed ? "Delete permanently" : "Move to trash"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -4400,7 +4400,7 @@
         "tags": [
           "Pages"
         ],
-        "summary": "List all pages with pagination",
+        "summary": "List published pages with pagination",
         "parameters": [
           {
             "schema": {
@@ -4442,18 +4442,6 @@
             "required": false,
             "description": "Sort field (prefix with - for descending)",
             "name": "sort",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "boolean",
-              "nullable": true,
-              "default": true,
-              "description": "Only return published pages"
-            },
-            "required": false,
-            "description": "Only return published pages",
-            "name": "publishedOnly",
             "in": "query"
           }
         ],
@@ -34884,6 +34872,26 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "draft",
+                "scheduled",
+                "published"
+              ],
+              "description": "Lifecycle status"
+            },
+            "required": false,
+            "description": "Lifecycle status",
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "title",
+                "createdAt",
+                "updatedAt"
+              ],
               "default": "updatedAt",
               "description": "Sort field"
             },
@@ -34895,6 +34903,10 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
               "default": "desc",
               "description": "Sort order"
             },
@@ -35531,10 +35543,6 @@
                   "isPublished": {
                     "type": "boolean",
                     "default": false
-                  },
-                  "sortOrder": {
-                    "type": "number",
-                    "default": 0
                   },
                   "hideHeader": {
                     "type": "boolean",
@@ -38128,9 +38136,6 @@
                       }
                     ],
                     "nullable": true
-                  },
-                  "sortOrder": {
-                    "type": "number"
                   },
                   "hideHeader": {
                     "type": "boolean"
