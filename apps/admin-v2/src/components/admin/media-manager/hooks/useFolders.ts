@@ -6,14 +6,18 @@ import type { MediaFolder } from "../types";
 export function useFolders(autoLoad = false) {
   const [folders, setFolders] = useState<MediaFolder[]>([]);
   const [isLoading, setIsLoading] = useState(autoLoad);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [currentFolderId, setCurrentFolderId] = useState<string | null | "all">("all");
 
   const loadFolders = useCallback(async () => {
     setIsLoading(true);
     try {
       setFolders(await MediaApiClient.fetchFolders());
+      setLoadError(null);
     } catch (error) {
-      toast.error("Folders could not be loaded", { description: error instanceof Error ? error.message : "Try again." });
+      const message = error instanceof Error ? error.message : "Try again.";
+      setLoadError(message);
+      toast.error("Folders could not be loaded", { description: message });
     } finally {
       setIsLoading(false);
     }
@@ -42,8 +46,10 @@ export function useFolders(autoLoad = false) {
       setFolders((current) => current.filter((item) => item.id !== folder.id));
       setCurrentFolderId((current) => current === folder.id ? "all" : current);
       toast.success("Folder deleted");
+      return true;
     } catch (error) {
       toast.error("Folder was not deleted", { description: error instanceof Error ? error.message : "Move its assets, refresh, and try again." });
+      return false;
     }
   }, []);
 
@@ -52,6 +58,7 @@ export function useFolders(autoLoad = false) {
   return {
     folders,
     isLoadingFolders: isLoading,
+    folderLoadError: loadError,
     currentFolderId,
     loadFolders,
     createFolder,

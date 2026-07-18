@@ -673,6 +673,26 @@ The cleanup bullets below describe the two-product proof store that preceded the
   lint, Astro diagnostics (`312` files, zero errors/warnings/hints), sequential
   production build/deploy, cache warm, and full `pnpm release:check` passed.
 
+### Media route-state checkpoint (2026-07-19)
+
+- Admin `2ffe166f-5299-4670-bca0-02341c97b39f` is live at 100%. The standalone
+  Media manager now stores safe folder, kind, sort, search, and Library/Trash
+  state in one canonical URL. Default and invalid values disappear; selection,
+  uploads, preview drafts, and picker-dialog state remain intentionally local.
+- Authenticated production proof deep-linked to
+  `?kind=video&sort=name-asc`, restored the four real MP4 assets in order,
+  narrowed to the 23.56 MiB cafeteria video, and retained that exact scope on
+  reload. Unfiled and Trash transitions were restored through Back/Forward, a
+  missing folder-shaped ID repaired to All assets, and the base URL still
+  entered selection mode with zero selected, a separate `Select all shown`,
+  five desktop columns, and no horizontal overflow.
+- The 54-test Media suite, route-state normalization/controlled-hook coverage,
+  targeted lint, sequential Admin typecheck, production build, and deployment
+  verification passed. Folder URL repair is guarded by a successful folder
+  read, so transient API failure cannot silently discard the address. The full
+  `pnpm release:check` subsequently passed; only the already recorded logs-only
+  ops-monitor email-channel warnings remain.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

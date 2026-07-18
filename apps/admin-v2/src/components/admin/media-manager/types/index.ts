@@ -65,6 +65,19 @@ export interface MediaFilterOptions {
   view: MediaLibraryView;
 }
 
+export interface MediaWorkspaceRouteState {
+  view: MediaLibraryView;
+  folderId: string | null | "all";
+  search: string;
+  kind?: MediaKind;
+  sortBy: MediaFilterOptions["sortBy"];
+  sortOrder: MediaFilterOptions["sortOrder"];
+}
+
+export interface MediaWorkspaceRouteUpdateOptions {
+  replace?: boolean;
+}
+
 export type UploadItemStatus =
   | "queued"
   | "initiating"

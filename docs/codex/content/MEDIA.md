@@ -281,6 +281,23 @@ buffered in a Worker invocation.
   the direct player, exposes optional descriptive caption and poster controls,
   and keeps the 100 MiB video limit visible. The library therefore proves that
   this file is stored and playable rather than merely accepted by validation.
+- Admin `2ffe166f-5299-4670-bca0-02341c97b39f` makes the standalone Media
+  workspace route-authoritative. Safe folder scope, image/video kind, sort,
+  debounced search, and Library/Trash view now survive refresh, copy/open, and
+  Back/Forward; defaults and invalid parameters are removed from the canonical
+  URL. Picker dialogs deliberately keep their transient scope outside the URL.
+  A folder-shaped URL is normalized only after a successful folder-authority
+  read proves it no longer exists, so a temporary folder API failure cannot
+  erase a merchant's address. Production proof restored
+  `?kind=video&sort=name-asc` to four correctly ordered MP4 assets, retained an
+  exact `search=Cafeteria` result across reload, traversed Unfiled Library and
+  Trash via Back/Forward, repaired `folder=folder_missing`, and retained the
+  five-column, zero-preselected bulk-selection contract with no horizontal
+  overflow. All 54 Media-focused tests, targeted lint, and the sequential Admin
+  typecheck/build/deploy gate passed. The repository release smoke then passed
+  dashboard auth, API readiness, storefront pages/cache headers, discovery
+  XML/feeds, UCP catalog discovery, and a live product route; only the known
+  logs-only ops-monitor email configuration warnings remain.
 
 ## Platform evidence
 
