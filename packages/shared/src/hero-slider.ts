@@ -1,4 +1,5 @@
 import { parseNavigationHref } from "./navigation-href";
+import type { ImageOptimizationOptions } from "./image-optimizer";
 
 export const HERO_SLIDE_LIMIT = 12;
 export const HERO_SLIDE_TITLE_LIMIT = 160;
@@ -86,6 +87,33 @@ export function getHeroSlideCloudflareGravity(
   const x = Number((focalPoint.x / 100).toFixed(4));
   const y = Number((focalPoint.y / 100).toFixed(4));
   return `${x}x${y}`;
+}
+
+/**
+ * Builds one aspect-ratio-safe Cloudflare transform for hero delivery and
+ * previews. A smaller requested width keeps the viewport ratio while using the
+ * same merchant focal point as the production banner.
+ */
+export function getHeroSlideImageTransform(
+  viewport: HeroSlideViewport,
+  focalPoint: HeroSlideFocalPoint,
+  options: { width?: number; quality?: number } = {},
+): ImageOptimizationOptions {
+  const presentation = HERO_SLIDE_PRESENTATION[viewport];
+  const width = options.width ?? presentation.width;
+  const height = Math.max(
+    1,
+    Math.round((width * presentation.height) / presentation.width),
+  );
+
+  return {
+    width,
+    height,
+    quality: options.quality ?? (viewport === "desktop" ? 90 : 85),
+    format: "auto",
+    fit: "cover",
+    gravity: getHeroSlideCloudflareGravity(focalPoint),
+  };
 }
 
 /**

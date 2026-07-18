@@ -253,6 +253,10 @@ buffered in a Worker invocation.
   `object-position` and Cloudflare cover-transform gravity. Other cropped
   surfaces must add an equally explicit domain control before describing a
   center crop as merchant intent.
+- Generic responsive `srcset` generation preserves the source aspect ratio
+  when height is omitted and proportionally scales an explicitly requested
+  width/height ratio. It must never manufacture square candidates merely
+  because the candidate descriptor supplies a width.
 - Focused shared tests protect the safe default, explicit cover behavior, and
   idempotence of already transformed URLs. Admin and storefront were rebuilt
   and deployed together because both bundle the shared optimizer.

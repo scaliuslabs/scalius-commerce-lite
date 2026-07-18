@@ -4,7 +4,7 @@ import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
   HERO_SLIDE_PRESENTATION,
-  getHeroSlideCloudflareGravity,
+  getHeroSlideImageTransform,
   getHeroSlideObjectPosition,
   type HeroSlideFocalPoint,
 } from "@scalius/shared/hero-slider";
@@ -65,11 +65,9 @@ if (images.length === 0) return;
               >
               <img
                 src={getOptimizedImageUrl(image.url, {
-                  width: presentation.width,
-                  height: height,
-                  quality: index === 0 ? 90 : 80,
-                  fit: "cover",
-                  gravity: getHeroSlideCloudflareGravity(focalPoint),
+                  ...getHeroSlideImageTransform(type, focalPoint, {
+                    quality: index === 0 ? 90 : 80,
+                  }),
                 })}
                 alt={image.title || `Slide ${index + 1}`}
                 width={presentation.width}

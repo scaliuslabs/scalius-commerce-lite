@@ -498,9 +498,23 @@ export function getResponsiveSrcSet(
 
   return widths
     .map((width) => {
+      const height = (() => {
+        if (options.height === null || options.height === undefined) return null;
+        if (
+          typeof options.width === "number" &&
+          Number.isFinite(options.width) &&
+          options.width > 0
+        ) {
+          return Math.max(
+            1,
+            Math.round((width * options.height) / options.width),
+          );
+        }
+        return options.height;
+      })();
       const url = getOptimizedImageUrl(
         imageUrl,
-        { ...options, width, height: width },
+        { ...options, width, height },
         ctx,
       );
       return `${url} ${width}w`;

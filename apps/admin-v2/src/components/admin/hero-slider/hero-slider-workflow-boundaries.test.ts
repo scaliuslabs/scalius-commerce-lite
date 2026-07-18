@@ -58,7 +58,8 @@ describe("hero slider workflow boundaries", () => {
     expect(focalPointEditorSource).toContain("Click the subject that must stay visible.");
     expect(focalPointEditorSource).toContain('type="range"');
     expect(focalPointEditorSource).toContain("HERO_SLIDE_DEFAULT_FOCAL_POINT");
-    expect(carouselSource).toContain("getHeroSlideCloudflareGravity(focalPoint)");
+    expect(rowSource).toContain("getHeroSlideImageTransform(type, image.focalPoint");
+    expect(carouselSource).toContain("getHeroSlideImageTransform(type, focalPoint");
     expect(carouselSource).toContain("getHeroSlideObjectPosition(focalPoint)");
   });
 });
