@@ -1,6 +1,6 @@
 # Abandoned Checkouts and Customer Recovery
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 
 ## Authority
 
@@ -55,6 +55,24 @@ Last reviewed: 2026-07-13
   record and the admin UI links to it directly.
 - All abandoned context expires after the bounded retention window. The list
   read stays side-effect free; cleanup belongs to scheduled/admin write paths.
+
+## Merchant interface
+
+- Long `chk_session_*` values render as a suffix-preserving compact identifier,
+  such as `S5I82lT…IUpbW`, while the exact identifier remains in the title and
+  accessible action name. Never show only the common prefix; rows must be
+  distinguishable without exposing a new recovery credential.
+- Desktop uses the sortable recovery table. Below the medium breakpoint the
+  same data becomes operational cards with selection, stage, customer, saved
+  cart estimate, age, View, optional hosted-order link, and Delete visible
+  without horizontal scrolling. Mobile keeps page selection and an explicit
+  newest/oldest sort instead of hiding bulk and ordering controls.
+- Admin version `d2c742b1-0bd7-4415-ab2b-10808c8eb350` was authenticated and
+  production-checked against 21 live recovery records on 2026-07-19. Desktop
+  showed distinct compact IDs. A real 390 × 844 viewport rendered 20 cards on
+  page one at a 390 px document width, opened a two-line saved-cart detail,
+  toggled oldest/newest order, and retained a 390 px width with no lateral
+  overflow.
 
 ## Deferred release work
 

@@ -60,6 +60,7 @@ import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandone
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
+  formatAbandonedCheckoutId,
   parseAbandonedCheckoutDisplay,
   type AbandonedCheckoutCartItem,
 } from "@/lib/abandoned-checkout-display";
@@ -121,11 +122,12 @@ const CheckoutRow = React.memo(
     canDelete: boolean;
   }) => {
     const { symbol } = useCurrency();
-  const display = useMemo(
+    const display = useMemo(
       () => parseAbandonedCheckoutDisplay(checkout),
       [checkout],
     );
     const displayId = getCheckoutDisplayId(checkout);
+    const compactId = formatAbandonedCheckoutId(displayId);
     const isHostedArchive = display.kind === "stale_hosted_payment_order";
     const updatedAt = useMemo(
       () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
@@ -143,8 +145,8 @@ const CheckoutRow = React.memo(
             />
           )}
         </TableCell>
-        <TableCell className="font-mono text-xs">
-          {displayId.substring(0, 12)}
+        <TableCell className="font-mono text-xs" title={displayId}>
+          {compactId}
         </TableCell>
         <TableCell className="font-medium">
           {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : (
@@ -198,6 +200,106 @@ const CheckoutRow = React.memo(
           )}
         </TableCell>
       </TableRow>
+    );
+  },
+);
+
+const CheckoutCard = React.memo(
+  ({
+    checkout,
+    isSelected,
+    onToggleSelection,
+    onViewDetails,
+    onDelete,
+    canDelete,
+  }: {
+    checkout: AbandonedCheckout;
+    isSelected: boolean;
+    onToggleSelection: (id: string) => void;
+    onViewDetails: (checkout: AbandonedCheckout) => void;
+    onDelete: (id: string) => void;
+    canDelete: boolean;
+  }) => {
+    const { symbol } = useCurrency();
+    const display = useMemo(
+      () => parseAbandonedCheckoutDisplay(checkout),
+      [checkout],
+    );
+    const displayId = getCheckoutDisplayId(checkout);
+    const compactId = formatAbandonedCheckoutId(displayId);
+    const isHostedArchive = display.kind === "stale_hosted_payment_order";
+    const updatedAt = useMemo(
+      () => (checkout.updatedAt ? new Date(checkout.updatedAt) : null),
+      [checkout.updatedAt],
+    );
+    const cartSummary = isHostedArchive
+      ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} · ${formatCurrency(display.total, symbol)}`
+      : `${display.items.length} ${display.items.length === 1 ? "item" : "items"} · ${formatCurrency(display.total, symbol)}`;
+
+    return (
+      <article className="border-b px-3 py-2.5 last:border-b-0" data-state={isSelected ? "selected" : undefined}>
+        <div className="flex min-w-0 items-start gap-2.5">
+          {canDelete ? (
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelection(checkout.id)}
+              aria-label={`Select incomplete order ${displayId}`}
+              className="mt-0.5"
+            />
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <span className="truncate font-mono text-xs font-medium" title={displayId}>{compactId}</span>
+              <Badge variant={display.variant} className="shrink-0 px-1.5 py-0 text-[10px]">{display.stage}</Badge>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Customer</p>
+                <p className="mt-0.5 truncate font-medium">
+                  {checkout.customerPhone ? formatPhoneForDisplay(checkout.customerPhone) : "No phone"}
+                </p>
+              </div>
+              <div className="min-w-0 text-right">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Saved cart</p>
+                <p className="mt-0.5 truncate font-medium" title={cartSummary}>{cartSummary}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between border-t pt-1.5">
+          <span className="text-[11px] text-muted-foreground">Updated {timeSince(updatedAt)}</span>
+          <div className="flex items-center gap-1">
+            {isHostedArchive && display.orderId ? (
+              <Button variant="ghost" size="sm" asChild className="h-7 px-2 text-xs">
+                <Link to={`/admin/orders/${display.orderId}` as string} aria-label={`View archived hosted-payment order ${display.orderId}`}>
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" /> Order
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => onViewDetails(checkout)}
+              aria-label={`View incomplete order ${displayId}`}
+            >
+              <Eye className="mr-1 h-3.5 w-3.5" /> View
+            </Button>
+            {canDelete ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onDelete(checkout.id)}
+                aria-label={`Delete incomplete order ${displayId}`}
+                title={isHostedArchive ? "Delete recovery record" : "Delete checkout record"}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </article>
     );
   },
 );
@@ -516,6 +618,17 @@ export function AbandonedCheckoutsManager() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs md:hidden"
+              onClick={() => handleSort("updatedAt")}
+              aria-label={`Sort by last updated, currently ${sort.order === "desc" ? "newest first" : "oldest first"}`}
+            >
+              <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
+              {sort.order === "desc" ? "Newest" : "Oldest"}
+            </Button>
             {selectedIds.size > 0 && orderActions.canBulkDeleteOrders && (
               <Button
                 variant="destructive"
@@ -547,9 +660,8 @@ export function AbandonedCheckoutsManager() {
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
           <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            Showing active checkout sessions and archived hosted-payment orders
-            that need recovery context. Empty sessions older than 1 hour and any
-            session older than 30 days are automatically cleared.
+            Recovery context for active checkouts and archived hosted payments.
+            <span className="hidden sm:inline"> Empty sessions clear after 1 hour; all sessions clear after 30 days.</span>
           </p>
         </div>
 
@@ -559,8 +671,51 @@ export function AbandonedCheckoutsManager() {
               {isFetching && checkouts.length > 0 && (
                 <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-10" />
               )}
-              <Table>
-                <TableHeader>
+              <div className="md:hidden">
+                {isLoading ? (
+                  <div className="grid h-52 place-items-center">
+                    <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  </div>
+                ) : checkouts.length === 0 ? (
+                  <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
+                    <ShoppingCart className="h-9 w-9" />
+                    <p className="font-medium">No abandoned checkouts found.</p>
+                    <p className="text-xs">Check back later or after a marketing campaign.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-2 text-xs">
+                      {orderActions.canBulkDeleteOrders ? (
+                        <label className="flex cursor-pointer items-center gap-2 font-medium">
+                          <Checkbox
+                            onCheckedChange={handleToggleSelectAll}
+                            checked={selectedIds.size === checkouts.length}
+                            aria-label="Select all incomplete checkouts on this page"
+                          />
+                          Select page
+                        </label>
+                      ) : <span />}
+                      <span className="text-muted-foreground">{checkouts.length} on this page</span>
+                    </div>
+                    <div>
+                      {checkouts.map((checkout) => (
+                        <CheckoutCard
+                          key={checkout.id}
+                          checkout={checkout}
+                          isSelected={selectedIds.has(checkout.id)}
+                          onToggleSelection={handleToggleSelection}
+                          onViewDetails={setDetailsDialog}
+                          onDelete={(id) => setDeleteDialog({ ids: [id] })}
+                          canDelete={orderActions.canDeleteOrders}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
                       {orderActions.canBulkDeleteOrders && (
@@ -605,8 +760,8 @@ export function AbandonedCheckoutsManager() {
                     </TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
+                  </TableHeader>
+                  <TableBody>
                   {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-64 text-center">
@@ -643,8 +798,9 @@ export function AbandonedCheckoutsManager() {
                       />
                     ))
                   )}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </CardContent>
           {pagination.totalPages > 1 && (
