@@ -933,7 +933,7 @@ function OrdersPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success(`${rows.length} orders exported successfully.`);
+    toast.success(`${rows.length} orders from this page exported.`);
   }, [search, table]);
 
   // ── Bulk archive handler (after useServerTable for selected revisions) ──
@@ -1188,6 +1188,11 @@ function OrdersPage() {
       selectedShipmentLockCount={selectedShipmentLockedOrders.length}
       selectedArchiveBlockedCount={selectedArchiveBlockedOrders.length}
       onExportCSV={handleExportCSV}
+      exportLabel={
+        buildRecoveryExportSearchParams(search)
+          ? "Export recovery CSV"
+          : "Export current page"
+      }
       autoRefreshEnabled={autoRefreshEnabled}
       onToggleAutoRefresh={toggleAutoRefresh}
       countdown={countdown}

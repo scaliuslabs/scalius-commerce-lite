@@ -184,12 +184,26 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
 
 **Gaps**
 
-- Normal “Export CSV” exports only the currently loaded table page, not all filtered results. Label it “Export current page” immediately or add a server-backed bounded export with row count/cap metadata.
+- The ordinary export is intentionally page-bounded and now says **Export current
+  page** in the toolbar and completion message. Payment-recovery export remains
+  a separate server-backed bounded export with row-count/cap metadata. Do not
+  regress the page export to a generic “Export CSV” label or imply that it
+  contains every filtered row.
 - Some desktop/mobile row actions still need a complete accessible-name audit. Tooltips are not a substitute for an accessible name.
 - Recovery and payment labels use text as small as 10px in several places. Operational states must remain legible at browser zoom and under common low-vision settings.
 - Bulk ship still needs the same strict duplicate and bounded-input audit already applied to archive.
 - List refreshes can move rows while the user is selecting or editing filters. Preserve selection only for still-visible IDs, announce refresh changes, and avoid auto-refresh while a destructive dialog is open.
 - No saved views, column selection, or queue presets. These are P2 productivity features after correctness work.
+
+**Live list/directory checkpoint — 2026-07-19:** The deployed dark-mode order
+list and buyer directory were exercised at 1440 px and at a real 390 x 844
+device viewport with no horizontal overflow. A storefront checkout order opened
+the read-only operational workspace instead of redirecting to the list. Guest
+checkout profiles appeared in the same Customers directory with explicit Guest
+identity, order count, paid-spend truth, last-order date, and order-history
+navigation. Admin bundle `index-BBo_gS3k.js` proves the bounded order export now
+renders “Export current page” on desktop and mobile; the previous ambiguous
+“Export CSV” control is absent.
 
 ### 2. Manual order creation
 
