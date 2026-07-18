@@ -49,6 +49,10 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   markup even though `/` is the storefront homepage. It was moved to Draft
   through the merchant editor. Production `/home` now returns 404, `/` remains
   200, and the pages sitemap lists About, Returns, and Shipping without Home.
+- The obsolete active `Lorem ipsum` GA4 record was deactivated, moved through
+  the recoverable analytics lifecycle, and permanently deleted after the list
+  synchronization fix was deployed and verified. No fake application-managed
+  analytics configuration remains in the demo store.
 
 ### Buyer-support and label-printing checkpoint (2026-07-17)
 

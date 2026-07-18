@@ -112,3 +112,18 @@ Executable source belongs only in the edit workflow.
 - Consent-region controls and provider test-event workflows are separate product
   decisions. Do not fabricate readiness from the presence of an ID or call an
   external provider from list/health reads.
+
+## Live lifecycle checkpoint (2026-07-19)
+
+- Removed the obsolete active `Lorem ipsum` GA4 demo row after the health
+  projection correctly diagnosed its invalid snippet. The production account
+  now truthfully shows no configured application-managed analytics provider;
+  Cloudflare's platform beacon remains independently present on the storefront.
+- Trash, restore, and permanent-delete successes now remove the moved row from
+  every cached list page immediately, mark other list views stale for their
+  next visit, and refresh provider health separately. A success toast can no
+  longer coexist with a row that has already changed lifecycle.
+- Production restore, trash, and permanent deletion were exercised without a
+  page reload at 1440 px. The empty analytics workspace was also checked at a
+  real 390 × 844 viewport in dark mode with no horizontal overflow. Admin
+  deployment: `4c30182b-13f6-4664-b316-09e22f5980fb`.
