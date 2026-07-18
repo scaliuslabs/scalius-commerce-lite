@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { parseAbandonedCheckoutDisplay } from "./abandoned-checkout-display";
+import {
+  formatAbandonedCheckoutId,
+  parseAbandonedCheckoutDisplay,
+} from "./abandoned-checkout-display";
+
+describe("abandoned checkout identifiers", () => {
+  it("keeps short identifiers and makes long checkout sessions distinguishable", () => {
+    expect(formatAbandonedCheckoutId("chk_1234")).toBe("chk_1234");
+    expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpbW")).toBe("S5I82lT…IUpbW");
+    expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpcX")).toBe("S5I82lT…IUpcX");
+    expect(formatAbandonedCheckoutId("  ")).toBe("Unknown");
+  });
+});
 
 describe("abandoned checkout display parsing", () => {
   it("keeps active cart-shaped checkout rows as cart sessions", () => {

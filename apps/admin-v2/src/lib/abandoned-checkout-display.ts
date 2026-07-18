@@ -38,6 +38,15 @@ export interface ParsedAbandonedCheckoutDisplay {
   balanceDue: number | null;
 }
 
+export function formatAbandonedCheckoutId(value: string | null | undefined): string {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return "Unknown";
+
+  const compact = normalized.replace(/^chk_session_/i, "") || normalized;
+  if (compact.length <= 16) return compact;
+  return `${compact.slice(0, 7)}…${compact.slice(-5)}`;
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
