@@ -40,6 +40,11 @@ count or skip fresh labels. A returning merchant with a saved device
 format/content preference can reach the browser print dialog after one review;
 a first-time merchant can see every decision before printing.
 
+Multi-page jobs can be reviewed one physical page at a time before printing.
+Only page one remains interactive for choosing the partially-used-sheet start
+cell; later pages are read-only previews so browsing a batch cannot silently
+change pagination.
+
 If the chosen stock is physically too narrow for any active barcode, printing
 stays blocked and the warning offers the first compatible standard format as a
 one-click recovery. The recommendation keeps thermal jobs on thermal media when
@@ -138,6 +143,9 @@ slots. The scaled page preview is also an interactive cell picker, while the
 numeric field remains the compact keyboard/mobile fallback. This offset is
 applied to the real print page and test page, but is never persisted into the
 next job.
+
+A compact previous/next control reviews every generated page without adding a
+second spreadsheet or preview mode. Preview navigation changes no job facts.
 
 ### Print
 
@@ -248,6 +256,11 @@ feeds, structured data, or external marketplaces.
   3 × 8 grid, offered `Use A4 adhesive`, switched to the compatible 2 × 7
   format, and re-enabled both test printing and Print/Save as PDF. The
   sequential release check passed afterwards.
+- Admin version `ecb63731-e127-4c44-8d74-512dc649290c` added bounded page-by-page
+  review for multi-page jobs. Production proof loaded three exact rich-demo
+  SKUs, expanded them to 18 on-hand labels across two A4 adhesive pages,
+  navigated to page 2, and confirmed later-page cells are read-only while the
+  first page remains the only partially-used-sheet start selector.
 
 ## Interface direction
 

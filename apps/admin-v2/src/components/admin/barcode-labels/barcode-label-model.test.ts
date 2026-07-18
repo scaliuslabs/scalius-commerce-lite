@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
 import {
   buildLabelCopies,
+  clampLabelPreviewPageIndex,
   findCompatibleLabelPreset,
   formatLabelCount,
   formatPageCount,
@@ -102,6 +103,14 @@ describe("barcode label page composition", () => {
     expect(formatPageCount(0)).toBe("0 pages");
     expect(formatPageCount(1)).toBe("1 page");
     expect(formatPageCount(2)).toBe("2 pages");
+  });
+
+  it("keeps multi-page preview navigation inside the current job", () => {
+    expect(clampLabelPreviewPageIndex(0, 2)).toBe(0);
+    expect(clampLabelPreviewPageIndex(1, 2)).toBe(1);
+    expect(clampLabelPreviewPageIndex(5, 2)).toBe(1);
+    expect(clampLabelPreviewPageIndex(-1, 2)).toBe(0);
+    expect(clampLabelPreviewPageIndex(1, 0)).toBe(0);
   });
 
   it("keeps quantity shortcuts explainable with their exact inventory source", () => {
