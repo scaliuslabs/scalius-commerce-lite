@@ -2,15 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
 import {
   buildLabelCopies,
+  clampLabelAlignmentMm,
   clampLabelPreviewPageIndex,
   findCompatibleLabelPreset,
   formatLabelCount,
   formatPageCount,
+  formatLabelPrintAlignment,
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
+  getLabelPrintGridPosition,
   getLabelShortcutQuantity,
   isbn10ToBooklandEan13,
   MAX_LABEL_COPIES,
@@ -111,6 +114,19 @@ describe("barcode label page composition", () => {
     expect(clampLabelPreviewPageIndex(5, 2)).toBe(1);
     expect(clampLabelPreviewPageIndex(-1, 2)).toBe(0);
     expect(clampLabelPreviewPageIndex(1, 0)).toBe(0);
+  });
+
+  it("keeps device alignment correction bounded and readable", () => {
+    expect(clampLabelAlignmentMm(Number.NaN)).toBe(0);
+    expect(clampLabelAlignmentMm(-7)).toBe(-5);
+    expect(clampLabelAlignmentMm(2.5)).toBe(2.5);
+    expect(clampLabelAlignmentMm(8)).toBe(5);
+    expect(formatLabelPrintAlignment({ xMm: 0, yMm: 0 })).toBe("Default");
+    expect(formatLabelPrintAlignment({ xMm: 1.5, yMm: -0.5 })).toBe("1.5 mm right · 0.5 mm up");
+    expect(getLabelPrintGridPosition(getLabelPreset("a4-cut-3x8"), { xMm: 1.5, yMm: -0.5 })).toEqual({
+      leftMm: 9.5,
+      topMm: 7.5,
+    });
   });
 
   it("keeps quantity shortcuts explainable with their exact inventory source", () => {

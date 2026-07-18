@@ -73,6 +73,11 @@ supported roll can preserve the symbol and its quiet zones.
   GTIN selection, label preview, test printing, PDF download, and per-item
   quantities. Receiving is a valuable future source when Scalius has purchase
   order authority.
+- [Lightspeed Retail label printing](https://x-series-support.lightspeedhq.com/hc/en-us/articles/25533677279771-Printing-barcode-labels)
+  keeps both single-product and bulk list entry points, can apply current
+  available inventory as the quantity, and lets merchants return from preview
+  to correct the job. This supports Scalius's shared workspace and explicit
+  `Available` shortcut rather than separate single and batch composers.
 - [Odoo printable delivery PDFs](https://www.odoo.com/documentation/17.0/applications/inventory_and_mrp/inventory/shipping_receiving/setup_configuration/print_on_validation.html)
   provides dense 2x7 and 4x12 page grids, one-per-unit quantities, PDF, and ZPL.
   Those outputs are operationally capable but expose format choices more than
@@ -91,6 +96,10 @@ supported roll can preserve the symbol and its quiet zones.
   platforms are architecture references, not a UX bar for this feature.
 - [Avery print guidance](https://www.avery.com/help/article/practice-test-sheet?page=1)
   requires an initial plain-paper alignment test and Actual Size/100% scale.
+  Avery's current troubleshooting guidance also recommends a small alignment
+  adjustment when the entire sheet is uniformly displaced. Scalius therefore
+  keeps device-local horizontal and vertical millimetre correction inside a
+  collapsed advanced control; it never changes the saved template or SKU.
   [GS1 guidance](https://www.gs1.org/standards/barcodes/10-steps-to-barcode-your-product/english)
   requires the correct symbol, human-readable digits, contrast, and quiet
   zones. Scalius must not shrink a barcode merely to make a crowded template
@@ -155,6 +164,11 @@ second spreadsheet or preview mode. Preview navigation changes no job facts.
 - **Test page** prints the real first symbol in the chosen starting cell, all
   stock outlines, cell numbers, and the Actual Size/100% plus browser
   header/footer instruction before a full batch.
+- A collapsed **Print alignment** control allows a bounded `-5` to `+5` mm
+  horizontal or vertical correction after a test sheet. Positive values move
+  right/down, the correction is saved only on that workstation, and Reset
+  restores the physically defined template without changing job or catalog
+  data.
 - The screen shows page size, labels per page, total labels, and total pages
   beside the action. It never guesses printer connection or readiness.
 - Plain-paper presets say so in the format picker. A merchant should not have
@@ -261,6 +275,13 @@ feeds, structured data, or external marketplaces.
   SKUs, expanded them to 18 on-hand labels across two A4 adhesive pages,
   navigated to page 2, and confirmed later-page cells are read-only while the
   first page remains the only partially-used-sheet start selector.
+- Admin version `83123bba-fa3a-4930-9d50-44beb129d596` added bounded,
+  workstation-local print alignment after renewed Shopify, Square, Lightspeed,
+  Avery, and GS1 review. Production proof opened one exact rich-demo SKU,
+  changed the hidden control to `1.5 mm right · 0.5 mm up`, reloaded to prove
+  persistence, reset it to the physical template, and repeated the workspace
+  at a real 390 × 844 viewport with no horizontal overflow. The print grid
+  position and ±5 mm clamp are covered by the focused model suite.
 
 ## Interface direction
 

@@ -138,6 +138,44 @@ export const DEFAULT_LABEL_CONTENT: LabelContentOptions = {
   showPrice: true,
 };
 
+export const MAX_LABEL_ALIGNMENT_MM = 5;
+
+export type LabelPrintAlignment = {
+  xMm: number;
+  yMm: number;
+};
+
+export const DEFAULT_LABEL_PRINT_ALIGNMENT: LabelPrintAlignment = {
+  xMm: 0,
+  yMm: 0,
+};
+
+export function clampLabelAlignmentMm(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(-MAX_LABEL_ALIGNMENT_MM, Math.min(MAX_LABEL_ALIGNMENT_MM, value));
+}
+
+export function formatLabelPrintAlignment(alignment: LabelPrintAlignment): string {
+  if (alignment.xMm === 0 && alignment.yMm === 0) return "Default";
+  const horizontal = alignment.xMm === 0
+    ? null
+    : `${Math.abs(alignment.xMm)} mm ${alignment.xMm > 0 ? "right" : "left"}`;
+  const vertical = alignment.yMm === 0
+    ? null
+    : `${Math.abs(alignment.yMm)} mm ${alignment.yMm > 0 ? "down" : "up"}`;
+  return [horizontal, vertical].filter(Boolean).join(" · ");
+}
+
+export function getLabelPrintGridPosition(
+  preset: Pick<LabelPreset, "marginXmm" | "marginYmm">,
+  alignment: LabelPrintAlignment,
+): { leftMm: number; topMm: number } {
+  return {
+    leftMm: preset.marginXmm + clampLabelAlignmentMm(alignment.xMm),
+    topMm: preset.marginYmm + clampLabelAlignmentMm(alignment.yMm),
+  };
+}
+
 export function formatLabelCount(count: number): string {
   return `${count} ${count === 1 ? "label" : "labels"}`;
 }
