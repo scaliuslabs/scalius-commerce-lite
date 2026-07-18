@@ -25,11 +25,27 @@ and a real preview. This retains the speed of a row action while still letting
 the merchant catch the wrong paper, an unsafe symbol fit, stale stock-based
 quantity, or a partially used sheet before opening the native print dialog.
 
+This also replaces the manual office workflow of downloading one symbol,
+placing copies on an A4 design canvas, aligning them by eye, exporting the
+canvas, and cutting the sheet. A standalone symbol download may eventually be
+useful to a packaging designer, but it is not the primary printing workflow and
+must not compete with the composed sheet/roll job. The normal merchant outcome
+is a physically sized page or roll rendered from exact saved SKUs.
+
 Do not replace the workspace with a linear wizard. Format choice changes symbol
 fit, content changes the physical artwork, the starting cell changes pagination,
 and quantity changes page count. Keeping selection, output controls, diagnostics,
 and preview in one responsive view makes those dependencies observable and lets
 experienced merchants finish without repeatedly moving forward and backward.
+
+Do not make a freeform drag canvas the default either. Lightspeed's advanced
+label editor is useful when a retailer owns supported hardware and maintains
+bespoke templates, but position/resize controls create accidental clipping and
+quiet-zone risk for ordinary merchants. Scalius keeps safe, physically defined
+presets and restrained content toggles in the primary path. A future named
+template editor may sit behind advanced disclosure, but it must preserve the
+same symbol-fit validation and never be required for A4/plain-paper or standard
+thermal output.
 
 The workspace keeps three layers visible on desktop: selected SKUs and label
 counts, format/content controls, and a sticky live paper preview. On narrow
