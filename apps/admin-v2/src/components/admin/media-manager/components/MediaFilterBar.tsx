@@ -4,15 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { capabilityAccept, type MediaCapability, type MediaFilterOptions, type MediaFolder, type MediaLibraryView } from "../types";
-
-const SORTS = {
-  newest: ["createdAt", "desc"],
-  oldest: ["createdAt", "asc"],
-  largest: ["size", "desc"],
-  smallest: ["size", "asc"],
-  "name-asc": ["filename", "asc"],
-  "name-desc": ["filename", "desc"],
-} as const satisfies Record<string, readonly [MediaFilterOptions["sortBy"], MediaFilterOptions["sortOrder"]]>;
+import { MEDIA_SORTS } from "../route-state";
 
 interface MediaFilterBarProps {
   capability: MediaCapability;
@@ -43,11 +35,15 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
   const wasSelectingRef = useRef(props.selectionMode);
   const [search, setSearch] = useState(props.filters.search);
   const [targetFolder, setTargetFolder] = useState("");
-  const sortValue = Object.entries(SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
+  const sortValue = Object.entries(MEDIA_SORTS).find(([, value]) => value[0] === props.filters.sortBy && value[1] === props.filters.sortOrder)?.[0] ?? "newest";
 
   useEffect(() => {
     if (props.selectedCount === 0) setTargetFolder("");
   }, [props.selectedCount]);
+
+  useEffect(() => {
+    setSearch(props.filters.search);
+  }, [props.filters.search]);
 
   useEffect(() => {
     if (wasSelectingRef.current && !props.selectionMode) {
@@ -75,7 +71,7 @@ export function MediaFilterBar(props: MediaFilterBarProps) {
             <SelectContent><SelectItem value="all">All types</SelectItem><SelectItem value="image">Images</SelectItem><SelectItem value="video">Videos</SelectItem></SelectContent>
           </Select>
         )}
-        <Select value={sortValue} onValueChange={(value) => { const sort = SORTS[value as keyof typeof SORTS]; props.onFiltersChange({ sortBy: sort[0], sortOrder: sort[1] }); }}>
+        <Select value={sortValue} onValueChange={(value) => { const sort = MEDIA_SORTS[value as keyof typeof MEDIA_SORTS]; props.onFiltersChange({ sortBy: sort[0], sortOrder: sort[1] }); }}>
           <SelectTrigger aria-label="Sort media assets" className="h-9 w-28 text-xs sm:h-8"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="newest">Newest</SelectItem><SelectItem value="oldest">Oldest</SelectItem><SelectItem value="largest">Largest</SelectItem><SelectItem value="smallest">Smallest</SelectItem><SelectItem value="name-asc">Name A–Z</SelectItem><SelectItem value="name-desc">Name Z–A</SelectItem></SelectContent>
         </Select>

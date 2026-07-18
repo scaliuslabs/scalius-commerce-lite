@@ -27,6 +27,7 @@ must remain outside the URL.
 | Inventory | `section` | Variants, low-stock alerts, and movements. |
 | Homepage hero | `section` | Desktop and mobile compositions. |
 | Meta Conversions | `section` | Settings and event logs. |
+| Media | `folder`, `kind`, `sort`, `search`, `view` | Defaults are omitted; missing folders normalize only after a successful folder read. Picker selections remain transient. |
 | Products, categories, attributes, collections, pages, customers, orders, discounts, analytics | typed list query | Safe search/filter/sort/page/trash state is already route-backed. |
 
 ## Deliberately transient state

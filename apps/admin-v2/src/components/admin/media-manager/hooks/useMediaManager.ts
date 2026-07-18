@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MediaApiClient } from "../api";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
-import { capabilityKind, type LibraryMediaFile, type MediaCapability, type MediaFile, type MediaLibraryView } from "../types";
+import {
+  capabilityKind,
+  type LibraryMediaFile,
+  type MediaCapability,
+  type MediaFile,
+  type MediaLibraryView,
+  type MediaWorkspaceRouteState,
+  type MediaWorkspaceRouteUpdateOptions,
+} from "../types";
 import { resolveSelectedMedia, selectAllVisibleMedia, updateMediaSelection } from "../utils/selection";
 
 interface UseMediaManagerOptions {
@@ -11,6 +19,11 @@ interface UseMediaManagerOptions {
   initialSelectedFiles?: MediaFile[];
   onSelect?: (file: MediaFile) => void;
   onSelectMultiple?: (files: MediaFile[]) => void;
+  workspaceState?: MediaWorkspaceRouteState;
+  onWorkspaceStateChange?: (
+    updates: Partial<MediaWorkspaceRouteState>,
+    options?: MediaWorkspaceRouteUpdateOptions,
+  ) => void;
 }
 
 function folderFilter(folderId: string | null | "all"): string | null | undefined {
@@ -34,6 +47,8 @@ export function useMediaManager({
   initialSelectedFiles = [],
   onSelect,
   onSelectMultiple,
+  workspaceState,
+  onWorkspaceStateChange,
 }: UseMediaManagerOptions) {
   const media = useMediaFiles(false);
   const folders = useFolders(autoLoad);
@@ -41,15 +56,18 @@ export function useMediaManager({
   const [selectionMode, setSelectionMode] = useState(!!onSelectMultiple);
   const [previewFile, setPreviewFile] = useState<LibraryMediaFile | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [view, setViewState] = useState<MediaLibraryView>("ready");
+  const [viewState, setViewState] = useState<MediaLibraryView>("ready");
   const [isMutating, setIsMutating] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionAnchorId = useRef<string | null>(null);
+  const routeControlled = workspaceState !== undefined && onWorkspaceStateChange !== undefined;
+  const view = routeControlled ? workspaceState.view : viewState;
+  const currentFolderId = routeControlled ? workspaceState.folderId : folders.currentFolderId;
 
   const upload = useMediaUpload({
     capability,
-    folderId: folders.currentFolderId === "all" ? null : folders.currentFolderId,
+    folderId: currentFolderId === "all" ? null : currentFolderId,
     onUploadComplete: (uploaded) => {
       if (onSelectMultiple) {
         setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
@@ -62,44 +80,123 @@ export function useMediaManager({
 
   const baseFilters = useMemo(() => ({
     kind: capabilityKind(capability),
-    folderId: folderFilter(folders.currentFolderId),
+    folderId: folderFilter(currentFolderId),
     view,
-  }), [capability, folders.currentFolderId, view]);
+  }), [capability, currentFolderId, view]);
+
+  const filters = useMemo(() => {
+    if (!routeControlled || !workspaceState) return media.filters;
+    return {
+      search: workspaceState.search,
+      sortBy: workspaceState.sortBy,
+      sortOrder: workspaceState.sortOrder,
+      kind: capabilityKind(capability) ?? workspaceState.kind,
+      folderId: folderFilter(workspaceState.folderId),
+      view: workspaceState.view,
+    };
+  }, [capability, media.filters, routeControlled, workspaceState]);
 
   useEffect(() => {
     setSelectedFileIds([]);
     setSelectionMode(!!onSelectMultiple);
     selectionAnchorId.current = null;
-    if (autoLoad) void media.loadFiles(undefined, { ...media.filters, ...baseFilters });
+    if (autoLoad) {
+      void media.loadFiles(undefined, routeControlled
+        ? filters
+        : { ...media.filters, ...baseFilters });
+    }
     // Filters are deliberately reset by these navigation changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoLoad, capability, folders.currentFolderId, view]);
+  }, [
+    autoLoad,
+    capability,
+    currentFolderId,
+    routeControlled,
+    view,
+    workspaceState?.kind,
+    workspaceState?.search,
+    workspaceState?.sortBy,
+    workspaceState?.sortOrder,
+  ]);
+
+  useEffect(() => {
+    if (
+      !routeControlled
+      || folders.isLoadingFolders
+      || folders.folderLoadError
+      || typeof currentFolderId !== "string"
+      || currentFolderId === "all"
+      || folders.folders.some((folder) => folder.id === currentFolderId)
+    ) return;
+
+    onWorkspaceStateChange?.({ folderId: "all" }, { replace: true });
+  }, [
+    currentFolderId,
+    folders.folders,
+    folders.folderLoadError,
+    folders.isLoadingFolders,
+    onWorkspaceStateChange,
+    routeControlled,
+  ]);
 
   useEffect(() => () => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (uploadRefreshTimer.current) clearTimeout(uploadRefreshTimer.current);
   }, []);
 
-  const load = useCallback(() => media.loadFiles(undefined, { ...media.filters, ...baseFilters }), [baseFilters, media]);
+  const load = useCallback(
+    () => media.loadFiles(undefined, routeControlled ? filters : { ...media.filters, ...baseFilters }),
+    [baseFilters, filters, media, routeControlled],
+  );
 
   const applyFilters = useCallback((updates: Partial<typeof media.filters>) => {
     setSelectedFileIds([]);
     setSelectionMode(!!onSelectMultiple);
     selectionAnchorId.current = null;
+    if (routeControlled) {
+      onWorkspaceStateChange?.({
+        ...(Object.prototype.hasOwnProperty.call(updates, "kind") ? { kind: updates.kind } : {}),
+        ...(updates.sortBy ? { sortBy: updates.sortBy } : {}),
+        ...(updates.sortOrder ? { sortOrder: updates.sortOrder } : {}),
+      });
+      return;
+    }
     void media.loadFiles(undefined, { ...media.filters, ...baseFilters, ...updates });
-  }, [baseFilters, media, onSelectMultiple]);
+  }, [baseFilters, media, onSelectMultiple, onWorkspaceStateChange, routeControlled]);
 
   const applySearch = useCallback((search: string) => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => applyFilters({ search }), 300);
-  }, [applyFilters]);
+    searchTimer.current = setTimeout(() => {
+      if (routeControlled) {
+        setSelectedFileIds([]);
+        setSelectionMode(!!onSelectMultiple);
+        selectionAnchorId.current = null;
+        onWorkspaceStateChange?.({ search }, { replace: true });
+      } else {
+        applyFilters({ search });
+      }
+    }, 300);
+  }, [applyFilters, onSelectMultiple, onWorkspaceStateChange, routeControlled]);
 
   const setView = useCallback((next: MediaLibraryView) => {
-    setViewState(next);
     setSelectedFileIds([]);
     setSelectionMode(!!onSelectMultiple);
     selectionAnchorId.current = null;
-  }, [onSelectMultiple]);
+    if (routeControlled) onWorkspaceStateChange?.({ view: next });
+    else setViewState(next);
+  }, [onSelectMultiple, onWorkspaceStateChange, routeControlled]);
+
+  const moveToFolder = useCallback((folderId: string | null | "all") => {
+    if (routeControlled) onWorkspaceStateChange?.({ folderId });
+    else folders.moveToFolder(folderId);
+  }, [folders, onWorkspaceStateChange, routeControlled]);
+
+  const deleteFolder = useCallback(async (folder: typeof folders.folders[number]) => {
+    const deleted = await folders.deleteFolder(folder);
+    if (deleted && routeControlled && currentFolderId === folder.id) {
+      onWorkspaceStateChange?.({ folderId: "all" }, { replace: true });
+    }
+  }, [currentFolderId, folders, onWorkspaceStateChange, routeControlled]);
 
   const replaceSelection = useCallback((ids: string[]) => {
     selectionAnchorId.current = null;
@@ -254,8 +351,12 @@ export function useMediaManager({
     ...media,
     ...folders,
     ...upload,
+    filters,
     view,
     setView,
+    currentFolderId,
+    moveToFolder,
+    deleteFolder,
     selectedFileIds,
     replaceSelection,
     selectionMode,
