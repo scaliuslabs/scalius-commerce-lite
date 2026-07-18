@@ -161,6 +161,11 @@ function EditDiscountPage() {
             isActive: duplicate ? false : Boolean(discount.isActive),
             appliesToProducts: productIds,
             appliesToCollections: collectionIds,
+            maxUsesPerOrder: discount.maxUsesPerOrder,
+            combineWithProductDiscounts: Boolean(discount.combineWithProductDiscounts),
+            combineWithOrderDiscounts: Boolean(discount.combineWithOrderDiscounts),
+            combineWithShippingDiscounts: Boolean(discount.combineWithShippingDiscounts),
+            customerSegment: discount.customerSegment,
           }}
           initialSelectedProducts={selectedProducts}
           initialSelectedCollections={selectedCollections}

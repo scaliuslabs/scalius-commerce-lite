@@ -5,7 +5,7 @@ import { routeTree } from "./routeTree.gen";
 import { createAdminQueryClient } from "./lib/admin-query-client";
 import {
   isRecoverableRouteLoadError,
-  recoverableRouteErrorSignature,
+  reloadRecoverableRouteOnce,
   RECOVERABLE_ROUTE_RELOAD_KEY,
 } from "./lib/recoverable-route-error";
 
@@ -46,15 +46,12 @@ function DefaultErrorComponent({ error }: { error: Error }) {
   useEffect(() => {
     if (!recoverableLoadError) return;
 
-    const signature = `${window.location.pathname}:${recoverableRouteErrorSignature(error)}`;
-    const previousSignature = window.sessionStorage.getItem(
-      RECOVERABLE_ROUTE_RELOAD_KEY,
-    );
-
-    if (previousSignature !== signature) {
-      window.sessionStorage.setItem(RECOVERABLE_ROUTE_RELOAD_KEY, signature);
-      window.location.reload();
-    }
+    reloadRecoverableRouteOnce({
+      error,
+      pathname: window.location.pathname,
+      storage: window.sessionStorage,
+      reload: () => window.location.reload(),
+    });
   }, [error, recoverableLoadError]);
 
   const handleReload = () => {

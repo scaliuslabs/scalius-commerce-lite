@@ -7,12 +7,36 @@ import {
   discountEditorSchema,
   fromDateInputValue,
   hydrateSelectedOptionLabels,
+  needsDiscountWriteNormalization,
   parseOptionalNumber,
   toDateInputValue,
   toDiscountWritePayload,
 } from "./discount-editor-model";
 
 describe("discount editor model", () => {
+  it("recognizes hidden legacy fields that one explicit save can repair", () => {
+    expect(
+      needsDiscountWriteNormalization("free_shipping", {
+        valueType: "free",
+        discountValue: 0,
+      }),
+    ).toBe(true);
+    expect(
+      needsDiscountWriteNormalization("free_shipping", {
+        valueType: "free",
+        discountValue: 1,
+      }),
+    ).toBe(false);
+    expect(
+      needsDiscountWriteNormalization("amount_off_order", {
+        valueType: "percentage",
+        discountValue: 10,
+        appliesToProducts: ["prod_legacy"],
+        combineWithShippingDiscounts: true,
+        maxUsesPerOrder: 2,
+      }),
+    ).toBe(true);
+  });
   it("keeps new and duplicated rules draft-first", () => {
     expect(createDiscountEditorDefaults("amount_off_order").isActive).toBe(false);
     expect(

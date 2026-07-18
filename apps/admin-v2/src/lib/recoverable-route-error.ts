@@ -32,3 +32,26 @@ export function isRecoverableRouteLoadError(error: unknown): boolean {
 export function recoverableRouteErrorSignature(error: unknown): string {
   return errorText(error).slice(0, 240);
 }
+
+export function reloadRecoverableRouteOnce({
+  error,
+  pathname,
+  storage,
+  reload,
+}: {
+  error: unknown;
+  pathname: string;
+  storage: Pick<Storage, "getItem" | "setItem">;
+  reload: () => void;
+}): boolean {
+  if (!isRecoverableRouteLoadError(error)) return false;
+
+  const signature = `${pathname}:${recoverableRouteErrorSignature(error)}`;
+  if (storage.getItem(RECOVERABLE_ROUTE_RELOAD_KEY) === signature) {
+    return false;
+  }
+
+  storage.setItem(RECOVERABLE_ROUTE_RELOAD_KEY, signature);
+  reload();
+  return true;
+}
