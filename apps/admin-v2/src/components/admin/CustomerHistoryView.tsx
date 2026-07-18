@@ -1,5 +1,5 @@
 // src/components/admin/CustomerHistoryView.tsx
-import React, { useState, useCallback } from "react";
+import React, { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { formatAdminDate, formatAdminTimestamp } from "~/lib/admin-time";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
@@ -27,8 +27,7 @@ import {
   MapPinned,
   Building,
   Home,
-  ExternalLink,
-  Loader2,
+  ArrowRight,
   Archive,
   ClipboardList,
 } from "lucide-react";
@@ -50,6 +49,8 @@ interface CustomerHistoryViewProps {
   history: CustomerHistoryRecord[];
   orders: CustomerOrderSummary[];
 }
+
+const ORDERS_PER_PAGE = 5;
 
 // --- Helper Functions ---
 
@@ -86,19 +87,12 @@ export function CustomerHistoryView({
   orders,
 }: CustomerHistoryViewProps) {
   const { symbol } = useCurrency();
-  const ITEMS_PER_PAGE = 5; // Define items per page
   const [displayedOrdersCount, setDisplayedOrdersCount] =
-    useState(ITEMS_PER_PAGE);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+    useState(ORDERS_PER_PAGE);
 
-  const loadMoreOrders = useCallback(() => {
-    setIsLoadingMore(true);
-    // Simulate loading delay if needed, or remove for instant load
-    setTimeout(() => {
-      setDisplayedOrdersCount((prevCount) => prevCount + ITEMS_PER_PAGE);
-      setIsLoadingMore(false);
-    }, 300); // Keep small delay for visual feedback
-  }, []);
+  const loadMoreOrders = () => {
+    setDisplayedOrdersCount((count) => count + ORDERS_PER_PAGE);
+  };
 
   const displayedOrders = React.useMemo(() => {
     return orders.slice(0, displayedOrdersCount);
@@ -114,19 +108,17 @@ export function CustomerHistoryView({
   ].filter(Boolean); // Filter out null/empty values
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {" "}
-      {/* Consistent padding */}
+    <div className="mx-auto max-w-7xl space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6 lg:px-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16 text-lg border">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <Avatar className="h-12 w-12 shrink-0 border text-base sm:h-16 sm:w-16 sm:text-lg">
             {/* Use Avatar Component */}
             {/* <AvatarImage src={customer.avatarUrl} alt={customer.name} /> // Add if you have avatar URLs */}
             <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+            <h1 className="truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
               {customer.name}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -151,18 +143,16 @@ export function CustomerHistoryView({
         </div>
       </div>
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
         {/* Customer Profile Card */}
         <Card className="lg:col-span-1">
-          <CardHeader>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <User className="h-5 w-5" />
               Customer Profile
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            {" "}
-            {/* Reduced top padding */}
+          <CardContent className="space-y-4 px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
             {/* Contact Info */}
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-3">
@@ -263,7 +253,7 @@ export function CustomerHistoryView({
 
         {/* Recent Orders Card */}
         <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
@@ -272,10 +262,51 @@ export function CustomerHistoryView({
               <Badge variant="outline">{orders.length} total</Badge>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="border rounded-md overflow-hidden">
-              {" "}
-              {/* Add border around table */}
+          <CardContent className="px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
+            <div className="divide-y overflow-hidden rounded-md border sm:hidden">
+              {displayedOrders.length > 0 ? (
+                displayedOrders.map((order) => (
+                  <Link
+                    key={order.id}
+                    to="/admin/orders/$orderId"
+                    params={{ orderId: order.id }}
+                    className="block space-y-2 p-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-sm font-semibold">
+                          #{order.id.substring(0, 6)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatAdminDate(order.createdAt) ?? "N/A"}
+                        </p>
+                      </div>
+                      <OrderStatusBadge status={order.status} />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-semibold tabular-nums">
+                        {symbol}
+                        {order.totalAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                        View order
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <Archive className="h-8 w-8" />
+                  <p className="font-medium">No Orders Yet</p>
+                  <p className="text-xs">This customer hasn't placed any orders.</p>
+                </div>
+              )}
+            </div>
+            <div className="hidden overflow-hidden rounded-md border sm:block">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -297,14 +328,13 @@ export function CustomerHistoryView({
                             asChild
                             className="p-0 h-auto font-medium text-primary"
                           >
-                            <a
-                              href={`/admin/orders/${order.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <Link
+                              to="/admin/orders/$orderId"
+                              params={{ orderId: order.id }}
                             >
                               #{order.id.substring(0, 6)} {/* Shorten ID */}
-                              <ExternalLink className="ml-1 h-3 w-3" />
-                            </a>
+                              <ArrowRight className="ml-1 h-3 w-3" />
+                            </Link>
                           </Button>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -344,16 +374,8 @@ export function CustomerHistoryView({
                   variant="outline"
                   size="sm"
                   onClick={loadMoreOrders}
-                  disabled={isLoadingMore}
                 >
-                  {isLoadingMore ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading...
-                    </>
-                  ) : (
-                    `Load More (${orders.length - displayedOrdersCount} remaining)`
-                  )}
+                  Load more ({orders.length - displayedOrdersCount} remaining)
                 </Button>
               </div>
             )}
@@ -362,7 +384,7 @@ export function CustomerHistoryView({
       </div>
       {/* Change History Card */}
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <History className="h-5 w-5" />
@@ -371,7 +393,7 @@ export function CustomerHistoryView({
             <Badge variant="outline">{history.length} changes</Badge>
           </div>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="px-4 pb-4 pt-0 sm:px-6 sm:pb-6">
           {history.length > 0 ? (
             <ScrollArea className="h-[400px] w-full pr-4">
               {" "}
