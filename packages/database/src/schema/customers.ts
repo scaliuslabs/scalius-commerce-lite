@@ -60,7 +60,7 @@ export const customerHistory = sqliteTable("customer_history", {
         .notNull()
         .default(UNIX_NOW),
 }, (table) => [
-    index("customer_history_customer_id_idx").on(table.customerId),
+    index("customer_history_customer_created_idx").on(table.customerId, table.createdAt),
 ]);
 
 export const customerAuthOtpChallenges = sqliteTable("customer_auth_otp_challenges", {

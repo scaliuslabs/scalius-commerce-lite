@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type {
   GetApiV1AdminCustomersByIdHistoryResponse,
+  GetApiV1AdminCustomersByIdHistoryData,
   GetApiV1AdminCustomersByIdResponse,
   GetApiV1AdminCustomersData,
   GetApiV1AdminCustomersResponse,
@@ -34,6 +35,9 @@ type ApiBody<T extends { body?: unknown }> = JsonSerializable<
 >;
 
 type CustomerListQuery = NonNullable<GetApiV1AdminCustomersData["query"]>;
+type CustomerHistoryQuery = NonNullable<
+  GetApiV1AdminCustomersByIdHistoryData["query"]
+>;
 
 export interface CustomersQueryInput extends Omit<CustomerListQuery, "trashed"> {
   [key: string]: string | number | boolean | null | undefined;
@@ -45,6 +49,7 @@ export type CustomersListPayload = ApiData<GetApiV1AdminCustomersResponse>;
 export type CustomerDto = ApiData<GetApiV1AdminCustomersByIdResponse>;
 export type CustomerHistoryPayload =
   ApiData<GetApiV1AdminCustomersByIdHistoryResponse>;
+export type CustomerHistoryQueryInput = { id: string } & CustomerHistoryQuery;
 export type CreateCustomerInput = ApiBody<PostApiV1AdminCustomersData>;
 export type UpdateCustomerInput = { id: string } &
   ApiBody<PutApiV1AdminCustomersByIdData>;
@@ -76,9 +81,15 @@ export const getCustomer = createServerFn({ method: "GET" })
   });
 
 export const getCustomerHistory = createServerFn({ method: "GET" })
-  .validator((data: { id: string }) => data)
+  .validator((data: CustomerHistoryQueryInput) => data)
   .handler(async ({ data }): Promise<CustomerHistoryPayload> => {
-    return apiGet<CustomerHistoryPayload>(`/customers/${data.id}/history`);
+    const { id, ...query } = data;
+    return apiGet<CustomerHistoryPayload>(`/customers/${id}/history`, {
+      historyPage: String(query.historyPage ?? 1),
+      historyLimit: String(query.historyLimit ?? 20),
+      ordersPage: String(query.ordersPage ?? 1),
+      ordersLimit: String(query.ordersLimit ?? 5),
+    });
   });
 
 export const createCustomer = createServerFn({ method: "POST" })

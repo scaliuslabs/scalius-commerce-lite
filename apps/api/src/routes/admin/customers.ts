@@ -82,6 +82,22 @@ const customerHistoryPayloadSchema = z.object({
     customer: customerHistoryCustomerSchema,
     history: z.array(customerHistoryEntrySchema),
     orders: z.array(customerHistoryOrderSchema),
+    pagination: z.object({
+        history: z.object({
+            page: z.number(),
+            limit: z.number(),
+            total: z.number(),
+            totalPages: z.number(),
+            hasNextPage: z.boolean(),
+        }),
+        orders: z.object({
+            page: z.number(),
+            limit: z.number(),
+            total: z.number(),
+            totalPages: z.number(),
+            hasNextPage: z.boolean(),
+        }),
+    }),
 });
 
 app.openapi(listRoute, async (c) => {
@@ -276,6 +292,12 @@ const getHistoryRoute = createRoute({
     summary: "Get customer details with history and orders",
     request: {
         params: z.object({ id: z.string() }),
+        query: z.object({
+            historyPage: z.coerce.number().int().min(1).default(1),
+            historyLimit: z.coerce.number().int().min(1).max(50).default(20),
+            ordersPage: z.coerce.number().int().min(1).default(1),
+            ordersLimit: z.coerce.number().int().min(1).max(25).default(5),
+        }),
     },
     responses: {
         200: { description: "Customer history data", content: { "application/json": { schema: successEnvelope(customerHistoryPayloadSchema) } } },
@@ -286,9 +308,12 @@ const getHistoryRoute = createRoute({
 app.openapi(getHistoryRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const { historyPage, historyLimit, ordersPage, ordersLimit } = c.req.valid("query");
     const metrics = buildCustomerOrderMetricsProjection();
+    const historyOffset = (historyPage - 1) * historyLimit;
+    const ordersOffset = (ordersPage - 1) * ordersLimit;
 
-    const [customerResults, history, customerOrders] = await db.batch([
+    const [customerResults, history, customerOrders, historyCountRows, orderCountRows] = await db.batch([
         db
             .select({
                 id: customers.id,
@@ -331,7 +356,9 @@ app.openapi(getHistoryRoute, async (c) => {
             })
             .from(customerHistory)
             .where(eq(customerHistory.customerId, id))
-            .orderBy(sql`${customerHistory.createdAt} DESC`),
+            .orderBy(sql`${customerHistory.createdAt} DESC`)
+            .limit(historyLimit)
+            .offset(historyOffset),
         db
             .select({
                 id: orders.id,
@@ -344,7 +371,20 @@ app.openapi(getHistoryRoute, async (c) => {
                 eq(orders.customerId, id),
                 isNull(orders.deletedAt),
             ))
-            .orderBy(sql`${orders.createdAt} DESC`),
+            .orderBy(sql`${orders.createdAt} DESC`)
+            .limit(ordersLimit)
+            .offset(ordersOffset),
+        db
+            .select({ total: sql<number>`COUNT(*)` })
+            .from(customerHistory)
+            .where(eq(customerHistory.customerId, id)),
+        db
+            .select({ total: sql<number>`COUNT(*)` })
+            .from(orders)
+            .where(and(
+                eq(orders.customerId, id),
+                isNull(orders.deletedAt),
+            )),
     ]);
 
     const customer = customerResults[0];
@@ -395,10 +435,31 @@ app.openapi(getHistoryRoute, async (c) => {
         createdAt: new Date(order.createdAt * 1000),
     }));
 
+    const historyTotal = Number(historyCountRows[0]?.total ?? 0);
+    const ordersTotal = Number(orderCountRows[0]?.total ?? 0);
+    const historyTotalPages = Math.ceil(historyTotal / historyLimit);
+    const ordersTotalPages = Math.ceil(ordersTotal / ordersLimit);
+
     return ok(c, {
         customer: enrichedCustomer,
         history: enrichedHistory,
         orders: enrichedOrders,
+        pagination: {
+            history: {
+                page: historyPage,
+                limit: historyLimit,
+                total: historyTotal,
+                totalPages: historyTotalPages,
+                hasNextPage: historyPage < historyTotalPages,
+            },
+            orders: {
+                page: ordersPage,
+                limit: ordersLimit,
+                total: ordersTotal,
+                totalPages: ordersTotalPages,
+                hasNextPage: ordersPage < ordersTotalPages,
+            },
+        },
     });
 });
 

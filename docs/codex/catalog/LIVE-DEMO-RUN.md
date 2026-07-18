@@ -610,8 +610,9 @@ The cleanup bullets below describe the two-product proof store that preceded the
   build while product pages already served the new build; a direct cache/build
   probe recovered to `src-b7ae9c72b6606ef5`, and the required sequential
   redeploy then passed health, 100% version, and all critical cache warm checks.
-- Latest customer-history release: admin
-  `eef9edd8-ec11-46b8-8251-c49dbe291194`. Customer and order timestamps now
+- Latest customer-history release: API
+  `b3839a53-241c-4ec8-9653-f1953de91e2e` and admin
+  `67ab9f0f-f998-4def-9c99-b57f0ef80d9a`. Customer and order timestamps now
   share the Bangladesh admin-time boundary, so the live guest COD order
   `NFPLAV` is `Jul 19, 2026, 2:53 AM` in both order detail and customer
   history instead of appearing on different calendar days. At 390 px the
@@ -619,11 +620,19 @@ The cleanup bullets below describe the two-product proof store that preceded the
   the desktop table remains available from the `sm` breakpoint. Production
   browser proof covered light and dark modes, exact same-tab navigation to
   `/admin/orders/NFPLAV`, one visible mobile order link, hidden desktop table,
-  zero horizontal overflow, and no route error. Focused boundaries, lint, and
-  the sequential Admin typecheck passed before deployment. The history API
-  still returns the customer's complete order and change-history arrays; that
-  unbounded read is the next scalability defect to replace with honest server
-  pagination rather than another client-only loading illusion.
+  zero horizontal overflow, and no route error. The former client-only loading
+  illusion and unbounded API read are also removed: the API independently pages
+  orders at 5 by default (25 maximum) and change history at 20 by default (50
+  maximum), returns exact totals/next-page state, and the UI appends only the
+  requested next page with ID deduplication, pending state, and inline retry
+  feedback. Five-query D1 batching plus the bounded location enrichment stays
+  within the six-connection Worker ceiling. Seven focused tests, generated SDK,
+  targeted lint, sequential API/Admin typechecks and deploy builds, API health/
+  ready probes, and the deployed 390 px browser smoke all passed.
+  Migration `0034_lively_lifeguard.sql` replaced the redundant single-column
+  customer indexes with `customer_id + created_at` history ordering and
+  `customer_id + deleted_at + created_at` active-order ordering; it applied
+  successfully before the final API deployment.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
 ## Required continuation checks

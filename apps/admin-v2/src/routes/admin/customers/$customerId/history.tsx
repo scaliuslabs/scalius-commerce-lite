@@ -22,9 +22,11 @@ function CustomerHistoryPage() {
 
   return (
     <CustomerHistoryView
+      key={customerId}
       customer={data.customer}
       history={data.history}
       orders={data.orders}
+      pagination={data.pagination}
     />
   );
 }

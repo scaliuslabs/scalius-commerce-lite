@@ -10122,7 +10122,12 @@ export type GetApiV1AdminCustomersByIdHistoryData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        historyPage?: number;
+        historyLimit?: number;
+        ordersPage?: number;
+        ordersLimit?: number;
+    };
     url: '/api/v1/admin/customers/{id}/history';
 };
 
@@ -10245,6 +10250,22 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 status: string;
                 createdAt: string | number;
             }>;
+            pagination: {
+                history: {
+                    page: number;
+                    limit: number;
+                    total: number;
+                    totalPages: number;
+                    hasNextPage: boolean;
+                };
+                orders: {
+                    page: number;
+                    limit: number;
+                    total: number;
+                    totalPages: number;
+                    hasNextPage: boolean;
+                };
+            };
         };
     };
 };

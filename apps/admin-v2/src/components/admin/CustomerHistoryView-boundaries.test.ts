@@ -13,8 +13,14 @@ describe("CustomerHistoryView responsive boundaries", () => {
     expect(source).not.toContain('target="_blank"');
   });
 
-  it("keeps pagination honest and store-time formatting deterministic", () => {
+  it("keeps pagination server-backed and store-time formatting deterministic", () => {
     expect(source).not.toContain("setTimeout(");
+    expect(source).not.toContain("orders.slice(");
+    expect(source).toContain("getCustomerHistory({");
+    expect(source).toContain("ordersPage: ordersPage.page + 1");
+    expect(source).toContain("historyPage: historyPage.page + 1");
+    expect(source).toContain("ordersPage.hasNextPage");
+    expect(source).toContain("historyPage.hasNextPage");
     expect(source).not.toContain("suppressHydrationWarning");
     expect(source).toContain("formatAdminDate(order.createdAt)");
     expect(source).toContain("formatAdminTimestamp(record.createdAt)");
