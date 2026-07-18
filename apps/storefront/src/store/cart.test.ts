@@ -96,6 +96,27 @@ describe("cart store", () => {
     expect(hydrateCartFromStorage()).toBe(hydrated);
   });
 
+  it("uses one shipping-fee authority for ordinary, waived, mixed, and invalid fees", async () => {
+    const {
+      cartHasFreeDeliveryItem,
+      getEffectiveCartShippingFee,
+    } = await importFreshCartModule();
+    const ordinary = {
+      regular: { freeDelivery: false },
+    };
+    const mixed = {
+      regular: { freeDelivery: false },
+      waived: { freeDelivery: true },
+    };
+
+    expect(cartHasFreeDeliveryItem(ordinary)).toBe(false);
+    expect(getEffectiveCartShippingFee(ordinary, 110)).toBe(110);
+    expect(cartHasFreeDeliveryItem(mixed)).toBe(true);
+    expect(getEffectiveCartShippingFee(mixed, 110)).toBe(0);
+    expect(getEffectiveCartShippingFee(ordinary, -10)).toBe(0);
+    expect(getEffectiveCartShippingFee(ordinary, Number.NaN)).toBe(0);
+  });
+
   it("falls back to an empty cart when stored JSON is invalid", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     localStorage.setItem("cart", "{bad json");

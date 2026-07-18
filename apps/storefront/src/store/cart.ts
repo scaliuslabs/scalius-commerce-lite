@@ -103,6 +103,24 @@ let canPersistToStorage = false;
 
 export const cartStore = map<CartStore>({ ...EMPTY_CART_STATE });
 
+type ShippingFeeCartItem = Pick<CartItem, "freeDelivery">;
+
+export function cartHasFreeDeliveryItem(
+  items: Record<string, ShippingFeeCartItem>,
+): boolean {
+  return Object.values(items).some((item) => item.freeDelivery === true);
+}
+
+export function getEffectiveCartShippingFee(
+  items: Record<string, ShippingFeeCartItem>,
+  methodFee: number,
+): number {
+  const normalizedMethodFee = Number.isFinite(methodFee)
+    ? Math.max(0, methodFee)
+    : 0;
+  return cartHasFreeDeliveryItem(items) ? 0 : normalizedMethodFee;
+}
+
 if (typeof window !== "undefined") {
   cartStore.subscribe((state) => {
     if (!canPersistToStorage) return;
