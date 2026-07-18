@@ -204,6 +204,10 @@ const getGeneralRoute = createRoute({
             z.object({
               headerConfig: z.record(z.string(), z.unknown()),
               footerConfig: z.record(z.string(), z.unknown()),
+              revisions: z.object({
+                header: z.number().int().nonnegative(),
+                footer: z.number().int().nonnegative(),
+              }),
               navigationReadiness: z.object({
                 header: navigationConfigReadinessSchema,
                 footer: navigationConfigReadinessSchema,
@@ -272,35 +276,45 @@ const headerConfigSchema = z.object({
   navigation: z.array(navigationItemSchema),
 });
 
+const saveHeaderSchema = headerConfigSchema.extend({
+  expectedRevision: z.number().int().nonnegative(),
+});
+
 const saveHeaderRoute = createRoute({
   method: "post",
   path: "/header",
   tags: ["Admin - Settings"],
   summary: "Save header configuration",
   request: {
-    body: { content: { "application/json": { schema: headerConfigSchema } } },
+    body: { content: { "application/json": { schema: saveHeaderSchema } } },
   },
   responses: {
     200: {
       description: "Header saved",
       content: {
-        "application/json": { schema: successEnvelope(z.object({})) },
+        "application/json": {
+          schema: successEnvelope(z.object({
+            revision: z.number().int().positive(),
+          })),
+        },
       },
     },
+    409: conflictResponse,
     ...errorResponses,
   },
 });
 
 app.openapi(saveHeaderRoute, async (c) => {
   const db = c.get("db");
-  const validatedConfig = c.req.valid("json");
-  await saveHeaderConfig(
+  const { expectedRevision, ...validatedConfig } = c.req.valid("json");
+  const saved = await saveHeaderConfig(
     db,
     validatedConfig as unknown as Record<string, unknown>,
+    expectedRevision,
   );
   await invalidateSiteSettingsCache(getKv());
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-  return ok(c, {});
+  return ok(c, saved);
 });
 
 // ─────────────────────────────────────────
@@ -320,35 +334,45 @@ const footerConfigSchema = z.object({
   social: z.array(socialLinkSchema),
 });
 
+const saveFooterSchema = footerConfigSchema.extend({
+  expectedRevision: z.number().int().nonnegative(),
+});
+
 const saveFooterRoute = createRoute({
   method: "post",
   path: "/footer",
   tags: ["Admin - Settings"],
   summary: "Save footer configuration",
   request: {
-    body: { content: { "application/json": { schema: footerConfigSchema } } },
+    body: { content: { "application/json": { schema: saveFooterSchema } } },
   },
   responses: {
     200: {
       description: "Footer saved",
       content: {
-        "application/json": { schema: successEnvelope(z.object({})) },
+        "application/json": {
+          schema: successEnvelope(z.object({
+            revision: z.number().int().positive(),
+          })),
+        },
       },
     },
+    409: conflictResponse,
     ...errorResponses,
   },
 });
 
 app.openapi(saveFooterRoute, async (c) => {
   const db = c.get("db");
-  const validatedConfig = c.req.valid("json");
-  await saveFooterConfig(
+  const { expectedRevision, ...validatedConfig } = c.req.valid("json");
+  const saved = await saveFooterConfig(
     db,
     validatedConfig as unknown as Record<string, unknown>,
+    expectedRevision,
   );
   await invalidateSiteSettingsCache(getKv());
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-  return ok(c, {});
+  return ok(c, saved);
 });
 
 // ─────────────────────────────────────────

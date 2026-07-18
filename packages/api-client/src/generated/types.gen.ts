@@ -16276,6 +16276,10 @@ export type GetApiV1AdminNavigationResponses = {
             footerConfig: {
                 [key: string]: unknown;
             };
+            revisions: {
+                header: number;
+                footer: number;
+            };
         };
     };
 };
@@ -16288,6 +16292,7 @@ export type PostApiV1AdminNavigationData = {
         config: {
             [key: string]: unknown;
         };
+        expectedRevision: number;
     };
     path?: never;
     query?: never;
@@ -16340,6 +16345,17 @@ export type PostApiV1AdminNavigationErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16373,6 +16389,7 @@ export type PostApiV1AdminNavigationResponses = {
         success: true;
         data: {
             message: string;
+            revision: number;
         };
     };
 };
@@ -16382,6 +16399,7 @@ export type PostApiV1AdminNavigationResponse = PostApiV1AdminNavigationResponses
 export type DeleteApiV1AdminNavigationByIdData = {
     body?: {
         type: 'header' | 'footer';
+        expectedRevision: number;
     };
     path: {
         id: string;
@@ -16436,6 +16454,17 @@ export type DeleteApiV1AdminNavigationByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16463,9 +16492,14 @@ export type DeleteApiV1AdminNavigationByIdError = DeleteApiV1AdminNavigationById
 
 export type DeleteApiV1AdminNavigationByIdResponses = {
     /**
-     * No content
+     * Navigation config reset
      */
-    204: void;
+    200: {
+        success: true;
+        data: {
+            revision: number;
+        };
+    };
 };
 
 export type DeleteApiV1AdminNavigationByIdResponse = DeleteApiV1AdminNavigationByIdResponses[keyof DeleteApiV1AdminNavigationByIdResponses];
@@ -16476,6 +16510,7 @@ export type PutApiV1AdminNavigationByIdData = {
         config: {
             [key: string]: unknown;
         };
+        expectedRevision: number;
     };
     path: {
         id: string;
@@ -16530,6 +16565,17 @@ export type PutApiV1AdminNavigationByIdErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -16563,6 +16609,7 @@ export type PutApiV1AdminNavigationByIdResponses = {
         success: true;
         data: {
             message: string;
+            revision: number;
         };
     };
 };
@@ -20294,6 +20341,10 @@ export type GetApiV1AdminSettingsGeneralResponses = {
             footerConfig: {
                 [key: string]: unknown;
             };
+            revisions: {
+                header: number;
+                footer: number;
+            };
             navigationReadiness: {
                 header: {
                     state: 'ready' | 'legacy_normalized' | 'invalid';
@@ -20395,6 +20446,7 @@ export type PostApiV1AdminSettingsHeaderData = {
                 }>;
             }>;
         }>;
+        expectedRevision: number;
     };
     path?: never;
     query?: never;
@@ -20447,6 +20499,17 @@ export type PostApiV1AdminSettingsHeaderErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -20479,7 +20542,7 @@ export type PostApiV1AdminSettingsHeaderResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            revision: number;
         };
     };
 };
@@ -20565,6 +20628,7 @@ export type PostApiV1AdminSettingsFooterData = {
             url: string;
             iconUrl?: string;
         }>;
+        expectedRevision: number;
     };
     path?: never;
     query?: never;
@@ -20617,6 +20681,17 @@ export type PostApiV1AdminSettingsFooterErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -20649,7 +20724,7 @@ export type PostApiV1AdminSettingsFooterResponses = {
     200: {
         success: true;
         data: {
-            [key: string]: unknown;
+            revision: number;
         };
     };
 };

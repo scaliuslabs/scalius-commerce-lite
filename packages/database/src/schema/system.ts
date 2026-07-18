@@ -56,7 +56,9 @@ export const siteSettings = sqliteTable("site_settings", {
     siteName: text("site_name").notNull(),
     siteDescription: text("site_description"),
     headerConfig: text("header_config").notNull(),
+    headerConfigRevision: integer("header_config_revision").notNull().default(1),
     footerConfig: text("footer_config").notNull(),
+    footerConfigRevision: integer("footer_config_revision").notNull().default(1),
     socialLinks: text("social_links"),
     contactInfo: text("contact_info"),
     siteTitle: text("site_title"),
@@ -81,6 +83,8 @@ export const siteSettings = sqliteTable("site_settings", {
         .default(UNIX_NOW),
 }, (table) => [
     uniqueIndex("site_settings_singleton_idx").on(table.singletonKey),
+    check("site_settings_header_config_revision_positive", sql`${table.headerConfigRevision} >= 1`),
+    check("site_settings_footer_config_revision_positive", sql`${table.footerConfigRevision} >= 1`),
     check("site_settings_checkout_flow_revision_positive", sql`${table.checkoutFlowRevision} >= 1`),
 ]);
 

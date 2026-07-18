@@ -14,6 +14,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
+  AppError,
   ConflictError,
   ServiceUnavailableError,
   ValidationError,
@@ -57,6 +58,35 @@ const THEME_COLORS_KEY = "storefront_colors";
 export interface ThemeSettingsDocument {
   theme: StorefrontThemeSettings;
   revision: number;
+}
+
+export const SITE_PRESENTATION_REVISION_CONFLICT =
+  "SITE_PRESENTATION_REVISION_CONFLICT";
+
+export type SitePresentationSection = "header" | "footer";
+
+export class SitePresentationRevisionConflictError extends AppError {
+  constructor(
+    section: SitePresentationSection,
+    expectedRevision: number,
+    currentRevision: number | null,
+  ) {
+    super(
+      409,
+      SITE_PRESENTATION_REVISION_CONFLICT,
+      `${section === "header" ? "Header" : "Footer"} settings changed in another session. Your draft was not saved.`,
+      { section, expectedRevision, currentRevision },
+    );
+    this.name = "SitePresentationRevisionConflictError";
+  }
+}
+
+function assertPresentationRevision(expectedRevision: number): void {
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
+    throw new ValidationError(
+      "A non-negative header or footer settings revision is required.",
+    );
+  }
 }
 
 function parseAuthoritativeThemeSettings(value: string): StorefrontThemeSettings {
@@ -308,6 +338,10 @@ export async function getGeneralSettings(db: Database) {
   );
   return {
     ...resolved,
+    revisions: {
+      header: row?.headerConfigRevision ?? 0,
+      footer: row?.footerConfigRevision ?? 0,
+    },
     navigationReadiness: {
       header: {
         state: headerRead.state,
@@ -324,51 +358,107 @@ export async function getGeneralSettings(db: Database) {
 export async function saveHeaderConfig(
   db: Database,
   config: Record<string, unknown>,
-) {
+  expectedRevision: number,
+): Promise<{ revision: number }> {
+  assertPresentationRevision(expectedRevision);
   const normalizedConfig = parseNavigationConfig("header", config);
-  await db
-    .insert(siteSettings)
-    .values({
-      id: "settings_" + nanoid(),
-      siteName: "My Store",
-      siteDescription: "",
-      headerConfig: JSON.stringify(normalizedConfig),
-      footerConfig: JSON.stringify({}),
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.singletonKey,
-      set: {
-        headerConfig: JSON.stringify(normalizedConfig),
+  const serialized = JSON.stringify(normalizedConfig);
+
+  if (expectedRevision === 0) {
+    const inserted = await db
+      .insert(siteSettings)
+      .values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        siteDescription: "",
+        headerConfig: serialized,
+        headerConfigRevision: 1,
+        footerConfig: JSON.stringify({}),
+        createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
-      },
-    });
+      })
+      .onConflictDoNothing({ target: siteSettings.singletonKey })
+      .returning({ revision: siteSettings.headerConfigRevision });
+    if (inserted[0]) return inserted[0];
+  } else {
+    const updated = await db
+      .update(siteSettings)
+      .set({
+        headerConfig: serialized,
+        headerConfigRevision: sql`${siteSettings.headerConfigRevision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(
+        eq(siteSettings.singletonKey, "default"),
+        eq(siteSettings.headerConfigRevision, expectedRevision),
+      ))
+      .returning({ revision: siteSettings.headerConfigRevision });
+    if (updated[0]) return updated[0];
+  }
+
+  const current = await db
+    .select({ revision: siteSettings.headerConfigRevision })
+    .from(siteSettings)
+    .where(eq(siteSettings.singletonKey, "default"))
+    .get();
+  throw new SitePresentationRevisionConflictError(
+    "header",
+    expectedRevision,
+    current?.revision ?? null,
+  );
 }
 
 export async function saveFooterConfig(
   db: Database,
   config: Record<string, unknown>,
-) {
+  expectedRevision: number,
+): Promise<{ revision: number }> {
+  assertPresentationRevision(expectedRevision);
   const normalizedConfig = parseNavigationConfig("footer", config);
-  await db
-    .insert(siteSettings)
-    .values({
-      id: "settings_" + nanoid(),
-      siteName: "My Store",
-      siteDescription: "",
-      headerConfig: JSON.stringify({}),
-      footerConfig: JSON.stringify(normalizedConfig),
-      createdAt: sql`unixepoch()`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.singletonKey,
-      set: {
-        footerConfig: JSON.stringify(normalizedConfig),
+  const serialized = JSON.stringify(normalizedConfig);
+
+  if (expectedRevision === 0) {
+    const inserted = await db
+      .insert(siteSettings)
+      .values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        siteDescription: "",
+        headerConfig: JSON.stringify({}),
+        footerConfig: serialized,
+        footerConfigRevision: 1,
+        createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
-      },
-    });
+      })
+      .onConflictDoNothing({ target: siteSettings.singletonKey })
+      .returning({ revision: siteSettings.footerConfigRevision });
+    if (inserted[0]) return inserted[0];
+  } else {
+    const updated = await db
+      .update(siteSettings)
+      .set({
+        footerConfig: serialized,
+        footerConfigRevision: sql`${siteSettings.footerConfigRevision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(
+        eq(siteSettings.singletonKey, "default"),
+        eq(siteSettings.footerConfigRevision, expectedRevision),
+      ))
+      .returning({ revision: siteSettings.footerConfigRevision });
+    if (updated[0]) return updated[0];
+  }
+
+  const current = await db
+    .select({ revision: siteSettings.footerConfigRevision })
+    .from(siteSettings)
+    .where(eq(siteSettings.singletonKey, "default"))
+    .get();
+  throw new SitePresentationRevisionConflictError(
+    "footer",
+    expectedRevision,
+    current?.revision ?? null,
+  );
 }
 
 // ─────────────────────────────────────────

@@ -1,6 +1,35 @@
 # Navigation, Header, and Footer Audit
 
-Last reviewed: 2026-07-17
+Last reviewed: 2026-07-19
+
+## 2026-07-19 concurrent-editor protection (implemented)
+
+Header and footer presentation documents now have independent positive,
+monotonic revisions in D1. Every settings save supplies the revision it was
+edited from and uses one atomic compare-and-swap; a stale tab receives typed
+`SITE_PRESENTATION_REVISION_CONFLICT` evidence and cannot replace the newer
+document. Migration `0033_sour_proudstar.sql` initializes existing demo rows at
+revision one and was applied against the real local D1 migration state before
+deployment.
+
+The admin keeps the merchant's draft when a conflict occurs. `Use latest`
+adopts the newer saved document; `Merge mine` keeps locally changed scalar
+leaves or ordered navigation/social arrays and adopts untouched fields from the
+newer revision. A revision conflict disables another save until the merchant
+chooses. The save snapshot is also fixed at request start, so edits made while
+a request is in flight remain visibly dirty instead of being marked saved.
+
+The older `/admin/navigation` POST/PUT/DELETE compatibility endpoints are now
+deprecated and route through the same revisioned header/footer services. They
+require `expectedRevision`; no alternate API route can bypass the CAS boundary.
+The automatic fallback was audited at the same time: it is already bounded to
+90 published categories plus 58 published pages, keeping Home and the
+Categories group within the existing 150-node public contract.
+
+Focused proof covers first-writer races, independent header/footer increments,
+stale-write rejection without data loss, transport error decoding, leaf/array
+draft rebasing, real admin conflict recovery, compatibility-route revision
+requirements, and the existing tree interaction suite.
 
 ## Typed resource target cutover (implemented and deployed)
 
@@ -223,20 +252,15 @@ the proven editor in a separate live demo-data run.
    validator now enforces depth, count, URL, label, identity, social, and
    structural bounds. The shape still cannot express reusable menus,
    placements, lifecycle, or per-resource dependency evidence.
-2. No revision/CAS exists. Header, footer, General Settings, or two open editors
-   can overwrite the same singleton without conflict. Each builder saves a
-   complete blob rather than a scoped command.
-3. Typed resource targets now follow current route and lifecycle state, but the
+2. Typed resource targets now follow current route and lifecycle state, but the
    JSON bridge has no normalized reverse-dependency index. Impact queries and
    per-menu invalidation still require the accepted named-menu model.
-4. Default navigation expands every visible category/page in an unbounded read.
-   Large catalogs can still create unusable markup even though the Categories
-   parent is now a truthful non-clickable label.
-5. Several implementations overlap: generic NavigationBuilder, header
+3. Several implementations overlap: generic NavigationBuilder, header
    NavigationSection, footer menu editor, separate header/footer route shapes,
-   and inline default builders. One canonical menu model/validator/resolver is
+   and compatibility API routes. The mutation routes now share one CAS
+   authority, but one canonical named-menu model/validator/resolver is still
    required.
-6. External-link presentation still needs an explicit merchant new-tab choice;
+4. External-link presentation still needs an explicit merchant new-tab choice;
    safe target validation and scheme blocking are now enforced.
 
 ## Merchant workflow direction

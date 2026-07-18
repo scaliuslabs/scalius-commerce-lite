@@ -6,11 +6,10 @@ import { NotFoundError } from "../../utils/api-error";
 
 const mocks = vi.hoisted(() => ({
     getNavigationItems: vi.fn(),
-    getNavigationMenus: vi.fn(),
     getNavigationPreviewProductCount: vi.fn(),
-    saveNavigationConfig: vi.fn(),
-    updateNavigationConfig: vi.fn(),
-    deleteNavigationConfig: vi.fn(),
+    getGeneralSettings: vi.fn(),
+    saveHeaderConfig: vi.fn(),
+    saveFooterConfig: vi.fn(),
     getKv: vi.fn(),
     invalidateSiteSettingsCache: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
@@ -18,11 +17,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/modules/navigation", () => ({
     getNavigationItems: mocks.getNavigationItems,
-    getNavigationMenus: mocks.getNavigationMenus,
     getNavigationPreviewProductCount: mocks.getNavigationPreviewProductCount,
-    saveNavigationConfig: mocks.saveNavigationConfig,
-    updateNavigationConfig: mocks.updateNavigationConfig,
-    deleteNavigationConfig: mocks.deleteNavigationConfig,
+}));
+
+vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
+    getGeneralSettings: mocks.getGeneralSettings,
+    saveHeaderConfig: mocks.saveHeaderConfig,
+    saveFooterConfig: mocks.saveFooterConfig,
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -50,9 +51,8 @@ function createTestApp() {
     mocks.getKv.mockReturnValue({ id: "kv" });
     mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-    mocks.saveNavigationConfig.mockResolvedValue(undefined);
-    mocks.updateNavigationConfig.mockResolvedValue(undefined);
-    mocks.deleteNavigationConfig.mockResolvedValue(undefined);
+    mocks.saveHeaderConfig.mockResolvedValue({ revision: 2 });
+    mocks.saveFooterConfig.mockResolvedValue({ revision: 2 });
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
@@ -126,17 +126,17 @@ describe("admin navigation routes", () => {
         {
             method: "POST" as const,
             path: "/api/v1/admin/navigation",
-            body: { type: "header", config: { items: [] } },
+            body: { type: "header", config: { items: [] }, expectedRevision: 1 },
         },
         {
             method: "PUT" as const,
             path: "/api/v1/admin/navigation/site_settings_id",
-            body: { type: "footer", config: { items: [] } },
+            body: { type: "footer", config: { items: [] }, expectedRevision: 1 },
         },
         {
             method: "DELETE" as const,
             path: "/api/v1/admin/navigation/site_settings_id",
-            body: { type: "header" },
+            body: { type: "header", expectedRevision: 1 },
         },
     ])("invalidates layout caches after $method navigation writes", async ({ method, path, body }) => {
         const { app, env } = createTestApp();
@@ -151,10 +151,23 @@ describe("admin navigation routes", () => {
             env,
         );
 
-        expect(response.status).toBe(method === "DELETE" ? 204 : 200);
+        expect(response.status).toBe(200);
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
             ["layout"],
             expect.objectContaining({ env }),
         );
+    });
+
+    it("rejects compatibility writes that omit the revision claim", async () => {
+        const { app } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/navigation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "header", config: { navigation: [] } }),
+        });
+
+        expect(response.status).toBe(400);
+        expect(mocks.saveHeaderConfig).not.toHaveBeenCalled();
     });
 });

@@ -4,26 +4,27 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
     getNavigationItems,
-    getNavigationMenus,
     getNavigationPreviewProductCount,
-    saveNavigationConfig,
-    updateNavigationConfig,
-    deleteNavigationConfig,
 } from "@scalius/core/modules/navigation";
+import {
+    getGeneralSettings,
+    saveFooterConfig,
+    saveHeaderConfig,
+} from "@scalius/core/modules/settings/site-settings.service";
 // OpenAPI-safe schema (no z.lazy() recursion — Hono spec generator stack overflows on recursive schemas)
 const saveNavigationConfigSchema = z.object({
     type: z.enum(["header", "footer"]),
     config: z.record(z.string(), z.unknown()),
+    expectedRevision: z.number().int().nonnegative(),
 });
 import { invalidateSiteSettingsCache } from "@scalius/core/modules/settings";
 import { getKv } from "../../utils/kv-cache";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../utils/cache-invalidation";
 
-import { ok, noContent } from "../../utils/api-response";
+import { ok } from "../../utils/api-response";
 import {
     successEnvelope,
-    messageResponse,
-    noContentResponse,
+    conflictResponse,
     errorResponses,
 } from "../../schemas/responses";
 
@@ -177,6 +178,10 @@ const getConfigRoute = createRoute({
                     schema: successEnvelope(z.object({
                         headerConfig: z.record(z.string(), z.unknown()),
                         footerConfig: z.record(z.string(), z.unknown()),
+                        revisions: z.object({
+                            header: z.number().int().nonnegative(),
+                            footer: z.number().int().nonnegative(),
+                        }),
                     })),
                 },
             },
@@ -187,8 +192,8 @@ const getConfigRoute = createRoute({
 
 app.openapi(getConfigRoute, async (c) => {
     const db = c.get("db");
-    const { headerConfig, footerConfig } = await getNavigationMenus(db, "admin");
-    return ok(c, { headerConfig, footerConfig });
+    const { headerConfig, footerConfig, revisions } = await getGeneralSettings(db);
+    return ok(c, { headerConfig, footerConfig, revisions });
 });
 
 // ── Save Navigation Config (Create/Update) ──
@@ -197,26 +202,40 @@ const saveConfigRoute = createRoute({
     method: "post",
     path: "/",
     tags: ["Admin - Navigation"],
-    summary: "Save navigation config (header or footer)",
+    summary: "Deprecated compatibility save for header or footer navigation",
+    deprecated: true,
     request: {
         body: { content: { "application/json": { schema: saveNavigationConfigSchema } } }
     },
     responses: {
         200: {
             description: "Navigation config saved",
-            content: { "application/json": { schema: messageResponse } },
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        message: z.string(),
+                        revision: z.number().int().positive(),
+                    })),
+                },
+            },
         },
+        409: conflictResponse,
         ...errorResponses,
     }
 });
 
 app.openapi(saveConfigRoute, async (c) => {
     const db = c.get("db");
-    const { type, config } = c.req.valid("json");
-    await saveNavigationConfig(db, type, config as Record<string, unknown>);
+    const { type, config, expectedRevision } = c.req.valid("json");
+    const saved = type === "header"
+        ? await saveHeaderConfig(db, config as Record<string, unknown>, expectedRevision)
+        : await saveFooterConfig(db, config as Record<string, unknown>, expectedRevision);
     await invalidateSiteSettingsCache(getKv());
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    return ok(c, { message: `${type} navigation config saved` });
+    return ok(c, {
+        message: `${type} navigation config saved`,
+        revision: saved.revision,
+    });
 });
 
 // ── Update Navigation Config ──
@@ -225,7 +244,8 @@ const updateConfigRoute = createRoute({
     method: "put",
     path: "/{id}",
     tags: ["Admin - Navigation"],
-    summary: "Update navigation config by site settings ID",
+    summary: "Deprecated compatibility update for header or footer navigation",
+    deprecated: true,
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: saveNavigationConfigSchema } } }
@@ -233,8 +253,16 @@ const updateConfigRoute = createRoute({
     responses: {
         200: {
             description: "Navigation config updated",
-            content: { "application/json": { schema: messageResponse } },
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        message: z.string(),
+                        revision: z.number().int().positive(),
+                    })),
+                },
+            },
         },
+        409: conflictResponse,
         ...errorResponses,
     }
 });
@@ -242,11 +270,16 @@ const updateConfigRoute = createRoute({
 app.openapi(updateConfigRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const { type, config } = c.req.valid("json");
-    await updateNavigationConfig(db, id, type, config as Record<string, unknown>);
+    const { type, config, expectedRevision } = c.req.valid("json");
+    const saved = type === "header"
+        ? await saveHeaderConfig(db, config as Record<string, unknown>, expectedRevision)
+        : await saveFooterConfig(db, config as Record<string, unknown>, expectedRevision);
     await invalidateSiteSettingsCache(getKv());
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    return ok(c, { message: `${type} navigation config updated` });
+    return ok(c, {
+        message: `${type} navigation config updated for ${id}`,
+        revision: saved.revision,
+    });
 });
 
 // ── Delete Navigation Config ──
@@ -255,7 +288,8 @@ const deleteConfigRoute = createRoute({
     method: "delete",
     path: "/{id}",
     tags: ["Admin - Navigation"],
-    summary: "Reset navigation config to empty",
+    summary: "Deprecated compatibility reset for header or footer navigation",
+    deprecated: true,
     request: {
         params: z.object({ id: z.string() }),
         body: {
@@ -263,25 +297,38 @@ const deleteConfigRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         type: z.enum(["header", "footer"]),
+                        expectedRevision: z.number().int().nonnegative(),
                     })
                 }
             }
         }
     },
     responses: {
-        204: noContentResponse,
+        200: {
+            description: "Navigation config reset",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        revision: z.number().int().positive(),
+                    })),
+                },
+            },
+        },
+        409: conflictResponse,
         ...errorResponses,
     }
 });
 
 app.openapi(deleteConfigRoute, async (c) => {
     const db = c.get("db");
-    const { id } = c.req.valid("param");
-    const { type } = c.req.valid("json");
-    await deleteNavigationConfig(db, id, type);
+    c.req.valid("param");
+    const { type, expectedRevision } = c.req.valid("json");
+    const saved = type === "header"
+        ? await saveHeaderConfig(db, { navigation: [] }, expectedRevision)
+        : await saveFooterConfig(db, { menus: [] }, expectedRevision);
     await invalidateSiteSettingsCache(getKv());
     await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
-    return noContent(c);
+    return ok(c, saved);
 });
 
 export { app as adminNavigationRoutes };

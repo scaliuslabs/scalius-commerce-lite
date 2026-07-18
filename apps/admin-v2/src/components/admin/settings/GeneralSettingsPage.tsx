@@ -97,6 +97,8 @@ function SettingsEditorBoundary({
 interface GeneralSettingsPageProps {
   headerConfig?: HeaderConfig | null;
   footerConfig?: FooterConfig | null;
+  headerRevision?: number;
+  footerRevision?: number;
   headerReadiness?: NavigationConfigSectionReadiness;
   footerReadiness?: NavigationConfigSectionReadiness;
   panel?: GeneralSettingsPanel;
@@ -123,6 +125,8 @@ const tabs = [
 export default function GeneralSettingsPage({
   headerConfig,
   footerConfig,
+  headerRevision,
+  footerRevision,
   headerReadiness,
   footerReadiness,
   panel,
@@ -202,6 +206,7 @@ export default function GeneralSettingsPage({
                     <HeaderBuilder
                       activePanel={headerPanel}
                       initialConfig={headerConfig}
+                      initialRevision={headerRevision}
                       readiness={headerReadiness}
                       onPanelChange={onPanelChange}
                     />
@@ -217,6 +222,7 @@ export default function GeneralSettingsPage({
                     <FooterBuilder
                       activePanel={footerPanel}
                       initialConfig={footerConfig}
+                      initialRevision={footerRevision}
                       readiness={footerReadiness}
                       onPanelChange={onPanelChange}
                     />

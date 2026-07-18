@@ -136,7 +136,7 @@ describe("general site settings", () => {
         labelMode: "custom",
         customLabel: "Unsafe",
       }],
-    })).rejects.toBeInstanceOf(ValidationError);
+    }, 1)).rejects.toBeInstanceOf(ValidationError);
     expect(db.insert).not.toHaveBeenCalled();
   });
 });

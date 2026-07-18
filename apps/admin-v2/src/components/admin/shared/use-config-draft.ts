@@ -19,10 +19,13 @@ function cloneConfig<T>(value: T): T {
  */
 export function useConfigDraft<T>(initialConfig: T): {
   config: T;
+  savedConfig: T;
   setConfig: Dispatch<SetStateAction<T>>;
   isDirty: boolean;
   discard: () => void;
-  markSaved: () => void;
+  markSaved: (value?: T) => void;
+  adoptSaved: (value: T) => void;
+  rebaseOnto: (latest: T, merge: (base: T, local: T, latest: T) => T) => void;
 } {
   const incomingKey = useMemo(
     () => JSON.stringify(initialConfig),
@@ -58,9 +61,32 @@ export function useConfigDraft<T>(initialConfig: T): {
     setConfig(cloneConfig(savedConfig));
   }, [savedConfig]);
 
-  const markSaved = useCallback(() => {
-    setSavedConfig(cloneConfig(config));
+  const markSaved = useCallback((value?: T) => {
+    setSavedConfig(cloneConfig(value ?? config));
   }, [config]);
 
-  return { config, setConfig, isDirty, discard, markSaved };
+  const adoptSaved = useCallback((value: T) => {
+    const next = cloneConfig(value);
+    setConfig(next);
+    setSavedConfig(cloneConfig(next));
+  }, []);
+
+  const rebaseOnto = useCallback((
+    latest: T,
+    merge: (base: T, local: T, latest: T) => T,
+  ) => {
+    setConfig((local) => cloneConfig(merge(savedConfig, local, latest)));
+    setSavedConfig(cloneConfig(latest));
+  }, [savedConfig]);
+
+  return {
+    config,
+    savedConfig,
+    setConfig,
+    isDirty,
+    discard,
+    markSaved,
+    adoptSaved,
+    rebaseOnto,
+  };
 }

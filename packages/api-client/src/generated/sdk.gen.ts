@@ -2031,7 +2031,9 @@ export const getApiV1AdminNavigation = <ThrowOnError extends boolean = false>(op
 });
 
 /**
- * Save navigation config (header or footer)
+ * Deprecated compatibility save for header or footer navigation
+ *
+ * @deprecated
  */
 export const postApiV1AdminNavigation = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminNavigationData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationResponses, PostApiV1AdminNavigationErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminNavigationResponses, PostApiV1AdminNavigationErrors, ThrowOnError>({
     security: [{
@@ -2048,7 +2050,9 @@ export const postApiV1AdminNavigation = <ThrowOnError extends boolean = false>(o
 });
 
 /**
- * Reset navigation config to empty
+ * Deprecated compatibility reset for header or footer navigation
+ *
+ * @deprecated
  */
 export const deleteApiV1AdminNavigationById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminNavigationByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminNavigationByIdResponses, DeleteApiV1AdminNavigationByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminNavigationByIdResponses, DeleteApiV1AdminNavigationByIdErrors, ThrowOnError>({
     security: [{
@@ -2065,7 +2069,9 @@ export const deleteApiV1AdminNavigationById = <ThrowOnError extends boolean = fa
 });
 
 /**
- * Update navigation config by site settings ID
+ * Deprecated compatibility update for header or footer navigation
+ *
+ * @deprecated
  */
 export const putApiV1AdminNavigationById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminNavigationByIdData, ThrowOnError>): RequestResult<PutApiV1AdminNavigationByIdResponses, PutApiV1AdminNavigationByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminNavigationByIdResponses, PutApiV1AdminNavigationByIdErrors, ThrowOnError>({
     security: [{

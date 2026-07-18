@@ -8,11 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   saveHeaderConfig: vi.fn(),
   saveFooterConfig: vi.fn(),
+  getGeneralSettings: vi.fn(),
 }));
 
 vi.mock("~/lib/api-functions/settings", () => ({
   saveHeaderConfig: mocks.saveHeaderConfig,
   saveFooterConfig: mocks.saveFooterConfig,
+  getGeneralSettings: mocks.getGeneralSettings,
 }));
 
 vi.mock("sonner", () => ({
@@ -33,6 +35,7 @@ import { HeaderBuilder } from "../header-builder/HeaderBuilder";
 import { defaultHeaderConfig } from "../header-builder/types";
 import { FooterBuilder } from "../footer-builder/FooterBuilder";
 import { defaultFooterConfig } from "../footer-builder/types";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -50,8 +53,9 @@ describe("navigation configuration recovery", () => {
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    mocks.saveHeaderConfig.mockReset().mockResolvedValue({});
-    mocks.saveFooterConfig.mockReset().mockResolvedValue({});
+    mocks.saveHeaderConfig.mockReset().mockResolvedValue({ revision: 2 });
+    mocks.saveFooterConfig.mockReset().mockResolvedValue({ revision: 2 });
+    mocks.getGeneralSettings.mockReset();
   });
 
   afterEach(() => {
@@ -75,6 +79,7 @@ describe("navigation configuration recovery", () => {
           logo: { src: "/logo.svg", alt: "Store" },
         }}
         readiness={{ state: "legacy_normalized" }}
+        initialRevision={1}
       />,
     );
 
@@ -87,7 +92,10 @@ describe("navigation configuration recovery", () => {
 
     expect(mocks.saveHeaderConfig).toHaveBeenCalledTimes(1);
     expect(mocks.saveHeaderConfig).toHaveBeenCalledWith({
-      data: expect.objectContaining({ logo: { src: "/logo.svg", alt: "Store" } }),
+      data: expect.objectContaining({
+        expectedRevision: 1,
+        logo: { src: "/logo.svg", alt: "Store" },
+      }),
     });
     expect(host.textContent).not.toContain("Save navigation update");
     expect(host.textContent).toContain("All changes saved");
@@ -103,6 +111,7 @@ describe("navigation configuration recovery", () => {
         activePanel="branding"
         initialConfig={defaultFooterConfig}
         readiness={{ state: "legacy_normalized" }}
+        initialRevision={1}
       />,
     );
 
@@ -177,5 +186,83 @@ describe("navigation configuration recovery", () => {
     expect(announcementTab.getAttribute("data-state")).toBe("active");
     expect(host.textContent).toContain("Announcement bar");
     expect(host.textContent).toContain("Message");
+  });
+
+  it("keeps a stale header draft and rebases it onto the latest revision", async () => {
+    const initialConfig = {
+      ...defaultHeaderConfig,
+      logo: { src: "/logo.svg", alt: "Store" },
+      topBar: { text: "Original", isEnabled: true },
+      contact: { phone: "1", text: "Call", isEnabled: true },
+    };
+    const latestConfig = {
+      ...initialConfig,
+      topBar: { text: "Saved elsewhere", isEnabled: false },
+      contact: { phone: "2", text: "Support", isEnabled: true },
+    };
+    mocks.saveHeaderConfig.mockRejectedValueOnce(
+      new AdminApiResponseError(
+        "Header settings changed in another session.",
+        409,
+        "SITE_PRESENTATION_REVISION_CONFLICT",
+        { section: "header", expectedRevision: 1, currentRevision: 2 },
+      ),
+    );
+    mocks.getGeneralSettings.mockResolvedValue({
+      headerConfig: latestConfig,
+      footerConfig: defaultFooterConfig,
+      revisions: { header: 2, footer: 1 },
+      navigationReadiness: {
+        header: { state: "ready" },
+        footer: { state: "ready" },
+      },
+    });
+
+    render(
+      <HeaderBuilder
+        activePanel="announcement"
+        initialConfig={initialConfig}
+        initialRevision={1}
+      />,
+    );
+
+    const message = host.querySelector<HTMLInputElement>("#announcement-text");
+    if (!message) throw new Error("Expected announcement input");
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setValue?.call(message, "Local promo");
+      message.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const save = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.trim() === "Save changes");
+    if (!save) throw new Error("Expected header save action");
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+
+    expect(host.textContent).toContain("A newer version was saved elsewhere");
+    expect(message.value).toBe("Local promo");
+
+    const merge = Array.from(host.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.trim() === "Merge mine");
+    if (!merge) throw new Error("Expected merge action");
+    await act(async () => merge.click());
+
+    expect(host.textContent).not.toContain("A newer version was saved elsewhere");
+    expect(message.value).toBe("Local promo");
+    expect(message.disabled).toBe(true);
+
+    mocks.saveHeaderConfig.mockResolvedValueOnce({ revision: 3 });
+    await act(async () => save.click());
+    expect(mocks.saveHeaderConfig).toHaveBeenLastCalledWith({
+      data: expect.objectContaining({
+        expectedRevision: 2,
+        topBar: { text: "Local promo", isEnabled: false },
+        contact: latestConfig.contact,
+      }),
+    });
   });
 });

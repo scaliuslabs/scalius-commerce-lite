@@ -8,6 +8,7 @@ import {
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
   readHeroSliderRevisionConflict,
+  readSitePresentationRevisionConflict,
 } from "./admin-api-error";
 
 describe("admin API detail-loader errors", () => {
@@ -115,6 +116,28 @@ describe("admin API detail-loader errors", () => {
       409,
       "CHECKOUT_FLOW_REVISION_CONFLICT",
       { expectedRevision: 0, currentRevision: "3" },
+    ))).toBeNull();
+  });
+
+  it("extracts only the matching header or footer revision conflict", () => {
+    const conflict = new AdminApiResponseError(
+      "Header changed",
+      409,
+      "SITE_PRESENTATION_REVISION_CONFLICT",
+      { section: "header", expectedRevision: 0, currentRevision: 2 },
+    );
+
+    expect(readSitePresentationRevisionConflict(conflict, "header")).toEqual({
+      section: "header",
+      expectedRevision: 0,
+      currentRevision: 2,
+    });
+    expect(readSitePresentationRevisionConflict(conflict, "footer")).toBeNull();
+    expect(readSitePresentationRevisionConflict(new AdminApiResponseError(
+      "Bad section",
+      409,
+      "SITE_PRESENTATION_REVISION_CONFLICT",
+      { section: "sidebar", expectedRevision: 1, currentRevision: 2 },
     ))).toBeNull();
   });
 

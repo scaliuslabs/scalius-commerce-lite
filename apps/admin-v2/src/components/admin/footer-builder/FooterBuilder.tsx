@@ -8,8 +8,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
 import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { getServerFnError } from "~/lib/api-helpers";
-import { saveFooterConfig } from "~/lib/api-functions/settings";
+import {
+  getGeneralSettings,
+  saveFooterConfig,
+} from "~/lib/api-functions/settings";
+import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
+import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
+import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 
 import { BrandingSection } from "./BrandingSection";
@@ -57,6 +63,7 @@ export function normalizeFooterConfig(config?: FooterConfig | null): FooterConfi
 export function FooterBuilder({
   activePanel,
   initialConfig,
+  initialRevision = 0,
   readiness,
   onPanelChange,
   onSave,
@@ -67,8 +74,20 @@ export function FooterBuilder({
     () => normalizeFooterConfig(initialConfig),
     [initialConfig],
   );
-  const { config, setConfig, isDirty, discard, markSaved } =
-    useConfigDraft(normalizedInitialConfig);
+  const {
+    config,
+    setConfig,
+    isDirty,
+    discard,
+    markSaved,
+    adoptSaved,
+    rebaseOnto,
+  } = useConfigDraft(normalizedInitialConfig);
+  const [revision, setRevision] = useState(initialRevision);
+  const [revisionConflict, setRevisionConflict] = useState<{
+    config: FooterConfig;
+    revision: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [internalActivePanel, setInternalActivePanel] =
     useState<FooterBuilderPanel>("branding");
@@ -83,6 +102,10 @@ export function FooterBuilder({
     setLegacyFormatSaved(false);
   }, [readiness?.state]);
 
+  useEffect(() => {
+    if (!isDirty && !revisionConflict) setRevision(initialRevision);
+  }, [initialRevision, isDirty, revisionConflict]);
+
   const handlePanelChange = (panel: string) => {
     const nextPanel = panel as FooterBuilderPanel;
     if (activePanel === undefined) setInternalActivePanel(nextPanel);
@@ -94,30 +117,73 @@ export function FooterBuilder({
     setNavigationEditorEpoch((current) => current + 1);
   };
 
+  const useLatestRevision = () => {
+    if (!revisionConflict) return;
+    adoptSaved(revisionConflict.config);
+    setRevision(revisionConflict.revision);
+    setRevisionConflict(null);
+    setNavigationEditorEpoch((current) => current + 1);
+  };
+
+  const mergeLatestRevision = () => {
+    if (!revisionConflict) return;
+    rebaseOnto(revisionConflict.config, rebaseFooterDraft);
+    setRevision(revisionConflict.revision);
+    setRevisionConflict(null);
+    setNavigationEditorEpoch((current) => current + 1);
+  };
+
   const handleSave = async () => {
-    if (isLoading || navigationInvalid) return;
+    if (isLoading || navigationInvalid || revisionConflict) return;
 
     setIsLoading(true);
     try {
+      const draftBeingSaved = config;
       const storedConfig: FooterConfig = {
-        ...config,
-        menus: config.menus.map((menu) => ({
+        ...draftBeingSaved,
+        menus: draftBeingSaved.menus.map((menu) => ({
           ...menu,
           links: menu.links.map(stripNavigationResolution),
         })),
       };
-      if (typeof onSave === "function") {
-        await onSave(storedConfig);
-      } else {
-        await saveFooterConfig({ data: storedConfig });
-      }
+      const saved = typeof onSave === "function"
+        ? await onSave(storedConfig, revision)
+        : await saveFooterConfig({
+            data: { ...storedConfig, expectedRevision: revision },
+          });
 
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
-      markSaved();
+      setRevision(saved.revision);
+      markSaved(draftBeingSaved);
       if (readiness?.state === "legacy_normalized") setLegacyFormatSaved(true);
       setNavigationEditorEpoch((current) => current + 1);
       toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
+      const conflict = readSitePresentationRevisionConflict(error, "footer");
+      if (conflict) {
+        try {
+          const latest = await getGeneralSettings();
+          const latestRevision = latest.revisions.footer;
+          setRevisionConflict({
+            config: normalizeFooterConfig(
+              latest.footerConfig as unknown as FooterConfig,
+            ),
+            revision: latestRevision,
+          });
+          queryClient.setQueryData(["settings", "general"], latest);
+          toast.error("Footer changed elsewhere", {
+            description: "Your draft is safe. Choose how to reconcile it with the latest version.",
+          });
+        } catch (latestError: unknown) {
+          toast.error("Footer changed elsewhere", {
+            description: getServerFnError(
+              latestError,
+              "Your draft is safe, but the latest version could not be loaded. Try saving again.",
+            ),
+          });
+        }
+        return;
+      }
       console.error("Error saving footer:", error);
       toast.error("Error", { description: getServerFnError(error, "Failed to save.") });
     } finally {
@@ -159,6 +225,14 @@ export function FooterBuilder({
         section="footer"
         readiness={legacyFormatSaved ? { state: "ready" } : readiness}
       />
+
+      {revisionConflict ? (
+        <PresentationRevisionConflictNotice
+          revision={revisionConflict.revision}
+          onMerge={mergeLatestRevision}
+          onUseLatest={useLatestRevision}
+        />
+      ) : null}
 
       {!navigationInvalid ? <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
@@ -241,7 +315,11 @@ export function FooterBuilder({
         </Button>
         <Button
           onClick={handleSave}
-          disabled={isLoading || (!isDirty && !navigationSaveRequired)}
+          disabled={
+            isLoading ||
+            Boolean(revisionConflict) ||
+            (!isDirty && !navigationSaveRequired)
+          }
           size="sm"
         >
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
