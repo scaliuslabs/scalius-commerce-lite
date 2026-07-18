@@ -15505,6 +15505,7 @@ export type GetApiV1AdminInventoryResponses = {
                 barcodeType: string | null;
                 optionLabel: string | null;
                 price: number;
+                effectivePrice: number;
                 stock: number;
                 reservedStock: number;
                 available: number;

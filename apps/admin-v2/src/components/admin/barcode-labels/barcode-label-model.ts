@@ -1,4 +1,5 @@
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
+import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
 
 export const MAX_LABEL_SKUS = 150;
 export const MAX_LABEL_COPIES = 1_000;
@@ -157,6 +158,18 @@ export function getLabelInventorySummary(
     : "Inventory not tracked";
 }
 
+export type LabelQuantityShortcut = "one" | "onHand" | "available";
+
+export function getLabelShortcutQuantity(
+  variant: Pick<InventoryLabelVariant, "available" | "stock" | "trackInventory">,
+  currentQuantity: number,
+  mode: LabelQuantityShortcut,
+): number {
+  if (mode === "one") return 1;
+  if (!variant.trackInventory) return Math.max(0, Math.trunc(currentQuantity));
+  return Math.max(0, mode === "onHand" ? variant.stock : variant.available);
+}
+
 export function getLabelDimensions(preset: LabelPreset) {
   return {
     widthMm: (preset.pageWidthMm - (2 * preset.marginXmm) - ((preset.columns - 1) * preset.gapXmm)) / preset.columns,
@@ -186,7 +199,7 @@ function gtinCheckDigit(inputWithoutCheckDigit: string): string {
 
 export function isbn10ToBooklandEan13(value: string): string | null {
   const normalized = value.replaceAll("-", "").toUpperCase();
-  if (!/^\d{9}[\dX]$/.test(normalized)) return null;
+  if (!/^\d{9}[\dX]$/.test(normalized) || getBarcodeValidationError(normalized, "isbn")) return null;
   const base = `978${normalized.slice(0, 9)}`;
   return `${base}${gtinCheckDigit(base)}`;
 }
@@ -204,26 +217,24 @@ export function resolveBarcodeSymbol(
     return { format: null, value, displayValue: value, error: "This SKU has no printable barcode." };
   }
 
+  const validationError = getBarcodeValidationError(value, barcodeType);
+  if (validationError) {
+    return { format: null, value, displayValue: value, error: validationError };
+  }
+
   if (barcodeType === "ean13") {
-    return /^\d{13}$/.test(value)
-      ? { format: "EAN13", value, displayValue: value, error: null }
-      : { format: null, value, displayValue: value, error: "EAN-13 requires 13 validated digits." };
+    return { format: "EAN13", value, displayValue: value, error: null };
   }
   if (barcodeType === "upc") {
-    return /^\d{12}$/.test(value)
-      ? { format: "UPC", value, displayValue: value, error: null }
-      : { format: null, value, displayValue: value, error: "UPC-A requires 12 validated digits." };
+    return { format: "UPC", value, displayValue: value, error: null };
   }
   if (barcodeType === "gtin") {
     const formats: Record<number, BarcodeRenderFormat> = { 8: "EAN8", 12: "UPC", 13: "EAN13", 14: "ITF14" };
-    const format = formats[value.length];
-    return /^\d+$/.test(value) && format
-      ? { format, value, displayValue: value, error: null }
-      : { format: null, value, displayValue: value, error: "GTIN labels require 8, 12, 13, or 14 validated digits." };
+    return { format: formats[value.length]!, value, displayValue: value, error: null };
   }
   if (barcodeType === "isbn") {
     const compact = value.replaceAll("-", "").toUpperCase();
-    if (/^\d{13}$/.test(compact)) {
+    if (compact.length === 13) {
       return { format: "EAN13", value: compact, displayValue: value, error: null };
     }
     const bookland = isbn10ToBooklandEan13(compact);

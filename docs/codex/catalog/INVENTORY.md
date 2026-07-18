@@ -69,7 +69,11 @@ Last reviewed: 2026-07-17
   workspace is available from persisted product SKU selections. The workspace
   provides exact-SKU quantities, A4/cut-sheet/thermal/custom stock, partially
   used sheet offsets, vector barcode preview, test output, and native browser
-  print/PDF without mutating inventory or barcode identity. See
+  print/PDF without mutating inventory or barcode identity. The optional
+  selling-price field uses the same SKU-over-product automatic-discount
+  precedence as checkout; render-time checksum validation prevents a legacy
+  invalid retail identifier from being presented as printable. Stock-derived
+  shortcuts preserve manual counts for untracked SKUs. See
   [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md).
 
 ## Catalog settings truth

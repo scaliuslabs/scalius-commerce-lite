@@ -31,6 +31,7 @@ const inventoryVariantSchema = z.object({
     barcodeType: z.string().nullable(),
     optionLabel: z.string().nullable(),
     price: z.number(),
+    effectivePrice: z.number(),
     stock: z.number(),
     reservedStock: z.number(),
     available: z.number(),

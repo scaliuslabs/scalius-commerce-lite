@@ -9,6 +9,7 @@ import {
   getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
+  getLabelShortcutQuantity,
   isbn10ToBooklandEan13,
   MAX_LABEL_COPIES,
   paginateLabelCopies,
@@ -22,6 +23,7 @@ const variant: InventoryLabelVariant = {
   sku: "KORI-42-SAND",
   optionLabel: "Size 42 / Color Sand",
   price: 8990,
+  effectivePrice: 8091,
   stock: 18,
   reservedStock: 1,
   available: 17,
@@ -36,6 +38,25 @@ describe("barcode label symbology", () => {
     expect(resolveBarcodeSymbol("036000291452", "upc").format).toBe("UPC");
     expect(resolveBarcodeSymbol("96385074", "gtin").format).toBe("EAN8");
     expect(resolveBarcodeSymbol("10012345000017", "gtin").format).toBe("ITF14");
+  });
+
+  it("refuses legacy retail identifiers whose checksum is invalid", () => {
+    expect(resolveBarcodeSymbol("5901234123458", "ean13")).toMatchObject({
+      format: null,
+      error: "EAN-13 must be 13 digits with a valid checksum.",
+    });
+    expect(resolveBarcodeSymbol("036000291453", "upc")).toMatchObject({
+      format: null,
+      error: "UPC-A must be 12 digits with a valid checksum.",
+    });
+    expect(resolveBarcodeSymbol("10012345000018", "gtin")).toMatchObject({
+      format: null,
+      error: "GTIN must be 8, 12, 13, or 14 digits with a valid checksum.",
+    });
+    expect(resolveBarcodeSymbol("0306406153", "isbn")).toMatchObject({
+      format: null,
+      error: "ISBN must be a valid ISBN-10 or ISBN-13.",
+    });
   });
 
   it("converts ISBN-10 to its Bookland EAN-13 symbol without changing the display value", () => {
@@ -75,6 +96,11 @@ describe("barcode label page composition", () => {
   it("keeps quantity shortcuts explainable with their exact inventory source", () => {
     expect(getLabelInventorySummary(variant)).toBe("18 on hand · 17 available");
     expect(getLabelInventorySummary({ ...variant, trackInventory: false })).toBe("Inventory not tracked");
+    expect(getLabelShortcutQuantity(variant, 3, "onHand")).toBe(18);
+    expect(getLabelShortcutQuantity(variant, 3, "available")).toBe(17);
+    expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "onHand")).toBe(3);
+    expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "available")).toBe(3);
+    expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "one")).toBe(1);
   });
 
   it("uses physical page dimensions for the A4 cut-sheet grid", () => {

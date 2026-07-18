@@ -24,6 +24,7 @@ export interface InventoryLabelVariant {
   sku: string;
   optionLabel: string | null;
   price: number;
+  effectivePrice: number;
   stock: number;
   reservedStock: number;
   available: number;
