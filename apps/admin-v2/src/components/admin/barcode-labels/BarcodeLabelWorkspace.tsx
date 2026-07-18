@@ -49,6 +49,7 @@ import {
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
+  getNonPrintingLabelVariantIds,
   getLabelPreset,
   getLabelPresetIssue,
   getLabelPrintGridPosition,
@@ -57,11 +58,13 @@ import {
   MAX_LABEL_COPIES,
   MAX_LABEL_ALIGNMENT_MM,
   MAX_LABEL_SKUS,
+  orderLabelVariants,
   paginateLabelCopies,
   resolveBarcodeSymbol,
   type BarcodeSymbol,
   type LabelContentOptions,
   type LabelCopy,
+  type LabelOrder,
   type LabelPageCell,
   type LabelPreset,
   type LabelPresetId,
@@ -388,6 +391,7 @@ export function BarcodeLabelWorkspace({
   const [startOffset, setStartOffset] = useState(0);
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [content, setContent] = useState<LabelContentOptions>(DEFAULT_LABEL_CONTENT);
+  const [labelOrder, setLabelOrder] = useState<LabelOrder>("selected");
   const [alignment, setAlignment] = useState<LabelPrintAlignment>(DEFAULT_LABEL_PRINT_ALIGNMENT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
@@ -401,9 +405,11 @@ export function BarcodeLabelWorkspace({
           content?: Partial<LabelContentOptions>;
           customPreset?: Partial<LabelPreset>;
           alignment?: Partial<LabelPrintAlignment>;
+          labelOrder?: LabelOrder;
         };
         if (LABEL_PRESETS.some((preset) => preset.id === parsed.presetId)) setPresetId(parsed.presetId!);
         if (parsed.content) setContent((current) => ({ ...current, ...parsed.content }));
+        if (["selected", "product", "sku"].includes(parsed.labelOrder ?? "")) setLabelOrder(parsed.labelOrder!);
         if (parsed.customPreset) {
           setCustomPreset((current) => ({ ...current, ...parsed.customPreset, id: "custom", name: current.name, detail: current.detail }));
         }
@@ -424,11 +430,11 @@ export function BarcodeLabelWorkspace({
   useEffect(() => {
     if (!preferencesLoaded) return;
     try {
-      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset, alignment }));
+      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset, alignment, labelOrder }));
     } catch {
       // Ignore blocked or exhausted local storage.
     }
-  }, [alignment, content, customPreset, preferencesLoaded, presetId]);
+  }, [alignment, content, customPreset, labelOrder, preferencesLoaded, presetId]);
 
   const previewQuery = useQuery({
     queryKey: ["inventory", "label-preview", selectedVariantIds],
@@ -454,6 +460,10 @@ export function BarcodeLabelWorkspace({
     () => previewQuery.data?.variants ?? [],
     [previewQuery.data],
   );
+  const orderedSelectedVariants = useMemo(
+    () => orderLabelVariants(selectedVariants, labelOrder),
+    [labelOrder, selectedVariants],
+  );
   useEffect(() => {
     if (selectedVariants.length === 0) return;
     setQuantities((current) => {
@@ -471,7 +481,7 @@ export function BarcodeLabelWorkspace({
   useEffect(() => {
     setStartOffset((current) => Math.min(current, Math.max(0, capacity - 1)));
   }, [capacity]);
-  const copies = useMemo(() => buildLabelCopies(selectedVariants, quantities), [quantities, selectedVariants]);
+  const copies = useMemo(() => buildLabelCopies(orderedSelectedVariants, quantities), [orderedSelectedVariants, quantities]);
   const pages = useMemo(
     () => paginateLabelCopies(copies.slice(0, MAX_LABEL_COPIES), preset, startOffset),
     [copies, preset, startOffset],
@@ -497,6 +507,26 @@ export function BarcodeLabelWorkspace({
   const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
   const pickerVariants = pickerQuery.data?.variants ?? [];
   const pickerPagination = pickerQuery.data?.pagination;
+  const nonPrintingVariantIds = useMemo(
+    () => getNonPrintingLabelVariantIds(selectedVariants, quantities),
+    [quantities, selectedVariants],
+  );
+
+  const removeVariantsFromJob = (ids: readonly string[]) => {
+    if (ids.length === 0) return;
+    const removed = new Set(ids);
+    setQuantities((current) => Object.fromEntries(
+      Object.entries(current).filter(([id]) => !removed.has(id)),
+    ));
+    onSelectedVariantIdsChange(selectedVariantIds.filter((id) => !removed.has(id)));
+  };
+
+  const clearJob = () => {
+    setQuantities({});
+    setStartOffset(0);
+    setPreviewPageIndex(0);
+    onSelectedVariantIdsChange([]);
+  };
 
   const updateSelected = (id: string, selected: boolean) => {
     if (selected) {
@@ -504,7 +534,7 @@ export function BarcodeLabelWorkspace({
       onSelectedVariantIdsChange([...selectedVariantIds, id]);
       return;
     }
-    onSelectedVariantIdsChange(selectedVariantIds.filter((candidate) => candidate !== id));
+    removeVariantsFromJob([id]);
   };
 
   const setAllQuantities = (mode: LabelQuantityShortcut) => {
@@ -584,15 +614,21 @@ export function BarcodeLabelWorkspace({
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_370px]">
           <div className="min-w-0 space-y-3">
             <Card>
-              <CardHeader className="flex-row items-center justify-between space-y-0 px-3 py-2.5">
+              <CardHeader className="flex-col items-start justify-between gap-2 space-y-0 px-3 py-2.5 sm:flex-row sm:items-center">
                 <div>
                   <CardTitle className="text-sm">Selected SKUs <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">{selectedVariantIds.length}/{MAX_LABEL_SKUS}</Badge></CardTitle>
                 </div>
                 {selectedVariants.length > 0 ? (
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to on-hand stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to available stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("available")}>Available</Button>
+                    {nonPrintingVariantIds.length > 0 ? (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Remove SKUs with zero labels from this print job" onClick={() => removeVariantsFromJob(nonPrintingVariantIds)}>
+                        Remove {nonPrintingVariantIds.length} zero
+                      </Button>
+                    ) : null}
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" title="Start a new empty label job without changing products or inventory" onClick={clearJob}>Clear job</Button>
                   </div>
                 ) : null}
               </CardHeader>
@@ -719,6 +755,17 @@ export function BarcodeLabelWorkspace({
                     <SelectTrigger id="barcode-label-preset" className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {LABEL_PRESETS.map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.detail}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="barcode-label-order" className="text-xs">Label order</Label>
+                  <Select value={labelOrder} onValueChange={(value) => setLabelOrder(value as LabelOrder)}>
+                    <SelectTrigger id="barcode-label-order" className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="selected">As selected</SelectItem>
+                      <SelectItem value="product">Product and variant A–Z</SelectItem>
+                      <SelectItem value="sku">SKU A–Z</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

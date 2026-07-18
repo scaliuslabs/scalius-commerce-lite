@@ -91,9 +91,9 @@ supported roll can preserve the symbol and its quiet zones.
   exposes barcode, EAN, and UPC editing, and its
   [POS recipe](https://docs.medusajs.com/resources/recipes/pos) demonstrates
   barcode lookup/scanner integration, but the current core admin guide does not
-  provide a label composer. Searches of Saleor's current core and dashboard
-  sources found no first-class barcode or label-printing workflow. These
-  platforms are architecture references, not a UX bar for this feature.
+  provide a label composer. Searches of [Saleor's current documentation](https://docs.saleor.io/)
+  and dashboard sources found no first-class barcode or label-printing workflow.
+  These platforms are architecture references, not a UX bar for this feature.
 - [Avery print guidance](https://www.avery.com/help/article/practice-test-sheet?page=1)
   requires an initial plain-paper alignment test and Actual Size/100% scale.
   Avery's current troubleshooting guidance also recommends a small alignment
@@ -118,10 +118,28 @@ supported roll can preserve the symbol and its quiet zones.
   silently replacing it with zero.
 - Quantity shortcuts are `One each`, `On hand`, and `Available`; every SKU also
   has an exact editable quantity. Zero is allowed and removes that SKU from the
-  print count without losing it from the batch.
+  print count without losing it from the batch. `Remove zero-count` clears those
+  dormant rows when a stock-derived batch becomes noisy, while `Clear job`
+  starts a fresh selection without changing any catalog or inventory fact.
 - A job is bounded to 150 SKUs and 1,000 rendered labels. The UI calculates
   page count before rendering and blocks an excessive job instead of freezing
   the browser.
+
+The entry point changes only the initial selection; it never creates a second
+printing system:
+
+| Merchant task | Fast entry | Initial quantity | Review before output |
+| --- | --- | --- | --- |
+| Reprint one damaged label | SKU row printer action | 1 | Exact SKU and physical preview |
+| Label several chosen variants | Inventory or SKU-matrix selection | 1 each | Per-SKU counts and preview |
+| Label current physical stock | Inventory selection | Explicit `On hand` action | Source stock remains visible |
+| Label only uncommitted units | Inventory selection | Explicit `Available` action | On-hand and available stay visible |
+| Use ordinary office paper | Direct workspace or any selection | Merchant-selected | A4 grid, start cell, test sheet, crop guides |
+| Use a label/thermal printer | Direct workspace or any selection | Merchant-selected | Exact roll size, fit check, test label |
+
+Purchase-order or receiving-document entry belongs here only after Scalius has
+an authoritative receiving workflow. Do not imitate a purchase-order shortcut
+by guessing quantities from inventory movements.
 
 ### Design
 
@@ -146,6 +164,13 @@ include conditional checkout codes or customer-specific promotions. The
 preview reports when the chosen media cannot hold the selected symbology at a
 safe size. Truncating descriptive text is allowed; truncating, horizontally
 scaling, or clipping the symbol or quiet zones is not.
+
+Physical output may be arranged `As selected`, `Product and variant A-Z`, or
+`SKU A-Z`. Arrangement is a workstation preference and affects only the copies
+sent to the sheet or roll. It must not rewrite the URL selection, SKU identity,
+catalog order, or inventory data. Shopify's fixed alphabetical output is not a
+reason to remove merchant control from mixed shelf, cutting, or replenishment
+batches.
 
 For partially used multi-label sheets, `Start at cell` skips the already-used
 slots. The scaled page preview is also an interactive cell picker, while the
@@ -174,9 +199,9 @@ second spreadsheet or preview mode. Preview navigation changes no job facts.
 - Plain-paper presets say so in the format picker. A merchant should not have
   to infer that `cut sheet` means the ordinary A4 paper-and-scissors workflow.
 - Device-local last-used format/content preferences are appropriate because
-  printer and paper choice belong to the workstation. Shared named templates
-  can be added later without making the initial workflow depend on a new D1
-  settings surface.
+  printer, paper, content, output order, and alignment belong to the workstation.
+  Shared named templates can be added later without making the initial workflow
+  depend on a new D1 settings surface.
 - ZPL is a later explicit output target. It must not be simulated by sending a
   PDF to a Zebra printer and claiming native integration.
 
@@ -282,6 +307,16 @@ feeds, structured data, or external marketplaces.
   persistence, reset it to the physical template, and repeated the workspace
   at a real 390 × 844 viewport with no horizontal overflow. The print grid
   position and ±5 mm clamp are covered by the focused model suite.
+- Admin version `f0bc4467-df7e-40a4-93e4-2fae9bf40231` added job-local label
+  ordering plus bounded batch cleanup. Production proof cleared a prior job,
+  selected a Dhara SKU before an Aster SKU, arranged output by product and
+  variant, and confirmed the physical preview changed to Aster then Dhara while
+  the exact URL selection identities remained intact. A zero-count Dhara row
+  was then removed in one action, leaving the exact Aster SKU and a truthful
+  `1 label · 1 page` summary. The chosen output order survived reload as a
+  workstation preference. The focused model suite passed 17 tests, including
+  stable selection order, product/SKU ordering, non-mutation, and zero-count
+  detection.
 
 ## Interface direction
 

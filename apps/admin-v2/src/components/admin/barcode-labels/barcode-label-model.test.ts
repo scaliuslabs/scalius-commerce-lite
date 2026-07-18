@@ -11,12 +11,14 @@ import {
   getBarcodeFitIssue,
   getLabelDimensions,
   getLabelInventorySummary,
+  getNonPrintingLabelVariantIds,
   getLabelPreset,
   getLabelPresetIssue,
   getLabelPrintGridPosition,
   getLabelShortcutQuantity,
   isbn10ToBooklandEan13,
   MAX_LABEL_COPIES,
+  orderLabelVariants,
   paginateLabelCopies,
   resolveBarcodeSymbol,
 } from "./barcode-label-model";
@@ -137,6 +139,34 @@ describe("barcode label page composition", () => {
     expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "onHand")).toBe(3);
     expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "available")).toBe(3);
     expect(getLabelShortcutQuantity({ ...variant, trackInventory: false }, 3, "one")).toBe(1);
+  });
+
+  it("arranges physical output without changing the selected SKU identities", () => {
+    const alpha = {
+      ...variant,
+      id: "var_2",
+      productName: "Aster Studio Clogs",
+      optionLabel: "Size 41",
+      sku: "ASTER-41",
+    };
+    const kori40 = {
+      ...variant,
+      id: "var_3",
+      optionLabel: "Size 40",
+      sku: "KORI-40-SAND",
+    };
+    const selected = [variant, alpha, kori40];
+
+    expect(orderLabelVariants(selected, "selected").map((item) => item.id)).toEqual(["var_1", "var_2", "var_3"]);
+    expect(orderLabelVariants(selected, "product").map((item) => item.id)).toEqual(["var_2", "var_3", "var_1"]);
+    expect(orderLabelVariants(selected, "sku").map((item) => item.id)).toEqual(["var_2", "var_3", "var_1"]);
+    expect(selected.map((item) => item.id)).toEqual(["var_1", "var_2", "var_3"]);
+  });
+
+  it("finds zero-count rows without treating a fresh selection as zero", () => {
+    const second = { ...variant, id: "var_2" };
+    expect(getNonPrintingLabelVariantIds([variant, second], { var_1: 0 })).toEqual(["var_1"]);
+    expect(getNonPrintingLabelVariantIds([variant, second], { var_1: -4, var_2: 2 })).toEqual(["var_1"]);
   });
 
   it("uses physical page dimensions for the A4 cut-sheet grid", () => {

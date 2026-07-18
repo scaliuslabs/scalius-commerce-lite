@@ -635,6 +635,24 @@ The cleanup bullets below describe the two-product proof store that preceded the
   successfully before the final API deployment.
 - Known external operations debt: ops-monitor email aliases are not configured, so alerts remain logs-only.
 
+### Barcode batch-composition checkpoint (2026-07-19)
+
+- Admin `f0bc4467-df7e-40a4-93e4-2fae9bf40231` is live at 100%. The shared
+  Barcode labels workspace now orders physical output as selected, by product
+  and variant, or by SKU without rewriting exact URL/catalog identities.
+- Authenticated production proof cleared a prior job, selected Dhara before
+  Aster, changed the output order, and observed Aster before Dhara in the paper
+  preview. Setting Dhara to zero exposed one bounded cleanup action; removing it
+  retained the exact Aster SKU and a truthful `1 label · 1 page` job. Output
+  order survived reload as a workstation preference.
+- This keeps one row action and one batch composer instead of introducing a
+  second immediate-print path or a blocking wizard. The A4/plain-paper, custom
+  stock, thermal, partially used sheet, test print, alignment, and native
+  Print/Save as PDF paths remain unchanged.
+- The focused 17-test model suite, targeted lint, sequential Admin typecheck,
+  production build/deploy, and full `pnpm release:check` passed. The only live
+  warning remains the previously recorded logs-only ops-monitor email channel.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
