@@ -144,6 +144,18 @@ describe("order list interactions", () => {
     expect(mutationsSource).toContain("queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
   });
 
+  it("labels the bounded page export separately from the server recovery export", () => {
+    const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
+    const toolbarSource = readFileSync(ORDER_TOOLBAR_SOURCE, "utf8");
+
+    expect(toolbarSource).toContain("exportLabel: string");
+    expect(toolbarSource).toContain("{exportLabel}");
+    expect(toolbarSource).not.toContain("Export CSV");
+    expect(routeSource).toContain('"Export recovery CSV"');
+    expect(routeSource).toContain('"Export current page"');
+    expect(routeSource).toContain("orders from this page exported");
+  });
+
   it("serializes order date filters as date-only values", () => {
     const routeSource = readFileSync(ORDERS_ROUTE_SOURCE, "utf8");
 

@@ -102,6 +102,7 @@ interface OrderToolbarProps {
   selectedArchiveBlockedCount?: number;
   // Export & refresh
   onExportCSV: () => void;
+  exportLabel: string;
   // Auto-refresh
   autoRefreshEnabled: boolean;
   onToggleAutoRefresh: () => void;
@@ -248,6 +249,7 @@ export function OrderToolbar({
   selectedShipmentLockCount = 0,
   selectedArchiveBlockedCount = 0,
   onExportCSV,
+  exportLabel,
   autoRefreshEnabled,
   onToggleAutoRefresh,
   countdown,
@@ -344,7 +346,7 @@ export function OrderToolbar({
         className="h-9 px-3 text-xs"
       >
         <Download className="mr-1.5 h-3.5 w-3.5" />
-        Export CSV
+        {exportLabel}
       </Button>
       <Button
         variant="outline"
