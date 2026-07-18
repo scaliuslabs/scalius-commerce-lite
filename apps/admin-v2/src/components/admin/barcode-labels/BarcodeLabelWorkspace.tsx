@@ -38,8 +38,11 @@ import {
 import { cn } from "@scalius/shared/utils";
 import {
   buildLabelCopies,
+  clampLabelAlignmentMm,
   clampLabelPreviewPageIndex,
+  DEFAULT_LABEL_PRINT_ALIGNMENT,
   DEFAULT_LABEL_CONTENT,
+  formatLabelPrintAlignment,
   formatLabelCount,
   formatPageCount,
   findCompatibleLabelPreset,
@@ -48,9 +51,11 @@ import {
   getLabelInventorySummary,
   getLabelPreset,
   getLabelPresetIssue,
+  getLabelPrintGridPosition,
   getLabelShortcutQuantity,
   LABEL_PRESETS,
   MAX_LABEL_COPIES,
+  MAX_LABEL_ALIGNMENT_MM,
   MAX_LABEL_SKUS,
   paginateLabelCopies,
   resolveBarcodeSymbol,
@@ -60,6 +65,7 @@ import {
   type LabelPageCell,
   type LabelPreset,
   type LabelPresetId,
+  type LabelPrintAlignment,
   type LabelQuantityShortcut,
 } from "./barcode-label-model";
 
@@ -234,12 +240,14 @@ function PrintPages({
   pages,
   preset,
   content,
+  alignment,
   formatPrice,
   test,
 }: {
   pages: LabelPageCell[][];
   preset: LabelPreset;
   content: LabelContentOptions;
+  alignment: LabelPrintAlignment;
   formatPrice: (price: number | string) => string;
   test: boolean;
 }) {
@@ -250,6 +258,7 @@ function PrintPages({
     ? [Array.from({ length: capacity }, (_, index) => index === firstOccupiedIndex ? firstCopy ?? null : null)]
     : pages.map((page) => Array.from({ length: capacity }, (_, index) => page[index] ?? null));
   const dimensions = getLabelDimensions(preset);
+  const gridPosition = getLabelPrintGridPosition(preset, alignment);
 
   return (
     <div id="barcode-print-root" data-print-mode={test ? "test" : "job"}>
@@ -261,36 +270,43 @@ function PrintPages({
           style={{
             width: `${preset.pageWidthMm}mm`,
             height: `${preset.pageHeightMm}mm`,
-            padding: `${preset.marginYmm}mm ${preset.marginXmm}mm`,
-            gridTemplateColumns: `repeat(${preset.columns}, ${dimensions.widthMm}mm)`,
-            gridTemplateRows: `repeat(${preset.rows}, ${dimensions.heightMm}mm)`,
-            columnGap: `${preset.gapXmm}mm`,
-            rowGap: `${preset.gapYmm}mm`,
           }}
         >
-          {page.map((copy, labelIndex) => (
-            <div
-              key={copy?.key ?? `empty-${labelIndex}`}
-              className={cn(
-                "barcode-print-label",
-                (preset.cropMarks || test) && "barcode-cut-guide",
-              )}
-            >
-              {copy ? (
-                <LabelArtwork
-                  copy={copy}
-                  content={content}
-                  price={formatPrice(copy.variant.effectivePrice)}
-                  compact={dimensions.heightMm < 30 || dimensions.widthMm < 50}
-                />
-              ) : test ? (
-                <div className="grid h-full place-items-center text-[6pt] text-zinc-400">{labelIndex + 1}</div>
-              ) : null}
-            </div>
-          ))}
+          <div
+            className="barcode-print-grid"
+            style={{
+              left: `${gridPosition.leftMm}mm`,
+              top: `${gridPosition.topMm}mm`,
+              gridTemplateColumns: `repeat(${preset.columns}, ${dimensions.widthMm}mm)`,
+              gridTemplateRows: `repeat(${preset.rows}, ${dimensions.heightMm}mm)`,
+              columnGap: `${preset.gapXmm}mm`,
+              rowGap: `${preset.gapYmm}mm`,
+            }}
+          >
+            {page.map((copy, labelIndex) => (
+              <div
+                key={copy?.key ?? `empty-${labelIndex}`}
+                className={cn(
+                  "barcode-print-label",
+                  (preset.cropMarks || test) && "barcode-cut-guide",
+                )}
+              >
+                {copy ? (
+                  <LabelArtwork
+                    copy={copy}
+                    content={content}
+                    price={formatPrice(copy.variant.effectivePrice)}
+                    compact={dimensions.heightMm < 30 || dimensions.widthMm < 50}
+                  />
+                ) : test ? (
+                  <div className="grid h-full place-items-center text-[6pt] text-zinc-400">{labelIndex + 1}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
           {test ? (
             <div className="barcode-test-note">
-              Test at Actual size / 100% · disable browser headers and footers · scan the first label before printing the batch
+              Test at Actual size / 100% · disable browser headers and footers · {formatLabelPrintAlignment(alignment)} alignment · scan the first label before the batch
             </div>
           ) : null}
         </div>
@@ -372,6 +388,7 @@ export function BarcodeLabelWorkspace({
   const [startOffset, setStartOffset] = useState(0);
   const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [content, setContent] = useState<LabelContentOptions>(DEFAULT_LABEL_CONTENT);
+  const [alignment, setAlignment] = useState<LabelPrintAlignment>(DEFAULT_LABEL_PRINT_ALIGNMENT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
 
@@ -383,11 +400,18 @@ export function BarcodeLabelWorkspace({
           presetId?: LabelPresetId;
           content?: Partial<LabelContentOptions>;
           customPreset?: Partial<LabelPreset>;
+          alignment?: Partial<LabelPrintAlignment>;
         };
         if (LABEL_PRESETS.some((preset) => preset.id === parsed.presetId)) setPresetId(parsed.presetId!);
         if (parsed.content) setContent((current) => ({ ...current, ...parsed.content }));
         if (parsed.customPreset) {
           setCustomPreset((current) => ({ ...current, ...parsed.customPreset, id: "custom", name: current.name, detail: current.detail }));
+        }
+        if (parsed.alignment) {
+          setAlignment({
+            xMm: clampLabelAlignmentMm(parsed.alignment.xMm ?? 0),
+            yMm: clampLabelAlignmentMm(parsed.alignment.yMm ?? 0),
+          });
         }
       }
     } catch {
@@ -400,11 +424,11 @@ export function BarcodeLabelWorkspace({
   useEffect(() => {
     if (!preferencesLoaded) return;
     try {
-      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset }));
+      window.localStorage.setItem(LABEL_PREFERENCE_KEY, JSON.stringify({ presetId, content, customPreset, alignment }));
     } catch {
       // Ignore blocked or exhausted local storage.
     }
-  }, [content, customPreset, preferencesLoaded, presetId]);
+  }, [alignment, content, customPreset, preferencesLoaded, presetId]);
 
   const previewQuery = useQuery({
     queryKey: ["inventory", "label-preview", selectedVariantIds],
@@ -520,8 +544,9 @@ export function BarcodeLabelWorkspace({
           body * { visibility: hidden !important; }
           #barcode-print-root, #barcode-print-root * { visibility: visible !important; }
           #barcode-print-root { display: block !important; position: absolute !important; inset: 0 auto auto 0 !important; margin: 0 !important; padding: 0 !important; background: #fff !important; color: #09090b !important; }
-          .barcode-print-page { position: relative; display: grid; box-sizing: border-box; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
+          .barcode-print-page { position: relative; box-sizing: border-box; overflow: hidden; break-after: page; page-break-after: always; background: #fff; }
           .barcode-print-page:last-child { break-after: auto; page-break-after: auto; }
+          .barcode-print-grid { position: absolute; display: grid; }
           .barcode-print-label { box-sizing: border-box; min-width: 0; min-height: 0; overflow: hidden; background: #fff; }
           .barcode-cut-guide { outline: 0.15mm dashed #a1a1aa; outline-offset: -0.15mm; }
           .barcode-test-note { position: absolute; right: ${preset.marginXmm}mm; bottom: 1.5mm; left: ${preset.marginXmm}mm; text-align: center; font: 7pt/1.2 sans-serif; color: #52525b; }
@@ -749,6 +774,47 @@ export function BarcodeLabelWorkspace({
                     </div>
                   ))}
                 </div>
+                <details className="group border-t pt-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden">
+                    <span className="flex items-center gap-1">
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                      Print alignment
+                    </span>
+                    <span className="max-w-[210px] truncate font-normal text-muted-foreground">
+                      {formatLabelPrintAlignment(alignment)}
+                    </span>
+                  </summary>
+                  <div className="mt-2 rounded-md border bg-muted/20 p-2.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <MillimetreInput
+                        id="barcode-alignment-x"
+                        label="Horizontal"
+                        value={alignment.xMm}
+                        min={-MAX_LABEL_ALIGNMENT_MM}
+                        max={MAX_LABEL_ALIGNMENT_MM}
+                        step={0.5}
+                        onChange={(xMm) => setAlignment((current) => ({ ...current, xMm: clampLabelAlignmentMm(xMm) }))}
+                      />
+                      <MillimetreInput
+                        id="barcode-alignment-y"
+                        label="Vertical"
+                        value={alignment.yMm}
+                        min={-MAX_LABEL_ALIGNMENT_MM}
+                        max={MAX_LABEL_ALIGNMENT_MM}
+                        step={0.5}
+                        onChange={(yMm) => setAlignment((current) => ({ ...current, yMm: clampLabelAlignmentMm(yMm) }))}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+                      <span>Positive moves right or down. Adjust only after a test sheet.</span>
+                      {(alignment.xMm !== 0 || alignment.yMm !== 0) ? (
+                        <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => setAlignment(DEFAULT_LABEL_PRINT_ALIGNMENT)}>
+                          Reset
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </details>
                 <div className="rounded-md bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
                   <div className="flex items-center justify-between"><span>Page</span><span className="font-medium text-foreground">{preset.pageWidthMm} × {preset.pageHeightMm} mm</span></div>
                   <div className="mt-1 flex items-center justify-between"><span>Labels per page</span><span className="font-medium text-foreground">{preset.columns * preset.rows}</span></div>
@@ -844,7 +910,7 @@ export function BarcodeLabelWorkspace({
       </div>
 
       {canPrint && printMode ? (
-        <PrintPages pages={pages} preset={preset} content={content} formatPrice={formatPrice} test={printMode === "test"} />
+        <PrintPages pages={pages} preset={preset} content={content} alignment={alignment} formatPrice={formatPrice} test={printMode === "test"} />
       ) : null}
     </>
   );
