@@ -1,5 +1,10 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
+import type { AnalyticsScriptsListResponse } from "~/types/api-responses";
 import {
   createAnalyticsScript,
   deleteAnalyticsScript,
@@ -13,8 +18,43 @@ import {
 } from "../api-functions/analytics";
 import { getServerFnError, queryKeys } from "./shared";
 
-function invalidateAnalytics(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.analytics.all });
+function invalidateAnalytics(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.analytics.all });
+}
+
+export function removeAnalyticsScriptFromListPage(
+  current: AnalyticsScriptsListResponse | undefined,
+  id: string,
+): AnalyticsScriptsListResponse | undefined {
+  if (!current?.scripts.some((script) => script.id === id)) return current;
+
+  const total = Math.max(0, current.pagination.total - 1);
+  return {
+    scripts: current.scripts.filter((script) => script.id !== id),
+    pagination: {
+      ...current.pagination,
+      total,
+      totalPages: Math.ceil(total / current.pagination.limit),
+    },
+  };
+}
+
+function removeAnalyticsScriptFromCachedLists(queryClient: QueryClient, id: string) {
+  queryClient.setQueriesData<AnalyticsScriptsListResponse>(
+    { queryKey: queryKeys.analytics.list() },
+    (current) => removeAnalyticsScriptFromListPage(current, id),
+  );
+}
+
+function reconcileAnalyticsLifecycleMove(queryClient: QueryClient, id: string) {
+  removeAnalyticsScriptFromCachedLists(queryClient, id);
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.analytics.list(),
+    refetchType: "none",
+  });
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.analytics.providerHealth(),
+  });
 }
 
 export function useCreateAnalyticsScript() {
@@ -67,7 +107,7 @@ export function useDeleteAnalyticsScript() {
   return useMutation({
     mutationFn: (claim: AnalyticsRevisionClaim) => deleteAnalyticsScript({ data: claim }),
     onSuccess: (_data, claim) => {
-      invalidateAnalytics(queryClient);
+      reconcileAnalyticsLifecycleMove(queryClient, claim.id);
       queryClient.removeQueries({ queryKey: queryKeys.analytics.detail(claim.id) });
       toast.success("Analytics script moved to trash");
     },
@@ -81,8 +121,8 @@ export function useRestoreAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (claim: AnalyticsRevisionClaim) => restoreAnalyticsScript({ data: claim }),
-    onSuccess: () => {
-      invalidateAnalytics(queryClient);
+    onSuccess: (_data, claim) => {
+      reconcileAnalyticsLifecycleMove(queryClient, claim.id);
       toast.success("Analytics script restored as inactive");
     },
     onError: (error) => toast.error(
@@ -95,8 +135,9 @@ export function usePermanentDeleteAnalyticsScript() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (claim: AnalyticsRevisionClaim) => permanentlyDeleteAnalyticsScript({ data: claim }),
-    onSuccess: () => {
-      invalidateAnalytics(queryClient);
+    onSuccess: (_data, claim) => {
+      reconcileAnalyticsLifecycleMove(queryClient, claim.id);
+      queryClient.removeQueries({ queryKey: queryKeys.analytics.detail(claim.id) });
       toast.success("Analytics script permanently deleted");
     },
     onError: (error) => toast.error(
