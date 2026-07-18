@@ -82,6 +82,7 @@ function applySelectedMethodStyles(methodId: string | null): void {
   document.querySelectorAll(".payment-method-card").forEach((card) => {
     const el = card as HTMLElement;
     const isSelected = el.dataset.method === methodId;
+    el.setAttribute("aria-checked", String(isSelected));
     el.classList.toggle("border-primary", isSelected);
     el.classList.toggle("border-input", !isSelected);
     el.querySelector(".check-dot")?.classList.toggle("hidden", !isSelected);
@@ -423,6 +424,8 @@ function renderGateways(): void {
   const container = document.getElementById("paymentMethods");
   if (!container) return;
   container.innerHTML = "";
+  container.setAttribute("role", "radiogroup");
+  container.setAttribute("aria-label", "Payment methods");
 
   if (checkoutConfig.unavailable || gateways.length === 0) {
     showError(
@@ -453,9 +456,12 @@ function renderGateways(): void {
       label = depositRequired ? `Pay Advance via ${meta.label}` : `Pay Online via ${meta.label}`;
     }
 
-    const card = document.createElement("div");
+    const card = document.createElement("button");
+    card.type = "button";
+    card.setAttribute("role", "radio");
+    card.setAttribute("aria-checked", "false");
     card.className =
-      "payment-method-card cursor-pointer rounded-xl border-2 border-input bg-card p-4 transition-all hover:border-primary/50 flex items-center gap-4";
+      "payment-method-card w-full appearance-none cursor-pointer rounded-xl border-2 border-input bg-card p-4 text-left transition-all hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background flex items-center gap-4";
     card.dataset.method = gw.id;
     card.innerHTML = `
       <div class="flex items-center justify-center w-10 h-10 rounded-full bg-muted border border-border shrink-0">
@@ -466,7 +472,7 @@ function renderGateways(): void {
         <p class="text-[11px] text-muted-foreground leading-tight mt-0.5">${meta.desc}</p>
         ${isGatewayTestMode(gw) ? '<span class="mt-1 inline-flex rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">Test mode · no real charge</span>' : ""}
       </div>
-      <div class="method-check w-5 h-5 rounded-full border-2 border-input flex items-center justify-center shrink-0">
+      <div class="method-check w-5 h-5 rounded-full border-2 border-input flex items-center justify-center shrink-0" aria-hidden="true">
         <div class="check-dot w-2.5 h-2.5 rounded-full bg-primary hidden"></div>
       </div>
     `;

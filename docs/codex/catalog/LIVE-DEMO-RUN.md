@@ -46,6 +46,25 @@ Private operational evidence remains ignored under `.wrangler/demo-store-apply/`
   tests, the 312-file Astro check, targeted lint, deployment verification,
   cache warming, and `pnpm release:check` passed.
 
+### Payment-choice and guest-order checkpoint (2026-07-19)
+
+- A visible 390 px guest checkout proved that the four payment choices were
+  visually selectable cards but plain clickable `div` elements: they had no
+  radio-group semantics, checked state, keyboard activation, or focus style.
+- Storefront `b398273c-9514-4127-92c0-226fb35c3d70` now renders a named radio
+  group of native button controls. The asynchronous gateway preparation path
+  owns `aria-checked`, so failed preparation cannot leave a false selection;
+  Space/Enter activation and focus-visible treatment come from the same cards
+  without adding another checkout mode.
+- Live keyboard proof moved the default selection to COD with Space, exposed
+  `Place Order — Pay on Delivery`, and completed order `NFPLAV` for Noor Ceramic
+  Vase at BDT 2,190 plus BDT 110 shipping. The 390 px receipt had no overflow or
+  browser error, the admin order route rendered without redirect, and the guest
+  buyer was linked to a unified Customer History profile with the same order.
+- The checkout suite passed 66 tests, the 312-file Astro check and targeted
+  lint passed, deployment verification/cache warming completed, and
+  `pnpm release:check` passed.
+
 ### CMS presentation checkpoint (2026-07-19)
 
 - Replaced the published About page's placeholder paragraph with a structured
