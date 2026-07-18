@@ -37,6 +37,11 @@ const homepageTitle =
   seo.homepageTitle || seo.siteTitle || "Welcome to Our Store";
 const homepageMetaDescription =
   seo.homepageMetaDescription || "Find the best products here.";
+const homepageHeading =
+  seo.siteTitle?.trim() ||
+  layoutData.business?.companyName?.trim() ||
+  layoutData.business?.legalName?.trim() ||
+  homepageTitle;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -66,6 +71,8 @@ function isCollection2(
   canonicalUrl={canonicalUrl ?? undefined}
   ogType="website"
 >
+  <h1 class="sr-only">{homepageHeading}</h1>
+
   <section class="w-full">
     <Hero hero={hero} />
   </section>

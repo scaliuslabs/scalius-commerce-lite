@@ -653,6 +653,26 @@ The cleanup bullets below describe the two-product proof store that preceded the
   production build/deploy, and full `pnpm release:check` passed. The only live
   warning remains the previously recorded logs-only ops-monitor email channel.
 
+### Storefront identity checkpoint (2026-07-19)
+
+- The real SEO settings workflow replaced the stale project marketing title
+  with shopper-facing demo identity: fallback title `Scalius Market`, homepage
+  title `Scalius Market | Thoughtful Everyday Essentials`, and a bounded search
+  summary describing the five-category assortment and Bangladesh delivery.
+  The public `/api/v1/seo` projection returned all three exact values after the
+  save, proving settings invalidation rather than a database-only edit.
+- Storefront `89ea5a82-3105-4811-9623-ea5971195d6a` is live at 100% with build
+  `src-286196bf4730a444`. The homepage now emits one semantic, visually hidden
+  H1 from the saved storefront title. It deliberately prefers shopper brand
+  identity over Business `companyName`/`legalName`; those fields remain the
+  authority for legal organization and seller schema.
+- Production HTML and browser proof matched the exact title, description, and
+  `Scalius Market` H1, retained three large hero images and the five rich
+  collection groups, and measured `1280 px` content inside a `1280 px` viewport
+  with no horizontal overflow. The focused 7-test boundary suite, targeted
+  lint, Astro diagnostics (`312` files, zero errors/warnings/hints), sequential
+  production build/deploy, cache warm, and full `pnpm release:check` passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
