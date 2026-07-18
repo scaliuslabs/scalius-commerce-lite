@@ -146,6 +146,11 @@ export function formatPageCount(count: number): string {
   return `${count} ${count === 1 ? "page" : "pages"}`;
 }
 
+export function clampLabelPreviewPageIndex(index: number, pageCount: number): number {
+  const lastPageIndex = Math.max(0, Math.trunc(pageCount) - 1);
+  return Math.max(0, Math.min(Math.trunc(index) || 0, lastPageIndex));
+}
+
 export function getLabelPreset(id: LabelPresetId): LabelPreset {
   return LABEL_PRESETS.find((preset) => preset.id === id) ?? LABEL_PRESETS[0];
 }

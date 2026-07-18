@@ -38,6 +38,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import {
   buildLabelCopies,
+  clampLabelPreviewPageIndex,
   DEFAULT_LABEL_CONTENT,
   formatLabelCount,
   formatPageCount,
@@ -305,6 +306,7 @@ function PaperPreview({
   formatPrice,
   startOffset,
   onStartOffsetChange,
+  canSetStartOffset,
 }: {
   page: LabelPageCell[];
   preset: LabelPreset;
@@ -312,6 +314,7 @@ function PaperPreview({
   formatPrice: (price: number | string) => string;
   startOffset: number;
   onStartOffsetChange: (value: number) => void;
+  canSetStartOffset: boolean;
 }) {
   const capacity = preset.columns * preset.rows;
   const cells = Array.from({ length: capacity }, (_, index) => page[index] ?? null);
@@ -335,11 +338,12 @@ function PaperPreview({
             className={cn(
               "group relative min-h-0 overflow-hidden bg-white text-left focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500",
               preset.cropMarks && "border border-dashed border-zinc-300",
-              index === startOffset && capacity > 1 && "ring-2 ring-inset ring-emerald-500",
+              canSetStartOffset && index === startOffset && capacity > 1 && "ring-2 ring-inset ring-emerald-500",
+              !canSetStartOffset && "cursor-default",
             )}
-            aria-label={`Start printing at cell ${index + 1}`}
-            aria-pressed={index === startOffset}
-            disabled={capacity <= 1}
+            aria-label={canSetStartOffset ? `Start printing at cell ${index + 1}` : `Preview cell ${index + 1}`}
+            aria-pressed={canSetStartOffset ? index === startOffset : undefined}
+            disabled={capacity <= 1 || !canSetStartOffset}
             onClick={() => onStartOffsetChange(index)}
           >
             {copy ? (
@@ -366,6 +370,7 @@ export function BarcodeLabelWorkspace({
   const [presetId, setPresetId] = useState<LabelPresetId>("a4-cut-3x8");
   const [customPreset, setCustomPreset] = useState<LabelPreset>(DEFAULT_CUSTOM_PRESET);
   const [startOffset, setStartOffset] = useState(0);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
   const [content, setContent] = useState<LabelContentOptions>(DEFAULT_LABEL_CONTENT);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode | null>(null);
@@ -447,6 +452,10 @@ export function BarcodeLabelWorkspace({
     () => paginateLabelCopies(copies.slice(0, MAX_LABEL_COPIES), preset, startOffset),
     [copies, preset, startOffset],
   );
+  useEffect(() => {
+    setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current, pages.length));
+  }, [pages.length]);
+  const previewPage = pages[previewPageIndex] ?? pages[0];
   const activeFitIssues = useMemo(() => selectedVariants.flatMap((variant) => {
     if (presetIssue) return [];
     if ((quantities[variant.id] ?? 0) <= 0) return [];
@@ -752,17 +761,48 @@ export function BarcodeLabelWorkspace({
             <Card>
               <CardHeader className="flex-row items-center justify-between space-y-0 px-3 py-2.5">
                 <CardTitle className="text-sm">Page preview</CardTitle>
-                <span className="text-[11px] text-muted-foreground">{capacity > 1 ? "Click a cell to start" : "Print at 100%"}</span>
+                {pages.length > 1 ? (
+                  <div className="flex items-center gap-1" aria-label="Preview page navigation">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={previewPageIndex === 0}
+                      onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current - 1, pages.length))}
+                      aria-label="Preview previous label page"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="min-w-14 text-center text-[11px] tabular-nums text-muted-foreground">
+                      {previewPageIndex + 1} / {pages.length}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={previewPageIndex >= pages.length - 1}
+                      onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current + 1, pages.length))}
+                      aria-label="Preview next label page"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">{capacity > 1 ? "Click a cell to start" : "Print at 100%"}</span>
+                )}
               </CardHeader>
               <CardContent className="border-t bg-zinc-100 p-4 dark:bg-zinc-950">
-                {pages[0]?.length ? (
+                {previewPage?.length ? (
                   <PaperPreview
-                    page={pages[0]}
+                    page={previewPage}
                     preset={preset}
                     content={content}
                     formatPrice={formatPrice}
                     startOffset={startOffset}
                     onStartOffsetChange={setStartOffset}
+                    canSetStartOffset={previewPageIndex === 0}
                   />
                 ) : <div className="grid aspect-[210/297] place-items-center border border-dashed bg-white text-center text-xs text-zinc-500">Select a SKU and set at least one label.</div>}
               </CardContent>
