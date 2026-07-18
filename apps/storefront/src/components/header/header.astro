@@ -109,8 +109,7 @@ const headerData: HeaderData = {
     const addClick = (id: string, fn: (e: MouseEvent) => void) => {
       const el = document.getElementById(id);
       if (el) {
-        el.removeEventListener("click", fn);
-        el.addEventListener("click", fn);
+        el.onclick = (event) => fn(event as MouseEvent);
       }
     };
 
@@ -137,17 +136,33 @@ const headerData: HeaderData = {
 
     const menuPanel = document.getElementById("mobile-menu-panel");
     const menuOverlay = document.getElementById("mobile-menu-overlay");
+    const menuTrigger = document.getElementById("mobile-menu-toggle");
+    const menuClose = document.getElementById("mobile-menu-close");
+
+    const focusableElements = () =>
+      menuPanel
+        ? Array.from(
+            menuPanel.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((element) => element.offsetParent !== null)
+        : [];
 
     const toggleMenu = (show: boolean) => {
       if (!menuPanel || !menuOverlay) return;
+      menuPanel.inert = !show;
+      menuPanel.setAttribute("aria-hidden", String(!show));
+      menuTrigger?.setAttribute("aria-expanded", String(show));
       if (show) {
         menuPanel.classList.remove("-translate-x-full");
         menuOverlay.classList.remove("opacity-0", "pointer-events-none");
         document.body.style.overflow = "hidden";
+        requestAnimationFrame(() => menuClose?.focus());
       } else {
         menuPanel.classList.add("-translate-x-full");
         menuOverlay.classList.add("opacity-0", "pointer-events-none");
         document.body.style.overflow = "";
+        menuTrigger?.focus();
       }
     };
 
@@ -158,6 +173,31 @@ const headerData: HeaderData = {
     }
 
     if (menuPanel) {
+      menuPanel.onkeydown = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          toggleMenu(false);
+          return;
+        }
+
+        if (event.key !== "Tab") return;
+        const elements = focusableElements();
+        const first = elements.at(0);
+        const last = elements.at(-1);
+        if (!first || !last) {
+          event.preventDefault();
+          return;
+        }
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      };
+
       menuPanel.onclick = (e) => {
         const target = e.target as HTMLElement;
         const btn = target.closest("[data-menu-toggle]");
@@ -179,6 +219,13 @@ const headerData: HeaderData = {
         }
       };
     }
+
+    const desktopBreakpoint = window.matchMedia("(min-width: 1024px)");
+    desktopBreakpoint.onchange = (event) => {
+      if (event.matches && menuTrigger?.getAttribute("aria-expanded") === "true") {
+        toggleMenu(false);
+      }
+    };
   }
 
   document.addEventListener("DOMContentLoaded", initializeHeader);
