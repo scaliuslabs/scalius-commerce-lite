@@ -179,6 +179,24 @@ describe("storefront page data boundaries", () => {
     );
   });
 
+  it("gives the homepage one stable storefront-identity heading", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/index.astro`,
+      "utf8",
+    );
+    const headingSource = source.slice(
+      source.indexOf("const homepageHeading ="),
+      source.indexOf('import { DEFAULT_CURRENCY }'),
+    );
+
+    expect(source).toContain("const homepageHeading =");
+    expect(headingSource.indexOf("seo.siteTitle?.trim()")).toBeLessThan(
+      headingSource.indexOf("layoutData.business?.companyName?.trim()"),
+    );
+    expect(headingSource).toContain("layoutData.business?.legalName?.trim()");
+    expect(source).toContain('<h1 class="sr-only">{homepageHeading}</h1>');
+  });
+
   it("uses the consolidated CMS page render endpoint", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/[slug].astro`,
