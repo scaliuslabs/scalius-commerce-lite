@@ -26,7 +26,7 @@ export function getBarcodeQuietZoneModules(
 }
 
 export type LabelPreset = {
-  id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-adhesive-2x7" | "thermal-50x25" | "thermal-40x30" | "custom";
+  id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-wide-cut-2x7" | "a4-adhesive-2x7" | "thermal-50x25" | "thermal-40x30" | "custom";
   name: string;
   detail: string;
   pageWidthMm: number;
@@ -69,6 +69,21 @@ export const LABEL_PRESETS: readonly LabelPreset[] = [
     marginYmm: 7,
     gapXmm: 1.5,
     gapYmm: 1,
+    cropMarks: true,
+    thermal: false,
+  },
+  {
+    id: "a4-wide-cut-2x7",
+    name: "A4 wide cut",
+    detail: "Plain paper · 2 × 7 · 14 labels",
+    pageWidthMm: 210,
+    pageHeightMm: 297,
+    columns: 2,
+    rows: 7,
+    marginXmm: 10,
+    marginYmm: 10,
+    gapXmm: 2,
+    gapYmm: 2,
     cropMarks: true,
     thermal: false,
   },
