@@ -4,13 +4,14 @@ import { normalizeAccountSection } from "./account-sections";
 
 describe("account section search state", () => {
   it("keeps supported deep links", () => {
+    expect(normalizeAccountSection("profile")).toBe("profile");
     expect(normalizeAccountSection("sessions")).toBe("sessions");
     expect(normalizeAccountSection("team")).toBe("team");
     expect(normalizeAccountSection("roles")).toBe("roles");
   });
 
-  it("fails closed to personal security for unknown values", () => {
-    expect(normalizeAccountSection("billing")).toBe("security");
-    expect(normalizeAccountSection(undefined)).toBe("security");
+  it("falls back to the non-destructive personal profile", () => {
+    expect(normalizeAccountSection("billing")).toBe("profile");
+    expect(normalizeAccountSection(undefined)).toBe("profile");
   });
 });

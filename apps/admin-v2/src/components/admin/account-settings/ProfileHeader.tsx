@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Card, CardContent } from "~/components/ui/card";
-import { Badge } from "~/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import {
   Check,
   Loader2,
   Pencil,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -116,7 +119,16 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
   };
 
   return (
-    <Card className="rounded-xl shadow-none">
+    <Card className="max-w-4xl rounded-xl shadow-none">
+      <CardHeader className="border-b p-4">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserRound className="h-4 w-4" aria-hidden="true" />
+          Profile
+        </CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
+          Your name and photo appear in administrator activity and shared work.
+        </CardDescription>
+      </CardHeader>
       <CardContent className="p-4">
         <div className="grid gap-3 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-center">
           <div className="relative h-12 w-12">
@@ -182,21 +194,6 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
               </div>
 
               <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 sm:min-h-9 sm:justify-end">
-                <Badge variant="outline" className="gap-1 font-normal">
-                  <Shield className="h-3 w-3" />
-                  {user.role === "admin" ? "Administrator" : "Admin account"}
-                </Badge>
-                {user.twoFactorEnabled ? (
-                  <Badge variant="secondary" className="gap-1 font-normal">
-                    <ShieldCheck className="h-3 w-3" />
-                    2FA on
-                  </Badge>
-                ) : (
-                  <Badge variant="destructive" className="gap-1 font-normal">
-                    <ShieldAlert className="h-3 w-3" />
-                    2FA setup required
-                  </Badge>
-                )}
                 <div
                   className="flex min-h-11 flex-wrap items-center gap-2 sm:min-h-9"
                   data-profile-edit-actions
@@ -237,7 +234,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
                         ) : (
                           <Check className="h-3.5 w-3.5" />
                         )}
-                        Save changes
+                        Save profile
                       </Button>
                     </>
                   )}

@@ -73,6 +73,8 @@ describe("theme and account settings workspace", () => {
 
     expect(source).toContain("Personal");
     expect(source).toContain("Store access");
+    expect(source).toContain('{ value: "profile" as const, label: "Profile"');
+    expect(source).toContain('activeSection === "profile"');
     expect(source).toContain("Administrators");
     expect(source).toContain("Sessions");
     expect(source).toContain("AccountSessions");
@@ -82,6 +84,9 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("min-h-11");
     expect(source).toContain("renderSection");
     expect(source).not.toContain("TabsList");
+
+    const profileRenderCount = source.match(/<ProfileHeader user=\{user\} \/>/g)?.length ?? 0;
+    expect(profileRenderCount).toBe(1);
 
     const routeSource = readSource("routes/admin/settings/account.tsx");
     expect(routeSource).toContain("validateAccountSearch");

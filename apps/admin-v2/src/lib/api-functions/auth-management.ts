@@ -43,6 +43,10 @@ export interface DeleteAdminUserInput {
   userId: string;
 }
 
+export interface ResendAdminSetupInput {
+  userId: string;
+}
+
 export interface MessageResponse {
   message: string;
 }
@@ -165,6 +169,15 @@ export const deleteAdminUser = createServerFn({ method: "POST" })
   .validator((data: DeleteAdminUserInput) => data)
   .handler(async ({ data }) => {
     return apiDelete<MessageResponse>(`/auth/users/${data.userId}`);
+  });
+
+export const resendAdminSetup = createServerFn({ method: "POST" })
+  .validator((data: ResendAdminSetupInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<MessageResponse>(
+      `/auth/users/${encodeURIComponent(data.userId)}/resend-setup`,
+      {},
+    );
   });
 
 export const updateProfile = createServerFn({ method: "POST" })

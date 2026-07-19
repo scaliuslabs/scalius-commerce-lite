@@ -881,6 +881,26 @@ The cleanup bullets below describe the two-product proof store that preceded the
   lazy-picker/caller-rerender regression test. Targeted lint and the sequential
   Admin typecheck, production build, upload, and deployment verification passed.
 
+### Account profile and setup-recovery checkpoint (2026-07-19)
+
+- API `e5ddc7bc-33ed-4f8b-8235-b906784f93f9` and Admin
+  `f947b7fa-478d-4414-8c16-eae043a3a453` are live at 100%.
+- Profile is now the default URL-owned Account section and contains the compact
+  identity editor. Two-factor, Password, Sessions, Administrators, and Roles no
+  longer repeat that card. Unknown sections normalize back to Profile.
+- Administrators still in the forced password-setup state can receive a new
+  one-use setup email from the team workspace. Ready accounts, non-admin
+  principals, and insufficient permissions fail closed; provider failures do
+  not expose recipient or provider details.
+- The authenticated production DOM proved `section=profile` renders Profile
+  without the 2FA workspace, `section=team` renders all four administrators
+  without the personal Profile card, and an unknown section replaces its URL
+  value with `section=profile`.
+- Six focused files passed 82 tests. API and Admin typechecks, SDK generation,
+  and both sequential production deployments passed. No setup email was sent
+  during the live smoke because every existing demo administrator is already
+  beyond password setup.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

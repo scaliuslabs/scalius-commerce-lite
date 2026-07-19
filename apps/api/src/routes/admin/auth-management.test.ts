@@ -357,6 +357,43 @@ function createAdminInviteDbMock() {
   };
 }
 
+function createAdminResendSetupDbMock(options: {
+  target?: {
+    id: string;
+    email: string;
+    mustChangePassword: boolean;
+  } | null;
+  principalRows?: Array<{ id: string }>;
+} = {}) {
+  const target = Object.prototype.hasOwnProperty.call(options, "target")
+    ? options.target
+    : {
+        id: "pending_admin",
+        email: "pending@example.com",
+        mustChangePassword: true,
+      };
+  const principalRows = options.principalRows ?? [{ id: "pending_admin" }];
+
+  return {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          get: vi.fn(async () => target),
+        })),
+      })),
+    })),
+    selectDistinct: vi.fn(() => ({
+      from: vi.fn(() => ({
+        leftJoin: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(async () => principalRows),
+          })),
+        })),
+      })),
+    })),
+  };
+}
+
 function createAccountSessionsDbMock(options: {
   currentSession?: Record<string, unknown> | null;
   otherSessions?: Array<Record<string, unknown>>;
@@ -735,6 +772,55 @@ describe("admin auth management team invites", () => {
     expect(source).toContain("mustEnrollTwoFactor: true");
     expect(source).not.toContain("sendAdminInviteEmail");
     expect(source).not.toContain("Temporary Password");
+  });
+
+  it("resends a one-use setup link only while password setup is pending", async () => {
+    const db = createAdminResendSetupDbMock();
+    const requestPasswordReset = vi.fn().mockResolvedValue({ status: true });
+    mocks.createAuth.mockReturnValue({ api: { requestPasswordReset } });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/pending_admin/resend-setup",
+      { method: "POST" },
+      { BETTER_AUTH_URL: "https://admin.scalius.test" } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(requestPasswordReset).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      body: {
+        email: "pending@example.com",
+        redirectTo: "/auth/reset-password",
+      },
+    });
+    expect(await response.json()).toEqual({
+      success: true,
+      data: { message: "A new secure setup link was sent" },
+    });
+  });
+
+  it("rejects setup-link resend after password setup is complete", async () => {
+    const db = createAdminResendSetupDbMock({
+      target: {
+        id: "ready_admin",
+        email: "ready@example.com",
+        mustChangePassword: false,
+      },
+      principalRows: [{ id: "ready_admin" }],
+    });
+    const requestPasswordReset = vi.fn();
+    mocks.createAuth.mockReturnValue({ api: { requestPasswordReset } });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/ready_admin/resend-setup",
+      { method: "POST" },
+      { BETTER_AUTH_URL: "https://admin.scalius.test" } as never,
+    );
+
+    expect(response.status).toBe(400);
+    expect(requestPasswordReset).not.toHaveBeenCalled();
   });
 });
 

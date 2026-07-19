@@ -323,6 +323,75 @@ app.openapi(createUserRoute, async (c) => {
     }
 });
 
+const resendAdminSetupRoute = createRoute({
+    method: "post",
+    path: "/users/{id}/resend-setup",
+    tags: ["Admin - Auth Management"],
+    summary: "Resend an invited administrator's password setup link",
+    request: {
+        params: z.object({ id: z.string() }),
+    },
+    responses: {
+        200: { description: "Setup link sent", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(resendAdminSetupRoute, async (c) => {
+    const db = c.get("db");
+    const { id: userId } = c.req.valid("param");
+    const env = c.env;
+
+    if (!env.BETTER_AUTH_URL && !env.PUBLIC_API_BASE_URL) {
+        throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
+    }
+
+    const invitedUser = await db
+        .select({
+            id: user.id,
+            email: user.email,
+            mustChangePassword: user.mustChangePassword,
+        })
+        .from(user)
+        .where(eq(user.id, userId))
+        .get();
+
+    if (!invitedUser) throw new NotFoundError("Administrator not found");
+
+    const targetAdminPrincipal = await db
+        .selectDistinct({ id: user.id })
+        .from(user)
+        .leftJoin(userRoles, eq(userRoles.userId, user.id))
+        .leftJoin(userPermissions, and(
+            eq(userPermissions.userId, user.id),
+            eq(userPermissions.granted, true),
+        ))
+        .where(and(eq(user.id, userId), adminPrincipalPredicate()));
+
+    if (targetAdminPrincipal.length === 0) {
+        throw new ValidationError("Can only resend setup for administrator accounts");
+    }
+    if (!invitedUser.mustChangePassword) {
+        throw new ValidationError("Password setup is already complete");
+    }
+
+    const auth = createAuth(env);
+    try {
+        await auth.api.requestPasswordReset({
+            headers: c.req.raw.headers,
+            body: {
+                email: invitedUser.email,
+                redirectTo: "/auth/reset-password",
+            },
+        });
+    } catch {
+        throw new ServiceUnavailableError("The setup email could not be sent. Check email delivery and try again.");
+    }
+
+    return ok(c, { message: "A new secure setup link was sent" });
+});
+
 const deleteUserRoute = createRoute({
     method: "delete",
     path: "/users/{id}",

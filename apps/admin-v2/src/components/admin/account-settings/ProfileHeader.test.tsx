@@ -159,7 +159,7 @@ describe("ProfileHeader display-name editing", () => {
 
     const input = displayNameInput();
     const cancelButton = buttonNamed("Cancel");
-    const saveButton = buttonNamed("Save changes");
+    const saveButton = buttonNamed("Save profile");
 
     expect(input.value).toBe(currentUser.name);
     expect(host.textContent).toContain(currentUser.email);
@@ -186,7 +186,7 @@ describe("ProfileHeader display-name editing", () => {
     });
 
     expect(displayNameInput().value).toBe("Temporary Name");
-    expect(buttonNamed("Save changes").disabled).toBe(false);
+    expect(buttonNamed("Save profile").disabled).toBe(false);
 
     act(() => {
       click(buttonNamed("Cancel"));
@@ -194,7 +194,7 @@ describe("ProfileHeader display-name editing", () => {
 
     expect(host.querySelector("h2")?.textContent).toBe(currentUser.name);
     expect(host.textContent).toContain(currentUser.email);
-    expect(queryButtonNamed("Save changes")).toBeNull();
+    expect(queryButtonNamed("Save profile")).toBeNull();
     expect(host.querySelector('input[aria-label="Display name"]')).toBeNull();
     expect(updateProfileMock).not.toHaveBeenCalled();
   });
@@ -214,7 +214,7 @@ describe("ProfileHeader display-name editing", () => {
     });
 
     act(() => {
-      click(buttonNamed("Save changes"));
+      click(buttonNamed("Save profile"));
     });
     await flushReactUpdates();
 
@@ -225,7 +225,7 @@ describe("ProfileHeader display-name editing", () => {
       },
     });
     expect(host.querySelector("h2")?.textContent).toBe("Arobi Owner");
-    expect(queryButtonNamed("Save changes")).toBeNull();
+    expect(queryButtonNamed("Save profile")).toBeNull();
     expect(buttonNamed("Edit profile")).toBeTruthy();
     expect(toastMock.success).toHaveBeenCalledWith("Profile saved");
     expect(refreshAdminRouteContextMock).toHaveBeenCalledWith(routerMock);
