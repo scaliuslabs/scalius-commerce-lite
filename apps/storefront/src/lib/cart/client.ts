@@ -191,6 +191,17 @@ function handleAbandonedCheckout() {
 // --- Language Data Management ---
 async function getLanguageData(): Promise<CheckoutLanguageData> {
   if (globalLangData) return globalLangData;
+  const serverLanguage = window.__CHECKOUT_LANGUAGE__;
+  if (
+    serverLanguage &&
+    typeof serverLanguage === "object" &&
+    "languageData" in serverLanguage &&
+    typeof serverLanguage.languageData === "object" &&
+    serverLanguage.languageData !== null
+  ) {
+    globalLangData = serverLanguage as CheckoutLanguageData;
+    return globalLangData;
+  }
   try {
     const language = await getActiveCheckoutLanguage();
     if (language) {
@@ -251,6 +262,24 @@ async function getLanguageData(): Promise<CheckoutLanguageData> {
   };
   globalLangData = fallbackLang;
   return fallbackLang;
+}
+
+function syncCartPagePresentation(ready: boolean): void {
+  const root = document.getElementById("cartPageRoot");
+  const cartItems = document.getElementById("cartItems");
+  const cartSummary = document.getElementById("cartSummary");
+  const checkoutPanel = document.getElementById("checkoutPanel");
+  const hasItems = Object.keys(cartStore.get().items).length > 0;
+
+  if (root) {
+    root.dataset.cartReady = ready ? "true" : "false";
+    root.dataset.cartHasItems = hasItems ? "true" : "false";
+  }
+  cartItems?.setAttribute("aria-busy", ready ? "false" : "true");
+
+  const hideOperationalPanels = !ready || !hasItems;
+  cartSummary?.classList.toggle("hidden", hideOperationalPanels);
+  checkoutPanel?.classList.toggle("hidden", hideOperationalPanels);
 }
 
 // --- NEW FUNCTION: To handle the quick buy action ---
@@ -648,6 +677,7 @@ export async function renderCartItems() {
           }
         : null,
     );
+    syncCartPagePresentation(true);
     return;
   }
   if (hostedPaymentRecoverySession) {
@@ -704,6 +734,7 @@ export async function renderCartItems() {
     .join("");
 
   await updateTotals();
+  syncCartPagePresentation(true);
 }
 
 export function updateCheckoutButtonState() {

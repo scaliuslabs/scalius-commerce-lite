@@ -161,6 +161,7 @@ interface Window {
   __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
   __BUILD_ID__?: string;
   __CHECKOUT_CONFIG__?: unknown;
+  __CHECKOUT_LANGUAGE__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;
   __scaliusCartPageAbortController?: AbortController;
   dataLayer?: Record<string, unknown>[];
