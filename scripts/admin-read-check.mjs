@@ -473,9 +473,11 @@ async function signOutBestEffort(config, fetchImpl, cookieHeader) {
         headers: {
           accept: "application/json",
           "cache-control": "no-cache",
+          "content-type": "application/json",
           cookie: cookieHeader,
           origin: config.dashboardBaseUrl,
         },
+        body: "{}",
       },
       "Admin sign-out",
       config.timeoutMs,

@@ -78,7 +78,13 @@ export async function closeAdminSession({ adminOrigin, cookieHeader, fetchImpl =
   try {
     const response = await request(fetchImpl, `${adminOrigin}/api/auth/sign-out`, {
       method: "POST",
-      headers: { accept: "application/json", cookie: cookieHeader, origin: adminOrigin },
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        cookie: cookieHeader,
+        origin: adminOrigin,
+      },
+      body: "{}",
     }, "Admin sign-out", timeoutMs);
     await response.body?.cancel();
     return { status: response.status === 200 ? "closed" : "warning", statusCode: response.status };

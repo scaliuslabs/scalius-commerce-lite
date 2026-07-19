@@ -965,6 +965,38 @@ The cleanup bullets below describe the two-product proof store that preceded the
   grammar. Fifty-nine focused tests, targeted lint, the sequential Admin
   typecheck, deployment, and authenticated browser checks passed.
 
+### Fresh catalog reconciliation and barcode-output checkpoint (2026-07-19)
+
+- A new authenticated read-only reconciliation at
+  `.wrangler/demo-store-evidence/run-2026-07-19T18-07-08-696Z-5ff28928`
+  matched all 5 manifest categories, all 50 products, the catalog attribute,
+  and all 5 planned merchandising collections with zero drift or conflict.
+  The Media authority still contains 246 assets. `Curated Essentials` remains
+  an intentional extra collection because the typed Header **Shop** item owns
+  that destination; it is not a homepage section.
+- The first pass found a repeated Soma Handloom Cushion Cover description. It
+  was corrected through the authenticated product editor and re-read cleanly
+  at aggregate revision 6. This was a real merchant-workflow correction, not a
+  direct production-data shortcut.
+- Better Auth rejected both operations-script sign-out requests with HTTP 415
+  because they omitted the JSON media type. The demo reconciliation and admin
+  read-check clients now send an explicit empty JSON body; the second live run
+  closed its session with HTTP 200. Twenty-seven focused operations-script
+  tests passed.
+- The deployed Barcode labels workspace was rechecked with a saved long Code
+  128 SKU. The narrow A4 cut sheet failed closed with a truthful physical-width
+  diagnostic; **Use A4 adhesive** selected the first compatible format and
+  enabled output. `Available` produced 8 labels from the visible `8 on hand ·
+  8 available` facts, cell 5 skipped four used sheet positions, and the exact
+  SKU stayed in the URL. Reload kept the workstation format but correctly reset
+  the job-local count to one and the used-sheet offset to a fresh sheet.
+- The same label job remained usable at 390 × 844 with no horizontal overflow
+  and a fixed **Test** / **Print / PDF** action bar. Browser console/error output
+  was empty. The focused barcode model and read-only inventory projection
+  suites passed 39 tests. The full decision and competitive boundary remain in
+  [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md); neither an immediate
+  row print nor a blocking wizard should replace the shared progressive job.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
