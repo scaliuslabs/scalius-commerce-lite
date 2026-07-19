@@ -3,9 +3,8 @@
 Last reviewed: 2026-07-19
 
 Status: pointer interaction, branch visibility, automatic post-drop expansion,
-and deterministic row-menu outdent/reorder fallbacks are implemented and
-production-browser verified. The exact Parent + Position Move dialog remains
-the final unimplemented part of this accepted contract.
+deterministic row-menu actions, and the exact Parent + Position Move dialog are
+implemented and production-browser verified.
 
 ## 2026-07-19 production checkpoint
 
@@ -21,6 +20,12 @@ the final unimplemented part of this accepted contract.
   contained no warnings or errors.
 - Leaf rows render a non-interactive spacer rather than an invisible focusable
   expand control. Menu/location singular labels are truthful.
+- Commit `5aea11546` added a bounded, depth-safe parent picker and an exact
+  one-based position field backed by one atomic revision-guarded command. A
+  production run moved `Footwear` to position 1 inside `Home & Living`, kept it
+  visible in the expanded branch, then used the same dialog to restore it to
+  root position 1. The original five-link order was republished at revision 12;
+  no dashboard warning or error was emitted.
 
 ## Why the previous interaction failed
 
