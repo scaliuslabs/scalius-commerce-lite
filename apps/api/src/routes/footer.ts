@@ -1,8 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getNavigationMenus } from "@scalius/core/modules/navigation";
+import { getLayoutData } from "@scalius/core/modules/storefront/storefront.service";
 import { cacheMiddleware } from "../middleware/cache";
 import { CACHE_TTLS } from "../utils/cache-ttls";
-import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -20,30 +19,6 @@ app.use(
   }),
 );
 
-// Footer data interface, strictly matching Admin schema
-interface SocialLink {
-  id?: string;
-  platform: string;
-  url?: string;
-  icon?: string;
-}
-
-interface FooterData {
-  logo: {
-    src: string;
-    alt: string;
-  };
-  tagline: string;
-  copyrightText: string;
-  menus: Array<{
-    id: string;
-    title: string;
-    links: Array<{ id?: string; title: string; href?: string }>;
-  }>;
-  social: SocialLink[];
-  description: string;
-}
-
 // GET /footer — get footer data
 const getFooterRoute = createRoute({
   method: "get",
@@ -53,23 +28,7 @@ const getFooterRoute = createRoute({
   responses: {
     200: {
       description: "Footer configuration",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        logo: z.object({ src: z.string(), alt: z.string() }),
-        tagline: z.string(),
-        copyrightText: z.string(),
-        menus: z.array(z.object({
-          id: z.string(),
-          title: z.string(),
-          links: z.array(z.object({ id: z.string().optional(), title: z.string(), href: z.string().optional() })),
-        })),
-        social: z.array(z.object({
-          id: z.string().optional(),
-          platform: z.string(),
-          url: z.string().optional(),
-          icon: z.string().optional(),
-        })),
-        description: z.string(),
-      })) } },
+      content: { "application/json": { schema: successEnvelope(z.record(z.string(), z.unknown())) } },
     },
     404: errorResponses[404],
     500: errorResponses[500],
@@ -77,30 +36,10 @@ const getFooterRoute = createRoute({
 });
 
 app.openapi(getFooterRoute, async (c) => {
-  const db = c.get("db");
-  const { footerConfig } = await getNavigationMenus(db, "public");
-  if (Object.keys(footerConfig).length === 0) {
-    throw new NotFoundError("Footer configuration not found");
-  }
-  const typedFooterConfig = footerConfig as Partial<FooterData>;
-
-  // Strict array usage for social links
-  const socialLinks: SocialLink[] = Array.isArray(typedFooterConfig.social)
-    ? typedFooterConfig.social
-    : [];
-
-  // Build response data
-  const footerData: FooterData = {
-    logo: typedFooterConfig.logo || { src: "/logo.svg", alt: "Store Logo" },
-    tagline: typedFooterConfig.tagline || "",
-    copyrightText:
-      typedFooterConfig.copyrightText || "Your Store",
-    menus: typedFooterConfig.menus || [],
-    social: socialLinks,
-    description: typedFooterConfig.description || ""
-  };
-
-  return ok(c, footerData);
+  const layout = await getLayoutData(c.get("db"), {
+    credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
+  });
+  return ok(c, layout.footer);
 });
 
 // Export the footer routes

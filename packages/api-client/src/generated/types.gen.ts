@@ -1162,31 +1162,7 @@ export type GetApiV1HeaderResponses = {
         success: true;
         data: {
             header: {
-                topBar: {
-                    text: string;
-                };
-                logo: {
-                    src: string;
-                    alt: string;
-                };
-                favicon?: {
-                    src: string;
-                    alt: string;
-                };
-                contact: {
-                    phone: string;
-                    text: string;
-                };
-                social: {
-                    facebook: string;
-                };
-                cartTotal?: string;
-                navigation: Array<{
-                    id: string;
-                    title: string;
-                    href?: string;
-                    subMenu?: Array<unknown>;
-                }>;
+                [key: string]: unknown;
             };
         };
     };
@@ -1555,28 +1531,7 @@ export type GetApiV1FooterResponses = {
     200: {
         success: true;
         data: {
-            logo: {
-                src: string;
-                alt: string;
-            };
-            tagline: string;
-            copyrightText: string;
-            menus: Array<{
-                id: string;
-                title: string;
-                links: Array<{
-                    id?: string;
-                    title: string;
-                    href?: string;
-                }>;
-            }>;
-            social: Array<{
-                id?: string;
-                platform: string;
-                url?: string;
-                icon?: string;
-            }>;
-            description: string;
+            [key: string]: unknown;
         };
     };
 };
@@ -2247,6 +2202,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 id?: string;
                 title: string;
                 href?: string;
+                openInNewTab?: boolean;
                 subMenu?: Array<unknown>;
                 [key: string]: unknown;
             }>;
@@ -17127,6 +17083,122 @@ export type PostApiV1AdminNavigationMenusByMenuIdItemsResponses = {
 
 export type PostApiV1AdminNavigationMenusByMenuIdItemsResponse = PostApiV1AdminNavigationMenusByMenuIdItemsResponses[keyof PostApiV1AdminNavigationMenusByMenuIdItemsResponses];
 
+export type GetApiV1AdminNavigationMenusByMenuIdSearchData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query: {
+        q: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/navigation/menus/{menuId}/search';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdSearchErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdSearchError = GetApiV1AdminNavigationMenusByMenuIdSearchErrors[keyof GetApiV1AdminNavigationMenusByMenuIdSearchErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdSearchResponses = {
+    /**
+     * Matching menu items with ancestor context
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                item: {
+                    id: string;
+                    menuId: string;
+                    parentId: string | null;
+                    position: number;
+                    label: string;
+                    labelMode: 'custom' | 'resource';
+                    targetType: string;
+                    targetId: string | null;
+                    targetValue: string | null;
+                    targetQuery: string | null;
+                    openInNewTab: boolean;
+                    isEnabled: boolean;
+                    createdAt: string | null;
+                    updatedAt: string | null;
+                };
+                childCount: number;
+                isMatch: boolean;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdSearchResponse = GetApiV1AdminNavigationMenusByMenuIdSearchResponses[keyof GetApiV1AdminNavigationMenusByMenuIdSearchResponses];
+
 export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
     body?: {
         expectedRevision: number;
@@ -17235,6 +17307,117 @@ export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
 };
 
 export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
+    body?: never;
+    path: {
+        menuId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdError = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
+    /**
+     * Menu item
+     */
+    200: {
+        success: true;
+        data: {
+            item: {
+                id: string;
+                menuId: string;
+                parentId: string | null;
+                position: number;
+                label: string;
+                labelMode: 'custom' | 'resource';
+                targetType: string;
+                targetId: string | null;
+                targetValue: string | null;
+                targetQuery: string | null;
+                openInNewTab: boolean;
+                isEnabled: boolean;
+                createdAt: string | null;
+                updatedAt: string | null;
+            };
+            childCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
 
 export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
     body?: {
@@ -18203,437 +18386,6 @@ export type GetApiV1AdminNavigationAuthorityShadowResponses = {
 };
 
 export type GetApiV1AdminNavigationAuthorityShadowResponse = GetApiV1AdminNavigationAuthorityShadowResponses[keyof GetApiV1AdminNavigationAuthorityShadowResponses];
-
-export type GetApiV1AdminNavigationData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/navigation';
-};
-
-export type GetApiV1AdminNavigationErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type GetApiV1AdminNavigationError = GetApiV1AdminNavigationErrors[keyof GetApiV1AdminNavigationErrors];
-
-export type GetApiV1AdminNavigationResponses = {
-    /**
-     * Navigation configuration
-     */
-    200: {
-        success: true;
-        data: {
-            headerConfig: {
-                [key: string]: unknown;
-            };
-            footerConfig: {
-                [key: string]: unknown;
-            };
-            revisions: {
-                header: number;
-                footer: number;
-            };
-        };
-    };
-};
-
-export type GetApiV1AdminNavigationResponse = GetApiV1AdminNavigationResponses[keyof GetApiV1AdminNavigationResponses];
-
-export type PostApiV1AdminNavigationData = {
-    body?: {
-        type: 'header' | 'footer';
-        config: {
-            [key: string]: unknown;
-        };
-        expectedRevision: number;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/navigation';
-};
-
-export type PostApiV1AdminNavigationErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminNavigationError = PostApiV1AdminNavigationErrors[keyof PostApiV1AdminNavigationErrors];
-
-export type PostApiV1AdminNavigationResponses = {
-    /**
-     * Navigation config saved
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            revision: number;
-        };
-    };
-};
-
-export type PostApiV1AdminNavigationResponse = PostApiV1AdminNavigationResponses[keyof PostApiV1AdminNavigationResponses];
-
-export type DeleteApiV1AdminNavigationByIdData = {
-    body?: {
-        type: 'header' | 'footer';
-        expectedRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/navigation/{id}';
-};
-
-export type DeleteApiV1AdminNavigationByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type DeleteApiV1AdminNavigationByIdError = DeleteApiV1AdminNavigationByIdErrors[keyof DeleteApiV1AdminNavigationByIdErrors];
-
-export type DeleteApiV1AdminNavigationByIdResponses = {
-    /**
-     * Navigation config reset
-     */
-    200: {
-        success: true;
-        data: {
-            revision: number;
-        };
-    };
-};
-
-export type DeleteApiV1AdminNavigationByIdResponse = DeleteApiV1AdminNavigationByIdResponses[keyof DeleteApiV1AdminNavigationByIdResponses];
-
-export type PutApiV1AdminNavigationByIdData = {
-    body?: {
-        type: 'header' | 'footer';
-        config: {
-            [key: string]: unknown;
-        };
-        expectedRevision: number;
-    };
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/admin/navigation/{id}';
-};
-
-export type PutApiV1AdminNavigationByIdErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Conflict
-     */
-    409: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PutApiV1AdminNavigationByIdError = PutApiV1AdminNavigationByIdErrors[keyof PutApiV1AdminNavigationByIdErrors];
-
-export type PutApiV1AdminNavigationByIdResponses = {
-    /**
-     * Navigation config updated
-     */
-    200: {
-        success: true;
-        data: {
-            message: string;
-            revision: number;
-        };
-    };
-};
-
-export type PutApiV1AdminNavigationByIdResponse = PutApiV1AdminNavigationByIdResponses[keyof PutApiV1AdminNavigationByIdResponses];
 
 export type GetApiV1AdminSearchData = {
     body?: never;
@@ -22405,66 +22157,6 @@ export type PostApiV1AdminSettingsHeaderData = {
             url: string;
             iconUrl?: string;
         }>;
-        navigation: Array<{
-            id: string;
-            target: {
-                type: 'resource';
-                resourceType: 'page' | 'category' | 'collection' | 'product';
-                resourceId: string;
-                query?: string;
-            } | {
-                type: 'internal_path';
-                path: string;
-            } | {
-                type: 'external_url';
-                url: string;
-            } | {
-                type: 'label';
-            };
-            labelMode: 'resource' | 'custom';
-            customLabel?: string;
-            lastKnownLabel?: string;
-            subMenu?: Array<{
-                id: string;
-                target: {
-                    type: 'resource';
-                    resourceType: 'page' | 'category' | 'collection' | 'product';
-                    resourceId: string;
-                    query?: string;
-                } | {
-                    type: 'internal_path';
-                    path: string;
-                } | {
-                    type: 'external_url';
-                    url: string;
-                } | {
-                    type: 'label';
-                };
-                labelMode: 'resource' | 'custom';
-                customLabel?: string;
-                lastKnownLabel?: string;
-                subMenu?: Array<{
-                    id: string;
-                    target: {
-                        type: 'resource';
-                        resourceType: 'page' | 'category' | 'collection' | 'product';
-                        resourceId: string;
-                        query?: string;
-                    } | {
-                        type: 'internal_path';
-                        path: string;
-                    } | {
-                        type: 'external_url';
-                        url: string;
-                    } | {
-                        type: 'label';
-                    };
-                    labelMode: 'resource' | 'custom';
-                    customLabel?: string;
-                    lastKnownLabel?: string;
-                }>;
-            }>;
-        }>;
         expectedRevision: number;
     };
     path?: never;
@@ -22577,70 +22269,6 @@ export type PostApiV1AdminSettingsFooterData = {
         tagline?: string;
         description?: string;
         copyrightText?: string;
-        menus: Array<{
-            id: string;
-            title: string;
-            links: Array<{
-                id: string;
-                target: {
-                    type: 'resource';
-                    resourceType: 'page' | 'category' | 'collection' | 'product';
-                    resourceId: string;
-                    query?: string;
-                } | {
-                    type: 'internal_path';
-                    path: string;
-                } | {
-                    type: 'external_url';
-                    url: string;
-                } | {
-                    type: 'label';
-                };
-                labelMode: 'resource' | 'custom';
-                customLabel?: string;
-                lastKnownLabel?: string;
-                subMenu?: Array<{
-                    id: string;
-                    target: {
-                        type: 'resource';
-                        resourceType: 'page' | 'category' | 'collection' | 'product';
-                        resourceId: string;
-                        query?: string;
-                    } | {
-                        type: 'internal_path';
-                        path: string;
-                    } | {
-                        type: 'external_url';
-                        url: string;
-                    } | {
-                        type: 'label';
-                    };
-                    labelMode: 'resource' | 'custom';
-                    customLabel?: string;
-                    lastKnownLabel?: string;
-                    subMenu?: Array<{
-                        id: string;
-                        target: {
-                            type: 'resource';
-                            resourceType: 'page' | 'category' | 'collection' | 'product';
-                            resourceId: string;
-                            query?: string;
-                        } | {
-                            type: 'internal_path';
-                            path: string;
-                        } | {
-                            type: 'external_url';
-                            url: string;
-                        } | {
-                            type: 'label';
-                        };
-                        labelMode: 'resource' | 'custom';
-                        customLabel?: string;
-                        lastKnownLabel?: string;
-                    }>;
-                }>;
-            }>;
-        }>;
         social: Array<{
             id: string;
             label: string;

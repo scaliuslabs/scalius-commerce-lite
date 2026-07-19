@@ -912,6 +912,8 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/navigation/*": {
     GET: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+    PATCH: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
   },

@@ -1,12 +1,12 @@
 // src/components/admin/footer-builder/FooterBuilder.tsx
 import { useState, lazy, Suspense, useEffect, useMemo } from "react";
+import { Link } from "@tanstack/react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { Image as ImageIcon, LayoutList, Loader2, RotateCcw, Share2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
-import { stripNavigationResolution } from "@scalius/shared/navigation-target";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   getGeneralSettings,
@@ -16,7 +16,7 @@ import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
-import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
+import { Card } from "~/components/ui/card";
 
 import { BrandingSection } from "./BrandingSection";
 import { ContentSection } from "./ContentSection";
@@ -27,12 +27,6 @@ import type {
   FooterBuilderProps,
 } from "./types";
 import { defaultFooterConfig } from "./types";
-
-const NavigationMenusSection = lazy(() =>
-  import("./NavigationMenusSection").then((module) => ({
-    default: module.NavigationMenusSection,
-  })),
-);
 
 const SocialLinksSection = lazy(() =>
   import("./SocialLinksSection").then((module) => ({
@@ -64,7 +58,6 @@ export function FooterBuilder({
   activePanel,
   initialConfig,
   initialRevision = 0,
-  readiness,
   onPanelChange,
   onSave,
 }: FooterBuilderProps) {
@@ -92,16 +85,6 @@ export function FooterBuilder({
   const [internalActivePanel, setInternalActivePanel] =
     useState<FooterBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
-  const [navigationEditorEpoch, setNavigationEditorEpoch] = useState(0);
-  const [legacyFormatSaved, setLegacyFormatSaved] = useState(false);
-  const navigationSaveRequired =
-    readiness?.state === "legacy_normalized" && !legacyFormatSaved;
-  const navigationInvalid = readiness?.state === "invalid";
-
-  useEffect(() => {
-    setLegacyFormatSaved(false);
-  }, [readiness?.state]);
-
   useEffect(() => {
     if (!isDirty && !revisionConflict) setRevision(initialRevision);
   }, [initialRevision, isDirty, revisionConflict]);
@@ -114,7 +97,6 @@ export function FooterBuilder({
 
   const handleDiscard = () => {
     discard();
-    setNavigationEditorEpoch((current) => current + 1);
   };
 
   const useLatestRevision = () => {
@@ -122,7 +104,6 @@ export function FooterBuilder({
     adoptSaved(revisionConflict.config);
     setRevision(revisionConflict.revision);
     setRevisionConflict(null);
-    setNavigationEditorEpoch((current) => current + 1);
   };
 
   const mergeLatestRevision = () => {
@@ -130,22 +111,15 @@ export function FooterBuilder({
     rebaseOnto(revisionConflict.config, rebaseFooterDraft);
     setRevision(revisionConflict.revision);
     setRevisionConflict(null);
-    setNavigationEditorEpoch((current) => current + 1);
   };
 
   const handleSave = async () => {
-    if (isLoading || navigationInvalid || revisionConflict) return;
+    if (isLoading || revisionConflict) return;
 
     setIsLoading(true);
     try {
       const draftBeingSaved = config;
-      const storedConfig: FooterConfig = {
-        ...draftBeingSaved,
-        menus: draftBeingSaved.menus.map((menu) => ({
-          ...menu,
-          links: menu.links.map(stripNavigationResolution),
-        })),
-      };
+      const { menus: _menus, ...storedConfig } = draftBeingSaved;
       const saved = typeof onSave === "function"
         ? await onSave(storedConfig, revision)
         : await saveFooterConfig({
@@ -155,8 +129,6 @@ export function FooterBuilder({
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       setRevision(saved.revision);
       markSaved(draftBeingSaved);
-      if (readiness?.state === "legacy_normalized") setLegacyFormatSaved(true);
-      setNavigationEditorEpoch((current) => current + 1);
       toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       const conflict = readSitePresentationRevisionConflict(error, "footer");
@@ -204,27 +176,12 @@ export function FooterBuilder({
           <span
             className={cn(
               "h-2 w-2 rounded-full",
-              navigationInvalid
-                ? "bg-destructive"
-                : isDirty || navigationSaveRequired
-                  ? "bg-amber-500"
-                  : "bg-emerald-500",
+              isDirty ? "bg-amber-500" : "bg-emerald-500",
             )}
           />
-          {navigationInvalid
-            ? "Editing locked"
-            : navigationSaveRequired
-              ? "Save required"
-              : isDirty
-                ? "Unsaved changes"
-                : "All changes saved"}
+          {isDirty ? "Unsaved changes" : "All changes saved"}
         </div>
       </div>
-
-      <NavigationConfigReadinessNotice
-        section="footer"
-        readiness={legacyFormatSaved ? { state: "ready" } : readiness}
-      />
 
       {revisionConflict ? (
         <PresentationRevisionConflictNotice
@@ -234,7 +191,7 @@ export function FooterBuilder({
         />
       ) : null}
 
-      {!navigationInvalid ? <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+      <Tabs value={activeTab} onValueChange={handlePanelChange} className="grid gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
@@ -281,17 +238,22 @@ export function FooterBuilder({
         </TabsContent>
 
         <TabsContent value="navigation" className="mt-0 min-w-0">
-          {activeTab === "navigation" && (
-            <Suspense fallback={<FooterSubtabSpinner />}>
-              <NavigationMenusSection
-                editorEpoch={navigationEditorEpoch}
-                menus={config.menus}
-                onChange={(menus) =>
-                  setConfig((prev) => ({ ...prev, menus }))
-                }
-              />
-            </Suspense>
-          )}
+          <Card className="flex min-h-48 flex-col items-start justify-center gap-3 p-5">
+            <div className="grid size-10 place-items-center rounded-lg bg-muted">
+              <LayoutList className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Footer menus are assigned by location</h3>
+              <p className="mt-1 max-w-lg text-sm text-muted-foreground">
+                Reuse published menus across footer columns without coupling links to footer branding or social content.
+              </p>
+            </div>
+            <Button asChild size="sm">
+              <Link to="/admin/navigation" search={{ panel: "placements", q: "" }}>
+                Open Navigation
+              </Link>
+            </Button>
+          </Card>
         </TabsContent>
 
         <TabsContent value="social" className="mt-0 min-w-0">
@@ -306,9 +268,9 @@ export function FooterBuilder({
             </Suspense>
           )}
         </TabsContent>
-      </Tabs> : null}
+      </Tabs>
 
-      {!navigationInvalid ? <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
+      <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
         <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
@@ -318,16 +280,14 @@ export function FooterBuilder({
           disabled={
             isLoading ||
             Boolean(revisionConflict) ||
-            (!isDirty && !navigationSaveRequired)
+            !isDirty
           }
           size="sm"
         >
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          {navigationSaveRequired && !isDirty
-            ? "Save typed format"
-            : "Save changes"}
+          Save changes
         </Button>
-      </div> : null}
+      </div>
     </div>
   );
 }

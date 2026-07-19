@@ -409,7 +409,7 @@ describe("site settings cache invalidation", () => {
     });
   });
 
-  it("preserves typed resource targets through the header request boundary", async () => {
+  it("keeps navigation out of the header presentation write boundary", async () => {
     const { app, env } = createTestApp();
     const navigationItem = {
       id: "featured-product",
@@ -436,7 +436,13 @@ describe("site settings cache invalidation", () => {
     expect(response.status).toBe(200);
     expect(mocks.saveHeaderConfig).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ navigation: [navigationItem] }),
+      {
+        topBar: { text: "Hi", isEnabled: true },
+        logo: { src: "/logo.png", alt: "Logo" },
+        favicon: { src: "/favicon.png", alt: "Icon" },
+        contact: { phone: "123", text: "Call", isEnabled: true },
+        social: [],
+      },
       1,
     );
   });

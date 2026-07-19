@@ -44,6 +44,8 @@ export interface HeaderConfig {
   navigation: NavigationItem[];
 }
 
+export type HeaderPresentationConfig = Omit<HeaderConfig, "navigation">;
+
 export const HEADER_BUILDER_PANELS = [
   "branding",
   "announcement",
@@ -63,7 +65,7 @@ export interface HeaderBuilderProps {
   readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: HeaderBuilderPanel) => void;
   onSave?: (
-    config: HeaderConfig,
+    config: HeaderPresentationConfig,
     expectedRevision: number,
   ) => Promise<{ revision: number }>;
 }

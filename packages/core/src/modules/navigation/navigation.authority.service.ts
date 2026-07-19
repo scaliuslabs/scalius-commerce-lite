@@ -50,10 +50,12 @@ import {
     type NavigationMenuItemStorage,
 } from "./navigation.authority";
 import {
+    chunkNavigationResourceIds,
     loadNavigationResourceSnapshots,
     resolveNavigationItemsForPublic,
 } from "./navigation.resolver";
 import { parseNavigationConfig } from "./navigation.validation";
+import { sanitizeFtsQuery } from "../../search/fts5";
 
 const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
 const NAVIGATION_PAGE_LIMIT = 100;
@@ -369,6 +371,109 @@ export async function listNavigationMenuItems(
         nextCursor: hasMore && last
             ? { position: last.position, id: last.id }
             : null,
+    };
+}
+
+export async function getNavigationMenuItemAuthority(
+    db: Database,
+    menuId: string,
+    itemId: string,
+) {
+    const row = await db
+        .select({
+            item: navigationMenuItems,
+            childCount: sql<number>`(
+                SELECT COUNT(*) FROM ${navigationMenuItems} AS child
+                WHERE child.menu_id = ${menuId}
+                  AND child.parent_id = ${navigationMenuItems.id}
+            )`,
+        })
+        .from(navigationMenuItems)
+        .where(and(
+            eq(navigationMenuItems.menuId, menuId),
+            eq(navigationMenuItems.id, itemId),
+        ))
+        .get();
+    if (!row) throw new NotFoundError("Menu item not found.");
+    return row;
+}
+
+export async function searchNavigationMenuItems(
+    db: Database,
+    menuId: string,
+    input: { query: string; limit?: number },
+) {
+    await getNavigationMenuAuthority(db, menuId);
+    const query = input.query.trim();
+    if (query.length < 2 || query.length > 100) {
+        throw new ValidationError("Search with 2–100 characters.");
+    }
+    const sanitized = sanitizeFtsQuery(query);
+    if (!sanitized) return { items: [] };
+    const limit = normalizeLimit(input.limit ?? 50);
+    const matches = await db
+        .select({
+            item: navigationMenuItems,
+            childCount: sql<number>`(
+                SELECT COUNT(*) FROM ${navigationMenuItems} AS child
+                WHERE child.menu_id = ${menuId}
+                  AND child.parent_id = ${navigationMenuItems.id}
+            )`,
+        })
+        .from(navigationMenuItems)
+        .where(and(
+            eq(navigationMenuItems.menuId, menuId),
+            sql`${sql.raw("navigation_menu_items")}.rowid IN (
+                SELECT rowid FROM navigation_menu_items_fts
+                WHERE navigation_menu_items_fts MATCH ${sanitized}
+                  AND menu_id = ${menuId}
+            )`,
+        ))
+        .orderBy(sql`(
+            SELECT rank FROM navigation_menu_items_fts
+            WHERE rowid = ${sql.raw("navigation_menu_items")}.rowid
+              AND navigation_menu_items_fts MATCH ${sanitized}
+        ) ASC`, asc(navigationMenuItems.position), asc(navigationMenuItems.id))
+        .limit(limit)
+        .all();
+
+    const rowsById = new Map(matches.map(({ item, childCount }) => [
+        item.id,
+        { item, childCount, isMatch: true },
+    ]));
+    let parentIds = [...new Set(matches.map(({ item }) => item.parentId).filter(
+        (id): id is string => Boolean(id),
+    ))];
+    for (let depth = 0; depth < 2 && parentIds.length; depth += 1) {
+        const parents = await db
+            .select({
+                item: navigationMenuItems,
+                childCount: sql<number>`(
+                    SELECT COUNT(*) FROM ${navigationMenuItems} AS child
+                    WHERE child.menu_id = ${menuId}
+                      AND child.parent_id = ${navigationMenuItems.id}
+                )`,
+            })
+            .from(navigationMenuItems)
+            .where(and(
+                eq(navigationMenuItems.menuId, menuId),
+                inArray(navigationMenuItems.id, parentIds),
+            ))
+            .all();
+        parentIds = [];
+        for (const { item, childCount } of parents) {
+            if (!rowsById.has(item.id)) {
+                rowsById.set(item.id, { item, childCount, isMatch: false });
+            }
+            if (item.parentId) parentIds.push(item.parentId);
+        }
+        parentIds = [...new Set(parentIds)];
+    }
+    return {
+        items: [...rowsById.values()].sort((left, right) => (
+            left.item.position - right.item.position
+            || left.item.id.localeCompare(right.item.id)
+        )),
     };
 }
 
@@ -974,6 +1079,97 @@ export async function getPublishedNavigationMenuTree(
     };
 }
 
+/**
+ * Resolve every storefront placement in one bounded projection. Placement
+ * definitions currently cap the public surface at five menus and 150 items per
+ * placement, but menu IDs are still chunked to respect D1's parameter limit if
+ * the registry grows. Reused menus are loaded and resolved only once.
+ */
+export async function getPublishedNavigationPlacements(db: Database) {
+    const placements = await getNavigationPlacementManifest(db);
+    if (!placements.length) return [];
+
+    const menuIds = [...new Set(placements.map((placement) => placement.menuId))];
+    const rowsByMenu = new Map<string, AuthorityProjectionRow[]>();
+
+    for (const chunk of chunkNavigationResourceIds(menuIds)) {
+        const rows = await db
+            .select({
+                menuId: navigationMenuPublicationItems.menuId,
+                id: navigationMenuPublicationItems.itemId,
+                parentId: navigationMenuPublicationItems.parentId,
+                position: navigationMenuPublicationItems.position,
+                label: navigationMenuPublicationItems.label,
+                labelMode: navigationMenuPublicationItems.labelMode,
+                targetType: navigationMenuPublicationItems.targetType,
+                targetId: navigationMenuPublicationItems.targetId,
+                targetValue: navigationMenuPublicationItems.targetValue,
+                targetQuery: navigationMenuPublicationItems.targetQuery,
+                openInNewTab: navigationMenuPublicationItems.openInNewTab,
+                isEnabled: navigationMenuPublicationItems.isEnabled,
+            })
+            .from(navigationMenuPublicationItems)
+            .innerJoin(
+                navigationMenus,
+                and(
+                    eq(navigationMenus.id, navigationMenuPublicationItems.menuId),
+                    eq(navigationMenus.publishedRevision, navigationMenuPublicationItems.revision),
+                ),
+            )
+            .where(inArray(navigationMenuPublicationItems.menuId, chunk))
+            .orderBy(
+                asc(navigationMenuPublicationItems.menuId),
+                asc(navigationMenuPublicationItems.position),
+                asc(navigationMenuPublicationItems.itemId),
+            )
+            .all();
+
+        for (const row of rows) {
+            const menuRows = rowsByMenu.get(row.menuId) ?? [];
+            menuRows.push(row);
+            rowsByMenu.set(row.menuId, menuRows);
+        }
+    }
+
+    const targetsByMenu = new Map<string, NavigationTargetItem[]>();
+    const validPlacements = [] as typeof placements;
+    for (const placement of placements) {
+        const rows = rowsByMenu.get(placement.menuId) ?? [];
+        if (
+            rows.length !== placement.itemCount
+            || rows.length > placement.definition.maxItems
+        ) {
+            console.warn("[Navigation] Skipping an invalid public placement", {
+                placementId: placement.id,
+                menuId: placement.menuId,
+            });
+            continue;
+        }
+        validPlacements.push(placement);
+        if (!targetsByMenu.has(placement.menuId)) {
+            targetsByMenu.set(
+                placement.menuId,
+                publishedHierarchyToTargets(buildNavigationHierarchy(rows)),
+            );
+        }
+    }
+
+    const allTargets = [...targetsByMenu.values()].flat();
+    const resources = await loadNavigationResourceSnapshots(
+        db,
+        { navigation: allTargets },
+        {},
+    );
+
+    return validPlacements.map((placement) => ({
+        ...placement,
+        items: resolveNavigationItemsForPublic(
+            targetsByMenu.get(placement.menuId) ?? [],
+            resources,
+        ),
+    }));
+}
+
 export async function listPublishedNavigationMenuItems(
     db: Database,
     menuId: string,
@@ -1216,6 +1412,11 @@ export async function getNavigationPlacementManifest(db: Database) {
             menuName: navigationMenus.name,
             publishedRevision: navigationMenus.publishedRevision,
             dependencyRevision: navigationMenus.dependencyRevision,
+            itemCount: sql<number>`(
+                SELECT COUNT(*) FROM ${navigationMenuPublicationItems}
+                WHERE ${navigationMenuPublicationItems.menuId} = ${navigationMenus.id}
+                  AND ${navigationMenuPublicationItems.revision} = ${navigationMenus.publishedRevision}
+            )`,
             rootCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuPublicationItems}
                 WHERE ${navigationMenuPublicationItems.menuId} = ${navigationMenus.id}
@@ -1238,10 +1439,19 @@ export async function getNavigationPlacementManifest(db: Database) {
             asc(navigationPlacements.id),
         )
         .all();
-    return rows.map((row) => ({
-        ...row,
-        definition: getNavigationPlacementDefinition(row.surface, row.slot),
-    }));
+    return rows.flatMap((row) => {
+        try {
+            return [{
+                ...row,
+                definition: getNavigationPlacementDefinition(row.surface, row.slot),
+            }];
+        } catch {
+            console.warn("[Navigation] Skipping an unsupported public placement", {
+                placementId: row.id,
+            });
+            return [];
+        }
+    });
 }
 
 interface ExpectedAuthorityItem {

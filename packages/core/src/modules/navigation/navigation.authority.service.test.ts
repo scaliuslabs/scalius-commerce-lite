@@ -14,6 +14,7 @@ import {
   createNavigationMenu,
   createNavigationMenuItem,
   getPublishedNavigationMenuTree,
+  getPublishedNavigationPlacements,
   getNavigationPlacementManifest,
   listNavigationPlacements,
   listNavigationMenuItems,
@@ -21,6 +22,7 @@ import {
   publishNavigationMenu,
   rollbackNavigationMenu,
   saveNavigationPlacement,
+  searchNavigationMenuItems,
   updateNavigationMenuItem,
 } from "./navigation.authority.service";
 import {
@@ -180,6 +182,12 @@ describe("navigation authority D1 commands", () => {
     expect(account.revision).toBe(3);
     const accountId = (account.item as { id: string }).id;
 
+    const search = await searchNavigationMenuItems(db, menu.id, { query: "Acc" });
+    expect(search.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ item: expect.objectContaining({ id: shopId }), isMatch: false }),
+      expect.objectContaining({ item: expect.objectContaining({ id: accountId }), isMatch: true }),
+    ]));
+
     const moved = await moveNavigationMenuItem(db, menu.id, accountId, {
       expectedRevision: 3,
       parentId: null,
@@ -207,6 +215,7 @@ describe("navigation authority D1 commands", () => {
         id: "placement_main",
         menuId: menu.id,
         publishedRevision: 5,
+        itemCount: 2,
         rootCount: 2,
         definition: expect.objectContaining({ maxDepth: 3, maxItems: 150 }),
       }),
@@ -221,6 +230,16 @@ describe("navigation authority D1 commands", () => {
         { title: "Shop", href: "/search" },
       ],
     });
+    expect(await getPublishedNavigationPlacements(db)).toEqual([
+      expect.objectContaining({
+        surface: "header",
+        slot: "primary",
+        items: [
+          { id: accountId, title: "Account", href: "/account" },
+          { id: shopId, title: "Shop", href: "/search" },
+        ],
+      }),
+    ]);
 
     const edited = await updateNavigationMenuItem(db, menu.id, shopId, {
       expectedRevision: 5,

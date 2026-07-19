@@ -63,12 +63,12 @@ describe("header and footer settings revision authority", () => {
   afterEach(() => sqlite.close());
 
   it("claims a missing singleton once and rejects a competing first writer", async () => {
-    await expect(saveHeaderConfig(db, { navigation: [] }, 0)).resolves.toEqual({
+    await expect(saveHeaderConfig(db, { topBar: { text: "", isEnabled: false } }, 0)).resolves.toEqual({
       revision: 1,
     });
 
     await expect(
-      saveFooterConfig(db, { menus: [] }, 0),
+      saveFooterConfig(db, { tagline: "" }, 0),
     ).rejects.toMatchObject({
       status: 409,
       code: "SITE_PRESENTATION_REVISION_CONFLICT",
@@ -91,20 +91,15 @@ describe("header and footer settings revision authority", () => {
     `).run();
 
     await expect(
-      saveHeaderConfig(db, { navigation: [] }, 1),
+      saveHeaderConfig(db, { topBar: { text: "Hello", isEnabled: true } }, 1),
     ).resolves.toEqual({ revision: 2 });
     await expect(
-      saveFooterConfig(db, { menus: [] }, 1),
+      saveFooterConfig(db, { tagline: "Carefully made" }, 1),
     ).resolves.toEqual({ revision: 2 });
 
     await expect(
       saveHeaderConfig(db, {
-        navigation: [{
-          id: "stale",
-          target: { type: "internal_path", path: "/stale" },
-          labelMode: "custom",
-          customLabel: "Stale",
-        }],
+        topBar: { text: "Stale", isEnabled: true },
       }, 1),
     ).rejects.toMatchObject({
       status: 409,
@@ -126,6 +121,8 @@ describe("header and footer settings revision authority", () => {
     };
     expect(row.header_config_revision).toBe(2);
     expect(row.footer_config_revision).toBe(2);
-    expect(JSON.parse(row.header_config)).toEqual({ navigation: [] });
+    expect(JSON.parse(row.header_config)).toEqual({
+      topBar: { text: "Hello", isEnabled: true },
+    });
   });
 });

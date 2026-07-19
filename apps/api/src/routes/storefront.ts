@@ -32,6 +32,7 @@ const navigationItemSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
   href: z.string().optional(),
+  openInNewTab: z.boolean().optional(),
   subMenu: z.array(z.any()).optional(),
 }).passthrough();
 const layoutDataSchema = z.object({

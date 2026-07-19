@@ -147,6 +147,13 @@ export const queryKeys = {
   navigation: {
     all: ["navigation"] as const,
     items: () => ["navigation", "items"] as const,
+    menus: () => ["navigation", "menus"] as const,
+    menu: (menuId: string) => ["navigation", "menus", menuId] as const,
+    menuItems: (menuId: string, parentId: string | null) =>
+      ["navigation", "menus", menuId, "items", parentId ?? "root"] as const,
+    publications: (menuId: string) =>
+      ["navigation", "menus", menuId, "publications"] as const,
+    placements: () => ["navigation", "placements"] as const,
     previewProducts: (params: Record<string, string>) =>
       ["navigation", "preview-products", params] as const,
   },

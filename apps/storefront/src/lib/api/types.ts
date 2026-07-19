@@ -326,6 +326,7 @@ export interface NavigationItem {
   id?: string;
   title: string;
   href?: string;
+  openInNewTab?: boolean;
   subMenu?: NavigationItem[];
 }
 
@@ -334,6 +335,7 @@ export interface FlatNavigationItem {
   id: string;
   title: string;
   href: string | null;
+  openInNewTab?: boolean;
   parentId: string | null;
   childIds: string[];
   depth: number;
@@ -344,7 +346,8 @@ export interface FlatNavigationItem {
 export interface FooterMenuLink {
   id?: string;
   title: string;
-  href: string;
+  href?: string;
+  openInNewTab?: boolean;
   subMenu?: FooterMenuLink[];
 }
 

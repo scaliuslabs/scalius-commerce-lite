@@ -243,30 +243,6 @@ const socialLinkSchema = z.object({
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const navigationTargetSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("resource"),
-    resourceType: z.enum(["page", "category", "collection", "product"]),
-    resourceId: z.string(),
-    query: z.string().optional(),
-  }),
-  z.object({ type: z.literal("internal_path"), path: z.string() }),
-  z.object({ type: z.literal("external_url"), url: z.string() }),
-  z.object({ type: z.literal("label") }),
-]);
-const navigationLeafSchema = z.object({
-  id: z.string(),
-  target: navigationTargetSchema,
-  labelMode: z.enum(["resource", "custom"]),
-  customLabel: z.string().optional(),
-  lastKnownLabel: z.string().optional(),
-});
-const navigationChildSchema = navigationLeafSchema.extend({
-  subMenu: z.array(navigationLeafSchema).optional(),
-});
-const navigationItemSchema = navigationLeafSchema.extend({
-  subMenu: z.array(navigationChildSchema).optional(),
-});
 const headerConfigSchema = z.object({
   topBar: z.object({
     text: z.string(),
@@ -280,7 +256,6 @@ const headerConfigSchema = z.object({
     isEnabled: z.boolean().optional().default(true),
   }),
   social: z.array(socialLinkSchema),
-  navigation: z.array(navigationItemSchema),
 });
 
 const saveHeaderSchema = headerConfigSchema.extend({
@@ -327,17 +302,11 @@ app.openapi(saveHeaderRoute, async (c) => {
 // ─────────────────────────────────────────
 // FOOTER
 // ─────────────────────────────────────────
-const footerMenuSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  links: z.array(navigationItemSchema),
-});
 const footerConfigSchema = z.object({
   logo: z.object({ src: z.string(), alt: z.string() }),
   tagline: z.string().optional().default(""),
   description: z.string().optional().default(""),
   copyrightText: z.string().optional().default(""),
-  menus: z.array(footerMenuSchema),
   social: z.array(socialLinkSchema),
 });
 

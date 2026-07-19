@@ -47,11 +47,6 @@ import {
   parseSeoReturnPolicySettings,
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
-import {
-  parseNavigationConfig,
-  readPersistedNavigationConfig,
-} from "../navigation/navigation.validation";
-import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -98,6 +93,20 @@ export const SITE_PRESENTATION_REVISION_CONFLICT =
   "SITE_PRESENTATION_REVISION_CONFLICT";
 
 export type SitePresentationSection = "header" | "footer";
+
+const SITE_PRESENTATION_KEYS: Record<
+  SitePresentationSection,
+  ReadonlySet<string>
+> = {
+  header: new Set(["topBar", "logo", "favicon", "contact", "social"]),
+  footer: new Set([
+    "logo",
+    "tagline",
+    "description",
+    "copyrightText",
+    "social",
+  ]),
+};
 
 export class SitePresentationRevisionConflictError extends AppError {
   constructor(
@@ -395,30 +404,45 @@ export async function saveCurrencySettings(
 // General (header + footer)
 // ─────────────────────────────────────────
 
+export function stripEmbeddedNavigation(
+  section: SitePresentationSection,
+  config: Record<string, unknown>,
+): Record<string, unknown> {
+  const allowedKeys = SITE_PRESENTATION_KEYS[section];
+  return Object.fromEntries(
+    Object.entries(config).filter(([key]) => allowedKeys.has(key)),
+  );
+}
+
+export function readPersistedSitePresentation(
+  section: SitePresentationSection,
+  value: string | null | undefined,
+): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return stripEmbeddedNavigation(section, parsed as Record<string, unknown>);
+  } catch {
+    return {};
+  }
+}
+
 export async function getGeneralSettings(db: Database) {
   const [row] = await db.select().from(siteSettings).limit(1);
-  const headerRead = readPersistedNavigationConfig("header", row?.headerConfig);
-  const footerRead = readPersistedNavigationConfig("footer", row?.footerConfig);
-  const resolved = await resolveNavigationConfigs(
-    db,
-    headerRead.config,
-    footerRead.config,
-    "admin",
-  );
   return {
-    ...resolved,
+    headerConfig: readPersistedSitePresentation("header", row?.headerConfig),
+    footerConfig: readPersistedSitePresentation("footer", row?.footerConfig),
     revisions: {
       header: row?.headerConfigRevision ?? 0,
       footer: row?.footerConfigRevision ?? 0,
     },
     navigationReadiness: {
       header: {
-        state: headerRead.state,
-        ...(headerRead.message ? { message: headerRead.message } : {}),
+        state: "ready" as const,
       },
       footer: {
-        state: footerRead.state,
-        ...(footerRead.message ? { message: footerRead.message } : {}),
+        state: "ready" as const,
       },
     },
   };
@@ -430,7 +454,7 @@ export async function saveHeaderConfig(
   expectedRevision: number,
 ): Promise<{ revision: number }> {
   assertPresentationRevision(expectedRevision);
-  const normalizedConfig = parseNavigationConfig("header", config);
+  const normalizedConfig = stripEmbeddedNavigation("header", config);
   const serialized = JSON.stringify(normalizedConfig);
 
   if (expectedRevision === 0) {
@@ -483,7 +507,7 @@ export async function saveFooterConfig(
   expectedRevision: number,
 ): Promise<{ revision: number }> {
   assertPresentationRevision(expectedRevision);
-  const normalizedConfig = parseNavigationConfig("footer", config);
+  const normalizedConfig = stripEmbeddedNavigation("footer", config);
   const serialized = JSON.stringify(normalizedConfig);
 
   if (expectedRevision === 0) {

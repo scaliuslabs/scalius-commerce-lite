@@ -1,9 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-  buildDefaultNavigation,
-  getNavigationMenu,
-  getNavigationMenus,
   getNavigationPlacementManifest,
+  getPublishedNavigationPlacements,
   getPublishedNavigationMenuTree,
   listPublishedNavigationMenuItems,
 } from "@scalius/core/modules/navigation";
@@ -64,48 +62,22 @@ const getNavigationRoute = createRoute({
 });
 
 app.openapi(getNavigationRoute, async (c) => {
-  const db = c.get("db");
   const { type } = c.req.valid("query");
-
-  const { headerConfig, footerConfig } = await getNavigationMenus(db);
-
-  let navigationConfig: Record<string, unknown> | null = null;
-
+  const placements = await getPublishedNavigationPlacements(c.get("db"));
+  const navigationConfig: Record<string, unknown> = {};
   if (type === "header" || type === "all") {
-    const header = headerConfig as Record<string, unknown> | null;
-    if (header && header.navigation) {
-      navigationConfig = {
-        ...(navigationConfig ?? {}),
-        header: header.navigation
-      };
-    }
+    navigationConfig.header = placements.find((placement) => (
+      placement.surface === "header" && placement.slot === "primary"
+    ))?.items ?? [];
   }
-
   if (type === "footer" || type === "all") {
-    const footer = footerConfig as Record<string, unknown> | null;
-    if (footer && footer.menus) {
-      navigationConfig = {
-        ...(navigationConfig ?? {}),
-        footer: footer.menus
-      };
-    }
-  }
-
-  // If no navigation config found, build default from categories + pages
-  if (!navigationConfig || (type === "all" && !navigationConfig.header)) {
-    const defaultNavigation = await buildDefaultNavigation(db);
-
-    if (!navigationConfig) {
-      navigationConfig = {};
-    }
-
-    if (type === "header" || type === "all") {
-      navigationConfig.header = navigationConfig.header || defaultNavigation;
-    }
-  }
-
-  if (!navigationConfig) {
-    throw new NotFoundError("Navigation configuration not found");
+    navigationConfig.footer = placements
+      .filter((placement) => placement.surface === "footer" && placement.slot === "column")
+      .map((placement) => ({
+        id: placement.id,
+        title: placement.labelOverride || placement.menuName,
+        links: placement.items,
+      }));
   }
 
   return ok(c, { navigation: navigationConfig });
@@ -268,15 +240,11 @@ const getNavigationByIdRoute = createRoute({
 });
 
 app.openapi(getNavigationByIdRoute, async (c) => {
-  const db = c.get("db");
   const { id } = c.req.valid("param");
-
-  const menu = await getNavigationMenu(db, id);
-  if (!menu) {
-    throw new NotFoundError(`Navigation menu with ID '${id}' not found`);
-  }
-
-  return ok(c, { menu });
+  const menu = await getPublishedNavigationMenuTree(c.get("db"), id);
+  return ok(c, {
+    menu: { id: menu.id, name: menu.name, items: menu.items },
+  });
 });
 
 // Export the navigation routes

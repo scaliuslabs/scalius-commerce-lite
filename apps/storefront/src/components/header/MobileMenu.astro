@@ -66,7 +66,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                   <div class="group/item">
                     <div class="flex items-center justify-between">
                       {item.href ? (
-                        <a href={item.href} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                        <a href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
                           {item.title}
                         </a>
                       ) : (
@@ -102,7 +102,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                   <div>
                                     <div class="flex items-center justify-between group/sub">
                                       {level2Item.href ? (
-                                        <a href={level2Item.href} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                        <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
                                           {level2Item.title}
                                         </a>
                                       ) : (
@@ -127,7 +127,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                             return (
                                               <li>
                                                 {level3Item.href ? (
-                                                  <a href={level3Item.href} class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5">
+                                                  <a href={level3Item.href} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5">
                                                     {level3Item.title}
                                                   </a>
                                                 ) : (
@@ -143,7 +143,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                     </div>
                                   </div>
                                 ) : level2Item.href ? (
-                                    <a href={level2Item.href} class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                    <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
                                       {level2Item.title}
                                     </a>
                                   ) : (
@@ -159,7 +159,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                     </div>
                   </div>
                 ) : item.href ? (
-                    <a href={item.href} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
+                    <a href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5">
                       {item.title}
                     </a>
                   ) : (

@@ -51,6 +51,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
   "/admin/pages/trash": { permission: PERMISSIONS.PAGES_VIEW },
 
+  // Reusable storefront menus
+  "/admin/navigation": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+
   // Orders
   "/admin/orders": { permission: PERMISSIONS.ORDERS_VIEW },
   "/admin/orders/new": { permission: PERMISSIONS.ORDERS_CREATE },

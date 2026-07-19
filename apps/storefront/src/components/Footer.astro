@@ -59,6 +59,7 @@ function convertFlatMenuToNested(menu: FooterMenu): FooterMenuLink[] {
           id: item.id,
           title: item.title,
           href: item.href || "#",
+          openInNewTab: item.openInNewTab,
         };
 
         // Recursively add children if any
