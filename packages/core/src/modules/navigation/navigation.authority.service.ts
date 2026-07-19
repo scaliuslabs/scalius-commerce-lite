@@ -245,11 +245,11 @@ export async function listNavigationMenus(
             deletedAt: navigationMenus.deletedAt,
             itemCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuItems}
-                WHERE ${navigationMenuItems.menuId} = ${navigationMenus.id}
+                WHERE ${navigationMenuItems.menuId} = ${sql.raw("navigation_menus.id")}
             )`,
             placementCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationPlacements}
-                WHERE ${navigationPlacements.menuId} = ${navigationMenus.id}
+                WHERE ${navigationPlacements.menuId} = ${sql.raw("navigation_menus.id")}
                   AND ${navigationPlacements.isEnabled} = true
             )`,
         })
@@ -355,7 +355,7 @@ export async function listNavigationMenuItems(
             childCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuItems} AS child
                 WHERE child.menu_id = ${menuId}
-                  AND child.parent_id = ${navigationMenuItems.id}
+                  AND child.parent_id = ${sql.raw("navigation_menu_items.id")}
             )`,
         })
         .from(navigationMenuItems)
@@ -385,7 +385,7 @@ export async function getNavigationMenuItemAuthority(
             childCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuItems} AS child
                 WHERE child.menu_id = ${menuId}
-                  AND child.parent_id = ${navigationMenuItems.id}
+                  AND child.parent_id = ${sql.raw("navigation_menu_items.id")}
             )`,
         })
         .from(navigationMenuItems)
@@ -417,7 +417,7 @@ export async function searchNavigationMenuItems(
             childCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuItems} AS child
                 WHERE child.menu_id = ${menuId}
-                  AND child.parent_id = ${navigationMenuItems.id}
+                  AND child.parent_id = ${sql.raw("navigation_menu_items.id")}
             )`,
         })
         .from(navigationMenuItems)
@@ -451,7 +451,7 @@ export async function searchNavigationMenuItems(
                 childCount: sql<number>`(
                     SELECT COUNT(*) FROM ${navigationMenuItems} AS child
                     WHERE child.menu_id = ${menuId}
-                      AND child.parent_id = ${navigationMenuItems.id}
+                      AND child.parent_id = ${sql.raw("navigation_menu_items.id")}
                 )`,
             })
             .from(navigationMenuItems)
@@ -1210,7 +1210,7 @@ export async function listPublishedNavigationMenuItems(
                 SELECT COUNT(*) FROM ${navigationMenuPublicationItems} AS child
                 WHERE child.menu_id = ${menuId}
                   AND child.revision = ${menu.publishedRevision}
-                  AND child.parent_id = ${navigationMenuPublicationItems.itemId}
+                  AND child.parent_id = ${sql.raw("navigation_menu_publication_items.item_id")}
                   AND child.is_enabled = true
             )`,
         })
@@ -1414,13 +1414,13 @@ export async function getNavigationPlacementManifest(db: Database) {
             dependencyRevision: navigationMenus.dependencyRevision,
             itemCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuPublicationItems}
-                WHERE ${navigationMenuPublicationItems.menuId} = ${navigationMenus.id}
-                  AND ${navigationMenuPublicationItems.revision} = ${navigationMenus.publishedRevision}
+                WHERE ${navigationMenuPublicationItems.menuId} = ${sql.raw("navigation_menus.id")}
+                  AND ${navigationMenuPublicationItems.revision} = ${sql.raw("navigation_menus.published_revision")}
             )`,
             rootCount: sql<number>`(
                 SELECT COUNT(*) FROM ${navigationMenuPublicationItems}
-                WHERE ${navigationMenuPublicationItems.menuId} = ${navigationMenus.id}
-                  AND ${navigationMenuPublicationItems.revision} = ${navigationMenus.publishedRevision}
+                WHERE ${navigationMenuPublicationItems.menuId} = ${sql.raw("navigation_menus.id")}
+                  AND ${navigationMenuPublicationItems.revision} = ${sql.raw("navigation_menus.published_revision")}
                   AND ${navigationMenuPublicationItems.parentId} IS NULL
                   AND ${navigationMenuPublicationItems.isEnabled} = true
             )`,
