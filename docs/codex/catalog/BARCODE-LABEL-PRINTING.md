@@ -221,10 +221,14 @@ Primary presets:
    crop marks, safe printer margins. This replaces manual A4 canvas assembly.
 2. **A4 compact — 4 x 10.** Plain paper or unbranded adhesive stock, 40 labels
    per page; shorter names and smaller but still valid symbols.
-3. **A4 adhesive — 2 x 7.** Fourteen larger labels with no crop marks.
-4. **Thermal 50 x 25 mm.** One label per page for common roll printers.
-5. **Thermal 40 x 30 mm.** One label per page for compact retail labels.
-6. **Custom.** Page size, rows, columns, symmetric margins, gaps, and cut guides
+3. **A4 wide cut — 2 x 7.** Fourteen larger plain-paper labels with visible
+   cut guides. This is the one-click office-printer recovery when a preserved
+   long barcode cannot safely fit the denser A4 grids.
+4. **A4 adhesive — 2 x 7.** Fourteen larger labels with no crop marks for
+   pre-cut stock.
+5. **Thermal 50 x 25 mm.** One label per page for common roll printers.
+6. **Thermal 40 x 30 mm.** One label per page for compact retail labels.
+7. **Custom.** Page size, rows, columns, symmetric margins, gaps, and cut guides
    remain advanced disclosure, not the default screen. The derived label cell
    must remain at least 20 x 15 mm.
 
@@ -394,8 +398,10 @@ feeds, structured data, or external marketplaces.
   inventory.
 - Existing long Scalius Code 128 values are preserved because changing a
   printed identity would invalidate physical stock labels. They may require the
-  wider A4 preset. Newly generated internal identities are compact 14-digit
-  numeric Code 128 values that use Code Set C and fit the thermal presets.
+  wider A4 preset. The wide plain-paper preset keeps cut guides; the otherwise
+  identical adhesive preset omits them for pre-cut stock. Newly generated
+  internal identities are compact 14-digit numeric Code 128 values that use
+  Code Set C and fit the thermal presets.
 - Retail symbols are revalidated immediately before rendering. A legacy EAN,
   UPC, GTIN, or ISBN with an invalid checksum remains visible with a correction
   message but cannot be printed as a valid retail symbol. This is defense in
@@ -478,6 +484,14 @@ feeds, structured data, or external marketplaces.
   action, and the fixed Test/Print bar remains visible. Production proof at
   390 x 844 retained zero horizontal overflow and exposed the long Code 128
   recovery without cramped or overlapping controls.
+- Admin version `e9263d53-9b47-417a-87e0-6277905839bb` closes the ordinary
+  office-paper gap in that recovery. A preserved long Code 128 value blocked
+  the dense A4 grid, the live workspace offered **Use A4 wide cut**, and the
+  resulting 2 x 7 job enabled Test and Print/PDF with fourteen visible cut
+  guides. The real CSS-sized browser output rendered as one 210 x 297 mm A4
+  page with vector symbols, exact SKU facts, no dashboard chrome, and no
+  clipping. The same selected two-SKU job retained zero horizontal overflow at
+  390 x 844. Pre-cut adhesive stock remains a separate guide-free preset.
 
 ## Product boundary and future extensions
 

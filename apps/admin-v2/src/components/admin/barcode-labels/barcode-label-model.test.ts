@@ -101,8 +101,12 @@ describe("barcode label symbology", () => {
 
   it("recommends the first compatible stock without crossing printer media when avoidable", () => {
     const longSymbol = resolveBarcodeSymbol("SCALIUS:C128:zho3a3mYUeiKOnujSUeDk", "code128");
-    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("a4-cut-3x8"))?.id).toBe("a4-adhesive-2x7");
-    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("thermal-50x25"))?.id).toBe("a4-adhesive-2x7");
+    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("a4-cut-3x8"))?.id).toBe("a4-wide-cut-2x7");
+    expect(findCompatibleLabelPreset([longSymbol], getLabelPreset("thermal-50x25"))?.id).toBe("a4-wide-cut-2x7");
+
+    const wideCut = getLabelPreset("a4-wide-cut-2x7");
+    expect(wideCut.detail).toContain("Plain paper");
+    expect(wideCut.cropMarks).toBe(true);
 
     const widerThermalSymbol = resolveBarcodeSymbol("123456789012345678901234", "code128");
     expect(getBarcodeFitIssue(widerThermalSymbol, getLabelPreset("thermal-40x30"))).not.toBeNull();
