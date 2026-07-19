@@ -63,6 +63,21 @@ export function taxSettingsIssue(
   return null;
 }
 
+export function taxSettingsFormIsDirty(
+  current: UpdateTaxSettingsInput,
+  saved: UpdateTaxSettingsInput,
+): boolean {
+  return (
+    current.expectedVersion !== saved.expectedVersion ||
+    current.enabled !== saved.enabled ||
+    current.pricesIncludeTax !== saved.pricesIncludeTax ||
+    current.taxShipping !== saved.taxShipping ||
+    current.defaultTaxClassId !== saved.defaultTaxClassId ||
+    current.shippingTaxClassId !== saved.shippingTaxClassId ||
+    current.displayLabel !== saved.displayLabel
+  );
+}
+
 export function resolveJurisdictionSelection(
   type: TaxJurisdictionType,
   optionId: string,

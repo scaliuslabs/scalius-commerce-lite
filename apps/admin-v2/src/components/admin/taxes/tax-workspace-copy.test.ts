@@ -14,6 +14,9 @@ describe("tax workspace merchant copy", () => {
     const diagnostics = source("./TaxRateDiagnosticsPanel.tsx");
 
     expect(policy).toContain("Checkout outcome");
+    expect(policy).toContain("UnsavedChangesGuard");
+    expect(policy).toContain("Reset");
+    expect(policy).toContain("!isDirty");
     expect(policy).not.toContain("Release-safe behavior");
     expect(policy).not.toContain("Configuration version");
     expect(readiness).not.toContain("Lifecycle checks");

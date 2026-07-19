@@ -6,6 +6,7 @@ import {
   basisPointsToPercent,
   percentToBasisPoints,
   resolveJurisdictionSelection,
+  taxSettingsFormIsDirty,
   taxSettingsIssue,
 } from "./tax-form";
 
@@ -104,5 +105,21 @@ describe("tax form boundaries", () => {
       jurisdictionId: null,
       jurisdictionLabel: null,
     });
+  });
+
+  it("distinguishes a saved tax policy from a merchant draft", () => {
+    const saved = {
+      expectedVersion: 4,
+      enabled: false,
+      pricesIncludeTax: false,
+      taxShipping: false,
+      defaultTaxClassId: "class_standard",
+      shippingTaxClassId: null,
+      displayLabel: "Tax",
+    };
+
+    expect(taxSettingsFormIsDirty(saved, { ...saved })).toBe(false);
+    expect(taxSettingsFormIsDirty({ ...saved, displayLabel: "VAT" }, saved)).toBe(true);
+    expect(taxSettingsFormIsDirty({ ...saved, taxShipping: true }, saved)).toBe(true);
   });
 });
