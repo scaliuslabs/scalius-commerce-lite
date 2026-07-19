@@ -717,6 +717,32 @@ The cleanup bullets below describe the two-product proof store that preceded the
   `pnpm release:check` subsequently passed; only the already recorded logs-only
   ops-monitor email-channel warnings remain.
 
+### Normalized navigation release checkpoint (2026-07-19)
+
+- Commits `2c83b00b8`, `83a0d170e`, and `5729861c4` replace embedded
+  header/footer link arrays with named, revisioned draft menus, immutable
+  publications, typed resource destinations, and independent storefront
+  placements. API `78823abf-e412-4d37-b181-5954c16c8c76` and Admin
+  `36ab46c7-38ba-4a7e-938f-42ad90a129db` are live at 100%.
+- Production-browser proof opened all five migrated menus with correct item and
+  location counts; Locations showed Header plus four ordered footer columns;
+  History showed the current and prior immutable revisions; and URL state
+  restored each panel on reload.
+- A real pointer drag nested Footwear under Home & Living while every unrelated
+  row remained visible. The destination expanded immediately after drop. The
+  explicit row actions then outdented and restored the original order, which
+  was republished at revision 9 so the demo was not left dirty.
+- The public homepage rendered the normalized header destinations and the
+  Shop, Collections, Company, and Help footer menus with current category,
+  collection, page, and account routes. Dashboard and storefront consoles were
+  clean. Header/footer presentation settings now link to the dedicated
+  Navigation workspace instead of owning a second menu editor.
+- Migration `0037_thick_ikaris.sql` repaired the earlier sparse footer
+  placement coordinates into slots 0–3 and added a database check. Four
+  migration-chain tests, 14 focused navigation tests, sequential Database,
+  Admin, and API typechecks, targeted lint, D1 migration, and deploy readiness
+  all passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

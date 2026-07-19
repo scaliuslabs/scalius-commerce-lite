@@ -2,10 +2,9 @@
 
 Last reviewed: 2026-07-19
 
-Status: normalized authority and canonical admin/public cutover implemented;
-local contract verification complete and production browser verification in
-progress. Embedded header/footer menu writes have been removed rather than
-dual-written.
+Status: normalized authority and canonical admin/public cutover implemented,
+deployed, and production-browser verified. Embedded header/footer menu writes
+have been removed rather than dual-written.
 
 Migration `0036_absent_living_lightning.sql` creates named menus, normalized
 draft items, immutable publication rows, independent placements, FTS search,
@@ -15,6 +14,10 @@ and ordered `footer.column` placements while leaving invalid or empty documents
 unclaimed. The migration was additive so the cutover could be verified safely.
 The public resolver and admin workspace now read the normalized tables;
 `site_settings` retains presentation fields only and is not a dual-write source.
+Migration `0037_thick_ikaris.sql` normalizes the migrated footer placement
+positions into the supported `0..3` storefront slots, retains the first four
+locations, and adds the D1 check that prevents unsupported header/footer slot
+coordinates from being written again.
 
 This document is the durable architecture decision for reusable navigation. It
 is intentionally separate from the current builder UI: changing row density or
@@ -57,6 +60,12 @@ projections.
   publication/rollback, placements, admin workspace, and public projection now
   use the normalized authority. The legacy compatibility write routes were
   removed; no ongoing dual write exists.
+- Production API `78823abf-e412-4d37-b181-5954c16c8c76` and Admin
+  `36ab46c7-38ba-4a7e-938f-42ad90a129db` proved five named menus, exact
+  publication state, Header plus four footer locations, URL-restored
+  Items/Locations/History panels, and current resource-linked storefront URLs.
+  The public homepage rendered the normalized header and all four normalized
+  footer menus with no browser warning or error.
 
 The canonical command/read layer now exists in
 `navigation.authority.service.ts` and `/admin/navigation/menus/*`. It provides

@@ -1,9 +1,26 @@
 # Navigation Tree Drag Interaction
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-19
 
-Status: accepted interaction contract; implementation and live verification in
-progress.
+Status: pointer interaction, branch visibility, automatic post-drop expansion,
+and deterministic row-menu outdent/reorder fallbacks are implemented and
+production-browser verified. The exact Parent + Position Move dialog remains
+the final unimplemented part of this accepted contract.
+
+## 2026-07-19 production checkpoint
+
+- Admin `36ab46c7-38ba-4a7e-938f-42ad90a129db` keeps the dragged source at 40%
+  opacity and leaves unrelated rows mounted while the target exposes distinct
+  before/inside/after regions.
+- A real pointer drag moved `Footwear` inside `Home & Living`; the destination
+  expanded immediately after the command settled and the moved row remained
+  visible without relying on the 500 ms hover dwell.
+- The row action moved the child up a level and then earlier to restore the
+  original order. Revision-guarded publication succeeded, the public footer
+  retained the original five-link order, and the dashboard/storefront consoles
+  contained no warnings or errors.
+- Leaf rows render a non-interactive spacer rather than an invisible focusable
+  expand control. Menu/location singular labels are truthful.
 
 ## Why the previous interaction failed
 
