@@ -22,12 +22,13 @@ import {
 } from "./site-settings.service";
 
 describe("general site settings", () => {
-  it("returns typed admin navigation with a derived preview", async () => {
+  it("returns only header and footer presentation fields", async () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           limit: vi.fn(async () => [{
             headerConfig: JSON.stringify({
+              topBar: { text: "Free delivery", isEnabled: true },
               navigation: [{
                 id: "returns",
                 target: { type: "internal_path", path: "/returns" },
@@ -35,7 +36,10 @@ describe("general site settings", () => {
                 customLabel: "Returns",
               }],
             }),
-            footerConfig: "{}",
+            footerConfig: JSON.stringify({
+              tagline: "Thoughtful goods",
+              menus: [{ id: "legacy-menu", links: [] }],
+            }),
           }]),
         })),
       })),
@@ -43,22 +47,20 @@ describe("general site settings", () => {
 
     await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
       headerConfig: {
-        navigation: [{
-          target: { type: "internal_path", path: "/returns" },
-          resolution: { title: "Returns", href: "/returns" },
-        }],
+        topBar: { text: "Free delivery", isEnabled: true },
       },
-      footerConfig: { menus: [] },
+      footerConfig: { tagline: "Thoughtful goods" },
     });
   });
 
-  it("isolates a malformed header while preserving the valid footer", async () => {
+  it("isolates malformed or legacy embedded navigation documents", async () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
           limit: vi.fn(async () => [{
             headerConfig: "{not-json",
             footerConfig: JSON.stringify({
+              description: "Support when you need it",
               menus: [{
                 id: "help",
                 title: "Help",
@@ -76,21 +78,16 @@ describe("general site settings", () => {
     };
 
     await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
-      headerConfig: { navigation: [] },
-      footerConfig: {
-        menus: [{
-          id: "help",
-          links: [{ resolution: { title: "Returns", href: "/returns" } }],
-        }],
-      },
+      headerConfig: {},
+      footerConfig: { description: "Support when you need it" },
       navigationReadiness: {
-        header: { state: "invalid" },
+        header: { state: "ready" },
         footer: { state: "ready" },
       },
     });
   });
 
-  it("returns strictly normalized legacy demo navigation without writing on read", async () => {
+  it("does not migrate legacy embedded navigation while reading", async () => {
     const update = vi.fn();
     const insert = vi.fn();
     const db = {
@@ -109,16 +106,9 @@ describe("general site settings", () => {
     };
 
     await expect(getGeneralSettings(db as never)).resolves.toMatchObject({
-      headerConfig: {
-        navigation: [{
-          id: "home",
-          target: { type: "internal_path", path: "/" },
-          customLabel: "Home",
-          resolution: { title: "Home", href: "/" },
-        }],
-      },
+      headerConfig: {},
       navigationReadiness: {
-        header: { state: "legacy_normalized" },
+        header: { state: "ready" },
         footer: { state: "ready" },
       },
     });
@@ -126,18 +116,27 @@ describe("general site settings", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it("rejects unsafe navigation targets before writing header settings", async () => {
-    const db = { insert: vi.fn() };
+  it("strips embedded navigation and unknown keys before writing header settings", async () => {
+    const returning = vi.fn(async () => [{ revision: 1 }]);
+    const onConflictDoNothing = vi.fn(() => ({ returning }));
+    const values = vi.fn(() => ({ onConflictDoNothing }));
+    const db = { insert: vi.fn(() => ({ values })) };
 
     await expect(saveHeaderConfig(db as never, {
+      topBar: { text: "Hello", isEnabled: true },
       navigation: [{
         id: "unsafe",
         target: { type: "external_url", url: "javascript:alert(1)" },
         labelMode: "custom",
         customLabel: "Unsafe",
       }],
-    }, 1)).rejects.toBeInstanceOf(ValidationError);
-    expect(db.insert).not.toHaveBeenCalled();
+      arbitrary: "not-persisted",
+    }, 0)).resolves.toEqual({ revision: 1 });
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+      headerConfig: JSON.stringify({
+        topBar: { text: "Hello", isEnabled: true },
+      }),
+    }));
   });
 });
 

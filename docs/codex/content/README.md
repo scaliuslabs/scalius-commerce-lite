@@ -17,7 +17,7 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   typed resource links, WordPress-like builder direction, and storefront truth.
 - [NAVIGATION-AUTHORITY.md](NAVIGATION-AUTHORITY.md) — normalized menu schema,
   immutable publication/placement contract, large-store paging, dependency
-  generations, migration gates, and the current additive 0036 checkpoint.
+  generations, migration gates, and the canonical admin/public cutover.
 - [HERO.md](HERO.md) — revision-guarded hero documents, safe slide links,
   explicit draft/save/conflict workflow, and storefront rendering rules.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,

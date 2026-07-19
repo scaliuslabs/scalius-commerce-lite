@@ -2,6 +2,27 @@
 
 Last reviewed: 2026-07-19
 
+## 2026-07-19 normalized authority cutover
+
+Navigation is now a dedicated `/admin/navigation` workspace instead of a
+header/footer settings array. Named menus have revision-guarded drafts,
+immutable publications, rollback history, and independent Header/Footer
+locations. Menu, panel, search, and item-dialog state are URL-addressable.
+
+The storefront resolves the current published placements and typed resources
+in one bounded projection. Invalid navigation is isolated: one corrupt or stale
+placement is skipped without taking down header/footer presentation, checkout,
+account, or the storefront homepage. Header and Footer settings accept only
+presentation fields; embedded `navigation`/`menus` data and unknown keys are
+stripped at the service boundary, and the obsolete compatibility write routes
+have been removed.
+
+The replacement outline never hides unrelated rows during drag. A row exposes
+three deterministic pointer regions—25% before, 50% inside, 25% after—with
+distinct line versus selected-row feedback. The dragged row itself moves at
+40% opacity, collapsed targets expand after a 500 ms inside dwell, and exact
+non-drag actions remain available for earlier/later/nest/outdent operations.
+
 ## 2026-07-19 concurrent-editor protection (implemented)
 
 Header and footer presentation documents now have independent positive,
@@ -19,9 +40,9 @@ newer revision. A revision conflict disables another save until the merchant
 chooses. The save snapshot is also fixed at request start, so edits made while
 a request is in flight remain visibly dirty instead of being marked saved.
 
-The older `/admin/navigation` POST/PUT/DELETE compatibility endpoints are now
-deprecated and route through the same revisioned header/footer services. They
-require `expectedRevision`; no alternate API route can bypass the CAS boundary.
+The older root `/admin/navigation` POST/PUT/DELETE compatibility endpoints have
+been removed. No alternate API route can overwrite embedded header/footer menu
+data.
 The automatic fallback was audited at the same time: it is already bounded to
 90 published categories plus 58 published pages, keeping Home and the
 Categories group within the existing 150-node public contract.

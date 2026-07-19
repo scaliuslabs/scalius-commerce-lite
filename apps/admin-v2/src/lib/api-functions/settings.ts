@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { CustomerAuthMethod } from "@scalius/shared/customer-auth-policy";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
-import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
 import type {
   CustomerRequestPolicy,
   CustomerRequestPreviewState,
@@ -55,8 +54,6 @@ export interface FaviconConfig {
   alt: string;
 }
 
-export type NavigationItemConfig = NavigationTargetItem;
-
 export interface HeaderConfigInput {
   expectedRevision: number;
   topBar: {
@@ -71,7 +68,6 @@ export interface HeaderConfigInput {
     isEnabled: boolean;
   };
   social: SocialLinkConfig[];
-  navigation: NavigationItemConfig[];
 }
 
 export interface FooterConfigInput {
@@ -80,11 +76,6 @@ export interface FooterConfigInput {
   tagline: string;
   description: string;
   copyrightText: string;
-  menus: Array<{
-    id: string;
-    title: string;
-    links: NavigationItemConfig[];
-  }>;
   social: SocialLinkConfig[];
 }
 

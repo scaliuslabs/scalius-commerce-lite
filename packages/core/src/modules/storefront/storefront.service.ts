@@ -24,7 +24,10 @@ import {
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
-import { parseMediaOptimizationSettings } from "../settings/site-settings.service";
+import {
+  parseMediaOptimizationSettings,
+  readPersistedSitePresentation,
+} from "../settings/site-settings.service";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import {
@@ -38,13 +41,11 @@ import {
 } from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
-import { buildDefaultNavigation } from "../navigation/navigation.service";
-import { resolveNavigationConfigs } from "../navigation/navigation.resolver";
-import { readPersistedNavigationConfig } from "../navigation/navigation.validation";
+import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
-export function readStorefrontNavigationConfigs(
+export function readStorefrontPresentationConfigs(
   headerValue: string | null | undefined,
   footerValue: string | null | undefined,
 ): {
@@ -52,8 +53,8 @@ export function readStorefrontNavigationConfigs(
   footerConfig: Record<string, unknown>;
 } {
   return {
-    headerConfig: readPersistedNavigationConfig("header", headerValue).config,
-    footerConfig: readPersistedNavigationConfig("footer", footerValue).config,
+    headerConfig: readPersistedSitePresentation("header", headerValue),
+    footerConfig: readPersistedSitePresentation("footer", footerValue),
   };
 }
 
@@ -69,6 +70,7 @@ interface NestedNavigationItem {
   id?: string;
   title: string;
   href?: string;
+  openInNewTab?: boolean;
   subMenu?: NestedNavigationItem[];
 }
 
@@ -368,24 +370,34 @@ export async function getLayoutData(
   const {
     headerConfig: storedHeaderConfig,
     footerConfig: storedFooterConfig,
-  } = readStorefrontNavigationConfigs(
+  } = readStorefrontPresentationConfigs(
     siteSettingsData?.headerConfig,
     siteSettingsData?.footerConfig,
   );
-  const {
-    headerConfig: resolvedHeaderConfig,
-    footerConfig: resolvedFooterConfig,
-  } = await resolveNavigationConfigs(
-    db,
-    storedHeaderConfig,
-    storedFooterConfig,
-    "public",
-  );
+  let navigationPlacements: Awaited<ReturnType<typeof getPublishedNavigationPlacements>> = [];
+  try {
+    navigationPlacements = await getPublishedNavigationPlacements(db);
+  } catch {
+    // Navigation is independently versioned presentation. A corrupt placement
+    // must not take down checkout, account, or the rest of the storefront.
+    console.warn("[Storefront] Published navigation could not be loaded.");
+  }
+  const headerPlacement = navigationPlacements.find((placement) => (
+    placement.surface === "header" && placement.slot === "primary"
+  ));
+  const footerPlacements = navigationPlacements.filter((placement) => (
+    placement.surface === "footer" && placement.slot === "column"
+  ));
+  const normalizedFooterMenus = footerPlacements.map((placement) => ({
+    id: placement.id,
+    title: placement.labelOverride || placement.menuName,
+    links: placement.items,
+  }));
   let headerData: Record<string, unknown>;
-  let navigationData: NestedNavigationItem[] = [];
+  const navigationData = (headerPlacement?.items ?? []) as NestedNavigationItem[];
 
   if (siteSettingsData?.headerConfig) {
-    const headerConfig = resolvedHeaderConfig;
+    const headerConfig = storedHeaderConfig;
     const topBarConfig = asRecord(headerConfig.topBar);
     const logoConfig = asRecord(headerConfig.logo);
     const faviconConfig = asRecord(headerConfig.favicon);
@@ -428,11 +440,6 @@ export async function getLayoutData(
       social: socialLinks,
     };
 
-    if (Array.isArray(headerConfig.navigation) && headerConfig.navigation.length > 0) {
-      navigationData = headerConfig.navigation as NestedNavigationItem[];
-    } else {
-      navigationData = await buildDefaultNavigation(db);
-    }
   } else {
     headerData = {
       topBar: { text: "", isEnabled: false },
@@ -446,7 +453,7 @@ export async function getLayoutData(
   // Process Footer
   let footerData: Record<string, unknown>;
   if (siteSettingsData?.footerConfig) {
-    const footerConfig = resolvedFooterConfig;
+    const footerConfig = storedFooterConfig;
     const footerLogoConfig = asRecord(footerConfig.logo);
     const footerFaviconConfig = asRecord(footerConfig.favicon);
 
@@ -454,14 +461,6 @@ export async function getLayoutData(
     if (Array.isArray(footerConfig.social)) {
       footerSocialLinks = footerConfig.social.map(normalizeSocialLink);
     }
-
-    const normalizedMenus = (Array.isArray(footerConfig.menus) ? footerConfig.menus : []).map(
-      (menu: Record<string, unknown>) => ({
-        id: String(menu.id),
-        title: menu.title || "",
-        links: menu.links || [],
-      }),
-    );
 
     footerData = {
       logo: {
@@ -475,7 +474,7 @@ export async function getLayoutData(
       tagline: footerConfig.tagline || "",
       description: footerConfig.description || "",
       copyrightText: footerConfig.copyrightText || "",
-      menus: normalizedMenus,
+      menus: normalizedFooterMenus,
       social: footerSocialLinks,
     };
   } else {
@@ -485,7 +484,7 @@ export async function getLayoutData(
       tagline: "",
       description: "",
       copyrightText: "",
-      menus: [],
+      menus: normalizedFooterMenus,
       social: [],
     };
   }

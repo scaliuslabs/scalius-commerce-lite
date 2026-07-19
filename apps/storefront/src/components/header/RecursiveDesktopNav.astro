@@ -18,7 +18,12 @@ const { items = [], depth = 0 } = Astro.props;
       items.map((item) => (
         <li class="recursive-nav-item relative">
           {item.href ? (
-          <a href={item.href} class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground transition-colors duration-200 outline-none hover:text-foreground hover:bg-muted focus-visible:bg-muted">
+          <a
+            href={item.href}
+            target={item.openInNewTab ? "_blank" : undefined}
+            rel={item.openInNewTab ? "noopener noreferrer" : undefined}
+            class="flex items-center justify-between px-4 py-2.5 mx-1.5 rounded-lg text-sm font-medium text-foreground transition-colors duration-200 outline-none hover:text-foreground hover:bg-muted focus-visible:bg-muted"
+          >
             <span class="flex-1 block truncate pr-4">{item.title}</span>
             {item.subMenu && item.subMenu.length > 0 && (
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200" />

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     deleteNavigationMenuItem: vi.fn(),
     getNavigationAuthorityShadowReport: vi.fn(),
     getNavigationMenuAuthority: vi.fn(),
+    getNavigationMenuItemAuthority: vi.fn(),
     getNavigationPlacementManifest: vi.fn(),
     listNavigationMenuItems: vi.fn(),
     listNavigationMenuPublications: vi.fn(),
@@ -21,11 +22,9 @@ const mocks = vi.hoisted(() => ({
     publishNavigationMenu: vi.fn(),
     rollbackNavigationMenu: vi.fn(),
     saveNavigationPlacement: vi.fn(),
+    searchNavigationMenuItems: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
-    getGeneralSettings: vi.fn(),
-    saveHeaderConfig: vi.fn(),
-    saveFooterConfig: vi.fn(),
     getKv: vi.fn(),
     invalidateSiteSettingsCache: vi.fn(),
     invalidateApiAndScheduleStorefrontGroups: vi.fn(),
@@ -39,6 +38,7 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     deleteNavigationMenuItem: mocks.deleteNavigationMenuItem,
     getNavigationAuthorityShadowReport: mocks.getNavigationAuthorityShadowReport,
     getNavigationMenuAuthority: mocks.getNavigationMenuAuthority,
+    getNavigationMenuItemAuthority: mocks.getNavigationMenuItemAuthority,
     getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
     listNavigationMenuItems: mocks.listNavigationMenuItems,
     listNavigationMenuPublications: mocks.listNavigationMenuPublications,
@@ -48,14 +48,9 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     publishNavigationMenu: mocks.publishNavigationMenu,
     rollbackNavigationMenu: mocks.rollbackNavigationMenu,
     saveNavigationPlacement: mocks.saveNavigationPlacement,
+    searchNavigationMenuItems: mocks.searchNavigationMenuItems,
     updateNavigationMenuItem: mocks.updateNavigationMenuItem,
     updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
-}));
-
-vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
-    getGeneralSettings: mocks.getGeneralSettings,
-    saveHeaderConfig: mocks.saveHeaderConfig,
-    saveFooterConfig: mocks.saveFooterConfig,
 }));
 
 vi.mock("@scalius/core/modules/settings", () => ({
@@ -83,8 +78,6 @@ function createTestApp() {
     mocks.getKv.mockReturnValue({ id: "kv" });
     mocks.invalidateSiteSettingsCache.mockResolvedValue(undefined);
     mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
-    mocks.saveHeaderConfig.mockResolvedValue({ revision: 2 });
-    mocks.saveFooterConfig.mockResolvedValue({ revision: 2 });
     app.onError((error, c) => {
         const { body, status } = errorResponseFromError(error);
         return c.json(body, status);
@@ -280,52 +273,4 @@ describe("admin navigation routes", () => {
         expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledTimes(1);
     });
 
-    it.each([
-        {
-            method: "POST" as const,
-            path: "/api/v1/admin/navigation",
-            body: { type: "header", config: { items: [] }, expectedRevision: 1 },
-        },
-        {
-            method: "PUT" as const,
-            path: "/api/v1/admin/navigation/site_settings_id",
-            body: { type: "footer", config: { items: [] }, expectedRevision: 1 },
-        },
-        {
-            method: "DELETE" as const,
-            path: "/api/v1/admin/navigation/site_settings_id",
-            body: { type: "header", expectedRevision: 1 },
-        },
-    ])("invalidates layout caches after $method navigation writes", async ({ method, path, body }) => {
-        const { app, env } = createTestApp();
-
-        const response = await app.request(
-            path,
-            {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
-            },
-            env,
-        );
-
-        expect(response.status).toBe(200);
-        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-            ["layout"],
-            expect.objectContaining({ env }),
-        );
-    });
-
-    it("rejects compatibility writes that omit the revision claim", async () => {
-        const { app } = createTestApp();
-
-        const response = await app.request("/api/v1/admin/navigation", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "header", config: { navigation: [] } }),
-        });
-
-        expect(response.status).toBe(400);
-        expect(mocks.saveHeaderConfig).not.toHaveBeenCalled();
-    });
 });

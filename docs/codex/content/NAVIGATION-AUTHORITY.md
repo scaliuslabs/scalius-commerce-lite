@@ -2,19 +2,19 @@
 
 Last reviewed: 2026-07-19
 
-Status: additive normalized authority implemented in migration 0036; admin and
-public cutover remains in progress. The demo-era typed-target bridge below is
-still the serving/write authority until the shadow report is clean in
-production and the canonical menu commands replace the duplicate settings
-writes.
+Status: normalized authority and canonical admin/public cutover implemented;
+local contract verification complete and production browser verification in
+progress. Embedded header/footer menu writes have been removed rather than
+dual-written.
 
 Migration `0036_absent_living_lightning.sql` creates named menus, normalized
 draft items, immutable publication rows, independent placements, FTS search,
 and indexed resource-dependency generation triggers. It deterministically lifts
 the validated typed header/footer demo documents into published `header.primary`
 and ordered `footer.column` placements while leaving invalid or empty documents
-unclaimed. The migration is additive: it does not yet let the public resolver
-prefer the new tables, and it does not make `site_settings` a dual-write source.
+unclaimed. The migration was additive so the cutover could be verified safely.
+The public resolver and admin workspace now read the normalized tables;
+`site_settings` retains presentation fields only and is not a dual-write source.
 
 This document is the durable architecture decision for reusable navigation. It
 is intentionally separate from the current builder UI: changing row density or
@@ -53,10 +53,10 @@ projections.
   proves nested backfill, publication/placement counts, query preservation,
   FTS-compatible rows, dependency bumps, malformed-document fail-closed
   behavior, handle normalization, and polymorphic target checks.
-- Do not switch public reads yet. The next gate is a production shadow report
-  comparing the typed JSON projection with the lifted publication, followed by
-  canonical CAS item/menu/publish commands and then one deliberate admin/public
-  cutover. No ongoing dual write is accepted.
+- The production shadow report passed before cutover. Canonical CAS commands,
+  publication/rollback, placements, admin workspace, and public projection now
+  use the normalized authority. The legacy compatibility write routes were
+  removed; no ongoing dual write exists.
 
 The canonical command/read layer now exists in
 `navigation.authority.service.ts` and `/admin/navigation/menus/*`. It provides
@@ -64,10 +64,11 @@ keyset menu and parent-item pages, stable destination moves, sparse positioning
 with bounded JSON-set compaction only when a gap is exhausted, target
 normalization, three-level/cycle/orphan guards, one-revision-per-command D1
 batches, immutable SHA-256 publications, and the small placement manifest.
-`GET /admin/navigation/authority-shadow` is the production parity gate. Draft
+`GET /admin/navigation/authority-shadow` remains a migration diagnostic. Draft
 commands do not invalidate public layout; only publish, rollback, or placement
-mutation does. The large-store UI and public projection cutover remain required
-before the compatibility routes can be removed.
+mutation does. The canonical `/admin/navigation` workspace pages menus and
+parent branches, uses FTS search, and stores menu/panel/query/item state in its
+URL.
 
 The next canonical checkpoint is also implemented. Publication history is
 parent-bounded, rollback copies an immutable source into the draft and creates
@@ -79,12 +80,13 @@ current storefront components. A published menu may still contain 10,000
 items for reuse elsewhere; an incompatible placement is rejected rather than
 silently truncated.
 
-Public normalized reads now expose an uncached placement manifest plus
+Public normalized reads expose an uncached placement manifest plus
 revision/dependency-keyed menu-tree and parent-page endpoints. The manifest is
 the small mutable pointer; menu responses are safe to cache by immutable
-publication revision plus resource dependency generation. This API is additive
-until the dashboard workspace and consolidated storefront layout deliberately
-switch from the typed JSON bridge.
+publication revision plus resource dependency generation. The consolidated
+storefront layout resolves all active placements in one bounded projection,
+deduplicates resource reads, and skips an invalid placement without taking down
+the rest of the storefront.
 
 Header/footer branding, announcement, contact, social, and legal copy remain
 presentation settings. They do not own menu content. Do not raise the current
@@ -96,11 +98,11 @@ lower rendering limit, but it must never silently truncate a published menu.
 Search, editing, and public projection are paged; no admin or storefront request
 loads every menu in the store.
 
-### Accepted demo-era bridge
+### Retired demo-era bridge
 
-If stable resource links must ship before the normalized authority in this
-document, the only accepted bridge is a single typed target inside each current
-JSON item. It is a cutover, not a compatibility layer:
+The typed JSON bridge below was accepted only during the migration. It is
+retained here as historical reasoning, not as a supported serving or write
+path:
 
 - `resource` target: `resourceType`, stable `resourceId`, and an optional safe
   query projection;

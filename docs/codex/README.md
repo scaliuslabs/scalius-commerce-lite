@@ -12,7 +12,7 @@ This folder contains concise engineering context. Treat source code, tests, depl
 - `content/README.md` - Pages, Media, navigation/presentation, Theme, Analytics, Tax, and remaining settings hardening program.
 - `content/NAVIGATION-AUTHORITY.md` - accepted reusable-menu, placement,
   publication, lifecycle, cache, migration, and rollback architecture for
-  large-store navigation; this is not yet implemented.
+  large-store navigation; normalized authority and cutover are implemented.
 - `content/NAVIGATION-DRAG-INTERACTION.md` - accepted tree hitboxes, visual
   feedback, outdent/root behavior, exact Move dialog, and verification matrix.
 - `INTERFACE-COPY-DENSITY.md` - accepted admin copy hierarchy, progressive

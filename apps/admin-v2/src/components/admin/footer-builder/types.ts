@@ -28,6 +28,8 @@ export interface FooterConfig {
   social: SocialLink[];
 }
 
+export type FooterPresentationConfig = Omit<FooterConfig, "menus">;
+
 export const FOOTER_BUILDER_PANELS = [
   "branding",
   "navigation",
@@ -46,7 +48,7 @@ export interface FooterBuilderProps {
   readiness?: NavigationConfigSectionReadiness;
   onPanelChange?: (panel: FooterBuilderPanel) => void;
   onSave?: (
-    config: FooterConfig,
+    config: FooterPresentationConfig,
     expectedRevision: number,
   ) => Promise<{ revision: number }>;
 }
