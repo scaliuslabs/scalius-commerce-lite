@@ -47,6 +47,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { ftsMatch, sanitizeFtsQuery } from "../../search/fts5";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
+import { calculateDiscountedPriceAtPrecision } from "@scalius/shared/price-utils";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
@@ -286,6 +287,7 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     variantLabel: string | null;
     productImageMediaId: string | null;
     taxClassId: string | null;
+    catalogUnitPrice: number | null;
 };
 type AdminOrderSkuIssueCode =
     | "SKU_REQUIRED"
@@ -350,6 +352,14 @@ export interface ManualOrderQuote {
     pricesIncludeTax: boolean;
     taxEnabled: boolean;
     settingsVersion: number;
+    lines: Array<{
+        index: number;
+        productId: string;
+        variantId: string;
+        quantity: number;
+        unitPrice: number;
+        lineSubtotal: number;
+    }>;
 }
 
 interface PreparedManualOrderQuote {
@@ -365,7 +375,10 @@ interface PreparedManualOrderQuote {
     quote: ManualOrderQuote;
 }
 
-function projectManualOrderQuote(taxQuote: TaxQuote): ManualOrderQuote {
+function projectManualOrderQuote(
+    taxQuote: TaxQuote,
+    trackedItems: PreparedManualOrderQuote["trackedItems"],
+): ManualOrderQuote {
     const fromMinor = (value: number) => fromMinorUnits(value, taxQuote.decimalPlaces);
     return {
         currencyCode: taxQuote.currencyCode,
@@ -379,6 +392,14 @@ function projectManualOrderQuote(taxQuote: TaxQuote): ManualOrderQuote {
         pricesIncludeTax: taxQuote.pricesIncludeTax,
         taxEnabled: taxQuote.enabled,
         settingsVersion: taxQuote.settingsVersion,
+        lines: trackedItems.map((item, index) => ({
+            index,
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            lineSubtotal: fromMinor(taxQuote.lines[index]?.grossAmountMinor ?? 0),
+        })),
     };
 }
 
@@ -388,19 +409,29 @@ async function prepareManualOrderQuote(
 ): Promise<PreparedManualOrderQuote> {
     const currentCurrency = await getCurrencySettings(db);
     const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
-    const money = calculateManualOrderMoney(
+    // Keep location validation first so a stale/cross-parent destination fails
+    // before catalog or tax reads do unnecessary work.
+    const locationNames = await resolveActiveDeliveryLocationNames(db, data);
+    const resolvedItems = await resolveAdminOrderItemInventory(
+        db,
         data.items,
+        { catalogPricePrecision: currency.decimalPlaces },
+    );
+    const money = calculateManualOrderMoney(
+        resolvedItems.map((item) => ({
+            productId: item.productId,
+            variantId: item.variantId,
+            quantity: item.quantity,
+            price: item.catalogUnitPrice!,
+        })),
         data.shippingCharge,
         data.discountAmount,
         currency,
     );
-    // Keep location validation first so a stale/cross-parent destination fails
-    // before catalog or tax reads do unnecessary work.
-    const locationNames = await resolveActiveDeliveryLocationNames(db, data);
-    const trackedItems = await resolveAdminOrderItemInventory(
-        db,
-        money.normalizedItems,
-    );
+    const trackedItems = resolvedItems.map((item, index) => ({
+        ...item,
+        price: money.normalizedItems[index]!.price,
+    }));
     const allocationLineIds = trackedItems.map((item, index) =>
         buildStorefrontTaxAllocationLineId(index, item.variantId),
     );
@@ -434,7 +465,7 @@ async function prepareManualOrderQuote(
         trackedItems,
         allocationLineIds,
         taxQuote,
-        quote: projectManualOrderQuote(taxQuote),
+        quote: projectManualOrderQuote(taxQuote, trackedItems),
     };
 }
 
@@ -902,6 +933,7 @@ function assertAdminOrderItemsUseSkus(items: AdminOrderSkuItem[]) {
 export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem>(
     db: Database,
     items: T[],
+    options: { catalogPricePrecision?: number } = {},
 ): Promise<Array<AdminOrderItemWithInventory<T>>> {
     assertAdminOrderItemsUseSkus(items);
 
@@ -915,6 +947,13 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             trackInventory: productVariants.trackInventory,
             imageId: productVariants.imageId,
             productName: products.name,
+            productDiscountType: products.discountType,
+            productDiscountPercentage: products.discountPercentage,
+            productDiscountAmount: products.discountAmount,
+            variantPrice: productVariants.price,
+            variantDiscountType: productVariants.discountType,
+            variantDiscountPercentage: productVariants.discountPercentage,
+            variantDiscountAmount: productVariants.discountAmount,
             taxClassId: sql<string | null>`coalesce(${productVariants.taxClassId}, ${products.taxClassId})`,
             variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
@@ -977,6 +1016,21 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             return;
         }
 
+        const variantHasDiscount =
+            (sku.variantDiscountType === "percentage" && (sku.variantDiscountPercentage ?? 0) > 0)
+            || (sku.variantDiscountType === "flat" && (sku.variantDiscountAmount ?? 0) > 0);
+        const catalogUnitPrice = options.catalogPricePrecision == null
+            ? null
+            : calculateDiscountedPriceAtPrecision(
+                sku.variantPrice,
+                variantHasDiscount ? sku.variantDiscountType : sku.productDiscountType,
+                variantHasDiscount
+                    ? sku.variantDiscountPercentage
+                    : sku.productDiscountPercentage,
+                variantHasDiscount ? sku.variantDiscountAmount : sku.productDiscountAmount,
+                options.catalogPricePrecision,
+            );
+
         resolvedItems.push({
             ...item,
             variantId,
@@ -988,6 +1042,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 sku.imageId,
             )?.mediaId ?? null,
             taxClassId: sku.taxClassId,
+            catalogUnitPrice,
         });
     });
 

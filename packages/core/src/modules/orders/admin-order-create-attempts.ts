@@ -279,7 +279,7 @@ function isFreshProcessingAttempt(
 
 function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<string, unknown> {
   return {
-    version: 1,
+    version: 2,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
@@ -295,7 +295,6 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
-      price: normalizeAmount(item.price),
     })),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
     shippingCharge: normalizeAmount(input.shippingCharge),

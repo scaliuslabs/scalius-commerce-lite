@@ -209,9 +209,14 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 
 **Implemented**
 
-- Customer/contact/address fields, Bangladesh city/zone/area selection, line creation, lazy variant loading, quantity/price editing, shipping, additional discount, keyboard submit, unsaved-change guard, and a sticky action bar.
+- Customer/contact/address fields, Bangladesh city/zone/area selection, line creation, lazy variant loading, quantity editing, server-owned catalog pricing, shipping, additional discount, keyboard submit, unsaved-change guard, and a sticky action bar.
 - Manual creation is deliberately one command: **create confirmed COD order**. The compact summary states `Confirmed`, `COD · unpaid`, and `Stock reserved`; the form does not silently pretend to save a neutral draft.
 - A debounced authenticated quote endpoint resolves the saved currency precision, exact active SKU and tax class, destination hierarchy, shipping, order-wide discount allocation, configured tax policy, and final total. Submit is locked until the quote matches the current form projection; the server recalculates the same quote at commit.
+- Create and quote requests carry only product, exact SKU, and quantity. The
+  server resolves the buyer-effective catalog unit price, including the saved
+  variant-over-product discount precedence, and returns authoritative line
+  prices for the desktop table and compact mobile item cards. A hidden or stale
+  browser `price` value cannot create a staff price override.
 - Server validation requires at least one sellable line, rejects missing/deleted/mismatched SKUs, prevents an excessive discount, and commits order/customer/items, immutable order and line tax snapshots, minor-unit allocations, idempotency evidence, and inventory reservations in one D1 batch.
 - Tracked inventory remains reserved while fulfillment is pending. Manual creation no longer invokes shipped semantics or deducts on-hand stock before a fulfillment command owns that transition.
 - Actor-scoped request idempotency replays the original committed result after a lost response and preserves one stock/order identity across retries.
@@ -229,7 +234,11 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 
 - A merchant-authored draft must not reuse `orders.status = incomplete`: that state belongs to buyer hosted-payment recovery and scheduled cleanup. The correct future model is a separate merchant-owned, versioned draft-order record with no customer, inventory, payment, or order side effects until an explicit completion command runs the authoritative quote and order commit.
 - The current command supports COD/unpaid only. Additional manual payment terms or saved gateway intents need explicit, permissioned commands and evidence; they must not be disguised as dropdown defaults on creation.
-- Submitted line prices are trusted staff overrides, but the UI does not distinguish catalog price from override or require a reason. Make override explicit, show original price, require the appropriate permission, and record actor/reason/before/after.
+- Do not add an implicit price override to this confirmed-order command. A
+  future custom-price workflow belongs to the separate merchant draft-order
+  authority and must show catalog versus custom price, require a dedicated
+  permission and reason, and persist actor/reason/before/after evidence before
+  an explicit completion command reserves stock or creates an order.
 - Admin-created item rows do not persist the same complete product/variant/money snapshot expected of an immutable order. Renames and product deletion can weaken historical display.
 - Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters. Archive no longer changes these facts; prefer ledger/query-derived stats or atomic deltas with reconciliation.
 
@@ -244,6 +253,20 @@ subtotal, 12000 shipping, 10000 discount, 0 configured tax, and 553080 total;
 one order tax snapshot and one line tax snapshot use `tax-v1`; the SKU retained
 24 on hand with exactly 1 reserved. The run therefore proves creation did not
 masquerade as shipment or deduct on-hand inventory.
+
+**Server-owned line-price proof — 2026-07-20:** API version
+`dfeab18e-fa9f-4209-bbf6-30cec56b6856` and admin version
+`e869ef18-3d4b-47e6-825a-84f614ee0403` were deployed after removing `price`
+from the manual create/quote request contract. The authenticated dashboard
+selected `Dock 7-in-1 USB-C Hub`, requested quantity 2, and displayed the
+server-quoted `৳5,510.80` unit price, `৳11,021.60` subtotal, `৳120.00`
+shipping, and `৳11,141.60` total before submit. It created confirmed COD order
+`L81PGQ` and navigated to its exact detail route without a console warning or
+error. A read-only remote D1 query proved `unit_price_minor = 551080`,
+`line_subtotal_minor = 1102160`, `total_amount_minor = 1114160`, pending
+fulfillment, 24 on hand, and 3 total reservations across the SKU's open
+orders. Focused validation proves a browser-supplied legacy `price` key is
+stripped and cannot alter the quote or persisted line.
 
 ### 3. Full edit
 

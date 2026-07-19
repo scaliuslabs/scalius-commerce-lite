@@ -33474,14 +33474,13 @@ export type PostApiV1AdminOrdersData = {
         zoneName?: string;
         areaName?: string | null;
         notes: string | null;
+        discountAmount: number | null;
+        shippingCharge: number;
         items: Array<{
             productId: string;
             variantId: string | null;
             quantity: number;
-            price: number;
         }>;
-        discountAmount: number | null;
-        shippingCharge: number;
         requestKey: string;
     };
     path?: never;
@@ -33896,7 +33895,6 @@ export type PostApiV1AdminOrdersQuoteData = {
             productId: string;
             variantId: string | null;
             quantity: number;
-            price: number;
         }>;
         discountAmount: number | null;
         shippingCharge: number;
@@ -34006,6 +34004,14 @@ export type PostApiV1AdminOrdersQuoteResponses = {
             pricesIncludeTax: boolean;
             taxEnabled: boolean;
             settingsVersion: number;
+            lines: Array<{
+                index: number;
+                productId: string;
+                variantId: string;
+                quantity: number;
+                unitPrice: number;
+                lineSubtotal: number;
+            }>;
         };
     };
 };
@@ -34484,14 +34490,14 @@ export type PutApiV1AdminOrdersByIdData = {
         zoneName?: string;
         areaName?: string | null;
         notes: string | null;
+        discountAmount: number | null;
+        shippingCharge: number;
         items: Array<{
             productId: string;
             variantId: string | null;
             quantity: number;
             price: number;
         }>;
-        discountAmount: number | null;
-        shippingCharge: number;
         expectedVersion: number;
         status: string;
     };

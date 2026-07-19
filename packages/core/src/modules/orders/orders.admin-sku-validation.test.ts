@@ -3,6 +3,7 @@ import type { Database } from "@scalius/database/client";
 import { PaymentStatus } from "@scalius/database/schema";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import type { CreateOrderInput } from "./orders.validation";
+import type { StorefrontTaxQuoteInput } from "../tax";
 
 const inventoryMocks = vi.hoisted(() => ({
     reserveStockBatch: vi.fn(),
@@ -84,7 +85,10 @@ beforeEach(() => {
         currencySymbol: "৳",
         usdExchangeRate: "1",
     });
-    taxMocks.calculateStorefrontTaxQuote.mockImplementation(async (_db, input) => {
+    taxMocks.calculateStorefrontTaxQuote.mockImplementation(async (
+        _db: Database,
+        input: StorefrontTaxQuoteInput,
+    ) => {
         const decimalPlaces = input.currency?.decimalPlaces ?? 2;
         const scale = 10 ** decimalPlaces;
         const minor = (value: number) => Math.round(value * scale);
@@ -172,6 +176,13 @@ interface SkuRow {
     productName?: string;
     variantLabel?: string | null;
     taxClassId?: string | null;
+    productDiscountType?: "percentage" | "flat" | null;
+    productDiscountPercentage?: number | null;
+    productDiscountAmount?: number | null;
+    variantPrice?: number;
+    variantDiscountType?: "percentage" | "flat" | null;
+    variantDiscountPercentage?: number | null;
+    variantDiscountAmount?: number | null;
 }
 
 interface AdminOrderSkuIssue {
@@ -217,6 +228,13 @@ function createSkuDb(rows: SkuRow[]) {
         productName: `Product ${row.id}`,
         variantLabel: null,
         taxClassId: null,
+        productDiscountType: null,
+        productDiscountPercentage: null,
+        productDiscountAmount: null,
+        variantPrice: 100,
+        variantDiscountType: null,
+        variantDiscountPercentage: null,
+        variantDiscountAmount: null,
         ...row,
     })));
     const innerJoin = vi.fn(() => ({ where }));
@@ -262,6 +280,13 @@ function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationR
         productName: `Product ${row.id}`,
         variantLabel: null,
         taxClassId: null,
+        productDiscountType: null,
+        productDiscountPercentage: null,
+        productDiscountAmount: null,
+        variantPrice: 100,
+        variantDiscountType: null,
+        variantDiscountPercentage: null,
+        variantDiscountAmount: null,
         ...row,
     })));
     const select = vi.fn(() => {
@@ -308,7 +333,6 @@ function createOrderInput(overrides: Partial<CreateOrderInput> = {}): CreateOrde
                 productId: "prod_active",
                 variantId: "var_foreign",
                 quantity: 1,
-                price: 100,
             },
         ],
         discountAmount: null,
@@ -369,6 +393,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantLabel: null,
                 productImageMediaId: null,
                 taxClassId: null,
+                catalogUnitPrice: null,
             },
             {
                 productId: "prod_2",
@@ -380,8 +405,45 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantLabel: null,
                 productImageMediaId: null,
                 taxClassId: null,
+                catalogUnitPrice: null,
             },
         ]);
+    });
+
+    it("resolves the buyer-effective catalog price instead of trusting an admin client amount", async () => {
+        const { db } = createSkuDb([
+            {
+                id: "var_product_discount",
+                productId: "prod_1",
+                trackInventory: true,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+                variantPrice: 100,
+                productDiscountType: "percentage",
+                productDiscountPercentage: 10,
+            },
+            {
+                id: "var_variant_discount",
+                productId: "prod_2",
+                trackInventory: true,
+                variantDeletedAt: null,
+                productActive: true,
+                productDeletedAt: null,
+                variantPrice: 100,
+                productDiscountType: "percentage",
+                productDiscountPercentage: 10,
+                variantDiscountType: "flat",
+                variantDiscountAmount: 25,
+            },
+        ]);
+
+        const result = await resolveAdminOrderItemInventory(db, [
+            { productId: "prod_1", variantId: "var_product_discount", quantity: 1 },
+            { productId: "prod_2", variantId: "var_variant_discount", quantity: 1 },
+        ], { catalogPricePrecision: 2 });
+
+        expect(result.map((item) => item.catalogUnitPrice)).toEqual([90, 75]);
     });
 
     it("resolves the exact SKU image asset for a manual-order snapshot", async () => {
@@ -554,7 +616,6 @@ describe("resolveAdminOrderItemInventory", () => {
                     productId: "prod_active",
                     variantId: "var_untracked",
                     quantity: 1,
-                    price: 100,
                 },
             ],
         }), "admin_test");
@@ -635,7 +696,6 @@ describe("resolveAdminOrderItemInventory", () => {
                     productId: "prod_active",
                     variantId: "var_untracked",
                     quantity: 2,
-                    price: 100,
                 },
             ],
             shippingCharge: 60,
@@ -721,6 +781,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 variantDeletedAt: null,
                 productActive: true,
                 productDeletedAt: null,
+                variantPrice: itemPrice,
             }]);
 
             await createOrder(db, createOrderInput({
@@ -728,7 +789,6 @@ describe("resolveAdminOrderItemInventory", () => {
                     productId: "prod_active",
                     variantId: "var_untracked",
                     quantity: 2,
-                    price: itemPrice,
                 }],
                 shippingCharge,
                 discountAmount,
@@ -772,7 +832,6 @@ describe("resolveAdminOrderItemInventory", () => {
                     productId: "prod_active",
                     variantId: "var_tracked",
                     quantity: 2,
-                    price: 100,
                 },
             ],
         }), "admin_test")).rejects.toBe(batchError);
@@ -809,7 +868,6 @@ describe("resolveAdminOrderItemInventory", () => {
                 productId: "prod_active",
                 variantId: "var_tracked",
                 quantity: 2,
-                price: 100,
             }],
         }), "admin_test");
 
@@ -857,7 +915,6 @@ describe("resolveAdminOrderItemInventory", () => {
                     productId: "prod_active",
                     variantId: "var_tracked",
                     quantity: 2,
-                    price: 100,
                 },
             ],
         }), "admin_test");

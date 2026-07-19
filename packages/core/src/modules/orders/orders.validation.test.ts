@@ -85,6 +85,25 @@ describe("manual-order create idempotency", () => {
             requestKey: crypto.randomUUID(),
         }).success).toBe(false);
     });
+
+    it("does not accept a browser-supplied unit price as create authority", () => {
+        const parsed = createOrderSchema.parse({
+            ...orderInput(1),
+            items: [{
+                productId: "product_1",
+                variantId: "variant_1",
+                quantity: 1,
+                price: 0.01,
+            }],
+            requestKey: crypto.randomUUID(),
+        });
+
+        expect(parsed.items).toEqual([{
+            productId: "product_1",
+            variantId: "variant_1",
+            quantity: 1,
+        }]);
+    });
 });
 
 describe("order archive concurrency", () => {

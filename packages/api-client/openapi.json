@@ -115940,6 +115940,15 @@
                     "nullable": true,
                     "maxLength": 500
                   },
+                  "discountAmount": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "shippingCharge": {
+                    "type": "number",
+                    "minimum": 0
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -115957,29 +115966,15 @@
                           "type": "integer",
                           "minimum": 1,
                           "maximum": 99
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0
                         }
                       },
                       "required": [
                         "productId",
                         "variantId",
-                        "quantity",
-                        "price"
+                        "quantity"
                       ]
                     },
                     "minItems": 1
-                  },
-                  "discountAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0
-                  },
-                  "shippingCharge": {
-                    "type": "number",
-                    "minimum": 0
                   },
                   "requestKey": {
                     "type": "string",
@@ -115995,9 +115990,9 @@
                   "zone",
                   "area",
                   "notes",
-                  "items",
                   "discountAmount",
                   "shippingCharge",
+                  "items",
                   "requestKey"
                 ]
               }
@@ -117509,17 +117504,12 @@
                           "type": "integer",
                           "minimum": 1,
                           "maximum": 99
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0
                         }
                       },
                       "required": [
                         "productId",
                         "variantId",
-                        "quantity",
-                        "price"
+                        "quantity"
                       ]
                     },
                     "minItems": 1
@@ -117603,6 +117593,45 @@
                         "settingsVersion": {
                           "type": "integer",
                           "minimum": 0
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "productId": {
+                                "type": "string"
+                              },
+                              "variantId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              },
+                              "unitPrice": {
+                                "type": "number",
+                                "minimum": 0
+                              },
+                              "lineSubtotal": {
+                                "type": "number",
+                                "minimum": 0
+                              }
+                            },
+                            "required": [
+                              "index",
+                              "productId",
+                              "variantId",
+                              "quantity",
+                              "unitPrice",
+                              "lineSubtotal"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -117616,7 +117645,8 @@
                         "taxLabel",
                         "pricesIncludeTax",
                         "taxEnabled",
-                        "settingsVersion"
+                        "settingsVersion",
+                        "lines"
                       ]
                     }
                   },
@@ -119855,6 +119885,15 @@
                     "nullable": true,
                     "maxLength": 500
                   },
+                  "discountAmount": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "shippingCharge": {
+                    "type": "number",
+                    "minimum": 0
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -119887,15 +119926,6 @@
                     },
                     "minItems": 1
                   },
-                  "discountAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0
-                  },
-                  "shippingCharge": {
-                    "type": "number",
-                    "minimum": 0
-                  },
                   "expectedVersion": {
                     "type": "integer",
                     "minimum": 1
@@ -119914,9 +119944,9 @@
                   "zone",
                   "area",
                   "notes",
-                  "items",
                   "discountAmount",
                   "shippingCharge",
+                  "items",
                   "expectedVersion",
                   "status"
                 ]
