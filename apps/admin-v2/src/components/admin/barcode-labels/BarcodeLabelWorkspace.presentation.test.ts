@@ -30,4 +30,14 @@ describe("BarcodeLabelWorkspace presentation boundary", () => {
       'aria-label={`${selected ? "Remove" : "Add"} ${variant.productName} ${variant.optionLabel || variant.sku}`}',
     );
   });
+
+  it("keeps print blockers and their recovery beside the selected SKUs", () => {
+    const readinessNotice = source.indexOf("not safely fit this format");
+    const skuPicker = source.indexOf(">Add SKUs</");
+    const pagePreview = source.indexOf(">Page preview</");
+
+    expect(readinessNotice).toBeGreaterThan(-1);
+    expect(readinessNotice).toBeLessThan(skuPicker);
+    expect(readinessNotice).toBeLessThan(pagePreview);
+  });
 });
