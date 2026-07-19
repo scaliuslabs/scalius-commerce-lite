@@ -78,14 +78,22 @@ export interface Product {
       .string()
       .max(500, "Notes must be less than 500 characters")
       .nullable(),
-    items: z.array(
-      z.object({
-        productId: z.string().min(1, "Product is required"),
-        variantId: z.string().nullable(),
-        quantity: z.number().min(1, "Quantity must be at least 1"),
-        price: z.number().min(0, "Price must be greater than or equal to 0"),
-      }),
-    ),
+    items: z
+      .array(
+        z.object({
+          productId: z.string().min(1, "Product is required"),
+          variantId: z.string().nullable(),
+          quantity: z
+            .number()
+            .int()
+            .min(1, "Quantity must be at least 1")
+            .max(99, "Quantity must be at most 99"),
+          price: z
+            .number()
+            .min(0, "Price must be greater than or equal to 0"),
+        }),
+      )
+      .min(1, "Add at least one sellable item"),
     discountAmount: z.coerce
       .number()
       .min(0, "Discount must be greater than or equal to 0")

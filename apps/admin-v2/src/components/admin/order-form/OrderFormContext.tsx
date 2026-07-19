@@ -5,6 +5,7 @@ import type {
   OrderFormValues,
   Product,
 } from "./types";
+import type { ManualOrderQuotePayload } from "@/lib/api-functions/orders";
 
 // Define the shape of the context state
 interface OrderFormContextType {
@@ -32,6 +33,13 @@ interface OrderFormContextType {
   loadZones: (cityId: string) => Promise<void>;
   loadAreas: (zoneId: string) => Promise<void>;
   isSubmitting: boolean;
+  manualQuote: {
+    data: ManualOrderQuotePayload | null;
+    isCurrent: boolean;
+    isLoading: boolean;
+    errorMessage: string | null;
+    retry: () => void;
+  };
   refs: {
     customerNameRef: React.RefObject<HTMLInputElement | null>;
     customerPhoneRef: React.RefObject<HTMLInputElement | null>;
@@ -84,6 +92,7 @@ interface OrderFormProviderProps {
   loadZones: (cityId: string) => Promise<void>;
   loadAreas: (zoneId: string) => Promise<void>;
   isSubmitting: boolean;
+  manualQuote: OrderFormContextType["manualQuote"];
 }
 
 export const OrderFormProvider: React.FC<OrderFormProviderProps> = ({

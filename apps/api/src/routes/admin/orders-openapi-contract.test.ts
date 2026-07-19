@@ -51,6 +51,17 @@ describe("admin order mutation OpenAPI responses", () => {
         ]);
     });
 
+    it("documents the authoritative manual-order quote before creation", () => {
+        const spec = buildAdminOrdersSpec();
+        expectResponses(spec, "/api/v1/admin/orders/quote", "post", [
+            "200",
+            "400",
+            "401",
+            "403",
+            "503",
+        ]);
+    });
+
     it("requires selectedOptions on every order-form SKU", () => {
         const spec = buildAdminOrdersSpec();
         const operation = spec.paths?.["/api/v1/admin/orders/{id}/form-data"]?.get;

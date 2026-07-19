@@ -26,18 +26,22 @@ const orderContentSchema = z.object({
         .string()
         .max(500, "Notes must be less than 500 characters")
         .nullable(),
-    items: z.array(
-        z.object({
-            productId: z.string().min(1, "Product is required"),
-            variantId: z.string().nullable(),
-            quantity: z
-                .number()
-                .int("Quantity must be a whole number")
-                .min(1, "Quantity must be at least 1")
-                .max(99, "Quantity must be at most 99"),
-            price: z.number().min(0, "Price must be greater than or equal to 0"),
-        }),
-    ),
+    items: z
+        .array(
+            z.object({
+                productId: z.string().min(1, "Product is required"),
+                variantId: z.string().nullable(),
+                quantity: z
+                    .number()
+                    .int("Quantity must be a whole number")
+                    .min(1, "Quantity must be at least 1")
+                    .max(99, "Quantity must be at most 99"),
+                price: z
+                    .number()
+                    .min(0, "Price must be greater than or equal to 0"),
+            }),
+        )
+        .min(1, "Add at least one sellable item"),
     discountAmount: z
         .number()
         .min(0, "Discount must be greater than or equal to 0")
@@ -53,6 +57,22 @@ export const createOrderSchema = orderContentSchema.extend({
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+/**
+ * Read-only authoritative preview used by the manual-order form. Contact facts
+ * are intentionally excluded: tax and money depend only on the sellable lines,
+ * destination, shipping, and order-level discount.
+ */
+export const quoteManualOrderSchema = orderContentSchema.pick({
+    city: true,
+    zone: true,
+    area: true,
+    items: true,
+    discountAmount: true,
+    shippingCharge: true,
+});
+
+export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;
 
 /** Schema for updating an existing order (PUT /api/orders/:id) */
 export const updateOrderSchema = orderContentSchema.extend({

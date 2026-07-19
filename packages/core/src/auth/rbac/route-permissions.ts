@@ -172,6 +172,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_CREATE },
   },
+  "/api/v1/admin/orders/quote": {
+    POST: { permission: PERMISSIONS.ORDERS_CREATE },
+  },
   "/api/v1/admin/orders/archive": {
     POST: { permission: PERMISSIONS.ORDERS_DELETE },
   },

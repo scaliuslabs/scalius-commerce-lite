@@ -22,6 +22,8 @@ import type {
   PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponse,
   PostApiV1AdminOrdersData,
   PostApiV1AdminOrdersResponse,
+  PostApiV1AdminOrdersQuoteData,
+  PostApiV1AdminOrdersQuoteResponse,
   PutApiV1AdminOrdersByIdData,
   PutApiV1AdminOrdersByIdFulfillmentStatusData,
   PutApiV1AdminOrdersByIdFulfillmentStatusResponse,
@@ -104,6 +106,8 @@ export interface OrderCatalogProductsPayload {
 }
 export type OrderItemDto = ApiData<GetApiV1AdminOrdersByIdItemsResponse>[number];
 export type CreateOrderInput = ApiBody<PostApiV1AdminOrdersData>;
+export type QuoteManualOrderInput = ApiBody<PostApiV1AdminOrdersQuoteData>;
+export type ManualOrderQuotePayload = ApiData<PostApiV1AdminOrdersQuoteResponse>;
 export type UpdateOrderInput = { id: string } &
   ApiBody<PutApiV1AdminOrdersByIdData>;
 export type OrderIdPayload = ApiData<PostApiV1AdminOrdersResponse>;
@@ -309,6 +313,12 @@ export const createOrder = createServerFn({ method: "POST" })
   .validator((data: CreateOrderInput) => data)
   .handler(async ({ data }) => {
     return apiPost<OrderIdPayload>("/orders", data);
+  });
+
+export const quoteManualOrder = createServerFn({ method: "POST" })
+  .validator((data: QuoteManualOrderInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<ManualOrderQuotePayload>("/orders/quote", data);
   });
 
 export const updateOrder = createServerFn({ method: "POST" })

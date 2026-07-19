@@ -8,6 +8,7 @@ import {
     orderInvoices,
     orderReturns,
     orderTaxSnapshots,
+    orderItemTaxSnapshots,
     customers,
     customerHistory,
     products,
@@ -49,7 +50,11 @@ import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { normalizeOrderStatus } from "@scalius/shared/order-state";
 import { unixToDate } from "@scalius/shared/utils";
 import { nanoid } from "nanoid";
-import type { ArchiveOrdersInput, CreateOrderInput } from "./orders.validation";
+import type {
+    ArchiveOrdersInput,
+    CreateOrderInput,
+    QuoteManualOrderInput,
+} from "./orders.validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import type {
     OrderDetails,
@@ -69,7 +74,13 @@ import {
     type OrderCurrencySnapshot,
 } from "../payments/order-currency";
 import { getCurrencySettings } from "../settings/site-settings.service";
-import { toMinorUnits } from "../tax";
+import {
+    buildStorefrontTaxAllocationLineId,
+    calculateStorefrontTaxQuote,
+    fromMinorUnits,
+    toMinorUnits,
+    type TaxQuote,
+} from "../tax";
 import {
     assertNoActiveRefundAttempt,
     assertNoActiveRefundAttemptsForOrders,
@@ -274,6 +285,7 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     productName: string;
     variantLabel: string | null;
     productImageMediaId: string | null;
+    taxClassId: string | null;
 };
 type AdminOrderSkuIssueCode =
     | "SKU_REQUIRED"
@@ -324,6 +336,113 @@ function calculateManualOrderMoney(
         discountAmountMinor: toMinorUnits(normalizedDiscount, currency.decimalPlaces),
         totalAmountMinor: toMinorUnits(totalAmount, currency.decimalPlaces),
     };
+}
+
+export interface ManualOrderQuote {
+    currencyCode: string;
+    decimalPlaces: number;
+    subtotalAmount: number;
+    shippingAmount: number;
+    discountAmount: number;
+    taxAmount: number;
+    totalAmount: number;
+    taxLabel: string;
+    pricesIncludeTax: boolean;
+    taxEnabled: boolean;
+    settingsVersion: number;
+}
+
+interface PreparedManualOrderQuote {
+    currency: OrderCurrencySnapshot;
+    locationNames: {
+        cityName: string;
+        zoneName: string;
+        areaName: string | null;
+    };
+    trackedItems: Array<AdminOrderItemWithInventory<ManualOrderMoneyItem>>;
+    allocationLineIds: string[];
+    taxQuote: TaxQuote;
+    quote: ManualOrderQuote;
+}
+
+function projectManualOrderQuote(taxQuote: TaxQuote): ManualOrderQuote {
+    const fromMinor = (value: number) => fromMinorUnits(value, taxQuote.decimalPlaces);
+    return {
+        currencyCode: taxQuote.currencyCode,
+        decimalPlaces: taxQuote.decimalPlaces,
+        subtotalAmount: fromMinor(taxQuote.subtotalMinor),
+        shippingAmount: fromMinor(taxQuote.shippingMinor),
+        discountAmount: fromMinor(taxQuote.discountMinor),
+        taxAmount: fromMinor(taxQuote.taxMinor),
+        totalAmount: fromMinor(taxQuote.totalMinor),
+        taxLabel: taxQuote.displayLabel,
+        pricesIncludeTax: taxQuote.pricesIncludeTax,
+        taxEnabled: taxQuote.enabled,
+        settingsVersion: taxQuote.settingsVersion,
+    };
+}
+
+async function prepareManualOrderQuote(
+    db: Database,
+    data: QuoteManualOrderInput,
+): Promise<PreparedManualOrderQuote> {
+    const currentCurrency = await getCurrencySettings(db);
+    const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
+    const money = calculateManualOrderMoney(
+        data.items,
+        data.shippingCharge,
+        data.discountAmount,
+        currency,
+    );
+    // Keep location validation first so a stale/cross-parent destination fails
+    // before catalog or tax reads do unnecessary work.
+    const locationNames = await resolveActiveDeliveryLocationNames(db, data);
+    const trackedItems = await resolveAdminOrderItemInventory(
+        db,
+        money.normalizedItems,
+    );
+    const allocationLineIds = trackedItems.map((item, index) =>
+        buildStorefrontTaxAllocationLineId(index, item.variantId),
+    );
+    const taxQuote = await calculateStorefrontTaxQuote(db, {
+        destination: {
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            ...locationNames,
+        },
+        lines: trackedItems.map((item, index) => ({
+            lineId: allocationLineIds[index]!,
+            productId: item.productId,
+            variantId: item.variantId,
+            unitPrice: item.price,
+            quantity: item.quantity,
+            taxClassId: item.taxClassId,
+        })),
+        shippingAmount: money.shippingCharge,
+        discountAmount: money.discountAmount,
+        discountType: money.discountAmount > 0 ? "amount_off_order" : null,
+        currency: {
+            code: currency.code,
+            decimalPlaces: currency.decimalPlaces,
+        },
+    });
+
+    return {
+        currency,
+        locationNames,
+        trackedItems,
+        allocationLineIds,
+        taxQuote,
+        quote: projectManualOrderQuote(taxQuote),
+    };
+}
+
+export async function quoteManualOrder(
+    db: Database,
+    data: QuoteManualOrderInput,
+): Promise<ManualOrderQuote> {
+    return (await prepareManualOrderQuote(db, data)).quote;
 }
 export type BuyerRecoveryPaymentMethod =
     | typeof PaymentMethod.SSLCOMMERZ
@@ -796,6 +915,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             trackInventory: productVariants.trackInventory,
             imageId: productVariants.imageId,
             productName: products.name,
+            taxClassId: sql<string | null>`coalesce(${productVariants.taxClassId}, ${products.taxClassId})`,
             variantLabel: variantOptionLabelSql(productVariants.id),
             variantDeletedAt: productVariants.deletedAt,
             productActive: products.isActive,
@@ -867,6 +987,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
                 mediaByProduct.get(sku.productId) ?? [],
                 sku.imageId,
             )?.mediaId ?? null,
+            taxClassId: sku.taxClassId,
         });
     });
 
@@ -1619,8 +1740,9 @@ async function getOrderDetailsOnce(
  * Inventory flow:
  *   1. Reserve stock for all variant items (validates availability)
  *   2. Insert order + items atomically via db.batch()
- *   3. Convert reservations to permanent deductions (admin orders are immediately active)
- *   4. If batch fails, release all reservations (no orphaned holds)
+ *   3. Commit one confirmed, unpaid COD order with immutable money/tax facts
+ *   4. Keep tracked stock reserved until the fulfillment lifecycle deducts it
+ *   5. If the batch fails, release all reservations (no orphaned holds)
  */
 export async function createOrder(
     db: Database,
@@ -1642,21 +1764,21 @@ export async function createOrder(
     // Claim first so a lost-response retry can replay the original order even
     // when catalog, delivery, or customer facts changed after the commit.
     const prepared = await (async () => {
-        const currentCurrency = await getCurrencySettings(db);
-        const currency = createOrderCurrencySnapshot(currentCurrency.currencyCode);
-        const money = calculateManualOrderMoney(
-            data.items,
-            data.shippingCharge,
-            data.discountAmount,
+        const manualQuote = await prepareManualOrderQuote(db, data);
+        const {
             currency,
-        );
-        const totalAmount = money.totalAmount;
+            locationNames: { cityName, zoneName, areaName },
+            trackedItems,
+            allocationLineIds,
+            taxQuote,
+            quote,
+        } = manualQuote;
+        const totalAmount = quote.totalAmount;
         const initialPaymentState = computeOrderPaymentState({
             totalAmount,
             paidAmount: 0,
             currency,
         });
-        const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
         const existingCustomer = await db
             .select()
             .from(customers)
@@ -1677,8 +1799,6 @@ export async function createOrder(
                 { paidAmount: initialPaymentState.paidAmount, createdAt: new Date() },
             ]);
         }
-
-        const trackedItems = await resolveAdminOrderItemInventory(db, money.normalizedItems);
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
             .map((item) => ({
@@ -1706,8 +1826,6 @@ export async function createOrder(
         }
 
         return {
-            currency,
-            money,
             totalAmount,
             initialPaymentState,
             cityName,
@@ -1716,6 +1834,9 @@ export async function createOrder(
             existingCustomer,
             customerStats,
             trackedItems,
+            allocationLineIds,
+            taxQuote,
+            quote,
             reservationEntries,
         };
     })().catch(async (error) => {
@@ -1723,8 +1844,6 @@ export async function createOrder(
         throw error;
     });
     const {
-        currency,
-        money,
         totalAmount,
         initialPaymentState,
         cityName,
@@ -1733,6 +1852,9 @@ export async function createOrder(
         existingCustomer,
         customerStats,
         trackedItems,
+        allocationLineIds,
+        taxQuote,
+        quote,
         reservationEntries,
     } = prepared;
     let customerId = existingCustomer?.id;
@@ -1804,6 +1926,19 @@ export async function createOrder(
         );
     }
 
+    const preparedOrderItems = trackedItems.map((item, index) => {
+        const allocationLineId = allocationLineIds[index]!;
+        const lineTax = taxQuote.lines.find((line) => line.lineId === allocationLineId);
+        if (!lineTax) {
+            throw new ValidationError("Authoritative tax quote is missing a manual-order line. Please retry.");
+        }
+        return {
+            id: generateOrderId(),
+            item,
+            lineTax,
+        };
+    });
+
     // Order row
     writeBatch.push(
         db.insert(orders).values({
@@ -1820,21 +1955,23 @@ export async function createOrder(
             areaName,
             notes: data.notes,
             totalAmount,
-            shippingCharge: money.shippingCharge,
-            discountAmount: money.discountAmount,
-            currencyCode: currency.code,
-            currencyDecimalPlaces: currency.decimalPlaces,
-            subtotalAmountMinor: money.subtotalAmountMinor,
-            shippingAmountMinor: money.shippingAmountMinor,
-            discountAmountMinor: money.discountAmountMinor,
-            taxAmountMinor: 0,
-            totalAmountMinor: money.totalAmountMinor,
-            taxLabel: null,
-            pricesIncludeTax: false,
+            shippingCharge: quote.shippingAmount,
+            discountAmount: quote.discountAmount,
+            currencyCode: taxQuote.currencyCode,
+            currencyDecimalPlaces: taxQuote.decimalPlaces,
+            subtotalAmountMinor: taxQuote.subtotalMinor,
+            shippingAmountMinor: taxQuote.shippingMinor,
+            discountAmountMinor: taxQuote.discountMinor,
+            taxAmountMinor: taxQuote.taxMinor,
+            totalAmountMinor: taxQuote.totalMinor,
+            taxLabel: taxQuote.displayLabel,
+            pricesIncludeTax: taxQuote.pricesIncludeTax,
             paidAmount: initialPaymentState.paidAmount,
             balanceDue: initialPaymentState.balanceDue,
             paymentStatus: initialPaymentState.paymentStatus,
-            status: "pending",
+            paymentMethod: PaymentMethod.COD,
+            fulfillmentStatus: FulfillmentStatus.PENDING,
+            status: OrderStatus.CONFIRMED,
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             version: 1,
@@ -1844,11 +1981,11 @@ export async function createOrder(
     );
 
     // Order items
-    if (data.items.length > 0) {
+    if (preparedOrderItems.length > 0) {
         writeBatch.push(
             db.insert(orderItems).values(
-                trackedItems.map((item) => ({
-                    id: generateOrderId(),
+                preparedOrderItems.map(({ id, item, lineTax }) => ({
+                    id,
                     orderId,
                     productId: item.productId,
                     variantId: item.variantId,
@@ -1858,11 +1995,67 @@ export async function createOrder(
                     productName: item.productName,
                     variantLabel: item.variantLabel,
                     inventoryTracked: item.inventoryTracked,
+                    unitPriceMinor: lineTax.unitPriceMinor,
+                    lineSubtotalMinor: lineTax.grossAmountMinor,
+                    discountAmountMinor: lineTax.discountMinor,
+                    taxableAmountMinor: lineTax.taxableAmountMinor,
+                    taxAmountMinor: lineTax.taxMinor,
+                    fulfillmentStatus: ItemFulfillmentStatus.PENDING,
+                    createdAt: sql`unixepoch()`,
+                })),
+            ),
+        );
+
+        writeBatch.push(
+            db.insert(orderItemTaxSnapshots).values(
+                preparedOrderItems.map(({ id, lineTax }) => ({
+                    orderItemId: id,
+                    orderId,
+                    taxClassId: lineTax.taxClassId,
+                    taxClassName: lineTax.taxClassName,
+                    unitPriceMinor: lineTax.unitPriceMinor,
+                    quantity: lineTax.quantity,
+                    grossAmountMinor: lineTax.grossAmountMinor,
+                    discountMinor: lineTax.discountMinor,
+                    taxableAmountMinor: lineTax.taxableAmountMinor,
+                    taxMinor: lineTax.taxMinor,
+                    pricesIncludeTax: taxQuote.pricesIncludeTax,
+                    rateSnapshot: JSON.stringify(lineTax.components),
                     createdAt: sql`unixepoch()`,
                 })),
             ),
         );
     }
+
+    writeBatch.push(
+        db.insert(orderTaxSnapshots).values({
+            orderId,
+            currencyCode: taxQuote.currencyCode,
+            decimalPlaces: taxQuote.decimalPlaces,
+            displayLabel: taxQuote.displayLabel,
+            pricesIncludeTax: taxQuote.pricesIncludeTax,
+            shippingTaxed: taxQuote.shippingTaxed,
+            subtotalMinor: taxQuote.subtotalMinor,
+            shippingMinor: taxQuote.shippingMinor,
+            discountMinor: taxQuote.discountMinor,
+            taxableMinor: taxQuote.taxableMinor,
+            taxMinor: taxQuote.taxMinor,
+            totalMinor: taxQuote.totalMinor,
+            settingsVersion: taxQuote.settingsVersion,
+            calculationVersion: taxQuote.calculationVersion,
+            destinationSnapshot: JSON.stringify(taxQuote.destination),
+            rateSnapshot: JSON.stringify({
+                lines: taxQuote.lines.map((line) => ({
+                    lineId: line.lineId,
+                    taxClassId: line.taxClassId,
+                    taxClassName: line.taxClassName,
+                    components: line.components,
+                })),
+                shipping: taxQuote.shipping,
+            }),
+            createdAt: sql`unixepoch()`,
+        }),
+    );
 
     writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response));
 
@@ -1898,22 +2091,6 @@ export async function createOrder(
         }
         await markAdminOrderCreateAttemptFailed(db, attempt, batchError).catch(() => undefined);
         throw batchError;
-    }
-
-    // ── Convert reservations to permanent deductions ────────────────────
-    // Admin orders are immediately active. Route the conversion through the
-    // claimed order transition engine so a Worker retry cannot deduct twice.
-    if (reservationEntries.length > 0) {
-        try {
-            await applyInventoryForStatusChange(db, orderId, OrderStatus.SHIPPED);
-        } catch (error: unknown) {
-            // The order remains reserved when the strict deduction cannot be
-            // proven, which fails safe against overselling.
-            console.error(
-                `[orders.admin] Failed to prove stock deduction for order ${orderId}. Stock remains reserved.`,
-                error,
-            );
-        }
     }
 
     return response;

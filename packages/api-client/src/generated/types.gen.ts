@@ -33887,6 +33887,131 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportResponses = {
 
 export type GetApiV1AdminOrdersPaymentRecoveryExportResponse = GetApiV1AdminOrdersPaymentRecoveryExportResponses[keyof GetApiV1AdminOrdersPaymentRecoveryExportResponses];
 
+export type PostApiV1AdminOrdersQuoteData = {
+    body?: {
+        city: string;
+        zone: string;
+        area: string | null;
+        items: Array<{
+            productId: string;
+            variantId: string | null;
+            quantity: number;
+            price: number;
+        }>;
+        discountAmount: number | null;
+        shippingCharge: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/quote';
+};
+
+export type PostApiV1AdminOrdersQuoteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersQuoteError = PostApiV1AdminOrdersQuoteErrors[keyof PostApiV1AdminOrdersQuoteErrors];
+
+export type PostApiV1AdminOrdersQuoteResponses = {
+    /**
+     * Authoritative manual-order quote
+     */
+    200: {
+        success: true;
+        data: {
+            currencyCode: string;
+            decimalPlaces: number;
+            subtotalAmount: number;
+            shippingAmount: number;
+            discountAmount: number;
+            taxAmount: number;
+            totalAmount: number;
+            taxLabel: string;
+            pricesIncludeTax: boolean;
+            taxEnabled: boolean;
+            settingsVersion: number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersQuoteResponse = PostApiV1AdminOrdersQuoteResponses[keyof PostApiV1AdminOrdersQuoteResponses];
+
 export type PostApiV1AdminOrdersArchiveData = {
     body?: {
         orders: Array<{

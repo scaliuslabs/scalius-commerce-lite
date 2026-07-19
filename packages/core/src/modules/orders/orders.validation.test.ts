@@ -77,6 +77,14 @@ describe("manual-order create idempotency", () => {
         expect(createOrderSchema.safeParse({ ...base, requestKey: "retry-me" }).success).toBe(false);
         expect(createOrderSchema.safeParse({ ...base, requestKey: crypto.randomUUID() }).success).toBe(true);
     });
+
+    it("rejects an empty order before service or inventory work", () => {
+        expect(createOrderSchema.safeParse({
+            ...orderInput(1),
+            items: [],
+            requestKey: crypto.randomUUID(),
+        }).success).toBe(false);
+    });
 });
 
 describe("order archive concurrency", () => {
