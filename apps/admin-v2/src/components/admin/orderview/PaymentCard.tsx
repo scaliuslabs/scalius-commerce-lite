@@ -49,6 +49,7 @@ import {
   orderPaymentsQueryOptions,
 } from "@/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
+import { resolveOrderOperationalReadState } from "@/lib/order-operational-read-state";
 import {
   useReconcileRefundAttempt,
   useIssueOrderPaymentRecoveryLink,
@@ -414,12 +415,20 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const isRefundLocked = Boolean(activeRefundOperation?.active);
 
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
-  const { data: codData } = useQuery({
+  const codQuery = useQuery({
     ...orderCodQueryOptions(order.id),
     enabled: isHydrated && isCOD,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
+  const codData = codQuery.data;
   const codTracking = isCOD ? ((codData as { tracking: CODTracking | null } | null)?.tracking ?? null) : null;
+  const codReadState = resolveOrderOperationalReadState({
+    hydrated: isHydrated,
+    loading: codQuery.isLoading,
+    error: codQuery.isError,
+    fetching: codQuery.isFetching,
+    hasData: codData !== undefined,
+  });
 
   // Mutations
   const codMutation = useUpdateOrderCod();
@@ -860,7 +869,62 @@ export function PaymentCard({ order }: PaymentCardProps) {
           {/* COD tracking */}
           {isHydrated && isCOD && (
             <div className="space-y-2">
-              {codTracking && (
+              {codReadState.status === "loading" ? (
+                <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading COD tracking…
+                </div>
+              ) : codReadState.status === "unavailable" ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">COD tracking unavailable</p>
+                      <p className="mt-1 text-xs opacity-90">
+                        Collection and failure actions are paused until the saved COD state can be verified.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 px-2 text-xs"
+                      onClick={() => void codQuery.refetch()}
+                      disabled={codReadState.refreshing}
+                    >
+                      {codReadState.refreshing ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {codReadState.status === "stale" ? (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    Showing the last loaded COD state. Retry before recording a collection or failure.
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 px-2 text-xs"
+                    onClick={() => void codQuery.refetch()}
+                    disabled={codReadState.refreshing}
+                  >
+                    {codReadState.refreshing && (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    )}
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+
+              {codTracking && codReadState.status !== "unavailable" && (
                 <div className="text-sm space-y-1 rounded-lg bg-muted/30 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">COD Status</span>
@@ -896,7 +960,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
               )}
 
               {/* COD action buttons -- only when not yet collected/returned */}
-              {canUpdateCod && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
+              {codReadState.status === "ready" && canUpdateCod && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
                 <div className="flex gap-2">
                   <Button
                     size="sm"

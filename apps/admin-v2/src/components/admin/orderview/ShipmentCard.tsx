@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink } from "lucide-react";
+import { AlertTriangle, Truck, ChevronDown, ChevronUp, Loader2, ExternalLink, RefreshCw } from "lucide-react";
 import { ShipmentMetadataDisplay } from "@/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "@/components/admin/ShipmentStatusIndicator";
 import type { Order, OrderShipment } from "./types";
@@ -39,11 +40,13 @@ const CreateShipmentForm = ({
 }: {
   order: Order;
 }) => {
+  const queryClient = useQueryClient();
   const [selectedProviderId, setSelectedProviderId] = React.useState("");
   const shipmentMutation = useCreateOrderShipment();
   const refundLocked = Boolean(order.activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const selectedProvider = order.deliveryProviders?.find(
+  const deliveryProviders = order.deliveryProviders ?? [];
+  const selectedProvider = deliveryProviders.find(
     (provider) => provider.id === selectedProviderId,
   );
   const selectedReadiness = selectedProvider
@@ -53,9 +56,20 @@ const CreateShipmentForm = ({
     !selectedReadiness.canCreateShipment
       ? getProviderReadinessMessage(selectedReadiness)
       : "";
-  const readyProviderCount = (order.deliveryProviders ?? []).filter(
+  const readyProviderCount = deliveryProviders.filter(
     (provider) => resolveProviderReadiness(provider).canCreateShipment,
   ).length;
+  const providersRead = order.operationalReads?.deliveryProviders ?? {
+    status: "ready" as const,
+    refreshing: false,
+  };
+
+  const retryProviders = () => {
+    void queryClient.refetchQueries({
+      queryKey: queryKeys.settings.deliveryProviders(),
+      type: "active",
+    });
+  };
 
   const handleCreateShipment = () => {
     if (refundLocked) {
@@ -101,8 +115,38 @@ const CreateShipmentForm = ({
           </div>
         )}
         <div className="space-y-3">
-          {order.deliveryProviders && order.deliveryProviders.length > 0 && (
+          {providersRead.status === "loading" ? (
+            <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading delivery providers…
+            </div>
+          ) : providersRead.status === "unavailable" ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">Delivery providers unavailable</p>
+                  <p className="mt-1 text-xs opacity-90">Provider shipment creation is paused until setup can be verified.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={retryProviders} disabled={providersRead.refreshing}>
+                  {providersRead.refreshing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+                  Retry
+                </Button>
+              </div>
+            </div>
+          ) : (
             <>
+              {providersRead.status === "stale" ? (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">Showing the last loaded provider setup. Retry before creating a shipment.</span>
+                  <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={retryProviders} disabled={providersRead.refreshing}>
+                    {providersRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {deliveryProviders.length > 0 ? (
+                <>
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                   Select Delivery Provider
@@ -110,7 +154,12 @@ const CreateShipmentForm = ({
                 <Select
                   value={selectedProviderId}
                   onValueChange={setSelectedProviderId}
-                  disabled={shipmentMutation.isPending || refundLocked || shipmentLocked}
+                  disabled={
+                    providersRead.status !== "ready" ||
+                    shipmentMutation.isPending ||
+                    refundLocked ||
+                    shipmentLocked
+                  }
                 >
                   <SelectTrigger
                     aria-label="Delivery provider"
@@ -119,7 +168,7 @@ const CreateShipmentForm = ({
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-card text-foreground">
-                    {order.deliveryProviders?.map((provider) => (
+                    {deliveryProviders.map((provider) => (
                       <SelectItem
                         key={provider.id}
                         value={provider.id}
@@ -139,7 +188,7 @@ const CreateShipmentForm = ({
                 {readyProviderCount === 0 && (
                   <p className="rounded-md border border-amber-200 bg-amber-50/80 p-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
                     No shipment-ready providers.{" "}
-                    {getProviderReadinessMessage(resolveProviderReadiness(order.deliveryProviders[0]))}
+                    {getProviderReadinessMessage(resolveProviderReadiness(deliveryProviders[0]!))}
                   </p>
                 )}
               </div>
@@ -149,6 +198,7 @@ const CreateShipmentForm = ({
                   shipmentMutation.isPending ||
                   !selectedProviderId ||
                   selectedReadiness?.canCreateShipment === false ||
+                  providersRead.status !== "ready" ||
                   refundLocked ||
                   shipmentLocked
                 }
@@ -159,6 +209,18 @@ const CreateShipmentForm = ({
                 )}
                 {shipmentMutation.isPending ? "Creating..." : "Create Shipment"}
               </Button>
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 p-3 text-sm">
+                  <div>
+                    <p className="font-medium">No delivery providers configured</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Add a provider for tracked courier shipments.</p>
+                  </div>
+                  <Button asChild type="button" variant="outline" size="sm" className="h-8">
+                    <Link to="/admin/settings/delivery-providers">Configure providers</Link>
+                  </Button>
+                </div>
+              )}
             </>
           )}
           <ManualFulfillmentDialog order={order} />
@@ -363,6 +425,16 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
   const hasCreateShipmentActions =
     orderActions.canManageOrderShipments && order.items.length > 0;
   const hasShipments = order.shipments && order.shipments.length > 0;
+  const shipmentsRead = order.operationalReads?.shipments ?? {
+    status: "ready" as const,
+    refreshing: false,
+  };
+  const retryShipments = () => {
+    void queryClient.refetchQueries({
+      queryKey: queryKeys.orders.shipments(order.id),
+      type: "active",
+    });
+  };
   const shipmentRefreshDisabledReason = refundLocked
     ? "Shipment refresh is locked while refund recovery is active."
     : shipmentLocked
@@ -380,16 +452,43 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
         <CreateShipmentForm order={order} />
       )}
 
-      {hasShipments && (
-        <Card className="mt-6 overflow-hidden">
-          <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Truck className="h-4 w-4" />
-              Shipment History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
+      <Card className="mt-6 overflow-hidden">
+        <CardHeader className="border-b border-border bg-muted/5 px-4 py-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Truck className="h-4 w-4" />
+            Shipment History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {shipmentsRead.status === "loading" ? (
+            <div className="flex min-h-24 items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading shipment history…
+            </div>
+          ) : shipmentsRead.status === "unavailable" ? (
+            <div className="flex min-h-28 flex-col items-center justify-center gap-3 p-4 text-center">
+              <div>
+                <p className="text-sm font-medium text-destructive">Shipment history unavailable</p>
+                <p className="mt-1 text-xs text-muted-foreground">Existing shipments were not assumed empty.</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+                {shipmentsRead.refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Retry
+              </Button>
+            </div>
+          ) : (
+            <>
+              {shipmentsRead.status === "stale" ? (
+                <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">Showing the last loaded shipment data. Refresh failed.</span>
+                  <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+                    {shipmentsRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                    Retry
+                  </Button>
+                </div>
+              ) : null}
+              {hasShipments ? (
+                <div className="divide-y divide-border">
               {order.shipments?.map((shipment) => (
                 <ShipmentHistoryItem
                   key={shipment.id}
@@ -400,10 +499,17 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                   refreshDisabledReason={shipmentRefreshDisabledReason}
                 />
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                </div>
+              ) : (
+                <div className="p-4 text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">No shipments yet</p>
+                  <p className="mt-1">Create a provider shipment above or record an own-courier fulfillment.</p>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

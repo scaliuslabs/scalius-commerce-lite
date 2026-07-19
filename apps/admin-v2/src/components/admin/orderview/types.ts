@@ -1,4 +1,5 @@
 import type { DeliveryProviderRecord } from "@/types/api-responses";
+import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -152,6 +153,10 @@ export interface Order {
   areaName?: string | null;
   shipments?: OrderShipment[];
   deliveryProviders?: DeliveryProviderRecord[];
+  operationalReads?: {
+    shipments: OrderOperationalReadState;
+    deliveryProviders: OrderOperationalReadState;
+  };
   // Payment fields
   paymentMethod?: string | null;
   paymentStatus?: string | null;
