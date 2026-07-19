@@ -25134,6 +25134,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
                 sslcommerz: {
                     configured: boolean;
@@ -25145,6 +25146,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
                 polar: {
                     configured: boolean;
@@ -25156,6 +25158,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
                 cod: {
                     configured: boolean;
@@ -25167,6 +25170,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     providerEnabled?: boolean;
                     checkoutSelected?: boolean;
                     checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
             };
             [key: string]: unknown;

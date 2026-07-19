@@ -49,6 +49,7 @@ describe("payment method merchant outcome matrix", () => {
         setupLabel: "Not required",
         providerLabel: "Always available",
         environmentLabel: "Not applicable",
+        healthLabel: "Not applicable",
       });
     },
   );
@@ -148,6 +149,14 @@ describe("payment method merchant outcome matrix", () => {
       healthLabel: "Not checked",
       setupLabel: "Complete",
       effective: true,
+    });
+  });
+
+  it("does not imply that cash on delivery has an external connection to probe", () => {
+    expect(outcome({ method: "cod" })).toMatchObject({
+      healthLabel: "Not applicable",
+      setupLabel: "Not required",
+      providerLabel: "Always available",
     });
   });
 

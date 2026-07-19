@@ -22,6 +22,7 @@ export interface GatewayStatus {
   providerEnabled?: boolean;
   checkoutSelected?: boolean;
   checkoutVisible?: boolean;
+  environment?: "test" | "live" | "mixed" | "unknown" | "not_applicable";
 }
 export interface PaymentMethodsData {
   enabledMethods: MethodKey[]; defaultMethod: MethodKey;
