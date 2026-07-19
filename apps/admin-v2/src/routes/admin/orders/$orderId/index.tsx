@@ -20,6 +20,10 @@ import type {
 } from "~/lib/api-functions/orders";
 import type { OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
 import { useHydrated } from "~/hooks/use-hydrated";
+import {
+  resolveOrderOperationalReadState,
+  type OrderOperationalReadState,
+} from "~/lib/order-operational-read-state";
 
 type ShipmentMetadata = Record<string, unknown> | string | null;
 
@@ -84,6 +88,10 @@ function toOrderViewModel(
   order: OrderDetailDto,
   shipments: OrderShipmentDto[],
   deliveryProviders: DeliveryProviderRecord[],
+  operationalReads: {
+    shipments: OrderOperationalReadState;
+    deliveryProviders: OrderOperationalReadState;
+  },
 ): Order {
   return {
     id: order.id,
@@ -118,6 +126,7 @@ function toOrderViewModel(
     areaName: order.areaName,
     shipments: shipments.map((shipment) => toOrderShipment(shipment, order.createdAt)),
     deliveryProviders,
+    operationalReads,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     paidAmount: order.paidAmount,
@@ -152,25 +161,53 @@ function OrderViewPage() {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
-  const { data: shipments = [] } = useQuery({
+  const shipmentsQuery = useQuery({
     ...orderShipmentsQueryOptions(orderId),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
-  const { data: providers = [] } = useQuery({
+  const providersQuery = useQuery({
     ...deliveryProvidersQueryOptions(),
     enabled: isHydrated,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
 
   const fullOrder = useMemo(() => {
-    const hydratedShipments = isHydrated ? shipments : [];
-    const activeProviders = isHydrated && Array.isArray(providers)
-      ? (providers as DeliveryProviderRecord[]).filter((p) => p.isActive)
+    const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)
+      ? shipmentsQuery.data
       : [];
-    return toOrderViewModel(order, hydratedShipments, activeProviders);
-  }, [isHydrated, order, shipments, providers]);
+    const activeProviders = isHydrated && Array.isArray(providersQuery.data)
+      ? (providersQuery.data as DeliveryProviderRecord[]).filter((p) => p.isActive)
+      : [];
+    return toOrderViewModel(order, hydratedShipments, activeProviders, {
+      shipments: resolveOrderOperationalReadState({
+        hydrated: isHydrated,
+        loading: shipmentsQuery.isLoading,
+        error: shipmentsQuery.isError,
+        fetching: shipmentsQuery.isFetching,
+        hasData: shipmentsQuery.data !== undefined,
+      }),
+      deliveryProviders: resolveOrderOperationalReadState({
+        hydrated: isHydrated,
+        loading: providersQuery.isLoading,
+        error: providersQuery.isError,
+        fetching: providersQuery.isFetching,
+        hasData: providersQuery.data !== undefined,
+      }),
+    });
+  }, [
+    isHydrated,
+    order,
+    providersQuery.data,
+    providersQuery.isError,
+    providersQuery.isFetching,
+    providersQuery.isLoading,
+    shipmentsQuery.data,
+    shipmentsQuery.isError,
+    shipmentsQuery.isFetching,
+    shipmentsQuery.isLoading,
+  ]);
 
   return <OrderView order={fullOrder} />;
 }

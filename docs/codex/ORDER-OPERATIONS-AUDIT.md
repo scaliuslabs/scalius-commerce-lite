@@ -1,6 +1,6 @@
 # Order Operations Audit
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-20
 
 Status: code-backed audit and implementation contract. This file does not claim that a workflow is production-proven merely because a component or endpoint exists.
 
@@ -278,13 +278,20 @@ closed-state visibility/pointer fallback.
   replace the whole workspace. Route-owned panels are direct imports: internal
   `lazy()`/`Suspense` boundaries previously allowed an optional chunk to resolve
   between the server render and hydration, changing the first client tree.
+- Shipment history, delivery-provider setup, and COD tracking distinguish the
+  initial load, a truthful empty result, an unavailable first read, and stale
+  last-known data after a failed refresh. Shipment/provider/COD writes remain
+  paused unless their owning read is current; every unavailable state has a
+  local retry instead of failing or blanking the full order workspace.
 
 **Proven**
 
 - Navigation/prefetch behavior, payment and notification mutation invalidation,
   permission projection, notification display grouping, recovery summaries,
-  direct panel boundaries, and payment-query hydration gating have focused
-  tests.
+  direct panel boundaries, payment-query hydration gating, and the operational
+  read-state transition model have focused tests. Source-boundary tests keep the
+  shipment/provider queries from regressing to default empty arrays and keep COD
+  actions behind a current successful read.
 
 **Live hydration checkpoint — 2026-07-19:** admin version
 `d8e7914f-1768-46ae-a404-211d3a596220` was exercised on the exact production
@@ -298,9 +305,17 @@ consecutive hard navigations rendered order, notification, return, and refund
 facts with zero console errors or warnings. Keep optional warm-query state out
 of server/first-client markup unless it is part of the route snapshot.
 
+**Live operational-read checkpoint — 2026-07-20:** admin version
+`de4f90a3-a5ff-46c9-b84d-b4dc387eb5f4` was exercised on gateway order
+`SEJ5E0` and COD order `1NC5RO`. Both loaded provider configuration and a
+truthful **No shipments yet** state without console errors. The COD workspace
+revealed **Mark Collected** only after its tracking query resolved. The COD
+workspace retained zero horizontal overflow at 390 x 844. Failure and stale
+branches are covered by the focused state/boundary tests; this live checkpoint
+proves the deployed current/empty paths, not a simulated production outage.
+
 **Gaps**
 
-- Shipment and provider query errors are converted to empty arrays, making an outage look like “no shipments” or “no providers.” COD query errors similarly look like no COD record. Every operational panel needs explicit loading/error/empty distinctions and retry.
 - There is no unified actor-attributed chronology. Evidence is fragmented across cards and some mutations have no actor/reason event at all. Add a single append-only order activity stream referencing the owning payment/shipment/refund/return/notification/support facts.
 - The layout is readable but not optimized for high-throughput operations: large icon/info blocks and two independent status controls consume space, while recovery facts are scattered. Use a compact sticky summary rail and one chronological workspace after domain correctness is fixed.
 - Fulfillment aggregate can be manually changed independently of item and shipment rows. The UI can show `complete` while every line is pending and no shipment exists. Derive it from fulfillment quantities, or represent an explicit audited override that does not masquerade as derived truth.
@@ -370,7 +385,6 @@ of server/first-client markup unless it is part of the route snapshot.
 - Generic workflow bypass (P0-1) and COD premature restock (P0-6).
 - `orders.status` mixes commercial, fulfillment, return, and financial dimensions even though separate payment and fulfillment records exist. Adopt command-specific transitions and derived summaries.
 - COD failure records an attempt but the operator flow lacks a clear retry/reschedule/address-correction sequence.
-- COD query failure is not surfaced in the detail UI.
 - Direct fulfillment aggregate editing is not synchronized with line quantities or shipment evidence.
 
 ### 9. Payments and hosted-payment recovery
@@ -431,7 +445,6 @@ of server/first-client markup unless it is part of the route snapshot.
 - Direct aggregate fulfillment editing can contradict line and shipment facts.
 - Post-shipment cancellation/backward status needs explicit reconciliation, not a generic status change.
 - Shipment history is not part of one actor-attributed order timeline, and manual fulfillment lacks a request key exposed by the client.
-- Provider and shipment secondary-read failures appear empty in the detail workspace.
 
 ### 13. Notifications
 
@@ -498,7 +511,11 @@ Every order surface must distinguish these states:
 9. mutation succeeded but cache/notification follow-up failed;
 10. bounded result/export was truncated.
 
-Current good examples are the list error/retry state, notification panel error/retry, payment recovery banners, refund/shipment locks, and recovery export cap metadata. Current failures are the new-order loader's empty-catalog fallback, edit/invoice catch-all redirects, shipment/provider/COD empty fallbacks, and generic mutation toasts that do not identify a stale revision or a committed-but-reconciliation-required outcome.
+Current good examples are the list error/retry state, notification panel
+error/retry, payment recovery banners, refund/shipment locks,
+shipment/provider/COD operational-read states, and recovery export cap metadata.
+Remaining failures include generic mutation toasts that do not identify a stale
+revision or a committed-but-reconciliation-required outcome.
 
 Use typed error codes and structured conflict details. Do not parse message strings to decide recovery. After a `409`, retain unsaved form input, show the server revision/change summary, and let the merchant reload or deliberately reapply allowed fields.
 
