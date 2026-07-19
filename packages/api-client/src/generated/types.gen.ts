@@ -16260,6 +16260,1327 @@ export type GetApiV1AdminNavigationPreviewProductsResponses = {
 
 export type GetApiV1AdminNavigationPreviewProductsResponse = GetApiV1AdminNavigationPreviewProductsResponses[keyof GetApiV1AdminNavigationPreviewProductsResponses];
 
+export type GetApiV1AdminNavigationMenusData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        cursor?: string;
+        includeTrash?: 'true' | 'false';
+    };
+    url: '/api/v1/admin/navigation/menus';
+};
+
+export type GetApiV1AdminNavigationMenusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusError = GetApiV1AdminNavigationMenusErrors[keyof GetApiV1AdminNavigationMenusErrors];
+
+export type GetApiV1AdminNavigationMenusResponses = {
+    /**
+     * Reusable navigation menus
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                id: string;
+                name: string;
+                handle: string;
+                revision: number;
+                publishedRevision: number | null;
+                dependencyRevision: number;
+                updatedAt: string | null;
+                deletedAt: string | null;
+                itemCount: number;
+                placementCount: number;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusResponse = GetApiV1AdminNavigationMenusResponses[keyof GetApiV1AdminNavigationMenusResponses];
+
+export type PostApiV1AdminNavigationMenusData = {
+    body?: {
+        name: string;
+        handle?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/navigation/menus';
+};
+
+export type PostApiV1AdminNavigationMenusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusError = PostApiV1AdminNavigationMenusErrors[keyof PostApiV1AdminNavigationMenusErrors];
+
+export type PostApiV1AdminNavigationMenusResponses = {
+    /**
+     * Navigation menu created
+     */
+    200: {
+        success: true;
+        data: {
+            menu: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusResponse = PostApiV1AdminNavigationMenusResponses[keyof PostApiV1AdminNavigationMenusResponses];
+
+export type GetApiV1AdminNavigationMenusByMenuIdData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdError = GetApiV1AdminNavigationMenusByMenuIdErrors[keyof GetApiV1AdminNavigationMenusByMenuIdErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdResponses = {
+    /**
+     * Navigation menu
+     */
+    200: {
+        success: true;
+        data: {
+            menu: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdResponse = GetApiV1AdminNavigationMenusByMenuIdResponses[keyof GetApiV1AdminNavigationMenusByMenuIdResponses];
+
+export type PatchApiV1AdminNavigationMenusByMenuIdData = {
+    body?: {
+        expectedRevision: number;
+        name: string;
+        handle: string;
+    };
+    path: {
+        menuId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}';
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdError = PatchApiV1AdminNavigationMenusByMenuIdErrors[keyof PatchApiV1AdminNavigationMenusByMenuIdErrors];
+
+export type PatchApiV1AdminNavigationMenusByMenuIdResponses = {
+    /**
+     * Navigation menu updated
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            name: string;
+            handle: string;
+        };
+    };
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdResponse = PatchApiV1AdminNavigationMenusByMenuIdResponses[keyof PatchApiV1AdminNavigationMenusByMenuIdResponses];
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query?: {
+        parentId?: string;
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/navigation/menus/{menuId}/items';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsError = GetApiV1AdminNavigationMenusByMenuIdItemsErrors[keyof GetApiV1AdminNavigationMenusByMenuIdItemsErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsResponses = {
+    /**
+     * Paged menu items
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                item: {
+                    id: string;
+                    menuId: string;
+                    parentId: string | null;
+                    position: number;
+                    label: string;
+                    labelMode: 'custom' | 'resource';
+                    targetType: string;
+                    targetId: string | null;
+                    targetValue: string | null;
+                    targetQuery: string | null;
+                    openInNewTab: boolean;
+                    isEnabled: boolean;
+                    createdAt: string | null;
+                    updatedAt: string | null;
+                };
+                childCount: number;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsResponse = GetApiV1AdminNavigationMenusByMenuIdItemsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsResponses];
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsData = {
+    body?: {
+        label: string;
+        labelMode: 'custom' | 'resource';
+        target: {
+            type: 'resource';
+            resourceType: 'page' | 'category' | 'collection' | 'product';
+            resourceId: string;
+            query?: string;
+        } | {
+            type: 'system';
+            key: 'home' | 'catalog' | 'search' | 'account' | 'cart' | 'checkout' | 'order_lookup';
+        } | {
+            type: 'internal_path';
+            path: string;
+        } | {
+            type: 'external_url';
+            url: string;
+        } | {
+            type: 'label';
+        };
+        openInNewTab?: boolean;
+        isEnabled?: boolean;
+        expectedRevision: number;
+        parentId?: string | null;
+    };
+    path: {
+        menuId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/items';
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsError = PostApiV1AdminNavigationMenusByMenuIdItemsErrors[keyof PostApiV1AdminNavigationMenusByMenuIdItemsErrors];
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsResponses = {
+    /**
+     * Menu item created
+     */
+    200: {
+        success: true;
+        data: {
+            item?: unknown;
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsResponse = PostApiV1AdminNavigationMenusByMenuIdItemsResponses[keyof PostApiV1AdminNavigationMenusByMenuIdItemsResponses];
+
+export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
+    body?: {
+        expectedRevision: number;
+    };
+    path: {
+        menuId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}';
+};
+
+export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdError = DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors[keyof DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors];
+
+export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
+    /**
+     * Menu item subtree deleted
+     */
+    200: {
+        success: true;
+        data: {
+            deletedCount: number;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
+
+export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdData = {
+    body?: {
+        label: string;
+        labelMode: 'custom' | 'resource';
+        target: {
+            type: 'resource';
+            resourceType: 'page' | 'category' | 'collection' | 'product';
+            resourceId: string;
+            query?: string;
+        } | {
+            type: 'system';
+            key: 'home' | 'catalog' | 'search' | 'account' | 'cart' | 'checkout' | 'order_lookup';
+        } | {
+            type: 'internal_path';
+            path: string;
+        } | {
+            type: 'external_url';
+            url: string;
+        } | {
+            type: 'label';
+        };
+        openInNewTab?: boolean;
+        isEnabled?: boolean;
+        expectedRevision: number;
+    };
+    path: {
+        menuId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}';
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdError = PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors[keyof PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors];
+
+export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
+    /**
+     * Menu item updated
+     */
+    200: {
+        success: true;
+        data: {
+            item?: unknown;
+            revision: number;
+        };
+    };
+};
+
+export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveData = {
+    body?: {
+        expectedRevision: number;
+        parentId?: string | null;
+        beforeId?: string;
+        afterId?: string;
+    };
+    path: {
+        menuId: string;
+        itemId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}/move';
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveError = PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors[keyof PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors];
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses = {
+    /**
+     * Menu item moved
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponse = PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses[keyof PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses];
+
+export type PostApiV1AdminNavigationMenusByMenuIdPublishData = {
+    body?: {
+        expectedRevision: number;
+    };
+    path: {
+        menuId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/publish';
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdPublishErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdPublishError = PostApiV1AdminNavigationMenusByMenuIdPublishErrors[keyof PostApiV1AdminNavigationMenusByMenuIdPublishErrors];
+
+export type PostApiV1AdminNavigationMenusByMenuIdPublishResponses = {
+    /**
+     * Menu published
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            publishedRevision: number;
+            itemCount: number;
+            checksum: string;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdPublishResponse = PostApiV1AdminNavigationMenusByMenuIdPublishResponses[keyof PostApiV1AdminNavigationMenusByMenuIdPublishResponses];
+
+export type GetApiV1AdminNavigationPlacementsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/navigation/placements';
+};
+
+export type GetApiV1AdminNavigationPlacementsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPlacementsError = GetApiV1AdminNavigationPlacementsErrors[keyof GetApiV1AdminNavigationPlacementsErrors];
+
+export type GetApiV1AdminNavigationPlacementsResponses = {
+    /**
+     * Navigation placements
+     */
+    200: {
+        success: true;
+        data: {
+            placements: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPlacementsResponse = GetApiV1AdminNavigationPlacementsResponses[keyof GetApiV1AdminNavigationPlacementsResponses];
+
+export type GetApiV1AdminNavigationAuthorityShadowData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/navigation/authority-shadow';
+};
+
+export type GetApiV1AdminNavigationAuthorityShadowErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationAuthorityShadowError = GetApiV1AdminNavigationAuthorityShadowErrors[keyof GetApiV1AdminNavigationAuthorityShadowErrors];
+
+export type GetApiV1AdminNavigationAuthorityShadowResponses = {
+    /**
+     * Navigation migration parity
+     */
+    200: {
+        success: true;
+        data: {
+            ready: boolean;
+            legacyMenuCount: number;
+            authorityMenuCount: number;
+            legacyItemCount: number;
+            authorityItemCount: number;
+            mismatches: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationAuthorityShadowResponse = GetApiV1AdminNavigationAuthorityShadowResponses[keyof GetApiV1AdminNavigationAuthorityShadowResponses];
+
 export type GetApiV1AdminNavigationData = {
     body?: never;
     path?: never;
