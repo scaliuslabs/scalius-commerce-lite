@@ -469,6 +469,15 @@ feeds, structured data, or external marketplaces.
   clear area in the live SVG, kept the long legacy value blocked on narrow A4
   stock, and re-enabled Test and Print/PDF after the one-click A4 adhesive
   recovery.
+- Admin version `56e81b0d-6b90-465e-9ac9-c8b828881c18` corrects the narrow
+  selected-SKU card found during a fresh merchant run. Product/option, SKU,
+  barcode, type, inventory, and the fit diagnostic now own the first row;
+  quantity and removal sit in a separate compact action row instead of
+  colliding with a long legacy identity. Full SKU/barcode values remain
+  available through titles, picker checkboxes announce the exact add/remove
+  action, and the fixed Test/Print bar remains visible. Production proof at
+  390 x 844 retained zero horizontal overflow and exposed the long Code 128
+  recovery without cramped or overlapping controls.
 
 ## Product boundary and future extensions
 

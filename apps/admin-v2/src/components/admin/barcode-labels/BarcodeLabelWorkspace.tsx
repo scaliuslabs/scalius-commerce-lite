@@ -681,35 +681,39 @@ export function BarcodeLabelWorkspace({
                       const symbol = resolveBarcodeSymbol(variant.barcode, variant.barcodeType);
                       const fitIssue = (quantities[variant.id] ?? 0) > 0 ? getBarcodeFitIssue(symbol, preset) : null;
                       return (
-                        <div key={variant.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-2">
+                        <div key={variant.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
                           <div className="min-w-0">
                             <div className="flex min-w-0 items-center gap-1.5">
                               <span className="truncate text-sm font-medium">{variant.productName}</span>
                               {variant.optionLabel ? <span className="truncate text-xs text-muted-foreground">· {variant.optionLabel}</span> : null}
                             </div>
-                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
-                              <span className="font-mono">{variant.sku}</span>
-                              <span className="font-mono">{variant.barcode ?? "No barcode"}</span>
-                              <span>{variant.barcodeType?.toUpperCase() ?? "UNPRINTABLE"}</span>
-                              <span>{getLabelInventorySummary(variant)}</span>
+                            <div className="mt-0.5 grid min-w-0 gap-0.5 text-[11px] text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2">
+                              <span className="truncate font-mono" title={variant.sku}>{variant.sku}</span>
+                              <span className="truncate font-mono" title={variant.barcode ?? "No barcode"}>{variant.barcode ?? "No barcode"}</span>
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="shrink-0">{variant.barcodeType?.toUpperCase() ?? "UNPRINTABLE"}</span>
+                                <span className="truncate">{getLabelInventorySummary(variant)}</span>
+                              </span>
                             </div>
                             {fitIssue ? <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">{fitIssue}</p> : null}
                           </div>
-                          <QuantityControl
-                            value={quantities[variant.id] ?? 1}
-                            label={`${variant.productName} ${variant.optionLabel ?? variant.sku}`}
-                            onChange={(value) => setQuantities((current) => ({ ...current, [variant.id]: value }))}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            aria-label={`Remove ${variant.productName} ${variant.optionLabel ?? variant.sku}`}
-                            onClick={() => updateSelected(variant.id, false)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-end gap-1 sm:contents">
+                            <QuantityControl
+                              value={quantities[variant.id] ?? 1}
+                              label={`${variant.productName} ${variant.optionLabel ?? variant.sku}`}
+                              onChange={(value) => setQuantities((current) => ({ ...current, [variant.id]: value }))}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              aria-label={`Remove ${variant.productName} ${variant.optionLabel ?? variant.sku}`}
+                              onClick={() => updateSelected(variant.id, false)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}
@@ -753,7 +757,11 @@ export function BarcodeLabelWorkspace({
                       const selected = selectedVariantIds.includes(variant.id);
                       return (
                         <label key={variant.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-muted/50">
-                          <Checkbox checked={selected} onCheckedChange={(checked) => updateSelected(variant.id, checked === true)} />
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={(checked) => updateSelected(variant.id, checked === true)}
+                            aria-label={`${selected ? "Remove" : "Add"} ${variant.productName} ${variant.optionLabel || variant.sku}`}
+                          />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium">{variant.productName}</span>
                             <span className="block truncate text-xs text-muted-foreground">{variant.optionLabel || "Default SKU"} · <span className="font-mono">{variant.sku}</span></span>
