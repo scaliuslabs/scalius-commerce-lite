@@ -12,6 +12,7 @@ import type {
   FooterData,
   NavigationItem,
   AnalyticsConfig,
+  Category,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { StorefrontThemeSettings } from "@scalius/shared/storefront-theme";
@@ -57,6 +58,25 @@ export interface HomepageData {
   };
   hero: HomepageHero;
   collections: CollectionWithProducts[];
+  presentation: {
+    categoryRail: {
+      enabled: boolean;
+      title: string;
+      categories: Array<Pick<
+        Category,
+        "id" | "name" | "slug" | "description" | "imageUrl" | "canonicalPath"
+      >>;
+    };
+    trustStrip: {
+      enabled: boolean;
+      items: Array<{
+        kind: "delivery" | "returns";
+        title: string;
+        detail: string;
+        href?: string;
+      }>;
+    };
+  };
 }
 
 // =============================================

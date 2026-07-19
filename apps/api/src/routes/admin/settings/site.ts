@@ -27,6 +27,10 @@ import {
   isValidSeoReturnPolicyUrl,
 } from "@scalius/shared/seo-return-policy";
 import {
+  MAX_HOMEPAGE_CATEGORY_IDS,
+  MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH,
+} from "@scalius/shared/homepage-presentation";
+import {
   getCurrencySettings,
   isCurrencyCodeLocked,
   saveCurrencySettings,
@@ -49,6 +53,8 @@ import {
   saveSeoSettings,
   getStorefrontUrlSetting,
   saveStorefrontUrl,
+  getHomepagePresentationSettings,
+  saveHomepagePresentationSettings,
   getAllowedCountries,
   saveAllowedCountries,
 } from "@scalius/core/modules/settings/site-settings.service";
@@ -1074,6 +1080,90 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
     htmlPaths: SEO_DISCOVERY_WARM_PATHS,
   });
   return ok(c, { message: "Storefront URL saved successfully" });
+});
+
+// ─────────────────────────────────────────
+// HOMEPAGE PRESENTATION
+// ─────────────────────────────────────────
+
+const homepagePresentationConfigSchema = z.object({
+  categoryRail: z.object({
+    enabled: z.boolean(),
+    title: z.string().max(MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH),
+    categoryIds: z.array(z.string().min(1)).max(MAX_HOMEPAGE_CATEGORY_IDS),
+  }),
+  trustStrip: z.object({
+    enabled: z.boolean(),
+  }),
+});
+
+const homepagePresentationDocumentSchema = z.object({
+  config: homepagePresentationConfigSchema,
+  revision: z.number().int().nonnegative(),
+});
+
+const getHomepagePresentationRoute = createRoute({
+  method: "get",
+  path: "/homepage-presentation",
+  tags: ["Admin - Settings"],
+  summary: "Get the ordered homepage category and trust presentation",
+  responses: {
+    200: {
+      description: "Homepage presentation",
+      content: {
+        "application/json": {
+          schema: successEnvelope(homepagePresentationDocumentSchema),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getHomepagePresentationRoute, async (c) => {
+  return ok(c, await getHomepagePresentationSettings(c.get("db")));
+});
+
+const saveHomepagePresentationRoute = createRoute({
+  method: "post",
+  path: "/homepage-presentation",
+  tags: ["Admin - Settings"],
+  summary: "Save the ordered homepage category and trust presentation",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: homepagePresentationConfigSchema.extend({
+            expectedRevision: z.number().int().nonnegative(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Homepage presentation saved",
+      content: {
+        "application/json": {
+          schema: successEnvelope(homepagePresentationDocumentSchema),
+        },
+      },
+    },
+    409: conflictResponse,
+    ...errorResponses,
+  },
+});
+
+app.openapi(saveHomepagePresentationRoute, async (c) => {
+  const { expectedRevision, ...config } = c.req.valid("json");
+  const saved = await saveHomepagePresentationSettings(
+    c.get("db"),
+    config,
+    expectedRevision,
+  );
+  await invalidateSiteSettingsCache(getKv());
+  await invalidateApiAndScheduleStorefrontGroups(HOMEPAGE_CACHE_GROUPS, c);
+  return ok(c, saved);
 });
 
 // ── Allowed Countries ──

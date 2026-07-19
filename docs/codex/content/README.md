@@ -20,6 +20,9 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   generations, migration gates, and the canonical admin/public cutover.
 - [HERO.md](HERO.md) — revision-guarded hero documents, safe slide links,
   explicit draft/save/conflict workflow, and storefront rendering rules.
+- [HOMEPAGE-PRESENTATION.md](HOMEPAGE-PRESENTATION.md) — bounded revisioned
+  category/policy composition, competitive evidence, cache authority, and the
+  future typed-module extension boundary.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,
   scalable list/edit workflows, activation, and public injection.
 - [SETTINGS.md](SETTINGS.md) — cross-settings authority map, shared workflow

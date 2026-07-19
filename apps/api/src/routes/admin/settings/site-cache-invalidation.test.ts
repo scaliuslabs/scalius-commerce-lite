@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   getProductFeedDiagnostics: vi.fn(),
   getStorefrontUrlSetting: vi.fn(),
   saveStorefrontUrl: vi.fn(),
+  getHomepagePresentationSettings: vi.fn(),
+  saveHomepagePresentationSettings: vi.fn(),
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
 }));
@@ -73,6 +75,8 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   saveSeoSettings: mocks.saveSeoSettings,
   getStorefrontUrlSetting: mocks.getStorefrontUrlSetting,
   saveStorefrontUrl: mocks.saveStorefrontUrl,
+  getHomepagePresentationSettings: mocks.getHomepagePresentationSettings,
+  saveHomepagePresentationSettings: mocks.saveHomepagePresentationSettings,
   getAllowedCountries: mocks.getAllowedCountries,
   saveAllowedCountries: mocks.saveAllowedCountries,
 }));
@@ -128,6 +132,20 @@ function createTestApp() {
   });
   mocks.saveHeaderConfig.mockResolvedValue(undefined);
   mocks.saveFooterConfig.mockResolvedValue(undefined);
+  mocks.getHomepagePresentationSettings.mockResolvedValue({
+    config: {
+      categoryRail: { enabled: false, title: "Shop by category", categoryIds: [] },
+      trustStrip: { enabled: false },
+    },
+    revision: 1,
+  });
+  mocks.saveHomepagePresentationSettings.mockResolvedValue({
+    config: {
+      categoryRail: { enabled: true, title: "Browse", categoryIds: ["cat_1"] },
+      trustStrip: { enabled: true },
+    },
+    revision: 2,
+  });
   mocks.getThemeSettings.mockResolvedValue({
     theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
     revision: 1,
@@ -679,6 +697,20 @@ describe("site settings cache invalidation", () => {
           "/api/facebook-feed.xml",
         ],
       },
+    },
+    {
+      path: "/homepage-presentation",
+      method: "POST" as const,
+      body: {
+        expectedRevision: 1,
+        categoryRail: {
+          enabled: true,
+          title: "Browse",
+          categoryIds: ["cat_1"],
+        },
+        trustStrip: { enabled: true },
+      },
+      groups: ["homepage"],
     },
     {
       path: "/allowed-countries",

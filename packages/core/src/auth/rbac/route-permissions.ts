@@ -700,6 +700,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/settings/homepage-presentation": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/hero-sliders": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },

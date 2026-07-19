@@ -812,6 +812,36 @@ The cleanup bullets below describe the two-product proof store that preceded the
   UCP catalog discovery, and a live Product schema route. The only warning is
   the already-recorded logs-only ops-monitor email channel.
 
+### Homepage presentation checkpoint (2026-07-19)
+
+- Homepage composition now has one bounded, revisioned settings document rather
+  than inferring every module from published catalog rows. The initial document
+  owns an ordered category rail (twelve exact category IDs maximum) and a
+  delivery/returns strip whose copy is derived only from active shipping and
+  saved return-policy authorities. Hero stories, collection placement, and
+  Theme styling remain independent owners.
+- Migration `0038_last_sentinel.sql` added the normalized document and positive
+  revision authority without changing existing header, footer, checkout, or
+  site identity. API `7a02c683-6e83-41cb-9084-810f587227a8`, Admin
+  `7929c8a5-33de-4bee-b53f-155d35a51ffb`, and Storefront
+  `28e9445f-d891-4cb4-bc30-d074de32a974` are live at 100%. The first visible
+  merchant read exposed a missing RBAC route mapping; the endpoint failed
+  closed, was covered with a focused authorization test, and the API was
+  redeployed before any settings write.
+- The real admin enabled the rail and policy strip, ordered Footwear, Home &
+  Living, Bags & Carry, Kitchen & Table, and Desk & Mobile Tech, and saved from
+  revision 1 to 2. The public API returned those exact five names in order,
+  exactly New & Noteworthy, Everyday Carry, and Home Refresh as collection
+  sections, and one truthful delivery fact. It omitted a returns claim because
+  no enabled return-policy authority exists.
+- Public category resolution is a bounded exact-ID `json_each()` lookup inside
+  the first D1 batch, so a selected category cannot disappear when the catalog
+  grows past 100 categories. Production browser geometry proved a 390 px
+  internal snap rail with no page overflow and a five-card 1280 px grid with no
+  page overflow. Shared parsing, migration, revision/CAS, storefront boundary,
+  cache invalidation, and RBAC tests all passed; targeted lint and sequential
+  Core/API/Admin/Storefront type diagnostics were clean.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

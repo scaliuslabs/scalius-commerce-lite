@@ -4,6 +4,8 @@ import "../styles/global.css";
 import Collection2 from "@/components/collection2.astro";
 import Collection1 from "../components/collection1.astro";
 import Hero from "@/components/hero.astro";
+import HomepageCategoryRail from "@/components/homepage/HomepageCategoryRail.astro";
+import HomepageTrustStrip from "@/components/homepage/HomepageTrustStrip.astro";
 import {
   getHomepageData,
   type CollectionWithProducts,
@@ -32,6 +34,9 @@ const seo = homepageData?.seo ?? {
 };
 const hero = homepageData?.hero || { desktop: null, mobile: null };
 const activeCollections = homepageData?.collections || [];
+const presentation = homepageData.presentation;
+const firstCollection = activeCollections[0] ?? null;
+const remainingCollections = activeCollections.slice(1);
 
 const homepageTitle =
   seo.homepageTitle || seo.siteTitle || "Welcome to Our Store";
@@ -78,19 +83,34 @@ function isCollection2(
   </section>
 
   <div class="flex flex-col">
-    {
-      activeCollections.map((collection) => (
-        <Fragment key={collection.id}>
-          {isCollection1(collection) && (
-            <Collection1
-              collection={collection}
-              currencySymbol={currencySymbol}
-              currencyCode={currencyCode}
-            />
-          )}
-          {isCollection2(collection) && <Collection2 collection={collection} />}
-        </Fragment>
-      ))
-    }
+    {firstCollection && (
+      <Fragment key={firstCollection.id}>
+        {isCollection1(firstCollection) && (
+          <Collection1
+            collection={firstCollection}
+            currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+          />
+        )}
+        {isCollection2(firstCollection) && <Collection2 collection={firstCollection} />}
+      </Fragment>
+    )}
+
+    <HomepageCategoryRail rail={presentation.categoryRail} />
+
+    {remainingCollections.map((collection) => (
+      <Fragment key={collection.id}>
+        {isCollection1(collection) && (
+          <Collection1
+            collection={collection}
+            currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+          />
+        )}
+        {isCollection2(collection) && <Collection2 collection={collection} />}
+      </Fragment>
+    ))}
+
+    <HomepageTrustStrip strip={presentation.trustStrip} />
   </div>
 </Layout>

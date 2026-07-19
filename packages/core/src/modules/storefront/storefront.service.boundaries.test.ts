@@ -25,6 +25,20 @@ describe("storefront layout data boundaries", () => {
       .toBeLessThan(source.indexOf("const resolvedMap = await resolveCollectionProductsBatch"));
   });
 
+  it("resolves ordered homepage categories and trust facts from saved authorities", () => {
+    const source = readFileSync(STOREFRONT_SERVICE_SOURCE, "utf8");
+
+    expect(source).toContain("parseHomepagePresentationConfig");
+    expect(source).toContain("homepageConfig.categoryRail.categoryIds");
+    expect(source).toContain("json_each(");
+    expect(source).toContain("json_valid(${siteSettings.homepageConfig})");
+    expect(source).not.toContain(".limit(100),\n\n    // 4. One active method");
+    expect(source).toContain("categoryById.get(id)");
+    expect(source).toContain("eq(shippingMethods.isActive, true)");
+    expect(source).toContain("parseSeoReturnPolicySettings");
+    expect(source).toContain("homepageConfig.trustStrip.enabled && trustItems.length > 0");
+  });
+
   it("includes merchant return-policy settings in the consolidated layout payload", () => {
     const source = readFileSync(STOREFRONT_SERVICE_SOURCE, "utf8");
 

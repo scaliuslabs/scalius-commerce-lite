@@ -4,6 +4,8 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  getHomepagePresentationSettings,
+  saveHomepagePresentationSettings,
   saveFooterConfig,
   saveHeaderConfig,
 } from "./site-settings.service";
@@ -31,6 +33,8 @@ describe("header and footer settings revision authority", () => {
         site_title TEXT,
         homepage_title TEXT,
         homepage_meta_description TEXT,
+        homepage_config TEXT NOT NULL DEFAULT '{}',
+        homepage_config_revision INTEGER NOT NULL DEFAULT 1 CHECK (homepage_config_revision >= 1),
         robots_txt TEXT,
         storefront_url TEXT DEFAULT '/',
         auth_verification_method TEXT NOT NULL DEFAULT 'email',
@@ -123,6 +127,56 @@ describe("header and footer settings revision authority", () => {
     expect(row.footer_config_revision).toBe(2);
     expect(JSON.parse(row.header_config)).toEqual({
       topBar: { text: "Hello", isEnabled: true },
+    });
+  });
+
+  it("stores one ordered homepage document and rejects stale writes", async () => {
+    sqlite.prepare(`
+      INSERT INTO site_settings (
+        id, singleton_key, site_name, site_description,
+        header_config, footer_config, homepage_config,
+        homepage_config_revision, created_at, updated_at
+      ) VALUES ('settings_1', 'default', 'Store', '', '{}', '{}', '{}', 1, 1, 1)
+    `).run();
+
+    await expect(saveHomepagePresentationSettings(db, {
+      categoryRail: {
+        enabled: true,
+        title: "Browse",
+        categoryIds: ["cat-b", "cat-a", "cat-b"],
+      },
+      trustStrip: { enabled: true },
+    }, 1)).resolves.toEqual({
+      config: {
+        categoryRail: {
+          enabled: true,
+          title: "Browse",
+          categoryIds: ["cat-b", "cat-a"],
+        },
+        trustStrip: { enabled: true },
+      },
+      revision: 2,
+    });
+
+    await expect(saveHomepagePresentationSettings(db, {
+      categoryRail: { enabled: false, title: "Stale", categoryIds: [] },
+      trustStrip: { enabled: false },
+    }, 1)).rejects.toMatchObject({
+      status: 409,
+      code: "HOMEPAGE_PRESENTATION_REVISION_CONFLICT",
+      details: { expectedRevision: 1, currentRevision: 2 },
+    });
+
+    await expect(getHomepagePresentationSettings(db)).resolves.toEqual({
+      config: {
+        categoryRail: {
+          enabled: true,
+          title: "Browse",
+          categoryIds: ["cat-b", "cat-a"],
+        },
+        trustStrip: { enabled: true },
+      },
+      revision: 2,
     });
   });
 });
