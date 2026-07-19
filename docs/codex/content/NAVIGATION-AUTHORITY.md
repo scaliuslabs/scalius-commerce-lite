@@ -58,6 +58,17 @@ projections.
   canonical CAS item/menu/publish commands and then one deliberate admin/public
   cutover. No ongoing dual write is accepted.
 
+The canonical command/read layer now exists in
+`navigation.authority.service.ts` and `/admin/navigation/menus/*`. It provides
+keyset menu and parent-item pages, stable destination moves, sparse positioning
+with bounded JSON-set compaction only when a gap is exhausted, target
+normalization, three-level/cycle/orphan guards, one-revision-per-command D1
+batches, immutable SHA-256 publications, and the small placement manifest.
+`GET /admin/navigation/authority-shadow` is the production parity gate. Draft
+commands do not invalidate public layout; only publish does. Rollback,
+placement mutation, the large-store UI, and public projection cutover remain
+required before the compatibility routes can be removed.
+
 Header/footer branding, announcement, contact, social, and legal copy remain
 presentation settings. They do not own menu content. Do not raise the current
 150-item JSON limit as an interim "scale" fix.

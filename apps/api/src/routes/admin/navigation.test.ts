@@ -7,6 +7,18 @@ import { NotFoundError } from "../../utils/api-error";
 const mocks = vi.hoisted(() => ({
     getNavigationItems: vi.fn(),
     getNavigationPreviewProductCount: vi.fn(),
+    createNavigationMenu: vi.fn(),
+    createNavigationMenuItem: vi.fn(),
+    deleteNavigationMenuItem: vi.fn(),
+    getNavigationAuthorityShadowReport: vi.fn(),
+    getNavigationMenuAuthority: vi.fn(),
+    getNavigationPlacementManifest: vi.fn(),
+    listNavigationMenuItems: vi.fn(),
+    listNavigationMenus: vi.fn(),
+    moveNavigationMenuItem: vi.fn(),
+    publishNavigationMenu: vi.fn(),
+    updateNavigationMenuItem: vi.fn(),
+    updateNavigationMenuMetadata: vi.fn(),
     getGeneralSettings: vi.fn(),
     saveHeaderConfig: vi.fn(),
     saveFooterConfig: vi.fn(),
@@ -18,6 +30,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@scalius/core/modules/navigation", () => ({
     getNavigationItems: mocks.getNavigationItems,
     getNavigationPreviewProductCount: mocks.getNavigationPreviewProductCount,
+    createNavigationMenu: mocks.createNavigationMenu,
+    createNavigationMenuItem: mocks.createNavigationMenuItem,
+    deleteNavigationMenuItem: mocks.deleteNavigationMenuItem,
+    getNavigationAuthorityShadowReport: mocks.getNavigationAuthorityShadowReport,
+    getNavigationMenuAuthority: mocks.getNavigationMenuAuthority,
+    getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
+    listNavigationMenuItems: mocks.listNavigationMenuItems,
+    listNavigationMenus: mocks.listNavigationMenus,
+    moveNavigationMenuItem: mocks.moveNavigationMenuItem,
+    publishNavigationMenu: mocks.publishNavigationMenu,
+    updateNavigationMenuItem: mocks.updateNavigationMenuItem,
+    updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
 }));
 
 vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
@@ -120,6 +144,64 @@ describe("admin navigation routes", () => {
         );
 
         expect(response.status).toBe(404);
+    });
+
+    it("exposes a bounded migration parity report without mutating navigation", async () => {
+        mocks.getNavigationAuthorityShadowReport.mockResolvedValue({
+            ready: true,
+            legacyMenuCount: 5,
+            authorityMenuCount: 5,
+            legacyItemCount: 20,
+            authorityItemCount: 20,
+            mismatches: [],
+        });
+        const { app, db } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/navigation/authority-shadow");
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+            success: true,
+            data: {
+                ready: true,
+                legacyMenuCount: 5,
+                authorityMenuCount: 5,
+                legacyItemCount: 20,
+                authorityItemCount: 20,
+                mismatches: [],
+            },
+        });
+        expect(mocks.getNavigationAuthorityShadowReport).toHaveBeenCalledWith(db);
+    });
+
+    it("publishes through the canonical command and invalidates public layout only then", async () => {
+        mocks.publishNavigationMenu.mockResolvedValue({
+            revision: 6,
+            publishedRevision: 6,
+            itemCount: 3,
+            checksum: "a".repeat(64),
+        });
+        const { app, db, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1/publish",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expectedRevision: 5 }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.publishNavigationMenu).toHaveBeenCalledWith(db, "menu_1", {
+            expectedRevision: 5,
+            publishedBy: null,
+        });
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["layout"],
+            expect.objectContaining({ env }),
+        );
     });
 
     it.each([
