@@ -13,13 +13,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
+  getPublishedNavigationMenuTree,
   getNavigationPlacementManifest,
+  listNavigationPlacements,
   listNavigationMenuItems,
   moveNavigationMenuItem,
   publishNavigationMenu,
+  rollbackNavigationMenu,
+  saveNavigationPlacement,
   updateNavigationMenuItem,
 } from "./navigation.authority.service";
-import { NavigationRevisionConflictError } from "./navigation.authority";
+import {
+  NavigationPlacementRevisionConflictError,
+  NavigationRevisionConflictError,
+} from "./navigation.authority";
 
 interface SqliteD1Result {
   results: Record<string, SQLOutputValue>[];
@@ -186,27 +193,80 @@ describe("navigation authority D1 commands", () => {
     expect(published).toMatchObject({ revision: 5, publishedRevision: 5, itemCount: 2 });
     expect(published.checksum).toMatch(/^[a-f0-9]{64}$/);
 
-    sqlite!.prepare(`
-      INSERT INTO navigation_placements
-        (id, surface, slot, position, menu_id, is_enabled, revision)
-      VALUES ('placement_main', 'header', 'primary', 0, ?, 1, 1)
-    `).run(menu.id);
+    const placement = await saveNavigationPlacement(db, {
+      id: "placement_main",
+      expectedRevision: 0,
+      surface: "header",
+      slot: "primary",
+      position: 0,
+      menuId: menu.id,
+    });
+    expect(placement.placement).toMatchObject({ id: "placement_main", revision: 1 });
     expect(await getNavigationPlacementManifest(db)).toEqual([
       expect.objectContaining({
         id: "placement_main",
         menuId: menu.id,
         publishedRevision: 5,
         rootCount: 2,
+        definition: expect.objectContaining({ maxDepth: 3, maxItems: 150 }),
       }),
     ]);
 
+    const publicMenu = await getPublishedNavigationMenuTree(db, menu.id, { maxItems: 150 });
+    expect(publicMenu).toMatchObject({
+      id: menu.id,
+      publishedRevision: 5,
+      items: [
+        { title: "Account", href: "/account" },
+        { title: "Shop", href: "/search" },
+      ],
+    });
+
+    const edited = await updateNavigationMenuItem(db, menu.id, shopId, {
+      expectedRevision: 5,
+      label: "Catalog",
+      labelMode: "custom",
+      target: { type: "internal_path", path: "/search" },
+    });
+    expect(edited.revision).toBe(6);
+    const republished = await publishNavigationMenu(db, menu.id, { expectedRevision: 6 });
+    expect(republished.publishedRevision).toBe(7);
+    expect((await getPublishedNavigationMenuTree(db, menu.id)).items[1]?.title).toBe("Catalog");
+
+    const rolledBack = await rollbackNavigationMenu(db, menu.id, {
+      expectedRevision: 7,
+      sourceRevision: 5,
+    });
+    expect(rolledBack).toMatchObject({
+      revision: 8,
+      publishedRevision: 8,
+      sourceRevision: 5,
+      itemCount: 2,
+    });
+    expect((await getPublishedNavigationMenuTree(db, menu.id)).items[1]?.title).toBe("Shop");
+    expect(await listNavigationPlacements(db)).toEqual([
+      expect.objectContaining({
+        placement: expect.objectContaining({ id: "placement_main", revision: 1 }),
+        publishedRevision: 8,
+      }),
+    ]);
+
+    await expect(saveNavigationPlacement(db, {
+      id: "placement_main",
+      expectedRevision: 0,
+      surface: "header",
+      slot: "primary",
+      position: 0,
+      menuId: menu.id,
+    })).rejects.toBeInstanceOf(NavigationPlacementRevisionConflictError);
+
     await expect(updateNavigationMenuItem(db, menu.id, shopId, {
-      expectedRevision: 4,
+      expectedRevision: 7,
       label: "Stale",
       labelMode: "custom",
       target: { type: "internal_path", path: "/stale" },
     })).rejects.toBeInstanceOf(NavigationRevisionConflictError);
     expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
-      .toEqual({ revision: 5 });
+      .toEqual({ revision: 8 });
   });
 });

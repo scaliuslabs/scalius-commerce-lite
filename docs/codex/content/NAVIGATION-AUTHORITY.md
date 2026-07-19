@@ -65,9 +65,26 @@ with bounded JSON-set compaction only when a gap is exhausted, target
 normalization, three-level/cycle/orphan guards, one-revision-per-command D1
 batches, immutable SHA-256 publications, and the small placement manifest.
 `GET /admin/navigation/authority-shadow` is the production parity gate. Draft
-commands do not invalidate public layout; only publish does. Rollback,
-placement mutation, the large-store UI, and public projection cutover remain
-required before the compatibility routes can be removed.
+commands do not invalidate public layout; only publish, rollback, or placement
+mutation does. The large-store UI and public projection cutover remain required
+before the compatibility routes can be removed.
+
+The next canonical checkpoint is also implemented. Publication history is
+parent-bounded, rollback copies an immutable source into the draft and creates
+a new linear publication instead of moving the pointer backward, and placement
+writes use an independent revision claim. The code-declared placement registry
+currently exposes `header.primary` and four repeatable `footer.column`
+positions, each with the three-level/150-rendered-item budget supported by the
+current storefront components. A published menu may still contain 10,000
+items for reuse elsewhere; an incompatible placement is rejected rather than
+silently truncated.
+
+Public normalized reads now expose an uncached placement manifest plus
+revision/dependency-keyed menu-tree and parent-page endpoints. The manifest is
+the small mutable pointer; menu responses are safe to cache by immutable
+publication revision plus resource dependency generation. This API is additive
+until the dashboard workspace and consolidated storefront layout deliberately
+switch from the typed JSON bridge.
 
 Header/footer branding, announcement, contact, social, and legal copy remain
 presentation settings. They do not own menu content. Do not raise the current

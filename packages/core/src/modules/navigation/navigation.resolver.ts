@@ -288,6 +288,7 @@ export function resolveNavigationItemsForPublic(
             id: item.id,
             title: resolution.title,
             ...(resolution.href ? { href: resolution.href } : {}),
+            ...(item.openInNewTab === true ? { openInNewTab: true } : {}),
             ...(children.length ? { subMenu: children } : {}),
         });
     }

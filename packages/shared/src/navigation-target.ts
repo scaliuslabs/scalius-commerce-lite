@@ -43,6 +43,7 @@ export interface NavigationTargetItem {
   customLabel?: string;
   /** Diagnostic fallback only. It never wins over a live resource title. */
   lastKnownLabel?: string;
+  openInNewTab?: boolean;
   subMenu?: NavigationTargetItem[];
   /** Read projection supplied by the central resolver; never persisted. */
   resolution?: NavigationResolution;
@@ -52,6 +53,7 @@ export interface ResolvedNavigationItem {
   id: string;
   title: string;
   href?: string;
+  openInNewTab?: boolean;
   subMenu?: ResolvedNavigationItem[];
 }
 
