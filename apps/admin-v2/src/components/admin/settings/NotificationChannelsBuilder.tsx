@@ -1,4 +1,40 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Bell,
+  ChevronDown,
+  Loader2,
+  Save,
+  ShieldCheck,
+} from "lucide-react";
+import { toast } from "sonner";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import {
+  CUSTOMER_NOTIFICATION_CHANNELS,
+  NOTIFICATION_EVENT_GROUPS,
+  NOTIFICATION_EVENTS,
+  adminNotificationConfigsEqual,
+  buildAdminNotificationConfig,
+  buildCustomerNotificationConfig,
+  customerNotificationConfigsEqual,
+  getAdminPushSelection,
+  getCustomerChannelSelection,
+  getDefaultAdminNotificationConfig,
+  getDefaultCustomerNotificationConfig,
+  serializeAdminNotificationConfig,
+  serializeCustomerNotificationConfig,
+  setAdminPushForEveryEvent,
+  setCustomerChannelForEveryEvent,
+  type AdminNotificationChannel,
+  type AdminNotificationConfig,
+  type CustomerNotificationChannel,
+  type CustomerNotificationConfig,
+} from "@/components/admin/settings/notification-channel-policy";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -6,170 +42,298 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { toast } from "sonner";
-import { AlertTriangle, Loader2, Save, Bell, ShieldCheck } from "lucide-react";
-import {
-  getNotificationChannels,
-  updateNotificationChannels,
-  getAdminNotificationChannels,
-  updateAdminNotificationChannels,
-} from "@/lib/api-functions/settings";
-import {
-  ORDER_NOTIFICATION_LABELS,
-  ORDER_NOTIFICATION_TYPES,
-  type OrderNotificationType,
-} from "@scalius/core/modules/notifications/notification-types";
-import { describeNotificationIssue } from "@/lib/order-notification-display";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
-
-const ORDER_STATUSES = ORDER_NOTIFICATION_TYPES.map((key) => ({
-  key,
-  label: ORDER_NOTIFICATION_LABELS[key],
-}));
-
-const CHANNELS = [
-  { key: "email", label: "Email" },
-  { key: "sms", label: "SMS" },
-  { key: "whatsapp", label: "WhatsApp" },
-] as const;
-
-const ADMIN_STATUSES = ORDER_STATUSES;
-
-const ADMIN_CHANNELS = [
-  { key: "push", label: "Push" },
-] as const;
+import {
+  getAdminNotificationChannels,
+  getNotificationChannels,
+  updateAdminNotificationChannels,
+  updateNotificationChannels,
+} from "@/lib/api-functions/settings";
+import { describeNotificationIssue } from "@/lib/order-notification-display";
 
 const DEFAULT_WHATSAPP_TEMPLATE = {
   templateName: "order_status_update",
   languageCode: "en_US",
 };
 
-type StatusKey = OrderNotificationType;
-type ChannelKey = (typeof CHANNELS)[number]["key"];
-type ChannelConfig = Record<StatusKey, Record<ChannelKey, boolean>>;
 type WhatsAppTemplateConfig = typeof DEFAULT_WHATSAPP_TEMPLATE;
-type CustomerChannelReadiness = {
-  email: boolean;
-  sms: boolean;
-  whatsapp: boolean;
-};
+type CustomerChannelReadiness = Record<CustomerNotificationChannel, boolean>;
 
-type AdminStatusKey = OrderNotificationType;
-type AdminChannelKey = (typeof ADMIN_CHANNELS)[number]["key"];
-type AdminChannelConfig = Record<AdminStatusKey, Record<AdminChannelKey, boolean>>;
-
-function getDefaultConfig(): ChannelConfig {
-  const config = {} as ChannelConfig;
-  for (const status of ORDER_STATUSES) {
-    config[status.key] = {
-      email: status.key !== "support_request_submitted",
-      sms: false,
-      whatsapp: false,
-    };
-  }
-  return config;
-}
-
-function channelCanBeEnabled(channel: ChannelKey, readiness: CustomerChannelReadiness): boolean {
-  if (channel === "email") return readiness.email;
-  if (channel === "sms") return readiness.sms;
-  if (channel === "whatsapp") return readiness.whatsapp;
-  return true;
-}
-
-function buildCustomerChannelConfig(
-  channelData: Record<string, string[]> | undefined,
+function channelCanBeEnabled(
+  channel: CustomerNotificationChannel,
   readiness: CustomerChannelReadiness,
-): ChannelConfig {
-  const config = getDefaultConfig();
-  if (!channelData || typeof channelData !== "object") {
-    return sanitizeCustomerChannelConfig(config, readiness);
-  }
-
-  for (const status of ORDER_STATUSES) {
-    const enabledChannels = channelData[status.key];
-    if (!Array.isArray(enabledChannels)) continue;
-    for (const ch of CHANNELS) {
-      config[status.key][ch.key] =
-        enabledChannels.includes(ch.key) && channelCanBeEnabled(ch.key, readiness);
-    }
-  }
-
-  return sanitizeCustomerChannelConfig(config, readiness);
+): boolean {
+  return readiness[channel];
 }
 
-function sanitizeCustomerChannelConfig(
-  config: ChannelConfig,
-  readiness: CustomerChannelReadiness,
-): ChannelConfig {
-  const sanitized = {} as ChannelConfig;
-  for (const status of ORDER_STATUSES) {
-    sanitized[status.key] = { ...config[status.key] };
-    for (const ch of CHANNELS) {
-      if (!channelCanBeEnabled(ch.key, readiness)) {
-        sanitized[status.key][ch.key] = false;
-      }
-    }
-  }
-  return sanitized;
-}
-
-function getDefaultAdminConfig(): AdminChannelConfig {
-  const config = {} as AdminChannelConfig;
-  for (const status of ADMIN_STATUSES) {
-    config[status.key] = {
-      push: status.key === "order_created" || status.key === "order_cancelled" || status.key === "support_request_submitted",
-    };
-  }
-  return config;
-}
-
-function buildAdminChannelConfig(
-  channelData: Record<string, string[]> | undefined,
-  pushReady: boolean,
-): AdminChannelConfig {
-  const config = getDefaultAdminConfig();
-  if (channelData && typeof channelData === "object") {
-    for (const status of ADMIN_STATUSES) {
-      const enabledChannels = channelData[status.key];
-      if (!Array.isArray(enabledChannels)) continue;
-      for (const ch of ADMIN_CHANNELS) {
-        config[status.key][ch.key] = enabledChannels.includes(ch.key);
-      }
-    }
-  }
-  return sanitizeAdminChannelConfig(config, pushReady);
-}
-
-function sanitizeAdminChannelConfig(
-  config: AdminChannelConfig,
-  pushReady: boolean,
-): AdminChannelConfig {
-  const sanitized = {} as AdminChannelConfig;
-  for (const status of ADMIN_STATUSES) {
-    sanitized[status.key] = { ...config[status.key] };
-    if (!pushReady) {
-      sanitized[status.key].push = false;
-    }
-  }
-  return sanitized;
-}
-
-function readinessIssueText(value: string | null | undefined, fallback: string): string {
+function readinessIssueText(
+  value: string | null | undefined,
+  fallback: string,
+): string {
   const trimmed = value?.trim() ?? "";
   const described = describeNotificationIssue(trimmed);
   if (described) return described;
   return trimmed.length > 0 ? trimmed : fallback;
 }
 
+function countCustomerRules(
+  config: CustomerNotificationConfig,
+  channel: CustomerNotificationChannel,
+): number {
+  return NOTIFICATION_EVENTS.filter((event) => config[event.key][channel])
+    .length;
+}
+
+function countAdminRules(config: AdminNotificationConfig): number {
+  return NOTIFICATION_EVENTS.filter((event) => config[event.key].push).length;
+}
+
+function ProviderStatus({
+  label,
+  ready,
+  activeRules,
+  issue,
+}: {
+  label: string;
+  ready: boolean;
+  activeRules: number;
+  issue: string;
+}) {
+  const state = ready
+    ? "Ready"
+    : activeRules > 0
+      ? `${activeRules} paused`
+      : "Needs setup";
+
+  return (
+    <span
+      className="inline-flex min-h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-xs"
+      title={ready ? `${label} delivery is ready.` : issue}
+    >
+      <span
+        className={ready ? "h-1.5 w-1.5 rounded-full bg-emerald-500" : "h-1.5 w-1.5 rounded-full bg-amber-500"}
+        aria-hidden="true"
+      />
+      <span className="font-medium">{label}</span>
+      <span className="text-muted-foreground">{state}</span>
+    </span>
+  );
+}
+
+function CustomerRulesMatrix({
+  channels,
+  readiness,
+  onToggle,
+  onToggleColumn,
+}: {
+  channels: CustomerNotificationConfig;
+  readiness: CustomerChannelReadiness;
+  onToggle: (
+    event: OrderNotificationType,
+    channel: CustomerNotificationChannel,
+  ) => void;
+  onToggleColumn: (
+    channel: CustomerNotificationChannel,
+    enabled: boolean,
+  ) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border">
+      <div className="hidden md:block">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/35">
+              <th className="px-3 py-2 text-left font-medium">Event</th>
+              {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => {
+                const selection = getCustomerChannelSelection(
+                  channels,
+                  channel.key,
+                );
+                return (
+                  <th
+                    key={channel.key}
+                    className="w-28 px-3 py-2 text-center font-medium"
+                  >
+                    <label className="inline-flex items-center gap-2">
+                      <Checkbox
+                        checked={selection}
+                        disabled={!readiness[channel.key]}
+                        onCheckedChange={(checked) =>
+                          onToggleColumn(channel.key, checked === true)
+                        }
+                        aria-label={`Enable ${channel.label} for every customer event`}
+                      />
+                      {channel.label}
+                    </label>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          {NOTIFICATION_EVENT_GROUPS.map((group) => (
+            <tbody key={group.label}>
+              <tr className="border-b bg-muted/20">
+                <th
+                  colSpan={CUSTOMER_NOTIFICATION_CHANNELS.length + 1}
+                  className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  {group.label}
+                </th>
+              </tr>
+              {group.keys.map((eventKey, index) => {
+                const event = NOTIFICATION_EVENTS.find(
+                  (candidate) => candidate.key === eventKey,
+                );
+                if (!event) return null;
+                return (
+                  <tr
+                    key={event.key}
+                    className={index < group.keys.length - 1 ? "border-b" : ""}
+                  >
+                    <td className="px-3 py-2 font-medium">{event.label}</td>
+                    {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => (
+                      <td key={channel.key} className="px-3 py-2 text-center">
+                        <Checkbox
+                          checked={channels[event.key][channel.key]}
+                          disabled={!readiness[channel.key]}
+                          onCheckedChange={() =>
+                            onToggle(event.key, channel.key)
+                          }
+                          aria-label={`${event.label} via ${channel.label}`}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          ))}
+        </table>
+      </div>
+
+      <div className="divide-y md:hidden">
+        {NOTIFICATION_EVENT_GROUPS.map((group) => (
+          <section key={group.label} aria-labelledby={`customer-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
+            <h3
+              id={`customer-${group.label.replace(/\W+/g, "-").toLowerCase()}`}
+              className="bg-muted/25 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              {group.label}
+            </h3>
+            <div className="divide-y">
+              {group.keys.map((eventKey) => {
+                const event = NOTIFICATION_EVENTS.find(
+                  (candidate) => candidate.key === eventKey,
+                );
+                if (!event) return null;
+                return (
+                  <div key={event.key} className="px-3 py-2.5">
+                    <p className="text-sm font-medium">{event.label}</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => (
+                        <label
+                          key={channel.key}
+                          className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                        >
+                          <Checkbox
+                            checked={channels[event.key][channel.key]}
+                            disabled={!readiness[channel.key]}
+                            onCheckedChange={() =>
+                              onToggle(event.key, channel.key)
+                            }
+                            aria-label={`${event.label} via ${channel.label}`}
+                          />
+                          <span className="truncate">{channel.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminRulesMatrix({
+  channels,
+  pushReady,
+  onToggle,
+  onToggleAll,
+}: {
+  channels: AdminNotificationConfig;
+  pushReady: boolean;
+  onToggle: (event: OrderNotificationType, channel: AdminNotificationChannel) => void;
+  onToggleAll: (enabled: boolean) => void;
+}) {
+  const selection = getAdminPushSelection(channels);
+
+  return (
+    <div className="overflow-hidden rounded-lg border text-sm">
+      <div className="flex items-center justify-between border-b bg-muted/35 px-3 py-2 font-medium">
+        <span>Admin event</span>
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={selection}
+            disabled={!pushReady}
+            onCheckedChange={(checked) => onToggleAll(checked === true)}
+            aria-label="Enable push for every admin event"
+          />
+          Push
+        </label>
+      </div>
+      {NOTIFICATION_EVENT_GROUPS.map((group) => (
+        <section key={group.label} aria-labelledby={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
+          <h3
+            id={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}
+            className="border-b bg-muted/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            {group.label}
+          </h3>
+          <div className="divide-y">
+            {group.keys.map((eventKey) => {
+              const event = NOTIFICATION_EVENTS.find(
+                (candidate) => candidate.key === eventKey,
+              );
+              if (!event) return null;
+              return (
+                <label
+                  key={event.key}
+                  className="flex min-h-10 items-center justify-between gap-3 px-3 py-2"
+                >
+                  <span className="font-medium">{event.label}</span>
+                  <Checkbox
+                    checked={channels[event.key].push}
+                    disabled={!pushReady}
+                    onCheckedChange={() => onToggle(event.key, "push")}
+                    aria-label={`Admin: ${event.label} via Push`}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function NotificationChannelsBuilder() {
-  const [channels, setChannels] = useState<ChannelConfig>(getDefaultConfig());
-  const [whatsAppTemplate, setWhatsAppTemplate] = useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
+  const [channels, setChannels] = useState<CustomerNotificationConfig>(
+    getDefaultCustomerNotificationConfig,
+  );
+  const [savedChannels, setSavedChannels] =
+    useState<CustomerNotificationConfig>(getDefaultCustomerNotificationConfig);
+  const [whatsAppTemplate, setWhatsAppTemplate] =
+    useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
+  const [savedWhatsAppTemplate, setSavedWhatsAppTemplate] =
+    useState<WhatsAppTemplateConfig>(DEFAULT_WHATSAPP_TEMPLATE);
   const [isEmailConfigured, setIsEmailConfigured] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isWhatsAppConfigured, setIsWhatsAppConfigured] = useState(false);
@@ -180,18 +344,74 @@ export function NotificationChannelsBuilder() {
   const [customerLoadError, setCustomerLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [adminChannels, setAdminChannels] = useState<AdminChannelConfig>(getDefaultAdminConfig());
+  const [adminChannels, setAdminChannels] = useState<AdminNotificationConfig>(
+    getDefaultAdminNotificationConfig,
+  );
+  const [savedAdminChannels, setSavedAdminChannels] =
+    useState<AdminNotificationConfig>(getDefaultAdminNotificationConfig);
   const [isPushConfigured, setIsPushConfigured] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const [isAdminLoading, setIsAdminLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
 
+  const readiness = useMemo<CustomerChannelReadiness>(
+    () => ({
+      email: isEmailConfigured,
+      sms: isSmsConfigured,
+      whatsapp: isWhatsAppConfigured,
+    }),
+    [isEmailConfigured, isSmsConfigured, isWhatsAppConfigured],
+  );
+
+  const customerIssues = useMemo(
+    () => [
+      !isEmailConfigured
+        ? readinessIssueText(
+            emailError,
+            "Email delivery needs a transactional email provider.",
+          )
+        : null,
+      !isSmsConfigured
+        ? readinessIssueText(
+            smsProviderError,
+            "SMS delivery needs an active SMS provider.",
+          )
+        : null,
+      !isWhatsAppConfigured
+        ? readinessIssueText(
+            whatsAppError,
+            "WhatsApp delivery needs Meta WhatsApp Cloud API credentials.",
+          )
+        : null,
+    ].filter((issue): issue is string => Boolean(issue)),
+    [
+      emailError,
+      isEmailConfigured,
+      isSmsConfigured,
+      isWhatsAppConfigured,
+      smsProviderError,
+      whatsAppError,
+    ],
+  );
+
+  const customerDirty = useMemo(
+    () =>
+      !customerNotificationConfigsEqual(channels, savedChannels) ||
+      whatsAppTemplate.templateName !== savedWhatsAppTemplate.templateName ||
+      whatsAppTemplate.languageCode !== savedWhatsAppTemplate.languageCode,
+    [channels, savedChannels, savedWhatsAppTemplate, whatsAppTemplate],
+  );
+  const adminDirty = useMemo(
+    () => !adminNotificationConfigsEqual(adminChannels, savedAdminChannels),
+    [adminChannels, savedAdminChannels],
+  );
+
   const loadCustomerChannels = useCallback(async () => {
     setIsLoading(true);
     setCustomerLoadError(null);
     try {
-      const data = await getNotificationChannels() as {
+      const data = (await getNotificationChannels()) as {
         channels?: Record<string, string[]>;
         whatsappTemplate?: Partial<WhatsAppTemplateConfig>;
         emailConfigured?: boolean;
@@ -201,31 +421,32 @@ export function NotificationChannelsBuilder() {
         smsProviderConfigured?: boolean;
         smsProviderError?: string | null;
       };
-      const emailConfigured = Boolean(data?.emailConfigured);
-      const whatsappConfigured = Boolean(data?.whatsappConfigured);
-      const smsConfigured = Boolean(data?.smsProviderConfigured);
-      setIsEmailConfigured(emailConfigured);
+      const nextChannels = buildCustomerNotificationConfig(data?.channels);
+      const nextTemplate = {
+        templateName:
+          data?.whatsappTemplate?.templateName ||
+          DEFAULT_WHATSAPP_TEMPLATE.templateName,
+        languageCode:
+          data?.whatsappTemplate?.languageCode ||
+          DEFAULT_WHATSAPP_TEMPLATE.languageCode,
+      };
+      setIsEmailConfigured(Boolean(data?.emailConfigured));
       setEmailError(data?.emailError ?? null);
-      setIsWhatsAppConfigured(whatsappConfigured);
+      setIsWhatsAppConfigured(Boolean(data?.whatsappConfigured));
       setWhatsAppError(data?.whatsappError ?? null);
-      setIsSmsConfigured(smsConfigured);
+      setIsSmsConfigured(Boolean(data?.smsProviderConfigured));
       setSmsProviderError(data?.smsProviderError ?? null);
-      setChannels(buildCustomerChannelConfig(data?.channels, {
-        email: emailConfigured,
-        sms: smsConfigured,
-        whatsapp: whatsappConfigured,
-      }));
-      if (data?.whatsappTemplate) {
-        setWhatsAppTemplate({
-          templateName: data.whatsappTemplate.templateName || DEFAULT_WHATSAPP_TEMPLATE.templateName,
-          languageCode: data.whatsappTemplate.languageCode || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
-        });
-      }
+      setChannels(nextChannels);
+      setSavedChannels(nextChannels);
+      setWhatsAppTemplate(nextTemplate);
+      setSavedWhatsAppTemplate(nextTemplate);
     } catch (error) {
-      setCustomerLoadError(getSettingsLoadErrorMessage(
-        error,
-        "Customer notification channels could not be loaded. Existing notification settings were not changed.",
-      ));
+      setCustomerLoadError(
+        getSettingsLoadErrorMessage(
+          error,
+          "Customer notification channels could not be loaded. Existing notification settings were not changed.",
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -235,20 +456,23 @@ export function NotificationChannelsBuilder() {
     setIsAdminLoading(true);
     setAdminLoadError(null);
     try {
-      const data = await getAdminNotificationChannels() as {
+      const data = (await getAdminNotificationChannels()) as {
         channels?: Record<string, string[]>;
         pushConfigured?: boolean;
         pushError?: string | null;
       };
-      const pushConfigured = Boolean(data?.pushConfigured);
-      setIsPushConfigured(pushConfigured);
+      const nextChannels = buildAdminNotificationConfig(data?.channels);
+      setIsPushConfigured(Boolean(data?.pushConfigured));
       setPushError(data?.pushError ?? null);
-      setAdminChannels(buildAdminChannelConfig(data?.channels, pushConfigured));
+      setAdminChannels(nextChannels);
+      setSavedAdminChannels(nextChannels);
     } catch (error) {
-      setAdminLoadError(getSettingsLoadErrorMessage(
-        error,
-        "Admin notification channels could not be loaded. Existing admin notification settings were not changed.",
-      ));
+      setAdminLoadError(
+        getSettingsLoadErrorMessage(
+          error,
+          "Admin notification channels could not be loaded. Existing admin notification settings were not changed.",
+        ),
+      );
     } finally {
       setIsAdminLoading(false);
     }
@@ -257,35 +481,40 @@ export function NotificationChannelsBuilder() {
   useEffect(() => {
     void loadCustomerChannels();
     void loadAdminChannels();
-  }, [loadCustomerChannels, loadAdminChannels]);
+  }, [loadAdminChannels, loadCustomerChannels]);
 
-  const handleToggle = (status: StatusKey, channel: ChannelKey) => {
-    if (!channelCanBeEnabled(channel, {
-      email: isEmailConfigured,
-      sms: isSmsConfigured,
-      whatsapp: isWhatsAppConfigured,
-    })) {
-      return;
-    }
-    setChannels((prev) => ({
-      ...prev,
-      [status]: {
-        ...prev[status],
-        [channel]: !prev[status][channel],
+  const handleToggle = (
+    event: OrderNotificationType,
+    channel: CustomerNotificationChannel,
+  ) => {
+    if (!channelCanBeEnabled(channel, readiness)) return;
+    setChannels((previous) => ({
+      ...previous,
+      [event]: {
+        ...previous[event],
+        [channel]: !previous[event][channel],
       },
     }));
   };
 
-  const handleAdminToggle = (status: AdminStatusKey, channel: AdminChannelKey) => {
-    if (channel === "push" && !isPushConfigured) {
-      return;
-    }
-    setAdminChannels((prev) => ({
-      ...prev,
-      [status]: {
-        ...prev[status],
-        [channel]: !prev[status][channel],
-      },
+  const handleToggleCustomerColumn = (
+    channel: CustomerNotificationChannel,
+    enabled: boolean,
+  ) => {
+    if (!channelCanBeEnabled(channel, readiness)) return;
+    setChannels((previous) =>
+      setCustomerChannelForEveryEvent(previous, channel, enabled),
+    );
+  };
+
+  const handleAdminToggle = (
+    event: OrderNotificationType,
+    channel: AdminNotificationChannel,
+  ) => {
+    if (channel === "push" && !isPushConfigured) return;
+    setAdminChannels((previous) => ({
+      ...previous,
+      [event]: { push: !previous[event].push },
     }));
   };
 
@@ -296,36 +525,29 @@ export function NotificationChannelsBuilder() {
     }
     setIsSaving(true);
     try {
-      const effectiveChannels = sanitizeCustomerChannelConfig(channels, {
-        email: isEmailConfigured,
-        sms: isSmsConfigured,
-        whatsapp: isWhatsAppConfigured,
-      });
-      setChannels(effectiveChannels);
-      // Transform UI format (Record<status, Record<channel, boolean>>)
-      // to API format (Record<status, string[]>) -- array of enabled channel keys
-      const apiChannels: Record<string, string[]> = {};
-      for (const status of ORDER_STATUSES) {
-        const statusChannels = effectiveChannels[status.key];
-        apiChannels[status.key] = CHANNELS
-          .filter((ch) => statusChannels?.[ch.key])
-          .map((ch) => ch.key);
-      }
+      const normalizedTemplate = {
+        templateName:
+          whatsAppTemplate.templateName.trim() ||
+          DEFAULT_WHATSAPP_TEMPLATE.templateName,
+        languageCode:
+          whatsAppTemplate.languageCode.trim() ||
+          DEFAULT_WHATSAPP_TEMPLATE.languageCode,
+      };
       await updateNotificationChannels({
         data: {
-          channels: apiChannels,
-          whatsappTemplate: {
-            templateName: whatsAppTemplate.templateName.trim() || DEFAULT_WHATSAPP_TEMPLATE.templateName,
-            languageCode: whatsAppTemplate.languageCode.trim() || DEFAULT_WHATSAPP_TEMPLATE.languageCode,
-          },
+          channels: serializeCustomerNotificationConfig(channels),
+          whatsappTemplate: normalizedTemplate,
         },
       });
-      toast.success("Notification channels saved");
+      setWhatsAppTemplate(normalizedTemplate);
+      setSavedWhatsAppTemplate(normalizedTemplate);
+      setSavedChannels(channels);
+      toast.success("Customer notification rules saved");
     } catch (error: unknown) {
-      toast.error("Failed to save", {
+      toast.error("Customer rules were not saved", {
         description: readinessIssueText(
           error instanceof Error ? error.message : null,
-          "Please try again.",
+          "Try again.",
         ),
       });
     } finally {
@@ -340,22 +562,16 @@ export function NotificationChannelsBuilder() {
     }
     setIsAdminSaving(true);
     try {
-      const effectiveAdminChannels = sanitizeAdminChannelConfig(adminChannels, isPushConfigured);
-      setAdminChannels(effectiveAdminChannels);
-      const apiChannels: Record<string, string[]> = {};
-      for (const status of ADMIN_STATUSES) {
-        const statusChannels = effectiveAdminChannels[status.key];
-        apiChannels[status.key] = ADMIN_CHANNELS
-          .filter((ch) => statusChannels?.[ch.key])
-          .map((ch) => ch.key);
-      }
-      await updateAdminNotificationChannels({ data: { channels: apiChannels } });
-      toast.success("Admin notification channels saved");
+      await updateAdminNotificationChannels({
+        data: { channels: serializeAdminNotificationConfig(adminChannels) },
+      });
+      setSavedAdminChannels(adminChannels);
+      toast.success("Admin notification rules saved");
     } catch (error: unknown) {
-      toast.error("Failed to save", {
+      toast.error("Admin rules were not saved", {
         description: readinessIssueText(
           error instanceof Error ? error.message : null,
-          "Please try again.",
+          "Try again.",
         ),
       });
     } finally {
@@ -372,23 +588,67 @@ export function NotificationChannelsBuilder() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <UnsavedChangesGuard
+        isDirty={customerDirty || adminDirty}
+        isSubmitting={isSaving || isAdminSaving}
+      />
+
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle className="text-base">Customer Notification Channels</CardTitle>
-              <CardDescription className="mt-1">
-                Choose how your <strong>customers</strong> are notified about order events.
-                These notifications are sent directly to the customer via their preferred channel.
-              </CardDescription>
+        <CardHeader className="space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <CardTitle className="text-base">Customer updates</CardTitle>
+                <CardDescription className="mt-0.5">
+                  Choose which order events reach buyers.
+                </CardDescription>
+              </div>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSave}
+              disabled={!customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
+              className="shrink-0"
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save customer rules
+            </Button>
           </div>
+
+          {!isLoading && !customerLoadError ? (
+            <div className="flex flex-wrap gap-2" aria-label="Customer channel readiness">
+              <ProviderStatus
+                label="Email"
+                ready={isEmailConfigured}
+                activeRules={countCustomerRules(channels, "email")}
+                issue={readinessIssueText(emailError, "Email delivery needs setup.")}
+              />
+              <ProviderStatus
+                label="SMS"
+                ready={isSmsConfigured}
+                activeRules={countCustomerRules(channels, "sms")}
+                issue={readinessIssueText(smsProviderError, "SMS delivery needs setup.")}
+              />
+              <ProviderStatus
+                label="WhatsApp"
+                ready={isWhatsAppConfigured}
+                activeRules={countCustomerRules(channels, "whatsapp")}
+                issue={readinessIssueText(whatsAppError, "WhatsApp delivery needs setup.")}
+              />
+            </div>
+          ) : null}
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="space-y-3 px-4 pb-4 pt-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : customerLoadError ? (
@@ -409,153 +669,130 @@ export function NotificationChannelsBuilder() {
             </Alert>
           ) : (
             <>
-          <div className="mb-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem]">
-            <div className="space-y-2">
-              <Label htmlFor="order-whatsapp-template">WhatsApp order template</Label>
-              <Input
-                id="order-whatsapp-template"
-                value={whatsAppTemplate.templateName}
-                onChange={(event) =>
-                  setWhatsAppTemplate((prev) => ({
-                    ...prev,
-                    templateName: event.target.value,
-                  }))
-                }
-                placeholder="order_status_update"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="order-whatsapp-language">Language</Label>
-              <Input
-                id="order-whatsapp-language"
-                value={whatsAppTemplate.languageCode}
-                onChange={(event) =>
-                  setWhatsAppTemplate((prev) => ({
-                    ...prev,
-                    languageCode: event.target.value,
-                  }))
-                }
-                placeholder="en_US"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-
-          {(!isEmailConfigured || !isSmsConfigured || !isWhatsAppConfigured) && (
-            <div className="mb-4 grid gap-2">
-              {!isEmailConfigured && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {readinessIssueText(
-                      emailError,
-                      "Email notifications are locked until a transactional email provider is ready.",
-                    )}
-                  </span>
-                </div>
-              )}
-              {!isSmsConfigured && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {readinessIssueText(
-                      smsProviderError,
-                      "SMS notifications are locked until an active SMS provider is ready.",
-                    )}
-                  </span>
-                </div>
-              )}
-              {!isWhatsAppConfigured && (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {readinessIssueText(
-                      whatsAppError,
-                      "WhatsApp notifications are locked until Meta WhatsApp Cloud API credentials are ready.",
-                    )}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/50 border-b">
-                  <th className="text-left py-3 px-4 font-medium">
-                    Order Event
-                  </th>
-                  {CHANNELS.map((ch) => (
-                    <th
-                      key={ch.key}
-                      className="text-center py-3 px-4 font-medium w-24"
-                    >
-                      {ch.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ORDER_STATUSES.map((status, i) => (
-                  <tr
-                    key={status.key}
-                    className={i < ORDER_STATUSES.length - 1 ? "border-b" : ""}
-                  >
-                    <td className="py-3 px-4 font-medium">{status.label}</td>
-                    {CHANNELS.map((ch) => (
-                      <td key={ch.key} className="text-center py-3 px-4">
-                        <Checkbox
-                          checked={channels[status.key]?.[ch.key] ?? false}
-                          disabled={!channelCanBeEnabled(ch.key, {
-                            email: isEmailConfigured,
-                            sms: isSmsConfigured,
-                            whatsapp: isWhatsAppConfigured,
-                          })}
-                          onCheckedChange={() =>
-                            handleToggle(status.key, ch.key)
-                          }
-                          aria-label={`${status.label} via ${ch.label}`}
-                        />
-                      </td>
+              {customerIssues.length > 0 ? (
+                <details className="group rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                    <span>
+                      {customerIssues.length} delivery {customerIssues.length === 1 ? "issue" : "issues"}
+                      <span className="ml-1.5 font-normal text-muted-foreground">
+                        Saved rules stay paused.
+                      </span>
+                    </span>
+                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </summary>
+                  <ul className="mt-2 space-y-1.5 border-t pt-2 text-xs text-muted-foreground">
+                    {customerIssues.map((issue) => (
+                      <li key={issue} className="flex gap-2">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <span>{issue}</span>
+                      </li>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </ul>
+                </details>
+              ) : null}
 
-          <div className="flex justify-end mt-4">
-            <Button onClick={handleSave} disabled={isSaving} size="sm">
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Save Changes
-            </Button>
-          </div>
+              <details className="group rounded-md border px-3 py-2 text-sm">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                  <span className="font-medium">WhatsApp template</span>
+                  <span className="ml-auto truncate text-xs text-muted-foreground">
+                    {whatsAppTemplate.templateName} · {whatsAppTemplate.languageCode}
+                  </span>
+                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-3 grid gap-3 border-t pt-3 md:grid-cols-[minmax(0,1fr)_12rem]">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="order-whatsapp-template">Template name</Label>
+                    <Input
+                      id="order-whatsapp-template"
+                      value={whatsAppTemplate.templateName}
+                      onChange={(event) =>
+                        setWhatsAppTemplate((previous) => ({
+                          ...previous,
+                          templateName: event.target.value,
+                        }))
+                      }
+                      placeholder="order_status_update"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="order-whatsapp-language">Language</Label>
+                    <Input
+                      id="order-whatsapp-language"
+                      value={whatsAppTemplate.languageCode}
+                      onChange={(event) =>
+                        setWhatsAppTemplate((previous) => ({
+                          ...previous,
+                          languageCode: event.target.value,
+                        }))
+                      }
+                      placeholder="en_US"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              </details>
+
+              <CustomerRulesMatrix
+                channels={channels}
+                readiness={readiness}
+                onToggle={handleToggle}
+                onToggleColumn={handleToggleCustomerColumn}
+              />
             </>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle className="text-base">Admin Notifications</CardTitle>
-              <CardDescription className="mt-1">
-                Choose which order events send push notifications to admin devices.
-              </CardDescription>
+        <CardHeader className="space-y-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle className="text-base">Admin alerts</CardTitle>
+                  {!isAdminLoading && !adminLoadError ? (
+                    <Badge
+                      variant={isPushConfigured ? "outline" : "secondary"}
+                      className={
+                        isPushConfigured
+                          ? "border-emerald-500/35 text-emerald-700 dark:text-emerald-400"
+                          : undefined
+                      }
+                    >
+                      {isPushConfigured
+                        ? "Push ready"
+                        : countAdminRules(adminChannels) > 0
+                          ? `${countAdminRules(adminChannels)} paused`
+                          : "Push needs setup"}
+                    </Badge>
+                  ) : null}
+                </div>
+                <CardDescription className="mt-0.5">
+                  Choose which events alert signed-in admin devices.
+                </CardDescription>
+              </div>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleAdminSave}
+              disabled={!adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
+              className="shrink-0"
+            >
+              {isAdminSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-2 h-4 w-4" />
+              )}
+              Save admin rules
+            </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 pt-0">
           {isAdminLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-10">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : adminLoadError ? (
@@ -575,71 +812,30 @@ export function NotificationChannelsBuilder() {
               </AlertDescription>
             </Alert>
           ) : (
-            <>
-              {!isPushConfigured && (
-                <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-3">
+              {!isPushConfigured ? (
+                <div className="flex items-start gap-2 rounded-md border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
                   <span>
                     {readinessIssueText(
                       pushError,
-                      "Admin push notifications are locked until Firebase service account credentials are ready.",
-                    )}
+                      "Admin push needs Firebase service account credentials.",
+                    )}{" "}
+                    Saved push rules stay paused until delivery recovers.
                   </span>
                 </div>
-              )}
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 border-b">
-                      <th className="text-left py-3 px-4 font-medium">
-                        Order Event
-                      </th>
-                      {ADMIN_CHANNELS.map((ch) => (
-                        <th
-                          key={ch.key}
-                          className="text-center py-3 px-4 font-medium w-24"
-                        >
-                          {ch.label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ADMIN_STATUSES.map((status, i) => (
-                      <tr
-                        key={status.key}
-                        className={i < ADMIN_STATUSES.length - 1 ? "border-b" : ""}
-                      >
-                        <td className="py-3 px-4 font-medium">{status.label}</td>
-                        {ADMIN_CHANNELS.map((ch) => (
-                          <td key={ch.key} className="text-center py-3 px-4">
-                            <Checkbox
-                              checked={adminChannels[status.key]?.[ch.key] ?? false}
-                              disabled={ch.key === "push" && !isPushConfigured}
-                              onCheckedChange={() =>
-                                handleAdminToggle(status.key, ch.key)
-                              }
-                              aria-label={`Admin: ${status.label} via ${ch.label}`}
-                            />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end mt-4">
-                <Button onClick={handleAdminSave} disabled={isAdminSaving} size="sm">
-                  {isAdminSaving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Save Changes
-                </Button>
-              </div>
-            </>
+              ) : null}
+              <AdminRulesMatrix
+                channels={adminChannels}
+                pushReady={isPushConfigured}
+                onToggle={handleAdminToggle}
+                onToggleAll={(enabled) =>
+                  setAdminChannels((previous) =>
+                    setAdminPushForEveryEvent(previous, enabled),
+                  )
+                }
+              />
+            </div>
           )}
         </CardContent>
       </Card>

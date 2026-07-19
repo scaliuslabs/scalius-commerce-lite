@@ -96,9 +96,8 @@ describe("sensitive settings load-error boundaries", () => {
     );
     expect(source).toContain("onClick={() => void loadCustomerChannels()}");
     expect(source).toContain("onClick={() => void loadAdminChannels()}");
-    expect(source.indexOf("customerLoadError ?")).toBeLessThan(
-      source.indexOf("Save Changes"),
-    );
+    expect(source).toContain("Boolean(customerLoadError)");
+    expect(source).toContain("Boolean(adminLoadError)");
   });
 
   it("blocks SMS OTP when auth settings cannot read SMS readiness", () => {

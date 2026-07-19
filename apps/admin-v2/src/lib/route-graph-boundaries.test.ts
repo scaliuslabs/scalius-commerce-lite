@@ -262,35 +262,44 @@ describe("admin route graph boundaries", () => {
       ),
       "utf8",
     );
-    const customerChannelBlock = notificationSource.slice(
-      notificationSource.indexOf("const CHANNELS"),
-      notificationSource.indexOf("const ADMIN_STATUSES"),
-    );
-    const adminChannelBlock = notificationSource.slice(
-      notificationSource.indexOf("const ADMIN_CHANNELS"),
-      notificationSource.indexOf("const DEFAULT_WHATSAPP_TEMPLATE"),
+    const policySource = readFileSync(
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "notification-channel-policy.ts",
+      ),
+      "utf8",
     );
 
-    expect(customerChannelBlock).toContain('key: "email"');
-    expect(customerChannelBlock).toContain('key: "sms"');
-    expect(customerChannelBlock).toContain('key: "whatsapp"');
-    expect(customerChannelBlock).not.toContain('key: "push"');
-    expect(adminChannelBlock).toContain('key: "push"');
-    expect(notificationSource).toContain("SMS notifications are locked until an active SMS provider is ready.");
+    const customerChannelBlock = policySource.slice(
+      policySource.indexOf("CUSTOMER_NOTIFICATION_CHANNELS"),
+      policySource.indexOf("ADMIN_NOTIFICATION_CHANNELS"),
+    );
+    const adminChannelBlock = policySource.slice(
+      policySource.indexOf("ADMIN_NOTIFICATION_CHANNELS"),
+      policySource.indexOf("NOTIFICATION_EVENTS"),
+    );
+
+    expect(customerChannelBlock).toContain('{ key: "email"');
+    expect(customerChannelBlock).toContain('{ key: "sms"');
+    expect(customerChannelBlock).toContain('{ key: "whatsapp"');
+    expect(customerChannelBlock).not.toContain('{ key: "push"');
+    expect(adminChannelBlock).toContain('{ key: "push"');
     expect(notificationSource).toContain("smsProviderConfigured");
-    expect(notificationSource).toContain("buildCustomerChannelConfig");
-    expect(notificationSource).toContain("sanitizeCustomerChannelConfig");
-    expect(notificationSource).toContain('channelCanBeEnabled(ch.key, readiness)');
-    expect(notificationSource).toContain('if (channel === "email") return readiness.email;');
-    expect(notificationSource).toContain('if (channel === "sms") return readiness.sms;');
-    expect(notificationSource).toContain('if (channel === "whatsapp") return readiness.whatsapp;');
-    expect(notificationSource).toContain("Admin push notifications are locked until Firebase service account credentials are ready.");
+    expect(notificationSource).toContain("buildCustomerNotificationConfig");
+    expect(notificationSource).toContain("serializeCustomerNotificationConfig");
+    expect(notificationSource).toContain("channelCanBeEnabled(channel, readiness)");
+    expect(notificationSource).toContain("return readiness[channel]");
+    expect(notificationSource).toContain("Saved rules stay paused.");
+    expect(notificationSource).toContain("Saved push rules stay paused until delivery recovers.");
     expect(notificationSource).toContain("pushConfigured");
-    expect(notificationSource).toContain('ch.key === "push" && !isPushConfigured');
-    expect(notificationSource).toContain("setChannels(effectiveChannels)");
-    expect(notificationSource).toContain("const statusChannels = effectiveChannels[status.key];");
-    expect(notificationSource).not.toContain("!whatsappConfigured");
-    expect(notificationSource).not.toContain("pushConfigured && enabledChannels.includes");
+    expect(notificationSource).toContain('channel === "push" && !isPushConfigured');
+    expect(policySource).toContain("Provider readiness controls delivery, not merchant intent.");
+    expect(policySource).toContain("enabledChannels.includes(channel.key)");
+    expect(policySource).toContain('enabledChannels.includes("push")');
+    expect(policySource).not.toContain("sanitizeCustomerChannelConfig");
   });
 
   it("keeps the deferred rich-text editor client render flicker-free", () => {
@@ -1659,7 +1668,7 @@ describe("admin route graph boundaries", () => {
     expect(notificationsSource).toContain("recorded attempt");
   });
 
-  it("keeps order detail low-priority panels behind lazy boundaries", () => {
+  it("keeps order detail panels on the deterministic eager boundary", () => {
     const orderViewPath = join(ADMIN_SRC_ROOT, "components", "admin", "OrderView.tsx");
     const orderViewSource = readFileSync(orderViewPath, "utf8");
     const supportPath = join(
@@ -1691,21 +1700,19 @@ describe("admin route graph boundaries", () => {
       "ShipmentCard.tsx",
     );
 
-    expect(orderViewSource).toContain("const LazyOrderSupportRequestsCard = lazy(");
-    expect(orderViewSource).toContain('import("./orderview/OrderSupportRequestsCard")');
+    expect(orderViewSource).not.toContain("lazy(");
+    expect(orderViewSource).not.toContain("<Suspense");
     expect(orderViewSource).toContain("(order.supportRequests?.length ?? 0) > 0");
-    expect(orderViewSource).toContain("const LazyOrderNotificationsCard = lazy(");
-    expect(orderViewSource).toContain('import("./orderview/OrderNotificationsCard")');
     expect(orderViewSource).toContain('import { PaymentCard } from "./orderview/PaymentCard"');
     expect(orderViewSource).toContain('import { ShipmentCard } from "./orderview/ShipmentCard"');
-    expect(orderViewSource).not.toContain(
+    expect(orderViewSource).toContain(
       'import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard"',
     );
-    expect(orderViewSource).not.toContain(
+    expect(orderViewSource).toContain(
       'import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard"',
     );
-    expect(findStaticImportPathToTarget(orderViewPath, supportPath)).toBeNull();
-    expect(findStaticImportPathToTarget(orderViewPath, notificationsPath)).toBeNull();
+    expect(findStaticImportPathToTarget(orderViewPath, supportPath)).not.toBeNull();
+    expect(findStaticImportPathToTarget(orderViewPath, notificationsPath)).not.toBeNull();
     expect(findStaticImportPathToTarget(orderViewPath, paymentPath)).not.toBeNull();
     expect(findStaticImportPathToTarget(orderViewPath, shipmentPath)).not.toBeNull();
   });
