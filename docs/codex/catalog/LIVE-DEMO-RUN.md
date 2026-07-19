@@ -1021,6 +1021,25 @@ The cleanup bullets below describe the two-product proof store that preceded the
   and accessibility tests, targeted lint, and the sequential 326-file Astro
   check passed before deployment.
 
+### Admin sign-in keyboard checkpoint (2026-07-20)
+
+- The deployed sign-in form already had programmatic Email, Password, and
+  Keep-signed-in names after hydration, but the shared auth layout still copied
+  a legacy positive-`tabindex`/MutationObserver script. Its real order was
+  Email, Password, Forgot password, a redundant logo link, checkbox, then Sign
+  in. The logo destination only routed a signed-out merchant back through the
+  auth guard, and the focus override applied globally to every auth form.
+- The auth shell now uses semantic source order without focus interception.
+  Password recovery remains visually beside the Password label but follows the
+  Password input in the DOM; the static Scalius mark is no longer a misleading
+  destination. Production focus order is Email, Password, Forgot password,
+  Keep me signed in, then Sign in, with no positive `tabindex` attributes.
+- Admin version `a21a4cdc-1453-4c78-954f-d3ad415c316c` is live at 100%.
+  Authenticated-independent production checks at 1440 x 1000 and 320 x 700
+  exposed the intended accessibility names, zero horizontal overflow, and no
+  browser console/page errors. Four focused auth tests, targeted lint, and the
+  single sequential Admin typecheck passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
