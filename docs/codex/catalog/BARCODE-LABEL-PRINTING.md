@@ -69,6 +69,27 @@ supported roll can preserve the symbol and its quiet zones.
 
 ## Competitive evidence
 
+The current platform comparison is intentionally capability-based. A missing
+core feature is not evidence that Scalius should omit it, and a supported
+printer list is not evidence that Scalius should bind label composition to one
+vendor:
+
+| Platform | Core barcode identity | First-class label workflow | Useful pattern | Constraint Scalius should avoid |
+| --- | --- | --- | --- | --- |
+| Shopify | Variant barcode plus optional app-generated 8-digit value | Separate Retail Barcode Labels app | Product-list batch entry, named stock templates, per-variant counts, native Print/Save as PDF | Extra app, fixed supported media, no arbitrary custom size, and no iPad printing from the app |
+| Square Retail | SKU or GTIN | Dashboard/POS label composer | Custom/category/purchase-order sources, location choice, test print, explicit PDF, and failed-job retry on managed POS hardware | Receiving/location shortcuts without authoritative receiving or location data |
+| Vendure | SKU in core; GTIN is a documented custom-field extension | No core composer found | Exact ProductVariant identity and extension points | Treating an extension example as a merchant-ready workflow |
+| Medusa | Variant SKU, barcode, EAN, and UPC | No core composer found | Exact variant identity and barcode-driven POS lookup | Confusing barcode storage or scanner lookup with physical label composition |
+| Saleor | Variant identity and extensible dashboard/API | No core composer found | Extension boundary | Claiming feature parity from an extensible API without a usable operator workflow |
+
+The resulting release bar is therefore higher than copying any one platform:
+the quick one-SKU action, mixed-SKU batch entry, ordinary A4 paper, adhesive
+sheets, thermal rolls, partial-sheet reuse, stock-derived counts, physical fit
+validation, test output, and PDF/print review belong in one built-in workspace.
+Purchase-order, location, and printer-queue entry points are added only when
+Scalius owns those underlying facts or hardware jobs; they must not be mocked by
+guessing from current stock.
+
 - [Shopify Retail Barcode Labels](https://help.shopify.com/en/manual/sell-in-person/hardware/barcode-printer/retail-barcode-labels)
   uses product-list selection as an entry point, then asks for a template,
   per-variant quantities, print settings, and final Print. The browser print
@@ -314,6 +335,15 @@ feeds, structured data, or external marketplaces.
   legacy long Code 128 value, custom-stock bounds and print blocking,
   numeric/interactive start-cell selection, 390 px responsive layout, no
   horizontal overflow, and no browser console warning/error.
+- The 2026-07-19 competitive re-audit used the current Shopify Retail Barcode
+  Labels instructions, Shopify printer guidance, Square Retail label workflow,
+  and current Vendure/Medusa/Saleor product/admin documentation. The live
+  Scalius workspace then loaded its 177-SKU demo catalog, selected an exact
+  persisted SKU, exposed its internal Code 128 identity and `8 on hand · 8
+  available` source facts, and composed one truthful A4 adhesive label with a
+  partial-sheet cell picker, test action, and Print/Save as PDF. No missing core
+  workflow justified replacing the progressive workspace with a wizard or a
+  direct-print row button.
 - The selected-SKU row exposes the exact on-hand and available counts beside
   the scan identity. The batch shortcuts therefore have visible source facts;
   they are not unexplained transformations of the editable print quantity.
