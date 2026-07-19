@@ -24,6 +24,7 @@ import {
   getApiV1StorefrontHomepage,
   getApiV1StorefrontLayout,
 } from "@scalius/api-client/sdk";
+import { createApiUrl, fetchWithRetry } from "./client";
 
 // =============================================
 // HOMEPAGE DATA TYPES
@@ -92,6 +93,13 @@ export interface LayoutData {
   };
 }
 
+export interface ThemePreviewData {
+  theme: StorefrontThemeSettings;
+  draftRevision: number;
+  basePublishedRevision: number;
+  expiresAt: string | number;
+}
+
 // =============================================
 // API FUNCTIONS
 // =============================================
@@ -149,4 +157,33 @@ export async function getLayoutData(): Promise<LayoutData | null> {
     },
     { ttlSeconds: CACHE_TTL.LONG },
   );
+}
+
+export async function resolveThemePreview(
+  token: string,
+): Promise<ThemePreviewData | null> {
+  const normalizedToken = token.trim();
+  if (!/^tpv_[A-Za-z0-9_-]{40,80}$/.test(normalizedToken)) return null;
+  try {
+    const response = await fetchWithRetry(
+      createApiUrl("/storefront/theme-preview/resolve"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: normalizedToken }),
+        cache: "no-store",
+      },
+      0,
+      4_000,
+      false,
+    );
+    if (!response.ok) {
+      await response.body?.cancel();
+      return null;
+    }
+    const payload = await response.json() as unknown;
+    return unwrapEnvelope<ThemePreviewData>(payload);
+  } catch {
+    return null;
+  }
 }

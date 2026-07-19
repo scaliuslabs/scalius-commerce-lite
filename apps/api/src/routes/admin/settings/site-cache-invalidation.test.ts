@@ -18,6 +18,13 @@ const mocks = vi.hoisted(() => ({
   saveFooterConfig: vi.fn(),
   getThemeSettings: vi.fn(),
   saveThemeSettings: vi.fn(),
+  getThemeWorkspace: vi.fn(),
+  saveThemeDraft: vi.fn(),
+  rebaseThemeDraft: vi.fn(),
+  publishThemeDraft: vi.fn(),
+  listThemeVersions: vi.fn(),
+  rollbackThemeSettings: vi.fn(),
+  createThemePreviewSession: vi.fn(),
   getMediaOptimizationSettings: vi.fn(),
   isValidMediaHostInput: vi.fn(),
   saveMediaOptimizationSettings: vi.fn(),
@@ -52,6 +59,13 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   saveFooterConfig: mocks.saveFooterConfig,
   getThemeSettings: mocks.getThemeSettings,
   saveThemeSettings: mocks.saveThemeSettings,
+  getThemeWorkspace: mocks.getThemeWorkspace,
+  saveThemeDraft: mocks.saveThemeDraft,
+  rebaseThemeDraft: mocks.rebaseThemeDraft,
+  publishThemeDraft: mocks.publishThemeDraft,
+  listThemeVersions: mocks.listThemeVersions,
+  rollbackThemeSettings: mocks.rollbackThemeSettings,
+  createThemePreviewSession: mocks.createThemePreviewSession,
   getMediaOptimizationSettings: mocks.getMediaOptimizationSettings,
   isValidMediaHostInput: mocks.isValidMediaHostInput,
   saveMediaOptimizationSettings: mocks.saveMediaOptimizationSettings,
@@ -124,6 +138,55 @@ function createTestApp() {
       colors: { primary: "#000000" },
     },
     revision: 2,
+  });
+  const themeDraft = {
+    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    revision: 2,
+    basePublishedRevision: 1,
+    updatedAt: new Date(1_000),
+  };
+  const themeWorkspace = {
+    published: {
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      revision: 1,
+    },
+    draft: themeDraft,
+  };
+  mocks.getThemeWorkspace.mockResolvedValue(themeWorkspace);
+  mocks.saveThemeDraft.mockResolvedValue(themeDraft);
+  mocks.rebaseThemeDraft.mockResolvedValue({
+    ...themeDraft,
+    revision: 3,
+  });
+  mocks.publishThemeDraft.mockResolvedValue({
+    published: {
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      revision: 2,
+    },
+    draft: {
+      ...themeDraft,
+      revision: 3,
+      basePublishedRevision: 2,
+    },
+  });
+  mocks.listThemeVersions.mockResolvedValue([]);
+  mocks.rollbackThemeSettings.mockResolvedValue({
+    published: {
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      revision: 2,
+    },
+    draft: {
+      ...themeDraft,
+      revision: 3,
+      basePublishedRevision: 2,
+    },
+  });
+  mocks.createThemePreviewSession.mockResolvedValue({
+    token: `tpv_${"a".repeat(48)}`,
+    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    draftRevision: 2,
+    basePublishedRevision: 1,
+    expiresAt: new Date(Date.now() + 60_000),
   });
   mocks.isValidMediaHostInput.mockReturnValue(true);
   mocks.saveMediaOptimizationSettings.mockResolvedValue({
@@ -361,6 +424,7 @@ describe("site settings cache invalidation", () => {
     };
 
     const response = await requestJson(app, env, "POST", "/header", {
+      expectedRevision: 1,
       topBar: { text: "Hi", isEnabled: true },
       logo: { src: "/logo.png", alt: "Logo" },
       favicon: { src: "/favicon.png", alt: "Icon" },
@@ -373,6 +437,7 @@ describe("site settings cache invalidation", () => {
     expect(mocks.saveHeaderConfig).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ navigation: [navigationItem] }),
+      1,
     );
   });
 
@@ -527,6 +592,7 @@ describe("site settings cache invalidation", () => {
       path: "/header",
       method: "POST" as const,
       body: {
+        expectedRevision: 1,
         topBar: { text: "Hi", isEnabled: true },
         logo: { src: "/logo.png", alt: "Logo" },
         favicon: { src: "/favicon.png", alt: "Icon" },
@@ -540,6 +606,7 @@ describe("site settings cache invalidation", () => {
       path: "/footer",
       method: "POST" as const,
       body: {
+        expectedRevision: 1,
         logo: { src: "/logo.png", alt: "Logo" },
         tagline: "",
         description: "",
@@ -800,7 +867,96 @@ describe("site settings cache invalidation", () => {
         colors: { primary: "#2563eb" },
       },
       1,
+      null,
     );
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("saves and rebases theme drafts without invalidating the published storefront", async () => {
+    const { app, env } = createTestApp();
+    const payload = {
+      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      expectedDraftRevision: 2,
+      basePublishedRevision: 1,
+    };
+
+    const saveResponse = await requestJson(app, env, "POST", "/theme/draft", payload);
+    const rebaseResponse = await requestJson(app, env, "POST", "/theme/draft/rebase", payload);
+
+    expect(saveResponse.status).toBe(200);
+    expect(rebaseResponse.status).toBe(200);
+    expect(mocks.saveThemeDraft).toHaveBeenCalledWith(
+      { id: "db" },
+      DEFAULT_STOREFRONT_THEME_SETTINGS,
+      2,
+      1,
+      null,
+    );
+    expect(mocks.rebaseThemeDraft).toHaveBeenCalledWith(
+      { id: "db" },
+      DEFAULT_STOREFRONT_THEME_SETTINGS,
+      2,
+      1,
+      null,
+    );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("creates a private exact-draft preview without invalidating caches", async () => {
+    const { app, env } = createTestApp();
+    const response = await requestJson(
+      app,
+      env,
+      "POST",
+      "/theme/preview-session",
+      { expectedDraftRevision: 2 },
+    );
+    const body = await response.json() as { data?: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(body.data).toMatchObject({
+      token: `tpv_${"a".repeat(48)}`,
+      draftRevision: 2,
+      basePublishedRevision: 1,
+    });
+    expect(body.data).not.toHaveProperty("theme");
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+  });
+
+  it("invalidates layout only after publishing or restoring a theme revision", async () => {
+    const { app, env } = createTestApp();
+    const publishResponse = await requestJson(
+      app,
+      env,
+      "POST",
+      "/theme/publish",
+      { expectedPublishedRevision: 1, expectedDraftRevision: 2 },
+    );
+    const rollbackResponse = await requestJson(
+      app,
+      env,
+      "POST",
+      "/theme/rollback",
+      {
+        sourceRevision: 1,
+        expectedPublishedRevision: 1,
+        expectedDraftRevision: 2,
+      },
+    );
+
+    expect(publishResponse.status).toBe(200);
+    expect(rollbackResponse.status).toBe(200);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledTimes(2);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenNthCalledWith(
+      1,
+      expect.arrayContaining(["layout"]),
+      expect.anything(),
+    );
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining(["layout"]),
+      expect.anything(),
+    );
   });
 });

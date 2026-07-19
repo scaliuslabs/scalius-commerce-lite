@@ -7,12 +7,17 @@ const mocks = vi.hoisted(() => ({
   getHomepageData: vi.fn(),
   getLayoutData: vi.fn(),
   getPageRenderData: vi.fn(),
+  resolveThemePreviewSession: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/storefront/storefront.service", () => ({
   getHomepageData: mocks.getHomepageData,
   getLayoutData: mocks.getLayoutData,
   getPageRenderData: mocks.getPageRenderData,
+}));
+
+vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
+  resolveThemePreviewSession: mocks.resolveThemePreviewSession,
 }));
 
 import { storefrontRoutes } from "./storefront";
@@ -181,6 +186,52 @@ describe("storefront consolidated route caching", () => {
           /^sc:api:storefront:page:\/api\/v1\/storefront\/pages\/slug\/missing-page#f:[0-9a-f]+$/,
         ),
       ]),
+    );
+  });
+
+  it("resolves an exact theme preview snapshot without shared caching", async () => {
+    const app = createTestApp();
+    const token = `tpv_${"a".repeat(48)}`;
+    mocks.resolveThemePreviewSession.mockResolvedValue({
+      theme: { density: "compact", colors: {} },
+      draftRevision: 7,
+      basePublishedRevision: 4,
+      expiresAt: 1_900_000_000,
+    });
+
+    const response = await app.request("/api/v1/storefront/theme-preview/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    const body = await response.json() as {
+      data?: { draftRevision?: number; theme?: { density?: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-cache, no-store, must-revalidate",
+    );
+    expect(body.data).toEqual(expect.objectContaining({
+      draftRevision: 7,
+      theme: expect.objectContaining({ density: "compact" }),
+    }));
+    expect(mocks.resolveThemePreviewSession).toHaveBeenCalledWith({}, token);
+  });
+
+  it("fails an expired theme preview closed and keeps the miss private", async () => {
+    const app = createTestApp();
+    mocks.resolveThemePreviewSession.mockResolvedValue(null);
+
+    const response = await app.request("/api/v1/storefront/theme-preview/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: `tpv_${"b".repeat(48)}` }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-cache, no-store, must-revalidate",
     );
   });
 });

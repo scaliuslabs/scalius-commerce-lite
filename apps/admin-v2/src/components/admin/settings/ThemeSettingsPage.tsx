@@ -5,10 +5,12 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleAlert,
+  Eye,
   Loader2,
   Palette,
   RotateCcw,
   Save,
+  Send,
 } from "lucide-react";
 import {
   DEFAULT_STOREFRONT_THEME_SETTINGS,
@@ -18,8 +20,16 @@ import {
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import {
-  getThemeSettings,
-  updateThemeSettings,
+  createThemePreviewSession,
+  getThemeVersions,
+  getThemeWorkspace,
+  publishThemeDraft,
+  rebaseThemeDraft,
+  rollbackTheme,
+  saveThemeDraft,
+  type ThemeDraftPayload,
+  type ThemeVersionPayload,
+  type ThemeWorkspacePayload,
 } from "~/lib/api-functions/settings";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -44,10 +54,15 @@ import {
   buildStorefrontReviewLinks,
   describeThemeDraftChanges,
   THEME_WORKSPACE_SECTIONS,
+  type ThemePreviewDevice,
   type ThemeWorkspaceSection,
 } from "./theme-workspace";
 import { ThemeReviewWorkspace } from "./ThemeReviewWorkspace";
 import { ThemeSystemWorkspace } from "./ThemeSystemWorkspace";
+import {
+  prepareThemePreviewWindow,
+  submitThemePreview,
+} from "./theme-preview-window";
 import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 const COLOR_FIELDS = [
@@ -98,51 +113,87 @@ const CONTROL_KEYS: ColorKey[] = ["border", "input", "ring"];
 export default function ThemeSettingsPage({
   section,
   onSectionChange,
+  previewPath = "/",
+  previewDevice = "desktop",
+  onPreviewLocationChange = () => undefined,
 }: {
   section: ThemeWorkspaceSection;
   onSectionChange: (section: ThemeWorkspaceSection) => void;
+  previewPath?: string;
+  previewDevice?: ThemePreviewDevice;
+  onPreviewLocationChange?: (path: string, device: ThemePreviewDevice) => void;
 }) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const [theme, setTheme] = useState<StorefrontThemeSettings>(
     DEFAULT_STOREFRONT_THEME_SETTINGS,
   );
-  const [savedTheme, setSavedTheme] = useState<StorefrontThemeSettings>(
+  const [savedDraftTheme, setSavedDraftTheme] = useState<StorefrontThemeSettings>(
     DEFAULT_STOREFRONT_THEME_SETTINGS,
   );
-  const [revision, setRevision] = useState(0);
-  const [conflict, setConflict] = useState<{
-    theme: StorefrontThemeSettings;
-    revision: number;
-  } | null>(null);
+  const [publishedTheme, setPublishedTheme] = useState<StorefrontThemeSettings>(
+    DEFAULT_STOREFRONT_THEME_SETTINGS,
+  );
+  const [publishedRevision, setPublishedRevision] = useState(0);
+  const [draftRevision, setDraftRevision] = useState(0);
+  const [basePublishedRevision, setBasePublishedRevision] = useState(0);
+  const [conflict, setConflict] = useState<ThemeWorkspacePayload | null>(null);
+  const [versions, setVersions] = useState<ThemeVersionPayload[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [operation, setOperation] = useState<
+    "saving" | "previewing" | "publishing" | "rebasing" | `restoring:${number}` | null
+  >(null);
   const [message, setMessage] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
 
-  const fetchColors = useCallback(async () => {
+  const applyWorkspace = useCallback((workspace: ThemeWorkspacePayload) => {
+    setTheme(workspace.draft.theme);
+    setSavedDraftTheme(workspace.draft.theme);
+    setPublishedTheme(workspace.published.theme);
+    setPublishedRevision(workspace.published.revision);
+    setDraftRevision(workspace.draft.revision);
+    setBasePublishedRevision(workspace.draft.basePublishedRevision);
+    setConflict(null);
+  }, []);
+
+  const fetchWorkspace = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
-      const data = await getThemeSettings();
-      setTheme(data.theme);
-      setSavedTheme(data.theme);
-      setRevision(data.revision);
-      setConflict(null);
+      applyWorkspace(await getThemeWorkspace());
       setMessage(null);
     } catch {
       setLoadError("Storefront style could not be loaded. No values have been assumed.");
     } finally {
       setLoading(false);
     }
+  }, [applyWorkspace]);
+
+  useEffect(() => {
+    void fetchWorkspace();
+  }, [fetchWorkspace]);
+
+  const loadHistory = useCallback(async () => {
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const result = await getThemeVersions();
+      setVersions(result.versions);
+    } catch {
+      setHistoryError("Published history could not be loaded.");
+    } finally {
+      setHistoryLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    void fetchColors();
-  }, [fetchColors]);
+    if (section === "review") void loadHistory();
+  }, [loadHistory, section]);
 
   const storefrontUrlQuery = useQuery(storefrontUrlQueryOptions());
 
@@ -151,8 +202,12 @@ export default function ThemeSettingsPage({
     [theme.colors],
   );
   const dirty = useMemo(
-    () => !themeSettingsDraftsEqual(theme, savedTheme),
-    [theme, savedTheme],
+    () => !themeSettingsDraftsEqual(theme, savedDraftTheme),
+    [theme, savedDraftTheme],
+  );
+  const hasUnpublishedChanges = useMemo(
+    () => !themeSettingsDraftsEqual(theme, publishedTheme),
+    [publishedTheme, theme],
   );
   const invalidKeys = useMemo(
     () =>
@@ -174,8 +229,8 @@ export default function ThemeSettingsPage({
   const publishBlocked = invalidKeys.length > 0 || contrastFailures.length > 0;
   const configuredStorefrontUrl = storefrontUrlQuery.data?.storefrontUrl;
   const draftChanges = useMemo(
-    () => describeThemeDraftChanges(savedTheme, theme),
-    [savedTheme, theme],
+    () => describeThemeDraftChanges(publishedTheme, theme),
+    [publishedTheme, theme],
   );
   const storefrontReviewLinks = useMemo(
     () => buildStorefrontReviewLinks(configuredStorefrontUrl),
@@ -209,50 +264,165 @@ export default function ThemeSettingsPage({
   };
 
   const handleDiscard = () => {
-    if (conflict) {
-      setTheme(conflict.theme);
-      setSavedTheme(conflict.theme);
-      setRevision(conflict.revision);
-      setConflict(null);
-      setMessage(null);
-      return;
-    }
-
-    setTheme(savedTheme);
-    setConflict(null);
+    setTheme(savedDraftTheme);
     setMessage(null);
   };
 
   const loadConflictingVersion = () => {
     if (!conflict) return;
-    setTheme(conflict.theme);
-    setSavedTheme(conflict.theme);
-    setRevision(conflict.revision);
-    setConflict(null);
+    applyWorkspace(conflict);
     setMessage(null);
   };
 
-  const rebaseLocalChanges = () => {
+  const rebaseLocalChanges = async () => {
     if (!conflict) return;
-
-    setTheme(
-      rebaseThemeSettingsDraft({
-        base: savedTheme,
+    try {
+      setOperation("rebasing");
+      setMessage(null);
+      const rebased = rebaseThemeSettingsDraft({
+        base: savedDraftTheme,
         local: theme,
-        latest: conflict.theme,
-      }),
-    );
-    setSavedTheme(conflict.theme);
-    setRevision(conflict.revision);
-    setConflict(null);
-    setMessage(null);
+        latest: conflict.draft.theme,
+      });
+      const saved = await rebaseThemeDraft({
+        data: {
+          theme: normalizeThemeSettingsDraft(rebased),
+          expectedDraftRevision: conflict.draft.revision,
+          basePublishedRevision: conflict.published.revision,
+        },
+      });
+      setTheme(saved.theme);
+      setSavedDraftTheme(saved.theme);
+      setPublishedTheme(conflict.published.theme);
+      setPublishedRevision(conflict.published.revision);
+      setDraftRevision(saved.revision);
+      setBasePublishedRevision(saved.basePublishedRevision);
+      setConflict(null);
+      setMessage({ type: "success", text: "Your changes were rebased and saved." });
+    } catch (error) {
+      await handleWorkspaceConflict(error, "Draft could not be rebased.");
+    } finally {
+      setOperation(null);
+    }
   };
 
-  const handleSave = async () => {
+  const handleWorkspaceConflict = async (error: unknown, fallback: string) => {
+    if (!isAdminApiConflictError(error)) {
+      setMessage({ type: "error", text: fallback });
+      return;
+    }
+    try {
+      setConflict(await getThemeWorkspace());
+      setMessage(null);
+    } catch {
+      setMessage({
+        type: "error",
+        text: "The storefront style changed elsewhere. Reload the workspace before continuing.",
+      });
+    }
+  };
+
+  const persistDraft = async (): Promise<ThemeDraftPayload | null> => {
+    if (!dirty && draftRevision > 0) {
+      return {
+        theme: savedDraftTheme,
+        revision: draftRevision,
+        basePublishedRevision,
+        updatedAt: null,
+      };
+    }
+    try {
+      const saved = await saveThemeDraft({
+        data: {
+          theme: normalizeThemeSettingsDraft(theme),
+          expectedDraftRevision: draftRevision,
+          basePublishedRevision,
+        },
+      });
+      setTheme(saved.theme);
+      setSavedDraftTheme(saved.theme);
+      setDraftRevision(saved.revision);
+      setBasePublishedRevision(saved.basePublishedRevision);
+      setConflict(null);
+      return saved;
+    } catch (error) {
+      await handleWorkspaceConflict(error, "Draft could not be saved. Your changes remain in this tab.");
+      return null;
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (publishBlocked) {
+      setMessage({
+        type: "error",
+        text:
+          invalidKeys.length > 0
+            ? "Fix the highlighted color values before saving the draft."
+            : "Increase the contrast of the highlighted text pairs before saving the draft.",
+      });
+      return;
+    }
+    try {
+      setOperation("saving");
+      setMessage(null);
+      const saved = await persistDraft();
+      if (saved) setMessage({ type: "success", text: `Draft revision ${saved.revision} saved.` });
+    } finally {
+      setOperation(null);
+    }
+  };
+
+  const handlePreview = async (
+    selectedPath = previewPath,
+    selectedDevice = previewDevice,
+  ) => {
+    if (!configuredStorefrontUrl) {
+      setMessage({ type: "error", text: "Configure a valid Storefront URL before previewing." });
+      return;
+    }
+    if (publishBlocked) {
+      setMessage({ type: "error", text: "Resolve the highlighted style issues before previewing." });
+      return;
+    }
+    const previewWindow = prepareThemePreviewWindow({
+      storefrontUrl: configuredStorefrontUrl,
+      path: selectedPath,
+      device: selectedDevice,
+    });
+    if (!previewWindow) {
+      setMessage({ type: "error", text: "Allow pop-ups for this dashboard to open the preview." });
+      return;
+    }
+    try {
+      setOperation("previewing");
+      setMessage(null);
+      const saved = await persistDraft();
+      if (!saved) {
+        previewWindow.close();
+        return;
+      }
+      const preview = await createThemePreviewSession({
+        data: { expectedDraftRevision: saved.revision },
+      });
+      await submitThemePreview({
+        previewWindow,
+        storefrontUrl: configuredStorefrontUrl,
+        token: preview.token,
+      });
+      setMessage({ type: "success", text: `Preview opened from draft revision ${saved.revision}.` });
+    } catch (error) {
+      previewWindow.close();
+      await handleWorkspaceConflict(error, "Draft preview could not be opened.");
+    } finally {
+      setOperation(null);
+    }
+  };
+
+  const handlePublish = async () => {
     if (conflict) {
       setMessage({
         type: "error",
-        text: "Resolve the newer published revision before publishing this draft.",
+        text: "Resolve the newer saved draft before publishing.",
       });
       return;
     }
@@ -269,37 +439,62 @@ export default function ThemeSettingsPage({
     }
 
     try {
-      setSaving(true);
+      setOperation("publishing");
       setMessage(null);
-      const cleaned = normalizeThemeSettingsDraft(theme);
-      const saved = await updateThemeSettings({
-        data: { theme: cleaned, expectedRevision: revision },
-      });
-      setTheme(saved.theme);
-      setSavedTheme(saved.theme);
-      setRevision(saved.revision);
-      setConflict(null);
-      setMessage({ type: "success", text: "Storefront style published." });
-    } catch (error) {
-      if (isAdminApiConflictError(error)) {
-        try {
-          const latest = await getThemeSettings();
-          setConflict(latest);
-          setMessage(null);
-        } catch {
-          setMessage({
-            type: "error",
-            text: "The published theme changed elsewhere. Reload before publishing.",
-          });
-        }
-      } else {
-        setMessage({
-          type: "error",
-          text: "Storefront style could not be published. Your changes remain in this tab.",
-        });
+      const saved = await persistDraft();
+      if (!saved) return;
+      if (themeSettingsDraftsEqual(saved.theme, publishedTheme)) {
+        setMessage({ type: "success", text: "Published style is already current." });
+        return;
       }
+      const workspace = await publishThemeDraft({
+        data: {
+          expectedPublishedRevision: publishedRevision,
+          expectedDraftRevision: saved.revision,
+        },
+      });
+      applyWorkspace(workspace);
+      setMessage({ type: "success", text: `Storefront style published as revision ${workspace.published.revision}.` });
+      if (section === "review") void loadHistory();
+    } catch (error) {
+      await handleWorkspaceConflict(error, "Storefront style could not be published. The saved draft remains available.");
     } finally {
-      setSaving(false);
+      setOperation(null);
+    }
+  };
+
+  const handleRestore = async (sourceRevision: number) => {
+    try {
+      setOperation(`restoring:${sourceRevision}`);
+      setMessage(null);
+      let exactDraftRevision = draftRevision;
+      if (exactDraftRevision === 0) {
+        const saved = await saveThemeDraft({
+          data: {
+            theme: savedDraftTheme,
+            expectedDraftRevision: 0,
+            basePublishedRevision,
+          },
+        });
+        exactDraftRevision = saved.revision;
+      }
+      const workspace = await rollbackTheme({
+        data: {
+          sourceRevision,
+          expectedPublishedRevision: publishedRevision,
+          expectedDraftRevision: exactDraftRevision,
+        },
+      });
+      applyWorkspace(workspace);
+      setMessage({
+        type: "success",
+        text: `Revision ${sourceRevision} restored as published revision ${workspace.published.revision}.`,
+      });
+      await loadHistory();
+    } catch (error) {
+      await handleWorkspaceConflict(error, `Revision ${sourceRevision} could not be restored.`);
+    } finally {
+      setOperation(null);
     }
   };
 
@@ -337,7 +532,7 @@ export default function ThemeSettingsPage({
               </div>
               <button
                 type="button"
-                onClick={() => void fetchColors()}
+              onClick={() => void fetchWorkspace()}
                 className="min-h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Retry
@@ -358,9 +553,15 @@ export default function ThemeSettingsPage({
             Set type, shape, spacing, and colors from one published system.
           </p>
         </div>
-        <span className="w-fit rounded-full border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-          Published · revision {revision || "—"}
-        </span>
+        <div className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="rounded-full border bg-card px-2.5 py-1">
+            Published r{publishedRevision || "—"}
+          </span>
+          <span className="rounded-full border bg-card px-2.5 py-1">
+            Draft {draftRevision > 0 ? `r${draftRevision}` : "new"}
+            {dirty ? " · unsaved" : " · saved"}
+          </span>
+        </div>
       </header>
 
       {!canManage && (
@@ -374,8 +575,10 @@ export default function ThemeSettingsPage({
           <div className="flex min-w-0 gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <div>
-              <p className="font-medium">Revision {conflict.revision} was published elsewhere.</p>
-              <p className="text-xs text-muted-foreground">Use the latest version, or replay only your changed fields on top of it.</p>
+              <p className="font-medium">The saved draft or published style changed elsewhere.</p>
+              <p className="text-xs text-muted-foreground">
+                Load draft r{conflict.draft.revision}, or replay only your changed fields on top of it.
+              </p>
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-2 gap-2">
@@ -388,10 +591,11 @@ export default function ThemeSettingsPage({
             </button>
             <button
               type="button"
-              onClick={rebaseLocalChanges}
+              onClick={() => void rebaseLocalChanges()}
+              disabled={operation === "rebasing"}
               className="min-h-10 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Rebase mine
+              {operation === "rebasing" ? "Rebasing…" : "Rebase mine"}
             </button>
           </div>
         </div>
@@ -549,24 +753,41 @@ export default function ThemeSettingsPage({
       {section === "review" && (
         <ThemeReviewWorkspace
           draftChanges={draftChanges}
-          revision={revision}
+          publishedRevision={publishedRevision}
+          draftRevision={draftRevision}
           dirty={dirty}
+          hasUnpublishedChanges={hasUnpublishedChanges}
           publishBlocked={publishBlocked}
           storefrontLinks={storefrontReviewLinks}
           storefrontUrlUnavailable={storefrontUrlQuery.isError}
+          previewPath={previewPath}
+          previewDevice={previewDevice}
+          onPreviewLocationChange={onPreviewLocationChange}
+          onPreview={(path, device) => void handlePreview(path, device)}
+          previewing={operation === "previewing"}
+          versions={versions}
+          historyLoading={historyLoading}
+          historyError={historyError}
+          canManage={canManage}
+          restoringRevision={operation?.startsWith("restoring:") ? Number(operation.split(":")[1]) : null}
+          onRestore={(sourceRevision) => void handleRestore(sourceRevision)}
         />
       )}
 
       <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            {dirty ? "Unpublished changes in this tab" : "Published style is up to date"}
+            {dirty
+              ? "Unsaved in this tab"
+              : hasUnpublishedChanges
+                ? `Draft r${draftRevision || "new"} saved · not published`
+                : "Published style is current"}
           </p>
-          <div className="grid grid-cols-3 gap-2 sm:flex">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <button
               type="button"
               onClick={handleDiscard}
-              disabled={saving || !dirty}
+              disabled={operation !== null || !dirty}
               className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
             >
               Discard
@@ -574,7 +795,7 @@ export default function ThemeSettingsPage({
             <button
               type="button"
               onClick={handleReset}
-              disabled={!canManage || saving}
+              disabled={!canManage || operation !== null}
               className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
             >
               <RotateCcw className="h-4 w-4" />
@@ -582,17 +803,35 @@ export default function ThemeSettingsPage({
             </button>
             <button
               type="button"
-              onClick={() => void handleSave()}
-              disabled={!canManage || saving || !dirty || publishBlocked || Boolean(conflict)}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
+              onClick={() => void handleSaveDraft()}
+              disabled={!canManage || operation !== null || !dirty || publishBlocked || Boolean(conflict)}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? "Publishing…" : "Publish"}
+              {operation === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {operation === "saving" ? "Saving…" : "Save draft"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handlePreview()}
+              disabled={operation !== null || publishBlocked || Boolean(conflict) || !configuredStorefrontUrl || (!canManage && draftRevision === 0)}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
+            >
+              {operation === "previewing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+              {operation === "previewing" ? "Opening…" : "Preview"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handlePublish()}
+              disabled={!canManage || operation !== null || !hasUnpublishedChanges || publishBlocked || Boolean(conflict)}
+              className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-1 sm:min-h-10"
+            >
+              {operation === "publishing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {operation === "publishing" ? "Publishing…" : "Publish"}
             </button>
           </div>
         </div>
       </div>
-      <UnsavedChangesGuard isDirty={dirty} isSubmitting={saving} />
+      <UnsavedChangesGuard isDirty={dirty} isSubmitting={operation !== null} />
     </div>
   );
 }

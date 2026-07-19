@@ -375,6 +375,42 @@ feeds, structured data, or external marketplaces.
   workstation preference. The focused model suite passed 17 tests, including
   stable selection order, product/SKU ordering, non-mutation, and zero-count
   detection.
+- Admin version `74d6cbfa-41d7-46b8-a016-94723acbbf12` keeps one-off and batch
+  printing in the same progressive workflow: exact-SKU row entry, selected-row
+  batch entry, and the dedicated label workspace. At narrow widths a fixed
+  action bar keeps the truthful label/page summary, Test, and Print/PDF actions
+  reachable after a long SKU search or page preview; desktop retains the
+  compact side rail. Production proof on 2026-07-19 loaded an exact rich-demo
+  SKU, its saved Code 128 identity, on-hand/available facts, A4 adhesive 2 × 7
+  preview, used-sheet start cell, Test, and Print/PDF. The full release check
+  then passed dashboard auth, storefront, catalog discovery, UCP, and a live
+  product route.
+
+## Product boundary and future extensions
+
+The best interface is deliberately not a mandatory step-by-step wizard. A
+wizard slows the common “print this SKU” action and hides the physical sheet
+while quantities change. Scalius uses progressive disclosure instead:
+
+1. A row-level **Print label** action opens one exact SKU with quantity one.
+2. Inventory/product multi-select opens the same workspace with the selection
+   preserved, where `One each`, `On hand`, and `Available` prepare common jobs.
+3. The workspace exposes paper/roll, content, start-cell, alignment, preview,
+   test, and final print/PDF in one reviewable state. Browser Print provides the
+   universal Save as PDF path for office A4 workflows; thermal printers remain
+   ordinary print destinations.
+
+This matches the useful coverage of Shopify/Square-style template and batch
+printing while avoiding a separate label app and adds the A4/manual-cut flow
+that small merchants otherwise assemble by hand. The workspace already covers
+exact single/batch SKUs, stock-derived quantities, A4/plain/adhesive/thermal/
+custom formats, partially used sheets, physical fit, test pages, bounded
+alignment, vector output, and browser PDF.
+
+Receiving-derived quantities, team-shared templates, native ZPL, and location,
+package, lot, or serial labels are later inventory/fulfilment capabilities and
+must not be fabricated from the current SKU model. SVG download may be added as
+an advanced export, never as the primary merchant workflow.
 
 ## Interface direction
 

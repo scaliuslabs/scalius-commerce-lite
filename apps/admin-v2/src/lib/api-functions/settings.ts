@@ -167,6 +167,47 @@ export interface UpdateThemeSettingsInput {
   expectedRevision: number;
   theme: StorefrontThemeSettings;
 }
+export interface ThemeDraftPayload {
+  theme: StorefrontThemeSettings;
+  revision: number;
+  basePublishedRevision: number;
+  updatedAt: string | number | null;
+}
+export interface ThemeWorkspacePayload {
+  published: ThemeSettingsPayload;
+  draft: ThemeDraftPayload;
+}
+export interface SaveThemeDraftInput {
+  theme: StorefrontThemeSettings;
+  expectedDraftRevision: number;
+  basePublishedRevision: number;
+}
+export interface PublishThemeDraftInput {
+  expectedPublishedRevision: number;
+  expectedDraftRevision: number;
+}
+export interface ThemeVersionPayload extends ThemeSettingsPayload {
+  id: string;
+  source: "publish" | "rollback" | "migration";
+  sourceRevision: number | null;
+  publishedBy: string | null;
+  createdAt: string | number;
+}
+export interface ThemeVersionsPayload {
+  versions: ThemeVersionPayload[];
+}
+export interface RollbackThemeInput extends PublishThemeDraftInput {
+  sourceRevision: number;
+}
+export interface ThemePreviewSessionInput {
+  expectedDraftRevision: number;
+}
+export interface ThemePreviewSessionPayload {
+  token: string;
+  draftRevision: number;
+  basePublishedRevision: number;
+  expiresAt: string | number;
+}
 export type MediaSettingsPayload = SettingsPayload;
 export type UpdateMediaSettingsInput = SettingsPayload;
 export type SmsProvider = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet";
@@ -396,6 +437,48 @@ export const updateThemeSettings = createServerFn({ method: "POST" })
   .validator((data: UpdateThemeSettingsInput) => data)
   .handler(async ({ data }) => {
     return apiPost<ThemeSettingsPayload & MessagePayload>("/settings/theme", data);
+  });
+
+export const getThemeWorkspace = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ThemeWorkspacePayload> => {
+    return apiGet<ThemeWorkspacePayload>("/settings/theme/workspace");
+  },
+);
+
+export const saveThemeDraft = createServerFn({ method: "POST" })
+  .validator((data: SaveThemeDraftInput) => data)
+  .handler(async ({ data }): Promise<ThemeDraftPayload> => {
+    return apiPost<ThemeDraftPayload>("/settings/theme/draft", data);
+  });
+
+export const rebaseThemeDraft = createServerFn({ method: "POST" })
+  .validator((data: SaveThemeDraftInput) => data)
+  .handler(async ({ data }): Promise<ThemeDraftPayload> => {
+    return apiPost<ThemeDraftPayload>("/settings/theme/draft/rebase", data);
+  });
+
+export const publishThemeDraft = createServerFn({ method: "POST" })
+  .validator((data: PublishThemeDraftInput) => data)
+  .handler(async ({ data }): Promise<ThemeWorkspacePayload> => {
+    return apiPost<ThemeWorkspacePayload>("/settings/theme/publish", data);
+  });
+
+export const getThemeVersions = createServerFn({ method: "GET" }).handler(
+  async (): Promise<ThemeVersionsPayload> => {
+    return apiGet<ThemeVersionsPayload>("/settings/theme/versions", { limit: "20" });
+  },
+);
+
+export const rollbackTheme = createServerFn({ method: "POST" })
+  .validator((data: RollbackThemeInput) => data)
+  .handler(async ({ data }): Promise<ThemeWorkspacePayload> => {
+    return apiPost<ThemeWorkspacePayload>("/settings/theme/rollback", data);
+  });
+
+export const createThemePreviewSession = createServerFn({ method: "POST" })
+  .validator((data: ThemePreviewSessionInput) => data)
+  .handler(async ({ data }): Promise<ThemePreviewSessionPayload> => {
+    return apiPost<ThemePreviewSessionPayload>("/settings/theme/preview-session", data);
   });
 
 export const getMediaSettings = createServerFn({ method: "GET" }).handler(

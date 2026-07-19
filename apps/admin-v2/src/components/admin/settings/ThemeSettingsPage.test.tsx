@@ -10,8 +10,13 @@ import ThemeSettingsPage from "./ThemeSettingsPage";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-const getThemeSettingsMock = vi.hoisted(() => vi.fn());
-const updateThemeSettingsMock = vi.hoisted(() => vi.fn());
+const getThemeWorkspaceMock = vi.hoisted(() => vi.fn());
+const saveThemeDraftMock = vi.hoisted(() => vi.fn());
+const publishThemeDraftMock = vi.hoisted(() => vi.fn());
+const getThemeVersionsMock = vi.hoisted(() => vi.fn());
+const rebaseThemeDraftMock = vi.hoisted(() => vi.fn());
+const rollbackThemeMock = vi.hoisted(() => vi.fn());
+const createThemePreviewSessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -25,8 +30,13 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 });
 
 vi.mock("~/lib/api-functions/settings", () => ({
-  getThemeSettings: getThemeSettingsMock,
-  updateThemeSettings: updateThemeSettingsMock,
+  getThemeWorkspace: getThemeWorkspaceMock,
+  saveThemeDraft: saveThemeDraftMock,
+  publishThemeDraft: publishThemeDraftMock,
+  getThemeVersions: getThemeVersionsMock,
+  rebaseThemeDraft: rebaseThemeDraftMock,
+  rollbackTheme: rollbackThemeMock,
+  createThemePreviewSession: createThemePreviewSessionMock,
 }));
 
 vi.mock("~/lib/admin-api-error", () => ({
@@ -50,8 +60,14 @@ describe("ThemeSettingsPage read authority", () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
-    getThemeSettingsMock.mockReset();
-    updateThemeSettingsMock.mockReset();
+    getThemeWorkspaceMock.mockReset();
+    saveThemeDraftMock.mockReset();
+    publishThemeDraftMock.mockReset();
+    getThemeVersionsMock.mockReset();
+    rebaseThemeDraftMock.mockReset();
+    rollbackThemeMock.mockReset();
+    createThemePreviewSessionMock.mockReset();
+    getThemeVersionsMock.mockResolvedValue({ versions: [] });
   });
 
   afterEach(() => {
@@ -67,7 +83,7 @@ describe("ThemeSettingsPage read authority", () => {
   }
 
   it("does not expose editable assumed defaults when the published read fails", async () => {
-    getThemeSettingsMock.mockRejectedValueOnce(new Error("offline"));
+    getThemeWorkspaceMock.mockRejectedValueOnce(new Error("offline"));
 
     act(() =>
       root.render(
@@ -87,11 +103,16 @@ describe("ThemeSettingsPage read authority", () => {
   });
 
   it("recovers the authoritative editor after a successful retry", async () => {
-    getThemeSettingsMock
+    getThemeWorkspaceMock
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce({
-        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
-        revision: 4,
+        published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 4 },
+        draft: {
+          theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+          revision: 7,
+          basePublishedRevision: 4,
+          updatedAt: null,
+        },
       });
 
     act(() =>
@@ -109,12 +130,13 @@ describe("ThemeSettingsPage read authority", () => {
     act(() => retry?.click());
     await flush();
 
-    expect(host.textContent).toContain("Published · revision 4");
+    expect(host.textContent).toContain("Published r4");
+    expect(host.textContent).toContain("Draft r7 · saved");
     expect(host.textContent).toContain("Design system");
     expect(host.querySelector('select[aria-label="Headings"]')).toBeTruthy();
   });
 
-  it("publishes a semantic control through the same revisioned document", async () => {
+  it("saves and then publishes one exact durable semantic draft", async () => {
     const publishedTheme = {
       ...DEFAULT_STOREFRONT_THEME_SETTINGS,
       typography: {
@@ -122,13 +144,29 @@ describe("ThemeSettingsPage read authority", () => {
         heading: "editorial" as const,
       },
     };
-    getThemeSettingsMock.mockResolvedValueOnce({
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
-      revision: 4,
+    getThemeWorkspaceMock.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 4 },
+      draft: {
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 7,
+        basePublishedRevision: 4,
+        updatedAt: null,
+      },
     });
-    updateThemeSettingsMock.mockResolvedValueOnce({
+    saveThemeDraftMock.mockResolvedValueOnce({
       theme: publishedTheme,
-      revision: 5,
+      revision: 8,
+      basePublishedRevision: 4,
+      updatedAt: null,
+    });
+    publishThemeDraftMock.mockResolvedValueOnce({
+      published: { theme: publishedTheme, revision: 5 },
+      draft: {
+        theme: publishedTheme,
+        revision: 9,
+        basePublishedRevision: 5,
+        updatedAt: null,
+      },
     });
 
     act(() =>
@@ -153,19 +191,43 @@ describe("ThemeSettingsPage read authority", () => {
     act(() => publish?.click());
     await flush();
 
-    expect(updateThemeSettingsMock).toHaveBeenCalledWith({
+    expect(saveThemeDraftMock).toHaveBeenCalledWith({
       data: {
         theme: publishedTheme,
-        expectedRevision: 4,
+        expectedDraftRevision: 7,
+        basePublishedRevision: 4,
       },
     });
-    expect(host.textContent).toContain("Published · revision 5");
+    expect(publishThemeDraftMock).toHaveBeenCalledWith({
+      data: {
+        expectedPublishedRevision: 4,
+        expectedDraftRevision: 8,
+      },
+    });
+    expect(host.textContent).toContain("Published r5");
+    expect(host.textContent).toContain("Draft r9 · saved");
   });
 
-  it("shows an exact draft ledger and real published storefront routes", async () => {
-    getThemeSettingsMock.mockResolvedValueOnce({
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
-      revision: 8,
+  it("shows an exact draft ledger, real preview controls, and immutable history", async () => {
+    getThemeWorkspaceMock.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 8 },
+      draft: {
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 11,
+        basePublishedRevision: 8,
+        updatedAt: null,
+      },
+    });
+    getThemeVersionsMock.mockResolvedValueOnce({
+      versions: [{
+        id: "theme_8",
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 8,
+        source: "publish",
+        sourceRevision: null,
+        publishedBy: null,
+        createdAt: 1_700_000_000,
+      }],
     });
 
     const onSectionChange = vi.fn();
@@ -176,9 +238,13 @@ describe("ThemeSettingsPage read authority", () => {
     );
     await flush();
 
-    expect(host.textContent).toContain("Draft ledger");
+    expect(host.textContent).toContain("Draft changes");
     expect(host.textContent).toContain("Published style is current");
-    expect(host.textContent).toContain("Review published routes");
+    expect(host.textContent).toContain("Storefront preview");
+    expect(host.textContent).toContain("Published history");
+    expect(host.textContent).toContain("Revision 8");
+    expect(host.querySelector<HTMLInputElement>('input[value="/"]')).toBeTruthy();
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Mobile"]')).toBeTruthy();
     expect(
       host.querySelector<HTMLAnchorElement>('a[href="https://shop.example.test/"]'),
     ).toBeTruthy();

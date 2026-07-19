@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isCacheablePublicResponse } from "./cache-policy";
+import {
+  isCacheablePublicResponse,
+  requestHasPrivateSession,
+} from "./cache-policy";
 
 function responseWithHeaders(headers: HeadersInit, status = 200): Response {
   const response = new Response("ok", { status, headers });
@@ -23,6 +26,13 @@ function responseWithHeaders(headers: HeadersInit, status = 200): Response {
 }
 
 describe("storefront cache policy", () => {
+  it("keeps theme preview requests out of the shared storefront cache", () => {
+    expect(requestHasPrivateSession(new Headers({
+      Cookie: "other=1; stp_theme_preview=tpv_secret",
+    }))).toBe(true);
+    expect(requestHasPrivateSession(new Headers({ Cookie: "other=1" }))).toBe(false);
+  });
+
   it("allows public HTML, XML, XSLT, and text responses", () => {
     for (const contentType of [
       "text/html; charset=utf-8",

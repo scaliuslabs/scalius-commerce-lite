@@ -596,6 +596,27 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/settings/theme/workspace": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/theme/draft": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/draft/rebase": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/publish": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/versions": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/theme/rollback": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/theme/preview-session": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
   "/api/v1/admin/settings/media": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
