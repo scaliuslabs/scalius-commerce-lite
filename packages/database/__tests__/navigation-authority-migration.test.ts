@@ -3,10 +3,13 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync(
-  resolve(import.meta.dirname, "../migrations/0036_absent_living_lightning.sql"),
+const migration = [
+  "0036_absent_living_lightning.sql",
+  "0037_thick_ikaris.sql",
+].map((file) => readFileSync(
+  resolve(import.meta.dirname, `../migrations/${file}`),
   "utf8",
-).replaceAll("--> statement-breakpoint", "");
+)).join("\n").replaceAll("--> statement-breakpoint", "");
 
 const existingSchema = `
   PRAGMA foreign_keys = ON;
@@ -114,7 +117,7 @@ describe("normalized navigation authority migration", () => {
           FROM navigation_menu_items;
         SELECT count(*) || ':' || sum(item_count)
           FROM navigation_menu_publications;
-        SELECT group_concat(surface || '.' || slot, ',')
+        SELECT group_concat(surface || '.' || slot || ':' || position, ',')
           FROM navigation_placements ORDER BY surface, position;
         UPDATE categories SET name = 'New shop' WHERE id = 'cat_1';
         SELECT dependency_revision FROM navigation_menus
@@ -128,7 +131,7 @@ describe("normalized navigation authority migration", () => {
       "2:2",
       "3:1:1",
       "2:3",
-      "header.primary,footer.column",
+      "header.primary:0,footer.column:0",
       "2",
     ]);
   });
@@ -150,6 +153,40 @@ describe("normalized navigation authority migration", () => {
 
     expect(result.stderr).toContain("navigation_menus_handle_normalized");
     expect(result.stderr).toContain("navigation_menu_items_target_shape");
+  });
+
+  it("normalizes legacy footer locations and drops only unsupported overflow placements", () => {
+    const footer = {
+      menus: Array.from({ length: 5 }, (_, index) => ({
+        id: `menu-${index + 1}`,
+        title: `Menu ${index + 1}`,
+        links: [],
+      })),
+    };
+    const result = spawnSync("sqlite3", [":memory:"], {
+      input: `.bail on
+        ${existingSchema}
+        INSERT INTO site_settings VALUES (
+          'site_1', 'default', '{}', '${sqlText(footer)}', 10, 20
+        );
+        ${migration}
+        SELECT count(*) FROM navigation_menus;
+        SELECT count(*) || ':' || group_concat(position, ',')
+          FROM (
+            SELECT position
+            FROM navigation_placements
+            WHERE surface = 'footer' AND slot = 'column'
+            ORDER BY position
+          );
+      `,
+      encoding: "utf8",
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout.trim().split("\n")).toEqual([
+      "5",
+      "4:0,1,2,3",
+    ]);
   });
 
   it("leaves a fresh or invalid legacy document unclaimed", () => {
