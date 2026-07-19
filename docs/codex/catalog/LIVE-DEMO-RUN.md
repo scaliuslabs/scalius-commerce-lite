@@ -863,6 +863,24 @@ The cleanup bullets below describe the two-product proof store that preceded the
   targeted lint, the sequential 323-file Storefront Astro check, deployment,
   and `pnpm release:check` passed.
 
+### Media picker lifecycle checkpoint (2026-07-19)
+
+- Admin `59ca36a8-6294-4e83-bd73-0b540ef37d50` is live at 100%. The reusable
+  Media picker now has one non-lazy owner for both the Radix dialog root and its
+  trigger. The lazy child owns content only; dismissing resets visibility and
+  unmounts the picker subtree so stale internal selection/dialog state cannot
+  survive into the next open.
+- A fresh authenticated Header Branding run proved the shared single-picker
+  contract in production: the dialog count moved from zero to one, one image
+  selection updated the unsaved logo draft and returned the count to zero, the
+  explicit Close action independently returned it to zero, and Discard restored
+  the saved Scalius logo without a settings write. The standalone Media route
+  remains a separate explicit workflow: Select starts with zero assets and
+  Select all shown is never implied.
+- The focused Media suite passes 57 tests across 16 files, including a mounted
+  lazy-picker/caller-rerender regression test. Targeted lint and the sequential
+  Admin typecheck, production build, upload, and deployment verification passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

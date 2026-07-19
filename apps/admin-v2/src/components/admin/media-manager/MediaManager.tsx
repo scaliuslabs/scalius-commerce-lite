@@ -1,38 +1,30 @@
-import { useEffect, useState } from "react";
-import { Upload } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
+import { useEffect } from "react";
+import { DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog";
 import { MediaWorkspace } from "./MediaWorkspace";
 import { useMediaManager } from "./hooks/useMediaManager";
 import type { MediaManagerProps } from "./types";
 
-type MediaManagerInternalProps = MediaManagerProps & { initialOpen?: boolean; onInitialOpenHandled?: () => void };
+type MediaManagerInternalProps = MediaManagerProps & {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
 
 export function MediaManager({
   onSelect,
   onSelectMultiple,
   selectedFiles = [],
-  triggerLabel = "Select image",
-  trigger,
   capability = "image",
   dialogClassName,
-  initialOpen = false,
-  onInitialOpenHandled,
+  open,
+  onOpenChange,
 }: MediaManagerInternalProps) {
-  const [open, setOpen] = useState(initialOpen);
   const manager = useMediaManager({
     autoLoad: false,
     capability,
     initialSelectedFiles: selectedFiles,
-    onSelect: onSelect ? (file) => { onSelect(file); setOpen(false); } : undefined,
-    onSelectMultiple: onSelectMultiple ? (files) => { onSelectMultiple(files); setOpen(false); } : undefined,
+    onSelect: onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined,
+    onSelectMultiple: onSelectMultiple ? (files) => { onOpenChange(false); onSelectMultiple(files); } : undefined,
   });
-
-  useEffect(() => {
-    if (!initialOpen) return;
-    setOpen(true);
-    onInitialOpenHandled?.();
-  }, [initialOpen, onInitialOpenHandled]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,16 +45,13 @@ export function MediaManager({
   }, [open]);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger ?? <Button type="button" variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4" />{triggerLabel}</Button>}</DialogTrigger>
-      <DialogContent
-        showCloseButton={false}
-        className={`h-[94svh] max-h-[860px] w-[96vw] max-w-7xl overflow-hidden p-0 ${dialogClassName ?? ""}`}
-      >
-        <DialogTitle className="sr-only">Choose media</DialogTitle>
-        <DialogDescription className="sr-only">Browse and upload supported media assets.</DialogDescription>
-        <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onSelect(file); setOpen(false); } : undefined} onClose={() => setOpen(false)} />
-      </DialogContent>
-    </Dialog>
+    <DialogContent
+      showCloseButton={false}
+      className={`h-[94svh] max-h-[860px] w-[96vw] max-w-7xl overflow-hidden p-0 ${dialogClassName ?? ""}`}
+    >
+      <DialogTitle className="sr-only">Choose media</DialogTitle>
+      <DialogDescription className="sr-only">Browse and upload supported media assets.</DialogDescription>
+      <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined} onClose={() => onOpenChange(false)} />
+    </DialogContent>
   );
 }
