@@ -9,6 +9,7 @@ import {
     publicProductHasCustomerOptions,
     publicProductHasBuyerResolvableSku,
 } from "./products.public-eligibility";
+import { generateInternalCode128Barcode } from "@scalius/shared/barcode-identity";
 
 describe("public product SKU eligibility", () => {
     it("uses a buyer-resolvable SKU topology instead of active product rows alone", () => {
@@ -103,7 +104,7 @@ describe("public product SKU eligibility", () => {
             reservedStock: 0,
             isDefault: true,
             trackInventory: false,
-            barcode: "SCALIUS:C128:default_prod_1",
+            barcode: generateInternalCode128Barcode("var_default_prod_1"),
             barcodeType: "code128",
             deletedAt: null,
         });

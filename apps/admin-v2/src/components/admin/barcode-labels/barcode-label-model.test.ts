@@ -112,6 +112,18 @@ describe("barcode label symbology", () => {
     expect(getBarcodeFitIssue(widerThermalSymbol, getLabelPreset("thermal-40x30"))).not.toBeNull();
     expect(findCompatibleLabelPreset([widerThermalSymbol], getLabelPreset("thermal-40x30"))?.id).toBe("thermal-50x25");
   });
+
+  it("recovers a preserved extra-long internal identity without shrinking its symbol", () => {
+    const extraLongSymbol = resolveBarcodeSymbol(
+      "SCALIUS:C128:default_prod_7ddDd0hhcPEn0crG-icvt",
+      "code128",
+    );
+
+    expect(getBarcodeFitIssue(extraLongSymbol, getLabelPreset("a4-adhesive-2x7"))).toContain("safe width");
+    expect(findCompatibleLabelPreset([extraLongSymbol], getLabelPreset("a4-adhesive-2x7"))?.id)
+      .toBe("a4-extra-wide-cut-1x10");
+    expect(getBarcodeFitIssue(extraLongSymbol, getLabelPreset("a4-extra-wide-cut-1x10"))).toBeNull();
+  });
 });
 
 describe("barcode label page composition", () => {

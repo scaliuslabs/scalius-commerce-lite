@@ -222,13 +222,16 @@ Primary presets:
 2. **A4 compact — 4 x 10.** Plain paper or unbranded adhesive stock, 40 labels
    per page; shorter names and smaller but still valid symbols.
 3. **A4 wide cut — 2 x 7.** Fourteen larger plain-paper labels with visible
-   cut guides. This is the one-click office-printer recovery when a preserved
-   long barcode cannot safely fit the denser A4 grids.
+   cut guides for moderately long symbols that cannot fit the denser A4 grids.
 4. **A4 adhesive — 2 x 7.** Fourteen larger labels with no crop marks for
    pre-cut stock.
-5. **Thermal 50 x 25 mm.** One label per page for common roll printers.
-6. **Thermal 40 x 30 mm.** One label per page for compact retail labels.
-7. **Custom.** Page size, rows, columns, symmetric margins, gaps, and cut guides
+5. **A4 extra-wide cut — 1 x 10.** Ten full-width plain-paper labels with cut
+   guides. This is the one-click recovery for preserved legacy Code 128 values
+   that cannot safely fit a two-column sheet; the symbol is never shrunk below
+   its safe module width.
+6. **Thermal 50 x 25 mm.** One label per page for common roll printers.
+7. **Thermal 40 x 30 mm.** One label per page for compact retail labels.
+8. **Custom.** Page size, rows, columns, symmetric margins, gaps, and cut guides
    remain advanced disclosure, not the default screen. The derived label cell
    must remain at least 20 x 15 mm.
 
@@ -499,6 +502,14 @@ feeds, structured data, or external marketplaces.
   offered **Use A4 wide cut** before the searchable picker. The action switched
   to the 2 x 7 plain-paper format and enabled Test and Print/PDF on desktop and
   at 390 x 844, with zero horizontal overflow and no browser errors.
+- Admin version `7c94a885-81e9-44f6-b50b-85af620a9892` closes the remaining
+  preserved-identity fit gap found during the renewed 2026-07-20 live check.
+  The exact Dock SKU's internal Code 128 identity needs about 115 mm of safe
+  symbol width, while the previous two-column A4 recovery provides only 90 mm.
+  The deployed workspace correctly blocked that unsafe job, offered **Use A4
+  extra-wide cut**, switched to a 1 x 10 full-width plain-paper sheet, and
+  enabled Test and Print/PDF without changing the saved barcode. The browser
+  console remained free of warnings and errors.
 
 ## Product boundary and future extensions
 
