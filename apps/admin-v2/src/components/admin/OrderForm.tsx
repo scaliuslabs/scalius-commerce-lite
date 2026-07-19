@@ -45,7 +45,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
 
-function toOrderContentInput(values: OrderFormValues) {
+function toOrderBaseContentInput(values: OrderFormValues) {
   return {
     customerName: values.customerName,
     customerPhone: values.customerPhone,
@@ -58,10 +58,17 @@ function toOrderContentInput(values: OrderFormValues) {
     zoneName: values.zoneName,
     areaName: values.areaName ?? null,
     notes: values.notes,
-    items: values.items,
     discountAmount: values.discountAmount,
     shippingCharge: values.shippingCharge,
   };
+}
+
+function toSellableLines(values: OrderFormValues) {
+  return values.items.map(({ productId, variantId, quantity }) => ({
+    productId,
+    variantId,
+    quantity,
+  }));
 }
 
 function toCreateOrderInput(
@@ -70,7 +77,8 @@ function toCreateOrderInput(
 ): CreateOrderInput {
   return {
     requestKey,
-    ...toOrderContentInput(values),
+    ...toOrderBaseContentInput(values),
+    items: toSellableLines(values),
   };
 }
 
@@ -82,7 +90,8 @@ function toUpdateOrderInput(
     throw new Error("Order version is missing. Reload the editor before saving.");
   }
   return {
-    ...toOrderContentInput(values),
+    ...toOrderBaseContentInput(values),
+    items: values.items,
     id,
     expectedVersion: values.version,
     status: values.status ?? OrderStatus.PENDING,
@@ -146,7 +155,11 @@ export function OrderForm({
       city: quoteCity,
       zone: quoteZone,
       area: quoteArea,
-      items: quoteItems,
+      items: quoteItems.map(({ productId, variantId, quantity }) => ({
+        productId,
+        variantId,
+        quantity,
+      })),
       shippingCharge: quoteShipping,
       discountAmount: quoteDiscount,
     }),

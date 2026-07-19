@@ -126,7 +126,6 @@ function buildInput(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput
       productId: "product_1",
       variantId: "variant_1",
       quantity: 1,
-      price: 100,
     }],
     discountAmount: null,
     shippingCharge: 60,

@@ -24,15 +24,13 @@ describe("generic order status mutation boundaries", () => {
     expect(graph).toBeGreaterThan(policy);
   });
 
-  it("applies the same narrow policy to full admin order edits", () => {
-    const policy = adminSource.indexOf(
-      "assertGenericAdminOrderStatusTransition(currentStatus, nextStatus)",
+  it("keeps status mutation out of the full admin editor", () => {
+    expect(adminSource).toContain("if (nextStatus !== currentStatus)");
+    expect(adminSource).toContain(
+      "Use the order status action for operational progress.",
     );
-    const graph = adminSource.indexOf(
+    expect(adminSource).not.toContain(
       'validateTransition("order", currentStatus, nextStatus)',
-      policy,
     );
-    expect(policy).toBeGreaterThan(0);
-    expect(graph).toBeGreaterThan(policy);
   });
 });

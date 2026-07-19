@@ -653,6 +653,14 @@ const manualOrderQuoteSchema = z.object({
     pricesIncludeTax: z.boolean(),
     taxEnabled: z.boolean(),
     settingsVersion: z.number().int().nonnegative(),
+    lines: z.array(z.object({
+        index: z.number().int().nonnegative(),
+        productId: z.string(),
+        variantId: z.string(),
+        quantity: z.number().int().positive(),
+        unitPrice: z.number().nonnegative(),
+        lineSubtotal: z.number().nonnegative(),
+    })),
 });
 
 const quoteManualOrderRoute = createRoute({

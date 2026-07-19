@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
-const orderContentSchema = z.object({
+const orderBaseContentSchema = z.object({
     customerName: z
         .string()
         .min(3, "Customer name must be at least 3 characters")
@@ -26,22 +26,6 @@ const orderContentSchema = z.object({
         .string()
         .max(500, "Notes must be less than 500 characters")
         .nullable(),
-    items: z
-        .array(
-            z.object({
-                productId: z.string().min(1, "Product is required"),
-                variantId: z.string().nullable(),
-                quantity: z
-                    .number()
-                    .int("Quantity must be a whole number")
-                    .min(1, "Quantity must be at least 1")
-                    .max(99, "Quantity must be at most 99"),
-                price: z
-                    .number()
-                    .min(0, "Price must be greater than or equal to 0"),
-            }),
-        )
-        .min(1, "Add at least one sellable item"),
     discountAmount: z
         .number()
         .min(0, "Discount must be greater than or equal to 0")
@@ -51,8 +35,32 @@ const orderContentSchema = z.object({
         .min(0, "Shipping charge must be greater than or equal to 0"),
 });
 
+const sellableOrderItemSchema = z.object({
+    productId: z.string().min(1, "Product is required"),
+    variantId: z.string().nullable(),
+    quantity: z
+        .number()
+        .int("Quantity must be a whole number")
+        .min(1, "Quantity must be at least 1")
+        .max(99, "Quantity must be at most 99"),
+});
+
+const editableOrderItemSchema = sellableOrderItemSchema.extend({
+    price: z
+        .number()
+        .min(0, "Price must be greater than or equal to 0"),
+});
+
+const sellableOrderContentSchema = orderBaseContentSchema.extend({
+    items: z.array(sellableOrderItemSchema).min(1, "Add at least one sellable item"),
+});
+
+const editableOrderContentSchema = orderBaseContentSchema.extend({
+    items: z.array(editableOrderItemSchema).min(1, "Add at least one sellable item"),
+});
+
 /** Schema for creating a new order (POST /api/orders). */
-export const createOrderSchema = orderContentSchema.extend({
+export const createOrderSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
 });
 
@@ -63,7 +71,7 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>;
  * are intentionally excluded: tax and money depend only on the sellable lines,
  * destination, shipping, and order-level discount.
  */
-export const quoteManualOrderSchema = orderContentSchema.pick({
+export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     city: true,
     zone: true,
     area: true,
@@ -75,7 +83,7 @@ export const quoteManualOrderSchema = orderContentSchema.pick({
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;
 
 /** Schema for updating an existing order (PUT /api/orders/:id) */
-export const updateOrderSchema = orderContentSchema.extend({
+export const updateOrderSchema = editableOrderContentSchema.extend({
     expectedVersion: z
         .number()
         .int("Order version must be a whole number")
