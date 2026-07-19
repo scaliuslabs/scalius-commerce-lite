@@ -505,6 +505,15 @@ export function BarcodeLabelWorkspace({
     : null, [activeFitIssues.length, activeSymbols, preset]);
   const tooManyCopies = copies.length > MAX_LABEL_COPIES;
   const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
+  const printReadiness = presetIssue
+    ? "Fix format"
+    : tooManyCopies
+      ? "Reduce quantities"
+      : activeFitIssues.length > 0
+        ? "Choose wider stock"
+        : copies.length > 0
+          ? preset.name
+          : "Select a SKU";
   const pickerVariants = pickerQuery.data?.variants ?? [];
   const pickerPagination = pickerQuery.data?.pagination;
   const nonPrintingVariantIds = useMemo(
@@ -584,7 +593,7 @@ export function BarcodeLabelWorkspace({
         }
       `}</style>
 
-      <div className="label-workspace-screen mx-auto max-w-[1440px] space-y-3 px-2 pb-8 sm:px-4">
+      <div className="label-workspace-screen mx-auto max-w-[1440px] space-y-3 px-2 pb-24 sm:px-4 sm:pb-8">
         <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-2.5">
             <Button asChild variant="ghost" size="icon" className="mt-0.5 h-8 w-8 shrink-0">
@@ -597,7 +606,7 @@ export function BarcodeLabelWorkspace({
               <p className="text-sm text-muted-foreground">Select exact SKUs, set counts, and print a ready-to-cut sheet or thermal roll.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="hidden items-center gap-2 self-end sm:flex sm:self-auto">
             <div className="hidden text-right text-xs text-muted-foreground sm:block">
               <div>{formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))}</div>
               <div>{formatPageCount(pages.length)}</div>
@@ -953,6 +962,23 @@ export function BarcodeLabelWorkspace({
               </div>
             ) : null}
           </aside>
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_hsl(var(--foreground))] backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:hidden">
+        <div className="mx-auto flex max-w-[1440px] items-center gap-2">
+          <div className="mr-auto min-w-0" aria-live="polite">
+            <div className="truncate text-xs font-medium">
+              {formatLabelCount(Math.min(copies.length, MAX_LABEL_COPIES))} · {formatPageCount(pages.length)}
+            </div>
+            <div className="truncate text-[11px] text-muted-foreground">{printReadiness}</div>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={!canPrint} onClick={() => startPrint("test")}>
+            <FileText className="mr-1.5 h-3.5 w-3.5" /> Test
+          </Button>
+          <Button type="button" size="sm" className="shrink-0" disabled={!canPrint} onClick={() => startPrint("job")}>
+            <Printer className="mr-1.5 h-3.5 w-3.5" /> Print / PDF
+          </Button>
         </div>
       </div>
 

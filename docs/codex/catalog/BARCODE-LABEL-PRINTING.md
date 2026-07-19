@@ -94,10 +94,16 @@ supported roll can preserve the symbol and its quiet zones.
   available inventory as the quantity, and lets merchants return from preview
   to correct the job. This supports Scalius's shared workspace and explicit
   `Available` shortcut rather than separate single and batch composers.
-- [Odoo printable delivery PDFs](https://www.odoo.com/documentation/17.0/applications/inventory_and_mrp/inventory/shipping_receiving/setup_configuration/print_on_validation.html)
+- [Odoo printable delivery PDFs](https://www.odoo.com/documentation/19.0/applications/inventory_and_mrp/inventory/shipping_receiving/setup_configuration/print_on_validation.html)
   provides dense 2x7 and 4x12 page grids, one-per-unit quantities, PDF, and ZPL.
   Those outputs are operationally capable but expose format choices more than
   most small merchants need on every run.
+- Odoo 19's current inventory documentation was rechecked on 2026-07-19. It
+  can trigger product-label PDF or ZPL output from a validated receipt,
+  picking, or delivery operation. Scalius should adopt this only after it has
+  an authoritative receiving/picking workflow: a label job must use exact
+  received quantities, never infer them from stock movements or an order that
+  may still change.
 - [Vendure's current ProductVariant core model](https://docs.vendure.io/current/core/core-concepts/products)
   exposes SKU but no first-class barcode or label-printing workspace; its
   [custom-field guide](https://docs.vendure.io/current/core/developer-guide/custom-fields)
@@ -218,8 +224,44 @@ second spreadsheet or preview mode. Preview navigation changes no job facts.
   printer, paper, content, output order, and alignment belong to the workstation.
   Shared named templates can be added later without making the initial workflow
   depend on a new D1 settings surface.
+- On narrow screens, a fixed compact action bar keeps the job summary, **Test**,
+  and **Print / PDF** reachable while the merchant reviews format, warnings,
+  and the physical page. The desktop header retains the same two actions; this
+  is one workflow with responsive placement, not a second mobile mode.
 - ZPL is a later explicit output target. It must not be simulated by sending a
   PDF to a Zebra printer and claiming native integration.
+
+## Scope boundary
+
+The release workspace deliberately solves SKU labels completely before growing
+into a general warehouse-document designer.
+
+**Release-now capabilities** are exact single-SKU and mixed-SKU entry points,
+stock-aware quantities, safe A4/adhesive/thermal/custom media, partially used
+sheets, fit diagnostics, a real first-label test, alignment correction, vector
+browser printing, and Save as PDF. These cover the ordinary office-printer,
+cut-sheet, adhesive-sheet, and label-printer workflows without requiring an
+app, a design canvas, or special hardware.
+
+The following additions have explicit authority gates:
+
+- **Print received quantities** comes from a persisted receipt or purchase-order
+  receiving result after Scalius owns that workflow. It must not guess from an
+  order, inventory movement, or current on-hand count.
+- **Shared named templates** arrive when a merchant needs store/location-level
+  template ownership and permissions. Workstation preferences remain local;
+  shared templates must never carry a partially used-sheet offset or job
+  quantities.
+- **Native ZPL** arrives with an explicit Zebra output target, dot-density and
+  stock-size validation, downloadable output, and a real printer smoke. PDF is
+  not relabelled as ZPL support.
+- **Location, package, lot, and serial labels** arrive only when those are
+  durable Scalius identities. They belong to the same print engine but use
+  different selectors and artwork, not fake product variants.
+
+A standalone SVG symbol download may remain an advanced packaging-design
+action. It must not replace the composed page/roll job or revive the manual A4
+canvas workflow.
 
 ## Barcode semantics
 
