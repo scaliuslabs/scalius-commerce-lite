@@ -15,15 +15,19 @@ The payment workspace keeps these facts separate:
   placeholder/environment validation.
 - **Provider**: provider calls are enabled. Turning a provider off preserves its
   saved setup and keeps it available for historical payment operations.
-- **Environment**: Stripe derives test/live from its key pair; SSLCommerz and
-  Polar use their saved sandbox switch. COD has no environment.
+- **Environment**: Stripe derives test/live/mismatch from its key pair;
+  SSLCommerz and Polar use their saved sandbox switch. COD has no environment.
+  This non-secret fact is included in the safe status projection, so a merchant
+  does not need to open or load masked credentials to see it.
 - **Checkout selection**: the merchant has included the method in the saved
   payment-method allowlist.
 - **Flow eligibility**: the saved checkout flow permits the method. COD is
   excluded by online-only/advance flows; online methods are excluded by the
   COD-only flow.
-- **Connection health**: not implemented. The admin says **Not checked** rather
-  than treating valid-looking credentials as a successful provider probe.
+- **Connection health**: not implemented for online gateways. The admin says
+  **Not checked** rather than treating valid-looking credentials as a
+  successful provider probe; COD says **Not applicable** because it has no
+  external provider connection.
 - **Buyer result**: visible only when setup, provider, selection, and flow all
   pass. The whole checkout can still be unavailable when shipping, delivery
   hierarchy, currency, or required customer sign-in readiness fails.
@@ -82,9 +86,9 @@ payment-session allowlist.
 - Payment-method saves also stay locked while the saved checkout-flow read is
   pending or unavailable. Cards say the flow result is unavailable instead of
   guessing the permissive Standard flow.
-- Gateway credentials remain lazy-loaded and masked. Environment is shown only
-  after setup is opened; the collapsed state says **Open setup** instead of
-  guessing.
+- Gateway credentials remain lazy-loaded and masked. Environment is rendered
+  from the safe server status while the collapsed card stays closed; opening
+  setup loads only the masked editable credential form.
 
 ### Admin state hardening (2026-07-13)
 
@@ -107,8 +111,9 @@ payment-session allowlist.
   contradictory policy.
 - Setup completeness is labelled **Complete**, not healthy. Configured but
   unselected online methods say **Configured, hidden** and retain a separate
-  **Connection: Not checked** fact. COD may say **Available, hidden** because it
-  has no credential setup. None of these labels claims a provider probe.
+  **Connection: Not checked** fact. COD reports **Connection: Not applicable**
+  and may say **Available, hidden** because it has no credential setup. None of
+  these labels claims a provider probe.
 - Provider toggles, sandbox toggles, secret visibility buttons, setup accordions,
   and buyer-selection labels are keyboard reachable and named. Provider cards
   remain one column until the wider `lg` workspace breakpoint so the admin
@@ -132,6 +137,19 @@ reconciliation, secret rotation, or test-to-live cutover.
   `apps/api/src/routes/admin/settings/payments.test.ts`
 - Public fail-closed projection:
   `packages/core/src/modules/settings/checkout-config.service.test.ts`
+
+### Live verification (2026-07-19)
+
+- API deployment `bc64e870-2d1f-4bb8-8845-bd9d50cdefac` exposes the safe
+  non-secret environment projection; admin deployment
+  `6dfdf19b-94b2-4a10-bfdc-7ff9be4efcb5` renders it without opening a
+  credential form.
+- The deployed demo workspace showed Stripe, SSLCommerz, and Polar as
+  **Test mode**, **Visible**, and **Connection: Not checked**. COD showed
+  **Environment: Not applicable** and **Connection: Not applicable**. No
+  public config or card label claimed a provider connection probe.
+- The focused API/admin matrix passed 67 tests; API and admin typechecks and
+  targeted lint passed before deployment.
 
 ## Remaining release gaps
 

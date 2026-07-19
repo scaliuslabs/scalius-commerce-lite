@@ -1,6 +1,6 @@
 import type { GatewayStatus, MethodKey } from "./payment-gateway-utils";
 
-export type PaymentMethodEnvironment = "test" | "live" | "mixed" | "unknown" | "not_applicable";
+export type PaymentMethodEnvironment = NonNullable<GatewayStatus["environment"]>;
 
 export type PaymentMethodOutcomeState =
   | "visible"
@@ -19,7 +19,7 @@ export interface PaymentMethodOutcome {
   providerLabel: "On" | "Off" | "Always available";
   checkoutLabel: "Visible" | "Hidden" | "Hidden by flow" | "Unavailable";
   environmentLabel: string;
-  healthLabel: "Not checked";
+  healthLabel: "Not checked" | "Not applicable";
   effective: boolean;
   canSelect: boolean;
 }
@@ -60,7 +60,7 @@ export function getPaymentMethodOutcome(options: {
     setupLabel: (isCod ? "Not required" : configured ? "Complete" : "Required") as PaymentMethodOutcome["setupLabel"],
     providerLabel: (isCod ? "Always available" : providerEnabled ? "On" : "Off") as PaymentMethodOutcome["providerLabel"],
     environmentLabel: getEnvironmentLabel(method, environment),
-    healthLabel: "Not checked" as const,
+    healthLabel: isCod ? "Not applicable" as const : "Not checked" as const,
     canSelect: isCod || usable,
   };
 

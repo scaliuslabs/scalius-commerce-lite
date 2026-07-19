@@ -86640,6 +86640,16 @@
                                 },
                                 "checkoutVisible": {
                                   "type": "boolean"
+                                },
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "test",
+                                    "live",
+                                    "mixed",
+                                    "unknown",
+                                    "not_applicable"
+                                  ]
                                 }
                               },
                               "required": [
@@ -86682,6 +86692,16 @@
                                 },
                                 "checkoutVisible": {
                                   "type": "boolean"
+                                },
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "test",
+                                    "live",
+                                    "mixed",
+                                    "unknown",
+                                    "not_applicable"
+                                  ]
                                 }
                               },
                               "required": [
@@ -86724,6 +86744,16 @@
                                 },
                                 "checkoutVisible": {
                                   "type": "boolean"
+                                },
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "test",
+                                    "live",
+                                    "mixed",
+                                    "unknown",
+                                    "not_applicable"
+                                  ]
                                 }
                               },
                               "required": [
@@ -86766,6 +86796,16 @@
                                 },
                                 "checkoutVisible": {
                                   "type": "boolean"
+                                },
+                                "environment": {
+                                  "type": "string",
+                                  "enum": [
+                                    "test",
+                                    "live",
+                                    "mixed",
+                                    "unknown",
+                                    "not_applicable"
+                                  ]
                                 }
                               },
                               "required": [

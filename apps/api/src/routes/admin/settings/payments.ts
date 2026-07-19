@@ -37,6 +37,7 @@ import {
     getCheckoutFlowValidationIssues,
     isCheckoutGatewayUsableForFlow,
 } from "@scalius/core/modules/settings/checkout-flow";
+import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
@@ -47,6 +48,10 @@ const GATEWAY_LABELS: Record<OnlineGatewayId, string> = {
     polar: "Polar",
 };
 const CHECKOUT_CACHE_GROUPS = ["checkout"];
+
+function getSandboxEnvironment(sandbox: boolean): "test" | "live" {
+    return sandbox ? "test" : "live";
+}
 
 async function invalidateCheckoutCaches(c: { env: Env; executionCtx?: WaitUntilExecutionContext }): Promise<void> {
     await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
@@ -286,6 +291,7 @@ const gatewayStatusSchema = z.object({
     providerEnabled: z.boolean().optional(),
     checkoutSelected: z.boolean().optional(),
     checkoutVisible: z.boolean().optional(),
+    environment: z.enum(["test", "live", "mixed", "unknown", "not_applicable"]).optional(),
 });
 
 const paymentMethodsResponseSchema = z.object({
@@ -389,18 +395,24 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             gatewayStatus: {
                 stripe: {
                     ...stripeReadiness,
+                    environment: getStripeCredentialEnvironment(stripeSettings ?? {
+                        secretKey: stripeMap.secret_key ?? "",
+                        publishableKey: stripeMap.publishable_key ?? "",
+                    }),
                     providerEnabled: stripeReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("stripe"),
                     checkoutVisible: flowActiveMethods.includes("stripe"),
                 },
                 sslcommerz: {
                     ...sslReadiness,
+                    environment: getSandboxEnvironment(sslSettings?.sandbox ?? sslMap.sandbox !== "false"),
                     providerEnabled: sslReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("sslcommerz"),
                     checkoutVisible: flowActiveMethods.includes("sslcommerz"),
                 },
                 polar: {
                     ...polarReadiness,
+                    environment: getSandboxEnvironment(polarSettings?.sandbox ?? polarMap.sandbox !== "false"),
                     providerEnabled: polarReadiness.enabled,
                     checkoutSelected: rawConfig.enabledMethods.includes("polar"),
                     checkoutVisible: flowActiveMethods.includes("polar"),
@@ -413,6 +425,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
                     providerEnabled: true,
                     checkoutSelected: rawConfig.enabledMethods.includes("cod"),
                     checkoutVisible: flowActiveMethods.includes("cod"),
+                    environment: "not_applicable" as const,
                 }
             }
         });

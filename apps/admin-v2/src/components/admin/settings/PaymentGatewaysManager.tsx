@@ -356,7 +356,7 @@ export default function PaymentGatewaysManager() {
 
     const getSavedEnvironment = (method: MethodKey): PaymentMethodEnvironment | undefined => {
         if (method === "cod") return "not_applicable";
-        if (!loadedGateways.current.has(method)) return undefined;
+        if (!loadedGateways.current.has(method)) return methods.gatewayStatus[method]?.environment;
         if (method === "stripe") return getStripeCredentialEnvironment(stripe);
         if (method === "sslcommerz") return ssl.sandbox ? "test" : "live";
         return polar.sandbox ? "test" : "live";

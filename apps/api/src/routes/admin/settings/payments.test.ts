@@ -452,6 +452,7 @@ describe("payment settings cache invalidation", () => {
                         configured: false,
                         enabled: true,
                         usable: false,
+                        environment: "live",
                         missingFields: ["publishableKey"],
                     },
                 },
@@ -540,10 +541,12 @@ describe("payment settings cache invalidation", () => {
                     stripe: {
                         checkoutSelected: true,
                         checkoutVisible: true,
+                        environment: "live",
                     },
                     cod: {
                         checkoutSelected: true,
                         checkoutVisible: false,
+                        environment: "not_applicable",
                     },
                 },
             },
