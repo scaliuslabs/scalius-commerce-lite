@@ -1,6 +1,7 @@
 import {
   and,
   eq,
+  exists,
   inArray,
   isNotNull,
   notExists,
@@ -762,7 +763,7 @@ export async function approveOrderReturn(
         notExists(activeClaim),
       )),
   ).returning({ id: orderReturnCommands.id });
-  const exists = commandExists(db, identity.commandId);
+  const commandRecordExists = commandExists(db, identity.commandId);
   const lineUpdates = context.lines.map((line) => {
     const decision = decisionById.get(line.id)!;
     return db.update(orderReturnLines).set({
@@ -773,7 +774,7 @@ export async function approveOrderReturn(
     }).where(and(
       eq(orderReturnLines.id, line.id),
       eq(orderReturnLines.returnId, returnId),
-      sql`EXISTS (${exists})`,
+      exists(commandRecordExists),
     )).returning({ id: orderReturnLines.id });
   });
   const headerUpdate = db.update(orderReturns).set({
@@ -786,7 +787,7 @@ export async function approveOrderReturn(
   }).where(and(
     eq(orderReturns.id, returnId),
     eq(orderReturns.version, input.expectedVersion),
-    sql`EXISTS (${exists})`,
+    exists(commandRecordExists),
   )).returning({ id: orderReturns.id });
   const orderUpdate = db.update(orders).set({
     version: context.order.version + 1,
@@ -794,7 +795,7 @@ export async function approveOrderReturn(
   }).where(and(
     eq(orders.id, orderId),
     eq(orders.version, context.order.version),
-    sql`EXISTS (${exists})`,
+    exists(commandRecordExists),
   )).returning({ id: orders.id });
   try {
     const results = await safeBatch(db, [commandGuard, ...lineUpdates, headerUpdate, orderUpdate] as never) as { id: string }[][];
@@ -927,7 +928,7 @@ export async function receiveOrderReturn(
           notExists(activeClaim),
         )),
     ).returning({ id: orderReturnCommands.id });
-    const exists = commandExists(db, identity.commandId);
+    const commandRecordExists = commandExists(db, identity.commandId);
     const headerClaim = db.update(orderReturns).set({
       activeOrderKey: orderId,
       activeCommandKey: input.commandKey,
@@ -938,7 +939,7 @@ export async function receiveOrderReturn(
     }).where(and(
       eq(orderReturns.id, returnId),
       eq(orderReturns.version, input.expectedVersion),
-      sql`EXISTS (${exists})`,
+      exists(commandRecordExists),
     )).returning({ id: orderReturns.id });
     const orderClaim = db.update(orders).set({
       version: context.order.version + 1,
@@ -946,7 +947,7 @@ export async function receiveOrderReturn(
     }).where(and(
       eq(orders.id, orderId),
       eq(orders.version, context.order.version),
-      sql`EXISTS (${exists})`,
+      exists(commandRecordExists),
     )).returning({ id: orders.id });
     try {
       const claimResults = await safeBatch(db, [commandClaim, headerClaim, orderClaim] as never) as { id: string }[][];
@@ -1242,7 +1243,7 @@ export async function cancelOrderReturn(
       ))),
     )),
   ).returning({ id: orderReturnCommands.id });
-  const exists = commandExists(db, identity.commandId);
+  const commandRecordExists = commandExists(db, identity.commandId);
   const headerUpdate = db.update(orderReturns).set({
     status: "cancelled",
     version: input.expectedVersion + 1,
@@ -1252,7 +1253,7 @@ export async function cancelOrderReturn(
   }).where(and(
     eq(orderReturns.id, returnId),
     eq(orderReturns.version, input.expectedVersion),
-    sql`EXISTS (${exists})`,
+    exists(commandRecordExists),
   )).returning({ id: orderReturns.id });
   const orderUpdate = db.update(orders).set({
     version: context.order.version + 1,
@@ -1260,7 +1261,7 @@ export async function cancelOrderReturn(
   }).where(and(
     eq(orders.id, orderId),
     eq(orders.version, context.order.version),
-    sql`EXISTS (${exists})`,
+    exists(commandRecordExists),
   )).returning({ id: orders.id });
   const results = await safeBatch(db, [commandGuard, headerUpdate, orderUpdate] as never) as { id: string }[][];
   if (!results.every((result) => result?.length)) {

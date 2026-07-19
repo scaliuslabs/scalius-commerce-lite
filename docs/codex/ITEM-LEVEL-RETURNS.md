@@ -1,6 +1,6 @@
 # Item-level returns
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-19
 
 The durable return authority is `order_returns` + `order_return_lines` +
 `order_return_commands` + immutable `order_return_receipt_lines`. A return is
@@ -58,3 +58,20 @@ request id as its source identity.
 The generic status editor intentionally cannot select `returned`, `refunded`,
 or `partially_refunded`, and cannot move shipped work backward or cancel it.
 Those states belong to their evidence-owning workflows.
+
+## Production proof
+
+Order `3EFMCF` exercised the full merchant workflow through the deployed admin:
+request one shipped SKU, approve one, receive one, and classify that unit as
+restockable. Approval left the SKU at 7 on hand / 0 committed / 7 available.
+Receipt completed return `ret_sQED4QK7x32iNHVZMDAE`, moved the order to
+`returned`, retained the independent unpaid COD state, and restored the exact
+SKU to 8 / 0 / 8. The return command rows for create, approve, and receive are
+all committed; the immutable receipt row references its inventory movement.
+
+The run exposed invalid SQLite from wrapping a Drizzle select as
+`EXISTS ((select ...))` in approval, receipt claim, and cancellation guards.
+Those predicates now use Drizzle's native `exists()` expression. A real
+`node:sqlite` integration suite executes all three guarded batches, including a
+damaged-without-restock receipt, so future SQL-shape regressions fail before
+deployment.

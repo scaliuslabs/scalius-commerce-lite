@@ -112,7 +112,10 @@ const CreateShipmentForm = ({
                   onValueChange={setSelectedProviderId}
                   disabled={shipmentMutation.isPending || refundLocked || shipmentLocked}
                 >
-                  <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
+                  <SelectTrigger
+                    aria-label="Delivery provider"
+                    className="h-9 text-sm border-border bg-background text-foreground"
+                  >
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-card text-foreground">

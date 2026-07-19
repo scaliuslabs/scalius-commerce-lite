@@ -1,6 +1,6 @@
 # Inventory and Order Operations Competitive Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 
 ## Scope and evidence rules
 
@@ -73,9 +73,12 @@ support the domain facts; the live observation is only UX evidence.
 - Item-level return domain and API authority now persist request, approval,
   immutable receipt disposition, actor, recovery, and exact inventory movement
   evidence. Request/approval never change stock; only explicit warehouse
-  restock disposition does. Refund remains independent. The legacy admin
-  whole-order dialog still needs migration to the new plural return workflow.
-  See [item-level returns](./ITEM-LEVEL-RETURNS.md).
+  restock disposition does. Refund remains independent. The order detail now
+  owns the plural return workspace for request, per-line decision, receipt
+  classification, cancellation, immutable receipt history, and recovery.
+  Production order `3EFMCF` proves 7/0/7 remains unchanged at approval and
+  returns to 8/0/8 only after an explicit one-unit restock receipt. See
+  [item-level returns](./ITEM-LEVEL-RETURNS.md).
 - Order audit facts exist but are fragmented across cards/tables. The current
   detail composition has status, support requests, payments, notifications,
   shipments, notes, and items, but no single actor-attributed chronological
@@ -198,14 +201,14 @@ support the domain facts; the live observation is only UX evidence.
 | Transfers | None | Shopify has shipment/partial receipt workflow; Adobe has bulk source movement | Build Shopify-style operational transfer, not a counter-to-counter shortcut |
 | Purchase orders | None | Shopify has supplier/terms/currency/cost + linked receipt | Add only after location/receipt authority exists |
 | Fulfillment | Selected item rows; no within-line quantities or location | Medusa and Adobe support partial quantities and source choice | Introduce fulfillment lines with quantity + source/location |
-| Returns | Item request/approval/receipt ledger; explicit restock; refund independent | All benchmarks separate item return lifecycle and refund/restock decisions | P0 backend complete; admin workflow migration pending |
+| Returns | Item request/approval/receipt ledger; explicit restock; refund independent; compact order-detail workflow | All benchmarks separate item return lifecycle and refund/restock decisions | P0 lifecycle and merchant workflow complete; exchanges remain a later extension |
 | Order audit UX | Rich but fragmented evidence cards | Shopify Timeline, Medusa Activity, Adobe comments/action log | Add one chronological, actor-aware activity projection |
 
 ## Prioritized Scalius decisions
 
 ### P0 — release correctness
 
-1. **Replace whole-order return with an item-level return ledger — backend complete.** Persist a
+1. **Replace whole-order return with an item-level return ledger — complete.** Persist a
    return header and lines with requested, approved, received, damaged, rejected,
    and restock quantities; reason and notes; shipment/receipt facts; refund
    allocation; actor; timestamps; and version. A request or approval must not

@@ -71,9 +71,11 @@ describe("order detail permission boundaries", () => {
     expect(headerSource).toContain("useOrderActionPermissions");
     expect(headerSource).toContain("orderActions.canManageOrderShipments");
     expect(headerSource).toContain("orderActions.canEditOrders");
+    expect(headerSource).toContain('aria-label="Fulfillment status"');
 
     expect(statusSource).toContain("orderActions.canChangeOrderStatus");
     expect(statusSource).not.toContain("canRefundOrders");
+    expect(statusSource).toContain('aria-label="Order status"');
 
     expect(paymentSource).toContain("orderActions.canUpdateOrderCod");
     expect(paymentSource).toContain("orderActions.canRefundOrders");
@@ -88,6 +90,7 @@ describe("order detail permission boundaries", () => {
     expect(shipmentSource).toContain("useOrderActionPermissions");
     expect(shipmentSource).toContain("orderActions.canManageOrderShipments");
     expect(shipmentSource).toContain("order.shipmentRecovery?.activeLock === true");
+    expect(shipmentSource).toContain('aria-label="Delivery provider"');
 
     expect(manualFulfillmentSource).toContain("orderActions.canManageOrderShipments");
     expect(manualFulfillmentSource).toContain("order.shipmentRecovery?.activeLock === true");

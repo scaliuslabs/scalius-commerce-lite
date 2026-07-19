@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const CARD_SOURCE = fileURLToPath(new URL("./OrderReturnsCard.tsx", import.meta.url));
 const ORDER_VIEW_SOURCE = fileURLToPath(new URL("../OrderView.tsx", import.meta.url));
 const CREATE_DIALOG_SOURCE = fileURLToPath(new URL("./order-returns/CreateReturnDialog.tsx", import.meta.url));
+const APPROVE_DIALOG_SOURCE = fileURLToPath(new URL("./order-returns/ApproveReturnDialog.tsx", import.meta.url));
 const RECEIVE_DIALOG_SOURCE = fileURLToPath(new URL("./order-returns/ReceiveReturnDialog.tsx", import.meta.url));
 const RETURN_ROW_SOURCE = fileURLToPath(new URL("./order-returns/OrderReturnRow.tsx", import.meta.url));
 
@@ -33,5 +34,17 @@ describe("OrderReturnsCard boundaries", () => {
     expect(receiveDialog).toContain('className="sm:sr-only"');
     expect(receiveDialog).not.toContain("min-w-[36rem]");
     expect(receiveDialog).not.toContain("text-xs");
+  });
+
+  it("closes successful mutations and gives cancel actions a distinct accessible name", () => {
+    const dialogs = [CREATE_DIALOG_SOURCE, APPROVE_DIALOG_SOURCE, RECEIVE_DIALOG_SOURCE]
+      .map((path) => readFileSync(path, "utf8"));
+
+    for (const dialog of dialogs) {
+      expect(dialog).toContain("onSuccess: () => {");
+      expect(dialog).toContain("onOpenChange(false);");
+      expect(dialog).toContain(">Cancel</Button>");
+      expect(dialog).not.toContain(">Close</Button>");
+    }
   });
 });
