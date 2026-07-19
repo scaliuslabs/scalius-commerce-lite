@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, ReceiptText, Save } from "lucide-react";
+import { AlertCircle, Loader2, ReceiptText, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
 import {
   saveTaxSettings,
   type TaxConfigurationPayload,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/api-functions/taxes";
 import { getServerFnError } from "@/lib/api-helpers";
 import { queryKeys } from "@/lib/query-keys";
-import { taxSettingsIssue } from "./tax-form";
+import { taxSettingsFormIsDirty, taxSettingsIssue } from "./tax-form";
 
 const NO_CLASS = "__none__";
 
@@ -30,7 +31,7 @@ export function TaxSettingsPanel({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<UpdateTaxSettingsInput>(() => ({
+  const savedForm: UpdateTaxSettingsInput = {
     expectedVersion: configuration.settings.version,
     enabled: configuration.settings.enabled,
     pricesIncludeTax: configuration.settings.pricesIncludeTax,
@@ -38,21 +39,18 @@ export function TaxSettingsPanel({
     defaultTaxClassId: configuration.settings.defaultTaxClassId,
     shippingTaxClassId: configuration.settings.shippingTaxClassId,
     displayLabel: configuration.settings.displayLabel,
-  }));
+  };
+  const [form, setForm] = useState<UpdateTaxSettingsInput>(() => savedForm);
 
   useEffect(() => {
-    setForm({
-      expectedVersion: configuration.settings.version,
-      enabled: configuration.settings.enabled,
-      pricesIncludeTax: configuration.settings.pricesIncludeTax,
-      taxShipping: configuration.settings.taxShipping,
-      defaultTaxClassId: configuration.settings.defaultTaxClassId,
-      shippingTaxClassId: configuration.settings.shippingTaxClassId,
-      displayLabel: configuration.settings.displayLabel,
-    });
+    setForm(savedForm);
+    // The settings object is the versioned authority. Individual fields are
+    // deliberately listed so a refetch only resets after saved state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configuration.settings]);
 
   const issue = taxSettingsIssue(form, configuration);
+  const isDirty = taxSettingsFormIsDirty(form, savedForm);
   const saveMutation = useMutation({
     mutationFn: () => saveTaxSettings({ data: form }),
     onSuccess: async () => {
@@ -66,6 +64,10 @@ export function TaxSettingsPanel({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+      <UnsavedChangesGuard
+        isDirty={isDirty}
+        isSubmitting={saveMutation.isPending}
+      />
       <Card>
         <CardHeader className="gap-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -178,10 +180,20 @@ export function TaxSettingsPanel({
             </Alert>
           ) : null}
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
+              type="button"
+              variant="outline"
+              onClick={() => setForm(savedForm)}
+              disabled={!canManage || !isDirty || saveMutation.isPending}
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+            <Button
+              type="button"
               onClick={() => saveMutation.mutate()}
-              disabled={!canManage || Boolean(issue) || saveMutation.isPending}
+              disabled={!canManage || !isDirty || Boolean(issue) || saveMutation.isPending}
             >
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save policy

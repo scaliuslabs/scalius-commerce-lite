@@ -1,6 +1,6 @@
 # Theme and Tax Settings Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 
 These settings currently have very different risk profiles. Tax has a serious
 domain model behind a sprawling interface; Theme has a narrow color override
@@ -56,8 +56,8 @@ model presented as if it were a complete theme system.
   describes equal priorities as one layer.
 
 This is a calculation-authority fix, not completion of the tax workspace. Bulk
-classification, configuration export, refund matrix coverage, and route-backed
-tab/search state remain follow-up work.
+classification, configuration export, and refund matrix coverage remain
+follow-up work. The primary workspace section is now validated URL state.
 
 ## Implemented tax readiness slice (2026-07-13)
 
@@ -108,6 +108,19 @@ tab/search state remain follow-up work.
   workflow.
 
 This is a calculation-explanation tool, not a legal nexus/registration engine.
+
+## Implemented policy-draft lifecycle (2026-07-19)
+
+- Policy Save and Reset now follow the same saved-versus-draft contract as the
+  other settings workspaces. An unchanged policy cannot create a no-op version;
+  editing any policy fact enables both actions, and Reset restores the complete
+  loaded version without writing.
+- Leaving the page with an unsaved policy draft uses the shared navigation
+  guard. A save in flight stays protected, and a successful authoritative
+  refetch becomes the next draft baseline.
+- Production verification changed the buyer-facing label locally, observed
+  Save/Reset enable, reset it to `Tax`, and observed both actions lock again.
+  The smoke intentionally performed no tax write.
 Authoritative jurisdiction obligations, configuration history/export, bulk
 classification, route-backed state, and the full refund matrix remain open.
 

@@ -913,6 +913,19 @@ The cleanup bullets below describe the two-product proof store that preceded the
   continuity; it does not claim that the legacy code builder has become the
   future automatic/stacking/campaign promotion builder.
 
+### Tax policy-draft checkpoint (2026-07-19)
+
+- Admin `b22826c4-6ce4-4991-887c-bceb79679e91` is live at 100%. The Tax Policy
+  workspace now distinguishes the saved version from a local draft, blocks
+  no-op version writes, provides Reset, and uses the shared unsaved-navigation
+  guard.
+- Authenticated production verification changed the buyer-facing label to a
+  local `VAT` draft, observed Save and Reset enable, then reset it to the saved
+  `Tax` value and observed both actions disable. No production tax mutation was
+  performed.
+- Twenty-five focused Tax form/readiness/workspace tests, targeted lint, and
+  the sequential Admin typecheck and deployment passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
