@@ -11,6 +11,36 @@ export const NAVIGATION_MENU_ITEM_LIMIT = 10_000;
 export const NAVIGATION_MENU_MAX_DEPTH = 3;
 export const NAVIGATION_POSITION_GAP = 1_024;
 
+export const NAVIGATION_PLACEMENT_REGISTRY = {
+    "header.primary": {
+        surface: "header",
+        slot: "primary",
+        repeatable: false,
+        maxPositions: 1,
+        maxDepth: 3,
+        maxItems: 150,
+    },
+    "footer.column": {
+        surface: "footer",
+        slot: "column",
+        repeatable: true,
+        maxPositions: 4,
+        maxDepth: 3,
+        maxItems: 150,
+    },
+} as const;
+
+export type NavigationPlacementKey = keyof typeof NAVIGATION_PLACEMENT_REGISTRY;
+
+export interface NavigationPlacementDefinition {
+    surface: string;
+    slot: string;
+    repeatable: boolean;
+    maxPositions: number;
+    maxDepth: number;
+    maxItems: number;
+}
+
 export const NAVIGATION_SYSTEM_TARGETS = {
     home: "/",
     catalog: "/search",
@@ -58,6 +88,18 @@ export interface NavigationMenuItemStorage {
     isEnabled: boolean;
 }
 
+export function getNavigationPlacementDefinition(
+    surface: string,
+    slot: string,
+): NavigationPlacementDefinition {
+    const key = `${surface.trim()}.${slot.trim()}` as NavigationPlacementKey;
+    const definition = NAVIGATION_PLACEMENT_REGISTRY[key];
+    if (!definition) {
+        throw new ValidationError("Choose a navigation placement supported by the current storefront theme.");
+    }
+    return definition;
+}
+
 export interface NavigationHierarchyRow {
     id: string;
     parentId: string | null;
@@ -83,6 +125,22 @@ export class NavigationRevisionConflictError extends AppError {
             { menuId, expectedRevision, currentRevision },
         );
         this.name = "NavigationRevisionConflictError";
+    }
+}
+
+export class NavigationPlacementRevisionConflictError extends AppError {
+    constructor(
+        placementId: string,
+        expectedRevision: number,
+        currentRevision: number | null,
+    ) {
+        super(
+            409,
+            "NAVIGATION_PLACEMENT_REVISION_CONFLICT",
+            "This menu placement changed while you were editing. Reload the latest placements and try again.",
+            { placementId, expectedRevision, currentRevision },
+        );
+        this.name = "NavigationPlacementRevisionConflictError";
     }
 }
 

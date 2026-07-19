@@ -14,9 +14,13 @@ const mocks = vi.hoisted(() => ({
     getNavigationMenuAuthority: vi.fn(),
     getNavigationPlacementManifest: vi.fn(),
     listNavigationMenuItems: vi.fn(),
+    listNavigationMenuPublications: vi.fn(),
     listNavigationMenus: vi.fn(),
+    listNavigationPlacements: vi.fn(),
     moveNavigationMenuItem: vi.fn(),
     publishNavigationMenu: vi.fn(),
+    rollbackNavigationMenu: vi.fn(),
+    saveNavigationPlacement: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
     getGeneralSettings: vi.fn(),
@@ -37,9 +41,13 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     getNavigationMenuAuthority: mocks.getNavigationMenuAuthority,
     getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
     listNavigationMenuItems: mocks.listNavigationMenuItems,
+    listNavigationMenuPublications: mocks.listNavigationMenuPublications,
     listNavigationMenus: mocks.listNavigationMenus,
+    listNavigationPlacements: mocks.listNavigationPlacements,
     moveNavigationMenuItem: mocks.moveNavigationMenuItem,
     publishNavigationMenu: mocks.publishNavigationMenu,
+    rollbackNavigationMenu: mocks.rollbackNavigationMenu,
+    saveNavigationPlacement: mocks.saveNavigationPlacement,
     updateNavigationMenuItem: mocks.updateNavigationMenuItem,
     updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
 }));
@@ -202,6 +210,74 @@ describe("admin navigation routes", () => {
             ["layout"],
             expect.objectContaining({ env }),
         );
+    });
+
+    it("rolls a publication forward as a new revision and invalidates public layout", async () => {
+        mocks.rollbackNavigationMenu.mockResolvedValue({
+            revision: 9,
+            publishedRevision: 9,
+            sourceRevision: 5,
+            itemCount: 3,
+            checksum: "b".repeat(64),
+        });
+        const { app, db, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1/rollback",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expectedRevision: 8, sourceRevision: 5 }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.rollbackNavigationMenu).toHaveBeenCalledWith(db, "menu_1", {
+            expectedRevision: 8,
+            sourceRevision: 5,
+            publishedBy: null,
+        });
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["layout"],
+            expect.objectContaining({ env }),
+        );
+    });
+
+    it("saves one registered placement through its independent revision boundary", async () => {
+        mocks.saveNavigationPlacement.mockResolvedValue({
+            placement: { id: "placement_header_primary", revision: 2 },
+        });
+        const { app, db, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/placements/placement_header_primary",
+            {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    expectedRevision: 1,
+                    surface: "header",
+                    slot: "primary",
+                    position: 0,
+                    menuId: "menu_1",
+                    isEnabled: true,
+                }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.saveNavigationPlacement).toHaveBeenCalledWith(db, {
+            id: "placement_header_primary",
+            expectedRevision: 1,
+            surface: "header",
+            slot: "primary",
+            position: 0,
+            menuId: "menu_1",
+            isEnabled: true,
+        });
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledTimes(1);
     });
 
     it.each([

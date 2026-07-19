@@ -35,9 +35,11 @@ import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
 import {
     buildNavigationHierarchy,
     checksumNavigationPublication,
+    getNavigationPlacementDefinition,
     NAVIGATION_MENU_ITEM_LIMIT,
     NAVIGATION_POSITION_GAP,
     NAVIGATION_SYSTEM_TARGETS,
+    NavigationPlacementRevisionConflictError,
     NavigationRevisionConflictError,
     normalizeNavigationMenuHandle,
     normalizeNavigationMenuItemInput,
@@ -47,7 +49,10 @@ import {
     type NavigationMenuItemInput,
     type NavigationMenuItemStorage,
 } from "./navigation.authority";
-import { loadNavigationResourceSnapshots } from "./navigation.resolver";
+import {
+    loadNavigationResourceSnapshots,
+    resolveNavigationItemsForPublic,
+} from "./navigation.resolver";
 import { parseNavigationConfig } from "./navigation.validation";
 
 const NAVIGATION_REVISION_GUARD = "NAVIGATION_REVISION_CONFLICT";
@@ -270,6 +275,36 @@ export async function getNavigationMenuAuthority(db: Database, menuId: string) {
         .get();
     if (!menu) throw new NotFoundError("Menu not found.");
     return menu;
+}
+
+export async function listNavigationMenuPublications(
+    db: Database,
+    menuId: string,
+    input: { limit?: number; beforeRevision?: number } = {},
+) {
+    await getNavigationMenuAuthority(db, menuId);
+    const limit = normalizeLimit(input.limit);
+    if (input.beforeRevision != null && (!Number.isInteger(input.beforeRevision) || input.beforeRevision < 1)) {
+        throw new ValidationError("Invalid publication cursor.");
+    }
+    const rows = await db
+        .select()
+        .from(navigationMenuPublications)
+        .where(and(
+            eq(navigationMenuPublications.menuId, menuId),
+            input.beforeRevision == null
+                ? undefined
+                : lt(navigationMenuPublications.revision, input.beforeRevision),
+        ))
+        .orderBy(desc(navigationMenuPublications.revision))
+        .limit(limit + 1)
+        .all();
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    return {
+        items,
+        nextCursor: hasMore ? items.at(-1)?.revision ?? null : null,
+    };
 }
 
 export async function updateNavigationMenuMetadata(
@@ -578,22 +613,76 @@ export async function deleteNavigationMenuItem(
     return { deletedCount: deleted.length, revision: result.revision };
 }
 
-function authorityRowToResourceItem(
-    row: typeof navigationMenuItems.$inferSelect,
-): NavigationTargetItem | null {
-    if (!["page", "category", "collection", "product"].includes(row.targetType)) return null;
-    return {
+type AuthorityProjectionRow = NavigationMenuItemStorage & {
+    id: string;
+    parentId: string | null;
+    position: number;
+};
+
+function authorityRowToTargetItem(row: AuthorityProjectionRow): NavigationTargetItem {
+    const common = {
         id: row.id,
-        target: {
-            type: "resource",
-            resourceType: row.targetType as "page" | "category" | "collection" | "product",
-            resourceId: row.targetId!,
-            ...(row.targetQuery ? { query: row.targetQuery } : {}),
-        },
         labelMode: row.labelMode,
         ...(row.labelMode === "custom" ? { customLabel: row.label } : {}),
         lastKnownLabel: row.label,
-    };
+        ...(row.openInNewTab ? { openInNewTab: true } : {}),
+    } satisfies Omit<NavigationTargetItem, "target">;
+
+    if (["page", "category", "collection", "product"].includes(row.targetType)) {
+        return {
+            ...common,
+            target: {
+                type: "resource",
+                resourceType: row.targetType as "page" | "category" | "collection" | "product",
+                resourceId: row.targetId!,
+                ...(row.targetQuery ? { query: row.targetQuery } : {}),
+            },
+        };
+    }
+    if (row.targetType === "system") {
+        const path = NAVIGATION_SYSTEM_TARGETS[
+            row.targetValue as keyof typeof NAVIGATION_SYSTEM_TARGETS
+        ];
+        return { ...common, target: { type: "internal_path", path: path ?? "/" } };
+    }
+    if (row.targetType === "internal_path") {
+        return { ...common, target: { type: "internal_path", path: row.targetValue! } };
+    }
+    if (row.targetType === "external_url") {
+        return { ...common, target: { type: "external_url", url: row.targetValue! } };
+    }
+    return { ...common, target: { type: "label" } };
+}
+
+async function validateNavigationRowsForPublication(
+    db: Database,
+    rows: readonly AuthorityProjectionRow[],
+): Promise<void> {
+    buildNavigationHierarchy(rows);
+    const enabledResources = rows
+        .filter((item) => item.isEnabled)
+        .filter((item) => ["page", "category", "collection", "product"].includes(item.targetType))
+        .map(authorityRowToTargetItem);
+    const resources = await loadNavigationResourceSnapshots(
+        db,
+        { navigation: enabledResources },
+        {},
+    );
+    const unavailable = enabledResources.filter((item) => {
+        if (item.target.type !== "resource") return false;
+        return resources.get(`${item.target.resourceType}:${item.target.resourceId}`)?.readiness !== "ready";
+    });
+    if (unavailable.length) {
+        throw new ValidationError(
+            "Resolve unavailable page, category, collection, or product links before publishing.",
+            { itemIds: unavailable.slice(0, 20).map((item) => item.id), total: unavailable.length },
+        );
+    }
+    for (const item of rows) {
+        if (item.targetType === "system" && !(item.targetValue! in NAVIGATION_SYSTEM_TARGETS)) {
+            throw new ValidationError(`Menu item ${item.id} uses an unsupported storefront destination.`);
+        }
+    }
 }
 
 export async function publishNavigationMenu(
@@ -616,32 +705,7 @@ export async function publishNavigationMenu(
     if (items.length > NAVIGATION_MENU_ITEM_LIMIT) {
         throw new ValidationError(`A menu can contain at most ${NAVIGATION_MENU_ITEM_LIMIT} items.`);
     }
-    buildNavigationHierarchy(items);
-
-    const enabledResources = items
-        .filter((item) => item.isEnabled)
-        .map(authorityRowToResourceItem)
-        .filter((item): item is NavigationTargetItem => item !== null);
-    const resources = await loadNavigationResourceSnapshots(
-        db,
-        { navigation: enabledResources },
-        {},
-    );
-    const unavailable = enabledResources.filter((item) => {
-        if (item.target.type !== "resource") return false;
-        return resources.get(`${item.target.resourceType}:${item.target.resourceId}`)?.readiness !== "ready";
-    });
-    if (unavailable.length) {
-        throw new ValidationError(
-            "Resolve unavailable page, category, collection, or product links before publishing.",
-            { itemIds: unavailable.slice(0, 20).map((item) => item.id), total: unavailable.length },
-        );
-    }
-    for (const item of items) {
-        if (item.targetType === "system" && !(item.targetValue! in NAVIGATION_SYSTEM_TARGETS)) {
-            throw new ValidationError(`Menu item ${item.id} uses an unsupported storefront destination.`);
-        }
-    }
+    await validateNavigationRowsForPublication(db, items);
 
     const checksum = await checksumNavigationPublication(items);
     const publishedRevision = input.expectedRevision + 1;
@@ -697,8 +761,450 @@ export async function publishNavigationMenu(
     }
 }
 
-export async function getNavigationPlacementManifest(db: Database) {
+export async function rollbackNavigationMenu(
+    db: Database,
+    menuId: string,
+    input: {
+        expectedRevision: number;
+        sourceRevision: number;
+        publishedBy?: string | null;
+    },
+) {
+    const menu = await getNavigationMenuAuthority(db, menuId);
+    if (menu.deletedAt) throw new ConflictError("Restore this menu before rolling it back.");
+    if (menu.revision !== input.expectedRevision) {
+        throw new NavigationRevisionConflictError(menuId, input.expectedRevision, menu.revision);
+    }
+    if (!Number.isInteger(input.sourceRevision) || input.sourceRevision < 1) {
+        throw new ValidationError("Choose a valid published menu revision.");
+    }
+    const sourcePublication = await db
+        .select()
+        .from(navigationMenuPublications)
+        .where(and(
+            eq(navigationMenuPublications.menuId, menuId),
+            eq(navigationMenuPublications.revision, input.sourceRevision),
+        ))
+        .get();
+    if (!sourcePublication) throw new NotFoundError("Published menu revision not found.");
+
+    const sourceRows = await db
+        .select()
+        .from(navigationMenuPublicationItems)
+        .where(and(
+            eq(navigationMenuPublicationItems.menuId, menuId),
+            eq(navigationMenuPublicationItems.revision, input.sourceRevision),
+        ))
+        .orderBy(
+            asc(navigationMenuPublicationItems.position),
+            asc(navigationMenuPublicationItems.itemId),
+        )
+        .limit(NAVIGATION_MENU_ITEM_LIMIT + 1)
+        .all();
+    if (sourceRows.length !== sourcePublication.itemCount) {
+        throw new ConflictError("This published menu revision is incomplete and cannot be restored.");
+    }
+    const authorityRows: AuthorityProjectionRow[] = sourceRows.map((row) => ({
+        id: row.itemId,
+        parentId: row.parentId,
+        position: row.position,
+        label: row.label,
+        labelMode: row.labelMode,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        targetValue: row.targetValue,
+        targetQuery: row.targetQuery,
+        openInNewTab: row.openInNewTab,
+        isEnabled: row.isEnabled,
+    }));
+    await validateNavigationRowsForPublication(db, authorityRows);
+    const checksum = await checksumNavigationPublication(authorityRows);
+    if (checksum !== sourcePublication.checksum) {
+        throw new ConflictError("This published menu revision failed its integrity check.");
+    }
+
+    const publishedRevision = input.expectedRevision + 1;
+    try {
+        const results = await safeBatch(db, [
+            buildMenuRevisionGuard(db, menuId, input.expectedRevision),
+            db.delete(navigationMenuItems).where(eq(navigationMenuItems.menuId, menuId)),
+            db.insert(navigationMenuItems).select(db.select({
+                id: navigationMenuPublicationItems.itemId,
+                menuId: navigationMenuPublicationItems.menuId,
+                parentId: navigationMenuPublicationItems.parentId,
+                position: navigationMenuPublicationItems.position,
+                label: navigationMenuPublicationItems.label,
+                labelMode: navigationMenuPublicationItems.labelMode,
+                targetType: navigationMenuPublicationItems.targetType,
+                targetId: navigationMenuPublicationItems.targetId,
+                targetValue: navigationMenuPublicationItems.targetValue,
+                targetQuery: navigationMenuPublicationItems.targetQuery,
+                openInNewTab: navigationMenuPublicationItems.openInNewTab,
+                isEnabled: navigationMenuPublicationItems.isEnabled,
+                createdAt: sql<number>`unixepoch()`.as("created_at"),
+                updatedAt: sql<number>`unixepoch()`.as("updated_at"),
+            }).from(navigationMenuPublicationItems).where(and(
+                eq(navigationMenuPublicationItems.menuId, menuId),
+                eq(navigationMenuPublicationItems.revision, input.sourceRevision),
+            ))),
+            db.insert(navigationMenuPublications).values({
+                menuId,
+                revision: publishedRevision,
+                publishedBy: input.publishedBy ?? null,
+                itemCount: sourcePublication.itemCount,
+                checksum,
+            }),
+            db.insert(navigationMenuPublicationItems).select(db.select({
+                menuId: navigationMenuPublicationItems.menuId,
+                revision: sql<number>`${publishedRevision}`.as("revision"),
+                itemId: navigationMenuPublicationItems.itemId,
+                parentId: navigationMenuPublicationItems.parentId,
+                position: navigationMenuPublicationItems.position,
+                label: navigationMenuPublicationItems.label,
+                labelMode: navigationMenuPublicationItems.labelMode,
+                targetType: navigationMenuPublicationItems.targetType,
+                targetId: navigationMenuPublicationItems.targetId,
+                targetValue: navigationMenuPublicationItems.targetValue,
+                targetQuery: navigationMenuPublicationItems.targetQuery,
+                openInNewTab: navigationMenuPublicationItems.openInNewTab,
+                isEnabled: navigationMenuPublicationItems.isEnabled,
+            }).from(navigationMenuPublicationItems).where(and(
+                eq(navigationMenuPublicationItems.menuId, menuId),
+                eq(navigationMenuPublicationItems.revision, input.sourceRevision),
+            ))),
+            db.update(navigationMenus)
+                .set({
+                    revision: publishedRevision,
+                    publishedRevision,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(navigationMenus.id, menuId),
+                    eq(navigationMenus.revision, input.expectedRevision),
+                ))
+                .returning({ revision: navigationMenus.revision }),
+        ] as never) as unknown[];
+        return {
+            revision: readRevisionResult(results.at(-1)),
+            publishedRevision,
+            sourceRevision: input.sourceRevision,
+            itemCount: sourcePublication.itemCount,
+            checksum,
+        };
+    } catch (error) {
+        return rethrowNavigationMutationError(db, menuId, input.expectedRevision, error);
+    }
+}
+
+function publishedHierarchyToTargets(
+    nodes: readonly NavigationHierarchyNode<AuthorityProjectionRow>[],
+): NavigationTargetItem[] {
+    return nodes.flatMap((node) => {
+        if (!node.item.isEnabled) return [];
+        const item = authorityRowToTargetItem(node.item);
+        const children = publishedHierarchyToTargets(node.children);
+        return [{ ...item, ...(children.length ? { subMenu: children } : {}) }];
+    });
+}
+
+export async function getPublishedNavigationMenuTree(
+    db: Database,
+    menuId: string,
+    input: { maxItems?: number } = {},
+) {
+    const menu = await getNavigationMenuAuthority(db, menuId);
+    if (menu.deletedAt || menu.publishedRevision == null) {
+        throw new NotFoundError("Published menu not found.");
+    }
+    const publication = await db
+        .select()
+        .from(navigationMenuPublications)
+        .where(and(
+            eq(navigationMenuPublications.menuId, menuId),
+            eq(navigationMenuPublications.revision, menu.publishedRevision),
+        ))
+        .get();
+    if (!publication) throw new NavigationAuthorityUnavailableError();
+    const maxItems = input.maxItems ?? NAVIGATION_MENU_ITEM_LIMIT;
+    if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > NAVIGATION_MENU_ITEM_LIMIT) {
+        throw new ValidationError("Published menu read limit is invalid.");
+    }
+    if (publication.itemCount > maxItems) {
+        throw new ConflictError(
+            `This menu contains ${publication.itemCount} items, exceeding this placement's ${maxItems}-item rendering budget.`,
+        );
+    }
+    const rows = await db
+        .select()
+        .from(navigationMenuPublicationItems)
+        .where(and(
+            eq(navigationMenuPublicationItems.menuId, menuId),
+            eq(navigationMenuPublicationItems.revision, menu.publishedRevision),
+        ))
+        .orderBy(
+            asc(navigationMenuPublicationItems.position),
+            asc(navigationMenuPublicationItems.itemId),
+        )
+        .limit(maxItems + 1)
+        .all();
+    if (rows.length !== publication.itemCount) throw new NavigationAuthorityUnavailableError();
+    const authorityRows: AuthorityProjectionRow[] = rows.map((row) => ({
+        id: row.itemId,
+        parentId: row.parentId,
+        position: row.position,
+        label: row.label,
+        labelMode: row.labelMode,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        targetValue: row.targetValue,
+        targetQuery: row.targetQuery,
+        openInNewTab: row.openInNewTab,
+        isEnabled: row.isEnabled,
+    }));
+    const targets = publishedHierarchyToTargets(buildNavigationHierarchy(authorityRows));
+    const resources = await loadNavigationResourceSnapshots(db, { navigation: targets }, {});
+    return {
+        id: menu.id,
+        name: menu.name,
+        handle: menu.handle,
+        publishedRevision: menu.publishedRevision,
+        dependencyRevision: menu.dependencyRevision,
+        checksum: publication.checksum,
+        items: resolveNavigationItemsForPublic(targets, resources),
+    };
+}
+
+export async function listPublishedNavigationMenuItems(
+    db: Database,
+    menuId: string,
+    input: {
+        parentId?: string | null;
+        limit?: number;
+        cursor?: NavigationItemCursor;
+    } = {},
+) {
+    const menu = await getNavigationMenuAuthority(db, menuId);
+    if (menu.deletedAt || menu.publishedRevision == null) {
+        throw new NotFoundError("Published menu not found.");
+    }
+    const limit = normalizeLimit(input.limit);
+    const parentId = input.parentId ?? null;
+    const conditions = [
+        eq(navigationMenuPublicationItems.menuId, menuId),
+        eq(navigationMenuPublicationItems.revision, menu.publishedRevision),
+        eq(navigationMenuPublicationItems.isEnabled, true),
+        parentId == null
+            ? isNull(navigationMenuPublicationItems.parentId)
+            : eq(navigationMenuPublicationItems.parentId, parentId),
+    ];
+    if (input.cursor) {
+        const cursorCondition = or(
+            gt(navigationMenuPublicationItems.position, input.cursor.position),
+            and(
+                eq(navigationMenuPublicationItems.position, input.cursor.position),
+                gt(navigationMenuPublicationItems.itemId, input.cursor.id),
+            ),
+        );
+        if (cursorCondition) conditions.push(cursorCondition);
+    }
+    const rows = await db
+        .select({
+            item: navigationMenuPublicationItems,
+            childCount: sql<number>`(
+                SELECT COUNT(*) FROM ${navigationMenuPublicationItems} AS child
+                WHERE child.menu_id = ${menuId}
+                  AND child.revision = ${menu.publishedRevision}
+                  AND child.parent_id = ${navigationMenuPublicationItems.itemId}
+                  AND child.is_enabled = true
+            )`,
+        })
+        .from(navigationMenuPublicationItems)
+        .where(and(...conditions))
+        .orderBy(
+            asc(navigationMenuPublicationItems.position),
+            asc(navigationMenuPublicationItems.itemId),
+        )
+        .limit(limit + 1)
+        .all();
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const targets = page.map(({ item }) => authorityRowToTargetItem({
+        id: item.itemId,
+        parentId: null,
+        position: item.position,
+        label: item.label,
+        labelMode: item.labelMode,
+        targetType: item.targetType,
+        targetId: item.targetId,
+        targetValue: item.targetValue,
+        targetQuery: item.targetQuery,
+        openInNewTab: item.openInNewTab,
+        isEnabled: item.isEnabled,
+    }));
+    const resources = await loadNavigationResourceSnapshots(db, { navigation: targets }, {});
+    const resolvedById = new Map(
+        resolveNavigationItemsForPublic(targets, resources).map((item) => [item.id, item]),
+    );
+    const items = page.flatMap(({ item, childCount }) => {
+        const resolved = resolvedById.get(item.itemId);
+        return resolved ? [{ ...resolved, position: item.position, childCount }] : [];
+    });
+    const last = page.at(-1)?.item;
+    return {
+        menu: {
+            id: menu.id,
+            name: menu.name,
+            handle: menu.handle,
+            publishedRevision: menu.publishedRevision,
+            dependencyRevision: menu.dependencyRevision,
+        },
+        parentId,
+        items,
+        nextCursor: hasMore && last
+            ? { position: last.position, id: last.itemId }
+            : null,
+    };
+}
+
+export async function listNavigationPlacements(db: Database) {
     return db
+        .select({
+            placement: navigationPlacements,
+            menuName: navigationMenus.name,
+            menuDeletedAt: navigationMenus.deletedAt,
+            publishedRevision: navigationMenus.publishedRevision,
+            publicationItemCount: navigationMenuPublications.itemCount,
+        })
+        .from(navigationPlacements)
+        .innerJoin(navigationMenus, eq(navigationMenus.id, navigationPlacements.menuId))
+        .leftJoin(navigationMenuPublications, and(
+            eq(navigationMenuPublications.menuId, navigationMenus.id),
+            eq(navigationMenuPublications.revision, navigationMenus.publishedRevision),
+        ))
+        .orderBy(
+            asc(navigationPlacements.surface),
+            asc(navigationPlacements.slot),
+            asc(navigationPlacements.position),
+            asc(navigationPlacements.id),
+        )
+        .all();
+}
+
+export async function saveNavigationPlacement(
+    db: Database,
+    input: {
+        id?: string;
+        expectedRevision: number;
+        surface: string;
+        slot: string;
+        position: number;
+        menuId: string;
+        labelOverride?: string | null;
+        isEnabled?: boolean;
+    },
+) {
+    const definition = getNavigationPlacementDefinition(input.surface, input.slot);
+    if (!Number.isInteger(input.position) || input.position < 0 || input.position >= definition.maxPositions) {
+        throw new ValidationError(`This navigation placement accepts positions 0–${definition.maxPositions - 1}.`);
+    }
+    if (!definition.repeatable && input.position !== 0) {
+        throw new ValidationError("This navigation placement has one fixed position.");
+    }
+    const labelOverride = input.labelOverride?.trim() || null;
+    if (labelOverride && labelOverride.length > 100) {
+        throw new ValidationError("Placement labels must be 100 characters or fewer.");
+    }
+    const menu = await getNavigationMenuAuthority(db, input.menuId);
+    if (menu.deletedAt || menu.publishedRevision == null) {
+        throw new ValidationError("Publish this menu before assigning it to the storefront.");
+    }
+    const publication = await db
+        .select({ itemCount: navigationMenuPublications.itemCount })
+        .from(navigationMenuPublications)
+        .where(and(
+            eq(navigationMenuPublications.menuId, input.menuId),
+            eq(navigationMenuPublications.revision, menu.publishedRevision),
+        ))
+        .get();
+    if (!publication) throw new NavigationAuthorityUnavailableError();
+    if (publication.itemCount > definition.maxItems) {
+        throw new ValidationError(
+            `This placement supports up to ${definition.maxItems} items; the published menu contains ${publication.itemCount}.`,
+        );
+    }
+
+    const id = input.id?.trim() || `placement_${nanoid()}`;
+    const existing = await db
+        .select({ revision: navigationPlacements.revision })
+        .from(navigationPlacements)
+        .where(eq(navigationPlacements.id, id))
+        .get();
+    try {
+        if (!existing) {
+            if (input.expectedRevision !== 0) {
+                throw new NavigationPlacementRevisionConflictError(id, input.expectedRevision, null);
+            }
+            const placement = await db
+                .insert(navigationPlacements)
+                .values({
+                    id,
+                    surface: definition.surface,
+                    slot: definition.slot,
+                    position: input.position,
+                    menuId: input.menuId,
+                    labelOverride,
+                    isEnabled: input.isEnabled !== false,
+                })
+                .returning()
+                .get();
+            return { placement };
+        }
+        if (existing.revision !== input.expectedRevision) {
+            throw new NavigationPlacementRevisionConflictError(id, input.expectedRevision, existing.revision);
+        }
+        const placement = await db
+            .update(navigationPlacements)
+            .set({
+                surface: definition.surface,
+                slot: definition.slot,
+                position: input.position,
+                menuId: input.menuId,
+                labelOverride,
+                isEnabled: input.isEnabled !== false,
+                revision: sql`${navigationPlacements.revision} + 1`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(
+                eq(navigationPlacements.id, id),
+                eq(navigationPlacements.revision, input.expectedRevision),
+            ))
+            .returning()
+            .get();
+        if (!placement) {
+            const current = await db
+                .select({ revision: navigationPlacements.revision })
+                .from(navigationPlacements)
+                .where(eq(navigationPlacements.id, id))
+                .get();
+            throw new NavigationPlacementRevisionConflictError(
+                id,
+                input.expectedRevision,
+                current?.revision ?? null,
+            );
+        }
+        return { placement };
+    } catch (error) {
+        if (error instanceof NavigationPlacementRevisionConflictError) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (/navigation_placements_active_slot_unique|UNIQUE constraint failed.*navigation_placements/i.test(message)) {
+            throw new ConflictError("Another menu already occupies this storefront placement.");
+        }
+        throw error;
+    }
+}
+
+export async function getNavigationPlacementManifest(db: Database) {
+    const rows = await db
         .select({
             id: navigationPlacements.id,
             surface: navigationPlacements.surface,
@@ -732,6 +1238,10 @@ export async function getNavigationPlacementManifest(db: Database) {
             asc(navigationPlacements.id),
         )
         .all();
+    return rows.map((row) => ({
+        ...row,
+        definition: getNavigationPlacementDefinition(row.surface, row.slot),
+    }));
 }
 
 interface ExpectedAuthorityItem {

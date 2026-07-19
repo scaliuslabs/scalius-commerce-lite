@@ -12,9 +12,13 @@ import {
     getNavigationItems,
     getNavigationPreviewProductCount,
     listNavigationMenuItems,
+    listNavigationMenuPublications,
     listNavigationMenus,
+    listNavigationPlacements,
     moveNavigationMenuItem,
     publishNavigationMenu,
+    rollbackNavigationMenu,
+    saveNavigationPlacement,
     updateNavigationMenuItem,
     updateNavigationMenuMetadata,
 } from "@scalius/core/modules/navigation";
@@ -570,6 +574,85 @@ app.openapi(publishMenuRoute, async (c) => {
     return ok(c, result);
 });
 
+const listMenuPublicationsRoute = createRoute({
+    method: "get",
+    path: "/menus/{menuId}/publications",
+    tags: ["Admin - Navigation"],
+    summary: "List immutable menu publications",
+    request: {
+        params: z.object({ menuId: z.string().min(1) }),
+        query: z.object({
+            limit: z.coerce.number().int().min(1).max(100).optional(),
+            cursor: z.coerce.number().int().positive().optional(),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Published menu history",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                items: z.array(z.object({
+                    menuId: z.string(),
+                    revision: z.number().int().positive(),
+                    publishedAt: z.coerce.date(),
+                    publishedBy: z.string().nullable(),
+                    itemCount: z.number().int().nonnegative(),
+                    checksum: z.string(),
+                })),
+                nextCursor: z.number().int().positive().nullable(),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listMenuPublicationsRoute, async (c) => {
+    const { menuId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    return ok(c, await listNavigationMenuPublications(c.get("db"), menuId, {
+        limit: query.limit,
+        beforeRevision: query.cursor,
+    }));
+});
+
+const rollbackMenuRoute = createRoute({
+    method: "post",
+    path: "/menus/{menuId}/rollback",
+    tags: ["Admin - Navigation"],
+    summary: "Restore a publication as a new immutable menu revision",
+    request: {
+        params: z.object({ menuId: z.string().min(1) }),
+        body: { content: { "application/json": { schema: z.object({
+            expectedRevision: z.number().int().positive(),
+            sourceRevision: z.number().int().positive(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Menu revision restored and republished",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                revision: z.number().int().positive(),
+                publishedRevision: z.number().int().positive(),
+                sourceRevision: z.number().int().positive(),
+                itemCount: z.number().int().nonnegative(),
+                checksum: z.string(),
+            })) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(rollbackMenuRoute, async (c) => {
+    const { menuId } = c.req.valid("param");
+    const user = c.get("user") as { id?: string } | undefined;
+    const result = await rollbackNavigationMenu(c.get("db"), menuId, {
+        ...c.req.valid("json"),
+        publishedBy: user?.id ?? null,
+    });
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
+});
+
 const placementManifestRoute = createRoute({
     method: "get",
     path: "/placements",
@@ -588,6 +671,65 @@ const placementManifestRoute = createRoute({
 
 app.openapi(placementManifestRoute, async (c) => {
     return ok(c, { placements: await getNavigationPlacementManifest(c.get("db")) });
+});
+
+const listPlacementSettingsRoute = createRoute({
+    method: "get",
+    path: "/placement-settings",
+    tags: ["Admin - Navigation"],
+    summary: "List navigation placement settings",
+    responses: {
+        200: {
+            description: "Navigation placement settings",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                placements: z.array(z.record(z.string(), z.unknown())),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listPlacementSettingsRoute, async (c) => {
+    return ok(c, { placements: await listNavigationPlacements(c.get("db")) });
+});
+
+const savePlacementRoute = createRoute({
+    method: "put",
+    path: "/placements/{placementId}",
+    tags: ["Admin - Navigation"],
+    summary: "Create or update one navigation placement with CAS",
+    request: {
+        params: z.object({ placementId: z.string().trim().min(1).max(160) }),
+        body: { content: { "application/json": { schema: z.object({
+            expectedRevision: z.number().int().nonnegative(),
+            surface: z.string().trim().min(1).max(80),
+            slot: z.string().trim().min(1).max(80),
+            position: z.number().int().nonnegative(),
+            menuId: z.string().trim().min(1).max(200),
+            labelOverride: z.string().trim().max(100).nullable().optional(),
+            isEnabled: z.boolean().optional(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Navigation placement saved",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                placement: z.record(z.string(), z.unknown()),
+            })) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(savePlacementRoute, async (c) => {
+    const { placementId } = c.req.valid("param");
+    const result = await saveNavigationPlacement(c.get("db"), {
+        id: placementId,
+        ...c.req.valid("json"),
+    });
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
 });
 
 const shadowReportRoute = createRoute({

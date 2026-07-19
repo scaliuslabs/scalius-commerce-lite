@@ -1249,6 +1249,200 @@ export type GetApiV1NavigationResponses = {
 
 export type GetApiV1NavigationResponse = GetApiV1NavigationResponses[keyof GetApiV1NavigationResponses];
 
+export type GetApiV1NavigationPlacementsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/navigation/placements';
+};
+
+export type GetApiV1NavigationPlacementsErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationPlacementsError = GetApiV1NavigationPlacementsErrors[keyof GetApiV1NavigationPlacementsErrors];
+
+export type GetApiV1NavigationPlacementsResponses = {
+    /**
+     * Published navigation placements
+     */
+    200: {
+        success: true;
+        data: {
+            placements: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1NavigationPlacementsResponse = GetApiV1NavigationPlacementsResponses[keyof GetApiV1NavigationPlacementsResponses];
+
+export type GetApiV1NavigationMenusByMenuIdData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query: {
+        revision: number;
+        dependencyRevision: number;
+    };
+    url: '/api/v1/navigation/menus/{menuId}';
+};
+
+export type GetApiV1NavigationMenusByMenuIdErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationMenusByMenuIdError = GetApiV1NavigationMenusByMenuIdErrors[keyof GetApiV1NavigationMenusByMenuIdErrors];
+
+export type GetApiV1NavigationMenusByMenuIdResponses = {
+    /**
+     * Published menu tree
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            handle: string;
+            publishedRevision: number;
+            dependencyRevision: number;
+            checksum: string;
+            items: Array<{
+                id: string;
+                title: string;
+                href?: string;
+                openInNewTab?: boolean;
+                subMenu?: Array<{
+                    id: string;
+                    title: string;
+                    href?: string;
+                    openInNewTab?: boolean;
+                    subMenu?: Array<{
+                        id: string;
+                        title: string;
+                        href?: string;
+                        openInNewTab?: boolean;
+                    }>;
+                }>;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1NavigationMenusByMenuIdResponse = GetApiV1NavigationMenusByMenuIdResponses[keyof GetApiV1NavigationMenusByMenuIdResponses];
+
+export type GetApiV1NavigationMenusByMenuIdItemsData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query: {
+        revision: number;
+        dependencyRevision: number;
+        parentId?: string;
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/navigation/menus/{menuId}/items';
+};
+
+export type GetApiV1NavigationMenusByMenuIdItemsErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationMenusByMenuIdItemsError = GetApiV1NavigationMenusByMenuIdItemsErrors[keyof GetApiV1NavigationMenusByMenuIdItemsErrors];
+
+export type GetApiV1NavigationMenusByMenuIdItemsResponses = {
+    /**
+     * Published menu item page
+     */
+    200: {
+        success: true;
+        data: {
+            menu: {
+                [key: string]: unknown;
+            };
+            parentId: string | null;
+            items: Array<{
+                id: string;
+                title: string;
+                href?: string;
+                openInNewTab?: boolean;
+                position: number;
+                childCount: number;
+            }>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1NavigationMenusByMenuIdItemsResponse = GetApiV1NavigationMenusByMenuIdItemsResponses[keyof GetApiV1NavigationMenusByMenuIdItemsResponses];
+
 export type GetApiV1NavigationByIdData = {
     body?: never;
     path: {
@@ -1299,14 +1493,17 @@ export type GetApiV1NavigationByIdResponses = {
                     id: string;
                     title: string;
                     href?: string;
+                    openInNewTab?: boolean;
                     subMenu?: Array<{
                         id: string;
                         title: string;
                         href?: string;
+                        openInNewTab?: boolean;
                         subMenu?: Array<{
                             id: string;
                             title: string;
                             href?: string;
+                            openInNewTab?: boolean;
                         }>;
                     }>;
                 }>;
@@ -17390,6 +17587,223 @@ export type PostApiV1AdminNavigationMenusByMenuIdPublishResponses = {
 
 export type PostApiV1AdminNavigationMenusByMenuIdPublishResponse = PostApiV1AdminNavigationMenusByMenuIdPublishResponses[keyof PostApiV1AdminNavigationMenusByMenuIdPublishResponses];
 
+export type GetApiV1AdminNavigationMenusByMenuIdPublicationsData = {
+    body?: never;
+    path: {
+        menuId: string;
+    };
+    query?: {
+        limit?: number;
+        cursor?: number;
+    };
+    url: '/api/v1/admin/navigation/menus/{menuId}/publications';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdPublicationsError = GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors[keyof GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses = {
+    /**
+     * Published menu history
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<{
+                menuId: string;
+                revision: number;
+                publishedAt: string | null;
+                publishedBy: string | null;
+                itemCount: number;
+                checksum: string;
+            }>;
+            nextCursor: number | null;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdPublicationsResponse = GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses];
+
+export type PostApiV1AdminNavigationMenusByMenuIdRollbackData = {
+    body?: {
+        expectedRevision: number;
+        sourceRevision: number;
+    };
+    path: {
+        menuId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/menus/{menuId}/rollback';
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdRollbackErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdRollbackError = PostApiV1AdminNavigationMenusByMenuIdRollbackErrors[keyof PostApiV1AdminNavigationMenusByMenuIdRollbackErrors];
+
+export type PostApiV1AdminNavigationMenusByMenuIdRollbackResponses = {
+    /**
+     * Menu revision restored and republished
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            publishedRevision: number;
+            sourceRevision: number;
+            itemCount: number;
+            checksum: string;
+        };
+    };
+};
+
+export type PostApiV1AdminNavigationMenusByMenuIdRollbackResponse = PostApiV1AdminNavigationMenusByMenuIdRollbackResponses[keyof PostApiV1AdminNavigationMenusByMenuIdRollbackResponses];
+
 export type GetApiV1AdminNavigationPlacementsData = {
     body?: never;
     path?: never;
@@ -17483,6 +17897,215 @@ export type GetApiV1AdminNavigationPlacementsResponses = {
 };
 
 export type GetApiV1AdminNavigationPlacementsResponse = GetApiV1AdminNavigationPlacementsResponses[keyof GetApiV1AdminNavigationPlacementsResponses];
+
+export type GetApiV1AdminNavigationPlacementSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/navigation/placement-settings';
+};
+
+export type GetApiV1AdminNavigationPlacementSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPlacementSettingsError = GetApiV1AdminNavigationPlacementSettingsErrors[keyof GetApiV1AdminNavigationPlacementSettingsErrors];
+
+export type GetApiV1AdminNavigationPlacementSettingsResponses = {
+    /**
+     * Navigation placement settings
+     */
+    200: {
+        success: true;
+        data: {
+            placements: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationPlacementSettingsResponse = GetApiV1AdminNavigationPlacementSettingsResponses[keyof GetApiV1AdminNavigationPlacementSettingsResponses];
+
+export type PutApiV1AdminNavigationPlacementsByPlacementIdData = {
+    body?: {
+        expectedRevision: number;
+        surface: string;
+        slot: string;
+        position: number;
+        menuId: string;
+        labelOverride?: string | null;
+        isEnabled?: boolean;
+    };
+    path: {
+        placementId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/navigation/placements/{placementId}';
+};
+
+export type PutApiV1AdminNavigationPlacementsByPlacementIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminNavigationPlacementsByPlacementIdError = PutApiV1AdminNavigationPlacementsByPlacementIdErrors[keyof PutApiV1AdminNavigationPlacementsByPlacementIdErrors];
+
+export type PutApiV1AdminNavigationPlacementsByPlacementIdResponses = {
+    /**
+     * Navigation placement saved
+     */
+    200: {
+        success: true;
+        data: {
+            placement: {
+                [key: string]: unknown;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminNavigationPlacementsByPlacementIdResponse = PutApiV1AdminNavigationPlacementsByPlacementIdResponses[keyof PutApiV1AdminNavigationPlacementsByPlacementIdResponses];
 
 export type GetApiV1AdminNavigationAuthorityShadowData = {
     body?: never;
