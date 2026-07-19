@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   formatAbandonedCheckoutId,
+  formatAbandonedCheckoutItemCount,
+  formatAbandonedCheckoutRecordCount,
   parseAbandonedCheckoutDisplay,
 } from "./abandoned-checkout-display";
 
@@ -10,6 +12,16 @@ describe("abandoned checkout identifiers", () => {
     expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpbW")).toBe("S5I82lT…IUpbW");
     expect(formatAbandonedCheckoutId("chk_session_S5I82lT0gFft-9f0IUpcX")).toBe("S5I82lT…IUpcX");
     expect(formatAbandonedCheckoutId("  ")).toBe("Unknown");
+  });
+});
+
+describe("abandoned checkout count copy", () => {
+  it("uses natural singular and plural labels", () => {
+    expect(formatAbandonedCheckoutItemCount(0)).toBe("0 items");
+    expect(formatAbandonedCheckoutItemCount(1)).toBe("1 item");
+    expect(formatAbandonedCheckoutItemCount(4)).toBe("4 items");
+    expect(formatAbandonedCheckoutRecordCount(1)).toBe("1 checkout record");
+    expect(formatAbandonedCheckoutRecordCount(2)).toBe("2 checkout records");
   });
 });
 

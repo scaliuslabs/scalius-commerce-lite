@@ -1,14 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AbandonedCheckoutsManager } from "~/components/admin/AbandonedCheckoutsManager";
+import { validateAbandonedCheckoutSearch } from "~/lib/abandoned-checkout-route-state";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
+  validateSearch: validateAbandonedCheckoutSearch,
   head: () => ({ meta: [{ title: "Incomplete Orders | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: AbandonedCheckoutsPage,
 });
 
 function AbandonedCheckoutsPage() {
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
   return (
     <div className="space-y-4">
       <div>
@@ -18,7 +23,15 @@ function AbandonedCheckoutsPage() {
           Completed orders are cleared automatically.
         </p>
       </div>
-      <AbandonedCheckoutsManager />
+      <AbandonedCheckoutsManager
+        routeState={search}
+        onRouteStateChange={(updates, options) => {
+          void navigate({
+            search: (previous) => ({ ...previous, ...updates }),
+            replace: options?.replace,
+          });
+        }}
+      />
     </div>
   );
 }
