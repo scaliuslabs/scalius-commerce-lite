@@ -6,6 +6,25 @@ export const MAX_LABEL_COPIES = 1_000;
 
 export type BarcodeRenderFormat = "CODE128" | "EAN13" | "UPC" | "EAN8" | "ITF14";
 
+export type BarcodeQuietZoneModules = {
+  left: number;
+  right: number;
+};
+
+/**
+ * Clear modules that must stay inside the rendered SVG, not merely in the
+ * surrounding label. Extra clear space is harmless; missing it can make an
+ * otherwise valid symbol unreliable at a scanner.
+ */
+export function getBarcodeQuietZoneModules(
+  format: BarcodeRenderFormat,
+): BarcodeQuietZoneModules {
+  if (format === "EAN13") return { left: 11, right: 7 };
+  if (format === "EAN8") return { left: 7, right: 7 };
+  if (format === "UPC") return { left: 9, right: 9 };
+  return { left: 10, right: 10 };
+}
+
 export type LabelPreset = {
   id: "a4-cut-3x8" | "a4-compact-4x10" | "a4-adhesive-2x7" | "thermal-50x25" | "thermal-40x30" | "custom";
   name: string;
@@ -346,7 +365,8 @@ export function estimateBarcodeWidthMm(symbol: BarcodeSymbol): number | null {
 
   const numericPairs = /^\d+$/.test(symbol.value) && symbol.value.length % 2 === 0;
   const encodedValues = numericPairs ? symbol.value.length / 2 : symbol.value.length;
-  const modulesIncludingQuietZone = (11 * (encodedValues + 2)) + 13 + 20;
+  const quietZone = getBarcodeQuietZoneModules(symbol.format);
+  const modulesIncludingQuietZone = (11 * (encodedValues + 2)) + 13 + quietZone.left + quietZone.right;
   return modulesIncludingQuietZone * 0.2;
 }
 

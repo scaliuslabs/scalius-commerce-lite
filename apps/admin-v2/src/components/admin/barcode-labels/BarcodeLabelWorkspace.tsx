@@ -49,6 +49,7 @@ import {
   formatPageCount,
   findCompatibleLabelPreset,
   getBarcodeFitIssue,
+  getBarcodeQuietZoneModules,
   getLabelDimensions,
   getLabelInventorySummary,
   getNonPrintingLabelVariantIds,
@@ -137,10 +138,13 @@ function BarcodeGraphic({
   useEffect(() => {
     if (!ref.current || !symbol.format || symbol.error) return;
     try {
+      const quietZone = getBarcodeQuietZoneModules(symbol.format);
       JsBarcode(ref.current, symbol.value, {
         format: symbol.format,
         displayValue: false,
         margin: 0,
+        marginLeft: quietZone.left * 2,
+        marginRight: quietZone.right * 2,
         width: 2,
         height: compact ? 32 : 54,
         background: "#ffffff",
