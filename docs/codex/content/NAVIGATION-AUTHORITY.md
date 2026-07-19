@@ -2,11 +2,19 @@
 
 Last reviewed: 2026-07-19
 
-Status: normalized named menus/placements remain an accepted future design.
-The demo-era typed-target bridge below is implemented and deployed. Its
-header/footer documents gained independent D1 revisions and conflict-safe admin
-recovery on 2026-07-19; named menus, immutable publications, placements, and
-reverse dependencies remain the future cutover described here.
+Status: additive normalized authority implemented in migration 0036; admin and
+public cutover remains in progress. The demo-era typed-target bridge below is
+still the serving/write authority until the shadow report is clean in
+production and the canonical menu commands replace the duplicate settings
+writes.
+
+Migration `0036_absent_living_lightning.sql` creates named menus, normalized
+draft items, immutable publication rows, independent placements, FTS search,
+and indexed resource-dependency generation triggers. It deterministically lifts
+the validated typed header/footer demo documents into published `header.primary`
+and ordered `footer.column` placements while leaving invalid or empty documents
+unclaimed. The migration is additive: it does not yet let the public resolver
+prefer the new tables, and it does not make `site_settings` a dual-write source.
 
 This document is the durable architecture decision for reusable navigation. It
 is intentionally separate from the current builder UI: changing row density or
@@ -24,7 +32,31 @@ Replace navigation arrays embedded in `site_settings.header_config` and
 4. explicit, independently revisioned placements;
 5. resource-lifecycle diagnostics and a reverse dependency index;
 6. a small uncached placement manifest plus revision-keyed, paged public menu
-   projections.
+projections.
+
+## 2026-07-19 implementation checkpoint
+
+- The schema source is `packages/database/src/schema/navigation.ts` and keeps
+  menu, draft-item, publication, publication-item, and placement revisions in
+  separate tables. Active handles are unique after `lower(trim())`; target
+  columns are shape-checked; resource query projections have a dedicated safe
+  field instead of being appended to copied URLs.
+- The legacy lift preserves nested identity, sparse sibling positions, custom
+  versus resource labels, exact resource IDs, internal/external paths, and
+  optional resource queries. Each lifted menu receives an immutable revision-1
+  publication and a placement; header/footer presentation remains untouched.
+- Published page/category/collection/product title, route, public-state,
+  trash, delete, restore, and same-ID recreation changes bump only referencing
+  menus' `dependency_revision`. Trigger guards live in `WHEN` and every body is
+  one indexed `UPDATE`, matching the D1 migration rule.
+- `navigation-authority-migration.test.ts` executes the migration in SQLite and
+  proves nested backfill, publication/placement counts, query preservation,
+  FTS-compatible rows, dependency bumps, malformed-document fail-closed
+  behavior, handle normalization, and polymorphic target checks.
+- Do not switch public reads yet. The next gate is a production shadow report
+  comparing the typed JSON projection with the lifted publication, followed by
+  canonical CAS item/menu/publish commands and then one deliberate admin/public
+  cutover. No ongoing dual write is accepted.
 
 Header/footer branding, announcement, contact, social, and legal copy remain
 presentation settings. They do not own menu content. Do not raise the current
