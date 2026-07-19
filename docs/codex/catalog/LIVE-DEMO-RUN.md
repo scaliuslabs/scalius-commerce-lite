@@ -753,6 +753,33 @@ The cleanup bullets below describe the two-product proof store that preceded the
   Admin, and API typechecks, targeted lint, D1 migration, and deploy readiness
   all passed.
 
+### Item-level return lifecycle checkpoint (2026-07-19)
+
+- API `404a7a71-a268-43b1-93c3-6faa37cd853c` and Admin
+  `a4ec0a7d-877b-4e45-a8a0-b077351fc577` are live at 100%. The existing demo
+  order `3EFMCF` was created, fulfilled with the own-courier path, and then
+  exercised through request, approval, physical receipt, and exact restock in
+  the visible merchant UI.
+- The first approval attempt exposed a real D1 500: three return transaction
+  paths emitted invalid double-wrapped `EXISTS ((select ...))` guards. All seven
+  affected predicates now use Drizzle's native `exists()` expression. A real
+  SQLite integration test executes approval, cancellation, and receipt,
+  including damaged receipt without restock.
+- Production approval closed its dialog and left
+  `ARKA-ROUND-WALL-MIRROR-60-CM-BRASS` at 7 on hand / 0 committed / 7
+  available. Receiving one sellable unit completed return
+  `ret_sQED4QK7x32iNHVZMDAE`, moved the order from Shipped to Returned, kept its
+  COD payment Unpaid with no refund, and restored the SKU to 8 / 0 / 8. The
+  inventory movement view shows the order-linked 7 to 8 edge, and D1 shows
+  committed create/approve/receive commands plus an immutable receipt carrying
+  the inventory movement reference.
+- Return dialogs now distinguish Cancel from the icon-only Close action, and
+  the fulfillment, order-status, and delivery-provider selectors expose stable
+  accessible names. Three Core integration tests, seven focused Admin tests,
+  targeted lint, sequential Core/API/Admin typechecks, sequential deployments,
+  API readiness, and the full `pnpm release:check` passed. The only release
+  warning remains the previously recorded logs-only ops-monitor email channel.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

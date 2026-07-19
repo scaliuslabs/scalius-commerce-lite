@@ -66,7 +66,10 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
             onValueChange={handleStatusChange}
             disabled={statusMutation.isPending || refundLocked || shipmentLocked || !canChangeStatus}
           >
-            <SelectTrigger className="h-9 text-sm border-border bg-background text-foreground">
+            <SelectTrigger
+              aria-label="Order status"
+              className="h-9 text-sm border-border bg-background text-foreground"
+            >
               {statusMutation.isPending ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />

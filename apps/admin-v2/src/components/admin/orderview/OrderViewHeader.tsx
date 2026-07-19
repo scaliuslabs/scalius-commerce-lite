@@ -228,7 +228,10 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
                     !orderActions.canManageOrderShipments
                   }
                 >
-                  <SelectTrigger className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}>
+                  <SelectTrigger
+                    aria-label="Fulfillment status"
+                    className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
