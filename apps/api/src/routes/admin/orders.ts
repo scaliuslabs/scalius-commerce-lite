@@ -4,6 +4,7 @@ import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import {
     createOrderSchema,
+    quoteManualOrderSchema,
     updateOrderSchema,
     archiveOrdersSchema,
     restoreOrderSchema,
@@ -639,6 +640,43 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
 });
 
 // ─── POST / (Create) ────────────────────────────────────────────────────────
+
+const manualOrderQuoteSchema = z.object({
+    currencyCode: z.string(),
+    decimalPlaces: z.number().int().min(0).max(3),
+    subtotalAmount: z.number().nonnegative(),
+    shippingAmount: z.number().nonnegative(),
+    discountAmount: z.number().nonnegative(),
+    taxAmount: z.number().nonnegative(),
+    totalAmount: z.number().nonnegative(),
+    taxLabel: z.string(),
+    pricesIncludeTax: z.boolean(),
+    taxEnabled: z.boolean(),
+    settingsVersion: z.number().int().nonnegative(),
+});
+
+const quoteManualOrderRoute = createRoute({
+    method: "post",
+    path: "/quote",
+    tags: ["Admin - Orders"],
+    summary: "Preview authoritative money and tax for a manual order",
+    request: {
+        body: { content: { "application/json": { schema: quoteManualOrderSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Authoritative manual-order quote",
+            content: { "application/json": { schema: successEnvelope(manualOrderQuoteSchema) } },
+        },
+        ...errorResponses,
+        503: serviceUnavailableResponse,
+    },
+});
+
+app.openapi(quoteManualOrderRoute, async (c) => {
+    const quote = await OrdersService.quoteManualOrder(c.get("db"), c.req.valid("json"));
+    return ok(c, quote);
+});
 
 const createOrderRoute = createRoute({
     method: "post",

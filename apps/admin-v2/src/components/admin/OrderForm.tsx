@@ -1,7 +1,8 @@
 // src/components/admin/OrderForm.tsx
 import React, { useCallback, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import type { SubmitHandler } from "react-hook-form";
 import { Form } from "@/components/ui/form";
 import { toast } from "sonner";
@@ -18,8 +19,10 @@ import { getDeliveryLocations } from "@/lib/api-functions/delivery";
 import { useCreateOrder, useUpdateOrder } from "@/lib/api-mutations/orders";
 import type {
   CreateOrderInput,
+  QuoteManualOrderInput,
   UpdateOrderInput,
 } from "@/lib/api-functions/orders";
+import { quoteManualOrder } from "@/lib/api-functions/orders";
 
 // Imports for our new, refactored components and types
 import {
@@ -38,6 +41,9 @@ import {
   getOrCreateAdminOrderRequestKey,
   rememberSubmittedAdminOrderRequestKey,
 } from "./order-form/create-order-request-key";
+import { useDebounce } from "@/hooks/use-debounce";
+import { queryKeys } from "@/lib/query-keys";
+import { getServerFnError } from "@/lib/api-mutations/shared";
 
 function toOrderContentInput(values: OrderFormValues) {
   return {
@@ -117,6 +123,72 @@ export function OrderForm({
     },
   });
 
+  const [
+    quoteCity,
+    quoteZone,
+    quoteArea,
+    quoteItems,
+    quoteShipping,
+    quoteDiscount,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "city",
+      "zone",
+      "area",
+      "items",
+      "shippingCharge",
+      "discountAmount",
+    ],
+  });
+  const quoteInput = React.useMemo<QuoteManualOrderInput>(
+    () => ({
+      city: quoteCity,
+      zone: quoteZone,
+      area: quoteArea,
+      items: quoteItems,
+      shippingCharge: quoteShipping,
+      discountAmount: quoteDiscount,
+    }),
+    [quoteArea, quoteCity, quoteDiscount, quoteItems, quoteShipping, quoteZone],
+  );
+  const debouncedQuoteInput = useDebounce(quoteInput, 350);
+  const canRequestQuote = !isEdit
+    && Boolean(debouncedQuoteInput.city && debouncedQuoteInput.zone)
+    && debouncedQuoteInput.items.length > 0
+    && debouncedQuoteInput.items.every((item) => Boolean(item.variantId));
+  const quoteInputIsCurrent =
+    JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
+  const quoteQuery = useQuery({
+    queryKey: queryKeys.orders.manualQuote(debouncedQuoteInput),
+    queryFn: () => quoteManualOrder({ data: debouncedQuoteInput }),
+    enabled: canRequestQuote,
+    retry: false,
+    staleTime: 0,
+  });
+  const manualQuote = React.useMemo(
+    () => ({
+      data: quoteQuery.data ?? null,
+      isCurrent:
+        isEdit ||
+        (canRequestQuote && quoteInputIsCurrent && quoteQuery.isSuccess),
+      isLoading:
+        !isEdit &&
+        canRequestQuote &&
+        (!quoteInputIsCurrent || quoteQuery.isFetching),
+      errorMessage: quoteQuery.error
+        ? getServerFnError(
+            quoteQuery.error,
+            "Could not calculate the order total",
+          )
+        : null,
+      retry: () => {
+        void quoteQuery.refetch();
+      },
+    }),
+    [canRequestQuote, isEdit, quoteInputIsCurrent, quoteQuery],
+  );
+
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const [locations, setLocations] = React.useState<{
     cities: DeliveryLocation[];
@@ -181,6 +253,10 @@ export function OrderForm({
   // --- FORM SUBMISSION ---
 
   const handleSubmit = useCallback<SubmitHandler<OrderFormValues>>((values) => {
+    if (!isEdit && !manualQuote.isCurrent) {
+      toast.error("Wait for the final tax and total before creating this order.");
+      return;
+    }
     // Find the location objects from state based on the selected IDs
     const city = locations.cities.find((c) => c.id === values.city);
     const zone = locations.zones.find((z) => z.id === values.zone);
@@ -195,13 +271,6 @@ export function OrderForm({
       areaName: area?.name ?? null,
     };
 
-    const onSuccess = () => {
-      if (!isEdit && createRequestKey.current) {
-        clearAdminOrderRequestKey(createRequestKey.current);
-      }
-      void navigate({ to: "/admin/orders" });
-    };
-
     if (isEdit) {
       const orderId = enrichedValues.id || defaultValues?.id;
       if (!orderId) {
@@ -210,7 +279,9 @@ export function OrderForm({
       }
       try {
         updateMutation.mutate(toUpdateOrderInput(enrichedValues, orderId), {
-          onSuccess,
+          onSuccess: () => {
+            void navigate({ to: "/admin/orders" });
+          },
         });
       } catch (error) {
         toast.error(
@@ -225,10 +296,18 @@ export function OrderForm({
       rememberSubmittedAdminOrderRequestKey(requestKey);
       createMutation.mutate(
         toCreateOrderInput(enrichedValues, requestKey),
-        { onSuccess },
+        {
+          onSuccess: (createdOrder) => {
+            clearAdminOrderRequestKey(requestKey);
+            void navigate({
+              to: "/admin/orders/$orderId",
+              params: { orderId: createdOrder.id },
+            });
+          },
+        },
       );
     }
-  }, [createMutation, defaultValues?.id, isEdit, locations, navigate, updateMutation]);
+  }, [createMutation, defaultValues?.id, isEdit, locations, manualQuote.isCurrent, navigate, updateMutation]);
 
   // --- DATA LOADING AND SIDE EFFECTS ---
 
@@ -254,7 +333,12 @@ export function OrderForm({
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (canSave && !isSubmitting && form.getValues("items").length > 0) {
+        if (
+          canSave &&
+          manualQuote.isCurrent &&
+          !isSubmitting &&
+          form.getValues("items").length > 0
+        ) {
           e.preventDefault();
           void form.handleSubmit(handleSubmit)();
         }
@@ -262,7 +346,9 @@ export function OrderForm({
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [canSave, form, handleSubmit, isSubmitting]);
+  }, [canSave, form, handleSubmit, isSubmitting, manualQuote.isCurrent]);
+
+  const canSubmit = canSave && manualQuote.isCurrent;
 
   return (
     <>
@@ -273,7 +359,7 @@ export function OrderForm({
       <Form {...form}>
         <form
           method="post"
-          onSubmit={canSave && form.formState.isDirty
+          onSubmit={canSubmit && form.formState.isDirty
             ? form.handleSubmit(handleSubmit)
             : (event) => event.preventDefault()}
           className="-mt-4 pb-6 space-y-4"
@@ -290,6 +376,7 @@ export function OrderForm({
             loadZones={loadZones}
             loadAreas={loadAreas}
             isSubmitting={isSubmitting}
+            manualQuote={manualQuote}
           >
             <CustomerInfoSection />
             <OrderItemsSection />
@@ -310,10 +397,13 @@ export function OrderForm({
         newUrl="/admin/orders/new"
         newLabel="New Order"
         canCreateNew={orderActions.canCreateOrders}
-        canSave={canSave}
-        saveDisabledReason={isEdit
-          ? "You do not have permission to edit orders."
-          : "You do not have permission to create orders."}
+        canSave={canSubmit}
+        saveLabel={isEdit ? undefined : "Create confirmed order"}
+        saveDisabledReason={!canSave
+          ? isEdit
+            ? "You do not have permission to edit orders."
+            : "You do not have permission to create orders."
+          : "Add an item and choose its delivery destination to calculate the final total."}
         onDiscard={isEdit
           ? undefined
           : () => {

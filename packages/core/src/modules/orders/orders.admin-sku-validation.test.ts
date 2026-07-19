@@ -16,6 +16,9 @@ const transitionMocks = vi.hoisted(() => ({
 const settingsMocks = vi.hoisted(() => ({
     getCurrencySettings: vi.fn(),
 }));
+const taxMocks = vi.hoisted(() => ({
+    calculateStorefrontTaxQuote: vi.fn(),
+}));
 const mediaMocks = vi.hoisted(() => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
 }));
@@ -47,6 +50,11 @@ vi.mock("../settings/site-settings.service", () => ({
     getCurrencySettings: settingsMocks.getCurrencySettings,
 }));
 
+vi.mock("../tax", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../tax")>()),
+    calculateStorefrontTaxQuote: taxMocks.calculateStorefrontTaxQuote,
+}));
+
 vi.mock("../products/products.media", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../products/products.media")>()),
     loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
@@ -75,6 +83,62 @@ beforeEach(() => {
         currencyCode: "BDT",
         currencySymbol: "৳",
         usdExchangeRate: "1",
+    });
+    taxMocks.calculateStorefrontTaxQuote.mockImplementation(async (_db, input) => {
+        const decimalPlaces = input.currency?.decimalPlaces ?? 2;
+        const scale = 10 ** decimalPlaces;
+        const minor = (value: number) => Math.round(value * scale);
+        const lines = input.lines.map((line) => {
+            const unitPriceMinor = minor(line.unitPrice);
+            const grossAmountMinor = unitPriceMinor * line.quantity;
+            return {
+                lineId: line.lineId,
+                productId: line.productId,
+                variantId: line.variantId,
+                taxClassId: line.taxClassId,
+                taxClassName: null,
+                unitPriceMinor,
+                quantity: line.quantity,
+                grossAmountMinor,
+                discountMinor: 0,
+                taxableAmountMinor: grossAmountMinor,
+                taxMinor: 0,
+                totalMinor: grossAmountMinor,
+                components: [],
+            };
+        });
+        const subtotalMinor = lines.reduce((total, line) => total + line.grossAmountMinor, 0);
+        const shippingMinor = minor(input.shippingAmount);
+        const discountMinor = minor(input.discountAmount);
+        return {
+            schemaVersion: 1 as const,
+            calculationVersion: "tax-v1" as const,
+            enabled: false,
+            currencyCode: input.currency?.code ?? "BDT",
+            decimalPlaces,
+            displayLabel: "Tax",
+            pricesIncludeTax: false,
+            shippingTaxed: false,
+            settingsVersion: 0,
+            subtotalMinor,
+            shippingMinor,
+            discountMinor,
+            taxableMinor: subtotalMinor,
+            taxMinor: 0,
+            totalMinor: subtotalMinor + shippingMinor - discountMinor,
+            destination: input.destination,
+            lines,
+            shipping: {
+                taxClassId: null,
+                taxClassName: null,
+                grossAmountMinor: shippingMinor,
+                discountMinor: 0,
+                taxableAmountMinor: 0,
+                taxMinor: 0,
+                totalMinor: shippingMinor,
+                components: [],
+            },
+        };
     });
     mediaMocks.loadProductMediaProjections.mockResolvedValue(new Map());
     createAttemptMocks.buildIdentity.mockResolvedValue({
@@ -107,6 +171,7 @@ interface SkuRow {
     imageId?: string | null;
     productName?: string;
     variantLabel?: string | null;
+    taxClassId?: string | null;
 }
 
 interface AdminOrderSkuIssue {
@@ -151,6 +216,7 @@ function createSkuDb(rows: SkuRow[]) {
         imageId: null,
         productName: `Product ${row.id}`,
         variantLabel: null,
+        taxClassId: null,
         ...row,
     })));
     const innerJoin = vi.fn(() => ({ where }));
@@ -195,11 +261,12 @@ function createOrderDbWithSkuRows(rows: SkuRow[], locationRows = activeLocationR
         imageId: null,
         productName: `Product ${row.id}`,
         variantLabel: null,
+        taxClassId: null,
         ...row,
     })));
     const select = vi.fn(() => {
         selectCall += 1;
-        if (selectCall === 3) {
+        if (selectCall === 2) {
             return {
                 from: vi.fn(() => ({
                     innerJoin: vi.fn(() => ({ where: skuWhere })),
@@ -301,6 +368,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 productName: "Product var_tracked",
                 variantLabel: null,
                 productImageMediaId: null,
+                taxClassId: null,
             },
             {
                 productId: "prod_2",
@@ -311,6 +379,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 productName: "Product var_untracked",
                 variantLabel: null,
                 productImageMediaId: null,
+                taxClassId: null,
             },
         ]);
     });
@@ -590,8 +659,11 @@ describe("resolveAdminOrderItemInventory", () => {
             discountAmountMinor: 0,
             taxAmountMinor: 0,
             totalAmountMinor: 26_000,
-            taxLabel: null,
+            taxLabel: "Tax",
             pricesIncludeTax: false,
+            paymentMethod: "cod",
+            status: "confirmed",
+            inventoryAction: "none",
         });
     });
 
@@ -720,8 +792,8 @@ describe("resolveAdminOrderItemInventory", () => {
         expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     });
 
-    it("finalizes tracked manual-order inventory through the claimed status transition", async () => {
-        const { db } = createOrderDbWithSkuRows([
+    it("keeps tracked manual-order stock reserved until fulfillment", async () => {
+        const { db, insertValues } = createOrderDbWithSkuRows([
             {
                 id: "var_tracked",
                 productId: "prod_active",
@@ -732,7 +804,7 @@ describe("resolveAdminOrderItemInventory", () => {
             },
         ]);
 
-        const result = await createOrder(db, createOrderInput({
+        await createOrder(db, createOrderInput({
             items: [{
                 productId: "prod_active",
                 variantId: "var_tracked",
@@ -741,11 +813,16 @@ describe("resolveAdminOrderItemInventory", () => {
             }],
         }), "admin_test");
 
-        expect(transitionMocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
-            db,
-            result.id,
-            "shipped",
+        const orderInsert = insertValues.find((values): values is Record<string, unknown> =>
+            !Array.isArray(values) && "inventoryAction" in values && "customerName" in values,
         );
+        expect(orderInsert).toMatchObject({
+            status: "confirmed",
+            inventoryAction: "reserved",
+            paymentMethod: "cod",
+            paymentStatus: "unpaid",
+        });
+        expect(transitionMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
         expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
     });
 

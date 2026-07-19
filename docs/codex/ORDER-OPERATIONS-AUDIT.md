@@ -25,7 +25,7 @@ Primary evidence:
 
 ## Executive decision
 
-The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, manual-create idempotency, bounded catalog picking, and evidence-preserving archival now have explicit authorities. Remaining high-risk work is concentrated in a durable order-amendment model, tax-correct manual orders, and complete permission/activity proof.
+The current order system has several strong recovery mechanisms, but it is not ready to be called operationally complete. Refund single-flight/reconciliation, shipment claims, notification outbox behavior, SKU validation, state-machine validation, payment-recovery proof handling, item-level returns, invoice issuance, safe full-edit locking, authoritative manual-order quoting/commit, bounded catalog picking, and evidence-preserving archival now have explicit authorities. Remaining high-risk work is concentrated in a durable draft/amendment model, explicit price-override evidence, concurrent customer aggregates, and complete permission/activity proof.
 
 The release path should immediately narrow generic mutation authority. Financial outcomes, returns, and post-shipment corrections must be commands with their own evidence and reconciliation, not values in one mutable status dropdown. Full order editing must become a versioned amendment workflow with explicit locks after payment, fulfillment, invoice issuance, or return activity.
 
@@ -43,7 +43,7 @@ The release path should immediately narrow generic mutation authority. Financial
 
 Full edit has one server-derived readiness projection used by list, detail, form-data, and the write service. It is limited to unpaid, unfulfilled `pending | processing | confirmed` orders with no tax snapshot, payment, shipment, refund, return, or invoice evidence and no active shipment claim. Protected orders show a compact reason and point back to their dedicated workflow. The full form no longer changes order status.
 
-This intentionally locks storefront checkout orders because they own immutable tax and line snapshots that the current generic editor cannot recalculate without destroying historical evidence. It remains available for unsettled manual orders. The policy is stricter than Shopify's recalculating editor and simpler than Medusa's requested/confirmed edit object or Vendure's modification preview; Scalius should relax it only after it has a durable amendment record, authoritative tax re-quote, payment delta, stable line identity, and explicit confirmation/reconciliation.
+This intentionally locks storefront checkout orders and newly confirmed manual orders because they own immutable tax and line snapshots that the current generic editor cannot recalculate without destroying historical evidence. It remains available only for legacy unsettled manual orders without such evidence. The policy is stricter than Shopify's recalculating editor and simpler than Medusa's requested/confirmed edit object or Vendure's modification preview; Scalius should relax it only after it has a durable amendment record, authoritative tax re-quote, payment delta, stable line identity, and explicit confirmation/reconciliation.
 
 Primary benchmark evidence reviewed on 2026-07-17:
 
@@ -210,7 +210,10 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 **Implemented**
 
 - Customer/contact/address fields, Bangladesh city/zone/area selection, line creation, lazy variant loading, quantity/price editing, shipping, additional discount, keyboard submit, unsaved-change guard, and a sticky action bar.
-- Server validates active product/SKU ownership, rejects missing/deleted/mismatched SKUs, performs currency-aware rounding, prevents a discount above subtotal plus shipping, reserves inventory, commits order/items/customer changes in a batch, and converts the reservation to a deduction.
+- Manual creation is deliberately one command: **create confirmed COD order**. The compact summary states `Confirmed`, `COD · unpaid`, and `Stock reserved`; the form does not silently pretend to save a neutral draft.
+- A debounced authenticated quote endpoint resolves the saved currency precision, exact active SKU and tax class, destination hierarchy, shipping, order-wide discount allocation, configured tax policy, and final total. Submit is locked until the quote matches the current form projection; the server recalculates the same quote at commit.
+- Server validation requires at least one sellable line, rejects missing/deleted/mismatched SKUs, prevents an excessive discount, and commits order/customer/items, immutable order and line tax snapshots, minor-unit allocations, idempotency evidence, and inventory reservations in one D1 batch.
+- Tracked inventory remains reserved while fulfillment is pending. Manual creation no longer invokes shipped semantics or deducts on-hand stock before a fulfillment command owns that transition.
 - Actor-scoped request idempotency replays the original committed result after a lost response and preserves one stock/order identity across retries.
 - Lazy-loaded SKU projections are retained beside unsaved lines, so the exact merchant option label remains visible immediately after adding it.
 - Product discovery is a debounced, paginated server query over active catalog
@@ -220,18 +223,27 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
 
 **Proven**
 
-- SKU validation, tracked/untracked item behavior, reservation failure, compensation, quantity boundaries, idempotent replay/reclaim/conflict, browser request-key recovery, bounded product/SKU/barcode search, and a number of inventory-claim paths have focused tests.
+- SKU validation, required non-empty lines, product/variant tax-class precedence, configured tax-quote use, immutable snapshot wiring, confirmed/COD/unpaid state, tracked stock reservation without premature deduction, untracked item behavior, reservation failure, compensation, quantity boundaries, idempotent replay/reclaim/conflict, browser request-key recovery, bounded product/SKU/barcode search, quote RBAC/OpenAPI contracts, and inventory-claim paths have focused tests.
 
 **Gaps**
 
-- The API schema permits an empty item array. Decide whether this is a draft/quote feature; otherwise require at least one sellable line on the server.
-- Manual creation silently defaults to COD/unpaid because payment method/status/terms are not in the form contract. The merchant is not told that every manual order becomes COD.
-- The order is saved as `pending` while tracked inventory is immediately converted from reserved to deducted by invoking shipped inventory semantics. This is an invisible lifecycle policy. Let the merchant choose a truthful draft/reserve/confirmed workflow, or clearly define that a manual order is confirmed on creation and represent it consistently.
-- Manual orders do not use the configured tax engine: tax is persisted as zero with no tax label or immutable tax snapshot. This makes totals and invoices unsuitable for taxed stores.
+- A merchant-authored draft must not reuse `orders.status = incomplete`: that state belongs to buyer hosted-payment recovery and scheduled cleanup. The correct future model is a separate merchant-owned, versioned draft-order record with no customer, inventory, payment, or order side effects until an explicit completion command runs the authoritative quote and order commit.
+- The current command supports COD/unpaid only. Additional manual payment terms or saved gateway intents need explicit, permissioned commands and evidence; they must not be disguised as dropdown defaults on creation.
 - Submitted line prices are trusted staff overrides, but the UI does not distinguish catalog price from override or require a reason. Make override explicit, show original price, require the appropriate permission, and record actor/reason/before/after.
 - Admin-created item rows do not persist the same complete product/variant/money snapshot expected of an immutable order. Renames and product deletion can weaken historical display.
 - Customer aggregate statistics are precomputed outside the order batch. Concurrent manual creates can overwrite each other's counters. Archive no longer changes these facts; prefer ledger/query-derived stats or atomic deltas with reconciliation.
-- UI calculation uses floating-point/two-decimal presentation while the server uses the saved currency precision. Expose a server quote/preview using the same minor-unit calculator and return field-level differences before commit.
+
+**Live authoritative-create proof — 2026-07-20:** API version
+`c584ba93-5ed2-4513-9d79-09ee52793403` and admin version
+`d76eacaa-fc73-405b-92a1-369ed5cf8085` were deployed. The authenticated
+dashboard created order `UWXZV7` from a one-SKU quote with shipping and an
+additional discount, then navigated directly to its exact detail workspace. A
+fresh page load showed confirmed/COD/unpaid/pending state and no console warning
+or error. A read-only remote D1 query proved BDT minor-unit amounts of 551080
+subtotal, 12000 shipping, 10000 discount, 0 configured tax, and 553080 total;
+one order tax snapshot and one line tax snapshot use `tax-v1`; the SKU retained
+24 on hand with exactly 1 reserved. The run therefore proves creation did not
+masquerade as shipment or deduct on-hand inventory.
 
 ### 3. Full edit
 
@@ -571,7 +583,7 @@ Representative commands: create manual order, amend draft, confirm, cancel pre-s
 
 - a D1-backed concurrent full-edit fixture beyond the authenticated production
   two-editor smoke;
-- tax-preserving manual create/edit and immutable order-line snapshots;
+- a D1 failure-injection test that proves manual order, tax snapshots, customer update, and reservation remain one atomic commit;
 - D1-backed archive/restore concurrency and history-preserving privacy/redaction behavior;
 - invoice allocation concurrency, atomicity, immutable prefix/business snapshot, authorization, deterministic rendering, and PDF failure UI;
 - generic status allowlist and proof that workflow-owned states cannot be reached through CRUD;
@@ -597,7 +609,7 @@ Source-string boundary tests are useful wiring alarms but do not replace service
 
 1. Add `expectedVersion` to detail/form/update and typed conflict UI.
 2. Split draft amendment from settled-order adjustments; lock destructive line/money/tax edits after settlement evidence.
-3. Route manual order calculations through the checkout money/tax snapshot engine.
+3. Route manual order calculations through the checkout money/tax snapshot engine — completed for quote and confirmed COD creation; reuse this authority when a separate draft-completion command exists.
 4. Replace unbounded create/edit catalog loading with a D1-safe server picker — completed with one bounded discovery route plus exact edit-line projection.
 5. Persist visible reconciliation state for post-commit inventory follow-up failures.
 

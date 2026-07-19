@@ -106,7 +106,7 @@ export function useCreateOrder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
-      toast.success("Order created");
+      toast.success("Confirmed order created");
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to create order")),
