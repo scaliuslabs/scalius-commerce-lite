@@ -842,6 +842,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
   cache invalidation, and RBAC tests all passed; targeted lint and sequential
   Core/API/Admin/Storefront type diagnostics were clean.
 
+### Cart pre-hydration safety checkpoint (2026-07-19)
+
+- Storefront `5b2bee34-3953-43b1-a8cc-8d1fdfa48bd9` is live at 100%. The
+  server-rendered cart now exposes only a compact loading state while browser
+  storage is unread: the totals, discount controls, checkout form, and submit
+  action remain hidden or disabled until an exact stored cart has rendered.
+  JavaScript-disabled buyers receive an explicit recovery message instead of a
+  deceptive zero-value checkout.
+- The server-projected checkout language is reused by the cart client, removing
+  the duplicate language request from the critical hydration path. A real
+  browser session restored Dhara Cotton Throw / Sand with its exact
+  `৳2,658.80` subtotal, `৳110` shipping, and `৳2,768.80` total; removing it
+  produced the truthful empty-cart state while keeping both operational panels
+  hidden and the submit action disabled.
+- The raw production HTML proved `data-cart-ready="false"`, an aria-busy
+  loading region, hidden summary/checkout panels, and a disabled submit button.
+  After hydration the live DOM proved ready/item state, visible exact totals,
+  and no false zero-value intermediate state. Twenty focused cart tests,
+  targeted lint, the sequential 323-file Storefront Astro check, deployment,
+  and `pnpm release:check` passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

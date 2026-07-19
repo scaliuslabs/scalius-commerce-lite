@@ -207,11 +207,15 @@ const submitLabel = codOnly
     ? "Checkout temporarily unavailable"
   : "Proceed to Payment →";
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
+const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
 
 <Layout title={lang.languageData.pageTitle} layoutData={layoutData} noindex>
   <!-- Hidden checkout meta for client-side JS -->
-  <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};`}></script>
+  <script
+    is:inline
+    set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
+  ></script>
   {
     codCartRepairState && (
       <script
@@ -235,7 +239,17 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
     hidden
   ></div>
 
-  <div class="container max-w-6xl mx-auto px-2 pt-2 pb-3 sm:px-3 sm:pt-2 sm:pb-3">
+  <div
+    id="cartPageRoot"
+    data-cart-ready="false"
+    data-cart-has-items="false"
+    class="container max-w-6xl mx-auto px-2 pt-2 pb-3 sm:px-3 sm:pt-2 sm:pb-3"
+  >
+    <noscript>
+      <div class="mb-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground" role="alert">
+        Enable JavaScript to load your saved cart and continue to checkout.
+      </div>
+    </noscript>
     {
       checkoutUnavailable && (
         <div
@@ -303,20 +317,28 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
             role="alert"
           ></div>
 
-          <div class="divide-y divide-gray-50 p-3 sm:p-4 block" id="cartItems">
-            <!-- Cart items will be rendered here by JavaScript -->
+          <div
+            class="divide-y divide-gray-50 p-3 sm:p-4 block"
+            id="cartItems"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div class="py-8 text-center text-sm text-muted-foreground" role="status">
+              Loading your cart…
+            </div>
           </div>
 
           <div
-            class="bg-muted/50 p-3 sm:p-4 space-y-2 border-t border-border"
+            id="cartSummary"
+            class="hidden bg-muted/50 p-3 sm:p-4 space-y-2 border-t border-border"
           >
             <div class="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>{lang.languageData.subtotalText}</span>
-              <span id="subtotal" class="font-medium text-foreground">0</span>
+              <span id="subtotal" class="font-medium text-foreground">—</span>
             </div>
             <div class="flex justify-between text-xs sm:text-sm text-muted-foreground">
               <span>{lang.languageData.shippingText}</span>
-              <span id="shippingCost" class="font-medium text-foreground">0</span
+              <span id="shippingCost" class="font-medium text-foreground">—</span
               >
             </div>
             <div
@@ -330,7 +352,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
                   class="font-mono text-xs bg-primary/10 px-1 rounded"
                 ></span></span
               >
-              <span id="discountAmount" class="font-bold">-0</span>
+              <span id="discountAmount" class="font-bold">—</span>
             </div>
 
             <div class="pt-2 border-t border-border mt-2">
@@ -341,7 +363,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
                 <span
                   id="total"
                   class="text-lg sm:text-xl font-extrabold text-foreground tracking-tight"
-                  >0</span
+                  >—</span
                 >
               </div>
             </div>
@@ -398,7 +420,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
       </div>
 
       <!-- Checkout Form Section - Left on Desktop -->
-      <div class="lg:w-7/12 order-2">
+      <div id="checkoutPanel" class="hidden lg:w-7/12 order-2">
 
         <!-- Optional customer login trigger -->
         <div class="mb-3">
@@ -553,7 +575,7 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
                 type="submit"
                 className="w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
                 id="submitButton"
-                disabled={isProcessing || checkoutUnavailable}
+                disabled={true}
               >
                 <span class="relative z-10" id="submitButtonText">
                   {isProcessing ? lang.languageData.processingText : submitLabel}
@@ -751,8 +773,8 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
     let submitAfterCartValidation = false;
 
     const restoreSubmitButton = () => {
-      submitButton.disabled = false;
       submitButton.textContent = initialSubmitText;
+      updateCheckoutButtonState();
     };
 
     const showCheckoutTransferError = (message: string) => {
@@ -775,12 +797,15 @@ const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
 
     const updateCheckoutButtonState = () => {
       if (submitButton) {
+        const cartReady = document.getElementById("cartPageRoot")?.dataset.cartReady === "true";
         const empty = isCartEmpty();
         const cartBlocked = window.hasCartValidationIssues?.() === true;
-        submitButton.disabled = checkoutUnavailable || empty || cartBlocked;
-        if (checkoutUnavailable || empty || cartBlocked) submitButton.classList.add("opacity-50", "cursor-not-allowed");
+        submitButton.disabled = !cartReady || checkoutUnavailable || empty || cartBlocked;
+        if (!cartReady || checkoutUnavailable || empty || cartBlocked) submitButton.classList.add("opacity-50", "cursor-not-allowed");
         else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
-        submitButton.title = checkoutUnavailable
+        submitButton.title = !cartReady
+          ? "Loading your cart"
+          : checkoutUnavailable
           ? checkoutUnavailableMessage
           : empty
             ? "Your cart is empty"

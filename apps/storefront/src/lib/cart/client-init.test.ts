@@ -92,24 +92,30 @@ function installStorageMocks() {
 function renderCartDom() {
   document.body.innerHTML = `
     <div id="checkout-meta" data-default-shipping-id="standard" data-default-shipping-fee="60"></div>
-    <form id="checkoutForm">
-      <input id="customerPhone" name="customerPhone" value="01700000000" />
-      <input id="checkoutIdInput" name="checkoutId" type="hidden" />
-      <input id="cartItemsInput" name="cartItems" type="hidden" />
-      <input id="discountCodeHidden" name="discountCode" type="hidden" />
-      <button id="submitButton" type="submit">Place Order</button>
-    </form>
-    <form id="discountForm">
-      <input id="discountCodeInput" />
-      <button id="applyDiscountBtn" type="submit">Apply</button>
-    </form>
-    <button id="removeDiscountBtn" type="button"></button>
-    <div id="discountMessage"></div>
-    <div id="cartValidationMessage" class="hidden"></div>
-    <div id="cartItems"></div>
-    <span id="subtotal"></span>
-    <span id="shippingCost"></span>
-    <span id="total"></span>
+    <div id="cartPageRoot" data-cart-ready="false" data-cart-has-items="false">
+      <div id="checkoutPanel" class="hidden">
+        <form id="checkoutForm">
+          <input id="customerPhone" name="customerPhone" value="01700000000" />
+          <input id="checkoutIdInput" name="checkoutId" type="hidden" />
+          <input id="cartItemsInput" name="cartItems" type="hidden" />
+          <input id="discountCodeHidden" name="discountCode" type="hidden" />
+          <button id="submitButton" type="submit" disabled>Place Order</button>
+        </form>
+      </div>
+      <div id="cartSummary" class="hidden">
+        <form id="discountForm">
+          <input id="discountCodeInput" />
+          <button id="applyDiscountBtn" type="submit">Apply</button>
+        </form>
+        <button id="removeDiscountBtn" type="button"></button>
+        <div id="discountMessage"></div>
+        <span id="subtotal"></span>
+        <span id="shippingCost"></span>
+        <span id="total"></span>
+      </div>
+      <div id="cartValidationMessage" class="hidden"></div>
+      <div id="cartItems" aria-busy="true">Loading your cart…</div>
+    </div>
   `;
 }
 
@@ -187,6 +193,44 @@ describe("initCartFunctionality", () => {
         customerPhone: "01700000000",
       }),
     );
+  });
+
+  it("reveals truthful cart and checkout panels only after stored items hydrate", async () => {
+    const root = document.getElementById("cartPageRoot") as HTMLElement;
+    const cartSummary = document.getElementById("cartSummary") as HTMLElement;
+    const checkoutPanel = document.getElementById("checkoutPanel") as HTMLElement;
+    const cartItems = document.getElementById("cartItems") as HTMLElement;
+
+    await initCartFunctionality();
+
+    expect(root.dataset.cartReady).toBe("true");
+    expect(root.dataset.cartHasItems).toBe("true");
+    expect(cartSummary.classList.contains("hidden")).toBe(false);
+    expect(checkoutPanel.classList.contains("hidden")).toBe(false);
+    expect(cartItems.getAttribute("aria-busy")).toBe("false");
+    expect(cartItems.textContent).toContain("Rice");
+  });
+
+  it("keeps operational panels hidden when hydration resolves to an empty cart", async () => {
+    const emptyCart: CartStore = {
+      items: {},
+      totalItems: 0,
+      totalAmount: 0,
+      discount: null,
+    };
+    localStorage.setItem("cart", JSON.stringify(emptyCart));
+    cartStore.set(emptyCart);
+
+    await initCartFunctionality();
+
+    const root = document.getElementById("cartPageRoot") as HTMLElement;
+    const submit = document.getElementById("submitButton") as HTMLButtonElement;
+    expect(root.dataset.cartReady).toBe("true");
+    expect(root.dataset.cartHasItems).toBe("false");
+    expect(document.getElementById("cartSummary")?.classList.contains("hidden")).toBe(true);
+    expect(document.getElementById("checkoutPanel")?.classList.contains("hidden")).toBe(true);
+    expect(document.getElementById("cartItems")?.getAttribute("aria-busy")).toBe("false");
+    expect(submit.disabled).toBe(true);
   });
 
   it("reuses an active checkout id for the hidden input and abandoned checkout save", async () => {
@@ -357,8 +401,16 @@ describe("initCartFunctionality", () => {
     expect(cartPage).toContain(
       'lg:sticky lg:self-start transition-all duration-200 order-1',
     );
-    expect(cartPage).toContain('<div class="lg:w-7/12 order-2">');
+    expect(cartPage).toContain('<div id="checkoutPanel" class="hidden lg:w-7/12 order-2">');
     expect(cartPage).not.toContain("order-2 lg:order-1");
     expect(cartPage).not.toContain("order-1 lg:order-2");
+    expect(cartPage).toContain('id="cartPageRoot"');
+    expect(cartPage).toContain('data-cart-ready="false"');
+    expect(cartPage).toContain('id="cartSummary"');
+    expect(cartPage).toContain('id="checkoutPanel"');
+    expect(cartPage).toContain("Loading your cart…");
+    expect(cartPage).toContain("Enable JavaScript to load your saved cart");
+    expect(cartPage).toContain("window.__CHECKOUT_LANGUAGE__=");
+    expect(cartPage).toContain("disabled={true}");
   });
 });
