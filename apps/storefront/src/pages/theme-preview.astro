@@ -1,0 +1,138 @@
+---
+import { resolveThemePreview } from "@/lib/api";
+import {
+  clearThemePreviewCookieHeader,
+  readThemePreviewCookie,
+} from "@/lib/theme-preview-cookie";
+import {
+  normalizeThemePreviewDevice,
+  normalizeThemePreviewRoutePath,
+} from "@/lib/theme-preview-route";
+
+export const prerender = false;
+
+Astro.response.headers.set(
+  "Cache-Control",
+  "private, no-cache, no-store, must-revalidate",
+);
+Astro.response.headers.set("Referrer-Policy", "no-referrer");
+Astro.response.headers.set("X-Robots-Tag", "noindex, nofollow");
+
+const method = Astro.request.method.toUpperCase();
+const token = readThemePreviewCookie(Astro.request.headers.get("cookie"));
+const requestedPath: unknown = Astro.url.searchParams.get("path");
+const requestedDevice: unknown = Astro.url.searchParams.get("device");
+
+if (method !== "GET") {
+  Astro.response.status = 405;
+  Astro.response.headers.set("Allow", "GET");
+}
+
+const routePath = normalizeThemePreviewRoutePath(requestedPath);
+const initialDevice = normalizeThemePreviewDevice(requestedDevice);
+const preview = token ? await resolveThemePreview(token) : null;
+
+if (token && !preview) {
+  Astro.response.headers.append("Set-Cookie", clearThemePreviewCookieHeader());
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Storefront draft preview</title>
+    <style>
+      :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-width: 20rem; background: #111113; color: #f4f4f5; }
+      button { font: inherit; }
+      .preview-shell { min-height: 100vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+      .preview-bar { position: sticky; top: 0; z-index: 2; min-height: 3.25rem; display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; padding: .55rem .8rem; border-bottom: 1px solid #34343a; background: rgba(17,17,19,.96); backdrop-filter: blur(14px); }
+      .preview-title { min-width: 0; margin-right: auto; }
+      .preview-title strong { display: block; font-size: .82rem; line-height: 1.15rem; }
+      .preview-title span { display: block; overflow: hidden; max-width: min(38rem, 74vw); text-overflow: ellipsis; white-space: nowrap; color: #a1a1aa; font-size: .7rem; line-height: 1rem; }
+      .preview-badge { border: 1px solid #52525b; border-radius: 999px; padding: .22rem .5rem; color: #d4d4d8; font-size: .7rem; white-space: nowrap; }
+      .device-switch { display: flex; align-items: center; gap: .2rem; padding: .18rem; border: 1px solid #3f3f46; border-radius: .5rem; background: #18181b; }
+      .device-switch button, .exit-button { min-height: 2rem; border: 0; border-radius: .35rem; padding: 0 .65rem; background: transparent; color: #a1a1aa; cursor: pointer; font-size: .75rem; font-weight: 600; }
+      .device-switch button[aria-pressed="true"] { background: #fafafa; color: #18181b; }
+      .device-switch button:focus-visible, .exit-button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+      .exit-button { border: 1px solid #3f3f46; color: #fafafa; }
+      .preview-stage { min-height: 0; overflow: auto; padding: .75rem; background: #27272a; }
+      .preview-frame-wrap { width: 100%; height: calc(100vh - 4.75rem); min-height: 35rem; margin: 0 auto; overflow: hidden; border: 1px solid #52525b; border-radius: .65rem; background: white; box-shadow: 0 18px 50px rgba(0,0,0,.35); transition: width 180ms ease; }
+      .preview-frame-wrap[data-device="desktop"] { width: min(100%, 90rem); }
+      .preview-frame-wrap[data-device="mobile"] { width: min(100%, 24.375rem); }
+      iframe { display: block; width: 100%; height: 100%; border: 0; background: white; }
+      .unavailable { min-height: 100vh; display: grid; place-items: center; padding: 1.25rem; background: #f4f4f5; color: #18181b; }
+      .unavailable article { width: min(100%, 30rem); border: 1px solid #d4d4d8; border-radius: .8rem; background: white; padding: 1.25rem; box-shadow: 0 10px 32px rgba(0,0,0,.08); }
+      .unavailable h1 { margin: 0; font-size: 1.15rem; }
+      .unavailable p { margin: .55rem 0 0; color: #52525b; font-size: .875rem; line-height: 1.45; }
+      @media (max-width: 42rem) {
+        .preview-badge { display: none; }
+        .preview-bar { align-items: flex-start; }
+        .preview-title { flex-basis: calc(100% - 4.5rem); }
+        .device-switch { order: 3; width: 100%; }
+        .device-switch button { flex: 1; }
+        .preview-stage { padding: .35rem; }
+        .preview-frame-wrap { height: calc(100vh - 7.7rem); border-radius: .45rem; }
+      }
+      @media (prefers-reduced-motion: reduce) { .preview-frame-wrap { transition: none; } }
+    </style>
+  </head>
+  <body>
+    {preview ? (
+      <div class="preview-shell">
+        <header class="preview-bar">
+          <div class="preview-title">
+            <strong>Draft preview</strong>
+            <span>{routePath}</span>
+          </div>
+          <span class="preview-badge">Draft r{preview.draftRevision} · published r{preview.basePublishedRevision}</span>
+          <div class="device-switch" role="group" aria-label="Preview width">
+            {(["full", "desktop", "mobile"] as const).map((device) => (
+              <button type="button" data-device={device} aria-pressed={initialDevice === device ? "true" : "false"}>
+                {device === "full" ? "Full" : device === "desktop" ? "Desktop" : "Mobile"}
+              </button>
+            ))}
+          </div>
+          <form method="post" action="/theme-preview/exit">
+            <button class="exit-button" type="submit">Exit</button>
+          </form>
+        </header>
+        <main class="preview-stage">
+          <div class="preview-frame-wrap" data-preview-frame data-device={initialDevice}>
+            <iframe
+              src={routePath}
+              title={`Storefront draft preview of ${routePath}`}
+              referrerpolicy="no-referrer"
+              sandbox="allow-same-origin allow-scripts"
+            ></iframe>
+          </div>
+        </main>
+      </div>
+    ) : (
+      <main class="unavailable">
+        <article>
+          <h1>Draft preview unavailable</h1>
+          <p>This preview expired or is no longer valid. Return to Theme settings and open a new preview.</p>
+        </article>
+      </main>
+    )}
+    <script>
+      const frame = document.querySelector<HTMLElement>("[data-preview-frame]");
+      const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-device]"));
+      for (const button of buttons) {
+        button.addEventListener("click", () => {
+          const device = button.dataset.device;
+          if (!frame || !device) return;
+          frame.dataset.device = device;
+          for (const candidate of buttons) {
+            candidate.setAttribute("aria-pressed", candidate === button ? "true" : "false");
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

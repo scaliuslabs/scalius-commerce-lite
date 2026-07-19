@@ -23,6 +23,67 @@ export const THEME_WORKSPACE_SECTIONS = [
 export type ThemeWorkspaceSection =
   (typeof THEME_WORKSPACE_SECTIONS)[number]["value"];
 
+export const THEME_PREVIEW_DEVICES = ["full", "desktop", "mobile"] as const;
+export type ThemePreviewDevice = (typeof THEME_PREVIEW_DEVICES)[number];
+
+export function normalizeThemePreviewDevice(value: unknown): ThemePreviewDevice {
+  return THEME_PREVIEW_DEVICES.includes(value as ThemePreviewDevice)
+    ? (value as ThemePreviewDevice)
+    : "desktop";
+}
+
+export function normalizeThemePreviewPath(value: unknown): string {
+  if (typeof value !== "string") return "/";
+  const path = value.trim();
+  if (!path.startsWith("/") || path.startsWith("//")) return "/";
+  if (path.includes("\\") || path.includes("?") || path.includes("#")) return "/";
+  if (/%2f|%5c/i.test(path)) return "/";
+  if (path === "/" || path === "/search") return path;
+
+  const segments = path.slice(1).split("/");
+  const safeSegment = (segment: string) => /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(segment);
+  if (
+    segments.length === 2 &&
+    ["products", "categories", "collections"].includes(segments[0] ?? "") &&
+    safeSegment(segments[1] ?? "")
+  ) {
+    return path;
+  }
+
+  const reserved = new Set([
+    "admin",
+    "api",
+    "cart",
+    "checkout",
+    "login",
+    "orders",
+    "payment-recovery",
+    "products",
+    "categories",
+    "collections",
+    "search",
+    "theme-preview",
+  ]);
+  if (segments.length === 1 && safeSegment(segments[0] ?? "") && !reserved.has(segments[0] ?? "")) {
+    return path;
+  }
+
+  return "/";
+}
+
+export function buildThemePreviewHandoffUrl(
+  storefrontUrl: string | null | undefined,
+  path: unknown,
+  device: unknown,
+): string | null {
+  const baseUrl = parseStorefrontUrl(storefrontUrl);
+  if (!baseUrl) return null;
+  const destination = new URL("/theme-preview/handoff", baseUrl);
+  destination.searchParams.set("path", normalizeThemePreviewPath(path));
+  destination.searchParams.set("device", normalizeThemePreviewDevice(device));
+  return destination.toString();
+}
+
 export function normalizeThemeWorkspaceSection(
   value: unknown,
 ): ThemeWorkspaceSection {

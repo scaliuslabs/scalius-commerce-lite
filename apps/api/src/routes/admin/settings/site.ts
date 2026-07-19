@@ -34,6 +34,13 @@ import {
   saveHeaderConfig,
   saveFooterConfig,
   getThemeSettings,
+  getThemeWorkspace,
+  saveThemeDraft,
+  rebaseThemeDraft,
+  publishThemeDraft,
+  listThemeVersions,
+  rollbackThemeSettings,
+  createThemePreviewSession,
   saveThemeSettings,
   getMediaOptimizationSettings,
   isValidMediaHostInput,
@@ -470,15 +477,243 @@ const saveThemeRoute = createRoute({
 app.openapi(saveThemeRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
+  const user = c.get("user") as { id?: string } | undefined;
   const saved = await saveThemeSettings(
     db,
     body.theme,
     body.expectedRevision,
+    user?.id ?? null,
   );
   await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
   return ok(c, {
     ...saved,
     message: "Theme settings saved successfully",
+  });
+});
+
+const themeDraftSchema = z.object({
+  theme: themeDocumentSchema,
+  revision: z.number().int().nonnegative(),
+  basePublishedRevision: z.number().int().nonnegative(),
+  updatedAt: z.any().nullable(),
+});
+
+const themeWorkspaceSchema = z.object({
+  published: z.object({
+    theme: themeDocumentSchema,
+    revision: z.number().int().nonnegative(),
+  }),
+  draft: themeDraftSchema,
+});
+
+const getThemeWorkspaceRoute = createRoute({
+  method: "get",
+  path: "/theme/workspace",
+  tags: ["Admin - Settings"],
+  summary: "Get published storefront style and durable draft",
+  responses: {
+    200: {
+      description: "Theme workspace",
+      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(getThemeWorkspaceRoute, async (c) => {
+  return ok(c, await getThemeWorkspace(c.get("db")));
+});
+
+const saveThemeDraftSchema = z.object({
+  theme: themeDocumentSchema,
+  expectedDraftRevision: z.number().int().nonnegative(),
+  basePublishedRevision: z.number().int().nonnegative(),
+});
+
+const saveThemeDraftRoute = createRoute({
+  method: "post",
+  path: "/theme/draft",
+  tags: ["Admin - Settings"],
+  summary: "Save the durable storefront style draft",
+  request: { body: { content: { "application/json": { schema: saveThemeDraftSchema } } } },
+  responses: {
+    200: {
+      description: "Draft saved",
+      content: { "application/json": { schema: successEnvelope(themeDraftSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(saveThemeDraftRoute, async (c) => {
+  const body = c.req.valid("json");
+  const user = c.get("user") as { id?: string } | undefined;
+  return ok(c, await saveThemeDraft(
+    c.get("db"),
+    body.theme,
+    body.expectedDraftRevision,
+    body.basePublishedRevision,
+    user?.id ?? null,
+  ));
+});
+
+const rebaseThemeDraftRoute = createRoute({
+  method: "post",
+  path: "/theme/draft/rebase",
+  tags: ["Admin - Settings"],
+  summary: "Rebase a storefront style draft onto the current published revision",
+  request: { body: { content: { "application/json": { schema: saveThemeDraftSchema } } } },
+  responses: {
+    200: {
+      description: "Draft rebased",
+      content: { "application/json": { schema: successEnvelope(themeDraftSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(rebaseThemeDraftRoute, async (c) => {
+  const body = c.req.valid("json");
+  const user = c.get("user") as { id?: string } | undefined;
+  return ok(c, await rebaseThemeDraft(
+    c.get("db"),
+    body.theme,
+    body.expectedDraftRevision,
+    body.basePublishedRevision,
+    user?.id ?? null,
+  ));
+});
+
+const publishThemeDraftSchema = z.object({
+  expectedPublishedRevision: z.number().int().nonnegative(),
+  expectedDraftRevision: z.number().int().positive(),
+});
+
+const publishThemeDraftRoute = createRoute({
+  method: "post",
+  path: "/theme/publish",
+  tags: ["Admin - Settings"],
+  summary: "Publish the exact durable storefront style draft",
+  request: { body: { content: { "application/json": { schema: publishThemeDraftSchema } } } },
+  responses: {
+    200: {
+      description: "Draft published",
+      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(publishThemeDraftRoute, async (c) => {
+  const body = c.req.valid("json");
+  const user = c.get("user") as { id?: string } | undefined;
+  const workspace = await publishThemeDraft(
+    c.get("db"),
+    body.expectedPublishedRevision,
+    body.expectedDraftRevision,
+    user?.id ?? null,
+  );
+  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  return ok(c, workspace);
+});
+
+const themeVersionSchema = z.object({
+  id: z.string(),
+  theme: themeDocumentSchema,
+  revision: z.number().int().positive(),
+  source: z.enum(["publish", "rollback", "migration"]),
+  sourceRevision: z.number().int().positive().nullable(),
+  publishedBy: z.string().nullable(),
+  createdAt: z.any(),
+});
+
+const listThemeVersionsRoute = createRoute({
+  method: "get",
+  path: "/theme/versions",
+  tags: ["Admin - Settings"],
+  summary: "List immutable published storefront style revisions",
+  request: { query: z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }) },
+  responses: {
+    200: {
+      description: "Published theme revisions",
+      content: { "application/json": { schema: successEnvelope(z.object({ versions: z.array(themeVersionSchema) })) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(listThemeVersionsRoute, async (c) => {
+  return ok(c, { versions: await listThemeVersions(c.get("db"), c.req.valid("query").limit) });
+});
+
+const rollbackThemeRoute = createRoute({
+  method: "post",
+  path: "/theme/rollback",
+  tags: ["Admin - Settings"],
+  summary: "Restore a published storefront style as a new revision",
+  request: { body: { content: { "application/json": { schema: z.object({
+    sourceRevision: z.number().int().positive(),
+    expectedPublishedRevision: z.number().int().nonnegative(),
+    expectedDraftRevision: z.number().int().positive(),
+  }) } } } },
+  responses: {
+    200: {
+      description: "Theme rollback published",
+      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(rollbackThemeRoute, async (c) => {
+  const body = c.req.valid("json");
+  const user = c.get("user") as { id?: string } | undefined;
+  const workspace = await rollbackThemeSettings(
+    c.get("db"),
+    body.sourceRevision,
+    body.expectedPublishedRevision,
+    body.expectedDraftRevision,
+    user?.id ?? null,
+  );
+  await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+  return ok(c, workspace);
+});
+
+const createThemePreviewRoute = createRoute({
+  method: "post",
+  path: "/theme/preview-session",
+  tags: ["Admin - Settings"],
+  summary: "Create a short-lived exact-draft storefront preview session",
+  request: { body: { content: { "application/json": { schema: z.object({
+    expectedDraftRevision: z.number().int().positive(),
+  }) } } } },
+  responses: {
+    200: {
+      description: "Preview handoff",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        token: z.string(),
+        draftRevision: z.number().int().positive(),
+        basePublishedRevision: z.number().int().nonnegative(),
+        expiresAt: z.any(),
+      })) } },
+    },
+    ...errorResponses,
+  },
+});
+
+app.openapi(createThemePreviewRoute, async (c) => {
+  const user = c.get("user") as { id?: string } | undefined;
+  const preview = await createThemePreviewSession(
+    c.get("db"),
+    c.req.valid("json").expectedDraftRevision,
+    user?.id ?? null,
+  );
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  return ok(c, {
+    token: preview.token,
+    draftRevision: preview.draftRevision,
+    basePublishedRevision: preview.basePublishedRevision,
+    expiresAt: preview.expiresAt,
   });
 });
 

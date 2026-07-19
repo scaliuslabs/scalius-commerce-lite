@@ -1,4 +1,4 @@
-const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth"];
+const PRIVATE_SESSION_COOKIE_NAMES = ["cs_tok", "cs_auth", "stp_theme_preview"];
 
 function hasNamedCookie(cookieHeader: string, cookieNames: readonly string[]): boolean {
   const names = new Set(cookieNames);

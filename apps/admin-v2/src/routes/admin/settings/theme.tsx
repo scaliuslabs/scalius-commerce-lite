@@ -3,13 +3,20 @@ import { useCallback } from "react";
 
 import ThemeSettingsPage from "~/components/admin/settings/ThemeSettingsPage";
 import {
+  normalizeThemePreviewDevice,
+  normalizeThemePreviewPath,
   normalizeThemeWorkspaceSection,
+  type ThemePreviewDevice,
   type ThemeWorkspaceSection,
 } from "~/components/admin/settings/theme-workspace";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export function validateThemeSearch(search: Record<string, unknown>) {
-  return { section: normalizeThemeWorkspaceSection(search.section) };
+  return {
+    section: normalizeThemeWorkspaceSection(search.section),
+    previewPath: normalizeThemePreviewPath(search.previewPath),
+    previewDevice: normalizeThemePreviewDevice(search.previewDevice),
+  };
 }
 
 export const Route = createFileRoute("/admin/settings/theme")({
@@ -33,11 +40,26 @@ function ThemePage() {
     },
     [navigate],
   );
+  const handlePreviewLocationChange = useCallback(
+    (previewPath: string, previewDevice: ThemePreviewDevice) => {
+      void navigate({
+        search: ((previous: Record<string, unknown>) => ({
+          ...previous,
+          previewPath,
+          previewDevice,
+        })) as never,
+      });
+    },
+    [navigate],
+  );
 
   return (
     <ThemeSettingsPage
       section={search.section}
       onSectionChange={handleSectionChange}
+      previewPath={search.previewPath}
+      previewDevice={search.previewDevice}
+      onPreviewLocationChange={handlePreviewLocationChange}
     />
   );
 }

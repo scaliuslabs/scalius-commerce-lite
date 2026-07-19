@@ -48,8 +48,12 @@ const storefrontStaticPostDeployWarmPaths = ["/", "/search"];
 const STOREFRONT_DYNAMIC_WARM_LIMIT = 4;
 const STOREFRONT_DYNAMIC_WARM_TIMEOUT_MS = 8_000;
 const STOREFRONT_WARM_CONCURRENCY = 4;
-const STOREFRONT_WARM_MAX_ATTEMPTS = 6;
-const STOREFRONT_WARM_RETRY_DELAY_MS = 1_000;
+// Cloudflare custom-domain propagation can legitimately take longer than the
+// previous six-second window after a successful Worker deploy. Keep the check
+// bounded, but do not misreport a healthy deploy while an edge still serves the
+// previous build during normal propagation.
+const STOREFRONT_WARM_MAX_ATTEMPTS = 20;
+const STOREFRONT_WARM_RETRY_DELAY_MS = 1_500;
 const API_READYZ_SAMPLE_COUNT = 4;
 const API_READYZ_SAMPLE_DELAY_MS = 1_000;
 const API_READYZ_TIMEOUT_MS = 10_000;

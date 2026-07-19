@@ -165,6 +165,87 @@ classification, route-backed state, and the full refund matrix remain open.
   theme tokens may affect its global colors/type only through the same published
   theme contract.
 
+## Decided draft, preview, history, and rollback contract (2026-07-19)
+
+This is the implementation authority for the next Theme slice. It follows the
+useful parts of Shopify's one-live-theme plus durable-draft model and
+WordPress's real-frontend preview, without introducing a second rendering
+engine or a free-form CSS/theme-code surface.
+
+- Scalius has one published semantic presentation document and one shared
+  durable draft. The draft has its own positive revision and records the
+  published revision it was based on. Draft saves use draft-revision CAS;
+  publishing requires both the exact draft revision and its exact base
+  published revision. A stale draft is rebased explicitly, never silently.
+- Publishing consumes the draft into a new monotonic published revision and
+  records the resulting sanitized document as an immutable history entry in
+  the same D1 batch. The draft then becomes clean at that published revision.
+  A concurrent draft save or publish must abort the whole batch.
+- Rollback does not decrement or resurrect an old revision number. It copies a
+  selected immutable history document into a new published revision, records
+  that new revision with `source=rollback`, and names the selected source
+  revision. Cache invalidation and warm paths are identical to a normal publish.
+- Existing stores are backfilled with their current published document as the
+  first history fact. Actor IDs are audit references only and may be null for
+  migration/system actions; deleting an administrator must not delete history.
+- Preview sessions are short-lived, opaque, and snapshot one exact draft
+  revision. Only a SHA-256 token hash is stored. Creating a new preview after a
+  draft save is explicit, so an open review cannot change underneath someone.
+- Raw preview tokens never enter a URL, log, KV key, analytics event, or cache
+  key. The admin opens a bearer-free storefront handoff route, verifies the
+  exact configured storefront window/origin, and transfers the token through a
+  versioned `postMessage` handshake. The storefront handoff trusts only the
+  configured dashboard origin and exchanges the token through a same-origin
+  JSON POST for a host-only, `HttpOnly`, `Secure`, `SameSite=Lax` cookie.
+  Astro's global cross-origin form protection remains enabled; invalid,
+  cross-origin, or expired sessions fail closed to the published theme.
+- Any request carrying the preview cookie bypasses shared HTML and layout
+  caching. Preview responses are `private, no-store`, exclude analytics and
+  Meta browser-event injection, and show a persistent Draft preview bar with a
+  clear exit action. The buyer-visible store and crawler/discovery outputs never
+  consume a draft.
+- The preview shell renders the real storefront route, not a hand-built product
+  card. It offers full, desktop, and mobile frames and safe route choices
+  (home, search, one selected public product/category/collection/page). It does
+  not permit arbitrary origins, credentials, script input, or unsafe paths.
+- Theme controls continue to affect the protected product-detail page only
+  through the already-supported global semantic tokens. This work does not
+  restructure that page or merge Header, Footer, Navigation, Hero, or content
+  authority into Theme.
+
+Release proof must cover two-tab draft conflicts, published-base conflicts,
+preview snapshot isolation, token expiry, raw-token absence from persistence
+and URLs, preview-cache bypass, analytics suppression, publish freshness,
+history immutability, rollback-as-new-revision, and real desktop/mobile route
+rendering.
+
+## Implemented durable Theme workspace and live preview (2026-07-19)
+
+- D1 now owns one CAS-protected durable draft, immutable published history,
+  monotonic publish/rollback revisions, and short-lived hashed preview-session
+  records. Publishing and rollback invalidate the dependent API/storefront
+  projections once; neither reinterprets an old revision in place.
+- The admin exposes Design system, Colors, and Review & publish as URL-backed
+  workspaces. Review shows an exact change ledger, real public-route/device
+  preview controls, publish readiness, immutable history, and restore-as-new-
+  revision behavior. Failed authority reads do not expose assumed defaults.
+- The storefront preview uses one exact draft snapshot and the real storefront
+  renderer. Preview-cookie requests are private/no-store, bypass shared HTML
+  caches, suppress analytics/Meta browser injection, and retain the protected
+  product-page composition.
+- The first production smoke exposed Astro rejecting the earlier cross-site
+  form POST. The final transport keeps Astro's global origin check enabled: a
+  bearer-free handoff page trusts only `DASHBOARD_URL`, receives the opaque
+  token through an exact-window/exact-origin versioned `postMessage`, and uses
+  a same-origin JSON POST to set the secure HttpOnly cookie. Wrong-origin,
+  malformed, and expired requests cannot resolve the bearer or set a cookie.
+- Production storefront version `164ea7c9-78f3-4301-8249-c64593cf403b` and
+  admin version `74d6cbfa-41d7-46b8-a016-94723acbbf12` were verified together.
+  The dashboard opened `Draft r1 · published r5`; the preview shell rendered
+  the real storefront homepage and its live catalog with no token in the URL.
+  Twenty focused Theme/preview/cache/migration suites passed 115 tests, all
+  relevant typechecks passed sequentially, and the full release check passed.
+
 ## Implemented theme authority slice (2026-07-13)
 
 - Migration `0024_kind_spitfire.sql` adds the singleton `theme_settings`

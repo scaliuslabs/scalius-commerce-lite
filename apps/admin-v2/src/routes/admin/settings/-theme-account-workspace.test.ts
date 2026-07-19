@@ -31,10 +31,14 @@ describe("theme and account settings workspace", () => {
     expect(source).toContain("UnsavedChangesGuard");
     expect(source).toContain("Advanced controls");
     expect(source).toContain("Semantic map");
-    expect(reviewSource).toContain("Review published routes");
-    expect(reviewSource).toContain("Draft ledger");
+    expect(reviewSource).toContain("Storefront preview");
+    expect(reviewSource).toContain("Draft changes");
+    expect(reviewSource).toContain("Published history");
+    expect(reviewSource).toContain("Restore as new revision");
     expect(systemSource).toContain("Product detail");
-    expect(reviewSource).toContain("Draft route/device preview is not available");
+    expect(source).toContain("Save draft");
+    expect(source).toContain("createThemePreviewSession");
+    expect(source).toContain("publishThemeDraft");
     expect(source).not.toContain("Summer Collection");
     expect(source).not.toContain("Sample Preview");
     expect(source).not.toContain("bg-white");
@@ -43,14 +47,23 @@ describe("theme and account settings workspace", () => {
   it("keeps the selected theme workspace in the URL", () => {
     expect(validateThemeSearch({ section: "colors" })).toEqual({
       section: "colors",
+      previewPath: "/",
+      previewDevice: "desktop",
     });
-    expect(validateThemeSearch({ section: "unknown" })).toEqual({
+    expect(validateThemeSearch({
+      section: "unknown",
+      previewPath: "/products/linen-shirt",
+      previewDevice: "mobile",
+    })).toEqual({
       section: "system",
+      previewPath: "/products/linen-shirt",
+      previewDevice: "mobile",
     });
 
     const routeSource = readSource("routes/admin/settings/theme.tsx");
     expect(routeSource).toContain("validateSearch: validateThemeSearch");
     expect(routeSource).toContain("onSectionChange={handleSectionChange}");
+    expect(routeSource).toContain("onPreviewLocationChange={handlePreviewLocationChange}");
   });
 
   it("visually separates personal security from store administration", () => {

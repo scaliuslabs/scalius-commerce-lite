@@ -12,6 +12,7 @@ import {
   getLayoutData,
   getPageRenderData,
 } from "@scalius/core/modules/storefront/storefront.service";
+import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";
@@ -143,6 +144,45 @@ app.openapi(layoutRoute, async (c) => {
     credentialEncryptionKey: c.env.CREDENTIAL_ENCRYPTION_KEY,
   }) as unknown as LayoutData;
   return ok(c, data);
+});
+
+const resolveThemePreviewRoute = createRoute({
+  method: "post",
+  path: "/theme-preview/resolve",
+  tags: ["Storefront"],
+  summary: "Resolve a short-lived storefront theme preview cookie",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ token: z.string().min(44).max(96) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Preview theme snapshot",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        theme: flexibleObjectSchema,
+        draftRevision: z.number().int().positive(),
+        basePublishedRevision: z.number().int().nonnegative(),
+        expiresAt: z.any(),
+      })) } },
+    },
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(resolveThemePreviewRoute, async (c) => {
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const preview = await resolveThemePreviewSession(
+    c.get("db"),
+    c.req.valid("json").token,
+  );
+  if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
+  return ok(c, preview);
 });
 
 // GET /storefront/csp — returns merchant-configured CSP allowed domains

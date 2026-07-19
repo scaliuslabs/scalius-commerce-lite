@@ -4,7 +4,7 @@ import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import { Toaster } from "@/components/ui/sonner";
-import { getLayoutData, type LayoutData } from "@/lib/api";
+import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
 import type { AnalyticsConfig } from "@/lib/api";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
@@ -27,6 +27,10 @@ import {
   sanitizeStorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import {
+  clearThemePreviewCookieHeader,
+  readThemePreviewCookie,
+} from "@/lib/theme-preview-cookie";
 
 interface Props {
   title: string;
@@ -62,7 +66,26 @@ const {
 const layoutData = providedLayoutData ?? (await getLayoutData());
 setRuntimeImageCdnPolicy(layoutData?.media);
 
-const analyticsScripts: AnalyticsConfig[] = layoutData?.analytics || [];
+const themePreviewToken = readThemePreviewCookie(
+  Astro.request.headers.get("cookie"),
+);
+const themePreview = themePreviewToken
+  ? await resolveThemePreview(themePreviewToken)
+  : null;
+const isThemePreview = themePreview !== null;
+if (themePreviewToken) {
+  Astro.response.headers.set(
+    "Cache-Control",
+    "private, no-cache, no-store, must-revalidate",
+  );
+  if (!themePreview) {
+    Astro.response.headers.append("Set-Cookie", clearThemePreviewCookieHeader());
+  }
+}
+
+const analyticsScripts: AnalyticsConfig[] = isThemePreview
+  ? []
+  : layoutData?.analytics || [];
 const navigationData = layoutData?.navigation || [];
 
 // Provide sensible defaults if API fails to prevent blank header/footer
@@ -160,7 +183,9 @@ const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // Build CSS only from shared enum constants and sanitized color overrides.
-const storefrontTheme = sanitizeStorefrontThemeSettings(layoutData?.theme);
+const storefrontTheme = sanitizeStorefrontThemeSettings(
+  themePreview?.theme ?? layoutData?.theme,
+);
 const themeTokenEntries = Object.entries(
   buildStorefrontThemeTokens(storefrontTheme),
 );
@@ -236,12 +261,12 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
-  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(layoutData?.metaCapi?.browserEventsEnabled === true)};`,
+  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
 ].join("");
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme-preview={isThemePreview ? "true" : undefined}>
   <head>
     <meta charset="UTF-8" />
 
@@ -347,7 +372,7 @@ const runtimeGlobalsScript = [
     {absoluteOgImageUrl && <meta name="twitter:image:alt" content={title} />}
 
     {/* Robots — public pages can be excluded from indexing while links remain crawlable. */}
-    {noindex && <meta name="robots" content="noindex,follow" />}
+    {(noindex || isThemePreview) && <meta name="robots" content="noindex,follow" />}
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
     {orgJsonLd && <script is:inline type="application/ld+json" set:html={orgJsonLd} />}
@@ -378,46 +403,48 @@ const runtimeGlobalsScript = [
         };
     </script>
     <script is:inline>
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const maxAge = 7776000;
-        const cookieSuffix = `; path=/; max-age=${maxAge}; SameSite=Lax${
-          window.location.protocol === "https:" ? "; Secure" : ""
-        }`;
-        const readClickId = (name) => {
-          const value = urlParams.get(name);
-          if (!value) return "";
-          const trimmed = value.trim();
-          return /^[A-Za-z0-9._~-]{1,512}$/.test(trimmed) ? trimmed : "";
-        };
-        const persistClickId = (cookieName, storageName, value) => {
-          document.cookie = `${cookieName}=${encodeURIComponent(value)}${cookieSuffix}`;
-          try {
-            sessionStorage.setItem(storageName, value);
-          } catch {
-            // Cookie persistence is enough when sessionStorage is unavailable.
+      if (document.documentElement.dataset.themePreview !== "true") {
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          const maxAge = 7776000;
+          const cookieSuffix = `; path=/; max-age=${maxAge}; SameSite=Lax${
+            window.location.protocol === "https:" ? "; Secure" : ""
+          }`;
+          const readClickId = (name) => {
+            const value = urlParams.get(name);
+            if (!value) return "";
+            const trimmed = value.trim();
+            return /^[A-Za-z0-9._~-]{1,512}$/.test(trimmed) ? trimmed : "";
+          };
+          const persistClickId = (cookieName, storageName, value) => {
+            document.cookie = `${cookieName}=${encodeURIComponent(value)}${cookieSuffix}`;
+            try {
+              sessionStorage.setItem(storageName, value);
+            } catch {
+              // Cookie persistence is enough when sessionStorage is unavailable.
+            }
+          };
+
+          const fbclid = readClickId("fbclid");
+          if (fbclid) {
+            const creationTime = Date.now();
+            const fbcValue = `fb.1.${creationTime}.${fbclid}`;
+            persistClickId("_fbc", "scalius_fbc", fbcValue);
           }
-        };
 
-        const fbclid = readClickId("fbclid");
-        if (fbclid) {
-          const creationTime = Date.now();
-          const fbcValue = `fb.1.${creationTime}.${fbclid}`;
-          persistClickId("_fbc", "scalius_fbc", fbcValue);
+          [
+            ["gclid", "scalius_gclid"],
+            ["gbraid", "scalius_gbraid"],
+            ["wbraid", "scalius_wbraid"],
+            ["msclkid", "scalius_msclkid"],
+            ["ttclid", "scalius_ttclid"],
+          ].forEach(([paramName, storageName]) => {
+            const clickId = readClickId(paramName);
+            if (clickId) persistClickId(storageName, storageName, clickId);
+          });
+        } catch (e) {
+          console.warn("Could not process ad click id:", e);
         }
-
-        [
-          ["gclid", "scalius_gclid"],
-          ["gbraid", "scalius_gbraid"],
-          ["wbraid", "scalius_wbraid"],
-          ["msclkid", "scalius_msclkid"],
-          ["ttclid", "scalius_ttclid"],
-        ].forEach(([paramName, storageName]) => {
-          const clickId = readClickId(paramName);
-          if (clickId) persistClickId(storageName, storageName, clickId);
-        });
-      } catch (e) {
-        console.warn("Could not process ad click id:", e);
       }
     </script>
 

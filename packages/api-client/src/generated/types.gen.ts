@@ -2075,6 +2075,61 @@ export type GetApiV1StorefrontLayoutResponses = {
 
 export type GetApiV1StorefrontLayoutResponse = GetApiV1StorefrontLayoutResponses[keyof GetApiV1StorefrontLayoutResponses];
 
+export type PostApiV1StorefrontThemePreviewResolveData = {
+    body?: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/theme-preview/resolve';
+};
+
+export type PostApiV1StorefrontThemePreviewResolveErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewResolveError = PostApiV1StorefrontThemePreviewResolveErrors[keyof PostApiV1StorefrontThemePreviewResolveErrors];
+
+export type PostApiV1StorefrontThemePreviewResolveResponses = {
+    /**
+     * Preview theme snapshot
+     */
+    200: {
+        success: true;
+        data: {
+            theme: {
+                [key: string]: unknown;
+            };
+            draftRevision: number;
+            basePublishedRevision: number;
+            expiresAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewResolveResponse = PostApiV1StorefrontThemePreviewResolveResponses[keyof PostApiV1StorefrontThemePreviewResolveResponses];
+
 export type GetApiV1StorefrontCspData = {
     body?: never;
     path?: never;
@@ -20992,6 +21047,900 @@ export type PostApiV1AdminSettingsThemeResponses = {
 };
 
 export type PostApiV1AdminSettingsThemeResponse = PostApiV1AdminSettingsThemeResponses[keyof PostApiV1AdminSettingsThemeResponses];
+
+export type GetApiV1AdminSettingsThemeWorkspaceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/workspace';
+};
+
+export type GetApiV1AdminSettingsThemeWorkspaceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeWorkspaceError = GetApiV1AdminSettingsThemeWorkspaceErrors[keyof GetApiV1AdminSettingsThemeWorkspaceErrors];
+
+export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
+    /**
+     * Theme workspace
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+            };
+            draft: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: unknown;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsThemeWorkspaceResponses[keyof GetApiV1AdminSettingsThemeWorkspaceResponses];
+
+export type PostApiV1AdminSettingsThemeDraftData = {
+    body?: {
+        theme: {
+            colors: {
+                [key: string]: string;
+            };
+            typography: {
+                heading: 'system' | 'modern' | 'editorial';
+                body: 'system' | 'modern' | 'humanist';
+                scale: 'compact' | 'standard' | 'generous';
+            };
+            cornerStyle: 'square' | 'subtle' | 'rounded';
+            density: 'compact' | 'comfortable' | 'airy';
+            containerWidth: 'focused' | 'standard' | 'wide';
+            components: {
+                buttons: 'solid' | 'soft' | 'outline';
+                inputs: 'outlined' | 'filled';
+                cards: 'bordered' | 'elevated' | 'flat';
+            };
+        };
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/draft';
+};
+
+export type PostApiV1AdminSettingsThemeDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftError = PostApiV1AdminSettingsThemeDraftErrors[keyof PostApiV1AdminSettingsThemeDraftErrors];
+
+export type PostApiV1AdminSettingsThemeDraftResponses = {
+    /**
+     * Draft saved
+     */
+    200: {
+        success: true;
+        data: {
+            theme: {
+                colors: {
+                    [key: string]: string;
+                };
+                typography: {
+                    heading: 'system' | 'modern' | 'editorial';
+                    body: 'system' | 'modern' | 'humanist';
+                    scale: 'compact' | 'standard' | 'generous';
+                };
+                cornerStyle: 'square' | 'subtle' | 'rounded';
+                density: 'compact' | 'comfortable' | 'airy';
+                containerWidth: 'focused' | 'standard' | 'wide';
+                components: {
+                    buttons: 'solid' | 'soft' | 'outline';
+                    inputs: 'outlined' | 'filled';
+                    cards: 'bordered' | 'elevated' | 'flat';
+                };
+            };
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThemeDraftResponses[keyof PostApiV1AdminSettingsThemeDraftResponses];
+
+export type PostApiV1AdminSettingsThemeDraftRebaseData = {
+    body?: {
+        theme: {
+            colors: {
+                [key: string]: string;
+            };
+            typography: {
+                heading: 'system' | 'modern' | 'editorial';
+                body: 'system' | 'modern' | 'humanist';
+                scale: 'compact' | 'standard' | 'generous';
+            };
+            cornerStyle: 'square' | 'subtle' | 'rounded';
+            density: 'compact' | 'comfortable' | 'airy';
+            containerWidth: 'focused' | 'standard' | 'wide';
+            components: {
+                buttons: 'solid' | 'soft' | 'outline';
+                inputs: 'outlined' | 'filled';
+                cards: 'bordered' | 'elevated' | 'flat';
+            };
+        };
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/draft/rebase';
+};
+
+export type PostApiV1AdminSettingsThemeDraftRebaseErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftRebaseError = PostApiV1AdminSettingsThemeDraftRebaseErrors[keyof PostApiV1AdminSettingsThemeDraftRebaseErrors];
+
+export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
+    /**
+     * Draft rebased
+     */
+    200: {
+        success: true;
+        data: {
+            theme: {
+                colors: {
+                    [key: string]: string;
+                };
+                typography: {
+                    heading: 'system' | 'modern' | 'editorial';
+                    body: 'system' | 'modern' | 'humanist';
+                    scale: 'compact' | 'standard' | 'generous';
+                };
+                cornerStyle: 'square' | 'subtle' | 'rounded';
+                density: 'compact' | 'comfortable' | 'airy';
+                containerWidth: 'focused' | 'standard' | 'wide';
+                components: {
+                    buttons: 'solid' | 'soft' | 'outline';
+                    inputs: 'outlined' | 'filled';
+                    cards: 'bordered' | 'elevated' | 'flat';
+                };
+            };
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftRebaseResponse = PostApiV1AdminSettingsThemeDraftRebaseResponses[keyof PostApiV1AdminSettingsThemeDraftRebaseResponses];
+
+export type PostApiV1AdminSettingsThemePublishData = {
+    body?: {
+        expectedPublishedRevision: number;
+        expectedDraftRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/publish';
+};
+
+export type PostApiV1AdminSettingsThemePublishErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePublishError = PostApiV1AdminSettingsThemePublishErrors[keyof PostApiV1AdminSettingsThemePublishErrors];
+
+export type PostApiV1AdminSettingsThemePublishResponses = {
+    /**
+     * Draft published
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+            };
+            draft: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePublishResponse = PostApiV1AdminSettingsThemePublishResponses[keyof PostApiV1AdminSettingsThemePublishResponses];
+
+export type GetApiV1AdminSettingsThemeVersionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/admin/settings/theme/versions';
+};
+
+export type GetApiV1AdminSettingsThemeVersionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeVersionsError = GetApiV1AdminSettingsThemeVersionsErrors[keyof GetApiV1AdminSettingsThemeVersionsErrors];
+
+export type GetApiV1AdminSettingsThemeVersionsResponses = {
+    /**
+     * Published theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            versions: Array<{
+                id: string;
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+                source: 'publish' | 'rollback' | 'migration';
+                sourceRevision: number | null;
+                publishedBy: string | null;
+                createdAt?: unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeVersionsResponse = GetApiV1AdminSettingsThemeVersionsResponses[keyof GetApiV1AdminSettingsThemeVersionsResponses];
+
+export type PostApiV1AdminSettingsThemeRollbackData = {
+    body?: {
+        sourceRevision: number;
+        expectedPublishedRevision: number;
+        expectedDraftRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/rollback';
+};
+
+export type PostApiV1AdminSettingsThemeRollbackErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRollbackError = PostApiV1AdminSettingsThemeRollbackErrors[keyof PostApiV1AdminSettingsThemeRollbackErrors];
+
+export type PostApiV1AdminSettingsThemeRollbackResponses = {
+    /**
+     * Theme rollback published
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+            };
+            draft: {
+                theme: {
+                    colors: {
+                        [key: string]: string;
+                    };
+                    typography: {
+                        heading: 'system' | 'modern' | 'editorial';
+                        body: 'system' | 'modern' | 'humanist';
+                        scale: 'compact' | 'standard' | 'generous';
+                    };
+                    cornerStyle: 'square' | 'subtle' | 'rounded';
+                    density: 'compact' | 'comfortable' | 'airy';
+                    containerWidth: 'focused' | 'standard' | 'wide';
+                    components: {
+                        buttons: 'solid' | 'soft' | 'outline';
+                        inputs: 'outlined' | 'filled';
+                        cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                };
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRollbackResponse = PostApiV1AdminSettingsThemeRollbackResponses[keyof PostApiV1AdminSettingsThemeRollbackResponses];
+
+export type PostApiV1AdminSettingsThemePreviewSessionData = {
+    body?: {
+        expectedDraftRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/preview-session';
+};
+
+export type PostApiV1AdminSettingsThemePreviewSessionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePreviewSessionError = PostApiV1AdminSettingsThemePreviewSessionErrors[keyof PostApiV1AdminSettingsThemePreviewSessionErrors];
+
+export type PostApiV1AdminSettingsThemePreviewSessionResponses = {
+    /**
+     * Preview handoff
+     */
+    200: {
+        success: true;
+        data: {
+            token: string;
+            draftRevision: number;
+            basePublishedRevision: number;
+            expiresAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePreviewSessionResponse = PostApiV1AdminSettingsThemePreviewSessionResponses[keyof PostApiV1AdminSettingsThemePreviewSessionResponses];
 
 export type GetApiV1AdminSettingsMediaData = {
     body?: never;
