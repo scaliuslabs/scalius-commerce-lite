@@ -732,6 +732,16 @@ The cleanup bullets below describe the two-product proof store that preceded the
   row remained visible. The destination expanded immediately after drop. The
   explicit row actions then outdented and restored the original order, which
   was republished at revision 9 so the demo was not left dirty.
+- Commit `5aea11546` completed the non-drag exact-placement path. In production,
+  `Move…` opened with the current Top level / position 1 state, offered only
+  depth-safe parents with resulting levels, moved Footwear to position 1 inside
+  Home & Living, and immediately showed the expanded destination. The same
+  dialog restored Top level / position 1 and the original demo order was
+  republished at revision 12. The dashboard console stayed clean.
+- The normalized navigation suite (28 tests), focused dialog/API/service
+  coverage (11 tests), targeted lint, sequential Core/API/API-client/Admin
+  typechecks, sequential API/Admin deployments, and `pnpm release:check` all
+  passed after the exact-placement cutover.
 - The public homepage rendered the normalized header destinations and the
   Shop, Collections, Company, and Help footer menus with current category,
   collection, page, and account routes. Dashboard and storefront consoles were
