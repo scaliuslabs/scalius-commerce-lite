@@ -11,11 +11,12 @@ import {
 } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Dialog, DialogTrigger } from "~/components/ui/dialog";
 import type { MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
-  initialOpen?: boolean;
-  onInitialOpenHandled?: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 const MediaManagerImpl = lazy(() =>
@@ -71,15 +72,16 @@ function MediaManagerTriggerShell({
 
 export function MediaManager(props: MediaManagerProps) {
   const [shouldLoad, setShouldLoad] = useState(false);
-  const [openOnLoad, setOpenOnLoad] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const handleOpen = useCallback(() => {
     setShouldLoad(true);
-    setOpenOnLoad(true);
+    setOpen(true);
   }, []);
 
-  const handleInitialOpen = useCallback(() => {
-    setOpenOnLoad(false);
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setShouldLoad(false);
   }, []);
 
   if (!shouldLoad) {
@@ -87,16 +89,20 @@ export function MediaManager(props: MediaManagerProps) {
   }
 
   return (
-    <Suspense
-      fallback={
-        <MediaManagerTriggerShell {...props} isLoading onOpen={handleOpen} />
-      }
-    >
-      <MediaManagerImpl
-        {...props}
-        initialOpen={openOnLoad}
-        onInitialOpenHandled={handleInitialOpen}
-      />
-    </Suspense>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <MediaManagerTriggerShell
+          {...props}
+          onOpen={() => setShouldLoad(true)}
+        />
+      </DialogTrigger>
+      <Suspense fallback={null}>
+        <MediaManagerImpl
+          {...props}
+          open={open}
+          onOpenChange={handleOpenChange}
+        />
+      </Suspense>
+    </Dialog>
   );
 }
