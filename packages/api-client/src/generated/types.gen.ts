@@ -17549,12 +17549,128 @@ export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses = {
 
 export type PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponse = PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses[keyof PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses];
 
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsData = {
+    body?: never;
+    path: {
+        menuId: string;
+        itemId: string;
+    };
+    query?: {
+        q?: string;
+        limit?: number;
+        parentId?: string;
+        topLevel?: 'true';
+    };
+    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}/move-options';
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsError = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors];
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses = {
+    /**
+     * Move context and bounded parent choices
+     */
+    200: {
+        success: true;
+        data: {
+            item: {
+                id: string;
+                label: string;
+                parentId: string | null;
+            };
+            subtreeDepth: number;
+            currentPosition: number;
+            selectedParentId: string | null;
+            positionCount: number;
+            parents: Array<{
+                id: string;
+                label: string;
+                pathLabel: string;
+                resultingLevel: number;
+                childCount: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponse = GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses[keyof GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses];
+
 export type PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveData = {
     body?: {
         expectedRevision: number;
         parentId?: string | null;
         beforeId?: string;
         afterId?: string;
+        index?: number;
     };
     path: {
         menuId: string;

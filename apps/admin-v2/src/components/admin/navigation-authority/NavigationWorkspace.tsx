@@ -39,6 +39,7 @@ import {
   Link2,
   ListTree,
   MapPin,
+  Move,
   Pencil,
   Plus,
   Search,
@@ -101,6 +102,7 @@ import {
   type NavigationPlacementSetting,
 } from "~/lib/api-functions/navigation-authority";
 import { queryKeys } from "~/lib/query-keys";
+import { NavigationAuthorityMoveDialog } from "./NavigationAuthorityMoveDialog";
 
 export type NavigationWorkspacePanel = "items" | "placements" | "history";
 
@@ -120,6 +122,7 @@ interface MoveDestination {
   parentId: string | null;
   beforeId?: string;
   afterId?: string;
+  index?: number;
 }
 
 const SYSTEM_DESTINATIONS = [
@@ -247,6 +250,7 @@ interface MenuRowProps {
   onToggle: () => void;
   onEdit: () => void;
   onAddChild: () => void;
+  onOpenMove: () => void;
   onMove: (destination: MoveDestination) => void;
 }
 
@@ -264,6 +268,7 @@ function MenuRow({
   onToggle,
   onEdit,
   onAddChild,
+  onOpenMove,
   onMove,
 }: MenuRowProps) {
   const draggable = useDraggable({ id: `item:${item.id}`, data: { item }, disabled: !dragEnabled });
@@ -348,6 +353,9 @@ function MenuRow({
             <DropdownMenuItem onSelect={onAddChild} disabled={depth >= 3}>
               <Plus className="mr-2 size-4" /> Add child
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onOpenMove}>
+              <Move className="mr-2 size-4" /> Move…
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={!previous}
@@ -392,6 +400,7 @@ interface MenuLevelProps {
   onToggle: (itemId: string) => void;
   onEdit: (itemId: string) => void;
   onAddChild: (parentId: string) => void;
+  onOpenMove: (item: NavigationMenuItemRow) => void;
   onMove: (itemId: string, destination: MoveDestination) => void;
 }
 
@@ -406,6 +415,7 @@ function MenuLevel({
   onToggle,
   onEdit,
   onAddChild,
+  onOpenMove,
   onMove,
 }: MenuLevelProps) {
   const query = useInfiniteQuery({
@@ -462,6 +472,7 @@ function MenuLevel({
               onToggle={() => onToggle(item.id)}
               onEdit={() => onEdit(item.id)}
               onAddChild={() => onAddChild(item.id)}
+              onOpenMove={() => onOpenMove(item)}
               onMove={(destination) => onMove(item.id, destination)}
             />
             {expanded && childCount > 0 && depth < 2 && (
@@ -476,6 +487,7 @@ function MenuLevel({
                 onToggle={onToggle}
                 onEdit={onEdit}
                 onAddChild={onAddChild}
+                onOpenMove={onOpenMove}
                 onMove={onMove}
               />
             )}
@@ -1105,6 +1117,7 @@ export function NavigationWorkspace({
   const [activeDrag, setActiveDrag] = useState<NavigationMenuItemRow | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [editMenuOpen, setEditMenuOpen] = useState(false);
+  const [moveDialogItem, setMoveDialogItem] = useState<NavigationMenuItemRow | null>(null);
   const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingExpandIdRef = useRef<string | null>(null);
   const sensors = useSensors(
@@ -1152,6 +1165,7 @@ export function NavigationWorkspace({
     },
     onSuccess: () => {
       toast.success("Menu item moved");
+      setMoveDialogItem(null);
       void invalidateMenu();
     },
     onError: (error) => mutationError(error, "Menu item was not moved"),
@@ -1345,6 +1359,7 @@ export function NavigationWorkspace({
                           onToggle={() => undefined}
                           onEdit={() => onItemChange(item.id)}
                           onAddChild={() => onItemChange("new", item.id)}
+                          onOpenMove={() => setMoveDialogItem(item)}
                           onMove={() => undefined}
                         />
                       )) : (
@@ -1382,6 +1397,7 @@ export function NavigationWorkspace({
                           })}
                           onEdit={(id) => onItemChange(id)}
                           onAddChild={(id) => onItemChange("new", id)}
+                          onOpenMove={setMoveDialogItem}
                           onMove={(id, destination) => moveMutation.mutate({ itemId: id, destination })}
                         />
                       </div>
@@ -1430,6 +1446,23 @@ export function NavigationWorkspace({
           onSaved={() => {
             onItemChange(undefined);
             void invalidateMenu();
+          }}
+        />
+      )}
+      {menu && moveDialogItem && (
+        <NavigationAuthorityMoveDialog
+          open
+          menu={menu}
+          item={moveDialogItem}
+          moving={moveMutation.isPending}
+          onOpenChange={(open) => {
+            if (!open) setMoveDialogItem(null);
+          }}
+          onMove={(destination) => {
+            if (destination.parentId) {
+              setExpandedIds((current) => new Set(current).add(destination.parentId!));
+            }
+            moveMutation.mutate({ itemId: moveDialogItem.id, destination });
           }}
         />
       )}
