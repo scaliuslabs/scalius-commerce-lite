@@ -66,6 +66,9 @@ Source, focused tests, and deployed behavior remain authoritative.
 ## Admin UX decisions
 
 - The create chooser asks what the code reduces, using three compact choices.
+- The activation switch uses a stable action label: `Activate after saving` on
+  create and `Discount active` on edit. Draft, scheduled, active, and expired
+  are lifecycle outcomes shown by the summary badge, not switch labels.
 - Product discounts use a dense primary work column plus a sticky checkout
   preview. Limits state that one code is accepted per order and that redemption
   is commit-time enforced.
@@ -126,6 +129,31 @@ fields:
 
 Do not advertise or add admin switches for these until checkout, tax allocation,
 orders, refunds, analytics, and concurrency enforcement share one design.
+
+## Benchmark direction
+
+- [Shopify](https://help.shopify.com/en/manual/discounts/discount-combinations)
+  exposes product, order, and shipping combination classes only because checkout
+  owns an explicit calculation order and conflict policy. Scalius must not copy
+  those switches ahead of equivalent allocation and refund truth.
+- [Vendure](https://docs.vendure.io/current/core/core-concepts/promotions)
+  separates promotion conditions from actions. That is the useful extensibility
+  boundary for future rules, but the common code workflow should remain a
+  compact outcome-first editor rather than a developer-shaped rule tree.
+- [Medusa](https://docs.medusajs.com/resources/commerce-modules/promotion/campaign)
+  groups promotions into campaigns with usage or spend budgets. A future
+  Scalius campaign model should own shared schedule/budget state instead of
+  duplicating it across codes.
+- [Saleor](https://docs.saleor.io/developer/discounts/promotions) distinguishes
+  catalogue-price promotions from checkout-order promotions and chooses the
+  best qualifying rule. That distinction is useful only after storefront
+  pricing, feed prices, checkout allocation, tax, and refunds consume the same
+  evaluator.
+
+The immediate interface remains intentionally smaller: choose the customer
+outcome, enter its value and eligibility, review a plain-language summary, then
+activate. Advanced promotion mechanics belong behind a shared evaluator first,
+not behind speculative form controls.
 
 ## Verification
 

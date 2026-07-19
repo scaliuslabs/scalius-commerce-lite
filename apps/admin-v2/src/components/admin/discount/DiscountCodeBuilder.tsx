@@ -770,7 +770,7 @@ export function DiscountCodeBuilder({
                       />
                     </FormControl>
                     <FormLabel htmlFor="discount-active" className="cursor-pointer text-sm">
-                      {field.value ? "Enabled" : "Draft"}
+                      {discountId ? "Discount active" : "Activate after saving"}
                     </FormLabel>
                   </FormItem>
                 )}
