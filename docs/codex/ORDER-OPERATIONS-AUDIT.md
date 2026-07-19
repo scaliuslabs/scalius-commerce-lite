@@ -1,6 +1,6 @@
 # Order Operations Audit
 
-Last reviewed: 2026-07-17
+Last reviewed: 2026-07-19
 
 Status: code-backed audit and implementation contract. This file does not claim that a workflow is production-proven merely because a component or endpoint exists.
 
@@ -273,11 +273,30 @@ closed-state visibility/pointer fallback.
 **Implemented**
 
 - Customer/contact/address, total/payment/fulfillment summaries, items, status actions, support requests, payment history/recovery/refunds/COD, notification delivery, shipments/reconciliation, and notes.
-- Primary detail has an explicit error view with retry/back. Optional panels are lazy/polled so payment or notification failures do not replace the whole workspace.
+- Primary detail has an explicit error view with retry/back. Optional panels own
+  their loading/error/empty states so a payment or notification failure does not
+  replace the whole workspace. Route-owned panels are direct imports: internal
+  `lazy()`/`Suspense` boundaries previously allowed an optional chunk to resolve
+  between the server render and hydration, changing the first client tree.
 
 **Proven**
 
-- Navigation/prefetch behavior, payment and notification mutation invalidation, permission projection, notification display grouping, and recovery summaries have focused tests.
+- Navigation/prefetch behavior, payment and notification mutation invalidation,
+  permission projection, notification display grouping, recovery summaries,
+  direct panel boundaries, and payment-query hydration gating have focused
+  tests.
+
+**Live hydration checkpoint — 2026-07-19:** admin version
+`d8e7914f-1768-46ae-a404-211d3a596220` was exercised on the exact production
+order route `/admin/orders/SEJ5E0`. A component-stack-only React recoverable
+error diagnostic traced the remaining mismatch to `PaymentCard`: an optional
+payment prefetch could change from fetching on the server to idle before the
+client's first render, changing a refresh button's disabled/spinner markup.
+Payment history and its fetching affordances now remain behind the existing
+hydration boundary, while the order snapshot renders immediately. Three
+consecutive hard navigations rendered order, notification, return, and refund
+facts with zero console errors or warnings. Keep optional warm-query state out
+of server/first-client markup unless it is part of the route snapshot.
 
 **Gaps**
 
