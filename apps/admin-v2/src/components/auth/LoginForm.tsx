@@ -123,17 +123,11 @@ export function LoginForm() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="password">Password</Label>
-              <Link
-                to="/auth/forgot-password"
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <div className="relative">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
+            <Label htmlFor="password" className="col-start-1 row-start-1">
+              Password
+            </Label>
+            <div className="relative col-span-2 row-start-2">
               <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="password"
@@ -147,6 +141,12 @@ export function LoginForm() {
                 className="h-11 pl-10"
               />
             </div>
+            <Link
+              to="/auth/forgot-password"
+              className="col-start-2 row-start-1 text-xs font-medium text-primary hover:underline"
+            >
+              Forgot password?
+            </Link>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
