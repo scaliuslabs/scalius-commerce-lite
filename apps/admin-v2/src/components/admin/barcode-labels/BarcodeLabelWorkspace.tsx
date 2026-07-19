@@ -7,6 +7,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Download,
   FileText,
   Minus,
   Plus,
@@ -38,6 +39,7 @@ import {
 import { cn } from "@scalius/shared/utils";
 import {
   buildLabelCopies,
+  buildLabelDataCsv,
   clampLabelAlignmentMm,
   clampLabelPreviewPageIndex,
   DEFAULT_LABEL_PRINT_ALIGNMENT,
@@ -505,6 +507,9 @@ export function BarcodeLabelWorkspace({
     : null, [activeFitIssues.length, activeSymbols, preset]);
   const tooManyCopies = copies.length > MAX_LABEL_COPIES;
   const canPrint = copies.length > 0 && !tooManyCopies && !presetIssue && activeFitIssues.length === 0;
+  const canExportLabelData = copies.length > 0
+    && !tooManyCopies
+    && copies.every((copy) => !copy.symbol.error);
   const printReadiness = presetIssue
     ? "Fix format"
     : tooManyCopies
@@ -556,6 +561,21 @@ export function BarcodeLabelWorkspace({
   const startPrint = (mode: PrintMode) => {
     if (!canPrint) return;
     setPrintMode(mode);
+  };
+
+  const downloadLabelData = () => {
+    if (!canExportLabelData) return;
+    const csv = buildLabelDataCsv(copies, formatPrice);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `barcode-labels-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -869,6 +889,30 @@ export function BarcodeLabelWorkspace({
                         </Button>
                       ) : null}
                     </div>
+                  </div>
+                </details>
+                <details className="group border-t pt-3">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden">
+                    <span className="flex items-center gap-1">
+                      <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                      External label software
+                    </span>
+                    <span className="font-normal text-muted-foreground">CSV merge</span>
+                  </summary>
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-md border bg-muted/20 p-2.5">
+                    <span className="min-w-0 text-[10px] leading-4 text-muted-foreground">
+                      One row per label, in this job's order.
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0 px-2 text-xs"
+                      disabled={!canExportLabelData}
+                      onClick={downloadLabelData}
+                    >
+                      <Download className="mr-1.5 h-3.5 w-3.5" /> Download CSV
+                    </Button>
                   </div>
                 </details>
                 <div className="rounded-md bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">

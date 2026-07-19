@@ -147,6 +147,19 @@ guessing from current stock.
   requires the correct symbol, human-readable digits, contrast, and quiet
   zones. Scalius must not shrink a barcode merely to make a crowded template
   look tidy.
+- [Avery's current print options](https://www.avery.com/help/article/printing-steps-and-options-in-design-and-print)
+  explicitly support starting on a later label and printing only part of a
+  sheet. That is why Scalius keeps `Start at cell` as part of the physical job
+  instead of asking office-printer merchants to rebuild a partly used A4 sheet
+  in a design canvas.
+- [Brother P-touch database printing](https://support.brother.com/g/s/es/dev/en/print/database_editor/index.html?navi=offall)
+  uses Excel or other tabular data as the merge source for specialist label
+  templates. Scalius therefore offers a collapsed **External label software**
+  export: a formula-safe UTF-8 CSV with one row per physical label, preserving
+  the exact SKU quantities, output order, encoded symbol value, human-readable
+  value, and automatic selling price already reviewed in the job. It is an
+  advanced bridge, not a second composer or a requirement for ordinary A4 and
+  thermal printing.
 
 ## Scalius workflow
 
@@ -241,6 +254,10 @@ second spreadsheet or preview mode. Preview navigation changes no job facts.
   beside the action. It never guesses printer connection or readiness.
 - Plain-paper presets say so in the format picker. A merchant should not have
   to infer that `cut sheet` means the ordinary A4 paper-and-scissors workflow.
+- A collapsed **External label software** control downloads one UTF-8 CSV row
+  per physical label. It supports database-merge workflows without placing
+  vendor-specific printer controls in the primary path; it does not claim a
+  native printer queue, driver, or ZPL integration.
 - Device-local last-used format/content preferences are appropriate because
   printer, paper, content, output order, and alignment belong to the workstation.
   Shared named templates can be added later without making the initial workflow
@@ -415,6 +432,14 @@ feeds, structured data, or external marketplaces.
   preview, used-sheet start cell, Test, and Print/PDF. The full release check
   then passed dashboard auth, storefront, catalog discovery, UCP, and a live
   product route.
+- Admin version `14fef837-9421-4f08-95e2-ebba601b430d` added the collapsed
+  specialist-software bridge after rechecking the current Shopify, Square,
+  Avery, Brother, Vendure, Medusa, and Saleor boundaries. Production proof
+  loaded an exact Aster SKU, preserved its quantity and physical preview,
+  opened **External label software**, and exposed an enabled **Download CSV**
+  action without adding another primary workflow. The focused model suite now
+  covers 18 cases, including repeated per-label rows, reviewed order, Unicode,
+  symbol metadata, and formula-safe merchant text.
 
 ## Product boundary and future extensions
 
