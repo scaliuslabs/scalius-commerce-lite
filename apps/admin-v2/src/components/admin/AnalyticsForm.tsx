@@ -44,10 +44,13 @@ import {
   OfficialProviderMark,
   type ProviderMarkId,
 } from "@/components/admin/settings/provider-marks";
+import { selectAnalyticsCreateType } from "@/components/admin/analytics-create-route-state";
 
 interface AnalyticsFormProps {
   defaultValues?: Partial<AnalyticsFormValues>;
   isEdit?: boolean;
+  selectedType?: AnalyticsScriptType;
+  onSelectedTypeChange?: (type: AnalyticsScriptType) => void;
 }
 
 const CONFIG_EXAMPLES: Record<AnalyticsScriptType, string> = {
@@ -145,13 +148,18 @@ const PROVIDERS: Array<{
 const providerLabel = (type: AnalyticsScriptType) =>
   PROVIDERS.find((provider) => provider.type === type)?.label ?? "Analytics";
 
-export function AnalyticsForm({ defaultValues, isEdit = false }: AnalyticsFormProps) {
+export function AnalyticsForm({
+  defaultValues,
+  isEdit = false,
+  selectedType: routeSelectedType,
+  onSelectedTypeChange,
+}: AnalyticsFormProps) {
   const { hasPermission } = usePermissions();
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.ANALYTICS_EDIT)
     : hasPermission(PERMISSIONS.ANALYTICS_CREATE);
   const canToggle = hasPermission(PERMISSIONS.ANALYTICS_TOGGLE);
-  const defaultType = defaultValues?.type ?? "cloudflare_web_analytics";
+  const defaultType = routeSelectedType ?? defaultValues?.type ?? "cloudflare_web_analytics";
   const form = useForm<AnalyticsFormValues>({
     resolver: zodResolver(analyticsFormSchema),
     defaultValues: {
@@ -188,6 +196,14 @@ export function AnalyticsForm({ defaultValues, isEdit = false }: AnalyticsFormPr
   });
 
   const previousSuggestion = useRef(CONFIG_EXAMPLES[defaultType]);
+  useEffect(() => {
+    if (!routeSelectedType || form.getValues("type") === routeSelectedType) return;
+    form.setValue("type", routeSelectedType, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }, [form, routeSelectedType]);
+
   useEffect(() => {
     const subscription = form.watch((value, context) => {
       if (context.name !== "type" || !value.type) return;
@@ -232,6 +248,7 @@ export function AnalyticsForm({ defaultValues, isEdit = false }: AnalyticsFormPr
         usePartytown: isCloudflare ? false : values.usePartytown,
       }))}
       formClassName="space-y-4"
+      allowSamePathStateNavigation={!isEdit}
     >
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
@@ -256,7 +273,11 @@ export function AnalyticsForm({ defaultValues, isEdit = false }: AnalyticsFormPr
                           <button
                             key={provider.type}
                             type="button"
-                            onClick={() => field.onChange(provider.type)}
+                            onClick={() => selectAnalyticsCreateType(
+                              provider.type,
+                              field.onChange,
+                              onSelectedTypeChange,
+                            )}
                             className={cn(
                               "relative min-h-20 rounded-md border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                               selected ? "border-foreground bg-muted/55" : "hover:bg-muted/35",

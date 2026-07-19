@@ -98,4 +98,44 @@ describe("UnsavedChangesGuard", () => {
 
     window.removeEventListener(ADMIN_NAVIGATION_CANCELLED_EVENT, cancelled);
   });
+
+  it("allows route-backed state changes on the same form pathname", async () => {
+    await act(async () => {
+      root.render(
+        <UnsavedChangesGuard
+          isDirty={true}
+          isSubmitting={false}
+          allowSamePathStateNavigation={true}
+        />,
+      );
+    });
+
+    const options = mocks.useBlocker.mock.calls.at(-1)?.[0];
+    expect(options.shouldBlockFn({
+      action: "PUSH",
+      current: {
+        routeId: "/admin/analytics/new",
+        fullPath: "/admin/analytics/new",
+        pathname: "/admin/analytics/new",
+      },
+      next: {
+        routeId: "/admin/analytics/new",
+        fullPath: "/admin/analytics/new",
+        pathname: "/admin/analytics/new/",
+      },
+    })).toBe(false);
+    expect(options.shouldBlockFn({
+      action: "PUSH",
+      current: {
+        routeId: "/admin/analytics/new",
+        fullPath: "/admin/analytics/new",
+        pathname: "/admin/analytics/new",
+      },
+      next: {
+        routeId: "/admin/analytics",
+        fullPath: "/admin/analytics",
+        pathname: "/admin/analytics",
+      },
+    })).toBe(true);
+  });
 });

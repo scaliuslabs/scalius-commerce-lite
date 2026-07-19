@@ -13,6 +13,10 @@ import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/a
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { PAGE_PUBLICATION_MODES } from "@/lib/page-publication";
 import {
+  analyticsScriptTypes,
+  type AnalyticsScriptType,
+} from "@/lib/analytics-script-types";
+import {
   isValidResourceCanonicalPath,
   normalizeCanonicalPathInput,
   type CanonicalResourceKind,
@@ -170,16 +174,7 @@ export type CustomerFormValues = z.infer<typeof customerFormSchema>;
 //  ANALYTICS
 // ═══════════════════════════════════════════════════════════════════
 
-export const analyticsScriptTypes = [
-  "google_analytics",
-  "google_tag_manager",
-  "facebook_pixel",
-  "tiktok_pixel",
-  "cloudflare_web_analytics",
-  "custom",
-] as const;
-
-export type AnalyticsScriptType = (typeof analyticsScriptTypes)[number];
+export { analyticsScriptTypes, type AnalyticsScriptType };
 
 export const analyticsFormSchema = z.object({
   id: z.string().optional(),
