@@ -56,6 +56,7 @@ const validateDiscountRoute = createRoute({
         discount: z.object({ id: z.string(), code: z.string(), type: z.string(), discountValue: z.number() }).passthrough().optional(),
         discountAmount: z.number().optional(),
         message: z.string().optional(),
+        requiresCustomerPhone: z.boolean().optional(),
       }).passthrough()) } },
     },
     400: errorResponses[400],

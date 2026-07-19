@@ -180,6 +180,24 @@ describe("isDiscountValid authority", () => {
         });
     });
 
+    it("asks for customer identity only when a one-use rule needs it", async () => {
+        const redemptionDb = createReadDb([
+            { get: discountRow({ limitOnePerCustomer: true }) },
+        ]);
+
+        const result = await isDiscountValid(
+            redemptionDb,
+            "SAVE20",
+            1_000,
+        );
+
+        expect(result).toEqual({
+            valid: false,
+            error: "Enter your phone number to check this one-use discount",
+            requiresCustomerPhone: true,
+        });
+    });
+
     it("checks product minimums against eligible lines instead of unrelated cart items", async () => {
         const scopedDb = createReadDb([
             {

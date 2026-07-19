@@ -92,6 +92,16 @@ Implements a two-layer edge caching strategy for HTML pages:
 - Appends `cache_gen={generation}` on product pages. Exact product purges bump this per-product KV generation, so product HTML moves globally without bumping the whole storefront version.
 - KV version and generation lookups use a canonical namespace: `CACHE_NAMESPACE`, then `STOREFRONT_URL` hostname, then the request hostname. Cache API key URLs still use the actual request hostname/origin so preview, staging, and localhost caches stay isolated.
 
+**Generated browser assets**:
+- Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
+  this back to a shared `/_astro/...` directory: an Astro entry filename can stay
+  stable when a referenced client module changes, while Cloudflare correctly
+  marks generated assets immutable. The build-scoped path ensures an existing
+  browser requests the new code after every source deployment.
+- The generated build ID is validated as a path-safe token before Astro config
+  uses it. Cloudflare may deduplicate identical file bodies internally; the
+  public URL still remains build-scoped.
+
 **Cache flow**:
 1. Check Cloudflare Cache API for cached HTML (with 500ms timeout)
 2. On HIT: return cached response with browser no-cache headers for HTML, or the route's public TTL for generated discovery XML/text

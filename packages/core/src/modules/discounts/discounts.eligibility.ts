@@ -289,7 +289,16 @@ export async function isDiscountValid(
         }
     }
 
-    // Check usage limit per customer (requires customerPhone)
+    // One-use rules need a stable buyer identity before the advisory check can
+    // truthfully say that the code is available. Unrestricted codes do not.
+    if (discount.limitOnePerCustomer && !customerPhone?.trim()) {
+        return {
+            valid: false,
+            error: "Enter your phone number to check this one-use discount",
+            requiresCustomerPhone: true,
+        };
+    }
+
     if (discount.limitOnePerCustomer && customerPhone) {
         try {
             const customerUsageResult = await db
