@@ -5951,6 +5951,9 @@
                         },
                         "message": {
                           "type": "string"
+                        },
+                        "requiresCustomerPhone": {
+                          "type": "boolean"
                         }
                       },
                       "required": [

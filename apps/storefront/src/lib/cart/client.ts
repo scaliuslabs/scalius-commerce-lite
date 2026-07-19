@@ -817,16 +817,11 @@ async function handleApplyDiscount() {
 
   const customerPhoneInput = document.getElementById(
     "customerPhone",
-  ) as HTMLInputElement;
-  const customerPhone = customerPhoneInput?.value;
-  if (!customerPhone || customerPhone.trim().length < 7) {
-    showDiscountMessage(
-      "Please enter a valid phone number before applying a discount.",
-      "info",
-    );
-    customerPhoneInput.focus();
-    return;
-  }
+  ) as HTMLInputElement | null;
+  const enteredPhone = customerPhoneInput?.value.trim();
+  const customerPhone = enteredPhone && enteredPhone.length >= 7
+    ? enteredPhone
+    : undefined;
 
   const applyBtn = document.getElementById(
     "applyDiscountBtn",
@@ -858,6 +853,9 @@ async function handleApplyDiscount() {
       });
       showDiscountMessage("Discount applied successfully!", "success");
     } else {
+      if (result?.requiresCustomerPhone) {
+        customerPhoneInput?.focus();
+      }
       showDiscountMessage(result?.error || "Invalid discount code", "error");
     }
   } catch (error: unknown) {

@@ -537,6 +537,7 @@ export interface DiscountValidationResponse {
   discountAmount?: number;
   minPurchaseAmount?: number;
   minQuantity?: number;
+  requiresCustomerPhone?: boolean;
 }
 
 export interface AnalyticsConfig {

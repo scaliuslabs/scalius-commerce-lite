@@ -372,6 +372,70 @@ describe("initCartFunctionality", () => {
     expect(removedEvents).toHaveBeenCalledTimes(1);
   });
 
+  it("validates unrestricted discount codes before the buyer enters a phone", async () => {
+    const phoneInput = document.getElementById("customerPhone") as HTMLInputElement;
+    phoneInput.value = "";
+    apiMocks.validateDiscount.mockResolvedValue({
+      valid: true,
+      discount: {
+        id: "disc_open",
+        code: "OPEN10",
+        type: "amount_off_order",
+        valueType: "percentage",
+        discountValue: 10,
+      },
+      discountAmount: 10,
+    });
+
+    await initCartFunctionality();
+    const codeInput = document.getElementById("discountCodeInput") as HTMLInputElement;
+    codeInput.value = "open10";
+    document.getElementById("discountForm")?.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
+      "OPEN10",
+      100,
+      [expect.objectContaining(CART_ITEM)],
+      60,
+      undefined,
+    );
+    expect(cartStore.get().discount?.code).toBe("OPEN10");
+  });
+
+  it("focuses the phone field only when a one-use code requires identity", async () => {
+    const phoneInput = document.getElementById("customerPhone") as HTMLInputElement;
+    phoneInput.value = "";
+    apiMocks.validateDiscount.mockResolvedValue({
+      valid: false,
+      error: "Enter your phone number to check this one-use discount",
+      requiresCustomerPhone: true,
+    });
+
+    await initCartFunctionality();
+    const codeInput = document.getElementById("discountCodeInput") as HTMLInputElement;
+    codeInput.value = "ONCE";
+    document.getElementById("discountForm")?.dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
+      "ONCE",
+      100,
+      [expect.objectContaining(CART_ITEM)],
+      60,
+      undefined,
+    );
+    expect(document.activeElement).toBe(phoneInput);
+    expect(document.getElementById("discountMessage")?.textContent).toBe(
+      "Enter your phone number to check this one-use discount",
+    );
+    expect(cartStore.get().discount).toBeNull();
+  });
+
   it("keeps cart page startup free of stale checkout id and inline discount hooks", () => {
     const cartPagePath = [
       `${process.cwd()}/src/pages/cart.astro`,

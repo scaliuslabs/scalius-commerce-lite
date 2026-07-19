@@ -8,8 +8,12 @@ import tailwindcss from "@tailwindcss/vite";
 import { partytownConfig } from "./src/lib/partytown-config.ts";
 import { CDN_DOMAINS } from "./src/lib/image-config.ts";
 import cloudflare from "@astrojs/cloudflare";
+import { readBuildAssetsDirectory } from "./scripts/build-assets-directory.mjs";
 
 const persistStatePath = process.env.SCALIUS_WRANGLER_STATE || "../../.wrangler/state";
+const buildAssetsDirectory = readBuildAssetsDirectory(
+  new URL("./src/config/build-id.ts", import.meta.url),
+);
 const reactSingletonDeps = [
   "react",
   "react-dom",
@@ -32,6 +36,10 @@ export default defineConfig({
   },
 
   build: {
+    // Astro's entry chunk name can remain stable when a referenced client module
+    // changes. Scope the whole asset directory to BUILD_ID so a browser can safely
+    // cache deployed JS/CSS as immutable without executing a previous build.
+    assets: buildAssetsDirectory,
     inlineStylesheets: "always",
   },
 

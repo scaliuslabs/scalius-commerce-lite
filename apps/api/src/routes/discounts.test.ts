@@ -118,6 +118,31 @@ describe("public discount routes", () => {
     });
   });
 
+  it("preserves the structured phone requirement for one-use codes", async () => {
+    const { app } = createTestApp();
+    mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳", decimalPlaces: 2 });
+    mocks.isDiscountValid.mockResolvedValue({
+      valid: false,
+      error: "Enter your phone number to check this one-use discount",
+      requiresCustomerPhone: true,
+    });
+
+    const response = await app.request("/api/v1/discounts/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "ONCE" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      success: true,
+      data: {
+        valid: false,
+        requiresCustomerPhone: true,
+      },
+    });
+  });
+
   it("uses typed promotion authority without consulting the legacy evaluator", async () => {
     const { app } = createTestApp();
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳", decimalPlaces: 2 });

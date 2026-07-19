@@ -1884,6 +1884,7 @@ export type PostApiV1DiscountsValidateResponses = {
             };
             discountAmount?: number;
             message?: string;
+            requiresCustomerPhone?: boolean;
             [key: string]: unknown;
         };
     };

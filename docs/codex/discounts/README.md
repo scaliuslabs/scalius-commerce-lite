@@ -1,6 +1,6 @@
 # Discounts
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-20
 
 This document records the discount authority and the merchant-facing contract.
 Source, focused tests, and deployed behavior remain authoritative.
@@ -25,6 +25,10 @@ Source, focused tests, and deployed behavior remain authoritative.
 - Public `/discounts/validate` is an advisory cart interaction. The order tax
   quote and synchronous order commit re-read authoritative product, variant,
   delivery, customer-phone, and discount facts before money or stock changes.
+- The storefront may validate an unrestricted code before the buyer has entered
+  a phone number. A one-use-per-customer code returns the structured
+  `requiresCustomerPhone` result instead; the cart then focuses the existing
+  checkout phone field. Do not block every code behind identity collection.
 - Minimum purchase for order and delivery codes uses the merchandise subtotal,
   excluding delivery. A product-scoped code checks the subtotal and quantity of
   eligible lines only; unrelated cart lines cannot satisfy its minimums.
@@ -114,6 +118,26 @@ Source, focused tests, and deployed behavior remain authoritative.
   forward restore the same builder instead of silently returning to the type
   chooser. **Change type** removes only that search value and retains unrelated
   route context.
+
+## Anonymous validation checkpoint (2026-07-20)
+
+- The public validator now distinguishes identity-free eligibility from rules
+  that actually need customer identity. An unrestricted code can be checked
+  with the checkout phone field empty; a one-use-per-customer rule returns the
+  typed `requiresCustomerPhone` outcome and the cart focuses the existing phone
+  control without treating the code itself as invalid.
+- Production proof used the active unrestricted free-delivery code `NN7HXMAX`
+  with an empty phone field and applied the exact BDT 110 shipping reduction.
+  A temporary active one-use code then returned `Enter your phone number to
+  check this one-use discount`, applied successfully after a valid Bangladesh
+  phone was entered, and was permanently deleted after the test.
+- The deployment exercise found a separate stale-client boundary: a generated
+  Astro entry filename had remained stable across changed cart logic while its
+  response was correctly marked immutable. Storefront assets are now emitted
+  below `/_astro/{BUILD_ID}/...`, so reloads and long-lived tabs cannot retain a
+  previous client build under the same URL. Desktop and 390 x 844 production
+  checks loaded the versioned asset path with no horizontal overflow or browser
+  errors.
 
 ## Deliberate remaining gaps
 
