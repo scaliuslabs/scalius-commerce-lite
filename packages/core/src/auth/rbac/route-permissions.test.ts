@@ -69,6 +69,26 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.PRODUCTS_EDIT });
   });
 
+  it("authorizes every normalized navigation command depth", () => {
+    const permission = { permission: PERMISSIONS.SETTINGS_HEADER_EDIT };
+    expect(getRoutePermission(
+      "/api/v1/admin/navigation/menus/menu_1",
+      "GET",
+    )).toEqual(permission);
+    expect(getRoutePermission(
+      "/api/v1/admin/navigation/menus/menu_1/items",
+      "GET",
+    )).toEqual(permission);
+    expect(getRoutePermission(
+      "/api/v1/admin/navigation/menus/menu_1/items/item_1",
+      "PATCH",
+    )).toEqual(permission);
+    expect(getRoutePermission(
+      "/api/v1/admin/navigation/menus/menu_1/items/item_1/move",
+      "POST",
+    )).toEqual(permission);
+  });
+
   it("authorizes category publication readiness and status endpoints", () => {
     expect(getRoutePermission(
       "/api/v1/admin/categories/cat_1/publish-readiness",
