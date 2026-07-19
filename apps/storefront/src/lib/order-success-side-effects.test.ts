@@ -97,4 +97,20 @@ describe("order success side effects", () => {
     expect(retryScript.indexOf("fetchPaymentSessionWithProcessingRetry"))
       .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
   });
+
+  it("reconciles a pending hosted payment through a same-origin receipt status read", () => {
+    const pageSource = readFileSync(
+      sourcePath("pages", "order-success.astro"),
+      "utf8",
+    );
+
+    expect(pageSource).toContain("data-order-success-state='payment_pending'");
+    expect(pageSource).toContain("/api/order-receipt/status?orderId=");
+    expect(pageSource).toContain('credentials: "same-origin"');
+    expect(pageSource).toContain('cache: "no-store"');
+    expect(pageSource).toContain('state !== "payment_pending"');
+    expect(pageSource).toContain("window.location.reload()");
+    expect(pageSource).not.toContain("X-Receipt-Token");
+    expect(pageSource).not.toContain("receiptToken=${");
+  });
 });

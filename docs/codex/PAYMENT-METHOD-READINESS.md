@@ -1,6 +1,6 @@
 # Payment Method Readiness
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-19
 
 This note records the exact merchant and buyer result for the four currently
 supported payment methods. It is a regression matrix, not a claim that Scalius
@@ -158,11 +158,21 @@ reconciliation, secret rotation, or test-to-live cutover.
   `1c8ab5aa-8914-45b9-bf79-2699af7f3f25` after 45 focused checkout tests and
   the storefront typecheck passed.
 - Fresh deployed buyer attempts produced one incomplete Stripe order, one
-  incomplete SSLCommerz order, one incomplete Polar order, and one completed
-  COD placement. SSLCommerz reached EasyCheckout sandbox at BDT 9,100; Polar
-  reached its no-payment sandbox; COD produced receipt `1NC5RO`. The admin list
-  and detail route loaded these states, and the exact SKU projection reconciled
-  on-hand 14 = reserved 4 + available 10.
+  SSLCommerz order, one incomplete Polar order, and one completed COD placement.
+  SSLCommerz reached EasyCheckout sandbox at BDT 9,100 and completed its
+  official test-card/OTP success flow; order `SEJ5E0` became **Paid** for the
+  exact BDT 9,100 in admin. Polar reached its no-payment sandbox; COD produced
+  receipt `1NC5RO`. The admin list and detail route loaded these states, and the
+  exact SKU projection reconciled on-hand 14 = reserved 4 + available 10.
+- The first SSLCommerz return rendered a truthful pending receipt while the
+  provider callback settled. Once D1 already showed Paid, the static page had
+  no status reconciliation and stayed pending until reload. Storefront
+  deployment `0e039efc-64dc-4b2d-a3dd-cdc992bd6354` adds a bounded,
+  visibility-aware same-origin status read. It resolves receipt proof only from
+  the httpOnly cookie, returns just the derived state and update time, and
+  reloads only when authority leaves `payment_pending`. Eighteen focused tests,
+  storefront typecheck, lint, and the deployed `order_placed` response proved
+  the boundary; the live receipt now renders Paid without proof in its URL.
 - The four guest attempts sharing one phone appear as a single **Guest** buyer
   with four orders and a customer-history route in `/admin/customers`. Guest
   buyer facts stay useful to the merchant without a separate second-class
@@ -173,8 +183,10 @@ reconciliation, secret rotation, or test-to-live cutover.
 - Add read-only provider connection tests and verified webhook/event health;
   until then **Not checked** is the only truthful status.
 - Add coordinated credential rotation/cutover with historical refund support.
-- Execute and record the sandbox success/failure/duplicate/webhook/refund matrix
-  in `COMMERCE-SETTINGS-BENCHMARK.md` for every provider before release.
+- Finish the sandbox failure/duplicate/webhook/refund matrix in
+  `COMMERCE-SETTINGS-BENCHMARK.md` for every provider before release. One
+  SSLCommerz successful authorization/callback/receipt recovery path is now
+  proved; that single path is not provider-health coverage.
 - Replace local Checkout Settings sections with separate authority-owned routes.
   Checkout Flow and Payment now guard dirty navigation, but the current mounted
   section strip remains an interim addressable-query workspace rather than the
