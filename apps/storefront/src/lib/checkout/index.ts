@@ -60,6 +60,18 @@ function getPaymentResultErrorMessage(result: PaymentResult): string {
   return getCheckoutStatusErrorMessage(result.status, result.error || "Payment failed");
 }
 
+export function getPaymentResultRecovery(result: PaymentResult): {
+  message: string;
+  buttonText: string;
+} | null {
+  if (result.errorCode !== "CUSTOMER_SESSION_STALE") return null;
+
+  return {
+    message: "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
+    buttonText: "Continue as guest",
+  };
+}
+
 function setPayButton(text: string, disabled = false): void {
   const btn = document.getElementById("payButton") as HTMLButtonElement | null;
   const span = document.getElementById("payButtonText");
@@ -651,6 +663,17 @@ async function processPayment(): Promise<void> {
           issues: result.cartIssues,
           message: result.error || checkoutFreshnessMessage(null, result.cartIssues),
         });
+        return;
+      }
+
+      const recovery = getPaymentResultRecovery(result);
+      if (recovery) {
+        if (loadingOverlay) {
+          loadingOverlay.style.display = "none";
+        }
+        isProcessing = false;
+        showError(recovery.message);
+        setPayButton(recovery.buttonText, false);
         return;
       }
       throw new Error(getPaymentResultErrorMessage(result));
