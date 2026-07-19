@@ -46,11 +46,13 @@ describe("admin form workflow boundaries", () => {
   it("requires a fail-closed save capability from every consumer", () => {
     expect(actionBarSource).toContain("canSave: boolean;");
     expect(actionBarSource).not.toContain("canSave = true");
-    expect(actionBarSource).toContain("disabled={isSubmitting || !canSave}");
-    expect(actionBarSource).toContain("if (canSave) onSave();");
+    expect(actionBarSource).toContain("disabled={isSubmitting || !canSave || !isDirty}");
+    expect(actionBarSource).toContain("if (canSave && isDirty) onSave();");
     expect(formContainerSource).toContain("canSave: boolean;");
     expect(formContainerSource).not.toContain("canSave = true");
-    expect(formContainerSource).toContain("if (canSave) onSubmit();");
+    expect(formContainerSource).toContain("if (canSave && form.formState.isDirty) onSubmit();");
+    expect(formContainerSource).toContain("getFormEntityLabel(title, newLabel)");
+    expect(formContainerSource).toContain("title={entityLabel}");
     expect(formContainerSource).toContain("canSave={canSave}");
     expect(formContainerSource).toContain("saveDisabledReason={saveDisabledReason}");
   });
@@ -65,6 +67,8 @@ describe("admin form workflow boundaries", () => {
     expect(orderFormSource).toContain("orderActions.canCreateOrders");
     expect(orderFormSource).toContain("orderActions.canEditOrders");
     expect(orderFormSource).toContain("canSave && !isSubmitting");
+    expect(orderFormSource).toContain("onSubmit={canSave && form.formState.isDirty");
+    expect(collectionFormSource).toContain("onSubmit={canSave && form.formState.isDirty");
     expect(collectionFormSource).toContain("canSave={canSave}");
     for (const source of [categoryFormSource, pageFormSource, customerFormSource, analyticsFormSource, orderFormSource, collectionFormSource]) {
       expect(source).toContain("canSave={canSave}");

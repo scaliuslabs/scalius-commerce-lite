@@ -127,3 +127,20 @@ Executable source belongs only in the edit workflow.
   page reload at 1440 px. The empty analytics workspace was also checked at a
   real 390 × 844 viewport in dark mode with no horizontal overflow. Admin
   deployment: `4c30182b-13f6-4664-b316-09e22f5980fb`.
+
+## Create-form workflow checkpoint (2026-07-19)
+
+- Admin `f545db93-6b63-46e2-8a34-b9aab9e670af` is live at 100%. Shared admin
+  form copy now derives one singular entity label, so the analytics route says
+  **Create analytics integration** and **Add a new analytics integration**
+  instead of exposing route-title grammar such as “New analytics” or “new new.”
+- Shared form submit and sticky-save paths now require an actual dirty draft in
+  addition to permission and validation readiness. This prevents a newly opened
+  analytics, product, category, customer, page, collection, or order workflow
+  from presenting an enabled no-op write.
+- Authenticated production verification proved the untouched analytics draft
+  has a disabled **Create draft** action, editing its name enables that action,
+  and a full reload restores the disabled untouched state. No analytics row or
+  provider configuration was written during the smoke.
+- Eighteen focused shared-form, analytics-list/card, and collection workflow
+  tests passed. Targeted lint and the sequential Admin typecheck were clean.

@@ -4,6 +4,7 @@ import { Form } from "@/components/ui/form";
 import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { ErrorBoundary } from "@/components/admin/ErrorBoundary";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
+import { getFormEntityLabel } from "./form-copy";
 
 interface FormContainerProps<T extends FieldValues> {
   /** The section name shown as breadcrumb link (e.g., "Categories") */
@@ -60,7 +61,7 @@ export function FormContainer<T extends FieldValues>({
   children,
   formClassName = "-mt-4 pb-6",
 }: FormContainerProps<T>) {
-  const entityLabel = newLabel?.replace(/^New\s+/, "") ?? title.replace(/s$/, "");
+  const entityLabel = getFormEntityLabel(title, newLabel);
 
   return (
     <ErrorBoundary>
@@ -73,7 +74,7 @@ export function FormContainer<T extends FieldValues>({
           method="post"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canSave) onSubmit();
+            if (canSave && form.formState.isDirty) onSubmit();
           }}
           className={formClassName}
           noValidate
@@ -91,7 +92,7 @@ export function FormContainer<T extends FieldValues>({
           {children}
         </form>
         <FormActionBar
-          title={title}
+          title={entityLabel}
           isEdit={isEdit}
           isSubmitting={isSubmitting}
           isDirty={form.formState.isDirty}

@@ -926,6 +926,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
 - Twenty-five focused Tax form/readiness/workspace tests, targeted lint, and
   the sequential Admin typecheck and deployment passed.
 
+### Shared form and Analytics draft checkpoint (2026-07-19)
+
+- The current production authority still contains the intended rich baseline:
+  5 categories with exactly 10 products each, 50 products, 177 sellable SKUs,
+  46 optioned products, 4 simple products, 49 rich additional-description
+  sections, 5 manifest collections, 3 responsive hero stories, and 246 ready
+  Media assets covering 237 manifest intents.
+- The empty Analytics list is intentional: it no longer fabricates provider
+  setup for visual fullness. Its create route did expose shared form slop—an
+  enabled untouched action and duplicate “new” copy—and therefore became the
+  next merchant-workflow repair.
+- Admin `f545db93-6b63-46e2-8a34-b9aab9e670af` is live at 100%. Singular form
+  labels now produce **Create analytics integration** and **Add a new analytics
+  integration to your store**. Shared form and sticky-save paths require a
+  dirty draft before submitting.
+- Authenticated production verification proved the untouched **Create draft**
+  action is disabled, becomes enabled after editing the integration name, and
+  returns to disabled after a full reload. No analytics integration was
+  created. Eighteen focused tests, targeted lint, and the sequential Admin
+  typecheck passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

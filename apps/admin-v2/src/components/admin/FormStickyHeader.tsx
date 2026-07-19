@@ -119,12 +119,14 @@ export function FormActionBar({
           <Button
             size="sm"
             type="button"
-            disabled={isSubmitting || !canSave}
+            disabled={isSubmitting || !canSave || !isDirty}
             title={!canSave
               ? saveDisabledReason ?? `You do not have permission to save this ${title.replace(/s$/, "").toLowerCase()}.`
+              : !isDirty
+                ? "No changes to save"
               : undefined}
             onClick={() => {
-              if (canSave) onSave();
+              if (canSave && isDirty) onSave();
             }}
             className="h-8 text-xs font-medium"
           >
