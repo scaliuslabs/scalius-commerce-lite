@@ -492,6 +492,13 @@ feeds, structured data, or external marketplaces.
   page with vector symbols, exact SKU facts, no dashboard chrome, and no
   clipping. The same selected two-SKU job retained zero horizontal overflow at
   390 x 844. Pre-cut adhesive stock remains a separate guide-free preset.
+- Admin version `b971379b-ddc9-4b31-b1e6-565f3e130f8e` keeps that recovery at
+  the point of discovery instead of below the full paper preview. Production
+  proof selected an Arka SKU whose preserved Code 128 value needs about 86 mm,
+  showed the A4 3 x 8 blocker immediately beneath the selected-SKU card, and
+  offered **Use A4 wide cut** before the searchable picker. The action switched
+  to the 2 x 7 plain-paper format and enabled Test and Print/PDF on desktop and
+  at 390 x 844, with zero horizontal overflow and no browser errors.
 
 ## Product boundary and future extensions
 
