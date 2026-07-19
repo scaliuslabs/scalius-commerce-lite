@@ -381,7 +381,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
         : false;
     },
   });
-  const paymentsResult = paymentsData as OrderPaymentsResult | null;
+  // Optional warm queries can finish between the server render and client
+  // hydration. Ignore that secondary cache until hydration so both first
+  // renders use the order-detail snapshot, then reveal the richer history.
+  const paymentsResult = isHydrated
+    ? (paymentsData as OrderPaymentsResult | null)
+    : null;
+  const paymentHistoryFetching = isHydrated && paymentsFetching;
   const payments = paymentsResult?.payments ?? [];
   const plan = paymentsResult?.plan ?? null;
   const paymentSessionAttempts = paymentsResult?.paymentSessionAttempts ?? [];
@@ -700,9 +706,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   size="sm"
                   className="h-7 shrink-0 px-2 text-xs"
                   onClick={() => void refetchPayments()}
-                  disabled={paymentsFetching}
+                  disabled={paymentHistoryFetching}
                 >
-                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  {paymentHistoryFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                   Retry
                 </Button>
               </div>
@@ -757,9 +763,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       size="sm"
                       className="h-7 shrink-0 border-red-300 bg-white/60 px-2 text-xs text-red-950 hover:bg-red-100 dark:border-red-900/50 dark:bg-black/10 dark:text-red-100"
                       onClick={() => void refetchPayments()}
-                      disabled={paymentsFetching}
+                      disabled={paymentHistoryFetching}
                     >
-                      {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      {paymentHistoryFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                       Refresh
                     </Button>
                   </div>
@@ -811,9 +817,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={() => void refetchPayments()}
-                  disabled={paymentsFetching}
+                  disabled={paymentHistoryFetching}
                 >
-                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  {paymentHistoryFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                   Refresh
                 </Button>
               </div>
@@ -963,9 +969,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={() => void refetchPayments()}
-                  disabled={paymentsFetching}
+                  disabled={paymentHistoryFetching}
                 >
-                  {paymentsFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  {paymentHistoryFetching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
                   Refresh
                 </Button>
               </div>

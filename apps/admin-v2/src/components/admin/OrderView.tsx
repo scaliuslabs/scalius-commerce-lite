@@ -1,4 +1,3 @@
-import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { Order } from "./orderview/types";
@@ -10,24 +9,9 @@ import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { PaymentCard } from "./orderview/PaymentCard";
-
-const LazyOrderReturnsCard = lazy(() =>
-  import("./orderview/OrderReturnsCard").then((module) => ({
-    default: module.OrderReturnsCard,
-  })),
-);
-
-const LazyOrderSupportRequestsCard = lazy(() =>
-  import("./orderview/OrderSupportRequestsCard").then((module) => ({
-    default: module.OrderSupportRequestsCard,
-  })),
-);
-
-const LazyOrderNotificationsCard = lazy(() =>
-  import("./orderview/OrderNotificationsCard").then((module) => ({
-    default: module.OrderNotificationsCard,
-  })),
-);
+import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
+import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
+import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 
 interface OrderViewProps {
   order: Order;
@@ -46,14 +30,10 @@ export function OrderView({ order }: OrderViewProps) {
           <div className="space-y-4 lg:col-span-4">
             <OrderStatusCard order={order} />
             {(order.supportRequests?.length ?? 0) > 0 && (
-              <Suspense fallback={<OrderPanelSkeleton heightClassName="h-32" />}>
-                <LazyOrderSupportRequestsCard order={order} />
-              </Suspense>
+              <OrderSupportRequestsCard order={order} />
             )}
             <PaymentCard order={order} />
-            <Suspense fallback={<OrderPanelSkeleton heightClassName="h-40" />}>
-              <LazyOrderNotificationsCard order={order} />
-            </Suspense>
+            <OrderNotificationsCard order={order} />
             <ShipmentCard order={order} />
             <OrderNotesCard order={order} />
           </div>
@@ -61,17 +41,11 @@ export function OrderView({ order }: OrderViewProps) {
           {/* Right Column for Order Items */}
           <div className="space-y-4 lg:col-span-8">
             <OrderItemsCard order={order} />
-            <Suspense fallback={<OrderPanelSkeleton heightClassName="h-40" />}>
-              <LazyOrderReturnsCard order={order} />
-            </Suspense>
+            <OrderReturnsCard order={order} />
           </div>
         </div>
       </div>
     </TooltipProvider>
     </ErrorBoundary>
   );
-}
-
-function OrderPanelSkeleton({ heightClassName }: { heightClassName: string }) {
-  return <div className={`${heightClassName} rounded-lg border border-border bg-muted/40`} />;
 }
