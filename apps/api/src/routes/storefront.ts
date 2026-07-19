@@ -25,6 +25,7 @@ const homepageDataSchema = z.object({
   seo: flexibleObjectSchema,
   hero: flexibleObjectSchema,
   collections: z.array(flexibleObjectSchema.nullable()),
+  presentation: flexibleObjectSchema,
 }).passthrough();
 type HomepageData = z.infer<typeof homepageDataSchema>;
 
@@ -52,7 +53,7 @@ const homepageRoute = createRoute({
   method: "get",
   path: "/homepage",
   tags: ["Storefront"],
-  summary: "Get consolidated homepage data (SEO, hero, collections + products)",
+  summary: "Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)",
   responses: {
     200: {
       description: "Homepage data",

@@ -2073,6 +2073,9 @@ export type GetApiV1StorefrontHomepageResponses = {
             collections: Array<{
                 [key: string]: unknown;
             } | null>;
+            presentation: {
+                [key: string]: unknown;
+            };
             [key: string]: unknown;
         };
     };
@@ -24404,6 +24407,231 @@ export type PostApiV1AdminSettingsStorefrontUrlResponses = {
 };
 
 export type PostApiV1AdminSettingsStorefrontUrlResponse = PostApiV1AdminSettingsStorefrontUrlResponses[keyof PostApiV1AdminSettingsStorefrontUrlResponses];
+
+export type GetApiV1AdminSettingsHomepagePresentationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/homepage-presentation';
+};
+
+export type GetApiV1AdminSettingsHomepagePresentationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsHomepagePresentationError = GetApiV1AdminSettingsHomepagePresentationErrors[keyof GetApiV1AdminSettingsHomepagePresentationErrors];
+
+export type GetApiV1AdminSettingsHomepagePresentationResponses = {
+    /**
+     * Homepage presentation
+     */
+    200: {
+        success: true;
+        data: {
+            config: {
+                categoryRail: {
+                    enabled: boolean;
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+                trustStrip: {
+                    enabled: boolean;
+                };
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsHomepagePresentationResponse = GetApiV1AdminSettingsHomepagePresentationResponses[keyof GetApiV1AdminSettingsHomepagePresentationResponses];
+
+export type PostApiV1AdminSettingsHomepagePresentationData = {
+    body?: {
+        categoryRail: {
+            enabled: boolean;
+            title: string;
+            categoryIds: Array<string>;
+        };
+        trustStrip: {
+            enabled: boolean;
+        };
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/homepage-presentation';
+};
+
+export type PostApiV1AdminSettingsHomepagePresentationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsHomepagePresentationError = PostApiV1AdminSettingsHomepagePresentationErrors[keyof PostApiV1AdminSettingsHomepagePresentationErrors];
+
+export type PostApiV1AdminSettingsHomepagePresentationResponses = {
+    /**
+     * Homepage presentation saved
+     */
+    200: {
+        success: true;
+        data: {
+            config: {
+                categoryRail: {
+                    enabled: boolean;
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+                trustStrip: {
+                    enabled: boolean;
+                };
+            };
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsHomepagePresentationResponse = PostApiV1AdminSettingsHomepagePresentationResponses[keyof PostApiV1AdminSettingsHomepagePresentationResponses];
 
 export type GetApiV1AdminSettingsAllowedCountriesData = {
     body?: never;

@@ -142,6 +142,8 @@ export const siteSettings = sqliteTable("site_settings", {
     siteTitle: text("site_title"),
     homepageTitle: text("homepage_title"),
     homepageMetaDescription: text("homepage_meta_description"),
+    homepageConfig: text("homepage_config").notNull().default("{}"),
+    homepageConfigRevision: integer("homepage_config_revision").notNull().default(1),
     robotsTxt: text("robots_txt"),
     storefrontUrl: text("storefront_url").default("/"),
     authVerificationMethod: text("auth_verification_method", { enum: ["email", "both", "whatsapp_otp", "sms_otp"] }).notNull().default("email"),
@@ -163,6 +165,7 @@ export const siteSettings = sqliteTable("site_settings", {
     uniqueIndex("site_settings_singleton_idx").on(table.singletonKey),
     check("site_settings_header_config_revision_positive", sql`${table.headerConfigRevision} >= 1`),
     check("site_settings_footer_config_revision_positive", sql`${table.footerConfigRevision} >= 1`),
+    check("site_settings_homepage_config_revision_positive", sql`${table.homepageConfigRevision} >= 1`),
     check("site_settings_checkout_flow_revision_positive", sql`${table.checkoutFlowRevision} >= 1`),
 ]);
 

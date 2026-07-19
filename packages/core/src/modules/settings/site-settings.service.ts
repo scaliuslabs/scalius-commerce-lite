@@ -47,6 +47,11 @@ import {
   parseSeoReturnPolicySettings,
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
+import {
+  parseHomepagePresentationConfig,
+  sanitizeHomepagePresentationConfig,
+  type HomepagePresentationConfig,
+} from "@scalius/shared/homepage-presentation";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -91,6 +96,8 @@ export interface ThemePreviewSessionDocument {
 
 export const SITE_PRESENTATION_REVISION_CONFLICT =
   "SITE_PRESENTATION_REVISION_CONFLICT";
+export const HOMEPAGE_PRESENTATION_REVISION_CONFLICT =
+  "HOMEPAGE_PRESENTATION_REVISION_CONFLICT";
 
 export type SitePresentationSection = "header" | "footer";
 
@@ -127,8 +134,20 @@ export class SitePresentationRevisionConflictError extends AppError {
 function assertPresentationRevision(expectedRevision: number): void {
   if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
     throw new ValidationError(
-      "A non-negative header or footer settings revision is required.",
+      "A non-negative presentation settings revision is required.",
     );
+  }
+}
+
+export class HomepagePresentationRevisionConflictError extends AppError {
+  constructor(expectedRevision: number, currentRevision: number | null) {
+    super(
+      409,
+      HOMEPAGE_PRESENTATION_REVISION_CONFLICT,
+      "Homepage presentation changed in another session. Your changes were not saved.",
+      { expectedRevision, currentRevision },
+    );
+    this.name = "HomepagePresentationRevisionConflictError";
   }
 }
 
@@ -549,6 +568,85 @@ export async function saveFooterConfig(
     .get();
   throw new SitePresentationRevisionConflictError(
     "footer",
+    expectedRevision,
+    current?.revision ?? null,
+  );
+}
+
+// ─────────────────────────────────────────
+// Homepage presentation
+// ─────────────────────────────────────────
+
+export async function getHomepagePresentationSettings(
+  db: Database,
+): Promise<{ config: HomepagePresentationConfig; revision: number }> {
+  const row = await db
+    .select({
+      config: siteSettings.homepageConfig,
+      revision: siteSettings.homepageConfigRevision,
+    })
+    .from(siteSettings)
+    .where(eq(siteSettings.singletonKey, "default"))
+    .get();
+
+  return {
+    config: parseHomepagePresentationConfig(row?.config),
+    revision: row?.revision ?? 0,
+  };
+}
+
+export async function saveHomepagePresentationSettings(
+  db: Database,
+  config: HomepagePresentationConfig,
+  expectedRevision: number,
+): Promise<{ config: HomepagePresentationConfig; revision: number }> {
+  assertPresentationRevision(expectedRevision);
+  const normalizedConfig = sanitizeHomepagePresentationConfig(config);
+  const serialized = JSON.stringify(normalizedConfig);
+
+  if (expectedRevision === 0) {
+    const inserted = await db
+      .insert(siteSettings)
+      .values({
+        id: "settings_" + nanoid(),
+        siteName: "My Store",
+        siteDescription: "",
+        headerConfig: JSON.stringify({}),
+        footerConfig: JSON.stringify({}),
+        homepageConfig: serialized,
+        homepageConfigRevision: 1,
+        createdAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .onConflictDoNothing({ target: siteSettings.singletonKey })
+      .returning({ revision: siteSettings.homepageConfigRevision });
+    if (inserted[0]) {
+      return { config: normalizedConfig, revision: inserted[0].revision };
+    }
+  } else {
+    const updated = await db
+      .update(siteSettings)
+      .set({
+        homepageConfig: serialized,
+        homepageConfigRevision: sql`${siteSettings.homepageConfigRevision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(and(
+        eq(siteSettings.singletonKey, "default"),
+        eq(siteSettings.homepageConfigRevision, expectedRevision),
+      ))
+      .returning({ revision: siteSettings.homepageConfigRevision });
+    if (updated[0]) {
+      return { config: normalizedConfig, revision: updated[0].revision };
+    }
+  }
+
+  const current = await db
+    .select({ revision: siteSettings.homepageConfigRevision })
+    .from(siteSettings)
+    .where(eq(siteSettings.singletonKey, "default"))
+    .get();
+  throw new HomepagePresentationRevisionConflictError(
     expectedRevision,
     current?.revision ?? null,
   );

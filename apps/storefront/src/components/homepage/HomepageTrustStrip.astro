@@ -1,0 +1,50 @@
+---
+import { RotateCcw, Truck } from "lucide-react";
+import type { HomepageData } from "@/lib/api/storefront";
+
+type TrustStrip = HomepageData["presentation"]["trustStrip"];
+
+interface Props {
+  strip: TrustStrip;
+}
+
+const { strip } = Astro.props;
+const items = strip.enabled ? strip.items : [];
+---
+
+{items.length > 0 && (
+  <section class="w-full py-4 md:py-8" aria-label="Delivery and returns">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <ul class="grid divide-y rounded-xl border bg-card sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+        {items.map((item) => {
+          const Icon = item.kind === "delivery" ? Truck : RotateCcw;
+          const content = (
+            <>
+              <span class="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-foreground">
+                <Icon className="size-4" aria-hidden="true" />
+              </span>
+              <span class="min-w-0">
+                <span class="block text-sm font-semibold text-foreground">{item.title}</span>
+                <span class="block text-xs leading-relaxed text-muted-foreground">{item.detail}</span>
+              </span>
+            </>
+          );
+
+          return (
+            <li>
+              {item.href ? (
+                <a href={item.href} class="flex min-h-20 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 md:px-5">
+                  {content}
+                </a>
+              ) : (
+                <div class="flex min-h-20 items-center gap-3 px-4 py-3 md:px-5">
+                  {content}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </section>
+)}

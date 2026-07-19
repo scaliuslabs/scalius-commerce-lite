@@ -9,6 +9,7 @@ import {
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { queryKeys } from "~/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
+import { HomepagePresentationBuilder } from "./settings/HomepagePresentationBuilder";
 
 interface StorefrontUrlValues {
   storefrontUrl: string;
@@ -84,52 +85,54 @@ export function StorefrontUrlBuilder({
   }
 
   return (
-    <div className="space-y-4 max-w-xl">
-      <div className="space-y-2">
-        <Label htmlFor="storefront-url">Store URL</Label>
-        <div className="flex gap-2">
-          <Input
-            id="storefront-url"
-            value={values.storefrontUrl}
-            onChange={(e) => setValue("storefrontUrl", e.target.value)}
-            placeholder="/"
-            className="flex-1"
-          />
-          {values.storefrontUrl && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={testUrl}
-              title="Test URL"
-            >
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          )}
+    <div className="space-y-8">
+      <div className="max-w-3xl space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="storefront-url">Store URL</Label>
+          <div className="flex gap-2">
+            <Input
+              id="storefront-url"
+              value={values.storefrontUrl}
+              onChange={(e) => setValue("storefrontUrl", e.target.value)}
+              placeholder="/"
+              className="flex-1"
+            />
+            {values.storefrontUrl && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={testUrl}
+                title="Open storefront"
+                aria-label="Open storefront"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Use the absolute public URL so previews, discovery files, and cache refreshes target the correct store.
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          SEO discovery proof needs a full absolute http(s) Store URL like
-          "https://mystore.com". Path-only values such as "/" or "/store" only
-          help dashboard preview/sidebar navigation, including the "View Store"
-          link.
-        </p>
+
+        <div className="flex justify-end border-t pt-4">
+          <Button
+            onClick={handleSubmit}
+            disabled={isSaving || !isLoaded}
+            className="min-w-[120px]"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save URL"
+            )}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex justify-end pt-4 border-t border-border">
-        <Button
-          onClick={handleSubmit}
-          disabled={isSaving || !isLoaded}
-          className="min-w-[120px]"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save URL"
-          )}
-        </Button>
-      </div>
+      <HomepagePresentationBuilder />
     </div>
   );
 }

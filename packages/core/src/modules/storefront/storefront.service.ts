@@ -13,8 +13,10 @@ import {
   metaConversionsSettings,
   settings,
   themeSettings,
+  categories,
+  shippingMethods,
 } from "@scalius/database/schema";
-import { eq, isNull, and } from "drizzle-orm";
+import { eq, isNull, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   processAnalyticsScript,
@@ -35,6 +37,7 @@ import {
   type StorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
 import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
+import { parseHomepagePresentationConfig } from "@scalius/shared/homepage-presentation";
 import {
   DEFAULT_CURRENCY,
   normalizeSupportedCurrencyCode,
@@ -42,6 +45,7 @@ import {
 import { getPublicPageBySlug } from "../pages/pages.service";
 import type { Database } from "@scalius/database/client";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { publicCategoryConditions } from "../categories/categories.publication";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
@@ -109,7 +113,7 @@ function normalizeSocialLink(value: unknown): SocialLink {
 
 /**
  * Fetch and shape all homepage data in two batched D1 round-trips.
- * Returns the final { seo, hero, collections } object for c.json().
+ * Returns the final { seo, hero, collections, presentation } object for c.json().
  */
 export async function getHomepageData(db: Database) {
   // === BATCH 1: Independent top-level queries ===
@@ -120,6 +124,7 @@ export async function getHomepageData(db: Database) {
         siteTitle: siteSettings.siteTitle,
         homepageTitle: siteSettings.homepageTitle,
         homepageMetaDescription: siteSettings.homepageMetaDescription,
+        homepageConfig: siteSettings.homepageConfig,
       })
       .from(siteSettings)
       .limit(1),
@@ -145,17 +150,77 @@ export async function getHomepageData(db: Database) {
       .from(collections)
       .where(and(eq(collections.isActive, true), isNull(collections.deletedAt)))
       .orderBy(collections.sortOrder),
+
+    // 3. Public metadata for the exact category IDs saved in the homepage
+    // document. Resolve the bounded ID set in SQLite so a selected category
+    // cannot disappear merely because a large catalog has more than 100 rows.
+    // json_valid() keeps a malformed legacy document fail-closed.
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+        description: categories.description,
+        imageUrl: categories.imageUrl,
+        canonicalPath: categories.canonicalPath,
+      })
+      .from(categories)
+      .where(and(
+        ...publicCategoryConditions(),
+        sql`${categories.id} IN (
+          SELECT CAST(homepage_category.value AS TEXT)
+          FROM ${siteSettings}, json_each(
+            CASE
+              WHEN json_valid(${siteSettings.homepageConfig})
+                THEN json_extract(${siteSettings.homepageConfig}, '$.categoryRail.categoryIds')
+              ELSE '[]'
+            END
+          ) AS homepage_category
+        )`,
+      )),
+
+    // 4. One active method is enough to prove delivery is offered.
+    db
+      .select({ id: shippingMethods.id })
+      .from(shippingMethods)
+      .where(eq(shippingMethods.isActive, true))
+      .limit(1),
+
+    // 5. Return-policy facts used by the truthful policy strip.
+    db
+      .select({ value: settings.value })
+      .from(settings)
+      .where(and(
+        eq(settings.category, "seo"),
+        eq(settings.key, "return_policy"),
+      ))
+      .limit(1),
   ]);
 
-  const [seoResults, heroResults, collectionResults] =
+  const [
+    seoResults,
+    heroResults,
+    collectionResults,
+    categoryResults,
+    shippingMethodResults,
+    returnPolicyResults,
+  ] =
     batchResults;
 
   // Process SEO
-  const seoSettings = (seoResults as Record<string, unknown>[])[0] || {
+  const siteRow = (seoResults as Record<string, unknown>[])[0];
+  const seoSettings = siteRow ? {
+    siteTitle: siteRow.siteTitle,
+    homepageTitle: siteRow.homepageTitle,
+    homepageMetaDescription: siteRow.homepageMetaDescription,
+  } : {
     siteTitle: "Scalius Commerce",
     homepageTitle: "Welcome to Scalius Commerce",
     homepageMetaDescription: "Your one-stop shop for everything amazing.",
   };
+  const homepageConfig = parseHomepagePresentationConfig(
+    typeof siteRow?.homepageConfig === "string" ? siteRow.homepageConfig : null,
+  );
 
   // Process Hero
   const desktopSlider = (heroResults as { type: string }[]).find(
@@ -215,10 +280,70 @@ export async function getHomepageData(db: Database) {
     })
     .filter(Boolean);
 
+  const categoryById = new Map(
+    (categoryResults as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      description: string | null;
+      imageUrl: string | null;
+      canonicalPath: string | null;
+    }>).map((category) => [category.id, category]),
+  );
+  const homepageCategories = homepageConfig.categoryRail.categoryIds
+    .map((id) => categoryById.get(id))
+    .filter((category): category is NonNullable<typeof category> => Boolean(category));
+
+  const trustItems: Array<{
+    kind: "delivery" | "returns";
+    title: string;
+    detail: string;
+    href?: string;
+  }> = [];
+  if ((shippingMethodResults as Array<{ id: string }>).length > 0) {
+    trustItems.push({
+      kind: "delivery",
+      title: "Delivery options",
+      detail: "Choose an available method at checkout.",
+    });
+  }
+  const returnPolicy = parseSeoReturnPolicySettings(
+    (returnPolicyResults as Array<{ value?: string }>)[0]?.value,
+  );
+  if (returnPolicy.enabled) {
+    const returnTitle = returnPolicy.category === "finite"
+      ? `${returnPolicy.returnWindowDays}-day returns`
+      : returnPolicy.category === "unlimited"
+        ? "Open-ended returns"
+        : "Final sale policy";
+    const returnDetail = returnPolicy.category === "no_returns"
+      ? "Review the policy before ordering."
+      : returnPolicy.returnFees === "free"
+        ? "Return shipping is covered."
+        : "Return shipping may apply.";
+    trustItems.push({
+      kind: "returns",
+      title: returnTitle,
+      detail: returnDetail,
+      ...(returnPolicy.policyUrl ? { href: returnPolicy.policyUrl } : {}),
+    });
+  }
+
   return {
     seo: seoSettings,
     hero,
     collections: formattedCollections,
+    presentation: {
+      categoryRail: {
+        enabled: homepageConfig.categoryRail.enabled && homepageCategories.length > 0,
+        title: homepageConfig.categoryRail.title,
+        categories: homepageCategories,
+      },
+      trustStrip: {
+        enabled: homepageConfig.trustStrip.enabled && trustItems.length > 0,
+        items: trustItems,
+      },
+    },
   };
 }
 

@@ -267,6 +267,13 @@
       "when": 1784428546472,
       "tag": "0037_thick_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1784436411193,
+      "tag": "0038_last_sentinel",
+      "breakpoints": true
     }
   ]
 }
