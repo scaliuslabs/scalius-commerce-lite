@@ -106,6 +106,11 @@ Source, focused tests, and deployed behavior remain authoritative.
   a generic Try Again button. The recovery is signature-bounded in session
   storage so one stale asset triggers at most one automatic reload while a
   persistent real error remains visible and manually recoverable.
+- The create workflow now owns its selected outcome in validated `type` search
+  state. Direct links such as `?type=amount_off_order`, refresh, back, and
+  forward restore the same builder instead of silently returning to the type
+  chooser. **Change type** removes only that search value and retains unrelated
+  route context.
 
 ## Deliberate remaining gaps
 

@@ -7,6 +7,10 @@ const builder = readFileSync(
   fileURLToPath(new URL("./DiscountCodeBuilder.tsx", import.meta.url)),
   "utf8",
 );
+const createRoute = readFileSync(
+  fileURLToPath(new URL("../../../routes/admin/discounts/new.tsx", import.meta.url)),
+  "utf8",
+);
 const editRoute = readFileSync(
   fileURLToPath(
     new URL("../../../routes/admin/discounts/$discountId/edit.tsx", import.meta.url),
@@ -38,6 +42,14 @@ describe("unified discount builder workflow", () => {
     expect(builder).toContain("Combines with");
     expect(builder).toContain("No other codes");
     expect(builder).not.toContain("combineWithProductDiscounts");
+  });
+
+  it("owns the selected outcome in validated route search state", () => {
+    expect(createRoute).toContain("validateDiscountCreateSearch");
+    expect(createRoute).toContain("Route.useSearch().type");
+    expect(createRoute).toContain("discountEditorTypes.includes");
+    expect(createRoute).toContain("search: (previous) => ({ ...previous, type })");
+    expect(createRoute).not.toContain("useState<DiscountEditorType");
   });
 
   it("preserves dirty input, save failure, keyboard semantics, and mobile actions", () => {

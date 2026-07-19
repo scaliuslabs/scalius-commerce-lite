@@ -901,6 +901,18 @@ The cleanup bullets below describe the two-product proof store that preceded the
   during the live smoke because every existing demo administrator is already
   beyond password setup.
 
+### Discount create-route checkpoint (2026-07-19)
+
+- Admin `668b3516-2a52-4143-94c3-88915ac5540e` is live at 100%. The selected
+  discount outcome is now validated URL state rather than component memory.
+- A fresh production direct link to `?type=amount_off_order` opened the order
+  builder without the type chooser, retained that builder after a full reload,
+  and **Change type** removed only `type` while restoring the chooser.
+- Eighteen focused discount-builder/model/validation tests, targeted lint, and
+  the sequential Admin typecheck and deployment passed. This fixes workflow
+  continuity; it does not claim that the legacy code builder has become the
+  future automatic/stacking/campaign promotion builder.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
