@@ -10,6 +10,7 @@ import {
   formatPageCount,
   formatLabelPrintAlignment,
   getBarcodeFitIssue,
+  getBarcodeQuietZoneModules,
   getLabelDimensions,
   getLabelInventorySummary,
   getNonPrintingLabelVariantIds,
@@ -46,6 +47,14 @@ describe("barcode label symbology", () => {
     expect(resolveBarcodeSymbol("036000291452", "upc").format).toBe("UPC");
     expect(resolveBarcodeSymbol("96385074", "gtin").format).toBe("EAN8");
     expect(resolveBarcodeSymbol("10012345000017", "gtin").format).toBe("ITF14");
+  });
+
+  it("keeps each symbology's scanner quiet zones inside the rendered SVG", () => {
+    expect(getBarcodeQuietZoneModules("EAN13")).toEqual({ left: 11, right: 7 });
+    expect(getBarcodeQuietZoneModules("EAN8")).toEqual({ left: 7, right: 7 });
+    expect(getBarcodeQuietZoneModules("UPC")).toEqual({ left: 9, right: 9 });
+    expect(getBarcodeQuietZoneModules("ITF14")).toEqual({ left: 10, right: 10 });
+    expect(getBarcodeQuietZoneModules("CODE128")).toEqual({ left: 10, right: 10 });
   });
 
   it("refuses legacy retail identifiers whose checksum is invalid", () => {

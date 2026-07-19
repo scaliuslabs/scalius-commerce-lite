@@ -334,6 +334,10 @@ feeds, structured data, or external marketplaces.
   exists in `@scalius/shared`, but the label renderer must additionally support
   the saved retail symbologies. A retail value must never be printed using a
   different symbology merely because its digits fit.
+- Scanner quiet zones are part of each rendered SVG, not accidental whitespace
+  borrowed from the surrounding product text or label padding. EAN-13, EAN-8,
+  UPC-A, ITF-14, and Code 128 keep their symbology-specific clear modules even
+  when the artwork is centred or content toggles change.
 - Print CSS owns physical millimetre dimensions and `@page`; preview scaling is
   screen-only. Print output hides the admin shell and preserves black bars,
   white background, quiet zones, and human-readable text.
@@ -440,6 +444,15 @@ feeds, structured data, or external marketplaces.
   action without adding another primary workflow. The focused model suite now
   covers 18 cases, including repeated per-label rows, reviewed order, Unicode,
   symbol metadata, and formula-safe merchant text.
+- Admin version `5bc2e086-59c8-4863-a086-7decf0bb7f66` made scanner quiet
+  zones a renderer-owned invariant after the physical-output audit found that
+  generic label padding could otherwise be mistaken for symbol whitespace.
+  The focused model suite now covers 19 cases and fixes EAN-13, EAN-8, UPC-A,
+  ITF-14, and Code 128 clear-module rules. Authenticated production proof
+  reloaded an exact Aster SKU, found the expected internal 20-module Code 128
+  clear area in the live SVG, kept the long legacy value blocked on narrow A4
+  stock, and re-enabled Test and Print/PDF after the one-click A4 adhesive
+  recovery.
 
 ## Product boundary and future extensions
 
