@@ -1040,6 +1040,26 @@ The cleanup bullets below describe the two-product proof store that preceded the
   browser console/page errors. Four focused auth tests, targeted lint, and the
   single sequential Admin typecheck passed before deployment.
 
+### Analytics provider route-state checkpoint (2026-07-20)
+
+- Admin version `0a22af80-e76f-4f6f-b6ce-b5b82962f7f7` is live at 100%.
+  Analytics creation now owns its provider in validated `type` URL state. The
+  canonical default omits the query, supported providers remain shareable and
+  reload-safe, and invalid provider text is removed from the raw browser URL
+  after hydration instead of remaining visible beside normalized form state.
+- Provider changes are an in-place form operation, not a form departure. The
+  shared unsaved guard now has an explicit same-resolved-route allowance for
+  URL-backed workspace state; it continues to block a different pathname and
+  continues to protect reload/tab close through `beforeunload`. The analytics
+  route also bypasses the global blocker for its deliberate internal provider
+  navigation.
+- A fresh authenticated production run proved invalid query → Cloudflare,
+  Cloudflare → GA4 → Google Tag Manager, and browser Back → GA4. The URL and
+  provider-specific form changed together, no unsaved dialog appeared, and
+  browser console/error output remained empty. Four focused files passed 20
+  tests, targeted lint and the single sequential Admin typecheck passed, and no
+  analytics integration was created.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

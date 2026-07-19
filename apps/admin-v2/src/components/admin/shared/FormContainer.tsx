@@ -38,6 +38,12 @@ interface FormContainerProps<T extends FieldValues> {
   children: React.ReactNode;
   /** Additional className for the <form> element */
   formClassName?: string;
+  /**
+   * Allow URL-backed state changes on this exact form route without showing
+   * the leave-page warning. The guard still blocks a different pathname and
+   * still protects refresh/tab close through beforeunload.
+   */
+  allowSamePathStateNavigation?: boolean;
 }
 
 /**
@@ -60,6 +66,7 @@ export function FormContainer<T extends FieldValues>({
   onSubmit,
   children,
   formClassName = "-mt-4 pb-6",
+  allowSamePathStateNavigation = false,
 }: FormContainerProps<T>) {
   const entityLabel = getFormEntityLabel(title, newLabel);
 
@@ -69,6 +76,7 @@ export function FormContainer<T extends FieldValues>({
         <UnsavedChangesGuard
           isDirty={form.formState.isDirty}
           isSubmitting={isSubmitting}
+          allowSamePathStateNavigation={allowSamePathStateNavigation}
         />
         <form
           method="post"

@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 const FORM_SCHEMAS_SOURCE = fileURLToPath(
   new URL("./form-schemas.ts", import.meta.url),
 );
+const ANALYTICS_SCRIPT_TYPES_SOURCE = fileURLToPath(
+  new URL("./analytics-script-types.ts", import.meta.url),
+);
 const ANALYTICS_FORM_SOURCE = fileURLToPath(
   new URL("../components/admin/AnalyticsForm.tsx", import.meta.url),
 );
@@ -14,10 +17,10 @@ const ANALYTICS_LIST_SOURCE = fileURLToPath(
 
 describe("analytics form schema", () => {
   it("keeps Google Tag Manager as a first-class guided script type", () => {
-    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+    const analyticsTypesSource = readFileSync(ANALYTICS_SCRIPT_TYPES_SOURCE, "utf8");
     const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
 
-    expect(formSchemasSource).toMatch(
+    expect(analyticsTypesSource).toMatch(
       /analyticsScriptTypes = \[[\s\S]*"google_tag_manager"/,
     );
     expect(analyticsFormSource).toContain("google_tag_manager: `<!-- Google Tag Manager -->");
@@ -27,11 +30,11 @@ describe("analytics form schema", () => {
   });
 
   it("keeps TikTok Pixel as a first-class guided script type", () => {
-    const formSchemasSource = readFileSync(FORM_SCHEMAS_SOURCE, "utf8");
+    const analyticsTypesSource = readFileSync(ANALYTICS_SCRIPT_TYPES_SOURCE, "utf8");
     const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
     const analyticsListSource = readFileSync(ANALYTICS_LIST_SOURCE, "utf8");
 
-    expect(formSchemasSource).toMatch(
+    expect(analyticsTypesSource).toMatch(
       /analyticsScriptTypes = \[[\s\S]*"tiktok_pixel"/,
     );
     expect(analyticsFormSource).toContain(

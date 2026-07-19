@@ -14,6 +14,7 @@ import { dispatchAdminNavigationCancelled } from "./admin-navigation-events";
 interface UnsavedChangesGuardProps {
   isDirty: boolean;
   isSubmitting: boolean;
+  allowSamePathStateNavigation?: boolean;
 }
 
 /**
@@ -31,9 +32,29 @@ interface UnsavedChangesGuardProps {
 export function UnsavedChangesGuard({
   isDirty,
   isSubmitting,
+  allowSamePathStateNavigation = false,
 }: UnsavedChangesGuardProps) {
   const { proceed, reset, status } = useBlocker({
-    shouldBlockFn: () => isDirty && !isSubmitting,
+    shouldBlockFn: ({ current, next }) => {
+      if (!isDirty || isSubmitting) return false;
+
+      // Some editors keep non-sensitive workspace state in the query string.
+      // Moving between those states does not leave the form or discard it, so
+      // the global leave-page guard must not intercept that navigation.
+      if (
+        allowSamePathStateNavigation &&
+        (
+          current.routeId === next.routeId ||
+          current.fullPath === next.fullPath ||
+          current.pathname.replace(/\/+$/, "") ===
+            next.pathname.replace(/\/+$/, "")
+        )
+      ) {
+        return false;
+      }
+
+      return true;
+    },
     withResolver: true,
     enableBeforeUnload: isDirty && !isSubmitting,
   });
