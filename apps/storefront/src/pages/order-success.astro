@@ -131,6 +131,7 @@ const legacySubtotal = order
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
+    data-order-id={order?.id}
   >
     {order && orderSuccessView ? (
     <div class="text-center mb-8 animate-fade-in">
@@ -152,6 +153,11 @@ const legacySubtotal = order
       )}
       <h1 class="text-2xl font-bold mb-2">{orderSuccessView.title}</h1>
       <p class="text-gray-600">{orderSuccessView.message}</p>
+      {orderSuccessView.kind === "payment_pending" && (
+        <p class="mt-3 text-sm text-muted-foreground" data-payment-status-message aria-live="polite">
+          Checking payment status…
+        </p>
+      )}
       {retryPaymentOptions.length > 0 && retryPaymentType && (
         <div class="mt-5 flex flex-col items-center gap-2">
           <div class="flex flex-col justify-center gap-2 sm:flex-row">
@@ -520,6 +526,89 @@ const legacySubtotal = order
     } catch (error: unknown) {
       console.error("FB Purchase: Error parsing data attribute:", error);
     }
+  });
+</script>
+
+<script>
+  const PAYMENT_STATUS_DELAYS_MS = [1500, 2500, 4000, 6000, 8000, 12000] as const;
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const receipt = document.querySelector<HTMLElement>(
+      "[data-order-success-state='payment_pending'][data-order-id]",
+    );
+    if (!receipt) return;
+
+    const orderId = receipt.dataset.orderId;
+    const message = receipt.querySelector<HTMLElement>("[data-payment-status-message]");
+    if (!orderId) return;
+
+    let stopped = false;
+    let checking = false;
+    let delayIndex = 0;
+    let timeoutId: number | undefined;
+
+    const schedule = () => {
+      if (stopped) return;
+      if (delayIndex >= PAYMENT_STATUS_DELAYS_MS.length) {
+        if (message) message.textContent = "Confirmation is taking longer than usual. You can safely leave this receipt and return later.";
+        return;
+      }
+      timeoutId = window.setTimeout(checkStatus, PAYMENT_STATUS_DELAYS_MS[delayIndex]);
+      delayIndex += 1;
+    };
+
+    const checkStatus = async () => {
+      if (stopped || checking) return;
+      if (document.visibilityState === "hidden") {
+        schedule();
+        return;
+      }
+
+      checking = true;
+      try {
+        const response = await fetch(
+          `/api/order-receipt/status?orderId=${encodeURIComponent(orderId)}`,
+          {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          },
+        );
+        const payload = await response.json() as {
+          success?: boolean;
+          data?: { state?: string };
+        };
+        const state = payload.success ? payload.data?.state : undefined;
+        if (state && state !== "payment_pending") {
+          stopped = true;
+          if (message) message.textContent = "Payment status updated. Refreshing your receipt…";
+          window.location.reload();
+          return;
+        }
+      } catch {
+        // A transient read failure must not turn a successful payment into a buyer-facing error.
+      } finally {
+        checking = false;
+      }
+
+      schedule();
+    };
+
+    const checkWhenVisible = () => {
+      if (document.visibilityState !== "visible" || stopped) return;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      void checkStatus();
+    };
+
+    document.addEventListener("visibilitychange", checkWhenVisible);
+    window.addEventListener("pagehide", () => {
+      stopped = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", checkWhenVisible);
+    }, { once: true });
+
+    schedule();
   });
 </script>
 
