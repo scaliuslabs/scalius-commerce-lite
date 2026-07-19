@@ -480,17 +480,20 @@ into delimited attribute strings.
 
 Create these collections after product IDs are known:
 
-| Collection | Source / presentation | Membership |
-| --- | --- | --- |
-| New & Noteworthy | manual / carousel / 12 | two or three launch products from every category, explicit merchant order |
-| Everyday Carry | dynamic / grid / 8 | Bags & Carry + Desk & Mobile Tech |
-| Home Refresh | dynamic / grid / 8 | Home & Living + Kitchen & Table |
-| Weekend Ready | manual / carousel / 8 | Rider, Monsoon, Rove, Transit, Tidal, Weekender, Vault, Echo |
-| Offers Worth Opening | manual / grid / 12 | only products with a current product- or SKU-level offer; update the list when offers change |
+| Collection | Source / presentation | Homepage | Membership |
+| --- | --- | --- | --- |
+| New & Noteworthy | manual / carousel / 12 | Yes | two or three launch products from every category, explicit merchant order |
+| Everyday Carry | dynamic / grid / 8 | Yes | Bags & Carry + Desk & Mobile Tech |
+| Home Refresh | dynamic / grid / 8 | Yes | Home & Living + Kitchen & Table |
+| Weekend Ready | manual / carousel / 8 | No | Rider, Monsoon, Rove, Transit, Tidal, Weekender, Vault, Echo |
+| Offers Worth Opening | manual / grid / 12 | No | only products with a current product- or SKU-level offer; update the list when offers change |
 
 Homepage order is one primary hero, New & Noteworthy, a five-category rail,
 Everyday Carry, Home Refresh, and a restrained trust/policy strip. Do not render
 all five collections as equal visual blocks.
+All five remain published collection pages. Homepage placement is a separate
+saved decision; the older Curated Essentials Shop landing may remain public but
+must not become a homepage section merely because it is published.
 
 Create three hero stories with distinct desktop and mobile assets:
 

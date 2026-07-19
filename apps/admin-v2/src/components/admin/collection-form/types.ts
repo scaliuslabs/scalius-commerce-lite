@@ -71,6 +71,7 @@ export const collectionFormSchema = z.object({
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(90),
     productIds: z.array(productIdSchema).max(90),
     featuredProductId: z.string().trim().max(180).optional(),
+    showOnHomepage: z.boolean(),
     maxProducts: z.number().int().min(1).max(24),
     title: z.string().trim().max(120).optional(),
     subtitle: z.string().trim().max(240).optional(),

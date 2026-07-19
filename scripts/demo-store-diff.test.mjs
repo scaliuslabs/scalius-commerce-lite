@@ -143,6 +143,23 @@ describe("demo-store diff and evidence", () => {
     expect(diff.summary.conflicts).toBe(1);
   });
 
+  it("reports homepage placement drift independently from publication", () => {
+    const snapshot = emptySnapshot();
+    const desired = demoStoreManifest.collections[0];
+    snapshot.collections = [{
+      id: "col_new",
+      name: desired.name,
+      version: 2,
+      presentation: desired.presentation,
+      isActive: true,
+      config: JSON.stringify({ showOnHomepage: false }),
+    }];
+
+    const diff = buildDemoStoreDiff(demoStoreManifest, snapshot);
+    expect(diff.resources.collections.find((item) => item.name === desired.name))
+      .toMatchObject({ action: "update", fields: ["showOnHomepage"] });
+  });
+
   it("writes a private evidence bundle and a whitelisted resume journal", async () => {
     const directory = await mkdtemp(join(tmpdir(), "scalius-demo-evidence-"));
     temporaryDirectories.push(directory);

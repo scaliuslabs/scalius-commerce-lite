@@ -8614,6 +8614,7 @@ export type PostApiV1AdminCollectionsData = {
             categoryIds?: Array<string>;
             productIds?: Array<string>;
             featuredProductId?: string;
+            showOnHomepage?: boolean;
             maxProducts?: number;
             title?: string;
             subtitle?: string;
@@ -9569,6 +9570,7 @@ export type PutApiV1AdminCollectionsByIdData = {
             categoryIds?: Array<string>;
             productIds?: Array<string>;
             featuredProductId?: string;
+            showOnHomepage?: boolean;
             maxProducts?: number;
             title?: string;
             subtitle?: string;

@@ -17,6 +17,22 @@ describe("collection validation", () => {
         expect(parsed).toEqual({ expectedVersion: 3, config: { title: "New heading" } });
     });
 
+    it("keeps homepage placement independent and defaults new collections off", () => {
+        const update = updateCollectionSchema.parse({
+            expectedVersion: 3,
+            config: { showOnHomepage: true },
+        });
+        expect(update).toEqual({ expectedVersion: 3, config: { showOnHomepage: true } });
+
+        const created = createCollectionSchema.parse({
+            name: "Private landing collection",
+            presentation: "grid",
+            isActive: false,
+            config: { source: "manual" },
+        });
+        expect(created.config.showOnHomepage).toBe(false);
+    });
+
     it("normalizes blank canonical path updates to null", () => {
         const parsed = updateCollectionSchema.parse({ expectedVersion: 3, canonicalPath: "   " });
 

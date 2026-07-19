@@ -52,6 +52,8 @@ export const LayoutSettingsSection = React.memo(
       () => new Map(knownProducts.map((product) => [product.id, product])),
       [knownProducts],
     );
+    const showOnHomepage = form.watch("config.showOnHomepage");
+    const isActive = form.watch("isActive");
 
     return (
       <div className="space-y-3">
@@ -71,7 +73,7 @@ export const LayoutSettingsSection = React.memo(
                       Published
                     </FormLabel>
                     <FormDescription className="text-xs">
-                      Visible on the storefront and eligible for homepage display
+                      Customers can open this collection page.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -167,12 +169,39 @@ export const LayoutSettingsSection = React.memo(
           </CardContent>
         </Card>
 
-        {/* Display Settings Card */}
+        {/* Homepage placement is independent from collection publication. */}
         <Card>
           <CardHeader className="pb-3 pt-4 px-4">
-            <CardTitle className="text-base">Display Settings</CardTitle>
+            <CardTitle className="text-base">Homepage section</CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-3">
+            <FormField
+              control={form.control}
+              name="config.showOnHomepage"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5 pr-4">
+                    <FormLabel className="text-sm font-medium">
+                      Show on homepage
+                    </FormLabel>
+                    <FormDescription className="text-xs">
+                      {field.value && !isActive
+                        ? "Ready to appear after this collection is published."
+                        : "Add this collection as a homepage product section."}
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {showOnHomepage ? (
+              <div className="space-y-3 border-t pt-3">
             {/* Display Style */}
             <FormField
               control={form.control}
@@ -209,7 +238,7 @@ export const LayoutSettingsSection = React.memo(
                     </SelectContent>
                   </Select>
                   <FormDescription className="text-xs">
-                    Content source and display style are independent.
+                    Choose how products are arranged on the homepage.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -337,6 +366,8 @@ export const LayoutSettingsSection = React.memo(
                 </FormItem>
               )}
             />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

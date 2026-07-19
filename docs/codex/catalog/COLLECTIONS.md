@@ -1,6 +1,6 @@
 # Collections audit and decisions
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-19
 
 This is the durable end-to-end contract for collection administration,
 membership, homepage presentation, public collection pages, discovery, and
@@ -14,6 +14,8 @@ A collection has two independent axes:
 - `config.source`: `manual` preserves an explicitly ordered product list;
   `dynamic` derives membership from one or more categories.
 - `presentation`: `grid` or `carousel` controls only the homepage component.
+- `isActive` publishes the stable collection page; `config.showOnHomepage`
+  independently places that published collection into the ordered homepage.
 
 The public collection page is always the stable ID route
 `/collections/<collectionId>`. `config.maxProducts` limits only the homepage
@@ -23,6 +25,13 @@ Inactive collections are drafts. Active collections must have membership for
 their selected source. Stale selections from the inactive source may remain in
 saved config so source switching is reversible, but they never affect public
 membership or cache dependency matching.
+
+Homepage placement defaults off and may be staged while a collection remains a
+draft. It becomes buyer-visible only after publication. Disabling homepage
+placement must not unpublish the collection page, remove it from collection
+pickers, or alter sitemap/indexing policy. `sortOrder` remains the single
+merchant-controlled order for whichever published collections are placed on
+the homepage; no demo IDs or collection names participate in runtime selection.
 
 ## Verified strengths
 
@@ -59,6 +68,11 @@ membership or cache dependency matching.
   request order after the current live tail.
 - Public collection and homepage payloads now expose only display config.
   Membership and lead-product IDs remain internal after server-side resolution.
+- Publication and homepage placement now have separate authorities. The editor
+  keeps the homepage fields behind one compact placement switch, the list marks
+  placed rows without adding another column, and the homepage resolver filters
+  before product resolution so hidden public collections add no product-query
+  work.
 - Both homepage presentations link to the stable collection ID route. Grid
   presentation places the configured lead product first, de-duplicates it, and
   still respects the homepage item limit.
@@ -105,6 +119,10 @@ membership or cache dependency matching.
 - Public APIs expose a display-only config projection. Membership IDs stay in
   D1/admin contracts and resolved categories/products remain explicit public
   fields.
+- Treat public collection pages and homepage composition as separate merchant
+  decisions. `showOnHomepage` is an explicit canonical config boolean with a
+  fail-closed default; it is not inferred from publication, presentation,
+  collection name, or non-empty membership.
 - Homepage "view collection" always targets the collection ID route. Category
   pills remain secondary navigation. The grid-only lead product is rendered
   first and de-duplicated; carousel keeps no lead-product control.

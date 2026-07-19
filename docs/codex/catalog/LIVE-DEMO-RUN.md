@@ -780,6 +780,38 @@ The cleanup bullets below describe the two-product proof store that preceded the
   API readiness, and the full `pnpm release:check` passed. The only release
   warning remains the previously recorded logs-only ops-monitor email channel.
 
+### Collection publication and homepage placement checkpoint (2026-07-19)
+
+- Collection publication and homepage composition are now separate facts.
+  `isActive` keeps a collection page publicly reachable; the normalized
+  `config.showOnHomepage` boolean controls only the storefront homepage. The
+  editor exposes that choice progressively and the list marks placed
+  collections without adding another wide table column.
+- API `edcf24e2-1527-4ba2-97ae-e9918e5aeade`, Admin
+  `14ce364a-ef44-4c40-a6ce-0299c1c002d9`, and Storefront
+  `fc20ade7-a45a-4d5d-bfae-82538f2a8585` are live at 100%. The real admin
+  saved New & Noteworthy, Everyday Carry, and Home Refresh as the only homepage
+  sections. Curated Essentials, Weekend Ready, and Offers Worth Opening remain
+  published but unplaced.
+- The authenticated production diff proved 5 categories, 50 products, 1
+  attribute, and 5 manifest collections all matched with zero updates, creates,
+  or conflicts; 246 ready media assets cover 237 manifest intents. Evidence is
+  in `.wrangler/demo-store-evidence/run-2026-07-19T04-29-23-467Z-d417018c`.
+- The public homepage API returned exactly the three placed collections with
+  12, 8, and 8 products. The public collection listing still returned all six
+  published collections, and direct storefront requests for all three
+  intentionally unplaced collection pages returned 200. The deployed desktop
+  homepage rendered only those three section headings; a real 390 px viewport
+  rendered the same three headings with `390 px` content inside a `390 px`
+  viewport and no horizontal overflow.
+- The sequential Storefront Astro check completed 321 files with zero errors,
+  warnings, or hints; deployment health and critical cache warming passed.
+  `pnpm ops:check` passed API health, four readiness samples, 318 OpenAPI paths,
+  bindings, queues, and deployment state. `pnpm release:check` then passed the
+  dashboard auth gate, storefront/cache behavior, discovery XML and feeds,
+  UCP catalog discovery, and a live Product schema route. The only warning is
+  the already-recorded logs-only ops-monitor email channel.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

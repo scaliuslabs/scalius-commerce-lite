@@ -12,6 +12,7 @@ const collectionValues = {
     source: "manual" as const,
     categoryIds: [],
     productIds: [],
+    showOnHomepage: false,
     maxProducts: 8,
   },
 };
