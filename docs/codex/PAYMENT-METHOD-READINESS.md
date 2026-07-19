@@ -150,6 +150,13 @@ reconciliation, secret rotation, or test-to-live cutover.
   public config or card label claimed a provider connection probe.
 - The focused API/admin matrix passed 67 tests; API and admin typechecks and
   targeted lint passed before deployment.
+- A stale customer cookie is rejected before any order write and cleared by
+  the same-origin checkout proxy. The buyer then receives an explicit
+  **Continue as guest** action that preserves the completed checkout form;
+  the UI does not silently change a signed-in order into a guest order. This
+  recovery shipped in storefront deployment
+  `1c8ab5aa-8914-45b9-bf79-2699af7f3f25` after 45 focused checkout tests and
+  the storefront typecheck passed.
 
 ## Remaining release gaps
 
