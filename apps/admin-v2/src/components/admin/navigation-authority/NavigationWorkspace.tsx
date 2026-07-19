@@ -283,23 +283,24 @@ function MenuRow({
         className={cn(
           "group flex min-h-12 items-center gap-1.5 rounded-lg border border-transparent px-2 transition-colors",
           "hover:border-border hover:bg-muted/45",
-          isDragging && "pointer-events-none relative z-30 border-primary bg-background opacity-45 shadow-lg",
+          isDragging && "pointer-events-none relative z-30 border-primary bg-background opacity-40 shadow-lg",
           !item.isEnabled && "opacity-60",
           isSearchMatch && "bg-primary/5",
         )}
       >
         <div className="w-[calc(var(--menu-depth)*1.125rem)] shrink-0" aria-hidden />
-        <button
-          type="button"
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground",
-            childCount ? "hover:bg-muted hover:text-foreground" : "pointer-events-none opacity-0",
-          )}
-          onClick={onToggle}
-          aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
-        >
-          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-        </button>
+        {childCount ? (
+          <button
+            type="button"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={onToggle}
+            aria-label={expanded ? `Collapse ${item.label}` : `Expand ${item.label}`}
+          >
+            {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          </button>
+        ) : (
+          <div className="size-8 shrink-0" aria-hidden />
+        )}
         {dragEnabled ? (
           <button
             ref={draggable.setNodeRef}
@@ -1173,6 +1174,9 @@ export function NavigationWorkspace({
     const destination = event.over?.data.current?.destination as MoveDestination | undefined;
     setActiveDrag(null);
     if (!destination || movingId === String(event.over?.id).split(":")[1]) return;
+    if (destination.parentId) {
+      setExpandedIds((current) => new Set(current).add(destination.parentId!));
+    }
     moveMutation.mutate({ itemId: movingId, destination });
   };
   const clearExpandTimer = () => {
@@ -1249,7 +1253,7 @@ export function NavigationWorkspace({
                     "block truncate text-[11px]",
                     candidate.id === selectedId ? "text-primary-foreground/70" : "text-muted-foreground",
                   )}>
-                    {candidate.itemCount} items · {candidate.placementCount} locations
+                    {candidate.itemCount} {candidate.itemCount === 1 ? "item" : "items"} · {candidate.placementCount} {candidate.placementCount === 1 ? "location" : "locations"}
                   </span>
                 </span>
                 {candidate.revision !== candidate.publishedRevision && (

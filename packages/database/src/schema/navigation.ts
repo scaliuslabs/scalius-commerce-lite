@@ -261,6 +261,14 @@ export const navigationPlacements = sqliteTable("navigation_placements", {
     index("navigation_placements_menu_idx").on(table.menuId, table.isEnabled),
     check("navigation_placements_surface_present", sql`length(trim(${table.surface})) BETWEEN 1 AND 80`),
     check("navigation_placements_slot_present", sql`length(trim(${table.slot})) BETWEEN 1 AND 80`),
+    check(
+        "navigation_placements_supported_location",
+        sql`(
+            (${table.surface} = 'header' AND ${table.slot} = 'primary' AND ${table.position} = 0)
+            OR
+            (${table.surface} = 'footer' AND ${table.slot} = 'column' AND ${table.position} BETWEEN 0 AND 3)
+        )`,
+    ),
     check("navigation_placements_revision_positive", sql`${table.revision} >= 1`),
     check(
         "navigation_placements_label_override_length",
