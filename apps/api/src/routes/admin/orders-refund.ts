@@ -31,6 +31,8 @@ const refundResultSchema = z.object({
     refundId: z.string().optional(),
     amount: z.number(),
     isFullRefund: z.boolean(),
+    notificationCount: z.number(),
+    sideEffectErrors: z.number(),
     error: z.string().optional(),
 }).passthrough();
 
@@ -199,6 +201,46 @@ async function recordReconciledRefundAttemptSideEffects(options: {
     return { notificationCount, sideEffectErrors };
 }
 
+async function recordDirectRefundSideEffects(options: {
+    db: Database;
+    queue: Env["ORDER_NOTIFICATIONS_QUEUE"] | undefined;
+    orderId: string;
+    result: Awaited<ReturnType<typeof processRefund>>;
+    context: Parameters<typeof invalidateProductAvailabilityCaches>[2];
+}): Promise<{ notificationCount: number; sideEffectErrors: number }> {
+    let notificationCount = 0;
+    let sideEffectErrors = 0;
+
+    try {
+        await invalidateProductAvailabilityCaches(
+            options.db,
+            { orderIds: [options.orderId] },
+            options.context,
+        );
+    } catch (error: unknown) {
+        sideEffectErrors += 1;
+        console.error("[orders-refund] Direct refund cache invalidation failed after local commit:", error);
+    }
+
+    if (options.result.refundNotification) {
+        try {
+            await enqueueRefundNotification({
+                db: options.db,
+                queue: options.queue,
+                orderId: options.orderId,
+                result: options.result,
+                source: "orders-refund",
+            });
+            notificationCount += 1;
+        } catch (error: unknown) {
+            sideEffectErrors += 1;
+            console.error("[orders-refund] Direct refund notification enqueue failed after local commit:", error);
+        }
+    }
+
+    return { notificationCount, sideEffectErrors };
+}
+
 function publicRefundResult<T extends { refundNotification?: unknown }>(result: T): Omit<T, "refundNotification"> {
     const { refundNotification: _refundNotification, ...publicResult } = result;
     return publicResult;
@@ -261,15 +303,18 @@ app.openapi(refundOrderRoute, async (c) => {
         throw error;
     }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
-    await invalidateProductAvailabilityCaches(db, { orderIds: [orderId] }, c);
-    await enqueueRefundNotification({
+    const sideEffects = await recordDirectRefundSideEffects({
         db,
         queue: c.env.ORDER_NOTIFICATIONS_QUEUE,
         orderId,
         result,
-        source: "orders-refund",
+        context: c,
     });
-    return ok(c, publicRefundResult(result));
+    return ok(c, {
+        ...publicRefundResult(result),
+        notificationCount: sideEffects.notificationCount,
+        sideEffectErrors: sideEffects.sideEffectErrors,
+    });
 });
 
 // ─── POST /:id/refund-attempts/:attemptId/reconcile ─────────────────────────

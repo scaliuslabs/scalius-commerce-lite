@@ -177,6 +177,22 @@ reconciliation, secret rotation, or test-to-live cutover.
   with four orders and a customer-history route in `/admin/customers`. Guest
   buyer facts stay useful to the merchant without a separate second-class
   directory.
+- The same BDT 9,100 SSLCommerz order completed a real sandbox refund through
+  the deployed admin. A SQLite integration test first reproduced the production
+  false concurrency failure: the claim batch inserted its pending refund rows
+  before evaluating the order guard, so D1 correctly saw the batch's own active
+  attempt. The order CAS now runs first, followed by the payment and attempt
+  evidence in the same batch. API deployments
+  `edfa57de-f558-47fc-8d9f-91d27c64c48d` and
+  `fbc4172f-df52-49f4-aef3-4fcced529a8f` accepted and finalized provider refund
+  `6a5cedfb946b9`; authoritative D1 showed order `SEJ5E0` cancelled/refunded,
+  paid amount zero, balance due BDT 9,100, and one refunded attempt/payment.
+  Post-commit cache invalidation and notification enqueue are now independent
+  best-effort follow-ups: their failure is returned as a warning and cannot
+  turn an already committed financial refund into a retryable HTTP error. Admin
+  deployment `1babfc2e-79e8-466b-b844-1224466864d1` closes the refund dialog,
+  refetches payment authority, and explains that financial refund does not by
+  itself receive returned stock.
 
 ## Remaining release gaps
 
@@ -185,8 +201,8 @@ reconciliation, secret rotation, or test-to-live cutover.
 - Add coordinated credential rotation/cutover with historical refund support.
 - Finish the sandbox failure/duplicate/webhook/refund matrix in
   `COMMERCE-SETTINGS-BENCHMARK.md` for every provider before release. One
-  SSLCommerz successful authorization/callback/receipt recovery path is now
-  proved; that single path is not provider-health coverage.
+  SSLCommerz authorization/callback/receipt-recovery and refund-success path is
+  now proved; that single happy path is not provider-health coverage.
 - Replace local Checkout Settings sections with separate authority-owned routes.
   Checkout Flow and Payment now guard dirty navigation, but the current mounted
   section strip remains an interim addressable-query workspace rather than the

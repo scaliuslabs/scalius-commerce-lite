@@ -31735,6 +31735,8 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             refundId?: string;
             amount: number;
             isFullRefund: boolean;
+            notificationCount: number;
+            sideEffectErrors: number;
             error?: string;
             [key: string]: unknown;
         };

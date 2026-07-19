@@ -134,7 +134,7 @@ export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdateOrderStatusInput) => updateOrderStatus({ data }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
@@ -241,7 +241,7 @@ export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: RefundOrderInput) => refundOrder({ data }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       queryClient.invalidateQueries({
@@ -251,6 +251,11 @@ export function useRefundOrder() {
         queryKey: queryKeys.orders.payments(variables.orderId),
       });
       toast.success("Refund processed");
+      if (result.sideEffectErrors > 0) {
+        toast.warning("Refund saved; follow-up needs attention", {
+          description: "The financial refund is complete, but cache refresh or customer notification should be checked.",
+        });
+      }
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to process refund")),

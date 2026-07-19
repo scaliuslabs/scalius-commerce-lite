@@ -22,6 +22,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -42,13 +43,12 @@ import {
   Copy,
 } from "lucide-react";
 import type { ActiveRefundOperation, Order, OrderRefundAttempt, OrderTimestamp } from "./types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
 } from "@/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "@/lib/order-detail-prefetch";
-import { queryKeys } from "@/lib/query-keys";
 import {
   useReconcileRefundAttempt,
   useIssueOrderPaymentRecoveryLink,
@@ -334,7 +334,6 @@ interface PaymentCardProps {
 }
 
 export function PaymentCard({ order }: PaymentCardProps) {
-  const queryClient = useQueryClient();
   const { symbol } = useCurrency();
   const isHydrated = useHydrated();
   const orderActions = useOrderActionPermissions();
@@ -497,11 +496,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
     refundMutation.mutate(
       { orderId: order.id, amount, reason: refundReason },
       {
-        onSuccess: () => {
-          toast.success("Refund Issued", { description: `Successfully initiated refund of ${symbol}${amount}.` });
+        onSuccess: async () => {
           setIsRefundDialogOpen(false);
-          // Invalidate order detail to refresh payment status
-          queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
+          await refetchPayments();
         },
       },
     );
@@ -1196,6 +1193,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Issue Refund</DialogTitle>
+            <DialogDescription>
+              Return money through the recorded payment method. A completed financial refund does not receive returned stock.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">

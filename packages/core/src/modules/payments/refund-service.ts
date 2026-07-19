@@ -1251,9 +1251,23 @@ export async function processRefund(
     // 3. Claim refund capacity locally before calling the gateway. The deterministic
     // refund allocation IDs and order-version CAS ensure that concurrent callers
     // cannot both pass this point and hit external providers.
-    let claimResults: [...unknown[], Array<{ id: string; version: number }>];
+    let claimResults: [Array<{ id: string; version: number }>, ...unknown[]];
     try {
         claimResults = await db.batch([
+            // The guarded order claim must execute before this transaction creates
+            // its own active refund rows. D1 batches are sequential: placing this
+            // statement after the inserts makes the no-active-refund predicate see
+            // and reject the claim's own rows.
+            db.update(orders).set({
+                version: claimVersion,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orders.id, params.orderId),
+                eq(orders.version, order.version),
+                sql`${orders.paidAmount} >= ${refundAmount}`,
+                noActiveRefundAttemptForOrderIdCondition(params.orderId),
+                noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
+            )).returning({ id: orders.id, version: orders.version }),
             ...allocations.flatMap((allocation) => [
                 db.insert(orderPayments).values({
                     id: allocation.id,
@@ -1284,16 +1298,6 @@ export async function processRefund(
                     currency: currency.code,
                 })),
             ]),
-            db.update(orders).set({
-                version: claimVersion,
-                updatedAt: sql`unixepoch()`,
-            }).where(and(
-                eq(orders.id, params.orderId),
-                eq(orders.version, order.version),
-                sql`${orders.paidAmount} >= ${refundAmount}`,
-                noActiveRefundAttemptForOrderIdCondition(params.orderId),
-                noActivePaymentSessionAttemptForOrderIdCondition(params.orderId),
-            )).returning({ id: orders.id, version: orders.version }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
         ] as any) as any;
     } catch (error: unknown) {
@@ -1303,7 +1307,7 @@ export async function processRefund(
         throw error;
     }
 
-    const claimedOrderResult = claimResults[claimResults.length - 1] as Array<{ id: string; version: number }> | undefined;
+    const claimedOrderResult = claimResults[0];
     const claimedOrder = claimedOrderResult?.[0];
     if (!claimedOrder) {
         await db.delete(refundAttempts).where(inArray(refundAttempts.refundPaymentId, allocations.map((allocation) => allocation.id)));
