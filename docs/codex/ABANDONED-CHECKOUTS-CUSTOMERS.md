@@ -74,6 +74,31 @@ Last reviewed: 2026-07-19
   toggled oldest/newest order, and retained a 390 px width with no lateral
   overflow.
 
+### URL and read-safety checkpoint (2026-07-19)
+
+- Admin `85db75f6-652d-430a-9793-4433e69e14a5` is live at 100%. Search, page,
+  page size, sort field, and sort order are validated URL state, so a reload,
+  copied link, and browser history restore the exact recovery workspace.
+- Selection is page/result scoped. Changing search, sort, page, or page size
+  clears local selection before another destructive action can target a record
+  that is no longer visible. An out-of-range copied page canonicalizes to the
+  real last page after the bounded pagination response is known.
+- The read now uses the server-safe admin API function shared by Worker SSR and
+  the hydrated browser. Do not restore a browser-relative `fetch("/api/...")`
+  query here: a live verification build proved that it can execute during SSR
+  and fail with `Invalid URL` before the list mounts.
+- Read failure is distinct from an empty result. A failed refresh either keeps
+  the last loaded rows with a warning or says that no records were assumed;
+  retry preserves the current URL state. Empty results use intentional recovery
+  copy rather than suggesting that an API failure means no checkout activity.
+- Production proof used a copied phone/customer sort URL and a full reload,
+  selected one row then changed page without carrying the selection, and opened
+  `page=999` which normalized to page 3 of 3 with records visible. Table copy now
+  says `1 item`/`4 items`, and destructive feedback uses natural `checkout
+  record`/`checkout records` grammar. No recovery record was deleted.
+- Fifty-nine focused route-state, parser/copy, and route-boundary tests passed;
+  targeted lint and the sequential Admin typecheck were clean.
+
 ## Deferred release work
 
 - Recovery messaging needs an explicit consent/template/dedupe/audit model and

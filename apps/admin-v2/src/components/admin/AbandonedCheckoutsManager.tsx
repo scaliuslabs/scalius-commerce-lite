@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCurrency } from "@/hooks/use-currency";
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -34,7 +33,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useDebounce } from "@/hooks/use-debounce";
 import {
   RefreshCw,
   Trash2,
@@ -43,28 +41,36 @@ import {
   Info,
   Phone,
   User,
-  Search,
   ArrowUpDown,
   Eye,
   Mail,
   MessageSquareText,
   MapPin,
   Package,
-  X,
   ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import type { AbandonedCheckout } from "@/types/api-responses";
 import { AdminListPagination } from "@/components/admin/shared/AdminListPagination";
+import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar";
 import { abandonedCheckoutsQueryOptions } from "@/lib/api-query-options/abandoned-checkouts";
 import { deleteAbandonedCheckouts } from "@/lib/api-functions/abandoned-checkouts";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
   formatAbandonedCheckoutId,
+  formatAbandonedCheckoutItemCount,
+  formatAbandonedCheckoutRecordCount,
   parseAbandonedCheckoutDisplay,
   type AbandonedCheckoutCartItem,
 } from "@/lib/abandoned-checkout-display";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import type {
+  AbandonedCheckoutRouteState,
+  AbandonedCheckoutSort,
+} from "@/lib/abandoned-checkout-route-state";
+import { abandonedCheckoutRouteStateToQuery } from "@/lib/abandoned-checkout-route-state";
+import { getCanonicalPageForPagination } from "@/lib/list-helpers";
 
 // --- Type Definitions ---
 interface Pagination {
@@ -73,8 +79,6 @@ interface Pagination {
   total: number;
   totalPages: number;
 }
-
-type SortKey = keyof AbandonedCheckout;
 
 // --- Utility Functions ---
 
@@ -159,7 +163,7 @@ const CheckoutRow = React.memo(
         <TableCell>
           {display.kind === "stale_hosted_payment_order"
             ? `${display.paymentMethod?.toUpperCase() ?? "Gateway"} ${display.paymentStatus ?? "unpaid"} / ${formatCurrency(display.total, symbol)}`
-            : `${display.items.length} item(s) / ${formatCurrency(display.total, symbol)}`}
+            : `${formatAbandonedCheckoutItemCount(display.items.length)} / ${formatCurrency(display.total, symbol)}`}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {timeSince(updatedAt)}
@@ -457,20 +461,22 @@ const DetailsModal = ({
   );
 };
 
-export function AbandonedCheckoutsManager() {
+export function AbandonedCheckoutsManager({
+  routeState,
+  onRouteStateChange,
+}: {
+  routeState: AbandonedCheckoutRouteState;
+  onRouteStateChange: (
+    updates: Partial<AbandonedCheckoutRouteState>,
+    options?: { replace?: boolean },
+  ) => void;
+}) {
   useCurrency();
   const queryClient = useQueryClient();
   const orderActions = useOrderActionPermissions();
 
   // Local UI state
-  const [requestedPage, setRequestedPage] = useState(1);
-  const [requestedLimit, setRequestedLimit] = useState(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; order: "asc" | "desc" }>({
-    key: "updatedAt",
-    order: "desc",
-  });
   const [deleteDialog, setDeleteDialog] = useState<{ ids: string[] } | null>(
     null,
   );
@@ -479,17 +485,17 @@ export function AbandonedCheckoutsManager() {
   );
   const [isActionLoading, setIsActionLoading] = useState(false);
 
-  const debouncedSearch = useDebounce(searchQuery, 300);
-
   // TanStack Query for data fetching
-  const { data: rawData, isLoading, isFetching } = useQuery({
-    ...abandonedCheckoutsQueryOptions({
-      page: requestedPage,
-      limit: requestedLimit,
-      search: debouncedSearch || undefined,
-      sort: sort.key,
-      order: sort.order,
-    }),
+  const {
+    data: rawData,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
+    ...abandonedCheckoutsQueryOptions(
+      abandonedCheckoutRouteStateToQuery(routeState),
+    ),
     placeholderData: keepPreviousData,
   });
 
@@ -499,14 +505,14 @@ export function AbandonedCheckoutsManager() {
     if (!raw) {
       return {
         checkouts: [] as AbandonedCheckout[],
-        pagination: { page: 1, limit: requestedLimit, total: 0, totalPages: 1 } as Pagination,
+        pagination: { page: 1, limit: routeState.limit, total: 0, totalPages: 1 } as Pagination,
       };
     }
     return {
       checkouts: (raw.checkouts ?? []) as AbandonedCheckout[],
-      pagination: (raw.pagination ?? { page: 1, limit: requestedLimit, total: 0, totalPages: 1 }) as Pagination,
+      pagination: (raw.pagination ?? { page: 1, limit: routeState.limit, total: 0, totalPages: 1 }) as Pagination,
     };
-  }, [rawData, requestedLimit]);
+  }, [rawData, routeState.limit]);
 
   const deleteDialogHostedArchiveCount = useMemo(() => {
     if (!deleteDialog) return 0;
@@ -517,28 +523,44 @@ export function AbandonedCheckoutsManager() {
     ).length;
   }, [checkouts, deleteDialog]);
 
-  // Reset selection when data changes (search/sort/page change)
-  // This is handled implicitly by the query key changing
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [
+    routeState.limit,
+    routeState.order,
+    routeState.page,
+    routeState.search,
+    routeState.sort,
+  ]);
+
+  useEffect(() => {
+    if (!rawData) return;
+    const canonicalPage = getCanonicalPageForPagination(routeState.page, pagination);
+    if (canonicalPage !== routeState.page) {
+      onRouteStateChange({ page: canonicalPage }, { replace: true });
+    }
+  }, [onRouteStateChange, pagination, rawData, routeState.page]);
 
   const handlePageChange = useCallback((newPage: number) => {
-    setRequestedPage(newPage);
-    setSelectedIds(new Set());
-  }, []);
+    onRouteStateChange({ page: newPage });
+  }, [onRouteStateChange]);
 
   const handleLimitChange = useCallback((newLimit: number) => {
-    setRequestedLimit(newLimit);
-    setRequestedPage(1);
-    setSelectedIds(new Set());
-  }, []);
+    onRouteStateChange({ limit: newLimit, page: 1 });
+  }, [onRouteStateChange]);
 
-  const handleSort = useCallback((key: SortKey) => {
-    setSort((prev) => ({
-      key,
-      order: prev.key === key && prev.order === "desc" ? "asc" : "desc",
-    }));
-    setRequestedPage(1);
-    setSelectedIds(new Set());
-  }, []);
+  const handleSort = useCallback((key: AbandonedCheckoutSort) => {
+    onRouteStateChange({
+      sort: key,
+      order:
+        routeState.sort === key && routeState.order === "desc" ? "asc" : "desc",
+      page: 1,
+    });
+  }, [onRouteStateChange, routeState.order, routeState.sort]);
+
+  const handleSearchChange = useCallback((search: string) => {
+    onRouteStateChange({ search, page: 1 }, { replace: true });
+  }, [onRouteStateChange]);
 
   const handleToggleSelection = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -569,7 +591,7 @@ export function AbandonedCheckoutsManager() {
     setIsActionLoading(true);
     try {
       await deleteAbandonedCheckouts({ data: { ids: deleteDialog.ids } });
-      toast.success(`${deleteDialog.ids.length} checkout(s) deleted.`);
+      toast.success(`${formatAbandonedCheckoutRecordCount(deleteDialog.ids.length)} deleted.`);
       setSelectedIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });
     } catch {
@@ -581,13 +603,13 @@ export function AbandonedCheckoutsManager() {
   }, [deleteDialog, orderActions.canDeleteOrders, queryClient]);
 
   const refresh = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["abandoned-checkouts"] });
-  }, [queryClient]);
+    void refetch();
+  }, [refetch]);
 
-  const renderSortArrow = (key: SortKey) => {
-    if (sort.key !== key)
+  const renderSortArrow = (key: AbandonedCheckoutSort) => {
+    if (routeState.sort !== key)
       return <ArrowUpDown className="ml-2 h-3 w-3 text-muted-foreground/50" />;
-    return sort.order === "desc" ? (
+    return routeState.order === "desc" ? (
       <span className="ml-1 text-foreground">&#9660;</span>
     ) : (
       <span className="ml-1 text-foreground">&#9650;</span>
@@ -597,39 +619,26 @@ export function AbandonedCheckoutsManager() {
   return (
     <>
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by phone, ID, or cart items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 pl-8 pr-8"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="Clear incomplete checkout search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
+        <DataTableToolbar
+          searchValue={routeState.search}
+          onSearchChange={handleSearchChange}
+          searchPlaceholder="Search phone, ID, or cart item…"
+          selectedCount={selectedIds.size}
+          filters={
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-8 px-2 text-xs md:hidden"
               onClick={() => handleSort("updatedAt")}
-              aria-label={`Sort by last updated, currently ${sort.order === "desc" ? "newest first" : "oldest first"}`}
+              aria-label={`Sort by last updated, currently ${routeState.order === "desc" ? "newest first" : "oldest first"}`}
             >
               <ArrowUpDown className="mr-1 h-3.5 w-3.5" />
-              {sort.order === "desc" ? "Newest" : "Oldest"}
+              {routeState.order === "desc" ? "Newest" : "Oldest"}
             </Button>
-            {selectedIds.size > 0 && orderActions.canBulkDeleteOrders && (
+          }
+          bulkActions={
+            orderActions.canBulkDeleteOrders ? (
               <Button
                 variant="destructive"
                 size="sm"
@@ -640,7 +649,9 @@ export function AbandonedCheckoutsManager() {
               >
                 <Trash2 className="h-4 w-4 mr-2" /> Delete ({selectedIds.size})
               </Button>
-            )}
+            ) : null
+          }
+          actions={
             <Button
               onClick={refresh}
               disabled={isFetching}
@@ -654,8 +665,22 @@ export function AbandonedCheckoutsManager() {
               )}
               Refresh
             </Button>
+          }
+        />
+
+        {isError ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-sm" role="alert">
+            <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+            <p className="min-w-0 flex-1 text-muted-foreground">
+              {checkouts.length > 0
+                ? "The latest incomplete orders could not be loaded. Showing the last available result."
+                : "Incomplete orders could not be loaded. No records have been assumed."}
+            </p>
+            <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => void refetch()}>
+              Try again
+            </Button>
           </div>
-        </div>
+        ) : null}
 
         <div className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
           <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -676,11 +701,17 @@ export function AbandonedCheckoutsManager() {
                   <div className="grid h-52 place-items-center">
                     <Loader2 className="h-7 w-7 animate-spin text-primary" />
                   </div>
+                ) : isError && checkouts.length === 0 ? (
+                  <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
+                    <AlertCircle className="h-9 w-9 text-destructive" />
+                    <p className="font-medium text-foreground">Incomplete orders unavailable</p>
+                    <p className="text-xs">Try again without losing this search or sort.</p>
+                  </div>
                 ) : checkouts.length === 0 ? (
                   <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
                     <ShoppingCart className="h-9 w-9" />
-                    <p className="font-medium">No abandoned checkouts found.</p>
-                    <p className="text-xs">Check back later or after a marketing campaign.</p>
+                    <p className="font-medium">No incomplete orders found.</p>
+                    <p className="text-xs">Change the search or check back after more checkout activity.</p>
                   </div>
                 ) : (
                   <>
@@ -768,6 +799,16 @@ export function AbandonedCheckoutsManager() {
                         <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
                       </TableCell>
                     </TableRow>
+                  ) : isError && checkouts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-64 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <AlertCircle className="h-9 w-9 text-destructive" />
+                          <p className="font-medium text-foreground">Incomplete orders unavailable</p>
+                          <p className="text-xs">Try again without losing this search or sort.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ) : checkouts.length === 0 ? (
                     <TableRow>
                       <TableCell
@@ -777,10 +818,10 @@ export function AbandonedCheckoutsManager() {
                         <div className="flex flex-col items-center justify-center gap-2">
                           <ShoppingCart className="h-10 w-10" />
                           <p className="font-medium">
-                            No abandoned checkouts found.
+                            No incomplete orders found.
                           </p>
                           <p className="text-xs">
-                            Check back later or after a marketing campaign.
+                            Change the search or check back after more checkout activity.
                           </p>
                         </div>
                       </TableCell>
@@ -825,8 +866,8 @@ export function AbandonedCheckoutsManager() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete {deleteDialog?.ids.length} incomplete
-              checkout record(s), including any archived hosted-payment recovery
+              This will permanently delete {formatAbandonedCheckoutRecordCount(deleteDialog?.ids.length ?? 0)},
+              including any archived hosted-payment recovery
               context in the selection. This action cannot be undone.
               {deleteDialogHostedArchiveCount > 0 && (
                 <span className="mt-3 block rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">

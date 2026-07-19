@@ -947,6 +947,24 @@ The cleanup bullets below describe the two-product proof store that preceded the
   created. Eighteen focused tests, targeted lint, and the sequential Admin
   typecheck passed.
 
+### Incomplete-order workspace checkpoint (2026-07-19)
+
+- Admin `85db75f6-652d-430a-9793-4433e69e14a5` is live at 100%. Incomplete
+  Orders now owns search, pagination, page size, sort field, and sort order in
+  validated URL state. Selection is cleared whenever that result identity
+  changes, and an out-of-range copied page repairs to the real last page.
+- A first live build exposed a Worker-SSR `Invalid URL` failure because the
+  legacy query used browser-relative `fetch`. The final build replaced it with
+  the server-safe admin API function and was redeployed before commit. Read
+  failure now remains visibly distinct from a valid empty result.
+- A copied `+880 1700 000019`/customer-ascending/10-row URL restored the exact
+  result and sort after full reload. Selecting one record enabled the bulk
+  action; moving to page 2 cleared it. Opening `page=999` normalized to page 3
+  of 3 with records visible. No recovery record was deleted.
+- Rough `item(s)` and `checkout(s)` copy was removed in favor of natural count
+  grammar. Fifty-nine focused tests, targeted lint, the sequential Admin
+  typecheck, deployment, and authenticated browser checks passed.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

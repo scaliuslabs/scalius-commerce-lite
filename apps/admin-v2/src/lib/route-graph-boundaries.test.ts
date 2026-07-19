@@ -936,7 +936,8 @@ describe("admin route graph boundaries", () => {
       ["while", "Tap"].join(""),
     ];
 
-    expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={setSelectedType} />");
+    expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={selectType} />");
+    expect(newRouteSource).toContain("validateSearch: validateDiscountCreateSearch");
     expect(newRouteSource).toContain("const DiscountCodeBuilder = lazy(");
     for (const marker of forbiddenMarkers) {
       expect(combinedSource).not.toContain(marker);
@@ -1329,16 +1330,33 @@ describe("admin route graph boundaries", () => {
     expect(mediaManagerBarrelSource).not.toContain("./MediaManagerPage");
   });
 
-  it("keeps abandoned checkouts route entry independent from its self-loading list", () => {
+  it("keeps abandoned checkout list state URL-owned and client-loaded", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "routes", "admin", "abandoned-checkouts.tsx"),
       "utf8",
     );
+    const managerSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
+      "utf8",
+    );
+    const querySource = readFileSync(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "abandoned-checkouts.ts"),
+      "utf8",
+    );
 
     expect(source).toContain("AbandonedCheckoutsManager");
+    expect(source).toContain("validateSearch: validateAbandonedCheckoutSearch");
     expect(source).not.toContain("abandonedCheckoutsQueryOptions");
     expect(source).not.toContain("ensureQueryData(");
     expect(source).not.toContain("prefetchQuery(");
+    expect(source).toContain("routeState={search}");
+    expect(managerSource).toContain("routeState: AbandonedCheckoutRouteState");
+    expect(managerSource).toContain("onRouteStateChange");
+    expect(managerSource).not.toContain("useState(\"\")");
+    expect(managerSource).toContain("No records have been assumed.");
+    expect(managerSource).toContain("getCanonicalPageForPagination");
+    expect(querySource).toContain("getAbandonedCheckouts({ data: params })");
+    expect(querySource).not.toContain("fetch(");
   });
 
   it("keeps new-order creation independent from catalog size", () => {

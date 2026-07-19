@@ -47,6 +47,14 @@ export function formatAbandonedCheckoutId(value: string | null | undefined): str
   return `${compact.slice(0, 7)}…${compact.slice(-5)}`;
 }
 
+export function formatAbandonedCheckoutItemCount(count: number): string {
+  return `${count} ${count === 1 ? "item" : "items"}`;
+}
+
+export function formatAbandonedCheckoutRecordCount(count: number): string {
+  return `${count} checkout ${count === 1 ? "record" : "records"}`;
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
