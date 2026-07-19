@@ -62,9 +62,14 @@ export function FormImageUploadField({
       {value ? (
         <div className={cn("relative w-full", aspectRatio, maxWidth)}>
           <img
-            src={getOptimizedImageUrl(value.url)}
+            src={getOptimizedImageUrl(value.url, {
+              width: 640,
+              height: 480,
+              quality: 82,
+              fit: "scale-down",
+            })}
             alt={value.filename}
-            className="h-full w-full rounded-md object-cover"
+            className="h-full w-full rounded-md bg-muted/20 object-contain"
             loading="lazy"
             decoding="async"
           />
@@ -74,6 +79,7 @@ export function FormImageUploadField({
             size="icon"
             className="absolute -right-2 -top-2 h-6 w-6"
             onClick={() => onChange(null)}
+            aria-label={`Remove ${value.filename}`}
           >
             <X className="h-4 w-4" />
           </Button>

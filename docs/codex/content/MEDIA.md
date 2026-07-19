@@ -329,3 +329,20 @@ buffered in a Worker invocation.
   cap an isolate at 128 MB and explicitly recommend streaming instead of
   buffering large bodies. Free/Pro request bodies also cap at 100 MB, so a
   nominal 100 MB video cannot safely use today's `file.arrayBuffer()` path.
+
+### Whole-asset preview follow-up (2026-07-20)
+
+- A fresh production pass reconfirmed the Media workspace at 1440 x 900 and
+  390 x 844: five desktop columns, two mobile columns, zero-preselected bulk
+  mode, and no mobile document overflow (`scrollWidth === innerWidth`). The
+  library remains an inspection surface and correctly uses bounded `contain`
+  transforms.
+- The shared category/CMS-page image form was the remaining inconsistent
+  inspection surface: its CSS cropped the merchant's selected asset even
+  though the generic Cloudflare transform preserved the source. It now requests
+  an explicit bounded `scale-down` preview, renders with `object-contain`, and
+  names the icon-only remove action for assistive technology. Deliberate public
+  crop surfaces remain unchanged.
+- The decision follows Shopify's current file editor, which models crop as an
+  explicit edit and focal point as merchant data, and Cloudflare's documented
+  distinction between whole-image `scale-down` and destructive `cover`.
