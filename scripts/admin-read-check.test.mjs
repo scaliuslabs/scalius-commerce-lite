@@ -189,7 +189,11 @@ describe("authenticated admin read check", () => {
     expect(new URL(fetchImpl.mock.calls[2][0]).pathname).toBe("/api/auth/sign-out");
     expect(fetchImpl.mock.calls[2][1]).toMatchObject({
       method: "POST",
-      headers: { cookie: "better-auth.session_token=session-secret" },
+      body: "{}",
+      headers: {
+        "content-type": "application/json",
+        cookie: "better-auth.session_token=session-secret",
+      },
     });
   });
 

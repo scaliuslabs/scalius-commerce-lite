@@ -71,6 +71,11 @@ describe("demo-store authenticated session", () => {
       timeoutMs: 1_000,
     })).resolves.toEqual({ status: "closed", statusCode: 200 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      body: "{}",
+      headers: expect.objectContaining({ "content-type": "application/json" }),
+    });
   });
 
   it("cleans up a provisional session when two-factor continuation is required", async () => {
