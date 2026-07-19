@@ -223,6 +223,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                 class="flex items-center justify-center h-9 w-9 rounded-full bg-card border border-input text-muted-foreground hover:border-primary/50 hover:text-foreground hover:shadow-sm transition-all"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={displayTitle}
                 title={displayTitle}
               >
                 {item.iconUrl ? (
@@ -232,16 +233,16 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                       height: 32,
                       fit: "contain",
                     })}
-                    alt={displayTitle}
+                    alt=""
+                    aria-hidden="true"
                     class="w-4 h-4 object-contain"
                     loading="lazy"
                   />
                 ) : (
-                  <span class="text-[10px] font-bold uppercase">
+                  <span aria-hidden="true" class="text-[10px] font-bold uppercase">
                     {displayTitle.charAt(0)}
                   </span>
                 )}
-                <span class="sr-only">{displayTitle}</span>
               </a>
             );
           })}

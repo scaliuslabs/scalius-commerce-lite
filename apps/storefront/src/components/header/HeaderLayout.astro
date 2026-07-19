@@ -137,6 +137,7 @@ const { headerData } = Astro.props;
                     class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={displayTitle}
                     title={displayTitle}
                   >
                     {item.iconUrl ? (
@@ -146,16 +147,16 @@ const { headerData } = Astro.props;
                           height: 32,
                           fit: "contain",
                         })}
-                        alt={displayTitle}
+                        alt=""
+                        aria-hidden="true"
                         class="w-4 h-4 object-contain"
                         loading="lazy"
                       />
                     ) : (
-                      <span class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
+                      <span aria-hidden="true" class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
                         {displayTitle.charAt(0)}
                       </span>
                     )}
-                    <span class="sr-only">{displayTitle}</span>
                   </a>
                 );
               })}
