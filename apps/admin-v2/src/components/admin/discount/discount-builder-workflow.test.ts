@@ -66,6 +66,12 @@ describe("unified discount builder workflow", () => {
     expect(builder).toContain("needsDiscountWriteNormalization");
   });
 
+  it("keeps activation copy distinct from the lifecycle status", () => {
+    expect(builder).toContain('discountId ? "Discount active" : "Activate after saving"');
+    expect(builder).not.toContain('field.value ? "Enabled" : "Draft"');
+    expect(builder).toContain('<Badge variant="outline">{lifecycleLabel(values)}</Badge>');
+  });
+
   it("claims the loaded revision and preserves input when a newer rule wins", () => {
     expect(builder).toContain("discountRevision");
     expect(builder).toContain("expectedRevision: discountRevision");
