@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { InventoryLabelVariant } from "~/lib/api-functions/inventory";
 import {
   buildLabelCopies,
+  buildLabelDataCsv,
   clampLabelAlignmentMm,
   clampLabelPreviewPageIndex,
   findCompatibleLabelPreset,
@@ -179,6 +180,28 @@ describe("barcode label page composition", () => {
     const copies = buildLabelCopies([variant], { [variant.id]: 25 });
     expect(copies).toHaveLength(25);
     expect(paginateLabelCopies(copies, getLabelPreset("a4-cut-3x8")).map((page) => page.length)).toEqual([24, 1]);
+  });
+
+  it("exports one formula-safe UTF-8 row per physical label in reviewed order", () => {
+    const risky = {
+      ...variant,
+      id: "var_2",
+      productName: "=HYPERLINK(\"https://invalid.example\")",
+      optionLabel: "বাংলা / Sand",
+      sku: "+FORMULA",
+      barcode: "12345678901234",
+    };
+    const copies = buildLabelCopies([variant, risky], { var_1: 2, var_2: 1 });
+    const csv = buildLabelDataCsv(copies, (price) => `৳${price}`);
+    const lines = csv.slice(1).split("\r\n");
+
+    expect(csv.startsWith("\uFEFF")).toBe(true);
+    expect(lines).toHaveLength(4);
+    expect(lines[1]).toContain('"1","Kori Studio Trainer"');
+    expect(lines[2]).toContain('"2","Kori Studio Trainer"');
+    expect(lines[3]).toContain('"3","\'=HYPERLINK(""https://invalid.example"")"');
+    expect(lines[3]).toContain('"বাংলা / Sand","\'+FORMULA"');
+    expect(lines[3]).toContain('"CODE128","12345678901234"');
   });
 
   it("keeps used sheet cells empty before placing the first printable label", () => {

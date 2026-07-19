@@ -383,6 +383,53 @@ export type LabelCopy = {
   symbol: BarcodeSymbol;
 };
 
+function labelCsvCell(value: unknown): string {
+  let text = value == null ? "" : String(value);
+  // Catalog text is merchant-controlled and CSV files are commonly opened in
+  // spreadsheet software before being merged into label-printer templates.
+  // Keep the export inert instead of allowing a leading formula character.
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+/**
+ * Exports one row per physical label, not one row per SKU. Database-merge
+ * tools such as P-touch can therefore print every record once and preserve the
+ * exact quantities and job order already reviewed in Scalius.
+ */
+export function buildLabelDataCsv(
+  copies: readonly LabelCopy[],
+  formatPrice: (price: number | string) => string,
+): string {
+  const headers = [
+    "Label number",
+    "Product",
+    "Variant",
+    "SKU",
+    "Barcode format",
+    "Encoded barcode",
+    "Printed value",
+    "Selling price",
+  ];
+  const rows = copies.map((copy, index) => [
+    index + 1,
+    copy.variant.productName,
+    copy.variant.optionLabel ?? "",
+    copy.variant.sku,
+    copy.symbol.format ?? "",
+    copy.symbol.value,
+    copy.symbol.displayValue,
+    formatPrice(copy.variant.effectivePrice),
+  ]);
+
+  // The BOM keeps non-Latin product and variant names intact in Excel and in
+  // the desktop label applications merchants commonly use as merge sources.
+  return `\uFEFF${[
+    headers.map(labelCsvCell).join(","),
+    ...rows.map((row) => row.map(labelCsvCell).join(",")),
+  ].join("\r\n")}`;
+}
+
 export function buildLabelCopies(
   variants: readonly InventoryLabelVariant[],
   quantities: Readonly<Record<string, number>>,
