@@ -37,6 +37,7 @@ import {
     checksumNavigationPublication,
     getNavigationPlacementDefinition,
     NAVIGATION_MENU_ITEM_LIMIT,
+    NAVIGATION_MENU_MAX_DEPTH,
     NAVIGATION_POSITION_GAP,
     NAVIGATION_SYSTEM_TARGETS,
     NavigationPlacementRevisionConflictError,
@@ -74,6 +75,7 @@ export interface NavigationItemDestination {
     parentId?: string | null;
     beforeId?: string;
     afterId?: string;
+    index?: number;
 }
 
 export interface NavigationAuthorityShadowReport {
@@ -398,6 +400,120 @@ export async function getNavigationMenuItemAuthority(
     return row;
 }
 
+export async function getNavigationMenuMoveOptions(
+    db: Database,
+    menuId: string,
+    itemId: string,
+    input: {
+        query?: string;
+        limit?: number;
+        selectedParentId?: string | null;
+    } = {},
+) {
+    await getNavigationMenuAuthority(db, menuId);
+    const rows = await db
+        .select({
+            id: navigationMenuItems.id,
+            parentId: navigationMenuItems.parentId,
+            position: navigationMenuItems.position,
+            label: navigationMenuItems.label,
+        })
+        .from(navigationMenuItems)
+        .where(eq(navigationMenuItems.menuId, menuId))
+        .limit(NAVIGATION_MENU_ITEM_LIMIT + 1)
+        .all();
+    if (rows.length > NAVIGATION_MENU_ITEM_LIMIT) {
+        throw new ValidationError(`A menu can contain at most ${NAVIGATION_MENU_ITEM_LIMIT} items.`);
+    }
+
+    const hierarchy = buildNavigationHierarchy(rows);
+    const nodes = flattenHierarchy(hierarchy);
+    const movingNode = nodes.find((node) => node.item.id === itemId);
+    if (!movingNode) throw new NotFoundError("Menu item not found.");
+
+    const query = input.query?.trim() ?? "";
+    if (query && (query.length < 2 || query.length > 100)) {
+        throw new ValidationError("Search with 2–100 characters.");
+    }
+    const limit = normalizeLimit(input.limit ?? 50);
+    const movingDepth = subtreeDepth(movingNode);
+    const blockedIds = new Set(flattenHierarchy([movingNode]).map((node) => node.item.id));
+    const nodeById = new Map(nodes.map((node) => [node.item.id, node]));
+    const pathLabel = (node: NavigationHierarchyNode<(typeof rows)[number]>): string => {
+        const labels = [node.item.label];
+        let parentId = node.item.parentId;
+        while (parentId) {
+            const parent = nodeById.get(parentId);
+            if (!parent) break;
+            labels.unshift(parent.item.label);
+            parentId = parent.item.parentId;
+        }
+        return labels.join(" › ");
+    };
+    const validParents = nodes.filter((node) => (
+        !blockedIds.has(node.item.id)
+        && node.depth + movingDepth <= NAVIGATION_MENU_MAX_DEPTH
+    ));
+    const validParentById = new Map(validParents.map((node) => [node.item.id, node]));
+    const selectedParentId = input.selectedParentId === undefined
+        ? movingNode.item.parentId
+        : input.selectedParentId;
+    if (selectedParentId && !validParentById.has(selectedParentId)) {
+        throw new ValidationError("Choose a depth-safe parent outside the moving branch.");
+    }
+
+    const currentSiblings = rows
+        .filter((row) => row.parentId === movingNode.item.parentId)
+        .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+    const currentPosition = currentSiblings.findIndex((row) => row.id === itemId) + 1;
+    const destinationSiblings = rows.filter((row) => (
+        row.parentId === selectedParentId && row.id !== itemId
+    ));
+    const normalizedQuery = query.toLocaleLowerCase();
+    const matches = validParents
+        .map((node) => ({ node, path: pathLabel(node) }))
+        .filter(({ node, path }) => !normalizedQuery || (
+            node.item.label.toLocaleLowerCase().includes(normalizedQuery)
+            || path.toLocaleLowerCase().includes(normalizedQuery)
+        ))
+        .sort((left, right) => left.path.localeCompare(right.path) || left.node.item.id.localeCompare(right.node.item.id));
+    const forcedIds = [movingNode.item.parentId, selectedParentId].filter(
+        (id): id is string => Boolean(id),
+    );
+    const selectedNodes = [
+        ...forcedIds.flatMap((id) => {
+            const node = validParentById.get(id);
+            return node ? [{ node, path: pathLabel(node) }] : [];
+        }),
+        ...matches,
+    ];
+    const seen = new Set<string>();
+    const parents = selectedNodes.flatMap(({ node, path }) => {
+        if (seen.has(node.item.id) || seen.size >= limit) return [];
+        seen.add(node.item.id);
+        return [{
+            id: node.item.id,
+            label: node.item.label,
+            pathLabel: path,
+            resultingLevel: node.depth + 1,
+            childCount: node.children.length,
+        }];
+    });
+
+    return {
+        item: {
+            id: movingNode.item.id,
+            label: movingNode.item.label,
+            parentId: movingNode.item.parentId,
+        },
+        subtreeDepth: movingDepth,
+        currentPosition,
+        selectedParentId,
+        positionCount: destinationSiblings.length + 1,
+        parents,
+    };
+}
+
 export async function searchNavigationMenuItems(
     db: Database,
     menuId: string,
@@ -607,8 +723,16 @@ export async function moveNavigationMenuItem(
     itemId: string,
     input: NavigationItemDestination & { expectedRevision: number },
 ) {
-    if (input.beforeId && input.afterId) {
-        throw new ValidationError("Choose either a before or after destination, not both.");
+    const destinationModes = [
+        Boolean(input.beforeId),
+        Boolean(input.afterId),
+        input.index != null,
+    ].filter(Boolean).length;
+    if (destinationModes > 1) {
+        throw new ValidationError("Choose one exact move destination.");
+    }
+    if (input.index != null && (!Number.isInteger(input.index) || input.index < 0)) {
+        throw new ValidationError("Choose a valid destination position.");
     }
     const hierarchyRows = await db
         .select({
@@ -636,7 +760,12 @@ export async function moveNavigationMenuItem(
         .filter((row) => row.parentId === parentId && row.id !== itemId)
         .sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
     let insertionIndex = siblings.length;
-    if (input.beforeId) {
+    if (input.index != null) {
+        if (input.index > siblings.length) {
+            throw new ValidationError("The destination position is outside this parent.");
+        }
+        insertionIndex = input.index;
+    } else if (input.beforeId) {
         insertionIndex = siblings.findIndex((row) => row.id === input.beforeId);
         if (insertionIndex < 0) throw new ValidationError("The before destination is not a sibling in this location.");
     } else if (input.afterId) {

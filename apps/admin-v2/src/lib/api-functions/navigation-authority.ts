@@ -46,6 +46,21 @@ export interface NavigationMenuItemPage {
   nextCursor: string | null;
 }
 
+export interface NavigationMenuMoveOptions {
+  item: { id: string; label: string; parentId: string | null };
+  subtreeDepth: number;
+  currentPosition: number;
+  selectedParentId: string | null;
+  positionCount: number;
+  parents: Array<{
+    id: string;
+    label: string;
+    pathLabel: string;
+    resultingLevel: number;
+    childCount: number;
+  }>;
+}
+
 export interface NavigationPlacementSetting {
   placement: {
     id: string;
@@ -130,6 +145,27 @@ export const getNavigationMenuItemAuthority = createServerFn({ method: "GET" })
     `/navigation/menus/${encodeURIComponent(data.menuId)}/items/${encodeURIComponent(data.itemId)}`,
   ));
 
+export const getNavigationMenuMoveOptionsAuthority = createServerFn({ method: "GET" })
+  .validator((data: {
+    menuId: string;
+    itemId: string;
+    query?: string;
+    limit?: number;
+    selectedParentId?: string | null;
+  }) => data)
+  .handler(async ({ data }) => apiGet<NavigationMenuMoveOptions>(
+    `/navigation/menus/${encodeURIComponent(data.menuId)}/items/${encodeURIComponent(data.itemId)}/move-options`,
+    {
+      limit: String(data.limit ?? 50),
+      ...(data.query ? { q: data.query } : {}),
+      ...(data.selectedParentId === null
+        ? { topLevel: "true" }
+        : data.selectedParentId
+          ? { parentId: data.selectedParentId }
+          : {}),
+    },
+  ));
+
 export const createNavigationMenuAuthority = createServerFn({ method: "POST" })
   .validator((data: { name: string; handle?: string }) => data)
   .handler(async ({ data }) => apiPost<{ menu: NavigationMenuSummary }>(
@@ -188,6 +224,7 @@ export const moveNavigationMenuItemAuthority = createServerFn({ method: "POST" }
     parentId?: string | null;
     beforeId?: string;
     afterId?: string;
+    index?: number;
   }) => data)
   .handler(async ({ data }) => {
     const { menuId, itemId, ...body } = data;

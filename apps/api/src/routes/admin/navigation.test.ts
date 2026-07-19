@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     getNavigationAuthorityShadowReport: vi.fn(),
     getNavigationMenuAuthority: vi.fn(),
     getNavigationMenuItemAuthority: vi.fn(),
+    getNavigationMenuMoveOptions: vi.fn(),
     getNavigationPlacementManifest: vi.fn(),
     listNavigationMenuItems: vi.fn(),
     listNavigationMenuPublications: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     getNavigationAuthorityShadowReport: mocks.getNavigationAuthorityShadowReport,
     getNavigationMenuAuthority: mocks.getNavigationMenuAuthority,
     getNavigationMenuItemAuthority: mocks.getNavigationMenuItemAuthority,
+    getNavigationMenuMoveOptions: mocks.getNavigationMenuMoveOptions,
     getNavigationPlacementManifest: mocks.getNavigationPlacementManifest,
     listNavigationMenuItems: mocks.listNavigationMenuItems,
     listNavigationMenuPublications: mocks.listNavigationMenuPublications,
@@ -173,6 +175,54 @@ describe("admin navigation routes", () => {
             },
         });
         expect(mocks.getNavigationAuthorityShadowReport).toHaveBeenCalledWith(db);
+    });
+
+    it("returns bounded exact-move context and preserves an explicit top-level choice", async () => {
+        mocks.getNavigationMenuMoveOptions.mockResolvedValue({
+            item: { id: "item_1", label: "Footwear", parentId: "parent_1" },
+            subtreeDepth: 1,
+            currentPosition: 2,
+            selectedParentId: null,
+            positionCount: 5,
+            parents: [],
+        });
+        const { app, db } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1/items/item_1/move-options?topLevel=true&q=foo&limit=25",
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.getNavigationMenuMoveOptions).toHaveBeenCalledWith(db, "menu_1", "item_1", {
+            query: "foo",
+            limit: 25,
+            selectedParentId: null,
+        });
+    });
+
+    it("moves to an exact zero-based sibling index", async () => {
+        mocks.moveNavigationMenuItem.mockResolvedValue({ revision: 7 });
+        const { app, db } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1/items/item_1/move",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    expectedRevision: 6,
+                    parentId: null,
+                    index: 3,
+                }),
+            },
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.moveNavigationMenuItem).toHaveBeenCalledWith(db, "menu_1", "item_1", {
+            expectedRevision: 6,
+            parentId: null,
+            index: 3,
+        });
     });
 
     it("publishes through the canonical command and invalidates public layout only then", async () => {

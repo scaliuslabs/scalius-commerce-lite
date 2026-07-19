@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createNavigationMenu,
   createNavigationMenuItem,
+  getNavigationMenuMoveOptions,
   getPublishedNavigationMenuTree,
   getPublishedNavigationPlacements,
   getNavigationPlacementManifest,
@@ -188,10 +189,27 @@ describe("navigation authority D1 commands", () => {
       expect.objectContaining({ item: expect.objectContaining({ id: accountId }), isMatch: true }),
     ]));
 
+    const moveOptions = await getNavigationMenuMoveOptions(db, menu.id, accountId);
+    expect(moveOptions).toMatchObject({
+      item: { id: accountId, label: "Account", parentId: shopId },
+      subtreeDepth: 1,
+      currentPosition: 1,
+      selectedParentId: shopId,
+      positionCount: 1,
+      parents: [
+        expect.objectContaining({
+          id: shopId,
+          pathLabel: "Shop",
+          resultingLevel: 2,
+          childCount: 1,
+        }),
+      ],
+    });
+
     const moved = await moveNavigationMenuItem(db, menu.id, accountId, {
       expectedRevision: 3,
       parentId: null,
-      beforeId: shopId,
+      index: 0,
     });
     expect(moved.revision).toBe(4);
     const roots = await listNavigationMenuItems(db, menu.id, { parentId: null });

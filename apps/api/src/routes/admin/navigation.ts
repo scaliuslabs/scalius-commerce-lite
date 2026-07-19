@@ -8,6 +8,7 @@ import {
     deleteNavigationMenuItem,
     getNavigationAuthorityShadowReport,
     getNavigationMenuItemAuthority,
+    getNavigationMenuMoveOptions,
     getNavigationMenuAuthority,
     getNavigationPlacementManifest,
     getNavigationItems,
@@ -467,6 +468,58 @@ app.openapi(getMenuItemRoute, async (c) => {
     return ok(c, await getNavigationMenuItemAuthority(c.get("db"), menuId, itemId));
 });
 
+const getMenuMoveOptionsRoute = createRoute({
+    method: "get",
+    path: "/menus/{menuId}/items/{itemId}/move-options",
+    tags: ["Admin - Navigation"],
+    summary: "Get depth-safe exact move choices for one menu item",
+    request: {
+        params: z.object({ menuId: z.string().min(1), itemId: z.string().min(1) }),
+        query: z.object({
+            q: z.string().trim().min(2).max(100).optional(),
+            limit: z.coerce.number().int().min(1).max(100).optional(),
+            parentId: z.string().min(1).optional(),
+            topLevel: z.enum(["true"]).optional(),
+        }).refine((value) => !(value.parentId && value.topLevel), {
+            message: "Choose one parent location.",
+        }),
+    },
+    responses: {
+        200: {
+            description: "Move context and bounded parent choices",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                item: z.object({
+                    id: z.string(),
+                    label: z.string(),
+                    parentId: z.string().nullable(),
+                }),
+                subtreeDepth: z.number().int().positive(),
+                currentPosition: z.number().int().positive(),
+                selectedParentId: z.string().nullable(),
+                positionCount: z.number().int().positive(),
+                parents: z.array(z.object({
+                    id: z.string(),
+                    label: z.string(),
+                    pathLabel: z.string(),
+                    resultingLevel: z.number().int().min(2).max(3),
+                    childCount: z.number().int().nonnegative(),
+                })),
+            })) } },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getMenuMoveOptionsRoute, async (c) => {
+    const { menuId, itemId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    return ok(c, await getNavigationMenuMoveOptions(c.get("db"), menuId, itemId, {
+        query: query.q,
+        limit: query.limit,
+        selectedParentId: query.topLevel ? null : query.parentId,
+    }));
+});
+
 const createMenuItemRoute = createRoute({
     method: "post",
     path: "/menus/{menuId}/items",
@@ -538,6 +591,7 @@ const moveMenuItemRoute = createRoute({
             parentId: z.string().nullable().optional(),
             beforeId: z.string().optional(),
             afterId: z.string().optional(),
+            index: z.number().int().min(0).max(9_999).optional(),
         }) } } },
     },
     responses: {
