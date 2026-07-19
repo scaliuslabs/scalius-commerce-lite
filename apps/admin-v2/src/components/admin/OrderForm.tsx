@@ -273,7 +273,7 @@ export function OrderForm({
       <Form {...form}>
         <form
           method="post"
-          onSubmit={canSave
+          onSubmit={canSave && form.formState.isDirty
             ? form.handleSubmit(handleSubmit)
             : (event) => event.preventDefault()}
           className="-mt-4 pb-6 space-y-4"

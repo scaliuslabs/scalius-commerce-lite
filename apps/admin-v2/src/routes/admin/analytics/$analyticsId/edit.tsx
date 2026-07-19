@@ -10,7 +10,7 @@ export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
     await queryClient.ensureQueryData(analyticsScriptQueryOptions(params.analyticsId));
   },
-  head: () => ({ meta: [{ title: "Edit Analytics Script | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Edit Analytics Integration | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: EditAnalyticsPage,
 });
