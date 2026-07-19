@@ -1,6 +1,6 @@
 # Notification and Provider Presentation Contract
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-20
 
 This document owns the boundary between notification policy, delivery-provider
 setup, and provider-brand presentation. Runtime code, provider terms, focused
@@ -85,6 +85,42 @@ The current source is inconsistent but safely reversible:
 This review deliberately does not import provider images. It prevents replacing
 generic glyphs with legally ambiguous or incorrectly sized marks while still
 establishing the asset contract needed for a later visual cutover.
+
+## Event-policy preservation checkpoint — 2026-07-20
+
+Provider readiness now controls whether a channel can be edited or delivered,
+not whether the merchant's saved event rule exists. The shared policy helper
+deserializes and serializes Email, SMS, WhatsApp, and administrator push intent
+without filtering checked rules through the current provider state. A
+temporarily unavailable provider therefore leaves its rules visibly checked
+and marked paused; saving an unrelated ready Email rule cannot silently erase
+SMS, WhatsApp, or push policy.
+
+The rule editor is grouped into Order progress, Payments & returns, and Support
+instead of one undifferentiated table. Desktop retains a compact matrix and
+whole-channel actions; mobile renders event cards without horizontal clipping.
+Customer and administrator rules have independent dirty/save actions, provider
+issues stay collapsed until needed, WhatsApp template fields use progressive
+disclosure, and navigation is protected while either ruleset is dirty.
+
+Admin deployment `7373e3fe-aec0-46a5-98b9-b8c04f0a24b4` was authenticated-
+smoked on the live rules route. A ready Email rule was changed without saving,
+Save became available, navigation to the URL-backed Admin push tab raised the
+Unsaved Changes guard, Keep Editing preserved the draft, and restoring the
+original rule disabled Save again without a write. At a real 390 x 844
+viewport the page reported 390 px document width, no horizontal overflow, and
+rendered the event-card layout in both light and dark modes; the browser console
+reported no errors. The live state also proved that saved SMS and WhatsApp
+intent remains visible as paused while those providers are unavailable.
+
+Four focused/boundary files passed 62 tests, including provider-outage intent
+preservation, immutable whole-column changes, indeterminate states, read-error
+write locks, URL ownership, and route-graph boundaries. Targeted lint and the
+admin TypeScript check passed. The sequential production release check passed
+API readiness, invalid-cookie auth, dashboard, storefront pages/cache headers,
+SEO discovery, both catalog feeds, UCP catalog search/lookup, and a live product
+route. Exact notification delivery, provider recovery, queue/DLQ, and stale-
+device outcomes remain part of the broader release proof below.
 
 ## Release proof
 
