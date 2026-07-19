@@ -63,6 +63,7 @@ import {
   useBulkShipOrders,
   useCreateOrderReturn,
   useIssueOrderPaymentRecoveryLink,
+  useRefundOrder,
   useReconcileRefundAttempt,
   useResendOrderNotification,
   useRetryOrderNotification,
@@ -251,6 +252,38 @@ describe("order notification mutations", () => {
 });
 
 describe("order refund recovery mutations", () => {
+  it("treats a committed refund as success while surfacing failed follow-up work", () => {
+    const mutation = useRefundOrder() as MutationOptions;
+
+    mutation.onSuccess?.(
+      {
+        success: true,
+        gateway: "sslcommerz",
+        refundId: "refund_provider_1",
+        amount: 100,
+        isFullRefund: true,
+        notificationCount: 0,
+        sideEffectErrors: 2,
+      },
+      { orderId: "ord_123" } as never,
+    );
+
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.payments("ord_123"),
+    });
+    expect(toastMocks.success).toHaveBeenCalledWith("Refund processed");
+    expect(toastMocks.warning).toHaveBeenCalledWith(
+      "Refund saved; follow-up needs attention",
+      {
+        description:
+          "The financial refund is complete, but cache refresh or customer notification should be checked.",
+      },
+    );
+  });
+
   it("invalidates order state and payments after a manual recovery check", () => {
     const mutation = useReconcileRefundAttempt() as MutationOptions;
 

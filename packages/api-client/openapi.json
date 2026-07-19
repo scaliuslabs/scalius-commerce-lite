@@ -109058,6 +109058,12 @@
                         "isFullRefund": {
                           "type": "boolean"
                         },
+                        "notificationCount": {
+                          "type": "number"
+                        },
+                        "sideEffectErrors": {
+                          "type": "number"
+                        },
                         "error": {
                           "type": "string"
                         }
@@ -109066,7 +109072,9 @@
                         "success",
                         "gateway",
                         "amount",
-                        "isFullRefund"
+                        "isFullRefund",
+                        "notificationCount",
+                        "sideEffectErrors"
                       ],
                       "additionalProperties": {
                         "nullable": true

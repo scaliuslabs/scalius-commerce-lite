@@ -105,7 +105,10 @@ function createDbMock(gateway: Gateway) {
   let refundAttemptSelectCall = 0;
   const updateSets: Array<Record<string, unknown>> = [];
   const insertValues: Array<Record<string, unknown>> = [];
-  const batch = vi.fn(async () => [undefined, [{ id: "order_1", version: 4 }]]);
+  const batch = vi.fn(async (statements: unknown[]) => [
+    [{ id: "order_1", version: 4 }],
+    ...statements.slice(1).map(() => undefined),
+  ]);
   const update = vi.fn(() => ({
     set: vi.fn((values: Record<string, unknown>) => {
       updateSets.push(values);

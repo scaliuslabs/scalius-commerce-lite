@@ -169,8 +169,8 @@ function createDbMock({
   const selectedOrder = { ...order, ...orderOverrides };
 
   const batch = vi.fn(async (statements: unknown[]) => [
-    ...statements.slice(0, -1).map((_, index) => [{ id: `refund_row_${index + 1}` }]),
     [{ id: "order_1", version: 4 }],
+    ...statements.slice(1).map((_, index) => [{ id: `refund_row_${index + 1}` }]),
   ]);
 
   const chainFor = (result: unknown) => {

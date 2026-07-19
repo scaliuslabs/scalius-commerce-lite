@@ -119,6 +119,7 @@ describe("admin refund notification routes", () => {
         });
         const body = await response.json() as { data: Record<string, unknown> };
         expect(body.data).not.toHaveProperty("refundNotification");
+        expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
     });
 
     it("enqueues partial-refund copy for partial refunds", async () => {
@@ -154,6 +155,42 @@ describe("admin refund notification routes", () => {
             data: { amount: 40, gateway: "stripe", refundId: "re_partial" },
         });
         const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).not.toHaveProperty("refundNotification");
+        expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
+    });
+
+    it("returns committed success when cache and notification follow-up both fail", async () => {
+        mocks.processRefund.mockResolvedValue({
+            success: true,
+            gateway: "sslcommerz",
+            refundId: "refund_provider_1",
+            amount: 120,
+            isFullRefund: true,
+            refundNotification: {
+                notificationType: "order_refunded",
+                dedupeKey: "refund:order_1:refund_order_1_4:full",
+                amount: 120,
+                refundId: "refund_provider_1",
+            },
+        });
+        mocks.invalidateProductAvailabilityCaches.mockRejectedValueOnce(new Error("cache unavailable"));
+        mocks.enqueueOrderRefundNotificationForOrder.mockRejectedValueOnce(new Error("queue unavailable"));
+        const { app, env } = createTestApp();
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 120, reason: "requested_by_customer" }),
+        }, env);
+
+        expect(response.status).toBe(200);
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).toMatchObject({
+            success: true,
+            refundId: "refund_provider_1",
+            notificationCount: 0,
+            sideEffectErrors: 2,
+        });
         expect(body.data).not.toHaveProperty("refundNotification");
     });
 
