@@ -997,6 +997,30 @@ The cleanup bullets below describe the two-product proof store that preceded the
   [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md); neither an immediate
   row print nor a blocking wizard should replace the shared progressive job.
 
+### Storefront image and social-accessibility checkpoint (2026-07-20)
+
+- The live rich homepage was measured at 1440 × 1000 and 390 × 844 before
+  editing. Both widths had zero horizontal overflow and no browser console or
+  page errors. Responsive hero sources resolved to the intended 1300 × 500 and
+  640 × 300 cover transforms; the merchant focal point remained in the first
+  desktop story. Catalog cards and logos continued to use non-cropping
+  `contain` transforms, while the portrait category rail alone used deliberate
+  editorial `cover` crops. No image-fit policy change was justified by the
+  rendered evidence.
+- The accessibility tree did expose a shared renderer defect: icon-only social
+  links announced the image alt and hidden label together (`X X`, `LinkedIn
+  LinkedIn`, and similar). Header, mobile-menu, and both Footer renderers now
+  give the anchor one explicit accessible name and make the visual image or
+  fallback glyph decorative. The Footer logo destination independently
+  announces **Go to homepage** instead of inheriting a media filename.
+- Storefront version `ca75d2e7-7866-4a02-a2ab-47fbe4620ce7`, build
+  `src-c23dd03c4356a166`, is live at 100%. Post-deploy desktop and mobile
+  accessibility snapshots exposed each social destination exactly once, the
+  Footer home link had the intended name, both layouts retained zero overflow,
+  and browser console/error output remained empty. Ten focused presentation
+  and accessibility tests, targeted lint, and the sequential 326-file Astro
+  check passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
