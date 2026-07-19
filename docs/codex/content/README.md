@@ -1,6 +1,6 @@
 # Content and Presentation Hardening
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-07-19
 
 This directory is the durable audit and decision record for CMS Pages, Media,
 navigation/header/footer builders, Theme, Analytics presentation, Tax settings,
@@ -15,6 +15,9 @@ tests, current Cloudflare state, and live browser evidence remain authoritative.
   folders, image/video behavior, product integration, and gallery rules.
 - [NAVIGATION.md](NAVIGATION.md) — versioned menus, header/footer placements,
   typed resource links, WordPress-like builder direction, and storefront truth.
+- [NAVIGATION-AUTHORITY.md](NAVIGATION-AUTHORITY.md) — normalized menu schema,
+  immutable publication/placement contract, large-store paging, dependency
+  generations, migration gates, and the current additive 0036 checkpoint.
 - [HERO.md](HERO.md) — revision-guarded hero documents, safe slide links,
   explicit draft/save/conflict workflow, and storefront rendering rules.
 - [ANALYTICS.md](ANALYTICS.md) — provider readiness, safe script authority,

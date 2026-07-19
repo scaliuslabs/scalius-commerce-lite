@@ -253,6 +253,13 @@
       "when": 1784419101756,
       "tag": "0035_shallow_loki",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1784423631667,
+      "tag": "0036_absent_living_lightning",
+      "breakpoints": true
     }
   ]
 }
