@@ -612,6 +612,33 @@ and a separate checkout visibility save without a single resulting preview.
   settings routes, provider probes, webhook health, rotation, and sandbox
   transaction evidence remain release work.
 
+### Deployed buyer-handoff checkpoint (2026-07-19)
+
+One real `Rider Court Trainers / 40 / Sand` SKU was checked out through four
+fresh browser sessions using the deployed storefront and synthetic guest buyer
+facts. This is handoff/authority evidence, not a claim that the full provider
+matrix is complete:
+
+| Method | Deployed result | Order/inventory result |
+| --- | --- | --- |
+| Stripe test | Stripe Card Element mounted with a test publishable key and accepted the official test-card fields. An intentionally stale customer cookie was rejected before write and then cleared; the deployed recovery now presents an explicit **Continue as guest** action. The subsequent attempt reached Stripe field validation; authorization was not completed. | One incomplete Stripe order, `HXPTDZ`; no duplicate order. |
+| SSLCommerz sandbox | Redirected to the official EasyCheckout sandbox with **PAY 9,100 BDT**. No sandbox payment was submitted. | One incomplete SSL order, `SEJ5E0`, labelled **Awaiting hosted payment**. |
+| Polar sandbox | Redirected to the Polar sandbox with its explicit “payments are not processed” banner and converted USD total. No sandbox payment was submitted. | One incomplete Polar order, `MKCCC5`, labelled **Awaiting hosted payment**. |
+| COD | Completed without a provider redirect and rendered the private receipt for order `1NC5RO`. | Pending, unpaid COD order with the exact BDT 8,990 subtotal, BDT 110 shipping, BDT 9,100 balance, and `40 / Sand` line. |
+
+The admin order list and order-detail route loaded all four results without
+redirecting. The SKU inventory projection showed on-hand 14, reserved 4, and
+available 10, matching the three open online attempts plus the pending COD
+order. The Customers directory grouped the four orders under one phone-owned
+guest buyer, labelled **Guest**, with a customer-history route; guest checkout
+facts are therefore merchant-visible without inventing a second customer
+directory.
+
+Still unproved: Stripe authorization, SSLCommerz/Polar sandbox completion,
+declines, provider timeouts, delayed/duplicate webhooks, browser recovery after
+provider success, capture/settlement, refunds, credential failure, and live
+cutover. Do not promote this checkpoint into “gateway healthy.”
+
 ### Verification scenarios for every gateway
 
 Each gateway must have a documented sandbox run for: successful authorization,

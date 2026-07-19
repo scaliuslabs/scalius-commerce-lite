@@ -157,6 +157,16 @@ reconciliation, secret rotation, or test-to-live cutover.
   recovery shipped in storefront deployment
   `1c8ab5aa-8914-45b9-bf79-2699af7f3f25` after 45 focused checkout tests and
   the storefront typecheck passed.
+- Fresh deployed buyer attempts produced one incomplete Stripe order, one
+  incomplete SSLCommerz order, one incomplete Polar order, and one completed
+  COD placement. SSLCommerz reached EasyCheckout sandbox at BDT 9,100; Polar
+  reached its no-payment sandbox; COD produced receipt `1NC5RO`. The admin list
+  and detail route loaded these states, and the exact SKU projection reconciled
+  on-hand 14 = reserved 4 + available 10.
+- The four guest attempts sharing one phone appear as a single **Guest** buyer
+  with four orders and a customer-history route in `/admin/customers`. Guest
+  buyer facts stay useful to the merchant without a separate second-class
+  directory.
 
 ## Remaining release gaps
 
