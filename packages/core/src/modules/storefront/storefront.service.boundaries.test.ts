@@ -17,6 +17,14 @@ if (!STOREFRONT_SERVICE_SOURCE || !API_STOREFRONT_ROUTE_SOURCE) {
 }
 
 describe("storefront layout data boundaries", () => {
+  it("resolves only collections explicitly placed on the homepage", () => {
+    const source = readFileSync(STOREFRONT_SERVICE_SOURCE, "utf8");
+
+    expect(source).toContain("collection.parsedConfig.showOnHomepage");
+    expect(source.indexOf("filter((collection) => collection.parsedConfig.showOnHomepage)"))
+      .toBeLessThan(source.indexOf("const resolvedMap = await resolveCollectionProductsBatch"));
+  });
+
   it("includes merchant return-policy settings in the consolidated layout payload", () => {
     const source = readFileSync(STOREFRONT_SERVICE_SOURCE, "utf8");
 

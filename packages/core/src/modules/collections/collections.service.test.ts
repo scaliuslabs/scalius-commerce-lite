@@ -136,6 +136,7 @@ describe("resolveCollectionProducts", () => {
                 source: "manual",
                 categoryIds: [],
                 productIds: [],
+                showOnHomepage: false,
                 maxProducts: 8,
             },
         })).rejects.toThrow(/blank until the collection has a saved ID route/);

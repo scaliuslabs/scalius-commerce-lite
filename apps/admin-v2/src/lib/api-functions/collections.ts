@@ -11,6 +11,7 @@ export interface CollectionConfigInput {
   categoryIds?: string[];
   productIds?: string[];
   featuredProductId?: string;
+  showOnHomepage?: boolean;
   maxProducts?: number;
   title?: string;
   subtitle?: string;

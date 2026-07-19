@@ -32,6 +32,7 @@ const DEFAULT_CONFIG = {
   source: "manual" as const,
   categoryIds: [] as string[],
   productIds: [] as string[],
+  showOnHomepage: false,
   maxProducts: 8,
   title: "",
   subtitle: "",

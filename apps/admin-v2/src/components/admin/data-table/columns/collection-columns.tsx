@@ -1,7 +1,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Switch } from "~/components/ui/switch";
 import { Badge } from "~/components/ui/badge";
-import { LayoutGrid, GridIcon } from "lucide-react";
+import { LayoutGrid, GridIcon, House } from "lucide-react";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { InlineEditCell } from "../InlineEditCell";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
@@ -148,6 +148,7 @@ export function getCollectionColumns(
       ),
       cell: ({ row }) => {
         const collection = row.original;
+        const isOnHomepage = normalizeCollectionConfig(collection.config).showOnHomepage;
         const isDisabled =
           !opts.canToggleStatus || !!collection.deletedAt || opts.showTrashed;
         const isTrashed = !!collection.deletedAt || opts.showTrashed;
@@ -176,6 +177,18 @@ export function getCollectionColumns(
             >
               {isTrashed ? "Trashed" : collection.isActive ? "Active" : "Inactive"}
             </Badge>
+            {!isTrashed && isOnHomepage ? (
+              <Badge
+                variant="outline"
+                className="gap-1 font-normal text-muted-foreground"
+                title={collection.isActive
+                  ? "Shown on the homepage"
+                  : "Will appear on the homepage after publication"}
+              >
+                <House className="h-3 w-3" aria-hidden="true" />
+                Home
+              </Badge>
+            ) : null}
           </div>
         );
       },

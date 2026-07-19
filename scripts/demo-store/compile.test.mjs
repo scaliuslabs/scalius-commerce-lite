@@ -154,8 +154,10 @@ describe("demo-store admin command compiler", () => {
     expect(footwear.preconditions.expectedRevision).toBe(7);
     expect(newCollection.preconditions.expectedVersion).toBe(3);
     expect(newCollection.body.config.productIds).toHaveLength(12);
+    expect(newCollection.body.config.showOnHomepage).toBe(true);
     expect(newCollection.body.config.productIds.every((reference) => reference.$ref.endsWith(":base"))).toBe(true);
     expect(findCommand(compiled, "collection:weekend-ready").body.config.productIds).toHaveLength(8);
+    expect(findCommand(compiled, "collection:weekend-ready").body.config.showOnHomepage).toBe(false);
     expect(findCommand(compiled, "collection:offers-worth-opening").body.config.productIds).toHaveLength(12);
     expect(desktopHero.body.expectedRevision).toBe(4);
     expect(desktopHero.body.images).toHaveLength(3);

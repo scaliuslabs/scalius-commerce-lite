@@ -407,6 +407,7 @@ function collectionCommands(manifest, current) {
       source: collection.source,
       categoryIds: collectionCategories(collection).map((slug) => commandRef(`category:${slug}`)),
       productIds: collectionMembers(collection, manifest).map((product) => commandRef(`${product.logicalKey}:base`)),
+      showOnHomepage: collection.showOnHomepage,
       maxProducts: collection.limit,
       title: collection.name,
       subtitle: "",

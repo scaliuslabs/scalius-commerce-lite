@@ -121,6 +121,7 @@ const collectionDefaults: Partial<CollectionFormValues> = {
     categoryIds: ["cat_curated"],
     productIds: ["prod_primary", "prod_secondary"],
     featuredProductId: "prod_featured",
+    showOnHomepage: true,
     maxProducts: 8,
     title: "Buyer-facing title",
     subtitle: "Buyer-facing subtitle",
@@ -297,6 +298,7 @@ describe("CollectionForm edit product labels", () => {
           source: "manual",
           productIds: ["prod_secondary", "prod_primary"],
           featuredProductId: "prod_featured",
+          showOnHomepage: true,
         }),
       }),
     );

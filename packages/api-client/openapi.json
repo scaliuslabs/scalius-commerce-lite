@@ -29206,6 +29206,10 @@
                         "type": "string",
                         "maxLength": 180
                       },
+                      "showOnHomepage": {
+                        "type": "boolean",
+                        "default": false
+                      },
                       "maxProducts": {
                         "type": "integer",
                         "minimum": 1,
@@ -32089,6 +32093,9 @@
                       "featuredProductId": {
                         "type": "string",
                         "maxLength": 180
+                      },
+                      "showOnHomepage": {
+                        "type": "boolean"
                       },
                       "maxProducts": {
                         "type": "integer",

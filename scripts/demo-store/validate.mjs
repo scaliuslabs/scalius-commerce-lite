@@ -189,6 +189,11 @@ export function validateDemoStoreManifest(manifest = demoStoreManifest) {
   expectUnique(errors, "Media logical keys", allMedia.map((media) => media.logicalKey));
   expectUnique(errors, "Media alt text", allMedia.map((media) => media.altText));
   expectUnique(errors, "Collection logical keys", manifest.collections.map((collection) => collection.logicalKey));
+  for (const collection of manifest.collections) {
+    if (typeof collection.showOnHomepage !== "boolean") {
+      errors.push(`Collection ${collection.logicalKey} needs explicit homepage placement`);
+    }
+  }
 
   const retained = new Map(manifest.products.filter((product) => product.retainedProductId).map((product) => [product.slug, product.retainedProductId]));
   if (retained.get("rider-court-trainers") !== "prod_9XNNERD2XpAOIoI1SN6gx") errors.push("Rider retained product identity changed");

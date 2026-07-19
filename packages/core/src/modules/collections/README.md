@@ -1,6 +1,6 @@
 # Collections
 
-Curated product groups displayed on the storefront homepage, with manual and dynamic types, drag-and-drop reordering, product resolution, and bulk operations.
+Curated product groups with independent public-page and homepage placement, manual and dynamic membership, drag-and-drop ordering, product resolution, and bulk operations.
 
 ## Files
 
@@ -33,6 +33,7 @@ The `config` column stores a JSON object:
   categoryIds: string[]      // Categories whose products to include
   productIds: string[]       // Specific product IDs to include
   featuredProductId?: string  // Product shown prominently (manual type only)
+  showOnHomepage: boolean    // Explicit homepage placement; default false
   maxProducts: number        // 1-24, default 8
   title?: string             // Display title on storefront
   subtitle?: string          // Display subtitle on storefront
@@ -45,13 +46,18 @@ arrays are always present, clamps `maxProducts` to 1-24, drops invalid product
 IDs, and ignores retired compatibility fields. Admin edit, public collection routes, and storefront
 product resolution should not call `JSON.parse(collection.config)` directly.
 
+`isActive` publishes the collection page. It never implies homepage placement.
+Only active, non-deleted collections with `config.showOnHomepage === true` enter
+the homepage batch resolver. The public collection config projection deliberately
+omits this internal composition flag.
+
 ## Validation (`collections.validation.ts`)
 
 **`createCollectionSchema`** (all required):
 - `name`: string, 3-100 chars
 - `presentation`: enum `["grid", "carousel"]`
 - `isActive`: boolean
-- `config`: collectionConfigSchema (source, categoryIds, productIds, featuredProductId?, maxProducts 1-24 default 8, title?, subtitle?)
+- `config`: collectionConfigSchema (source, categoryIds, productIds, featuredProductId?, showOnHomepage default false, maxProducts 1-24 default 8, title?, subtitle?)
 
 **`updateCollectionSchema`** (all optional): Same fields.
 

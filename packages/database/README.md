@@ -193,7 +193,7 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 
 | Table.Column | Expected Shape |
 |---|---|
-| `collections.config` | `{ categoryIds: string[], productIds: string[], featuredProductId?: string, maxProducts: number (1-24, default 8), title?: string, subtitle?: string }` |
+| `collections.config` | `{ source: "manual" | "dynamic", categoryIds: string[], productIds: string[], featuredProductId?: string, showOnHomepage: boolean (default false), maxProducts: number (1-24, default 8), title?: string, subtitle?: string }` |
 | `productAttributes.options` | `string[]` (declared via Drizzle `mode: "json"`) |
 | `siteSettings.headerConfig` | `{ topBar: { text, isEnabled }, logo: { src, alt }, favicon: { src, alt }, contact: { phone, text, isEnabled }, social: SocialLink[] \| Record<string, string>, navigation?: NavItem[] }` |
 | `siteSettings.footerConfig` | `{ logo: { src, alt }, favicon: { src, alt }, tagline, description, copyrightText, social: SocialLink[], menus: { id, title, items: { id, label, href }[] }[] }` |

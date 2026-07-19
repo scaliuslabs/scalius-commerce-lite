@@ -187,7 +187,7 @@ export async function getHomepageData(db: Database) {
     sortOrder: col.sortOrder as number,
     isActive: col.isActive as boolean,
     parsedConfig: normalizeCollectionConfig(col.config),
-  }));
+  })).filter((collection) => collection.parsedConfig.showOnHomepage);
 
   const resolvedMap = await resolveCollectionProductsBatch(
     db,

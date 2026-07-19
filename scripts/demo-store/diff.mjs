@@ -35,6 +35,17 @@ function sameStrings(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function configRecord(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function summarize(resources) {
   return resources.reduce((counts, resource) => {
     counts[resource.action] = (counts[resource.action] ?? 0) + 1;
@@ -116,6 +127,7 @@ export function buildDemoStoreDiff(manifest, snapshot) {
     const fields = [];
     if (actual.presentation !== desired.presentation) fields.push("presentation");
     if (actual.isActive !== true) fields.push("isActive");
+    if (configRecord(actual.config).showOnHomepage !== desired.showOnHomepage) fields.push("showOnHomepage");
     return { logicalKey: desired.logicalKey, name: desired.name, resourceId: actual.id, version: actual.version, action: fields.length ? "update" : "match", fields };
   });
 
