@@ -1,6 +1,6 @@
 # Barcode label printing
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-20
 
 ## Decision
 
@@ -68,6 +68,22 @@ another supported roll fits; it falls back to wider A4 stock only when no
 supported roll can preserve the symbol and its quiet zones.
 
 ## Competitive evidence
+
+The first-party platform evidence was rechecked on 2026-07-20 after the
+merchant-printing question was raised again. Shopify still routes product-list
+selection into its separately installed Retail Barcode Labels app, then asks
+for a template, exact per-variant quantities, printer settings, and final
+Print/Save as PDF; it still limits custom stock and does not replace an
+ordinary office merchant's partially used A4 workflow. Square still provides
+the strongest operational reference: custom/category/purchase-order sources,
+SKU-or-GTIN choice, preview, test print, PDF, and managed printer-queue retry.
+Medusa still exposes SKU, EAN, UPC, and barcode on the exact variant without a
+core label composer; Vendure and Saleor remain extension boundaries rather
+than comparable operator workflows. This renewed check does not change the
+decision below: one-SKU and multi-SKU actions must enter the same non-blocking,
+physically previewed job workspace. A row icon alone is insufficient, while a
+linear wizard would hide interdependent quantity, paper, fit, and used-sheet
+decisions and slow the common reprint-one-label path.
 
 The current platform comparison is intentionally capability-based. A missing
 core feature is not evidence that Scalius should omit it, and a supported
