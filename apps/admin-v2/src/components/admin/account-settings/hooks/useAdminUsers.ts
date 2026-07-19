@@ -5,6 +5,7 @@ import {
   createAdminUser,
   deleteAdminUser,
   getAdminUsers,
+  resendAdminSetup,
   type AdminUser,
 } from "~/lib/api-functions/auth-management";
 import { getRbacRoles } from "~/lib/api-functions/rbac";
@@ -90,6 +91,15 @@ export function useAdminUsers() {
     }
   };
 
+  const resendSetup = async (userId: string) => {
+    try {
+      const result = await resendAdminSetup({ data: { userId } });
+      toast.success(result.message);
+    } catch (err) {
+      throw new Error(getServerFnError(err, "Could not resend the setup email"));
+    }
+  };
+
   return {
     adminUsers,
     availableRoles,
@@ -99,6 +109,7 @@ export function useAdminUsers() {
     rolesError,
     addUser,
     deleteUser,
+    resendSetup,
     refetch: fetchAdminUsers,
     refetchRoles: fetchRoles,
   };

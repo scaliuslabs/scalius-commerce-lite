@@ -1095,6 +1095,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/users/*": {
+    POST: { permission: PERMISSIONS.TEAM_MANAGE },
     DELETE: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/change-password": {

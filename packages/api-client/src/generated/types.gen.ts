@@ -37450,6 +37450,111 @@ export type PostApiV1AdminAuthUsersResponses = {
 
 export type PostApiV1AdminAuthUsersResponse = PostApiV1AdminAuthUsersResponses[keyof PostApiV1AdminAuthUsersResponses];
 
+export type PostApiV1AdminAuthUsersByIdResendSetupData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/auth/users/{id}/resend-setup';
+};
+
+export type PostApiV1AdminAuthUsersByIdResendSetupErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthUsersByIdResendSetupError = PostApiV1AdminAuthUsersByIdResendSetupErrors[keyof PostApiV1AdminAuthUsersByIdResendSetupErrors];
+
+export type PostApiV1AdminAuthUsersByIdResendSetupResponses = {
+    /**
+     * Setup link sent
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthUsersByIdResendSetupResponse = PostApiV1AdminAuthUsersByIdResendSetupResponses[keyof PostApiV1AdminAuthUsersByIdResendSetupResponses];
+
 export type DeleteApiV1AdminAuthUsersByIdData = {
     body?: never;
     path: {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -69,6 +70,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     deleteUser,
     refetch,
     refetchRoles,
+    resendSetup,
   } = useAdminUsers();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
@@ -77,6 +79,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
@@ -105,6 +108,21 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     setNewUserEmail("");
     setSelectedRoleId("");
     setError(null);
+  };
+
+  const handleResendSetup = async (userId: string) => {
+    setResendingUserId(userId);
+    try {
+      await resendSetup(userId);
+    } catch (resendError) {
+      toast.error(
+        resendError instanceof Error
+          ? resendError.message
+          : "Could not resend the setup email",
+      );
+    } finally {
+      setResendingUserId(null);
+    }
   };
 
   const handleAddUser = async (e: React.SyntheticEvent) => {
@@ -329,7 +347,9 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
               <span className="pr-1 text-right">Status and actions</span>
             </div>
             <div className="divide-y">
-            {filteredUsers.map((adminUser) => (
+            {filteredUsers.map((adminUser) => {
+              const status = getAdminUserStatus(adminUser);
+              return (
               <div
                 key={adminUser.id}
                 className="grid gap-3 p-3 transition-colors hover:bg-muted/20 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,0.55fr)_auto] sm:items-center"
@@ -375,7 +395,24 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <AdminStatusBadge status={getAdminUserStatus(adminUser)} />
+                  <AdminStatusBadge status={status} />
+                  {canManageTeam && status === "password_setup" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 text-xs sm:min-h-9"
+                      onClick={() => void handleResendSetup(adminUser.id)}
+                      disabled={!userAuthorityReady || resendingUserId !== null}
+                    >
+                      {resendingUserId === adminUser.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      Resend setup
+                    </Button>
+                  )}
                   {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
                     <Button
                       variant="ghost"
@@ -416,7 +453,8 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
             </div>
           </div>
         )}

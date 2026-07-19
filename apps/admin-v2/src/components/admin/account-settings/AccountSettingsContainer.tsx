@@ -4,6 +4,7 @@ import {
   MonitorSmartphone,
   Shield,
   ShieldPlus,
+  UserRound,
   Users,
 } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -49,7 +50,7 @@ export function AccountSettings({
   const activeSection =
     (section === "team" && !canViewTeam) ||
     (section === "roles" && !canManageRoles)
-      ? "security"
+      ? "profile"
       : section;
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export function AccountSettings({
   }, [activeSection, onSectionChange, section]);
 
   const personalSections = [
+    { value: "profile" as const, label: "Profile", icon: UserRound },
     { value: "security" as const, label: "Two-factor", icon: Shield },
     { value: "password" as const, label: "Password", icon: KeyRound },
     { value: "sessions" as const, label: "Sessions", icon: MonitorSmartphone },
@@ -73,6 +75,7 @@ export function AccountSettings({
   ];
 
   const renderSection = () => {
+    if (activeSection === "profile") return <ProfileHeader user={user} />;
     if (activeSection === "password") return <ChangePasswordForm />;
     if (activeSection === "sessions") return <AccountSessions />;
     if (activeSection === "team" && canViewTeam) {
@@ -109,8 +112,6 @@ export function AccountSettings({
 
   return (
     <div className="space-y-4 pb-8">
-      <ProfileHeader user={user} />
-
       <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
         <nav
           aria-label="Account settings"

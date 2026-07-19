@@ -159,8 +159,8 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 | Discounts | Case-normalized global code identity; one unified legacy builder; revisioned typed promotion CRUD/preview/activate/pause; exact code-promotion checkout evaluation; total/per-customer/spend-budget claims in the order batch; immutable line/shipping allocations consumed by tax and refund integrity checks; buyer-safe rejection reasons | Admin still lacks the replacement promotion builder. Live typed scope is deliberately one code promotion/order with subtotal/quantity conditions and line/order/shipping effects. Automatic promotion activation, selectors/audiences, BOGO/gifts, campaign sharing, stacking, and item-aware refund commands remain unavailable. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
-| Theme | Sanitized allowlisted colors, revision CAS, cache invalidation, local dirty/conflict handling | Only colors; duplicated presets/defaults; synthetic preview; no durable draft/history/rollback; no real route/device preview; no contrast gate; hard-coded light popover; raw CSS/color math can render misleading previews; no typography/density/radius/layout model. |
-| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset link, RBAC roles/overrides, permission checks, and bounded personal session/device list plus revocation | Personal and organization settings remain mixed in local-state tabs; no pending-invite workspace/resend/revoke; no suspend/reactivate; no recent security event history; no user bulk operations; account sections are not yet separate authority-owned routes. |
+| Theme | One versioned semantic presentation document, durable drafts, real route/device preview, contrast gates, publication history, rollback, revision CAS, and cache invalidation | Header, footer, navigation, heroes, and Theme remain separate authorities; a future unified Presentation workspace must compose them without making Theme an unbounded CSS editor or changing the protected product-detail composition. |
+| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset links, RBAC roles/overrides, permission checks, bounded personal session/device revocation, a dedicated Profile workspace, and URL-owned Profile/security/team sections | The current blocked-user invitation model now supports setup-email resend but is not yet a first-class pending-invite entity with expiry/revoke/copy-link state. Suspend/reactivate, recent security-event history, bulk user operations, and path-separated authority routes remain unavailable. |
 
 ### Code evidence
 
@@ -623,7 +623,7 @@ shipment, return after collection, and reconciliation.
 
 ## Theme and presentation
 
-### Current implementation defects
+### Historical defects resolved by the versioned Theme workspace
 
 - The page title says “Storefront Theme,” but its only durable fact is an
   allowlisted color map. Typography, density, radius, card style, container,
@@ -751,11 +751,27 @@ retained. What changes is lifecycle visibility and operational control.
   empty and failed reads keep all revoke actions locked, and hidden rows remain
   covered by revoke-all.
 
-This is an honest workflow improvement, not completion of the target account
-or presentation architecture. URL-owned account routes, invite lifecycle,
-suspension, account security-event history, theme drafts/history/rollback,
-shared semantic presentation settings, and real storefront previews remain
-required.
+### Implemented Account profile and setup-recovery slice (2026-07-19)
+
+- Profile is now the default, independently addressable Account section rather
+  than an identity card repeated above Two-factor, Password, Sessions, Team,
+  and Roles. Unknown or permission-denied Account sections recover to Profile;
+  the validated URL value survives refresh, back, and forward navigation.
+- The Profile workspace owns display name and avatar editing only. Role and 2FA
+  readiness are no longer decorative profile badges because their authorities
+  remain in Store access and Two-factor respectively.
+- An administrator still completing the forced password-setup flow can receive
+  a new one-use setup link from the Administrators workspace. The command is
+  permission-gated, resolves the target by administrator ID, rejects non-admin
+  or already-ready accounts, and turns provider failure into a generic
+  retryable outcome without logging or returning recipient/provider details.
+- The deployed Profile and Administrators workspaces were re-read from the live
+  authenticated DOM. Profile retained `section=profile`, Administrators retained
+  `section=team`, and the personal profile card was absent from the team route.
+
+This remains an honest intermediate lifecycle. A dedicated invitation entity
+with expiry/revoke state, administrator suspension/reactivation, security-event
+history, bulk operations, and path-separated authority routes remain required.
 
 ## Shared UI contract
 

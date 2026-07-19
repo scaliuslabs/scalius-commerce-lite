@@ -82,10 +82,11 @@ source audit found these concrete shared-contract violations:
   sitemap and feed inclusion, schema prerequisites, return-policy truth, and
   cache freshness. Each control must preview the exact public consequence and
   retain the existing fail-closed discovery invariants.
-- Theme remains incomplete until it provides real route/device preview,
-  versioned drafts, publication history, and rollback. More power must remain a
-  coherent semantic design system; do not expose a loose collection of CSS
-  knobs or redesign the protected product-detail composition.
+- Theme now provides real route/device preview, versioned drafts, publication
+  history, rollback, and one semantic presentation document. Future work is
+  composition with the separately versioned Header, Footer, Navigation, and
+  Hero authorities; do not turn Theme into loose CSS knobs or redesign the
+  protected product-detail composition.
 - Notification policy and delivery providers are different authorities. The
   notification workspace should own event/channel rules while Firebase, email,
   SMS, and push setup live as provider readiness; duplicated Firebase controls
@@ -148,8 +149,8 @@ actual operational or buyer projection before it can be called complete.
 
 | Route | Owning contract | Release status |
 | --- | --- | --- |
-| Theme | [`THEME-TAX.md`](THEME-TAX.md) | Semantic presentation document and real preview/history remain active work |
-| Account / users | [`../COMMERCE-SETTINGS-BENCHMARK.md`](../COMMERCE-SETTINGS-BENCHMARK.md) | Personal sessions are bounded and revocable; invitations/suspension/security history remain |
+| Theme | [`THEME-TAX.md`](THEME-TAX.md) | Versioned semantic presentation, real preview, publication history, and rollback are live; cross-authority composition remains |
+| Account / users | [`../COMMERCE-SETTINGS-BENCHMARK.md`](../COMMERCE-SETTINGS-BENCHMARK.md) | Profile/security/team sections are URL-owned, personal sessions are bounded and revocable, and blocked setup can be resent; first-class invitations/suspension/security history remain |
 | Hero sliders | [`HERO.md`](HERO.md) | Versioned desktop/mobile media exists; publication and rich-demo proof continue |
 | Checkout / payments | [`../CHECKOUT-FLOW-CONTRACT.md`](../CHECKOUT-FLOW-CONTRACT.md), [`../PAYMENT-METHOD-READINESS.md`](../PAYMENT-METHOD-READINESS.md) | Outcome model is live; provider probes/webhook health/rotation and full sandbox matrix remain |
 | Taxes | [`THEME-TAX.md`](THEME-TAX.md), [`../TAX-LIFECYCLE-INVARIANTS.md`](../TAX-LIFECYCLE-INVARIANTS.md) | Calculation authority is strong; bulk classification/export/refund matrix remain |
