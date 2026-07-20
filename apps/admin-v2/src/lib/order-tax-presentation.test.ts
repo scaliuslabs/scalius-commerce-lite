@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  formatSavedMajorAmount,
   formatSavedMinorAmount,
   hasSavedOrderLineMoney,
   resolveSavedOrderLineMoney,
@@ -24,6 +25,8 @@ describe("admin saved order tax presentation", () => {
     const summary = resolveSavedOrderMoneySummary(savedOrder);
     expect(summary?.taxLabel).toBe("VAT");
     expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("BDT 275.00");
+    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("BDT 12,345.00");
+    expect(formatSavedMajorAmount(12_345.6, summary!)).toBe("BDT 12,345.60");
   });
 
   it("rejects legacy, partial, and mismatched snapshots", () => {

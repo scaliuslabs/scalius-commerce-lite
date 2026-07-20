@@ -150,5 +150,10 @@ export function formatSavedMinorAmount(
   summary: Pick<SavedOrderMoneySummary, "currencyCode" | "decimalPlaces">,
 ): string {
   const amount = amountMinor / 10 ** summary.decimalPlaces;
-  return `${summary.currencyCode} ${amount.toFixed(summary.decimalPlaces)}`;
+  const formatted = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: summary.decimalPlaces,
+    maximumFractionDigits: summary.decimalPlaces,
+    useGrouping: true,
+  }).format(amount);
+  return `${summary.currencyCode} ${formatted}`;
 }

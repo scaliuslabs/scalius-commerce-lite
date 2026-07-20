@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPurchaseTrackingPayload,
+  formatOrderSuccessLabel,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
 } from "./order-success-state";
@@ -37,6 +38,12 @@ function makeOrder(overrides: Partial<OrderReceipt> = {}): OrderReceipt {
 }
 
 describe("order success state", () => {
+  it("uses buyer-facing payment provider labels", () => {
+    expect(formatOrderSuccessLabel("cod")).toBe("Cash on Delivery");
+    expect(formatOrderSuccessLabel("sslcommerz")).toBe("SSLCommerz");
+    expect(formatOrderSuccessLabel("partially_refunded")).toBe("Partially Refunded");
+  });
+
   it("treats COD pending/unpaid orders as placed", () => {
     const order = makeOrder({
       paymentMethod: "cod",
