@@ -259,6 +259,22 @@ rendering.
   Twenty focused Theme/preview/cache/migration suites passed 115 tests, all
   relevant typechecks passed sequentially, and the full release check passed.
 
+### Mobile publishing controls checkpoint (2026-07-20)
+
+- Production was re-audited at an exact 390 x 844 viewport. Theme section,
+  preview path, and device remain URL-backed; the real mobile storefront draft
+  preview, immutable published history, restore workflow, and desktop action
+  row all remained healthy with no console errors or horizontal overflow.
+- The fixed mobile publishing bar previously wrapped five actions across three
+  rows, consumed roughly 190 px, and obscured the preview controls. Secondary
+  actions now live in a compact **More theme actions** menu while **Save**,
+  **Preview**, and **Publish** stay in one primary row. The bar is 85 px high
+  and every primary target is at least 44 px; desktop still exposes Discard,
+  Defaults, Save draft, Preview, and Publish directly.
+- Focused Theme/settings tests passed 8 assertions, the target admin typecheck
+  passed sequentially, and admin version
+  `a81fffca-60cb-476f-b9f6-9b15b1f3fa4a` was verified live at 100%.
+
 ## Implemented theme authority slice (2026-07-13)
 
 - Migration `0024_kind_spitfire.sql` adds the singleton `theme_settings`

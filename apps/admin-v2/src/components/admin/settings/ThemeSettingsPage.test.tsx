@@ -260,4 +260,43 @@ describe("ThemeSettingsPage read authority", () => {
     act(() => colors?.click());
     expect(onSectionChange).toHaveBeenCalledWith("colors");
   });
+
+  it("keeps the fixed mobile action bar to one primary row", async () => {
+    getThemeWorkspaceMock.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 8 },
+      draft: {
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 11,
+        basePublishedRevision: 8,
+        updatedAt: null,
+      },
+    });
+
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="system" onSectionChange={() => undefined} />,
+      ),
+    );
+    await flush();
+
+    const actionBar = host.querySelector<HTMLElement>(
+      '[data-testid="theme-action-bar"]',
+    );
+    const primaryActions = host.querySelector<HTMLElement>(
+      '[data-testid="theme-primary-actions"]',
+    );
+
+    expect(actionBar?.className).toContain("py-2");
+    expect(primaryActions?.className).toContain(
+      "grid-cols-[2.75rem_repeat(3,minmax(0,1fr))]",
+    );
+    expect(
+      host.querySelector<HTMLButtonElement>(
+        'button[aria-label="More theme actions"]',
+      ),
+    ).toBeTruthy();
+    expect(primaryActions?.textContent).toContain("Save");
+    expect(primaryActions?.textContent).toContain("Preview");
+    expect(primaryActions?.textContent).toContain("Publish");
+  });
 });
