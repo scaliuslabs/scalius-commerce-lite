@@ -189,9 +189,14 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
   a separate server-backed bounded export with row-count/cap metadata. Do not
   regress the page export to a generic “Export CSV” label or imply that it
   contains every filtered row.
-- Some desktop/mobile row actions still need a complete accessible-name audit. Tooltips are not a substitute for an accessible name.
-- Recovery and payment labels use text as small as 10px in several places. Operational states must remain legible at browser zoom and under common low-vision settings.
-- List refreshes can move rows while the user is selecting or editing filters. Preserve selection only for still-visible IDs, announce refresh changes, and avoid auto-refresh while a destructive dialog is open.
+- Desktop and mobile row actions now expose explicit order-specific accessible
+  names. Tooltips remain supplementary and must never become the only name.
+- Operational recovery, payment-method, and payment-attempt labels use the
+  shared 12 px minimum instead of 10 px utility text.
+- The 60-second timer pauses while any order is selected, an archive/shipping
+  dialog is open, or its mutation is saving, and tells the merchant why. A
+  manual refresh or mutation result can still reconcile the current page;
+  selection remains limited to IDs still visible in that result.
 - No saved views, column selection, or queue presets. These are P2 productivity features after correctness work.
 
 **Live list/directory checkpoint — 2026-07-19:** The deployed dark-mode order
@@ -216,6 +221,17 @@ browser-authored `codAmount` each returned 400. Order `UWXZV7` remained
 requests did not claim or mutate it. Eighty-nine focused validation,
 fulfillment, delivery, and OpenAPI tests plus sequential Core, API, API-client,
 and Admin typechecks passed before deployment.
+
+**List continuity and legibility checkpoint — 2026-07-20:** Admin version
+`44562aa3-4be3-428c-9eb9-85f8e3e825d2` is live at 100%. With Auto enabled,
+selecting `LOY7RM` changed the compact control to **Paused** with the explicit
+reason “Auto-refresh is paused while orders are selected.” Clearing the
+selection resumed the truthful 60-second countdown. Opening the archive dialog
+paused the timer with the separate action-open reason; cancelling it caused no
+order mutation. The list then rendered ten compact mobile order cards at
+390 × 844 with zero horizontal overflow, explicit view/archive/edit/fraud/
+shipment accessible names, and 12 px operational labels. Sixteen focused list
+tests, targeted lint, and the sequential Admin typecheck passed before deploy.
 
 ### 2. Manual order creation
 

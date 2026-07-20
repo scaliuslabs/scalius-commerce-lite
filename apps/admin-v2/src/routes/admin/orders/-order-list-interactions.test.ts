@@ -135,10 +135,15 @@ describe("order list interactions", () => {
     expect(refreshBlock).toContain("activeOrderListRefreshRef");
     expect(refreshBlock).toContain("orderListFetchingRef");
     expect(refreshBlock).toContain("orderListRefreshInFlightRef");
+    expect(refreshBlock).toContain("autoRefreshPausedRef.current");
     expect(refreshBlock).toContain("ORDER_AUTO_REFRESH_DEBOUNCE_MS");
     expect(refreshBlock).toContain("void Promise.resolve(refetchActiveOrders()).finally");
     expect(refreshBlock).not.toContain("invalidateQueries");
     expect(refreshBlock).not.toContain("queryKeys.orders.list()");
+
+    expect(routeSource).toContain("getOrderAutoRefreshPauseReason");
+    expect(routeSource).toContain("autoRefreshPauseReason={autoRefreshPauseReason}");
+    expect(routeSource).toContain("if (autoRefreshPausedRef.current) return prev");
 
     // Mutations may still invalidate all order-list variants; idle resume must not.
     expect(mutationsSource).toContain("queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() })");
