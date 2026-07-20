@@ -22,6 +22,7 @@ must remain outside the URL.
 | Checkout settings | `section` | Flow, payment, languages, shipping, delivery, and customer requests. |
 | Tax settings | `section` | Policy, classes, rates, classification, and preview. |
 | Theme settings | `section` | Design system, colors, and review/publish. |
+| Storefront theme preview | `path`, `device` | Same-origin draft shell; device changes push history and restore on refresh/Back without putting the preview bearer in the URL. |
 | Account settings | `section` | Existing route-backed workspace. |
 | Notification settings | `section` | Delivery rules and admin push. |
 | Inventory | `section` | Variants, low-stock alerts, and movements. |

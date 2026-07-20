@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  createThemePreviewDeviceUrl,
   normalizeThemePreviewDashboardOrigin,
   normalizeThemePreviewDevice,
   normalizeThemePreviewRoutePath,
@@ -44,6 +45,25 @@ describe("theme preview route selection", () => {
     expect(normalizeThemePreviewDevice("desktop")).toBe("desktop");
     expect(normalizeThemePreviewDevice("mobile")).toBe("mobile");
     expect(normalizeThemePreviewDevice("tablet")).toBe("full");
+  });
+
+  it("updates only the addressable preview device", () => {
+    expect(
+      createThemePreviewDeviceUrl(
+        "https://storefront.example.test/theme-preview?path=%2Fsearch%3Fq%3Dlamp&device=desktop",
+        "mobile",
+      ),
+    ).toBe(
+      "https://storefront.example.test/theme-preview?path=%2Fsearch%3Fq%3Dlamp&device=mobile",
+    );
+    expect(
+      createThemePreviewDeviceUrl(
+        "https://storefront.example.test/theme-preview?path=%2Fproducts%2Flamp",
+        "tablet",
+      ),
+    ).toBe(
+      "https://storefront.example.test/theme-preview?path=%2Fproducts%2Flamp&device=full",
+    );
   });
 
   it("accepts one explicit http(s) dashboard origin and strips paths", () => {
