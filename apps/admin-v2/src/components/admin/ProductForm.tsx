@@ -63,7 +63,6 @@ interface ProductFormProps {
   optionMatrixSaving?: boolean;
   onOptionMatrixSave?: () => void;
 }
-
 export function ProductForm({
   categories,
   defaultValues,
@@ -198,11 +197,6 @@ export function ProductForm({
             >
               {isEdit ? "Edit product" : "Create product"}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isEdit
-                ? "Update catalog details, merchandising, and discovery settings."
-                : "Start as a draft, then publish after pricing, media, and SKU readiness are confirmed."}
-            </p>
           </div>
           {/* Two-Column Layout */}
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">

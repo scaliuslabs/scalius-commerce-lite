@@ -1,10 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  BadgePercent,
   Boxes,
   CircleDollarSign,
   GalleryHorizontalEnd,
   LibraryBig,
+  Megaphone,
   Package,
   ShieldAlert,
   ShoppingBasket,
@@ -41,6 +43,10 @@ describe("AdminNav icon taxonomy", () => {
 
     expect(leafItem("/admin/products").icon).toBe(Package);
     expect(leafItem("/admin/abandoned-checkouts").icon).toBe(ShoppingCart);
+    expect(leafItem("/admin/discounts").icon).toBe(BadgePercent);
+    expect(leafItem("/admin/promotions").icon).toBe(Megaphone);
+    expect(leafItem("/admin/discounts").name).toBe("Discounts");
+    expect(leafItem("/admin/promotions").name).toBe("Promotions");
     expect(leafItem("/admin/settings/hero-sliders").icon).toBe(
       GalleryHorizontalEnd,
     );

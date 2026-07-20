@@ -29,6 +29,7 @@ import {
   GalleryHorizontalEnd,
   LibraryBig,
   ShoppingBasket,
+  Megaphone,
   Menu,
 } from "lucide-react";
 import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
@@ -234,8 +235,14 @@ export const allNavSections: NavSection[] = [
           },
           {
             name: "Discounts",
-            href: "/admin/promotions",
+            href: "/admin/discounts",
             icon: BadgePercent,
+            requiredPermission: NAV_PERMISSIONS.DISCOUNTS_VIEW,
+          },
+          {
+            name: "Promotions",
+            href: "/admin/promotions",
+            icon: Megaphone,
             requiredPermission: NAV_PERMISSIONS.DISCOUNTS_VIEW,
           },
           {

@@ -5,6 +5,20 @@ import { storefrontSourcePath } from "./test-source-paths";
 const STOREFRONT_SRC_ROOT = storefrontSourcePath();
 
 describe("storefront page data boundaries", () => {
+  it("uses the cart title as the page's primary heading", () => {
+    const source = readFileSync(
+      `${STOREFRONT_SRC_ROOT}/pages/cart.astro`,
+      "utf8",
+    );
+
+    expect(source).toContain(
+      '<h1 class="text-sm sm:text-base font-bold text-foreground">',
+    );
+    expect(source).not.toContain(
+      '<h2 class="text-sm sm:text-base font-bold text-foreground">',
+    );
+  });
+
   it("keeps product detail reads in the first fetch wave", () => {
     const source = readFileSync(
       `${STOREFRONT_SRC_ROOT}/pages/products/[slug].astro`,

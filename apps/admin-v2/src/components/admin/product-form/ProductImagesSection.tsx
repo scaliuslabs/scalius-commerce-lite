@@ -26,7 +26,6 @@ import type { ProductFormValues, ProductMediaItem } from "./types";
 function associationId(): string {
   return `pmed_${crypto.randomUUID().replaceAll("-", "")}`;
 }
-
 function durationLabel(durationMs: number | null): string | null {
   if (durationMs === null) return null;
   const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
@@ -116,9 +115,6 @@ export const ProductImagesSection = memo(function ProductImagesSection({
         >
           <ChevronDown className={cn("h-4 w-4 transition-transform", !isOpen && "-rotate-90")} />
           <CardTitle className="text-sm">Media{mediaCount ? ` (${mediaCount})` : ""}</CardTitle>
-          <span className="ml-auto hidden text-xs text-muted-foreground sm:inline">
-            Choose one featured image or video
-          </span>
         </button>
       </CardHeader>
       {isOpen ? (

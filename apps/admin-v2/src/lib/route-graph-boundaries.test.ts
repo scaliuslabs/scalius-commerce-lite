@@ -1190,8 +1190,8 @@ describe("admin route graph boundaries", () => {
     );
     expect(source).toContain("const DashboardStats = lazy(()");
     expect(source).toContain("const RecentOrders = lazy(()");
-    expect(source).toContain("const WelcomeBanner = lazy(()");
-    expect(source).toContain("fallback={<WelcomeBannerLoading />}");
+    expect(source).not.toContain("WelcomeBanner");
+    expect(source).toContain(">Dashboard</h1>");
     expect(loaderSource).toContain('typeof window === "undefined"');
     expect(loaderSource).toContain(
       "void queryClient.prefetchQuery(dashboardSummaryQueryOptions())",

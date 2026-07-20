@@ -508,7 +508,9 @@ export default function ThemeSettingsPage({
   if (loading) {
     return (
       <div className="mx-auto max-w-6xl space-y-4" aria-busy="true">
-        <div className="h-14 animate-pulse rounded-lg bg-muted" />
+        <header>
+          <h1 className="text-xl font-semibold tracking-tight">Storefront style</h1>
+        </header>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="h-96 animate-pulse rounded-xl bg-muted" />
           <div className="h-72 animate-pulse rounded-xl bg-muted" />
@@ -874,7 +876,6 @@ export default function ThemeSettingsPage({
     </div>
   );
 }
-
 function ColorPairRow({
   background,
   foreground,
