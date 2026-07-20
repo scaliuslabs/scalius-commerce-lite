@@ -68,6 +68,48 @@ async function reconcileInventoryForStatus(
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
 }
 
+/**
+ * A provider-less fulfillment is operated entirely by the merchant, so a
+ * merchant-confirmed delivered order is also its delivery authority. Keep
+ * provider shipments untouched: their status remains owned by provider sync.
+ *
+ * The batch is intentionally idempotent. COD/status retries can repair legacy
+ * rows that reached delivered order state while their manual shipment still
+ * said processing and their line items still said shipped.
+ */
+async function markManualDeliveryEvidence(
+    db: Database,
+    orderId: string,
+): Promise<void> {
+    const writes = [
+        db.update(orderItems).set({
+            fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
+        }).where(and(
+            eq(orderItems.orderId, orderId),
+            eq(orderItems.fulfillmentStatus, ItemFulfillmentStatus.SHIPPED),
+        )),
+        db.update(deliveryShipments).set({
+            status: ShipmentStatus.DELIVERED,
+            rawStatus: ShipmentStatus.DELIVERED,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(deliveryShipments.orderId, orderId),
+            eq(deliveryShipments.providerType, "manual"),
+            sql`${deliveryShipments.providerId} IS NULL`,
+            sql`${deliveryShipments.status} NOT IN (
+                ${ShipmentStatus.DELIVERED},
+                ${ShipmentStatus.RETURNED},
+                ${ShipmentStatus.CANCELLED},
+                ${ShipmentStatus.FAILED},
+                ${ShipmentStatus.DELIVERY_FAILED}
+            )`,
+        )),
+    ];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    await db.batch(writes as any);
+}
+
 function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
     if (!metadata) return {};
     if (typeof metadata === "string") {
@@ -714,6 +756,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 await rollbackStatusClaim();
                 throw error;
             }
+            await markManualDeliveryEvidence(db, orderId);
             return { message: "COD collection recorded" };
         }
         case "failed": {
@@ -869,7 +912,10 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
 
     writes.push(db.insert(deliveryShipments).values({
         id: shipmentId, orderId, trackingId: (body.trackingId as string | undefined) ?? null, trackingUrl: (body.trackingUrl as string | undefined) ?? null,
-        courierName: (body.courierName as string | undefined) ?? null, status: "processing", note: (body.note as string | undefined) ?? null,
+        courierName: (body.courierName as string | undefined) ?? null,
+        status: ShipmentStatus.IN_TRANSIT,
+        rawStatus: ShipmentStatus.IN_TRANSIT,
+        note: (body.note as string | undefined) ?? null,
         shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmount: (body.shipmentAmount as number | undefined) ?? null, isFinalShipment,
         createdAt: now, updatedAt: now,
     }));
@@ -984,6 +1030,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     await assertNoActivePaymentSessionAttempt(db, orderId);
     if (currentStatus === nextStatus) {
         await reconcileInventoryForStatus(db, orderId, nextStatus);
+        if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
+            await markManualDeliveryEvidence(db, orderId);
+        }
         return { message: "Status unchanged; inventory reconciled" };
     }
 
@@ -1040,6 +1089,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
             previousInventoryAction: existingOrder.inventoryAction as string,
         });
         throw error;
+    }
+    if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
+        await markManualDeliveryEvidence(db, orderId);
     }
 
     // Build notification payload if the new status warrants one

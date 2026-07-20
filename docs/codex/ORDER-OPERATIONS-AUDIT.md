@@ -295,9 +295,34 @@ real creation path without repair: the browser submitted one exact Dock SKU,
 navigated to its detail route, and a read-only remote D1 query immediately
 found the order, one reserved unit, and pending `cod_tracking` row
 `fdb3ef59-b998-4fc9-b2b9-80390f9e7d21` in committed state. Opening **Mark
-Collected** showed the outstanding `৳5,510.80` plus the new explanation; the
-dialog was cancelled so the proof order remains confirmed, unpaid, and
-reserved for later lifecycle testing.
+Collected** showed the outstanding `৳5,510.80` plus the new explanation and
+was initially cancelled so the same order could become the end-to-end
+fulfillment proof below.
+
+**Manual-delivery evidence repair and live replay — 2026-07-20:** API version
+`bb51fdb5-9bd6-457f-a31d-743ce24033d0` and admin version
+`1a7539f8-d98f-413d-8eff-26ab7a4da4d0` make own-courier evidence follow the
+buyer-visible lifecycle instead of leaving a delivered order attached to a
+`processing` shipment. A manual fulfillment now starts its provider-less row
+at **In Transit**. COD collection and explicit delivered/completed commands
+idempotently mark shipped line items and only provider-less manual shipments
+Delivered; provider-owned shipment states remain carrier-owned. Manual rows
+also omit the irrelevant provider polling timestamp.
+
+The authenticated dashboard then completed `VHQK8M`: **Own Courier** created
+tracking `OWN-VHQK8M-1`, moved the order to Shipped/Complete, and displayed one
+**In Transit** manual shipment. **Mark Collected** recorded `৳5,510.80` from
+**Lifecycle proof courier**. A clean page load showed Delivered/Paid/Complete,
+COD Collected, and the shipment Delivered. A read-only remote D1 join proved
+the same order, item, shipment, payment, balance, and COD facts: item
+`delivered`, manual/provider-less shipment `delivered`, `paid_amount = 5510.8`,
+`balance_due = 0`, and collected amount `5510.8`. The live run also caught two
+last-mile UI defects: shipment data stayed stale until reload and the COD
+dialog described the old semantics. Admin version
+`b1af5dc9-0dea-42a8-9a7d-7f09a031bdc8` now invalidates shipment history after
+COD commands and truthfully explains delivery, payment, and reservation
+commit; the deployed dialog was reopened on `1NC5RO` and cancelled without
+mutating that audit order.
 
 ### 3. Full edit
 
@@ -499,10 +524,13 @@ proves the deployed current/empty paths, not a simulated production outage.
 **Implemented**
 
 - Provider readiness, shipment creation claims, insert-first provider workflow, explicit `reconcile_required` repair, provider refresh, bulk ship, own-courier fulfillment, item selection, tracking metadata, final/partial aggregate state, recovery locks, and notifications.
+- Provider-less own-courier rows begin in transit. A delivered/completed manual
+  command synchronizes shipped line evidence and manual shipment evidence,
+  while provider-owned rows remain under carrier status synchronization.
 
 **Proven**
 
-- Claim failure, foreign/duplicate/empty item IDs, failed shipment batch cleanup, final-shipment retry, reconciliation, provider status sync, active refund locks, and notification conditions have focused tests.
+- Claim failure, foreign/duplicate/empty item IDs, failed shipment batch cleanup, final-shipment retry, reconciliation, provider status sync, manual delivery evidence repair, active refund locks, and notification conditions have focused tests.
 
 **Gaps**
 

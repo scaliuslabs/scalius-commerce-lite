@@ -1162,7 +1162,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
           <DialogHeader>
             <DialogTitle>Record COD Collection</DialogTitle>
             <DialogDescription>
-              Record the exact outstanding cash received from the courier. This completes the order payment; it does not change fulfillment or stock.
+              Confirm the cash received after delivery. This settles payment, marks the
+              order delivered, and commits its reserved stock.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">

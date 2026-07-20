@@ -355,6 +355,9 @@ export function useUpdateOrderCod() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.cod(variables.orderId),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.shipments(variables.orderId),
+      });
       toast.success("COD action recorded");
     },
     onError: (err) =>

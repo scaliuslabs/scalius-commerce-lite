@@ -63,6 +63,8 @@ describe("manual fulfillment boundaries", () => {
     expect(shipmentCardSource).toContain("refreshDisabledReason");
     expect(statusIndicatorSource).toContain("canRefresh");
     expect(statusIndicatorSource).toContain("refreshDisabledReason");
+    expect(statusIndicatorSource).toContain("showLastChecked");
+    expect(shipmentCardSource).toContain("showLastChecked={hasRefreshableProvider}");
     expect(apiFunctionsSource).toContain("`/orders/${orderId}/fulfill`");
     expect(apiMutationsSource).toContain("useCreateFulfillmentShipment");
   });

@@ -139,15 +139,16 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 
 1. `createFulfillmentShipment()` checks order is not cancelled/returned
 2. Validates no items are already shipped/delivered (throws `ConflictError` if so)
-3. Claims the order with a version/status/fulfillment check, then creates a manual/own-courier `deliveryShipments` row and updates item fulfillment statuses to `shipped`
+3. Claims the order with a version/status/fulfillment check, then creates a provider-less manual/own-courier `deliveryShipments` row at `in_transit` and updates item fulfillment statuses to `shipped`
 4. If final shipment: updates order `fulfillmentStatus` to `complete`, and order status to `shipped` when it was still confirmed
 5. Applies inventory deduction for final shipments, including retries where the order was already marked shipped or delivered before inventory completed
 6. When the final manual shipment actually changes the buyer-visible order status to `shipped`, the core result returns a private `statusChange` fact and the API route records it through the durable order-notification outbox. Plain fulfillment-status-only edits do not reuse `order_completed`; that event remains tied to the buyer-visible `completed` order status.
+7. A later delivered/completed command idempotently moves shipped items and only provider-less manual shipment rows to `delivered`. Carrier/provider shipment rows stay provider-owned and continue through provider sync/reconciliation.
 
 ### COD Actions
 
 `processCodAction()` handles three actions with CAS protection on the order version:
-- `collected`: CAS-updates the order toward `delivered`, records collection via `recordCODCollection()` before inventory movement, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry signal
+- `collected`: CAS-updates the order toward `delivered`, records collection via `recordCODCollection()` before inventory movement, reconciles reserved inventory, synchronizes shipped-item and provider-less manual-shipment delivery evidence, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry/repair signal
 - `failed`: Records failure via `recordCODFailure()`
 - `returned`: CAS-updates the order toward `returned`, marks COD returned before inventory restoration, rolls back the returned claim if the COD marker or inventory repair fails, and retries inventory restoration when the order is already returned
 

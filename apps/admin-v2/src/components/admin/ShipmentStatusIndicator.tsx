@@ -15,6 +15,7 @@ interface ShipmentStatusIndicatorProps {
   onStatusUpdated?: (updatedShipment: { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown }) => void;
   canRefresh?: boolean;
   refreshDisabledReason?: string;
+  showLastChecked?: boolean;
 }
 
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
@@ -22,6 +23,7 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   onStatusUpdated,
   canRefresh = true,
   refreshDisabledReason,
+  showLastChecked = true,
 }) => {
   const { isRefreshing, refreshShipmentStatus } = useShipmentStatus();
   const showRefreshControl = canRefresh || Boolean(refreshDisabledReason);
@@ -84,39 +86,43 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
         </span>
       </div>
 
-      <div className="flex items-center justify-between text-xs">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] cursor-help">
-              <History className="h-3 w-3 mr-1" />
-              {getLastCheckedLabel(shipment.lastChecked)}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent
-            side="bottom"
-            className="text-xs p-2 bg-[var(--popover)] text-[var(--popover-foreground)] border border-[var(--border)]"
-          >
-            {getLastCheckedLabel(shipment.lastChecked)}
-          </TooltipContent>
-        </Tooltip>
+      {(showLastChecked || showRefreshControl) && (
+        <div className="flex items-center justify-between text-xs">
+          {showLastChecked ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex cursor-help items-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+                  <History className="mr-1 h-3 w-3" />
+                  {getLastCheckedLabel(shipment.lastChecked)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="border border-[var(--border)] bg-[var(--popover)] p-2 text-xs text-[var(--popover-foreground)]"
+              >
+                {getLastCheckedLabel(shipment.lastChecked)}
+              </TooltipContent>
+            </Tooltip>
+          ) : <span />}
 
-        {showRefreshControl && (
-          <span title={refreshTitle}>
-            <Button
-              aria-label={refreshTitle}
-              onClick={handleRefresh}
-              disabled={!canRefresh || isRefreshing[shipment.id]}
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
-              />
-            </Button>
-          </span>
-        )}
-      </div>
+          {showRefreshControl && (
+            <span title={refreshTitle}>
+              <Button
+                aria-label={refreshTitle}
+                onClick={handleRefresh}
+                disabled={!canRefresh || isRefreshing[shipment.id]}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-[var(--muted)]"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isRefreshing[shipment.id] ? "animate-spin" : ""}`}
+                />
+              </Button>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 };
