@@ -11,7 +11,10 @@ import {
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
-import type { CartValidationIssue, CartValidationResult } from "@/lib/api/orders";
+import type {
+  CartValidationIssue,
+  CartValidationResult,
+} from "@/lib/api/orders";
 import {
   validateDiscount,
   getActiveCheckoutLanguage,
@@ -41,6 +44,8 @@ import {
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
 } from "../checkout/session-state";
+import { fetchAuthoritativeTaxQuote } from "../checkout/tax-quote-client";
+import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 import {
   cartItemVariantLabel as optionVariantLabel,
   normalizeCartItemOptions,
@@ -71,6 +76,12 @@ let cartValidationSummaryMessage = "";
 let preserveCartValidationSummaryOnce = false;
 let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
+let cartTaxQuoteSequence = 0;
+let latestCheckoutLocation: {
+  cityId: string;
+  zoneId: string;
+  areaId: string;
+} | null = null;
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
 
 // --- Abandoned Checkout ---
@@ -79,6 +90,8 @@ let cartRuntimeAbortController: AbortController | null = null;
 let cartStoreUnsubscribe: (() => void) | null = null;
 
 function resetCartRuntimeListeners(): AbortSignal {
+  cartTaxQuoteSequence += 1;
+  latestCheckoutLocation = null;
   cartStoreUnsubscribe?.();
   cartStoreUnsubscribe = null;
   cartRuntimeAbortController?.abort();
@@ -396,9 +409,87 @@ function cartValidationPayload(items: Record<string, VariantCartItem>) {
 
 function formStringValue(name: string): string | null {
   if (typeof document === "undefined") return null;
-  const input = document.querySelector(`[name="${name}"]`) as HTMLInputElement | null;
+  const input = document.querySelector(
+    `[name="${name}"]`,
+  ) as HTMLInputElement | null;
   const value = input?.value?.trim();
   return value ? value : null;
+}
+
+function cartTaxQuoteInput(): Record<string, unknown> | null {
+  const city = latestCheckoutLocation?.cityId || formStringValue("city");
+  const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
+  const shippingMethodId =
+    window.lastShippingEventDetail?.id ||
+    document.getElementById("checkout-meta")?.dataset.defaultShippingId;
+  const cartItems = (
+    document.getElementById("cartItemsInput") as HTMLInputElement | null
+  )?.value;
+
+  if (!city || !zone || !shippingMethodId || !cartItems || cartItems === "{}") {
+    return null;
+  }
+
+  return {
+    cartItems,
+    city,
+    zone,
+    area:
+      latestCheckoutLocation?.areaId || formStringValue("area") || undefined,
+    shippingMethodId,
+    discountCodeHidden: (
+      document.getElementById("discountCodeHidden") as HTMLInputElement | null
+    )?.value,
+    customerPhone: formStringValue("customerPhone") || undefined,
+  };
+}
+
+function renderAuthoritativeCartQuote(
+  quote: CheckoutTaxQuote,
+  elements: {
+    subtotal: HTMLElement;
+    shipping: HTMLElement;
+    total: HTMLElement;
+    totalLabel: HTMLElement | null;
+    taxLabel: HTMLElement | null;
+    taxAmount: HTMLElement | null;
+    taxStatus: HTMLElement | null;
+  },
+): void {
+  elements.subtotal.textContent = formatPriceShort(quote.subtotalAmount);
+  elements.shipping.textContent =
+    quote.shippingAmount === 0
+      ? "Free"
+      : formatPriceShort(quote.shippingAmount);
+  elements.total.textContent = formatPriceShort(quote.totalAmount);
+  if (elements.totalLabel) {
+    elements.totalLabel.textContent =
+      elements.totalLabel.dataset.finalLabel || "Total";
+  }
+
+  if (elements.taxLabel) {
+    elements.taxLabel.textContent = `${quote.displayLabel}${
+      quote.pricesIncludeTax ? " (included)" : ""
+    }`;
+  }
+  if (elements.taxAmount) {
+    elements.taxAmount.textContent = formatPriceShort(quote.taxAmount);
+  }
+  if (elements.taxStatus) {
+    elements.taxStatus.textContent = "";
+    elements.taxStatus.classList.add("hidden");
+  }
+
+  const discountRow = document.getElementById("discountRow");
+  const discountAmount = document.getElementById("discountAmount");
+  if (discountRow && discountAmount) {
+    if (quote.discountAmount > 0) {
+      discountRow.style.display = "flex";
+      discountAmount.textContent = `-${formatPriceShort(quote.discountAmount)}`;
+    } else {
+      discountRow.style.display = "none";
+    }
+  }
 }
 
 function cartValidationDeliveryPayload() {
@@ -407,9 +498,10 @@ function cartValidationDeliveryPayload() {
   if (!city || !zone) return {};
 
   const meta = document.getElementById("checkout-meta");
-  const shippingMethodId = window.lastShippingEventDetail?.id
-    ?? meta?.dataset.defaultShippingId
-    ?? null;
+  const shippingMethodId =
+    window.lastShippingEventDetail?.id ??
+    meta?.dataset.defaultShippingId ??
+    null;
 
   return {
     city,
@@ -489,7 +581,8 @@ function updateCartValidationMessage() {
 }
 
 function applyPendingCartRepairState(): boolean {
-  const state = readAndClearCartRepairState() ?? readAndClearInlineCartRepairState();
+  const state =
+    readAndClearCartRepairState() ?? readAndClearInlineCartRepairState();
   if (!state) return false;
 
   rotateCheckoutId();
@@ -530,7 +623,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
         ...cartValidationDeliveryPayload(),
       }),
     });
-    const json = await response.json().catch(() => null) as {
+    const json = (await response.json().catch(() => null)) as {
       success?: boolean;
       error?: string;
       data?: CartValidationResult;
@@ -543,26 +636,24 @@ export async function validateCartSnapshot(): Promise<boolean> {
 
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     const issues = Array.isArray(rawIssues) ? rawIssues : [];
-    const summaryMessage = issues.length > 0 && preserveCartValidationSummaryOnce
-      ? cartValidationSummaryMessage
-      : "";
+    const summaryMessage =
+      issues.length > 0 && preserveCartValidationSummaryOnce
+        ? cartValidationSummaryMessage
+        : "";
     preserveCartValidationSummaryOnce = false;
     if (response.ok && json?.success && json.data) {
       reconcileValidatedCartSnapshot(json.data, (message) => {
         showDiscountMessage(message, "info");
       });
     }
-    setCartValidationIssues(
-      issues,
-      cartStore.get().items,
-      summaryMessage,
-    );
+    setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
     if (!response.ok || !json?.success) {
-      cartValidationGlobalError = issues.length > 0
-        ? ""
-        : json?.error
-          || json?.details?.message
-          || "Could not verify cart availability. Please refresh and try again.";
+      cartValidationGlobalError =
+        issues.length > 0
+          ? ""
+          : json?.error ||
+            json?.details?.message ||
+            "Could not verify cart availability. Please refresh and try again.";
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
@@ -578,7 +669,8 @@ export async function validateCartSnapshot(): Promise<boolean> {
     console.warn("Could not refresh cart availability before checkout.", error);
     cartValidationIssues = {};
     clearCartValidationSummary();
-    cartValidationGlobalError = "Could not verify cart availability. Please refresh and try again.";
+    cartValidationGlobalError =
+      "Could not verify cart availability. Please refresh and try again.";
     updateCartValidationMessage();
     updateCheckoutButtonState();
     return false;
@@ -593,8 +685,15 @@ function scheduleCartValidation() {
   }, 350);
 }
 
-export function renderIssueAction(cartKey: string, issue: CartValidationIssue): string {
-  return renderCartIssueAction(cartKey, issue, cartStore.get().items[cartKey]?.slug);
+export function renderIssueAction(
+  cartKey: string,
+  issue: CartValidationIssue,
+): string {
+  return renderCartIssueAction(
+    cartKey,
+    issue,
+    cartStore.get().items[cartKey]?.slug,
+  );
 }
 
 function renderCartItemIssues(cartKey: string): string {
@@ -602,16 +701,18 @@ function renderCartItemIssues(cartKey: string): string {
   if (issues.length === 0) return "";
 
   return `<div class="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive space-y-1">${issues
-    .map((issue) => (
-      `<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    .map(
+      (issue) =>
+        `<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <span>${escapeHtml(issue.message)}</span>
         ${renderIssueAction(cartKey, issue)}
-      </div>`
-    ))
+      </div>`,
+    )
     .join("")}</div>`;
 }
 
 export async function updateTotals() {
+  const quoteSequence = ++cartTaxQuoteSequence;
   const { items, totalAmount, discount } = cartStore.get();
   const selectedMethodFee = window.lastShippingEventDetail?.fee ?? 0;
   const shippingFee = getEffectiveCartShippingFee(items, selectedMethodFee);
@@ -620,6 +721,10 @@ export async function updateTotals() {
   const subtotalEl = document.getElementById("subtotal");
   const shippingEl = document.getElementById("shippingCost");
   const totalEl = document.getElementById("total");
+  const totalLabelEl = document.getElementById("totalLabel");
+  const taxLabelEl = document.getElementById("taxLabel");
+  const taxAmountEl = document.getElementById("taxAmount");
+  const taxStatusEl = document.getElementById("taxStatus");
   const discountHiddenInput = document.getElementById(
     "discountCodeHidden",
   ) as HTMLInputElement;
@@ -647,7 +752,53 @@ export async function updateTotals() {
   }
 
   totalEl.textContent = formatPriceShort(Math.max(0, finalTotal));
+  if (totalLabelEl) totalLabelEl.textContent = "Estimated total";
   updateDiscountUI();
+
+  const quoteInput = cartTaxQuoteInput();
+  if (!quoteInput) {
+    if (taxLabelEl) taxLabelEl.textContent = "Tax";
+    if (taxAmountEl) taxAmountEl.textContent = "Add city & zone";
+    if (taxStatusEl) {
+      taxStatusEl.textContent = "";
+      taxStatusEl.classList.add("hidden");
+    }
+    return;
+  }
+
+  if (taxLabelEl) taxLabelEl.textContent = "Tax";
+  if (taxAmountEl) taxAmountEl.textContent = "Calculating…";
+  if (taxStatusEl) {
+    taxStatusEl.textContent = "";
+    taxStatusEl.classList.add("hidden");
+  }
+  totalEl.textContent = "Calculating…";
+  if (totalLabelEl) {
+    totalLabelEl.textContent = totalLabelEl.dataset.finalLabel || "Total";
+  }
+
+  try {
+    const quote = await fetchAuthoritativeTaxQuote(quoteInput);
+    if (quoteSequence !== cartTaxQuoteSequence) return;
+    renderAuthoritativeCartQuote(quote, {
+      subtotal: subtotalEl,
+      shipping: shippingEl,
+      total: totalEl,
+      totalLabel: totalLabelEl,
+      taxLabel: taxLabelEl,
+      taxAmount: taxAmountEl,
+      taxStatus: taxStatusEl,
+    });
+  } catch {
+    if (quoteSequence !== cartTaxQuoteSequence) return;
+    if (taxAmountEl) taxAmountEl.textContent = "Unavailable";
+    totalEl.textContent = "—";
+    if (taxStatusEl) {
+      taxStatusEl.textContent =
+        "We could not verify tax. Change the destination or try again.";
+      taxStatusEl.classList.remove("hidden");
+    }
+  }
 }
 
 export async function renderCartItems() {
@@ -699,10 +850,12 @@ export async function renderCartItems() {
         }),
       );
       const jsCartKey = inlineJsString(cartKey);
-      const safeOptions = normalizeCartItemOptions(item.options)?.map((option) => ({
-        name: escapeHtml(option.name),
-        label: escapeHtml(option.label),
-      }));
+      const safeOptions = normalizeCartItemOptions(item.options)?.map(
+        (option) => ({
+          name: escapeHtml(option.name),
+          label: escapeHtml(option.label),
+        }),
+      );
       const issueBlock = renderCartItemIssues(cartKey);
 
       const variantInfo = safeOptions
@@ -819,9 +972,8 @@ async function handleApplyDiscount() {
     "customerPhone",
   ) as HTMLInputElement | null;
   const enteredPhone = customerPhoneInput?.value.trim();
-  const customerPhone = enteredPhone && enteredPhone.length >= 7
-    ? enteredPhone
-    : undefined;
+  const customerPhone =
+    enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
 
   const applyBtn = document.getElementById(
     "applyDiscountBtn",
@@ -932,7 +1084,10 @@ export async function initCartFunctionality() {
       (item) => item.action === "reduce_quantity",
     );
     clearCartValidationSummary();
-    if (typeof issue?.availableQuantity !== "number" || issue.availableQuantity < 1) {
+    if (
+      typeof issue?.availableQuantity !== "number" ||
+      issue.availableQuantity < 1
+    ) {
       delete cartValidationIssues[cartKey];
       removeCartItemByKey(cartKey);
       return;
@@ -969,7 +1124,8 @@ export async function initCartFunctionality() {
     }
   };
   window.bulkRemoveCartIssueItems = () => applyBulkCartRepair("remove");
-  window.bulkReduceCartIssueItems = () => applyBulkCartRepair("reduce_quantity");
+  window.bulkReduceCartIssueItems = () =>
+    applyBulkCartRepair("reduce_quantity");
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
   cartStoreUnsubscribe = cartStore.subscribe(() => {
@@ -979,41 +1135,84 @@ export async function initCartFunctionality() {
     scheduleCartValidation();
   });
 
-  window.addEventListener("shippingLocationChange", (e) => {
-    window.lastShippingEventDetail = (e as CustomEvent).detail;
-    // Reset discount when delivery option changes
-    if (cartStore.get().discount) {
-      removeDiscount();
-      showDiscountMessage(
-        "Discount removed — delivery option changed.",
-        "info",
-      );
-    }
-    updateTotals();
-    handleAbandonedCheckout();
-  }, { signal: runtimeSignal });
+  window.addEventListener(
+    "shippingLocationChange",
+    (e) => {
+      window.lastShippingEventDetail = (e as CustomEvent).detail;
+      // Reset discount when delivery option changes
+      if (cartStore.get().discount) {
+        removeDiscount();
+        showDiscountMessage(
+          "Discount removed — delivery option changed.",
+          "info",
+        );
+      }
+      void updateTotals();
+      handleAbandonedCheckout();
+    },
+    { signal: runtimeSignal },
+  );
 
-  document.addEventListener("zone-selected", () => {
-    attemptToTrackInitiateCheckout();
-    handleAbandonedCheckout();
-  }, { signal: runtimeSignal });
+  window.addEventListener(
+    "checkout-location-change",
+    (event) => {
+      const detail = (
+        event as CustomEvent<{
+          cityId?: unknown;
+          zoneId?: unknown;
+          areaId?: unknown;
+        }>
+      ).detail;
+      latestCheckoutLocation = {
+        cityId: typeof detail?.cityId === "string" ? detail.cityId : "",
+        zoneId: typeof detail?.zoneId === "string" ? detail.zoneId : "",
+        areaId: typeof detail?.areaId === "string" ? detail.areaId : "",
+      };
+      void updateTotals();
+      handleAbandonedCheckout();
+    },
+    { signal: runtimeSignal },
+  );
 
-  document.getElementById("discountForm")?.addEventListener("submit", (e) => {
-    e.preventDefault();
-    handleApplyDiscount();
-  }, { signal: runtimeSignal });
+  document.addEventListener(
+    "zone-selected",
+    () => {
+      attemptToTrackInitiateCheckout();
+      handleAbandonedCheckout();
+    },
+    { signal: runtimeSignal },
+  );
 
-  document.getElementById("customerPhone")?.addEventListener("blur", () => {
-    attemptToTrackInitiateCheckout();
-  }, { signal: runtimeSignal });
+  document.getElementById("discountForm")?.addEventListener(
+    "submit",
+    (e) => {
+      e.preventDefault();
+      handleApplyDiscount();
+    },
+    { signal: runtimeSignal },
+  );
 
-  document.getElementById("checkoutForm")?.addEventListener("input", () => {
-    handleAbandonedCheckout();
-  }, { signal: runtimeSignal });
+  document.getElementById("customerPhone")?.addEventListener(
+    "blur",
+    () => {
+      attemptToTrackInitiateCheckout();
+    },
+    { signal: runtimeSignal },
+  );
+
+  document.getElementById("checkoutForm")?.addEventListener(
+    "input",
+    () => {
+      handleAbandonedCheckout();
+    },
+    { signal: runtimeSignal },
+  );
 
   document
     .getElementById("removeDiscountBtn")
-    ?.addEventListener("click", handleRemoveDiscount, { signal: runtimeSignal });
+    ?.addEventListener("click", handleRemoveDiscount, {
+      signal: runtimeSignal,
+    });
 
   await getLanguageData();
   await renderCartItems();
@@ -1021,7 +1220,7 @@ export async function initCartFunctionality() {
     await renderCartItems();
   }
   await validateCartSnapshot();
-  updateTotals();
+  void updateTotals();
   updateCheckoutButtonState();
 }
 

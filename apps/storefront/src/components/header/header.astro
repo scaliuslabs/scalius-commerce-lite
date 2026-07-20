@@ -18,7 +18,7 @@ const headerData: HeaderData = {
     text: apiHeaderData?.topBar?.text || "",
     isEnabled: apiHeaderData?.topBar?.isEnabled ?? true,
   },
-  logo: (apiHeaderData?.logo?.src)
+  logo: apiHeaderData?.logo?.src
     ? apiHeaderData.logo
     : { src: "", alt: apiHeaderData?.logo?.alt || "Store" },
   contact: {
@@ -51,11 +51,11 @@ const headerData: HeaderData = {
     social={headerData.social}
   />
 
-  <CartFlyout client:idle />
+  <CartFlyout client:load />
 </header>
 
 <script>
-  import { cartStore, hydrateCartFromStorage } from "@/store/cart";
+  import { cartStore } from "@/store/cart";
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
@@ -64,15 +64,13 @@ const headerData: HeaderData = {
   }, 50);
 
   function initializeHeader() {
-    hydrateCartFromStorage();
-
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
       const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
       const formattedTotal = `${sym}${totalAmount.toLocaleString()}`;
 
       const countElements = document.querySelectorAll(
-        "#cart-count, #mobile-cart-count"
+        "#cart-count, #mobile-cart-count",
       );
       countElements.forEach((el) => {
         if (el instanceof HTMLElement) {
@@ -81,7 +79,7 @@ const headerData: HeaderData = {
             "scale-0",
             "opacity-0",
             "scale-100",
-            "opacity-100"
+            "opacity-100",
           );
           if (totalItems > 0) {
             el.classList.add("scale-100", "opacity-100");
@@ -222,7 +220,10 @@ const headerData: HeaderData = {
 
     const desktopBreakpoint = window.matchMedia("(min-width: 1024px)");
     desktopBreakpoint.onchange = (event) => {
-      if (event.matches && menuTrigger?.getAttribute("aria-expanded") === "true") {
+      if (
+        event.matches &&
+        menuTrigger?.getAttribute("aria-expanded") === "true"
+      ) {
         toggleMenu(false);
       }
     };

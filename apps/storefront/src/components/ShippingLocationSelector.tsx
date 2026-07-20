@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useStore } from "@nanostores/react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -16,12 +16,22 @@ export interface ShippingLocationSelectorProps {
   shippingMethodLabel?: string;
 }
 
+const subscribeToClientReadiness = () => () => {};
+const getClientReadiness = () => true;
+const getServerReadiness = () => false;
+
 export default function ShippingLocationSelector({
   shippingMethods,
   shippingMethodLabel = "Choose Delivery Option",
 }: ShippingLocationSelectorProps) {
-  const cart = useStore(cartStore);
-  const shippingFeeIsWaived = cartHasFreeDeliveryItem(cart.items);
+  const storedCart = useStore(cartStore);
+  const clientReady = useSyncExternalStore(
+    subscribeToClientReadiness,
+    getClientReadiness,
+    getServerReadiness,
+  );
+  const visibleCartItems = clientReady ? storedCart.items : {};
+  const shippingFeeIsWaived = cartHasFreeDeliveryItem(visibleCartItems);
   const [selectedLocation, setSelectedLocation] = useState<string | undefined>(
     shippingMethods.length > 0 ? shippingMethods[0].id : undefined,
   );
@@ -40,8 +50,7 @@ export default function ShippingLocationSelector({
     if (selectedLocation) {
       const detail = {
         id: selectedLocation,
-        fee:
-          shippingMethods.find((sm) => sm.id === selectedLocation)?.fee || 0,
+        fee: shippingMethods.find((sm) => sm.id === selectedLocation)?.fee || 0,
       };
       // Set directly on window to eliminate race condition with event listeners
       window.lastShippingEventDetail = detail;
@@ -80,13 +89,16 @@ export default function ShippingLocationSelector({
       >
         {shippingMethods.map((method) => {
           const normalFeeLabel = formatPriceShort(method.fee);
-          const effectiveFee = getEffectiveCartShippingFee(cart.items, method.fee);
-          const feeLabel = effectiveFee === 0
-            ? "Free"
-            : formatPriceShort(effectiveFee);
-          const waivedFeeTitle = shippingFeeIsWaived && method.fee > 0
-            ? `Normally ${normalFeeLabel}; waived by an item in your cart.`
-            : undefined;
+          const effectiveFee = getEffectiveCartShippingFee(
+            visibleCartItems,
+            method.fee,
+          );
+          const feeLabel =
+            effectiveFee === 0 ? "Free" : formatPriceShort(effectiveFee);
+          const waivedFeeTitle =
+            shippingFeeIsWaived && method.fee > 0
+              ? `Normally ${normalFeeLabel}; waived by an item in your cart.`
+              : undefined;
 
           return (
             <Label

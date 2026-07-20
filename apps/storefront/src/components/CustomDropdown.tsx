@@ -91,7 +91,12 @@ export default function CustomDropdown({
     if (disabled) return;
     updatePlacement();
     setSearchTerm("");
-    setActiveIndex(Math.max(0, options.findIndex((option) => option.value === value)));
+    setActiveIndex(
+      Math.max(
+        0,
+        options.findIndex((option) => option.value === value),
+      ),
+    );
     setIsOpen(true);
   }, [disabled, options, updatePlacement, value]);
 
@@ -106,7 +111,8 @@ export default function CustomDropdown({
     }
 
     document.addEventListener("mousedown", handlePointerOutside);
-    return () => document.removeEventListener("mousedown", handlePointerOutside);
+    return () =>
+      document.removeEventListener("mousedown", handlePointerOutside);
   }, [closeDropdown]);
 
   useEffect(() => {
@@ -135,7 +141,9 @@ export default function CustomDropdown({
   useEffect(() => {
     if (!isOpen || activeIndex < 0) return;
     const listbox = listboxRef.current;
-    const option = document.getElementById(`${listboxId}-option-${activeIndex}`);
+    const option = document.getElementById(
+      `${listboxId}-option-${activeIndex}`,
+    );
     if (!listbox || !option) return;
 
     const listRect = listbox.getBoundingClientRect();
@@ -155,9 +163,7 @@ export default function CustomDropdown({
     closeDropdown(true);
   };
 
-  const moveActive = (
-    key: "ArrowDown" | "ArrowUp" | "Home" | "End",
-  ) => {
+  const moveActive = (key: "ArrowDown" | "ArrowUp" | "Home" | "End") => {
     setActiveIndex((current) =>
       nextDropdownOptionIndex(current, filteredOptions.length, key),
     );
@@ -190,7 +196,7 @@ export default function CustomDropdown({
         ref={triggerRef}
         type="button"
         id={id}
-        className={`flex h-8 w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:h-9 sm:text-sm ${
+        className={`flex min-h-11 w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-left text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:min-h-9 ${
           triggerClassName || "border-border bg-background"
         } ${
           disabled
@@ -212,7 +218,9 @@ export default function CustomDropdown({
         aria-expanded={isOpen}
         aria-controls={isOpen ? listboxId : undefined}
       >
-        <span className={`block truncate ${!selectedOption ? "text-muted-foreground" : ""}`}>
+        <span
+          className={`block truncate ${!selectedOption ? "text-muted-foreground" : ""}`}
+        >
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <svg
@@ -222,7 +230,12 @@ export default function CustomDropdown({
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -239,12 +252,16 @@ export default function CustomDropdown({
                 ref={searchInputRef}
                 type="text"
                 role="combobox"
-                className="h-8 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-xs text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9 sm:text-sm"
+                className="h-11 w-full rounded-md border border-border bg-background px-2.5 pr-8 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 sm:h-9"
                 aria-label={`Search ${placeholder.toLocaleLowerCase()}`}
                 aria-controls={listboxId}
                 aria-expanded="true"
                 aria-autocomplete="list"
-                aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+                aria-activedescendant={
+                  activeIndex >= 0
+                    ? `${listboxId}-option-${activeIndex}`
+                    : undefined
+                }
                 placeholder={`Search ${placeholder.toLocaleLowerCase()}`}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -257,8 +274,19 @@ export default function CustomDropdown({
                   className="absolute right-1.5 top-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
                   onClick={() => setSearchTerm("")}
                 >
-                  <svg aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  <svg
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               )}
@@ -279,10 +307,8 @@ export default function CustomDropdown({
                   id={`${listboxId}-option-${index}`}
                   role="option"
                   aria-selected={option.value === value}
-                  className={`cursor-pointer px-2.5 py-1.5 text-xs text-foreground sm:text-sm ${
-                    index === activeIndex
-                      ? "bg-muted"
-                      : "hover:bg-muted/70"
+                  className={`flex min-h-11 cursor-pointer items-center px-2.5 py-1.5 text-sm text-foreground sm:min-h-8 ${
+                    index === activeIndex ? "bg-muted" : "hover:bg-muted/70"
                   } ${option.value === value ? "font-medium" : ""}`}
                   onMouseEnter={() => setActiveIndex(index)}
                   onMouseDown={(event) => event.preventDefault()}
@@ -292,7 +318,10 @@ export default function CustomDropdown({
                 </li>
               ))
             ) : (
-              <li role="status" className="px-2.5 py-3 text-center text-xs text-muted-foreground sm:text-sm">
+              <li
+                role="status"
+                className="px-2.5 py-3 text-center text-xs text-muted-foreground sm:text-sm"
+              >
                 No matching options
               </li>
             )}
