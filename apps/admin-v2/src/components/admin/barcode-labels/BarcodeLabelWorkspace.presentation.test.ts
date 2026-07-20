@@ -52,4 +52,12 @@ describe("BarcodeLabelWorkspace presentation boundary", () => {
   it("keeps the primary mobile print targets at least 44 pixels tall", () => {
     expect(source.match(/className="min-h-11 shrink-0"/g)).toHaveLength(2);
   });
+
+  it("uses mobile-safe targets throughout the progressive workspace without loosening desktop density", () => {
+    expect(source).toContain('className="mt-0.5 h-11 w-11 shrink-0 sm:h-8 sm:w-8"');
+    expect(source).toContain('className="h-11 pl-8 text-sm sm:h-8"');
+    expect(source).toContain('className="h-11 sm:h-9"');
+    expect(source).toContain('className="flex h-11 items-center overflow-hidden rounded-md border bg-background sm:h-8"');
+    expect(source.match(/className="h-11 w-11 sm:h-7 sm:w-7"/g)).toHaveLength(4);
+  });
 });

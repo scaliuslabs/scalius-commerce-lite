@@ -1312,6 +1312,30 @@ The cleanup bullets below describe the two-product proof store that preceded the
   focused Media files passed 25 tests and the single sequential Admin typecheck
   passed before deployment.
 
+### Barcode mobile-workspace checkpoint (2026-07-20)
+
+- Renewed first-party Shopify, Vendure, Medusa, Saleor, Avery, GS1, and Zebra
+  evidence retained the progressive job design: row actions are fast exact-SKU
+  entry points, while one workspace owns single/batch quantities, physical
+  paper or roll choice, fit checks, preview, test output, Print/PDF, and the
+  specialist CSV bridge. A second wizard or immediate-print icon would split
+  state and hide the paper/quantity/fit relationship.
+- The fresh 390 x 844 production run found that secondary label controls still
+  inherited desktop-sized targets. Back, SKU search/pagination, quantity
+  steppers, batch shortcuts, fit recovery, selectors, start cell, advanced
+  disclosure/export, and preview paging now measure 44 px on mobile while the
+  1440 px workspace retains its compact 28/32/36 px controls.
+- Production selected one Arka SKU, then a two-SKU batch and applied **On
+  hand** to produce 12 labels. Starting at cell 5 exposed the media-safety
+  warning; A4 3 x 8 correctly blocked the long Code 128 identity, **Use A4 wide
+  cut** restored safe output across two preview pages, and page navigation
+  measured 44 x 44 px. A separate compact 14-digit test SKU rendered safely on
+  50 x 25 mm thermal stock with Test and Print/PDF enabled.
+- Admin version `fb27b83a-0d40-4529-a373-922d5f7c7729` is live at 100%. Width
+  stayed exactly 390 px with no horizontal overflow, the browser log remained
+  empty, 29 focused label tests passed, and the sequential Admin typecheck
+  passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
