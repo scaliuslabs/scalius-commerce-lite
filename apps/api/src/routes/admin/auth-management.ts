@@ -129,6 +129,7 @@ const adminUserSchema = z.object({
     twoFactorEnabled: z.boolean(),
     mustChangePassword: z.boolean(),
     mustEnrollTwoFactor: z.boolean(),
+    suspended: z.boolean(),
     isSuperAdmin: z.boolean(),
     createdAt: z.union([z.string(), z.number()]),
     roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
@@ -160,6 +161,8 @@ app.openapi(listUsersRoute, async (c) => {
                 twoFactorEnabled: user.twoFactorEnabled,
                 mustChangePassword: user.mustChangePassword,
                 mustEnrollTwoFactor: user.mustEnrollTwoFactor,
+                banned: user.banned,
+                banExpires: user.banExpires,
                 isSuperAdmin: user.isSuperAdmin,
                 createdAt: user.createdAt
             })
@@ -195,8 +198,14 @@ app.openapi(listUsersRoute, async (c) => {
                 const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
                 const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
 
+                const { banned, banExpires, ...publicAdminUser } = adminUser;
+                const banExpiresAt = banExpires instanceof Date
+                    ? banExpires.getTime()
+                    : Number(banExpires ?? 0) * 1000;
+
                 return {
-                    ...adminUser,
+                    ...publicAdminUser,
+                    suspended: Boolean(banned && (!banExpires || banExpiresAt > Date.now())),
                     roles: userRoleData,
                     overrides: { grants, denials }
                 };
@@ -396,7 +405,7 @@ const deleteUserRoute = createRoute({
     method: "delete",
     path: "/users/{id}",
     tags: ["Admin - Auth Management"],
-    summary: "Delete an admin user",
+    summary: "Revoke an unfinished administrator invitation",
     request: {
         params: z.object({ id: z.string() }),
     },
@@ -416,9 +425,17 @@ app.openapi(deleteUserRoute, async (c) => {
             throw new ValidationError("You cannot delete your own account");
         }
 
-        const userToDelete = await db.select({ id: user.id, role: user.role, isSuperAdmin: user.isSuperAdmin }).from(user).where(eq(user.id, userId)).get();
+        const userToDelete = await db.select({
+            id: user.id,
+            role: user.role,
+            isSuperAdmin: user.isSuperAdmin,
+            mustChangePassword: user.mustChangePassword,
+        }).from(user).where(eq(user.id, userId)).get();
         if (!userToDelete) throw new NotFoundError("User not found");
         if (userToDelete.isSuperAdmin) throw new ValidationError("Cannot delete a super admin user");
+        if (!userToDelete.mustChangePassword) {
+            throw new ValidationError("Completed administrator access must be suspended instead of deleted");
+        }
 
         const targetAdminPrincipal = await db
             .selectDistinct({ id: user.id })
@@ -444,11 +461,181 @@ app.openapi(deleteUserRoute, async (c) => {
 
         await db.delete(user).where(eq(user.id, userId));
 
-        return ok(c, { message: "Admin user deleted successfully" });
+        return ok(c, { message: "Administrator invitation revoked" });
     } catch (error: unknown) {
         console.error("Delete admin user error:", error);
         throw error;
     }
+});
+
+const setAdminSuspensionRoute = createRoute({
+    method: "post",
+    path: "/users/{id}/suspension",
+    tags: ["Admin - Auth Management"],
+    summary: "Suspend or reactivate an administrator",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ suspended: z.boolean() }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Administrator suspension updated",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        message: z.string(),
+                        suspended: z.boolean(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(setAdminSuspensionRoute, async (c) => {
+    const db = c.get("db");
+    const sessionUser = c.get("user");
+    const { id: userId } = c.req.valid("param");
+    const { suspended } = c.req.valid("json");
+
+    if (userId === sessionUser.id) {
+        throw new ValidationError("You cannot suspend your own account");
+    }
+
+    const target = await db
+        .select({
+            id: user.id,
+            isSuperAdmin: user.isSuperAdmin,
+            banned: user.banned,
+        })
+        .from(user)
+        .where(eq(user.id, userId))
+        .get();
+    if (!target) throw new NotFoundError("Administrator not found");
+    if (target.isSuperAdmin) {
+        throw new ValidationError("The store owner cannot be suspended");
+    }
+
+    const targetAdminPrincipal = await db
+        .selectDistinct({ id: user.id })
+        .from(user)
+        .leftJoin(userRoles, eq(userRoles.userId, user.id))
+        .leftJoin(userPermissions, and(
+            eq(userPermissions.userId, user.id),
+            eq(userPermissions.granted, true),
+        ))
+        .where(and(eq(user.id, userId), adminPrincipalPredicate()));
+    if (targetAdminPrincipal.length === 0) {
+        throw new ValidationError("Can only change access for administrator accounts");
+    }
+
+    if (target.banned === suspended) {
+        return ok(c, {
+            message: suspended ? "Administrator is already suspended" : "Administrator is already active",
+            suspended,
+        });
+    }
+
+    const changedAt = new Date();
+    if (!suspended) {
+        await db
+            .update(user)
+            .set({
+                banned: false,
+                banReason: null,
+                banExpires: null,
+                updatedAt: changedAt,
+            })
+            .where(and(eq(user.id, userId), eq(user.banned, true)));
+
+        return ok(c, {
+            message: "Administrator access restored",
+            suspended: false,
+        });
+    }
+
+    const otherActiveAdmins = await db
+        .selectDistinct({ id: user.id })
+        .from(user)
+        .leftJoin(userRoles, eq(userRoles.userId, user.id))
+        .leftJoin(userPermissions, and(
+            eq(userPermissions.userId, user.id),
+            eq(userPermissions.granted, true),
+        ))
+        .where(and(
+            ne(user.id, userId),
+            eq(user.banned, false),
+            eq(user.mustChangePassword, false),
+            or(
+                eq(user.mustEnrollTwoFactor, false),
+                eq(user.twoFactorEnabled, true),
+            ),
+            adminPrincipalPredicate(),
+        ));
+    if (otherActiveAdmins.length === 0) {
+        throw new ValidationError("Cannot suspend the last active administrator");
+    }
+
+    const authorityGuard = buildBatchGuard(db, sql`CASE WHEN EXISTS (
+        SELECT 1 FROM ${user}
+        WHERE ${user.id} = ${userId}
+          AND ${user.isSuperAdmin} = ${false}
+          AND ${user.banned} = ${false}
+    ) AND EXISTS (
+        SELECT 1 FROM ${user} AS other_admin
+        LEFT JOIN ${userRoles} AS other_user_roles
+          ON other_user_roles.user_id = other_admin.id
+        LEFT JOIN ${userPermissions} AS other_user_permissions
+          ON other_user_permissions.user_id = other_admin.id
+         AND other_user_permissions.granted = ${true}
+        WHERE other_admin.id <> ${userId}
+          AND other_admin.banned = ${false}
+          AND other_admin.must_change_password = ${false}
+          AND (
+            other_admin.must_enroll_two_factor = ${false}
+            OR other_admin.two_factor_enabled = ${true}
+          )
+          AND (
+            other_admin.role = 'admin'
+            OR other_admin.is_super_admin = ${true}
+            OR other_user_roles.id IS NOT NULL
+            OR other_user_permissions.id IS NOT NULL
+          )
+    ) THEN 1 ELSE json_extract('ADMIN_SUSPENSION_CONFLICT', '$') END`);
+
+    try {
+        await safeBatch(db, [
+            authorityGuard,
+            db.update(user)
+                .set({
+                    banned: true,
+                    banReason: "Store access suspended by an administrator",
+                    banExpires: null,
+                    updatedAt: changedAt,
+                })
+                .where(and(eq(user.id, userId), eq(user.banned, false))),
+            db.delete(sessionTable).where(eq(sessionTable.userId, userId)),
+        ]);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/ADMIN_SUSPENSION_CONFLICT|malformed json/iu.test(message)) {
+            throw new ConflictError("Administrator access changed. Refresh the team list and try again");
+        }
+        throw error;
+    }
+
+    return ok(c, {
+        message: "Administrator suspended and signed out",
+        suspended: true,
+    });
 });
 
 // ─────────────────────────────────────────

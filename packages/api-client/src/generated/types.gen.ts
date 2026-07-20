@@ -37450,6 +37450,7 @@ export type GetApiV1AdminAuthUsersResponses = {
                 twoFactorEnabled: boolean;
                 mustChangePassword: boolean;
                 mustEnrollTwoFactor: boolean;
+                suspended: boolean;
                 isSuperAdmin: boolean;
                 createdAt: string | number;
                 roles: Array<{
@@ -37792,6 +37793,114 @@ export type DeleteApiV1AdminAuthUsersByIdResponses = {
 };
 
 export type DeleteApiV1AdminAuthUsersByIdResponse = DeleteApiV1AdminAuthUsersByIdResponses[keyof DeleteApiV1AdminAuthUsersByIdResponses];
+
+export type PostApiV1AdminAuthUsersByIdSuspensionData = {
+    body?: {
+        suspended: boolean;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/auth/users/{id}/suspension';
+};
+
+export type PostApiV1AdminAuthUsersByIdSuspensionErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthUsersByIdSuspensionError = PostApiV1AdminAuthUsersByIdSuspensionErrors[keyof PostApiV1AdminAuthUsersByIdSuspensionErrors];
+
+export type PostApiV1AdminAuthUsersByIdSuspensionResponses = {
+    /**
+     * Administrator suspension updated
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            suspended: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminAuthUsersByIdSuspensionResponse = PostApiV1AdminAuthUsersByIdSuspensionResponses[keyof PostApiV1AdminAuthUsersByIdSuspensionResponses];
 
 export type PostApiV1AdminAuthChangePasswordData = {
     body?: {

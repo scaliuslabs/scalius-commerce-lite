@@ -17,6 +17,27 @@ The rich demo catalog is now applied and independently reconciled in production.
 
 Private operational evidence remains ignored under `.wrangler/demo-store-apply/` and `.wrangler/demo-store-evidence/`. The latest complete apply evidence is `run-2026-07-15T14-42-45-778Z-4cf1f909`; the independent read-only evidence is `run-2026-07-15T14-46-12-389Z-a194f298`. Session cleanup returned a best-effort warning, so do not claim the short-lived remote session was explicitly deleted; no credential or cookie is stored in the repository.
 
+### Administrator lifecycle checkpoint (2026-07-20)
+
+- API `204d3414-abf6-442d-b7fb-ace0471cd12b` and Admin
+  `3c610bd9-88e2-4d70-accf-6c03490a9fef` expose first-class administrator
+  suspension through the existing Better Auth ban authority. A suspension and
+  target-session revocation share one guarded D1 batch; current user, owner,
+  last-active-admin, non-admin, stale, and concurrent-change cases fail closed.
+- The deployed Administrators workspace now distinguishes setup work from
+  suspension, preserves completed identities instead of hard-deleting them,
+  and limits permanent revocation to unfinished invitations. Jhon dou was
+  suspended in the visible live interface, re-read as `Suspended` with
+  `Restore access`, then restored and re-read as `2FA setup` with the suspend
+  action available again. No demo administrator was left disabled.
+- The tightened last-admin guard was deployed and the visible suspend/restore
+  cycle was repeated successfully; an unfinished password setup no longer
+  counts as a lockout-safe administrator. At 390 px and 320 px, document and
+  body widths matched the viewport exactly; exact accessible suspend actions
+  remained present. The four focused suites passed 105 tests, targeted lint
+  passed, API/Core/Admin typechecks ran
+  sequentially, SDK generation completed, and both deployments verified 100%.
+
 ### Free-delivery checkout projection (2026-07-19)
 
 - A fresh Kori Oak Floating Shelf buyer run proved exact Walnut/Natural SKU

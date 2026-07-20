@@ -150,7 +150,7 @@ actual operational or buyer projection before it can be called complete.
 | Route | Owning contract | Release status |
 | --- | --- | --- |
 | Theme | [`THEME-TAX.md`](THEME-TAX.md) | Versioned semantic presentation, real preview, publication history, and rollback are live; cross-authority composition remains |
-| Account / users | [`../COMMERCE-SETTINGS-BENCHMARK.md`](../COMMERCE-SETTINGS-BENCHMARK.md) | Profile/security/team sections are URL-owned, personal sessions are bounded and revocable, and blocked setup can be resent; first-class invitations/suspension/security history remain |
+| Account / users | [`../COMMERCE-SETTINGS-BENCHMARK.md`](../COMMERCE-SETTINGS-BENCHMARK.md) | Profile/security/team sections are URL-owned, personal sessions are bounded and revocable, and administrator suspension preserves identity while atomically revoking sessions; invitation expiry/revoke history and security-event history remain |
 | Hero sliders | [`HERO.md`](HERO.md) | Versioned desktop/mobile media exists; publication and rich-demo proof continue |
 | Checkout / payments | [`../CHECKOUT-FLOW-CONTRACT.md`](../CHECKOUT-FLOW-CONTRACT.md), [`../PAYMENT-METHOD-READINESS.md`](../PAYMENT-METHOD-READINESS.md) | Outcome model is live; provider probes/webhook health/rotation and full sandbox matrix remain |
 | Taxes | [`THEME-TAX.md`](THEME-TAX.md), [`../TAX-LIFECYCLE-INVARIANTS.md`](../TAX-LIFECYCLE-INVARIANTS.md) | Calculation authority is strong; bulk classification/export/refund matrix remain |

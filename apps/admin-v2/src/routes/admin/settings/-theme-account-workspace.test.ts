@@ -98,6 +98,10 @@ describe("theme and account settings workspace", () => {
     expect(usersSource).toContain("Administrators are unavailable");
     expect(usersSource).toContain("Find administrators");
     expect(usersSource).toContain("getAdminUserStatus");
+    expect(usersSource).toContain("Suspend administrator?");
+    expect(usersSource).toContain("Restore access");
+    expect(usersSource).toContain("Revoke this invitation?");
+    expect(usersSource).not.toContain("Their historical activity remains in the audit trail");
 
     const sessionsSource = readSource(
       "components/admin/account-settings/AccountSessions.tsx",

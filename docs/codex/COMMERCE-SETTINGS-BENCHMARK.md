@@ -840,9 +840,28 @@ retained. What changes is lifecycle visibility and operational control.
   authenticated DOM. Profile retained `section=profile`, Administrators retained
   `section=team`, and the personal profile card was absent from the team route.
 
+### Implemented administrator suspension slice (2026-07-20)
+
+- The existing Better Auth `banned` authority now powers a first-class
+  suspend/restore workflow instead of introducing a parallel account state.
+  Suspension and deletion of every target session commit in one guarded D1
+  batch, and a second authority guard prevents two administrators from racing
+  the store into a last-admin lockout.
+- The current user and store owner cannot be suspended. Restoring access keeps
+  the administrator's roles and overrides. Banned users were already rejected
+  by both API and dashboard session authority, so the UI state matches the
+  existing sign-in boundary.
+- Completed administrator identities can no longer be hard-deleted through the
+  team endpoint. Only unfinished password-setup invitations may be revoked;
+  ready and 2FA-setup administrators must be suspended so historical ownership
+  is preserved.
+- The Administrators workspace distinguishes warning-level setup work from a
+  destructive suspended state, exposes exact suspend/restore/revoke actions,
+  and searches by lifecycle status as well as name, email, and role.
+
 This remains an honest intermediate lifecycle. A dedicated invitation entity
-with expiry/revoke state, administrator suspension/reactivation, security-event
-history, bulk operations, and path-separated authority routes remain required.
+with expiry/revoke timestamps, recent security-event history, bulk operations,
+and path-separated authority routes remain required.
 
 ## Shared UI contract
 

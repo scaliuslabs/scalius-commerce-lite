@@ -9,6 +9,7 @@ describe("administrator readiness status", () => {
         twoFactorEnabled: false,
         mustChangePassword: true,
         mustEnrollTwoFactor: true,
+        suspended: false,
       }),
     ).toBe("password_setup");
   });
@@ -19,6 +20,7 @@ describe("administrator readiness status", () => {
         twoFactorEnabled: false,
         mustChangePassword: false,
         mustEnrollTwoFactor: false,
+        suspended: false,
       }),
     ).toBe("two_factor_setup");
   });
@@ -29,8 +31,20 @@ describe("administrator readiness status", () => {
         twoFactorEnabled: true,
         mustChangePassword: false,
         mustEnrollTwoFactor: false,
+        suspended: false,
       }),
     ).toBe("ready");
+  });
+
+  it("keeps suspension visible ahead of onboarding readiness", () => {
+    expect(
+      getAdminUserStatus({
+        twoFactorEnabled: false,
+        mustChangePassword: true,
+        mustEnrollTwoFactor: true,
+        suspended: true,
+      }),
+    ).toBe("suspended");
   });
 
   it("keeps administrator mutations fail-closed while authority is stale", () => {
