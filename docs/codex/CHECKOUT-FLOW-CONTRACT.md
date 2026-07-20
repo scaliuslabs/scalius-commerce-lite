@@ -1,6 +1,6 @@
 # Checkout Flow Contract
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-20
 
 This note defines the merchant-facing checkout controls, their buyer-facing
 effects, and the server authority that prevents a stale storefront from
@@ -48,6 +48,10 @@ order gate is `assertCheckoutOrderPolicy()`.
   checkout snapshots, and payment handoff must use
   `getEffectiveCartShippingFee()`. A raw method fee must not reappear in one
   projection after cart validation has established the free-delivery waiver.
+- A merchant may change payment policy while a buyer already has checkout
+  state. If the buyer's saved/default method is no longer eligible and exactly
+  one truthful method remains, the storefront selects that method. It must not
+  strand the buyer behind a disabled action or resurrect an excluded method.
 
 ## Fail-Closed Readiness
 
@@ -113,6 +117,27 @@ prerequisites are ready.
   - `apps/storefront/src/store/cart.test.ts`
   - `apps/storefront/src/lib/cart/presentation-boundaries.test.ts`
   - `apps/storefront/src/lib/cart/client-init.test.ts`
+  - `apps/storefront/src/lib/checkout/render-summary.test.ts`
+
+## Live payment-policy recovery (2026-07-20)
+
+- An authenticated production run started a buyer checkout under **Standard**
+  with SSLCommerz saved as the active/default method, then changed the merchant
+  policy to **COD only**. The fresh public checkout projection correctly
+  removed Stripe, SSLCommerz, and Polar, but the buyer was initially left with
+  the sole COD card unselected and a disabled **Select a payment method**
+  action.
+- Storefront version `6606ba62-fc31-4cc4-936f-be54005886ef`, build
+  `src-44bcf53e98a61f60`, now selects the sole surviving method only when the
+  saved/default method is no longer eligible. Production then showed COD
+  checked with **Place Order — Pay on Delivery** enabled; no order was placed
+  during the check.
+- The merchant policy was restored through the revisioned admin form to
+  **Standard** at revision 5. A fresh 390 × 844 buyer load returned all four
+  configured methods, kept SSLCommerz as the valid default, enabled
+  **Continue to Payment →**, and measured 390 px document width at a 390 px
+  viewport. The same policy-change path is covered by the focused storefront
+  regression test.
 
 ## Buyer shipping-fee projection (2026-07-19)
 
