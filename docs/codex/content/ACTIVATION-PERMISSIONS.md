@@ -1,6 +1,6 @@
 # Activation and Publishing Permission Boundary
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-20
 
 Pages, Analytics scripts, and Discounts are draft/inactive by default. Their
 create and ordinary edit permissions do not grant buyer-facing publication or
@@ -24,3 +24,9 @@ CRUD, preview, activation, pause, and archive. Activation and pause require
 authority. Activation is currently restricted to an internally consistent
 code promotion with at least one active code and one active effect. Automatic
 promotion activation remains unavailable until checkout can evaluate it.
+
+The deployed Promotions UI mirrors this boundary: create and save use the
+operator's exact discount create/edit permission, Activate/Pause are absent or
+disabled without `discounts.toggle_status`, and Archive requires the discount
+delete authority. The browser does not infer permission from button presence;
+the API and core remain authoritative and revision-CAS every lifecycle command.

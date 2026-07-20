@@ -1,6 +1,6 @@
 # Commerce Settings Competitive Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-07-20
 Code baseline inspected: `26d3fc27d`
 
 This is the durable product and architecture decision record for Discounts,
@@ -156,7 +156,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 
 | Domain | What is already sound | Release-blocking or high-cost gaps |
 | --- | --- | --- |
-| Discounts | Case-normalized global code identity; one unified legacy builder; revisioned typed promotion CRUD/preview/activate/pause; exact code-promotion checkout evaluation; total/per-customer/spend-budget claims in the order batch; immutable line/shipping allocations consumed by tax and refund integrity checks; buyer-safe rejection reasons | Admin still lacks the replacement promotion builder. Live typed scope is deliberately one code promotion/order with subtotal/quantity conditions and line/order/shipping effects. Automatic promotion activation, selectors/audiences, BOGO/gifts, campaign sharing, stacking, and item-aware refund commands remain unavailable. |
+| Discounts | Case-normalized global code identity; a URL-addressable replacement Promotions list/builder/test-cart; revisioned typed CRUD/preview/activate/pause/archive; exact code-promotion checkout evaluation; total/per-customer/spend-budget claims in the order batch; immutable line/shipping allocations consumed by tax and refund integrity checks; buyer-safe rejection reasons | Live typed scope is deliberately one code promotion/order with subtotal/quantity conditions and line/order/shipping effects. Automatic promotion authoring/activation, selectors/audiences, BOGO/gifts, campaign sharing, stacking, cursor pagination beyond the first bounded list wave, and item-aware refund commands remain unavailable. Legacy authoring remains a compatibility surface for codes not yet represented by typed authority and is no longer the visible sidebar destination. |
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | One versioned semantic presentation document, durable drafts, real route/device preview, contrast gates, publication history, rollback, revision CAS, and cache invalidation | Header, footer, navigation, heroes, and Theme remain separate authorities; a future unified Presentation workspace must compose them without making Theme an unbounded CSS editor or changing the protected product-detail composition. |
@@ -169,7 +169,11 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 - Discount validation/evaluation/CRUD:
   `packages/core/src/modules/discounts/discounts.validation.ts`,
   `discounts.eligibility.ts`, and `discounts.service.ts`.
-- Unified merchant code builder and form model:
+- Replacement typed merchant workspace:
+  `apps/admin-v2/src/components/admin/promotion/**`,
+  `apps/admin-v2/src/routes/admin/promotions/**`, and
+  `apps/admin-v2/src/lib/api-functions/promotions.ts`.
+- Legacy compatibility builder and form model:
   `apps/admin-v2/src/components/admin/discount/DiscountCodeBuilder.tsx` and
   `discount-editor-model.ts`.
 - Tax UI and domain:
@@ -419,6 +423,37 @@ Explicit Scalius decisions:
   classes/same-target policy; and the admin builder/test cart must render the
   production evaluator's applied and rejected reasons before any automatic,
   stacking, budget, or gift control becomes visible.
+
+### Implemented merchant workspace and live proof (2026-07-20)
+
+- The visible **Discounts** navigation now opens `/admin/promotions`. The
+  replacement list owns URL-validated search and status filters, compact
+  desktop rows/mobile cards, honest outcome/requirement/schedule/status
+  summaries, and permission-gated creation. The legacy `/admin/discounts`
+  route remains reachable only as a compatibility surface while unsupported
+  targeting and automatic rules are designed against typed authority.
+- One compact builder owns internal/customer naming, normalized single or bulk
+  codes, independent item/order/delivery effects, subtotal and quantity
+  requirements, timezone-aware schedule, total/per-customer redemption limits,
+  discount-spend budget, revision state, lifecycle commands, and archive. It
+  does not render automatic, stacking, audience/catalog selector, BOGO, or gift
+  controls that checkout cannot yet honor.
+- The builder's **Test cart** drawer calls the saved promotion preview route and
+  renders the production evaluator's exact applied allocation classes. Drafts
+  are explicitly marked as assumed active for simulation. Lifecycle and
+  archive actions use the same create/edit/toggle/delete permission boundary as
+  the API, and revision conflicts refresh the authoritative aggregate without
+  misclassifying ordinary code-identity 409s.
+- Authenticated production proof created `Welcome order + delivery` with code
+  `WEEKENDSHIP`, 10% order savings, free delivery, a `৳5,000` subtotal
+  requirement, total/per-customer/spend budgets, and `Asia/Dhaka` schedule
+  authority. A test cart with `৳8,990` merchandise and `৳110` delivery
+  produced exactly `৳899` order plus `৳110` shipping allocations. After
+  activation the buyer cart showed `-৳1,009` and total `৳8,091`; pause
+  rejected the same code as inactive, and reactivation restored the exact
+  result. The production list then showed the active code, combined outcome,
+  minimum-subtotal requirement, and no-end-date schedule without reopening the
+  form.
 
 ### Builder information architecture
 

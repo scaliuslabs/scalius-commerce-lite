@@ -5,6 +5,7 @@ import {
   nullForAdminApiNotFound,
   readCheckoutFlowRevisionConflict,
   readDiscountRevisionConflict,
+  readPromotionRevisionConflict,
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
   readHeroSliderRevisionConflict,
@@ -94,6 +95,22 @@ describe("admin API detail-loader errors", () => {
       409,
       "DISCOUNT_REVISION_CONFLICT",
       { expectedRevision: 0, currentRevision: "3" },
+    ))).toBeNull();
+  });
+
+  it("does not mistake a promotion code collision for a revision conflict", () => {
+    expect(readPromotionRevisionConflict(new AdminApiResponseError(
+      "Promotion changed",
+      409,
+      "PROMOTION_REVISION_CONFLICT",
+      { expectedRevision: 4, currentRevision: 5 },
+    ))).toEqual({ expectedRevision: 4, currentRevision: 5 });
+
+    expect(readPromotionRevisionConflict(new AdminApiResponseError(
+      "Promotion code is already reserved",
+      409,
+      "CONFLICT",
+      { code: "WELCOME10" },
     ))).toBeNull();
   });
 

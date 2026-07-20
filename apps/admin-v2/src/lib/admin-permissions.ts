@@ -30,6 +30,7 @@ export const ADMIN_PERMISSIONS = {
   DISCOUNTS_VIEW: "discounts.view",
   DISCOUNTS_CREATE: "discounts.create",
   DISCOUNTS_EDIT: "discounts.edit",
+  DISCOUNTS_DELETE: "discounts.delete",
   DISCOUNTS_TOGGLE_STATUS: "discounts.toggle_status",
   ANALYTICS_VIEW: "analytics.view",
   ANALYTICS_CREATE: "analytics.create",

@@ -29,6 +29,7 @@ import { Route as AdminAttributesRouteImport } from './routes/admin/attributes'
 import { Route as AdminAccessDeniedRouteImport } from './routes/admin/access-denied'
 import { Route as AdminAbandonedCheckoutsRouteImport } from './routes/admin/abandoned-checkouts'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
+import { Route as AdminPromotionsIndexRouteImport } from './routes/admin/promotions/index'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
 import { Route as AdminPagesIndexRouteImport } from './routes/admin/pages/index'
 import { Route as AdminOrdersIndexRouteImport } from './routes/admin/orders/index'
@@ -50,6 +51,7 @@ import { Route as AdminSettingsDeliveryProvidersRouteImport } from './routes/adm
 import { Route as AdminSettingsCheckoutRouteImport } from './routes/admin/settings/checkout'
 import { Route as AdminSettingsCacheRouteImport } from './routes/admin/settings/cache'
 import { Route as AdminSettingsAccountRouteImport } from './routes/admin/settings/account'
+import { Route as AdminPromotionsNewRouteImport } from './routes/admin/promotions/new'
 import { Route as AdminProductsNewRouteImport } from './routes/admin/products/new'
 import { Route as AdminPagesTrashRouteImport } from './routes/admin/pages/trash'
 import { Route as AdminPagesNewRouteImport } from './routes/admin/pages/new'
@@ -64,6 +66,7 @@ import { Route as AdminAnalyticsNewRouteImport } from './routes/admin/analytics/
 import { Route as AdminProductsProductIdIndexRouteImport } from './routes/admin/products/$productId/index'
 import { Route as AdminOrdersOrderIdIndexRouteImport } from './routes/admin/orders/$orderId/index'
 import { Route as ApiV1AdminSplatRouteImport } from './routes/api/v1/admin/$'
+import { Route as AdminPromotionsPromotionIdEditRouteImport } from './routes/admin/promotions/$promotionId/edit'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminOrdersOrderIdEditRouteImport } from './routes/admin/orders/$orderId/edit'
@@ -173,6 +176,11 @@ const AdminAbandonedCheckoutsRoute = AdminAbandonedCheckoutsRouteImport.update({
 const AdminSettingsIndexRoute = AdminSettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPromotionsIndexRoute = AdminPromotionsIndexRouteImport.update({
+  id: '/promotions/',
+  path: '/promotions/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
@@ -285,6 +293,11 @@ const AdminSettingsAccountRoute = AdminSettingsAccountRouteImport.update({
   path: '/settings/account',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPromotionsNewRoute = AdminPromotionsNewRouteImport.update({
+  id: '/promotions/new',
+  path: '/promotions/new',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProductsNewRoute = AdminProductsNewRouteImport.update({
   id: '/products/new',
   path: '/products/new',
@@ -356,6 +369,12 @@ const ApiV1AdminSplatRoute = ApiV1AdminSplatRouteImport.update({
   path: '/api/v1/admin/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPromotionsPromotionIdEditRoute =
+  AdminPromotionsPromotionIdEditRouteImport.update({
+    id: '/promotions/$promotionId/edit',
+    path: '/promotions/$promotionId/edit',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminProductsProductIdEditRoute =
   AdminProductsProductIdEditRouteImport.update({
     id: '/products/$productId/edit',
@@ -440,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -461,6 +481,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/': typeof AdminOrdersIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/promotions/': typeof AdminPromotionsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -471,6 +492,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -505,6 +527,7 @@ export interface FileRoutesByTo {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -526,6 +549,7 @@ export interface FileRoutesByTo {
   '/admin/orders': typeof AdminOrdersIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
+  '/admin/promotions': typeof AdminPromotionsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -536,6 +560,7 @@ export interface FileRoutesByTo {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId': typeof AdminProductsProductIdIndexRoute
@@ -572,6 +597,7 @@ export interface FileRoutesById {
   '/admin/pages/new': typeof AdminPagesNewRoute
   '/admin/pages/trash': typeof AdminPagesTrashRoute
   '/admin/products/new': typeof AdminProductsNewRoute
+  '/admin/promotions/new': typeof AdminPromotionsNewRoute
   '/admin/settings/account': typeof AdminSettingsAccountRoute
   '/admin/settings/cache': typeof AdminSettingsCacheRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
@@ -593,6 +619,7 @@ export interface FileRoutesById {
   '/admin/orders/': typeof AdminOrdersIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
+  '/admin/promotions/': typeof AdminPromotionsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/analytics/$analyticsId/edit': typeof AdminAnalyticsAnalyticsIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -603,6 +630,7 @@ export interface FileRoutesById {
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/promotions/$promotionId/edit': typeof AdminPromotionsPromotionIdEditRoute
   '/api/v1/admin/$': typeof ApiV1AdminSplatRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/products/$productId/': typeof AdminProductsProductIdIndexRoute
@@ -640,6 +668,7 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/pages/trash'
     | '/admin/products/new'
+    | '/admin/promotions/new'
     | '/admin/settings/account'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
@@ -661,6 +690,7 @@ export interface FileRouteTypes {
     | '/admin/orders/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/promotions/'
     | '/admin/settings/'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -671,6 +701,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/promotions/$promotionId/edit'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -705,6 +736,7 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/pages/trash'
     | '/admin/products/new'
+    | '/admin/promotions/new'
     | '/admin/settings/account'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
@@ -726,6 +758,7 @@ export interface FileRouteTypes {
     | '/admin/orders'
     | '/admin/pages'
     | '/admin/products'
+    | '/admin/promotions'
     | '/admin/settings'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -736,6 +769,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/promotions/$promotionId/edit'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId'
     | '/admin/products/$productId'
@@ -771,6 +805,7 @@ export interface FileRouteTypes {
     | '/admin/pages/new'
     | '/admin/pages/trash'
     | '/admin/products/new'
+    | '/admin/promotions/new'
     | '/admin/settings/account'
     | '/admin/settings/cache'
     | '/admin/settings/checkout'
@@ -792,6 +827,7 @@ export interface FileRouteTypes {
     | '/admin/orders/'
     | '/admin/pages/'
     | '/admin/products/'
+    | '/admin/promotions/'
     | '/admin/settings/'
     | '/admin/analytics/$analyticsId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -802,6 +838,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$orderId/edit'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/promotions/$promotionId/edit'
     | '/api/v1/admin/$'
     | '/admin/orders/$orderId/'
     | '/admin/products/$productId/'
@@ -962,6 +999,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/promotions/': {
+      id: '/admin/promotions/'
+      path: '/promotions'
+      fullPath: '/admin/promotions/'
+      preLoaderRoute: typeof AdminPromotionsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products/': {
       id: '/admin/products/'
       path: '/products'
@@ -1109,6 +1153,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAccountRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/promotions/new': {
+      id: '/admin/promotions/new'
+      path: '/promotions/new'
+      fullPath: '/admin/promotions/new'
+      preLoaderRoute: typeof AdminPromotionsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products/new': {
       id: '/admin/products/new'
       path: '/products/new'
@@ -1207,6 +1258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1AdminSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/promotions/$promotionId/edit': {
+      id: '/admin/promotions/$promotionId/edit'
+      path: '/promotions/$promotionId/edit'
+      fullPath: '/admin/promotions/$promotionId/edit'
+      preLoaderRoute: typeof AdminPromotionsPromotionIdEditRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/products/$productId/edit': {
       id: '/admin/products/$productId/edit'
       path: '/products/$productId/edit'
@@ -1290,6 +1348,7 @@ interface AdminRouteChildren {
   AdminPagesNewRoute: typeof AdminPagesNewRoute
   AdminPagesTrashRoute: typeof AdminPagesTrashRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
+  AdminPromotionsNewRoute: typeof AdminPromotionsNewRoute
   AdminSettingsAccountRoute: typeof AdminSettingsAccountRoute
   AdminSettingsCacheRoute: typeof AdminSettingsCacheRoute
   AdminSettingsCheckoutRoute: typeof AdminSettingsCheckoutRoute
@@ -1310,6 +1369,7 @@ interface AdminRouteChildren {
   AdminOrdersIndexRoute: typeof AdminOrdersIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
+  AdminPromotionsIndexRoute: typeof AdminPromotionsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminAnalyticsAnalyticsIdEditRoute: typeof AdminAnalyticsAnalyticsIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
@@ -1320,6 +1380,7 @@ interface AdminRouteChildren {
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
+  AdminPromotionsPromotionIdEditRoute: typeof AdminPromotionsPromotionIdEditRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
   AdminProductsProductIdIndexRoute: typeof AdminProductsProductIdIndexRoute
 }
@@ -1341,6 +1402,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPagesNewRoute: AdminPagesNewRoute,
   AdminPagesTrashRoute: AdminPagesTrashRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
+  AdminPromotionsNewRoute: AdminPromotionsNewRoute,
   AdminSettingsAccountRoute: AdminSettingsAccountRoute,
   AdminSettingsCacheRoute: AdminSettingsCacheRoute,
   AdminSettingsCheckoutRoute: AdminSettingsCheckoutRoute,
@@ -1361,6 +1423,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersIndexRoute: AdminOrdersIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
+  AdminPromotionsIndexRoute: AdminPromotionsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminAnalyticsAnalyticsIdEditRoute: AdminAnalyticsAnalyticsIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
@@ -1371,6 +1434,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,
+  AdminPromotionsPromotionIdEditRoute: AdminPromotionsPromotionIdEditRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,
   AdminProductsProductIdIndexRoute: AdminProductsProductIdIndexRoute,
 }

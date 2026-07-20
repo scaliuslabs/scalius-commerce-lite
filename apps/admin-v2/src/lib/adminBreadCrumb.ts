@@ -30,6 +30,7 @@ export function generateAdminBreadcrumbs(
     "collections",
     "pages",
     "discounts",
+    "promotions",
     "analytics",
     "customers",
     "products",

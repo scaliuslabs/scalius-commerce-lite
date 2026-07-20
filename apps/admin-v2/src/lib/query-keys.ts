@@ -106,6 +106,13 @@ export const queryKeys = {
     detail: (id: string) => ["discounts", "detail", id] as const,
   },
 
+  // ── Promotions ───────────────────────────────────────────────────
+  promotions: {
+    all: ["promotions"] as const,
+    list: (params?: Record<string, unknown>) => listKey("promotions", params),
+    detail: (id: string) => ["promotions", "detail", id] as const,
+  },
+
   // ── Pages ────────────────────────────────────────────────────────
   pages: {
     all: ["pages"] as const,
