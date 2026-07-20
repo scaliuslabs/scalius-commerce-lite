@@ -18,6 +18,9 @@ describe("delivery location responsive workspace", () => {
     );
     expect(containerSource).toContain("grid w-full grid-cols-2 gap-2");
     expect(containerSource).toContain("Search ${labels.plural}...");
+    expect(containerSource).toContain("<SearchableSelect");
+    expect(containerSource).toContain("maxVisibleOptions={100}");
+    expect(containerSource).not.toContain("<SelectContent");
     expect(containerSource).not.toContain("Search ${state.activeTab}s...");
   });
 

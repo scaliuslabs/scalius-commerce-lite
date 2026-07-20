@@ -128,4 +128,43 @@ describe("SearchableSelect", () => {
     });
     expect(document.body.textContent).toContain("No categories found.");
   });
+
+  it("bounds a very large list while keeping the selected option reachable", async () => {
+    const options = Array.from({ length: 1258 }, (_, index) => ({
+      value: `zone-${index + 1}`,
+      label: `Zone ${index + 1}`,
+    }));
+
+    await act(async () => root.render(
+      <SearchableSelect
+        value="zone-1258"
+        onValueChange={vi.fn()}
+        options={options}
+        maxVisibleOptions={100}
+        searchPlaceholder="Search zones..."
+      />,
+    ));
+
+    const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]');
+    if (!trigger) throw new Error("Expected searchable selector trigger");
+    await act(async () => trigger.click());
+    await flushUi();
+
+    const visibleItems = document.body.querySelectorAll('[role="option"]');
+    expect(visibleItems).toHaveLength(100);
+    expect(visibleItems[0]?.textContent).toContain("Zone 1258");
+    expect(
+      document.body.querySelector('[data-slot="searchable-select-overflow-hint"]')?.textContent,
+    ).toContain("Showing 100 of 1258");
+
+    const search = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder="Search zones..."]',
+    );
+    if (!search) throw new Error("Expected searchable selector input");
+    await act(async () => setInputValue(search, "Zone 1249"));
+    expect(document.body.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(document.body.querySelector('[role="option"]')?.textContent).toContain(
+      "Zone 1249",
+    );
+  });
 });

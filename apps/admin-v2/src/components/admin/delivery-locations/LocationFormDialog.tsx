@@ -4,6 +4,7 @@ import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { Switch } from "../../ui/switch";
+import { SearchableSelect } from "../../ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../ui/select";
 import type { Location, LocationFormData } from "./hooks/useDeliveryLocations";
 
 interface LocationFormDialogProps {
@@ -47,6 +41,9 @@ export function LocationFormDialog({
   onSubmit,
 }: LocationFormDialogProps) {
   const locationLabel = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+  const parentLabel = activeTab === "zone" ? "City" : "Zone";
+  const parentLabelLower = parentLabel.toLowerCase();
+  const parentLabelPlural = parentLabel === "City" ? "cities" : "zones";
   const pathaoExternalId = formData.externalIds.pathao;
   const setPathaoExternalId = (value: string) => {
     setFormData((prev) => {
@@ -101,46 +98,36 @@ export function LocationFormDialog({
                   {activeTab === "zone" ? "City" : "Zone"}{" "}
                   <span className="text-red-500">*</span>
                 </Label>
-                <Select
-                  value={formData.parentId || "_none"}
+                <SearchableSelect
+                  id="parentId"
+                  value={formData.parentId}
                   onValueChange={(value) =>
                     setFormData((prev) => ({
                       ...prev,
-                      parentId: value === "_none" ? "" : value,
+                      parentId: value,
                     }))
                   }
+                  options={parentLocations.map((parent) => ({
+                    value: parent.id,
+                    label: `${parent.displayName ?? parent.name}${
+                      parent.isActive ? "" : " (inactive)"
+                    }`,
+                    keywords: parent.displayName ? [parent.name] : undefined,
+                    disabled: formData.isActive && !parent.isActive,
+                  }))}
+                  placeholder={
+                    loadingParents
+                      ? `Loading ${parentLabelPlural}…`
+                      : `Select ${parentLabelLower}`
+                  }
+                  searchPlaceholder={`Search ${parentLabelPlural}…`}
+                  emptyMessage={`No ${parentLabelPlural} found.`}
+                  ariaLabel={`Parent ${parentLabelLower} for ${locationLabel.toLowerCase()}`}
+                  triggerClassName="w-full"
+                  maxVisibleOptions={100}
+                  disabled={loadingParents}
                   required
-                >
-                  <SelectTrigger className="bg-background border-border text-foreground">
-                    <SelectValue
-                      placeholder={`Select ${activeTab === "zone" ? "city" : "zone"}`}
-                    />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border text-foreground">
-                    {loadingParents ? (
-                      <div className="flex items-center justify-center p-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="ml-2">Loading...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <SelectItem value="_none" className="text-foreground">
-                          -- Select {activeTab === "zone" ? "City" : "Zone"}{" "}
-                          --
-                        </SelectItem>
-                        {parentLocations.map((parent) => (
-                          <SelectItem
-                            key={parent.id}
-                            value={parent.id}
-                            className="text-foreground"
-                          >
-                            {parent.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
+                />
               </div>
             )}
 
@@ -149,7 +136,16 @@ export function LocationFormDialog({
                 id="isActive"
                 checked={formData.isActive}
                 onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, isActive: checked }))
+                  setFormData((prev) => ({
+                    ...prev,
+                    isActive: checked,
+                    parentId: checked && parentLocations.some(
+                      (parent) =>
+                        parent.id === prev.parentId && !parent.isActive,
+                    )
+                      ? ""
+                      : prev.parentId,
+                  }))
                 }
               />
               <Label htmlFor="isActive">Active</Label>
