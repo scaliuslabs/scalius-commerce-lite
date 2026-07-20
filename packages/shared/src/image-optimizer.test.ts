@@ -79,4 +79,19 @@ describe("getOptimizedImageUrl", () => {
     expect(srcset).toContain("width=1300,height=500");
     expect(srcset).not.toContain("width=650,height=650");
   });
+
+  it("does not let a height-only request change crop ratio at every width", () => {
+    const srcset = getResponsiveSrcSet(
+      "https://cdn.example.com/categories/home.jpg",
+      [240, 360, 520],
+      { height: 620, fit: "cover", gravity: "auto" },
+      imageContext,
+    );
+
+    expect(srcset).toContain("width=240");
+    expect(srcset).toContain("width=360");
+    expect(srcset).toContain("width=520");
+    expect(srcset).not.toContain("height=");
+    expect(srcset).toContain("gravity=auto");
+  });
 });

@@ -1186,6 +1186,28 @@ The cleanup bullets below describe the two-product proof store that preceded the
   lint, the sequential 327-file Astro diagnostic, and the production
   storefront build passed before deployment.
 
+### Responsive image-delivery checkpoint (2026-07-20)
+
+- The shared `srcset` helper previously accepted a height without a base width,
+  so candidate widths changed while height stayed fixed. That made one
+  category image use a different crop ratio at every breakpoint. Height-only
+  requests now preserve the source ratio; deliberate exact crops must declare
+  both dimensions and are proportionally scaled.
+- The live homepage category rail now serves one truthful portrait family:
+  240 x 286, 360 x 429, and 520 x 620, each with saliency-based `gravity=auto`.
+  Header branding remains a non-upscaled `scale-down` transform, product cards
+  remain `contain`, and hero slides retain the merchant's saved focal point.
+- The live Weekender Duffel 35L page serves five 140 x 140 `contain` gallery
+  thumbnails. Its Open Graph and Product JSON-LD images use a padded 1200 x 630
+  frame, preserving the whole product. The protected product-page composition
+  was not redesigned.
+- Admin `525dd6a0-7c78-4217-9a39-b1d8a3ef4700` and Storefront
+  `89fa5db0-efe6-4e48-bb1a-d2190197e379` / build
+  `src-6f3a5e1ac0204ab0` are live at 100%. Forty-one focused tests and the
+  sequential Shared, Admin, and Storefront typechecks passed before deployment.
+  `pnpm ops:check` and `pnpm release:check` passed afterward; the only warnings
+  remain the known logs-only operations email configuration.
+
 ### Bulk-shipment authority checkpoint (2026-07-20)
 
 - API version `82b7fb11-2880-497a-8647-1ae3a18c37c5` closes the unbounded

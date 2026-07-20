@@ -510,7 +510,11 @@ export function getResponsiveSrcSet(
             Math.round((width * options.height) / options.width),
           );
         }
-        return options.height;
+        // A fixed height paired with changing srcset widths would create a
+        // different crop ratio for every candidate. Without an authored base
+        // width there is no truthful ratio to preserve, so keep the source's
+        // natural aspect instead of manufacturing breakpoint-specific crops.
+        return null;
       })();
       const url = getOptimizedImageUrl(
         imageUrl,

@@ -76,7 +76,7 @@ const optimizedMedia = galleryMedia.map((item) => {
             height: desktopThumb.imageSize,
             quality: 80,
             format: "auto",
-            fit: "cover",
+            fit: "contain",
           })
         : null,
       mainUrl: item.url,
@@ -103,7 +103,7 @@ const optimizedMedia = galleryMedia.map((item) => {
       height: desktopThumb.imageSize,
       quality: 80,
       format: "auto",
-      fit: "cover",
+      fit: "contain",
     }),
     mainUrl: getProductImageUrl(item.url, {
       width: 600,
@@ -221,7 +221,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                     alt=""
                     width={desktopThumb.imageSize}
                     height={desktopThumb.imageSize}
-                    class="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    class="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                     loading={index < 5 ? "eager" : "lazy"}
                   />
                 ) : (
@@ -419,7 +419,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                           alt=""
                           width={mobileThumb.imageSize}
                           height={mobileThumb.imageSize}
-                          class="h-full w-full object-cover object-center"
+                          class="h-full w-full object-contain object-center"
                           loading="lazy"
                         />
                       ) : (
