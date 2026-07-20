@@ -1,4 +1,4 @@
-# Codex Working Notes
+# Platform Engineering Notes
 
 Last reviewed: 2026-07-14
 

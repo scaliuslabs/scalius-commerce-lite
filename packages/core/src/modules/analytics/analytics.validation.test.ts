@@ -178,6 +178,22 @@ describe("analytics validation", () => {
     );
   });
 
+  it("rejects malformed repeated beacon attributes without regex backtracking", () => {
+    const config = `<script src="${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC}" ${
+      "data-cf-beacon=\"a ".repeat(2_000)
+    }></script>`;
+    const result = createAnalyticsSchema.safeParse({
+      name: "Cloudflare Web Analytics",
+      type: "cloudflare_web_analytics",
+      isActive: true,
+      usePartytown: false,
+      config,
+      location: "body_end",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("extracts safe list identifiers and masks Cloudflare site tokens", () => {
     expect(getAnalyticsProviderIdentifier("google_analytics", VALID_GA4_CONFIG)).toBe(
       "G-ABC123DEF4",

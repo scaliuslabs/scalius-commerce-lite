@@ -129,7 +129,7 @@ Options:
   --skip-install             Do not run pnpm install
   --skip-admin               Do not create the default local admin
   --admin-email <email>      Local admin email (default: ${localAdminEmail})
-  --admin-password <value>   Local admin password, 12+ chars (default: ${localAdminPassword})
+  --admin-password <value>   Local admin password, 12+ chars (or LOCAL_ADMIN_PASSWORD)
   --admin-name <name>        Local admin name (default: ${localAdminName})
   --state <path>             Wrangler local state path; relative paths resolve from repo root
 `);
@@ -145,10 +145,14 @@ if (!skipAdmin && !envOnly) {
   }
 }
 
-function run(cmd, label) {
+function run(cmd, label, options = {}) {
   console.log(`\n▶ ${label}`);
-  console.log(`  $ ${cmd}\n`);
-  execSync(cmd, { cwd: root, stdio: "inherit" });
+  console.log(`  $ ${options.displayCommand ?? cmd}\n`);
+  execSync(cmd, {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, ...options.env },
+  });
 }
 
 function appendMissingEnvVars(filePath, expectedValues, label) {
@@ -334,13 +338,18 @@ if (envOnly) {
   run(
     [
       "node scripts/dev-admin.mjs create",
-      `--email ${shellQuote(localAdminEmail)}`,
-      `--password ${shellQuote(localAdminPassword)}`,
-      `--name ${shellQuote(localAdminName)}`,
       "--skip-migrations",
       ...(resolvedWranglerState ? [`--state ${shellQuote(resolvedWranglerState)}`] : []),
     ].join(" "),
     "Creating default local admin if needed",
+    {
+      displayCommand: "node scripts/dev-admin.mjs create --skip-migrations (credentials via environment)",
+      env: {
+        LOCAL_ADMIN_EMAIL: localAdminEmail,
+        LOCAL_ADMIN_PASSWORD: localAdminPassword,
+        LOCAL_ADMIN_NAME: localAdminName,
+      },
+    },
   );
 }
 
@@ -355,7 +364,7 @@ if (envOnly) {
   console.log("  1. pnpm dev          — Start API + admin + storefront");
   console.log("  2. http://localhost:4323/admin");
   if (!skipAdmin) {
-    console.log(`  3. Sign in with ${localAdminEmail} / ${localAdminPassword}\n`);
+    console.log(`  3. Sign in as ${localAdminEmail} with the configured local admin password.\n`);
   } else {
     console.log("  3. Create the first admin in the browser or run pnpm dev:admin:create\n");
   }

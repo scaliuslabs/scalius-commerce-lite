@@ -70,4 +70,13 @@ describe("local admin CLI", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Unknown command: bogus");
   });
+
+  it("never prints the configured password in help output", () => {
+    const password = "NeverPrintThis123!";
+    const result = runAdminCli(["help"], { LOCAL_ADMIN_PASSWORD: password });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain(password);
+    expect(result.stdout).toContain("LOCAL_ADMIN_PASSWORD");
+  });
 });

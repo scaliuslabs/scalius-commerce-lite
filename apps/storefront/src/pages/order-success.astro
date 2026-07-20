@@ -128,13 +128,14 @@ const legacySubtotal = order
   <meta slot="head" name="robots" content="noindex,nofollow" />
   <section
     class="container mx-auto px-4 py-8 max-w-2xl"
+    data-order-success-print={order ? "receipt" : undefined}
     data-fb-order-details={purchaseTrackingPayload ? JSON.stringify(purchaseTrackingPayload) : undefined}
     data-order-success-state={orderSuccessView?.kind ?? "recovery"}
     data-order-finalize={orderSuccessView?.shouldFinalizeClientSide ? "true" : "false"}
     data-order-id={order?.id}
   >
     {order && orderSuccessView ? (
-    <div class="text-center mb-8 animate-fade-in">
+    <div class="order-success-print-header text-center mb-8 animate-fade-in">
       {orderSuccessView.shouldFinalizeClientSide ? (
         <div class="success-checkmark">
           <div class="check-icon">
@@ -181,10 +182,10 @@ const legacySubtotal = order
       )}
     </div>
 
-    <div class="space-y-6 animate-slide-up">
+    <div class="order-success-print-grid space-y-6 animate-slide-up">
       <!-- Order details sections -->
       <div
-        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-order bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -304,7 +305,7 @@ const legacySubtotal = order
       </div>
 
       <div
-        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-shipping bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -360,7 +361,7 @@ const legacySubtotal = order
       </div>
 
       <div
-        class="bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
+        class="order-success-print-card order-success-print-items bg-gray-50 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
       >
         <h2 class="text-lg font-medium mb-4 flex items-center">
           <svg
@@ -382,7 +383,7 @@ const legacySubtotal = order
             orderItemsFromApi.map((item) => {
               const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
               return (
-                <div class="flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                <div class="order-success-print-item flex justify-between items-center border-b border-gray-100 pb-3 last:border-0 last:pb-0">
                   <div>
                     <p class="font-medium">
                       {item.productName || "Product Unavailable"}

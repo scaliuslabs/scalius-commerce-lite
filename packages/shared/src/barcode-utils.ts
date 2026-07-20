@@ -6,13 +6,27 @@
 
 export function generateEAN13(): string {
   const prefix = "200";
-  const random = Array.from(crypto.getRandomValues(new Uint8Array(9)))
-    .map((b) => b % 10)
-    .join("")
-    .slice(0, 9);
+  const random = randomDecimalDigits(9);
   const digits = prefix + random;
   const checkDigit = calculateEAN13CheckDigit(digits);
   return digits + checkDigit;
+}
+
+function randomDecimalDigits(length: number): string {
+  let result = "";
+  const bytes = new Uint8Array(Math.max(16, length * 2));
+
+  while (result.length < length) {
+    crypto.getRandomValues(bytes);
+    for (const byte of bytes) {
+      if (byte >= 250) continue;
+      const digit = byte - Math.floor(byte / 10) * 10;
+      result += String.fromCharCode(48 + digit);
+      if (result.length === length) break;
+    }
+  }
+
+  return result;
 }
 
 export function calculateEAN13CheckDigit(digits: string): string {

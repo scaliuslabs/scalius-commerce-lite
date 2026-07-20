@@ -38,3 +38,12 @@ tests/
 # jetbrains setting folder
 .idea/
 .vercel
+
+# Local development-assistant context is intentionally not published.
+AGENTS.md
+CLAUDE.md
+CODEX.md
+GEMINI.md
+.claude/
+.codex/
+.cursor/

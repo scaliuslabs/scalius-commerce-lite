@@ -109,7 +109,7 @@ describe("Wikimedia Commons candidate discovery", () => {
       },
       approval: { eligible: false },
     });
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("upload.wikimedia.org"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).hostname === "upload.wikimedia.org")).toBe(false);
   });
 
   it("rejects share-alike, GFDL, unknown, and non-platform image candidates", async () => {

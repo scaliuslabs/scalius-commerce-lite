@@ -161,6 +161,24 @@ describe("notification provider health", () => {
         });
         expect(db.calls.receiptReads).toBe(0);
     });
+
+    it("masks email and phone data in stored provider failure reasons", async () => {
+        const db = createProviderHealthDb({
+            marker: {
+                channel: "email",
+                provider: "resend",
+                reason: "Invalid API key for owner+alerts@example.com or +880 1712-345678.",
+                blockedAt: 500,
+            },
+        });
+
+        const block = await getNotificationProviderBlock(db, {
+            channel: "email",
+            provider: "resend",
+        });
+
+        expect(block?.reason).toBe("Invalid API key for [email] or [phone].");
+    });
 });
 
 function createProviderHealthDb(options: {

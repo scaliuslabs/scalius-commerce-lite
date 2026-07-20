@@ -41,7 +41,7 @@ Discount code CRUD, eligibility validation, and discount amount calculation. Sup
 - The create entry point asks which checkout amount the code reduces. It does
   not expose automatic promotions or stacking until the typed promotion
   evaluator and allocation ledger described in
-  `docs/codex/COMMERCE-SETTINGS-BENCHMARK.md` exist.
+  `docs/platform/COMMERCE-SETTINGS-BENCHMARK.md` exist.
 
 ## Files
 

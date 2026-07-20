@@ -49,9 +49,23 @@ describe("demo-store Media upload journal", () => {
 
   it("rejects credential-like or non-canonical logical keys", async () => {
     const journalPath = await journalFixture();
-    for (const logicalKey of ["product:password-proof", "product:valid\nsecret", "Product:Primary", "product::primary"]) {
+    for (const logicalKey of [
+      "product:password-proof",
+      "product:valid\nsecret",
+      "Product:Primary",
+      "product::primary",
+    ]) {
       await expect(appendUploadJournal(journalPath, baseRecord({ logicalKey }), fingerprint)).rejects.toThrow(/logical key/iu);
     }
+  });
+
+  it("accepts long canonical segmented keys without regex backtracking", async () => {
+    const journalPath = await journalFixture();
+    const logicalKey = `0:${"00:".repeat(60)}0`;
+
+    await appendUploadJournal(journalPath, baseRecord({ logicalKey }), fingerprint);
+
+    expect((await readUploadJournal(journalPath, fingerprint)).has(logicalKey)).toBe(true);
   });
 
   it("rejects IDs that are not exact Media or upload-session opaque identities", async () => {

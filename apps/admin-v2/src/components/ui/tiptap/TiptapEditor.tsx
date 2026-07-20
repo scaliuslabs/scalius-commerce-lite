@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
-import { sanitizeHtml } from "@scalius/shared/html-sanitize";
+import {
+  hasRenderableHtmlContent,
+  sanitizeHtml,
+} from "@scalius/shared/html-sanitize";
 import { Minimize2 } from "lucide-react";
 import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
@@ -17,19 +20,6 @@ interface TiptapEditorProps {
   autoFocus?: boolean;
 }
 
-const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
-
-function hasRenderableContent(content: string) {
-  const text = content
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .trim();
-
-  return text.length > 0 || RICH_CONTENT_BLOCK_RE.test(content);
-}
-
 export function TiptapEditor({
   content,
   onChange,
@@ -43,7 +33,7 @@ export function TiptapEditor({
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
   const editorViewportHeight = compact ? "200px" : "300px";
-  const hasInitialContent = hasRenderableContent(content);
+  const hasInitialContent = hasRenderableHtmlContent(content);
   const sanitizedInitialContent = useMemo(() => sanitizeHtml(content), [content]);
 
   // Handle Escape key and body scroll lock for fullscreen

@@ -251,9 +251,106 @@ function humanizeChannel(channel: NotificationProviderHealthChannel): string {
 }
 
 function maskSensitiveReasonText(value: string): string {
-    return value
-        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
-        .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]");
+    return maskPhoneLikeText(maskEmailLikeText(value));
+}
+
+function maskEmailLikeText(value: string): string {
+    let output = "";
+    let copiedThrough = 0;
+
+    for (let at = value.indexOf("@"); at >= 0; at = value.indexOf("@", at + 1)) {
+        let start = at;
+        while (start > copiedThrough && isEmailLocalCharacter(value[start - 1])) start -= 1;
+
+        let end = at + 1;
+        while (end < value.length && isEmailDomainCharacter(value[end])) end += 1;
+        const domain = value.slice(at + 1, end);
+        const lastDot = domain.lastIndexOf(".");
+        if (start === at || lastDot <= 0 || lastDot >= domain.length - 2) continue;
+
+        output += value.slice(copiedThrough, start) + "[email]";
+        copiedThrough = end;
+    }
+
+    return output + value.slice(copiedThrough);
+}
+
+function isEmailLocalCharacter(character: string | undefined): boolean {
+    if (!character) return false;
+    return (
+        isAsciiLetterOrDigit(character)
+        || character === "."
+        || character === "_"
+        || character === "%"
+        || character === "+"
+        || character === "-"
+    );
+}
+
+function isEmailDomainCharacter(character: string | undefined): boolean {
+    if (!character) return false;
+    return (
+        isAsciiLetterOrDigit(character)
+        || character === "."
+        || character === "-"
+    );
+}
+
+function isAsciiLetterOrDigit(character: string): boolean {
+    const code = character.charCodeAt(0);
+    return (code >= 48 && code <= 57)
+        || (code >= 65 && code <= 90)
+        || (code >= 97 && code <= 122);
+}
+
+function maskPhoneLikeText(value: string): string {
+    let output = "";
+    let cursor = 0;
+
+    while (cursor < value.length) {
+        const start = cursor;
+        if (value[cursor] !== "+" && !isAsciiDigit(value[cursor])) {
+            output += value[cursor];
+            cursor += 1;
+            continue;
+        }
+
+        let end = cursor;
+        let digits = 0;
+        let lastDigitEnd = cursor;
+        while (end < value.length && isPhoneCandidateCharacter(value[end])) {
+            if (isAsciiDigit(value[end])) {
+                digits += 1;
+                lastDigitEnd = end + 1;
+            }
+            end += 1;
+        }
+
+        if (digits >= 10) {
+            output += "[phone]" + value.slice(lastDigitEnd, end);
+            cursor = end;
+        } else {
+            output += value.slice(start, Math.max(start + 1, end));
+            cursor = Math.max(start + 1, end);
+        }
+    }
+
+    return output;
+}
+
+function isAsciiDigit(character: string | undefined): boolean {
+    return Boolean(character && character >= "0" && character <= "9");
+}
+
+function isPhoneCandidateCharacter(character: string | undefined): boolean {
+    return isAsciiDigit(character)
+        || character === "+"
+        || character === " "
+        || character === "\t"
+        || character === "("
+        || character === ")"
+        || character === "."
+        || character === "-";
 }
 
 const PROVIDER_BREAKER_PATTERNS = [

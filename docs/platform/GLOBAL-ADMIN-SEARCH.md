@@ -132,4 +132,3 @@ Before production implementation:
    reader, reduced motion, and no-JavaScript/sensitive-data boundaries;
 8. ship behind an explicit feature gate with latency, error, and zero-result
    aggregate telemetry that contains no query text or PII.
-

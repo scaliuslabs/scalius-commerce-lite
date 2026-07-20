@@ -5,6 +5,7 @@ import { analyticsScriptQueryOptions } from "~/lib/api-query-options/analytics";
 import type { AnalyticsScript } from "~/types/api-responses";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/form-schemas";
+import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 export const Route = createFileRoute("/admin/analytics/$analyticsId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -24,10 +25,10 @@ function EditAnalyticsPage() {
   const validLocation = (["head", "body_start", "body_end"].includes(s.location) ? s.location : "head") as "head" | "body_start" | "body_end";
   const config = (() => {
     if (validType !== "cloudflare_web_analytics" || !s.config) return s.config || "";
-    const match = s.config.match(/data-cf-beacon\s*=\s*(["'])(.*?)\1/is);
-    if (!match?.[2]) return s.config;
+    const beaconJson = readQuotedHtmlAttribute(s.config, "data-cf-beacon");
+    if (!beaconJson) return s.config;
     try {
-      const parsed = JSON.parse(match[2]) as { token?: unknown };
+      const parsed = JSON.parse(beaconJson) as { token?: unknown };
       return typeof parsed.token === "string" ? parsed.token : s.config;
     } catch {
       return s.config;

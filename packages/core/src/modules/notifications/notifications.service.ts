@@ -4,6 +4,7 @@
 import type { Database } from "@scalius/database/client";
 import { adminFcmTokens, orders } from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import { eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
@@ -604,7 +605,7 @@ export async function sendOrderNotificationEmail(
                 </p>
               </div>
             `,
-            text: `${name}, ${htmlMessages[type]?.replace(/<[^>]+>/g, "") || `Order #${orderId} updated.`}`,
+            text: `${name}, ${htmlToPlainText(htmlMessages[type]) || `Order #${orderId} updated.`}`,
         };
 
         if (!email) {

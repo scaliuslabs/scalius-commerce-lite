@@ -122,7 +122,7 @@ Commands:
 
 Options:
   --email <email>       Admin email (default: ${defaults.email})
-  --password <value>    Admin password, 12+ chars (default: ${defaults.password})
+  --password <value>    Admin password, 12+ chars (or LOCAL_ADMIN_PASSWORD)
   --name <name>         Admin name (default: ${defaults.name})
   --api <url>           Local API origin (default: ${defaults.apiBaseUrl})
   --state <path>        Wrangler local state path; relative paths resolve from repo root
@@ -257,7 +257,7 @@ async function createAdmin({ allowExisting }) {
   console.log("\nLocal admin ready:");
   console.log(`  Admin URL: http://localhost:4323/admin`);
   console.log(`  Email:     ${config.email}`);
-  console.log(`  Password:  ${config.password}`);
+  console.log("  Password:  use the value supplied through --password or LOCAL_ADMIN_PASSWORD");
 }
 
 async function requestJson(method, path, body) {

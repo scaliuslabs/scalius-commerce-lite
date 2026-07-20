@@ -81,4 +81,3 @@ For each audited page, test:
 5. narrow/mobile layout preserves the same address and meaning;
 6. no sensitive or unsaved value enters the address, analytics, or logs;
 7. the canonical address can be emitted by the future global-search registry.
-

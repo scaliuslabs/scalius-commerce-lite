@@ -29,7 +29,6 @@ const REQUIRED_FIELDS_BY_STATUS = new Map([
 ]);
 const STATUS_FIELDS = new Set(["sessionId", "mediaId", "partNumber", "posterMediaId"]);
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/iu;
-const LOGICAL_KEY_PATTERN = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?(?::[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?)+$/u;
 const UNSAFE_LOGICAL_KEY_PATTERN = /cookie|bearer|password|secret|otp|proof|@/iu;
 const MEDIA_ID_PATTERN = /^media_[A-Za-z0-9_-]{21}$/u;
 const SESSION_ID_PATTERN = /^mup_[A-Za-z0-9_-]{21}$/u;
@@ -47,10 +46,29 @@ function validateLogicalKey(value) {
     || value.length > MAX_LOGICAL_KEY_LENGTH
     || /[\r\n]/u.test(value)
     || UNSAFE_LOGICAL_KEY_PATTERN.test(value)
-    || !LOGICAL_KEY_PATTERN.test(value)
+    || !isValidLogicalKey(value)
   ) {
     throw new Error("Media upload journal logical key is invalid or unsafe.");
   }
+}
+
+function isValidLogicalKey(value) {
+  const segments = value.split(":");
+  return segments.length >= 2 && segments.every(isValidLogicalKeySegment);
+}
+
+function isValidLogicalKeySegment(segment) {
+  if (segment.length === 0 || !isLowerAlphaNumeric(segment[0]) || !isLowerAlphaNumeric(segment.at(-1))) {
+    return false;
+  }
+  for (const character of segment) {
+    if (!isLowerAlphaNumeric(character) && character !== "-") return false;
+  }
+  return true;
+}
+
+function isLowerAlphaNumeric(character) {
+  return (character >= "a" && character <= "z") || (character >= "0" && character <= "9");
 }
 
 function validateOpaqueId(field, value) {

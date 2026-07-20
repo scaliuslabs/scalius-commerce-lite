@@ -309,8 +309,15 @@ function randomJitterMs(maxMs: number): number {
     return 0;
   }
 
-  const values = runtimeCrypto.getRandomValues(new Uint32Array(1));
-  return (values[0] ?? 0) % maxMs;
+  const range = 0x1_0000_0000;
+  const acceptedLimit = Math.floor(range / maxMs) * maxMs;
+  const values = new Uint32Array(1);
+  do {
+    runtimeCrypto.getRandomValues(values);
+  } while ((values[0] ?? 0) >= acceptedLimit);
+
+  const value = values[0] ?? 0;
+  return value - Math.floor(value / maxMs) * maxMs;
 }
 
 function resolveSendConcurrency(env: Record<string, unknown>): number {
