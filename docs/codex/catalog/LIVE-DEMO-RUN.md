@@ -1077,6 +1077,29 @@ The cleanup bullets below describe the two-product proof store that preceded the
   tests, targeted lint and the single sequential Admin typecheck passed, and no
   analytics integration was created.
 
+### Typed promotion workspace checkpoint (2026-07-20)
+
+- Admin version `57148933-77ab-4f95-b3d4-9be9a85b9894` is live at 100%. The
+  visible **Discounts** destination opens the replacement `/admin/promotions`
+  list instead of the legacy code builder. A real draft named `Welcome order +
+  delivery` was saved with code `WEEKENDSHIP`, 10% order savings, free
+  delivery, a `৳5,000` subtotal requirement, total/per-customer/spend budgets,
+  and `Asia/Dhaka` schedule authority.
+- The saved test-cart drawer evaluated `৳8,990` merchandise plus `৳110`
+  delivery through the production evaluator and returned exact `৳899` order
+  and `৳110` shipping allocations. After activation the live storefront cart
+  applied `-৳1,009` and reached `৳8,091`. Pausing the promotion made the
+  buyer code fail closed with **This discount is not active or available**;
+  reactivation restored the same result. The final production list displayed
+  Active, `WEEKENDSHIP`, **Order: 10% off · Delivery: free**, and the minimum
+  requirement without reopening the form.
+- Eight focused Promotions/access/error files pass 43 tests. The single
+  sequential Admin typecheck and production build passed before deployment.
+  This checkpoint does not claim automatic promotions, selectors/audiences,
+  cross-promotion stacking, campaigns, BOGO/gifts, or item-aware refund-command
+  parity; those controls remain deliberately absent until the evaluator and
+  immutable allocation authority support them.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

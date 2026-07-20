@@ -234,7 +234,7 @@ export const allNavSections: NavSection[] = [
           },
           {
             name: "Discounts",
-            href: "/admin/discounts",
+            href: "/admin/promotions",
             icon: BadgePercent,
             requiredPermission: NAV_PERMISSIONS.DISCOUNTS_VIEW,
           },

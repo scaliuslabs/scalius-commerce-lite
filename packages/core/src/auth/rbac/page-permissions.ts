@@ -65,6 +65,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/discounts/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
 
+  // Revisioned promotions (the canonical discount-management surface)
+  "/admin/promotions": { permission: PERMISSIONS.DISCOUNTS_VIEW },
+  "/admin/promotions/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
+
   // Analytics
   "/admin/analytics": { permission: PERMISSIONS.ANALYTICS_VIEW },
   "/admin/analytics/new": { permission: PERMISSIONS.ANALYTICS_CREATE },
@@ -113,6 +117,9 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
 
     // Discounts
     { pattern: /^\/admin\/discounts\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
+
+    // Promotions
+    { pattern: /^\/admin\/promotions\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
 
     // Analytics
     { pattern: /^\/admin\/analytics\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ANALYTICS_EDIT } },
