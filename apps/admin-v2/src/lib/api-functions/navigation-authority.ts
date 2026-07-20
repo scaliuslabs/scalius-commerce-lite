@@ -101,13 +101,14 @@ export interface NavigationItemDraft {
 }
 
 export const getNavigationMenusAuthority = createServerFn({ method: "GET" })
-  .validator((data: { cursor?: string; limit?: number } = {}) => data)
+  .validator((data: { cursor?: string; limit?: number; includeTrash?: boolean } = {}) => data)
   .handler(async ({ data }) => apiGet<{
     items: NavigationMenuSummary[];
     nextCursor: string | null;
   }>("/navigation/menus", {
     limit: String(data.limit ?? 50),
     ...(data.cursor ? { cursor: data.cursor } : {}),
+    ...(data.includeTrash ? { includeTrash: "true" } : {}),
   }));
 
 export const getNavigationMenuAuthority = createServerFn({ method: "GET" })
@@ -187,6 +188,22 @@ export const updateNavigationMenuMetadataAuthority = createServerFn({ method: "P
       body,
     );
   });
+
+export const trashNavigationMenuAuthority = createServerFn({ method: "POST" })
+  .validator((data: { menuId: string; expectedRevision: number }) => data)
+  .handler(async ({ data }) => apiDelete<{ revision: number }>(
+    `/navigation/menus/${encodeURIComponent(data.menuId)}`,
+    {
+    expectedRevision: data.expectedRevision,
+    },
+  ));
+
+export const restoreNavigationMenuAuthority = createServerFn({ method: "POST" })
+  .validator((data: { menuId: string; expectedRevision: number }) => data)
+  .handler(async ({ data }) => apiPost<{ revision: number }>(
+    `/navigation/menus/${encodeURIComponent(data.menuId)}/restore`,
+    { expectedRevision: data.expectedRevision },
+  ));
 
 export const createNavigationMenuItemAuthority = createServerFn({ method: "POST" })
   .validator((data: NavigationItemDraft & {
