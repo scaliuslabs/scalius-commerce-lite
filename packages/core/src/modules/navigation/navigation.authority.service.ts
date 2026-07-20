@@ -20,6 +20,7 @@ import {
     inArray,
     isNull,
     lt,
+    notExists,
     or,
     sql,
 } from "drizzle-orm";
@@ -106,6 +107,21 @@ function buildMenuRevisionGuard(
             WHERE ${navigationMenus.id} = ${menuId}
               AND ${navigationMenus.revision} = ${expectedRevision}
               AND ${navigationMenus.deletedAt} IS NULL
+        ) THEN 1 ELSE json_extract(${NAVIGATION_REVISION_GUARD}, '$') END
+    `);
+}
+
+function buildTrashedMenuRevisionGuard(
+    db: Database,
+    menuId: string,
+    expectedRevision: number,
+): BatchItem<"sqlite"> {
+    return buildBatchGuard(db, sql`
+        CASE WHEN EXISTS (
+            SELECT 1 FROM ${navigationMenus}
+            WHERE ${navigationMenus.id} = ${menuId}
+              AND ${navigationMenus.revision} = ${expectedRevision}
+              AND ${navigationMenus.deletedAt} IS NOT NULL
         ) THEN 1 ELSE json_extract(${NAVIGATION_REVISION_GUARD}, '$') END
     `);
 }
@@ -328,6 +344,76 @@ export async function updateNavigationMenuMetadata(
         throw new NotFoundError("Menu not found.");
     }
     return { revision: mutation.revision, name, handle };
+}
+
+export async function trashNavigationMenu(
+    db: Database,
+    menuId: string,
+    input: { expectedRevision: number },
+) {
+    const menu = await getNavigationMenuAuthority(db, menuId);
+    if (menu.deletedAt) throw new ConflictError("This menu is already in Trash.");
+    if (menu.revision !== input.expectedRevision) {
+        throw new NavigationRevisionConflictError(menuId, input.expectedRevision, menu.revision);
+    }
+    try {
+        const results = await safeBatch(db, [
+            buildMenuRevisionGuard(db, menuId, input.expectedRevision),
+            db.update(navigationMenus)
+                .set({
+                    deletedAt: sql`unixepoch()`,
+                    revision: sql`${navigationMenus.revision} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(and(
+                    eq(navigationMenus.id, menuId),
+                    notExists(db
+                        .select({ id: navigationPlacements.id })
+                        .from(navigationPlacements)
+                        .where(and(
+                            eq(navigationPlacements.menuId, menuId),
+                            eq(navigationPlacements.isEnabled, true),
+                        ))),
+                ))
+                .returning({ revision: navigationMenus.revision }),
+        ] as never) as unknown[];
+        const trashedMenus = results.at(-1) as unknown[] | undefined;
+        if (!trashedMenus?.length) {
+            throw new ConflictError("Remove this menu from its storefront locations before moving it to Trash.");
+        }
+        return { revision: readRevisionResult(trashedMenus) };
+    } catch (error) {
+        if (error instanceof ConflictError) throw error;
+        return rethrowNavigationMutationError(db, menuId, input.expectedRevision, error);
+    }
+}
+
+export async function restoreNavigationMenu(
+    db: Database,
+    menuId: string,
+    input: { expectedRevision: number },
+) {
+    const menu = await getNavigationMenuAuthority(db, menuId);
+    if (!menu.deletedAt) throw new ConflictError("This menu is not in Trash.");
+    if (menu.revision !== input.expectedRevision) {
+        throw new NavigationRevisionConflictError(menuId, input.expectedRevision, menu.revision);
+    }
+    try {
+        const results = await safeBatch(db, [
+            buildTrashedMenuRevisionGuard(db, menuId, input.expectedRevision),
+            db.update(navigationMenus)
+                .set({
+                    deletedAt: null,
+                    revision: sql`${navigationMenus.revision} + 1`,
+                    updatedAt: sql`unixepoch()`,
+                })
+                .where(eq(navigationMenus.id, menuId))
+                .returning({ revision: navigationMenus.revision }),
+        ] as never) as unknown[];
+        return { revision: readRevisionResult(results.at(-1)) };
+    } catch (error) {
+        return rethrowNavigationMutationError(db, menuId, input.expectedRevision, error);
+    }
 }
 
 export async function listNavigationMenuItems(

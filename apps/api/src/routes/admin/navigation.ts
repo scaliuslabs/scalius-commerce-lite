@@ -19,9 +19,11 @@ import {
     listNavigationPlacements,
     moveNavigationMenuItem,
     publishNavigationMenu,
+    restoreNavigationMenu,
     rollbackNavigationMenu,
     saveNavigationPlacement,
     searchNavigationMenuItems,
+    trashNavigationMenu,
     updateNavigationMenuItem,
     updateNavigationMenuMetadata,
 } from "@scalius/core/modules/navigation";
@@ -362,6 +364,66 @@ const updateMenuRoute = createRoute({
 app.openapi(updateMenuRoute, async (c) => {
     const { menuId } = c.req.valid("param");
     return ok(c, await updateNavigationMenuMetadata(c.get("db"), menuId, c.req.valid("json")));
+});
+
+const trashMenuRoute = createRoute({
+    method: "delete",
+    path: "/menus/{menuId}",
+    tags: ["Admin - Navigation"],
+    summary: "Move an unplaced menu to Trash",
+    request: {
+        params: z.object({ menuId: z.string().min(1) }),
+        body: { content: { "application/json": { schema: z.object({
+            expectedRevision: z.number().int().positive(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Menu moved to Trash",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                revision: z.number().int().positive(),
+            })) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(trashMenuRoute, async (c) => {
+    const { menuId } = c.req.valid("param");
+    const result = await trashNavigationMenu(c.get("db"), menuId, c.req.valid("json"));
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
+});
+
+const restoreMenuRoute = createRoute({
+    method: "post",
+    path: "/menus/{menuId}/restore",
+    tags: ["Admin - Navigation"],
+    summary: "Restore a menu from Trash",
+    request: {
+        params: z.object({ menuId: z.string().min(1) }),
+        body: { content: { "application/json": { schema: z.object({
+            expectedRevision: z.number().int().positive(),
+        }) } } },
+    },
+    responses: {
+        200: {
+            description: "Menu restored",
+            content: { "application/json": { schema: successEnvelope(z.object({
+                revision: z.number().int().positive(),
+            })) } },
+        },
+        409: conflictResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(restoreMenuRoute, async (c) => {
+    const { menuId } = c.req.valid("param");
+    const result = await restoreNavigationMenu(c.get("db"), menuId, c.req.valid("json"));
+    await invalidateApiAndScheduleStorefrontGroups(LAYOUT_CACHE_GROUPS, c);
+    return ok(c, result);
 });
 
 const listMenuItemsRoute = createRoute({

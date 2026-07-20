@@ -17,13 +17,16 @@ import {
   getPublishedNavigationMenuTree,
   getPublishedNavigationPlacements,
   getNavigationPlacementManifest,
+  listNavigationMenus,
   listNavigationPlacements,
   listNavigationMenuItems,
   moveNavigationMenuItem,
   publishNavigationMenu,
+  restoreNavigationMenu,
   rollbackNavigationMenu,
   saveNavigationPlacement,
   searchNavigationMenuItems,
+  trashNavigationMenu,
   updateNavigationMenuItem,
 } from "./navigation.authority.service";
 import {
@@ -305,5 +308,62 @@ describe("navigation authority D1 commands", () => {
     })).rejects.toBeInstanceOf(NavigationRevisionConflictError);
     expect(sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id))
       .toEqual({ revision: 8 });
+  });
+
+  it("trashes only an unplaced menu and restores it without republishing", async () => {
+    const db = createDatabase();
+    const menu = await createNavigationMenu(db, { name: "Seasonal" });
+    await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: 1,
+      label: "Summer",
+      labelMode: "custom",
+      target: { type: "internal_path", path: "/search" },
+    });
+    await publishNavigationMenu(db, menu.id, { expectedRevision: 2 });
+    await saveNavigationPlacement(db, {
+      id: "placement_seasonal",
+      expectedRevision: 0,
+      surface: "header",
+      slot: "primary",
+      position: 0,
+      menuId: menu.id,
+    });
+
+    await expect(trashNavigationMenu(db, menu.id, { expectedRevision: 2 }))
+      .rejects.toBeInstanceOf(NavigationRevisionConflictError);
+    await expect(trashNavigationMenu(db, menu.id, { expectedRevision: 3 }))
+      .rejects.toThrow("Remove this menu from its storefront locations");
+    await saveNavigationPlacement(db, {
+      id: "placement_seasonal",
+      expectedRevision: 1,
+      surface: "header",
+      slot: "primary",
+      position: 0,
+      menuId: menu.id,
+      isEnabled: false,
+    });
+    await expect(trashNavigationMenu(db, menu.id, { expectedRevision: 3 }))
+      .resolves.toEqual({ revision: 4 });
+    await expect(listNavigationMenus(db)).resolves.toMatchObject({ items: [] });
+    await expect(listNavigationMenus(db, { includeTrash: true })).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: menu.id, revision: 4, deletedAt: expect.any(Date) })],
+    });
+    await expect(listNavigationPlacements(db)).resolves.toEqual([
+      expect.objectContaining({
+        placement: expect.objectContaining({
+          id: "placement_seasonal",
+          isEnabled: false,
+          revision: 2,
+        }),
+      }),
+    ]);
+    await expect(getPublishedNavigationPlacements(db)).resolves.toEqual([]);
+
+    await expect(restoreNavigationMenu(db, menu.id, { expectedRevision: 4 }))
+      .resolves.toEqual({ revision: 5 });
+    await expect(listNavigationMenus(db)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: menu.id, revision: 5, deletedAt: null })],
+    });
+    await expect(getPublishedNavigationPlacements(db)).resolves.toEqual([]);
   });
 });

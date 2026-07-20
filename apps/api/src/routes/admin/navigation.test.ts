@@ -21,9 +21,11 @@ const mocks = vi.hoisted(() => ({
     listNavigationPlacements: vi.fn(),
     moveNavigationMenuItem: vi.fn(),
     publishNavigationMenu: vi.fn(),
+    restoreNavigationMenu: vi.fn(),
     rollbackNavigationMenu: vi.fn(),
     saveNavigationPlacement: vi.fn(),
     searchNavigationMenuItems: vi.fn(),
+    trashNavigationMenu: vi.fn(),
     updateNavigationMenuItem: vi.fn(),
     updateNavigationMenuMetadata: vi.fn(),
     getKv: vi.fn(),
@@ -48,9 +50,11 @@ vi.mock("@scalius/core/modules/navigation", () => ({
     listNavigationPlacements: mocks.listNavigationPlacements,
     moveNavigationMenuItem: mocks.moveNavigationMenuItem,
     publishNavigationMenu: mocks.publishNavigationMenu,
+    restoreNavigationMenu: mocks.restoreNavigationMenu,
     rollbackNavigationMenu: mocks.rollbackNavigationMenu,
     saveNavigationPlacement: mocks.saveNavigationPlacement,
     searchNavigationMenuItems: mocks.searchNavigationMenuItems,
+    trashNavigationMenu: mocks.trashNavigationMenu,
     updateNavigationMenuItem: mocks.updateNavigationMenuItem,
     updateNavigationMenuMetadata: mocks.updateNavigationMenuMetadata,
 }));
@@ -223,6 +227,56 @@ describe("admin navigation routes", () => {
             parentId: null,
             index: 3,
         });
+    });
+
+    it("moves a menu to Trash and invalidates public layout", async () => {
+        mocks.trashNavigationMenu.mockResolvedValue({
+            revision: 8,
+        });
+        const { app, db, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1",
+            {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expectedRevision: 7 }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.trashNavigationMenu).toHaveBeenCalledWith(db, "menu_1", {
+            expectedRevision: 7,
+        });
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["layout"],
+            expect.objectContaining({ env }),
+        );
+    });
+
+    it("restores a menu without reassigning storefront placements", async () => {
+        mocks.restoreNavigationMenu.mockResolvedValue({ revision: 9 });
+        const { app, db, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/navigation/menus/menu_1/restore",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ expectedRevision: 8 }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(200);
+        expect(mocks.restoreNavigationMenu).toHaveBeenCalledWith(db, "menu_1", {
+            expectedRevision: 8,
+        });
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+            ["layout"],
+            expect.objectContaining({ env }),
+        );
     });
 
     it("publishes through the canonical command and invalidates public layout only then", async () => {

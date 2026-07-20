@@ -42,6 +42,7 @@ import {
   Move,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Trash2,
@@ -90,9 +91,11 @@ import {
   getNavigationPlacementSettings,
   getNavigationPublications,
   publishNavigationMenuAuthority,
+  restoreNavigationMenuAuthority,
   rollbackNavigationMenuAuthority,
   saveNavigationPlacementAuthority,
   searchNavigationMenuItemsAuthority,
+  trashNavigationMenuAuthority,
   updateNavigationMenuItemAuthority,
   updateNavigationMenuMetadataAuthority,
   moveNavigationMenuItemAuthority,
@@ -856,17 +859,22 @@ function MenuMetadataDialog({
   open,
   onOpenChange,
   onSaved,
+  onDeleted,
 }: {
   menu?: NavigationMenuSummary;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (menuId: string) => void;
+  onDeleted?: () => void;
 }) {
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
+  const [confirmTrash, setConfirmTrash] = useState(false);
+  const placementCount = menu?.placementCount ?? 0;
   useEffect(() => {
     setName(menu?.name ?? "");
     setHandle(menu?.handle ?? "");
+    setConfirmTrash(false);
   }, [menu, open]);
   const mutation = useMutation({
     mutationFn: async () => {
@@ -886,6 +894,22 @@ function MenuMetadataDialog({
     },
     onError: (error) => mutationError(error, "Menu was not saved"),
   });
+  const trashMutation = useMutation({
+    mutationFn: () => {
+      if (!menu) throw new Error("Menu is unavailable.");
+      return trashNavigationMenuAuthority({
+        data: { menuId: menu.id, expectedRevision: menu.revision },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Menu moved to Trash", {
+        description: "Items and publication history were kept.",
+      });
+      onOpenChange(false);
+      onDeleted?.();
+    },
+    onError: (error) => mutationError(error, "Menu was not moved to Trash"),
+  });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -903,12 +927,117 @@ function MenuMetadataDialog({
             <Input id="navigation-menu-handle" value={handle} maxLength={80} placeholder="Generated from name" onChange={(event) => setHandle(event.target.value)} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!name.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? "Saving…" : menu ? "Save details" : "Create menu"}
-          </Button>
+        {menu && confirmTrash && (
+          <div className="rounded-lg border border-destructive/35 bg-destructive/5 p-3 text-sm">
+            <p className="font-medium">
+              {placementCount > 0 ? "This menu is still in use" : "Move this menu to Trash?"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {placementCount > 0
+                ? `Remove it from ${placementCount} storefront ${placementCount === 1 ? "location" : "locations"} first, then try again.`
+                : "Items and publication history can be restored later."}
+            </p>
+          </div>
+        )}
+        <DialogFooter className="sm:justify-between">
+          {menu ? (
+            confirmTrash ? (
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setConfirmTrash(false)}>Keep menu</Button>
+                {placementCount === 0 && (
+                  <Button
+                    variant="destructive"
+                    disabled={trashMutation.isPending}
+                    onClick={() => trashMutation.mutate()}
+                  >
+                    {trashMutation.isPending ? "Moving…" : "Move to Trash"}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setConfirmTrash(true)}>
+                <Trash2 className="mr-2 size-4" /> Move to Trash
+              </Button>
+            )
+          ) : <span />}
+          {!confirmTrash && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button disabled={!name.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
+                {mutation.isPending ? "Saving…" : menu ? "Save details" : "Create menu"}
+              </Button>
+            </div>
+          )}
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MenuTrashDialog({
+  open,
+  onOpenChange,
+  onRestored,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRestored: (menuId: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: [...queryKeys.navigation.menus(), "trash"],
+    queryFn: () => getNavigationMenusAuthority({ data: { limit: 100, includeTrash: true } }),
+    enabled: open,
+  });
+  const trashedMenus = (query.data?.items ?? []).filter((menu) => Boolean(menu.deletedAt));
+  const mutation = useMutation({
+    mutationFn: (menu: NavigationMenuSummary) => restoreNavigationMenuAuthority({
+      data: { menuId: menu.id, expectedRevision: menu.revision },
+    }),
+    onSuccess: async (_result, menu) => {
+      toast.success("Menu restored", { description: "Storefront locations stay disabled until you assign them again." });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menus() });
+      onRestored(menu.id);
+    },
+    onError: (error) => mutationError(error, "Menu was not restored"),
+  });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Menu Trash</DialogTitle>
+          <DialogDescription>Restore a menu without automatically republishing it to the storefront.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[55vh] divide-y overflow-y-auto rounded-lg border">
+          {trashedMenus.map((menu) => (
+            <div key={menu.id} className="flex items-center justify-between gap-3 p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{menu.name}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {menu.itemCount} {menu.itemCount === 1 ? "item" : "items"} · deleted {formatDate(menu.deletedAt!)}
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={mutation.isPending}
+                onClick={() => mutation.mutate(menu)}
+              >
+                <RotateCcw className="mr-2 size-3.5" /> Restore
+              </Button>
+            </div>
+          ))}
+          {query.isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Loading Trash…</div>}
+          {query.isError && (
+            <div className="flex items-center justify-between gap-3 p-3 text-sm text-destructive">
+              <span>Trash could not be loaded.</span>
+              <Button size="sm" variant="outline" onClick={() => void query.refetch()}>Retry</Button>
+            </div>
+          )}
+          {!query.isLoading && !query.isError && !trashedMenus.length && (
+            <div className="p-8 text-center text-sm text-muted-foreground">Trash is empty.</div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -1117,6 +1246,7 @@ export function NavigationWorkspace({
   const [activeDrag, setActiveDrag] = useState<NavigationMenuItemRow | null>(null);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [editMenuOpen, setEditMenuOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const [moveDialogItem, setMoveDialogItem] = useState<NavigationMenuItemRow | null>(null);
   const expandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingExpandIdRef = useRef<string | null>(null);
@@ -1126,8 +1256,10 @@ export function NavigationWorkspace({
   );
 
   useEffect(() => {
-    if (!selectedMenuId && selectedId) onMenuChange(selectedId);
-  }, [onMenuChange, selectedId, selectedMenuId]);
+    if (menusQuery.isLoading || menusQuery.isFetching) return;
+    if (selectedId && selectedMenuId !== selectedId) onMenuChange(selectedId);
+    if (!selectedId && selectedMenuId) onMenuChange("");
+  }, [menusQuery.isFetching, menusQuery.isLoading, onMenuChange, selectedId, selectedMenuId]);
   useEffect(() => {
     setExpandedIds(new Set());
   }, [selectedId]);
@@ -1240,7 +1372,12 @@ export function NavigationWorkspace({
           <h1 className="text-2xl font-semibold tracking-tight">Navigation</h1>
           <p className="mt-1 text-sm text-muted-foreground">Build reusable menus, publish safely, and place them across the storefront.</p>
         </div>
-        <Button onClick={() => setNewMenuOpen(true)}><Plus className="mr-2 size-4" /> New menu</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTrashOpen(true)}>
+            <Trash2 className="mr-2 size-4" /> Trash
+          </Button>
+          <Button onClick={() => setNewMenuOpen(true)}><Plus className="mr-2 size-4" /> New menu</Button>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -1432,10 +1569,24 @@ export function NavigationWorkspace({
         }}
       />
       <MenuMetadataDialog
-        menu={menu}
+        menu={menu ? menus.find((candidate) => candidate.id === menu.id) ?? menu : undefined}
         open={editMenuOpen}
         onOpenChange={setEditMenuOpen}
         onSaved={() => void invalidateMenu()}
+        onDeleted={() => {
+          setEditMenuOpen(false);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menus() });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.navigation.placements() });
+          onMenuChange("");
+        }}
+      />
+      <MenuTrashDialog
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        onRestored={(menuId) => {
+          setTrashOpen(false);
+          onMenuChange(menuId);
+        }}
       />
       {menu && itemId && (
         <MenuItemDialog
