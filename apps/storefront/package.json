@@ -36,7 +36,7 @@
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
     "lucide-react": "^1.25.0",
-    "nanoid": "^5.1.11",
+    "nanoid": "^6.0.0",
     "nanostores": "^1.4.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
