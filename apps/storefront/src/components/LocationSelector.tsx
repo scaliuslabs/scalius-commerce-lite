@@ -42,39 +42,45 @@ export default function LocationSelector({
   const [isLoadingZones, setIsLoadingZones] = useState<boolean>(false);
   const [isLoadingAreas, setIsLoadingAreas] = useState<boolean>(false);
 
-  const loadZones = useCallback(async (cityId: string): Promise<LocationData[]> => {
-    if (!cityId) return [];
-    setIsLoadingZones(true);
-    try {
-      const response = await getZones(cityId);
-      const nextZones = response || [];
-      setZones(nextZones);
-      return nextZones;
-    } catch (error: unknown) {
-      console.error("Error loading zones:", error);
-      setZones([]);
-      return [];
-    } finally {
-      setIsLoadingZones(false);
-    }
-  }, []);
+  const loadZones = useCallback(
+    async (cityId: string): Promise<LocationData[]> => {
+      if (!cityId) return [];
+      setIsLoadingZones(true);
+      try {
+        const response = await getZones(cityId);
+        const nextZones = response || [];
+        setZones(nextZones);
+        return nextZones;
+      } catch (error: unknown) {
+        console.error("Error loading zones:", error);
+        setZones([]);
+        return [];
+      } finally {
+        setIsLoadingZones(false);
+      }
+    },
+    [],
+  );
 
-  const loadAreas = useCallback(async (zoneId: string): Promise<LocationData[]> => {
-    if (!zoneId) return [];
-    setIsLoadingAreas(true);
-    try {
-      const response = await getAreas(zoneId);
-      const nextAreas = response || [];
-      setAreas(nextAreas);
-      return nextAreas;
-    } catch (error: unknown) {
-      console.error("Error loading areas:", error);
-      setAreas([]);
-      return [];
-    } finally {
-      setIsLoadingAreas(false);
-    }
-  }, []);
+  const loadAreas = useCallback(
+    async (zoneId: string): Promise<LocationData[]> => {
+      if (!zoneId) return [];
+      setIsLoadingAreas(true);
+      try {
+        const response = await getAreas(zoneId);
+        const nextAreas = response || [];
+        setAreas(nextAreas);
+        return nextAreas;
+      } catch (error: unknown) {
+        console.error("Error loading areas:", error);
+        setAreas([]);
+        return [];
+      } finally {
+        setIsLoadingAreas(false);
+      }
+    },
+    [],
+  );
 
   const dispatchZoneSelected = useCallback(
     (zoneId: string, sourceZones = zones) => {
@@ -90,6 +96,16 @@ export default function LocationSelector({
     [zones],
   );
 
+  const notifySelection = useCallback(
+    (selection: LocationSelection) => {
+      onSelectionChange?.(selection);
+      window.dispatchEvent(
+        new CustomEvent("checkout-location-change", { detail: selection }),
+      );
+    },
+    [onSelectionChange],
+  );
+
   const prefillLocation = useCallback(
     async (detail: LocationPrefillDetail) => {
       const city = resolveLocationOption(cities, detail.city, detail.cityName);
@@ -100,21 +116,37 @@ export default function LocationSelector({
       setSelectedArea("");
       setZones([]);
       setAreas([]);
+      notifySelection({
+        cityId: city.id,
+        cityName: city.name,
+        zoneId: "",
+        zoneName: "",
+        areaId: "",
+        areaName: "",
+      });
 
       const nextZones = await loadZones(city.id);
-      const zone = resolveLocationOption(nextZones, detail.zone, detail.zoneName);
+      const zone = resolveLocationOption(
+        nextZones,
+        detail.zone,
+        detail.zoneName,
+      );
       if (!zone) return;
 
       setSelectedZone(zone.id);
       dispatchZoneSelected(zone.id, nextZones);
 
       const nextAreas = showAreaField ? await loadAreas(zone.id) : [];
-      const area = resolveLocationOption(nextAreas, detail.area, detail.areaName);
+      const area = resolveLocationOption(
+        nextAreas,
+        detail.area,
+        detail.areaName,
+      );
       const areaId = area?.id ?? "";
       if (areaId) {
         setSelectedArea(areaId);
       }
-      onSelectionChange?.({
+      notifySelection({
         cityId: city.id,
         cityName: city.name,
         zoneId: zone.id,
@@ -123,12 +155,21 @@ export default function LocationSelector({
         areaName: area?.name ?? "",
       });
     },
-    [cities, dispatchZoneSelected, loadAreas, loadZones, onSelectionChange, showAreaField],
+    [
+      cities,
+      dispatchZoneSelected,
+      loadAreas,
+      loadZones,
+      notifySelection,
+      showAreaField,
+    ],
   );
 
   useEffect(() => {
     const handlePrefill = (event: Event) => {
-      void prefillLocation((event as CustomEvent<LocationPrefillDetail>).detail || {});
+      void prefillLocation(
+        (event as CustomEvent<LocationPrefillDetail>).detail || {},
+      );
     };
 
     window.addEventListener("location-prefill", handlePrefill);
@@ -142,7 +183,7 @@ export default function LocationSelector({
     setSelectedArea("");
     setZones([]);
     setAreas([]);
-    onSelectionChange?.({
+    notifySelection({
       cityId: value,
       cityName: city?.name || "",
       zoneId: "",
@@ -159,7 +200,7 @@ export default function LocationSelector({
     setSelectedZone(value);
     setSelectedArea("");
     setAreas([]);
-    onSelectionChange?.({
+    notifySelection({
       cityId: selectedCity,
       cityName: city?.name || "",
       zoneId: value,
@@ -180,7 +221,7 @@ export default function LocationSelector({
     const zone = zones.find((item) => item.id === selectedZone);
     const area = areas.find((item) => item.id === value);
     setSelectedArea(value);
-    onSelectionChange?.({
+    notifySelection({
       cityId: selectedCity,
       cityName: city?.name || "",
       zoneId: selectedZone,
@@ -223,8 +264,8 @@ export default function LocationSelector({
           value={selectedCity}
           onChange={handleCityChange}
           required
-          className="bg-gray-50 border-gray-200 rounded-lg h-9"
-          triggerClassName="bg-gray-50 border-gray-200 rounded-lg h-9"
+          className="bg-gray-50 border-gray-200 rounded-lg"
+          triggerClassName="bg-gray-50 border-gray-200 rounded-lg"
         />
       </div>
 
@@ -244,8 +285,8 @@ export default function LocationSelector({
           onChange={handleZoneChange}
           disabled={!selectedCity || isLoadingZones}
           required
-          className="bg-gray-50 border-gray-200 rounded-lg h-9"
-          triggerClassName="bg-gray-50 border-gray-200 rounded-lg h-9"
+          className="bg-gray-50 border-gray-200 rounded-lg"
+          triggerClassName="bg-gray-50 border-gray-200 rounded-lg"
         />
         {isLoadingZones && (
           <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">
@@ -270,8 +311,8 @@ export default function LocationSelector({
             value={selectedArea}
             onChange={handleAreaChange}
             disabled={!selectedZone || isLoadingAreas}
-            className="bg-gray-50 border-gray-200 rounded-lg h-9 z-10"
-            triggerClassName="bg-gray-50 border-gray-200 rounded-lg h-9"
+            className="z-10 rounded-lg border-gray-200 bg-gray-50"
+            triggerClassName="rounded-lg border-gray-200 bg-gray-50"
           />
           {isLoadingAreas && (
             <div className="absolute right-3 top-[calc(50%+4px)] -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-solid border-gray-400 border-r-transparent">

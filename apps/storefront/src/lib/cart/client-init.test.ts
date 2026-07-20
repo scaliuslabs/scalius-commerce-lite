@@ -20,6 +20,10 @@ const apiMocks = vi.hoisted(() => ({
   validateDiscount: vi.fn(),
 }));
 
+const taxQuoteMocks = vi.hoisted(() => ({
+  fetchAuthoritativeTaxQuote: vi.fn(),
+}));
+
 vi.mock("@/lib/api", () => ({
   getActiveCheckoutLanguage: apiMocks.getActiveCheckoutLanguage,
   saveAbandonedCheckout: apiMocks.saveAbandonedCheckout,
@@ -29,6 +33,10 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/lib/analytics", () => ({
   trackFbAddToCart: vi.fn(),
   trackFbInitiateCheckout: vi.fn(),
+}));
+
+vi.mock("../checkout/tax-quote-client", () => ({
+  fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
 }));
 
 const CART_ITEM = {
@@ -111,6 +119,10 @@ function renderCartDom() {
         <div id="discountMessage"></div>
         <span id="subtotal"></span>
         <span id="shippingCost"></span>
+        <span id="taxLabel">Tax</span>
+        <span id="taxAmount">Add city &amp; zone</span>
+        <p id="taxStatus" class="hidden"></p>
+        <span id="totalLabel" data-final-label="Total">Estimated total</span>
         <span id="total"></span>
       </div>
       <div id="cartValidationMessage" class="hidden"></div>
@@ -123,6 +135,7 @@ describe("initCartFunctionality", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockReset();
     installStorageMocks();
     localStorage.clear();
     sessionStorage.clear();
@@ -172,7 +185,9 @@ describe("initCartFunctionality", () => {
   it("keeps one checkout id and one abandoned-checkout listener across repeated init", async () => {
     await initCartFunctionality();
     const firstCheckoutId = sessionStorage.getItem("checkoutId");
-    const checkoutIdInput = document.getElementById("checkoutIdInput") as HTMLInputElement;
+    const checkoutIdInput = document.getElementById(
+      "checkoutIdInput",
+    ) as HTMLInputElement;
 
     expect(firstCheckoutId).toMatch(/^chk_session_/);
     expect(checkoutIdInput.value).toBe(firstCheckoutId);
@@ -198,7 +213,9 @@ describe("initCartFunctionality", () => {
   it("reveals truthful cart and checkout panels only after stored items hydrate", async () => {
     const root = document.getElementById("cartPageRoot") as HTMLElement;
     const cartSummary = document.getElementById("cartSummary") as HTMLElement;
-    const checkoutPanel = document.getElementById("checkoutPanel") as HTMLElement;
+    const checkoutPanel = document.getElementById(
+      "checkoutPanel",
+    ) as HTMLElement;
     const cartItems = document.getElementById("cartItems") as HTMLElement;
 
     await initCartFunctionality();
@@ -209,6 +226,93 @@ describe("initCartFunctionality", () => {
     expect(checkoutPanel.classList.contains("hidden")).toBe(false);
     expect(cartItems.getAttribute("aria-busy")).toBe("false");
     expect(cartItems.textContent).toContain("Rice");
+    expect(document.getElementById("taxAmount")?.textContent).toBe(
+      "Add city & zone",
+    );
+    expect(document.getElementById("totalLabel")?.textContent).toBe(
+      "Estimated total",
+    );
+  });
+
+  it("replaces provisional cart totals with the authoritative destination quote", async () => {
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockResolvedValue({
+      valid: true,
+      quoteFingerprint: "taxq_1234567890123456789012",
+      displayLabel: "VAT",
+      pricesIncludeTax: false,
+      shippingTaxed: true,
+      currencyCode: "BDT",
+      decimalPlaces: 2,
+      settingsVersion: 4,
+      subtotalMinor: 10_000,
+      subtotalAmount: 100,
+      shippingMinor: 6_000,
+      shippingAmount: 60,
+      discountMinor: 0,
+      discountAmount: 0,
+      taxMinor: 1_120,
+      taxAmount: 11.2,
+      totalMinor: 17_120,
+      totalAmount: 171.2,
+      items: [],
+    });
+
+    await initCartFunctionality();
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", {
+        detail: {
+          cityId: "city_dhaka",
+          zoneId: "zone_banani",
+          areaId: "",
+        },
+      }),
+    );
+    await vi.waitFor(() => {
+      expect(document.getElementById("taxAmount")?.textContent).toBe("৳11.20");
+    });
+
+    expect(taxQuoteMocks.fetchAuthoritativeTaxQuote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        city: "city_dhaka",
+        zone: "zone_banani",
+        shippingMethodId: "standard",
+        cartItems: expect.stringContaining('"variantId":"var_1"'),
+      }),
+    );
+    expect(document.getElementById("taxLabel")?.textContent).toBe("VAT");
+    expect(document.getElementById("shippingCost")?.textContent).toBe("৳60");
+    expect(document.getElementById("totalLabel")?.textContent).toBe("Total");
+    expect(document.getElementById("total")?.textContent).toBe("৳171.20");
+    expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
+  });
+
+  it("does not present a provisional amount as final when tax cannot be verified", async () => {
+    document.getElementById("checkoutForm")?.insertAdjacentHTML(
+      "beforeend",
+      `
+        <input name="city" value="city_dhaka" />
+        <input name="zone" value="zone_banani" />
+      `,
+    );
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(
+      new Error("quote unavailable"),
+    );
+
+    await initCartFunctionality();
+    await vi.waitFor(() => {
+      expect(document.getElementById("taxAmount")?.textContent).toBe(
+        "Unavailable",
+      );
+    });
+
+    expect(document.getElementById("totalLabel")?.textContent).toBe("Total");
+    expect(document.getElementById("total")?.textContent).toBe("—");
+    expect(document.getElementById("taxStatus")?.classList).not.toContain(
+      "hidden",
+    );
+    expect(document.getElementById("taxStatus")?.textContent).toContain(
+      "Change the destination or try again",
+    );
   });
 
   it("keeps operational panels hidden when hydration resolves to an empty cart", async () => {
@@ -227,9 +331,15 @@ describe("initCartFunctionality", () => {
     const submit = document.getElementById("submitButton") as HTMLButtonElement;
     expect(root.dataset.cartReady).toBe("true");
     expect(root.dataset.cartHasItems).toBe("false");
-    expect(document.getElementById("cartSummary")?.classList.contains("hidden")).toBe(true);
-    expect(document.getElementById("checkoutPanel")?.classList.contains("hidden")).toBe(true);
-    expect(document.getElementById("cartItems")?.getAttribute("aria-busy")).toBe("false");
+    expect(
+      document.getElementById("cartSummary")?.classList.contains("hidden"),
+    ).toBe(true);
+    expect(
+      document.getElementById("checkoutPanel")?.classList.contains("hidden"),
+    ).toBe(true);
+    expect(
+      document.getElementById("cartItems")?.getAttribute("aria-busy"),
+    ).toBe("false");
     expect(submit.disabled).toBe(true);
   });
 
@@ -238,7 +348,9 @@ describe("initCartFunctionality", () => {
 
     await initCartFunctionality();
 
-    const checkoutIdInput = document.getElementById("checkoutIdInput") as HTMLInputElement;
+    const checkoutIdInput = document.getElementById(
+      "checkoutIdInput",
+    ) as HTMLInputElement;
     expect(sessionStorage.getItem("checkoutId")).toBe("chk_session_existing");
     expect(checkoutIdInput.value).toBe("chk_session_existing");
 
@@ -331,7 +443,9 @@ describe("initCartFunctionality", () => {
     await initCartFunctionality();
 
     const repairStateCheckoutId = sessionStorage.getItem("checkoutId");
-    const checkoutIdInput = document.getElementById("checkoutIdInput") as HTMLInputElement;
+    const checkoutIdInput = document.getElementById(
+      "checkoutIdInput",
+    ) as HTMLInputElement;
     expect(repairStateCheckoutId).toMatch(/^chk_session_/);
     expect(repairStateCheckoutId).not.toBe(failedCheckoutId);
     expect(checkoutIdInput.value).toBe(repairStateCheckoutId);
@@ -373,7 +487,9 @@ describe("initCartFunctionality", () => {
   });
 
   it("validates unrestricted discount codes before the buyer enters a phone", async () => {
-    const phoneInput = document.getElementById("customerPhone") as HTMLInputElement;
+    const phoneInput = document.getElementById(
+      "customerPhone",
+    ) as HTMLInputElement;
     phoneInput.value = "";
     apiMocks.validateDiscount.mockResolvedValue({
       valid: true,
@@ -388,11 +504,13 @@ describe("initCartFunctionality", () => {
     });
 
     await initCartFunctionality();
-    const codeInput = document.getElementById("discountCodeInput") as HTMLInputElement;
+    const codeInput = document.getElementById(
+      "discountCodeInput",
+    ) as HTMLInputElement;
     codeInput.value = "open10";
-    document.getElementById("discountForm")?.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+    document
+      .getElementById("discountForm")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.advanceTimersByTimeAsync(0);
 
     expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
@@ -406,7 +524,9 @@ describe("initCartFunctionality", () => {
   });
 
   it("focuses the phone field only when a one-use code requires identity", async () => {
-    const phoneInput = document.getElementById("customerPhone") as HTMLInputElement;
+    const phoneInput = document.getElementById(
+      "customerPhone",
+    ) as HTMLInputElement;
     phoneInput.value = "";
     apiMocks.validateDiscount.mockResolvedValue({
       valid: false,
@@ -415,11 +535,13 @@ describe("initCartFunctionality", () => {
     });
 
     await initCartFunctionality();
-    const codeInput = document.getElementById("discountCodeInput") as HTMLInputElement;
+    const codeInput = document.getElementById(
+      "discountCodeInput",
+    ) as HTMLInputElement;
     codeInput.value = "ONCE";
-    document.getElementById("discountForm")?.dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+    document
+      .getElementById("discountForm")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await vi.advanceTimersByTimeAsync(0);
 
     expect(apiMocks.validateDiscount).toHaveBeenCalledWith(
@@ -451,10 +573,16 @@ describe("initCartFunctionality", () => {
     expect(initIndex).toBeGreaterThan(-1);
     expect(clearIndex).toBeLessThan(initIndex);
     expect(cartPage).not.toContain('onclick="window.removeDiscountCode()"');
-    expect(cartPage).toContain("window.__scaliusCartPageAbortController?.abort();");
+    expect(cartPage).toContain(
+      "window.__scaliusCartPageAbortController?.abort();",
+    );
     expect(cartPage).toContain("writeCheckoutTransferSession(");
-    expect(cartPage).toContain("showCheckoutTransferError(transferWrite.message);");
-    expect(cartPage).not.toContain('sessionStorage.setItem("scalius_checkout_data"');
+    expect(cartPage).toContain(
+      "showCheckoutTransferError(transferWrite.message);",
+    );
+    expect(cartPage).not.toContain(
+      'sessionStorage.setItem("scalius_checkout_data"',
+    );
     expect(cartPage).toContain('quickBuyStorage") === "blocked"');
     expect(cartPage).toContain(
       'document.addEventListener("cart-updated", updateCheckoutButtonState',
@@ -463,15 +591,20 @@ describe("initCartFunctionality", () => {
       'window.addEventListener("cart-updated", updateCheckoutButtonState',
     );
     expect(cartPage).toContain(
-      'lg:sticky lg:self-start transition-all duration-200 order-1',
+      "lg:sticky lg:self-start transition-all duration-200 order-1",
     );
-    expect(cartPage).toContain('<div id="checkoutPanel" class="hidden lg:w-7/12 order-2">');
+    expect(cartPage).toContain(
+      '<div id="checkoutPanel" class="hidden lg:w-7/12 order-2">',
+    );
     expect(cartPage).not.toContain("order-2 lg:order-1");
     expect(cartPage).not.toContain("order-1 lg:order-2");
     expect(cartPage).toContain('id="cartPageRoot"');
     expect(cartPage).toContain('data-cart-ready="false"');
     expect(cartPage).toContain('id="cartSummary"');
     expect(cartPage).toContain('id="checkoutPanel"');
+    expect(cartPage).toContain('id="taxAmount"');
+    expect(cartPage).toContain('id="totalLabel"');
+    expect(cartPage).toContain("Estimated total");
     expect(cartPage).toContain("Loading your cart…");
     expect(cartPage).toContain("Enable JavaScript to load your saved cart");
     expect(cartPage).toContain("window.__CHECKOUT_LANGUAGE__=");
