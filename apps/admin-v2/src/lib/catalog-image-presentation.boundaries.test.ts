@@ -31,7 +31,10 @@ describe("admin catalog image presentation boundaries", () => {
 
     expect(transformedSurfaces.length).toBeGreaterThan(0);
     for (const { source } of transformedSurfaces) {
-      expect(source).toContain('fit: "contain"');
+      expect(
+        source.includes('fit: "contain"') ||
+          source.includes("ADMIN_IMAGE_PRESETS.productMicro"),
+      ).toBe(true);
     }
   });
 });

@@ -346,3 +346,26 @@ buffered in a Worker invocation.
 - The decision follows Shopify's current file editor, which models crop as an
   explicit edit and focal point as merchant data, and Cloudflare's documented
   distinction between whole-image `scale-down` and destructive `cover`.
+
+### Compact-image delivery follow-up (2026-07-20)
+
+- A second source/runtime pass found that several visually small admin surfaces
+  still loaded the original merchant object: header/footer logo previews,
+  favicon preview, administrator avatars, category rows, discount product
+  search, custom social icons, and the printable invoice logo. This is harmless
+  with the demo assets but becomes expensive and slow when a merchant selects a
+  multi-megabyte original.
+- `admin-image-presentation.ts` now owns a finite set of reusable transform
+  presets. Whole-asset logo/icon/product previews use bounded `scale-down`;
+  `cover` is limited to the two interfaces whose visible contract is a crop:
+  circular administrator avatars and square category artwork. Reusing one 96 px
+  avatar transform across the menu, profile, and administrator list also avoids
+  three arbitrary variants of the same source.
+- Storefront header/footer/favicon and structured-data logos no longer upscale a
+  small merchant mark. Custom footer social images use `scale-down` rather than
+  a silent 20 px square crop. This changes delivery semantics only; the
+  protected product-page composition is untouched.
+- Cloudflare bills and caches each source-plus-parameter combination as a unique
+  transformation for the month, so finite named presets are a cost and cache
+  contract as well as a visual one. New compact surfaces should reuse the
+  nearest preset rather than inventing another width/height/quality tuple.

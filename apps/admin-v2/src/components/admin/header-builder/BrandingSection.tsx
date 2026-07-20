@@ -13,6 +13,8 @@ import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { MediaManager } from "../media-manager";
 import { Trash2, AlertCircle } from "lucide-react";
 import type { LogoConfig, FaviconConfig, MediaFile } from "./types";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 interface BrandingSectionProps {
   logo: LogoConfig;
@@ -60,7 +62,10 @@ export function BrandingSection({
               {logo.src ? (
                 <div className="relative group border border-border rounded-md p-2 bg-muted/30 w-full aspect-2/1 flex items-center justify-center">
                   <img
-                    src={logo.src}
+                    src={getOptimizedImageUrl(
+                      logo.src,
+                      ADMIN_IMAGE_PRESETS.brandLogo,
+                    )}
                     alt={logo.alt || "Logo preview"}
                     className="max-h-full max-w-full object-contain"
                     loading="lazy"
@@ -126,7 +131,10 @@ export function BrandingSection({
               {favicon.src ? (
                 <div className="relative group border border-border rounded-md p-2 bg-muted/30 h-20 w-20 flex items-center justify-center mx-auto">
                   <img
-                    src={favicon.src}
+                    src={getOptimizedImageUrl(
+                      favicon.src,
+                      ADMIN_IMAGE_PRESETS.favicon,
+                    )}
                     alt={favicon.alt || "Favicon preview"}
                     className="h-10 w-10 object-contain"
                     loading="lazy"

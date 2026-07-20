@@ -15,6 +15,8 @@ import { cn } from "@scalius/shared/utils";
 import { Badge } from "../../ui/badge";
 import { useCurrency } from "~/hooks/use-currency";
 import { getProducts, getProductsByIds } from "~/lib/api-functions/products";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 // Product interface based on what's used in OrderForm
 export interface DiscountProductOption {
@@ -303,7 +305,10 @@ export function ProductSelector({
                           />
                           {product.primaryImage ? (
                             <img
-                              src={product.primaryImage}
+                              src={getOptimizedImageUrl(
+                                product.primaryImage,
+                                ADMIN_IMAGE_PRESETS.productMicro,
+                              )}
                               alt=""
                               className="h-6 w-6 shrink-0 rounded bg-muted object-contain object-center"
                               loading="lazy"

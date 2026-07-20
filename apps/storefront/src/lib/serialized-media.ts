@@ -30,7 +30,7 @@ const SOCIAL_ICON_IMAGE_OPTIONS: ImageOptimizationOptions = {
   height: 20,
   quality: 85,
   format: "auto",
-  fit: "cover",
+  fit: "scale-down",
 };
 
 function optimizeRasterUrl(
