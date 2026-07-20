@@ -1272,6 +1272,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
   actions remained named, and recovery/payment operational labels no longer use
   10 px text.
 
+### CMS Page editor mobile checkpoint (2026-07-20)
+
+- The live About editor was rechecked at 1440 px and exact 390 × 844 widths.
+  Its current two-column desktop and single-column mobile composition remained
+  compact, the canonical editor URL stayed stable, the rich editor toolbar
+  wrapped without overflow, and document/body width stayed exactly 390 px.
+- A shared mobile action-bar defect affected Pages and every entity editor that
+  uses the same form boundary: Discard and Save were only 32 px high. Shared
+  and product action bars now render 44 px mobile targets in a 56 px bar while
+  retaining the 32 px desktop controls. Unsaved/conflict status stays
+  accessible on mobile without consuming action space and remains visibly
+  rendered on desktop.
+- A local-only title change enabled Save and exposed **Unsaved changes** to the
+  accessibility tree; restoring the exact committed title disabled Save again.
+  No production page write was made. The buyer-facing `/about` route then
+  rendered its title, featured media, complete content, header, and footer at
+  390 px with zero horizontal overflow.
+- Admin version `167ce913-9218-42f9-ac98-c56548adb31b` is live at 100%. Nine
+  focused action-bar, unsaved-guard, and Page-list tests plus the single
+  sequential Admin typecheck passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.
