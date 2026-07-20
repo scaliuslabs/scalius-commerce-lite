@@ -404,30 +404,30 @@ async function runBrowserRichTextEdit({ config, cookieHeader, setCookieHeaders, 
     await setBrowserCookies(cdp, config.adminBaseUrl, setCookieHeaders);
 
     await cdp.send("Page.navigate", { url: editUrl });
-    await waitForPageExpression(
+    await waitForPageCondition(
       cdp,
-      `document.readyState === "interactive" || document.readyState === "complete"`,
+      { kind: "document-ready" },
       30_000,
       "product edit document",
     );
-    await waitForPageExpression(
+    await waitForPageCondition(
       cdp,
-      `location.pathname === ${JSON.stringify(`/admin/products/${productId}/edit`)}`,
+      { kind: "pathname", value: `/admin/products/${productId}/edit` },
       30_000,
       "authenticated product edit route",
     );
-    await waitForPageExpression(
+    await waitForPageCondition(
       cdp,
-      `Boolean(document.querySelector(".ProseMirror[contenteditable='true']"))`,
+      { kind: "selector-exists", value: ".ProseMirror[contenteditable='true']" },
       60_000,
       "rich-text editor",
     );
 
     await focusEditorAtEnd(cdp);
     await cdp.send("Input.insertText", { text: ` ${marker}` });
-    await waitForPageExpression(
+    await waitForPageCondition(
       cdp,
-      `document.querySelector(".ProseMirror")?.textContent?.includes(${JSON.stringify(marker)}) === true`,
+      { kind: "selector-text-includes", value: ".ProseMirror", expected: marker },
       10_000,
       "inserted rich-text marker",
     );
@@ -519,12 +519,9 @@ async function focusEditorAtEnd(cdp) {
 }
 
 async function clickSaveProduct(cdp) {
-  await waitForPageExpression(
+  await waitForPageCondition(
     cdp,
-    `
-      Array.from(document.querySelectorAll("button"))
-        .some((button) => button.textContent?.includes("Save Product") && !button.disabled)
-    `,
+    { kind: "save-product-enabled" },
     15_000,
     "enabled Save Product button",
   );
@@ -843,13 +840,42 @@ class CdpClient {
   }
 }
 
-async function waitForPageExpression(cdp, expression, timeoutMs, description) {
+const PAGE_CONDITION_FUNCTIONS = {
+  "document-ready": `function () {
+    return document.readyState === "interactive" || document.readyState === "complete";
+  }`,
+  pathname: `function (expectedPathname) {
+    return location.pathname === expectedPathname;
+  }`,
+  "selector-exists": `function (selector) {
+    return Boolean(document.querySelector(selector));
+  }`,
+  "selector-text-includes": `function (selector, expectedText) {
+    return document.querySelector(selector)?.textContent?.includes(expectedText) === true;
+  }`,
+  "save-product-enabled": `function () {
+    return Array.from(document.querySelectorAll("button"))
+      .some((button) => button.textContent?.includes("Save Product") && !button.disabled);
+  }`,
+};
+
+async function waitForPageCondition(cdp, condition, timeoutMs, description) {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
     try {
-      const result = await cdp.send("Runtime.evaluate", {
-        expression: `Boolean((() => { return (${expression}); })())`,
+      const globalObject = await cdp.send("Runtime.evaluate", {
+        expression: "globalThis",
+      });
+      const functionDeclaration = PAGE_CONDITION_FUNCTIONS[condition.kind];
+      if (!functionDeclaration) throw new Error(`Unsupported page condition: ${condition.kind}`);
+      const values = condition.kind === "selector-text-includes"
+        ? [condition.value, condition.expected]
+        : condition.value === undefined ? [] : [condition.value];
+      const result = await cdp.send("Runtime.callFunctionOn", {
+        objectId: globalObject.result?.objectId,
+        functionDeclaration,
+        arguments: values.map((value) => ({ value })),
         awaitPromise: true,
         returnByValue: true,
       });

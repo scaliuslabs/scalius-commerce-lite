@@ -29,6 +29,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Repository hygiene
+        run: node scripts/repository-hygiene.mjs
+
+      - name: Whitespace guard
+        run: git show --check --format= --no-renames HEAD
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -67,6 +73,3 @@ jobs:
 
       - name: Working tree cleanliness
         run: git diff --exit-code
-
-      - name: Whitespace guard
-        run: git show --check --format= --no-renames HEAD

@@ -66,4 +66,3 @@ All counters remain non-negative. An event whose `before` snapshot does not matc
 - Replay tests proving the same deterministic claim is idempotent and a changed payload fails closed.
 - Expiry tests proving a partially released orphan frees only its outstanding amount.
 - A read-only production diagnostic reporting legacy rows, v2 rows, gaps, counter mismatches, and safe samples without buyer or credential data.
-

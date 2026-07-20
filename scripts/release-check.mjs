@@ -106,8 +106,8 @@ const knownOptions = new Set([...booleanOptions, ...stringOptions]);
 const requiredDocs = [
   "audit/README.md",
   "audit/OPERATIONAL_RUNBOOK.md",
-  "docs/codex/PLATFORM-GOAL.md",
-  "docs/codex/README.md",
+  "docs/platform/PLATFORM-GOAL.md",
+  "docs/platform/README.md",
   "docs/ARCHITECTURE.md",
   "README.md",
   "AGENTS.md",
@@ -580,12 +580,14 @@ function extractTagValues(xml, tagName) {
 }
 
 function decodeXml(value) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'");
+  const entities = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: "\"",
+    "#39": "'",
+  };
+  return value.replace(/&(amp|lt|gt|quot|#39);/g, (match, entity) => entities[entity] ?? match);
 }
 
 function hasPositiveCacheTtl(cacheControl) {

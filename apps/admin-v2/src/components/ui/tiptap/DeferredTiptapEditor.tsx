@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
+import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 import { RichContent } from "../rich-content";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 
@@ -18,25 +19,12 @@ const TiptapEditor = lazy(() =>
   loadTiptapEditorModule(),
 );
 
-const RICH_CONTENT_BLOCK_RE = /<(img|video|iframe|table|hr)\b/i;
-
 function getDeferredEditorMinHeightClass(compact: boolean) {
   return compact ? "min-h-[237px]" : "min-h-[257px]";
 }
 
 function getDeferredEditorViewportClass(compact: boolean) {
   return compact ? "h-[200px]" : "h-[300px]";
-}
-
-function hasRenderableContent(content: string) {
-  const text = content
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .trim();
-
-  return text.length > 0 || RICH_CONTENT_BLOCK_RE.test(content);
 }
 
 interface DeferredTiptapEditorProps {
@@ -84,7 +72,7 @@ export function DeferredTiptapEditor({
   const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);
   const [autoFocusEditor, setAutoFocusEditor] = useState(false);
-  const hasContent = hasRenderableContent(content);
+  const hasContent = hasRenderableHtmlContent(content);
 
   const loadAndMountEditor = useCallback((autoFocus: boolean) => {
     if (autoFocus) setAutoFocusEditor(true);

@@ -41,6 +41,7 @@ import {
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 
 const { slug } = Astro.params;
 if (!slug) {
@@ -215,11 +216,8 @@ const ogImageUrl = schemaImageUrls[0] ?? null;
 
 // Description for OG and JSON-LD -- strip HTML (per research constraint)
 const seoDescription = (
-  pageMetaDescription ||
-  product.description ||
-  product.name
+  htmlToPlainText(pageMetaDescription || product.description || product.name)
 )
-  .replace(/<[^>]+>/g, "")
   .slice(0, 200);
 
 const sellerSchemaName =

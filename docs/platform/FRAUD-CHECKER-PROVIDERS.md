@@ -1,6 +1,6 @@
 # Fraud Checker Providers
 
-Codex-maintained notes for the admin fraud checker integration.
+Engineering notes for the admin fraud checker integration.
 
 ## Provider Matrix
 

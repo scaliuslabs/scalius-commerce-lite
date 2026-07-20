@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeHtml } from "./html-sanitize";
+import {
+  hasRenderableHtmlContent,
+  htmlToPlainText,
+  sanitizeHtml,
+} from "./html-sanitize";
 
 describe("sanitizeHtml", () => {
   it("adds intrinsic dimensions from Cloudflare image transforms", () => {
@@ -31,5 +35,33 @@ describe("sanitizeHtml", () => {
     expect(generic).not.toContain('height="');
     expect(incomplete).not.toContain('width="600"');
     expect(incomplete).not.toContain('height="');
+  });
+});
+
+describe("htmlToPlainText", () => {
+  it("keeps block boundaries and decodes entities once", () => {
+    expect(
+      htmlToPlainText("<p>First &amp;amp; second</p><p>Third&nbsp;line.</p>"),
+    ).toBe("First &amp; second Third line.");
+  });
+
+  it("drops script and style contents instead of exposing them as text", () => {
+    expect(
+      htmlToPlainText(
+        "<p>Visible</p><script >steal()</script ><style >.bad{}</style ><p>Safe</p>",
+      ),
+    ).toBe("Visible Safe");
+  });
+});
+
+describe("hasRenderableHtmlContent", () => {
+  it("recognizes visible text and sanitized image content", () => {
+    expect(hasRenderableHtmlContent("<p>&nbsp;</p>")).toBe(false);
+    expect(hasRenderableHtmlContent("<p>Visible</p>")).toBe(true);
+    expect(hasRenderableHtmlContent('<img src="https://example.com/item.jpg">')).toBe(true);
+  });
+
+  it("does not treat removed script content as renderable", () => {
+    expect(hasRenderableHtmlContent("<script >alert(1)</script >")).toBe(false);
   });
 });

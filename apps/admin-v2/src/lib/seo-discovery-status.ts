@@ -836,11 +836,16 @@ function extractXmlElementTexts(xml: string, tagName: string): string[] {
 function normalizeXmlTextValue(value: string): string {
   return value
     .replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/u, "$1")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
+    .replace(/&(amp|quot|apos|lt|gt);/giu, (_match, entity: string) => {
+      const decoded: Record<string, string> = {
+        amp: "&",
+        quot: '"',
+        apos: "'",
+        lt: "<",
+        gt: ">",
+      };
+      return decoded[entity.toLowerCase()] ?? _match;
+    })
     .trim();
 }
 

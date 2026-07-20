@@ -1,6 +1,7 @@
 import { eq, isNull } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { analytics, metaConversionsSettings } from "@scalius/database/schema";
+import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
 import {
@@ -193,13 +194,13 @@ function extractCloudflareWebAnalyticsToken(config: string): string | null {
     return null;
   }
 
-  const beaconMatch = config.match(/data-cf-beacon\s*=\s*(["'])(.*?)\1/is);
-  if (!beaconMatch?.[2]) {
+  const beaconJson = readQuotedHtmlAttribute(config, "data-cf-beacon");
+  if (!beaconJson) {
     return null;
   }
 
   try {
-    const beaconConfig = JSON.parse(beaconMatch[2]) as { token?: unknown };
+    const beaconConfig = JSON.parse(beaconJson) as { token?: unknown };
     return typeof beaconConfig.token === "string" ? beaconConfig.token : null;
   } catch {
     return null;

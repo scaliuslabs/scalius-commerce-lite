@@ -928,7 +928,7 @@ The cleanup bullets below describe the two-product proof store that preceded the
   `9a23ba01-d95f-46b2-a13f-c00e08ca2909` are live at 100%. Migration 0039
   introduced durable invitation authority and backfilled unfinished legacy
   administrators into an honest retryable delivery state.
-- An authenticated merchant run invited `Codex Invite QA` with the Product
+- An authenticated merchant run invited `Release Invite QA` with the Product
   Specialist role. The team workspace exposed `Invite pending`, the exact
   setup-link expiry, Resend setup, Permissions, and Revoke invitation. Remote
   D1 proved `pending` + `sent` and an exact 3,600-second delivery window.

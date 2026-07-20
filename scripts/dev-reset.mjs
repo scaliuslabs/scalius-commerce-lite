@@ -56,7 +56,7 @@ Usage: pnpm dev:reset [options]
 Options:
   --skip-admin               Do not create the default local admin after reset
   --admin-email <email>      Local admin email (default: ${localAdminEmail})
-  --admin-password <value>   Local admin password, 12+ chars (default: ${localAdminPassword})
+  --admin-password <value>   Local admin password, 12+ chars (or LOCAL_ADMIN_PASSWORD)
   --admin-name <name>        Local admin name (default: ${localAdminName})
   --state <path>             Wrangler local state path; relative paths resolve from repo root
 `);
@@ -72,10 +72,14 @@ if (!skipAdmin) {
   }
 }
 
-function run(cmd, label) {
+function run(cmd, label, options = {}) {
   console.log(`\n▶ ${label}`);
-  console.log(`  $ ${cmd}\n`);
-  execSync(cmd, { cwd: root, stdio: "inherit" });
+  console.log(`  $ ${options.displayCommand ?? cmd}\n`);
+  execSync(cmd, {
+    cwd: root,
+    stdio: "inherit",
+    env: { ...process.env, ...options.env },
+  });
 }
 
 console.log("\n🔄 Scalius Commerce — Database Reset\n");
@@ -117,13 +121,18 @@ if (skipAdmin) {
   run(
     [
       "node scripts/dev-admin.mjs create",
-      `--email ${shellQuote(localAdminEmail)}`,
-      `--password ${shellQuote(localAdminPassword)}`,
-      `--name ${shellQuote(localAdminName)}`,
       "--skip-migrations",
       ...(resolvedWranglerStateOverride ? [`--state ${shellQuote(resolvedWranglerStateOverride)}`] : []),
     ].join(" "),
     "Creating default local admin",
+    {
+      displayCommand: "node scripts/dev-admin.mjs create --skip-migrations (credentials via environment)",
+      env: {
+        LOCAL_ADMIN_EMAIL: localAdminEmail,
+        LOCAL_ADMIN_PASSWORD: localAdminPassword,
+        LOCAL_ADMIN_NAME: localAdminName,
+      },
+    },
   );
 }
 
@@ -133,5 +142,5 @@ console.log("   Start fresh with: pnpm dev");
 if (skipAdmin) {
   console.log("   Then visit http://localhost:4323/admin to create a new admin account.\n");
 } else {
-  console.log(`   Admin login: ${localAdminEmail} / ${localAdminPassword}\n`);
+  console.log(`   Admin login: ${localAdminEmail} with the configured local admin password.\n`);
 }

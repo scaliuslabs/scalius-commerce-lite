@@ -32,6 +32,7 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import {
   SlidersHorizontal,
   X,
@@ -104,10 +105,7 @@ const canonicalFilterState = JSON.stringify(currentFilters);
 const hasListingQuery = Astro.url.searchParams.size > 0;
 
 function plainText(value: string | null | undefined): string | null {
-  const text = value
-    ?.replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const text = htmlToPlainText(value);
   return text ? text : null;
 }
 

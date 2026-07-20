@@ -100,7 +100,7 @@ describe("Openverse candidate discovery", () => {
       manualReview: { complete: false, sourcePageLicenseVerified: null },
       approval: { eligible: false },
     });
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("cdn.example-source.org"))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).hostname === "cdn.example-source.org")).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/thumb/"))).toBe(false);
   });
 

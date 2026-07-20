@@ -1523,7 +1523,8 @@ describe("admin route graph boundaries", () => {
     expect(editorSource).toContain("style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}");
     expect(editorSource).toContain("import { TiptapToolbarSkeleton } from \"./TiptapToolbarSkeleton\"");
     expect(editorSource).toContain("<TiptapToolbarSkeleton");
-    expect(editorSource).toContain("import { sanitizeHtml } from \"@scalius/shared/html-sanitize\"");
+    expect(editorSource).toContain('from "@scalius/shared/html-sanitize"');
+    expect(editorSource).toContain("hasRenderableHtmlContent");
     expect(editorSource).toContain("sanitizeHtml(content)");
     expect(editorSource).toContain('className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"');
     expect(editorSource).not.toContain("<RichContent");

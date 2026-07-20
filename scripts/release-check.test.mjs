@@ -119,7 +119,7 @@ describe("release documentation gate", () => {
     expect(seen).toEqual(expect.arrayContaining([
       "/repo/audit/README.md",
       "/repo/audit/OPERATIONAL_RUNBOOK.md",
-      "/repo/docs/codex/PLATFORM-GOAL.md",
+      "/repo/docs/platform/PLATFORM-GOAL.md",
       "/repo/docs/ARCHITECTURE.md",
     ]));
   });

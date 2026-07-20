@@ -1,3 +1,6 @@
+import { isTag, isText } from "domhandler";
+import { parseDocument } from "htmlparser2";
+
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const USER_AGENT = "ScaliusCommerce-DemoAssetResearch/1.0 (https://scalius.com/contact)";
 const MAX_QUERIES = 10;
@@ -27,15 +30,25 @@ function metadataValue(metadata, key) {
 }
 
 function plainText(value) {
-  return value
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  const document = parseDocument(value, {
+    decodeEntities: true,
+    lowerCaseTags: true,
+  });
+  const parts = [];
+  appendVisibleText(document.children, parts);
+  return parts.join(" ").replace(/\s+/gu, " ").trim();
+}
+
+function appendVisibleText(nodes, parts) {
+  for (const node of nodes ?? []) {
+    if (isText(node)) {
+      parts.push(node.data);
+      continue;
+    }
+    if (!isTag(node)) continue;
+    if (["script", "style", "template"].includes(node.name)) continue;
+    appendVisibleText(node.children, parts);
+  }
 }
 
 function normalizeLicense(metadata) {

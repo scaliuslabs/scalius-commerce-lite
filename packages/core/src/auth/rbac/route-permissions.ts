@@ -1173,7 +1173,9 @@ export function getRoutePermission(
 
 function normalizePathname(pathname: string): string {
   const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
+  let end = normalized.length;
+  while (end > 1 && normalized[end - 1] === "/") end -= 1;
+  return normalized.slice(0, end);
 }
 
 /**

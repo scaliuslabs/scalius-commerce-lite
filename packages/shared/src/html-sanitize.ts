@@ -115,6 +115,40 @@ const ALLOWED_BUTTON_TYPES = new Set(["button", "submit", "reset"]);
 const ALLOWED_TARGETS = new Set(["_blank", "_self", "_parent", "_top"]);
 const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,/i;
 const HAS_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
+  "article",
+  "aside",
+  "blockquote",
+  "br",
+  "dd",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "figcaption",
+  "figure",
+  "footer",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "p",
+  "section",
+  "table",
+  "td",
+  "th",
+  "tr",
+  "ul",
+]);
+const RENDERABLE_EMPTY_TAGS = new Set(["hr", "img"]);
 
 /**
  * Sanitizes admin-authored rich HTML using a parser-backed allowlist.
@@ -136,6 +170,65 @@ export function sanitizeHtml(html: string): string {
 
   const children = sanitizeNodes(document.children);
   return DomUtils.getOuterHTML(children);
+}
+
+/**
+ * Converts merchant-authored rich text to normalized plain text without using
+ * regex-based tag stripping. Script-capable nodes are removed by the same
+ * allowlist as `sanitizeHtml`, and block boundaries remain readable spaces.
+ */
+export function htmlToPlainText(html: string | null | undefined): string {
+  if (!html) return "";
+
+  const document = parseDocument(sanitizeHtml(html), {
+    decodeEntities: true,
+    lowerCaseTags: true,
+  });
+  const parts: string[] = [];
+  appendPlainText(document.children, parts);
+
+  return parts
+    .join("")
+    .replace(/\u00a0/gu, " ")
+    .replace(/\s+/gu, " ")
+    .replace(/\s+([.,;:!?])/gu, "$1")
+    .trim();
+}
+
+/** Returns whether sanitized rich text has visible text or an empty visual node. */
+export function hasRenderableHtmlContent(html: string | null | undefined): boolean {
+  if (!html) return false;
+
+  const document = parseDocument(sanitizeHtml(html), {
+    decodeEntities: true,
+    lowerCaseTags: true,
+  });
+  return nodesHaveRenderableContent(document.children);
+}
+
+function appendPlainText(nodes: ChildNode[] = [], parts: string[]): void {
+  for (const node of nodes) {
+    if (isText(node)) {
+      parts.push(node.data);
+      continue;
+    }
+    if (!isTag(node)) continue;
+
+    const isBoundary = PLAIN_TEXT_BOUNDARY_TAGS.has(node.name);
+    if (isBoundary) parts.push(" ");
+    appendPlainText(node.children ?? [], parts);
+    if (isBoundary) parts.push(" ");
+  }
+}
+
+function nodesHaveRenderableContent(nodes: ChildNode[] = []): boolean {
+  for (const node of nodes) {
+    if (isText(node) && node.data.trim().length > 0) return true;
+    if (!isTag(node)) continue;
+    if (RENDERABLE_EMPTY_TAGS.has(node.name)) return true;
+    if (nodesHaveRenderableContent(node.children ?? [])) return true;
+  }
+  return false;
 }
 
 function sanitizeNodes(nodes: ChildNode[] = []): ChildNode[] {

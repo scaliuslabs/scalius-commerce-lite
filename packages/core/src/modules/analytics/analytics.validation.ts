@@ -1,5 +1,6 @@
 // src/modules/analytics/analytics.validation.ts
 import { z } from "zod";
+import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 export const analyticsScriptTypes = [
     "google_analytics",
@@ -82,15 +83,13 @@ function extractCloudflareWebAnalyticsToken(config: string): string | null {
         return null;
     }
 
-    const beaconMatch = config.match(
-        /data-cf-beacon\s*=\s*(["'])(.*?)\1/is,
-    );
-    if (!beaconMatch?.[2]) {
+    const beaconJson = readQuotedHtmlAttribute(config, "data-cf-beacon");
+    if (!beaconJson) {
         return null;
     }
 
     try {
-        const beaconConfig = JSON.parse(beaconMatch[2]) as { token?: unknown };
+        const beaconConfig = JSON.parse(beaconJson) as { token?: unknown };
         return typeof beaconConfig.token === "string" ? beaconConfig.token : null;
     } catch {
         return null;
