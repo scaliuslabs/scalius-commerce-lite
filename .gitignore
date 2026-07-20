@@ -47,3 +47,8 @@ GEMINI.md
 .claude/
 .codex/
 .cursor/
+
+# Local product audits, work plans, and research notes are not published.
+/audit/
+/docs/platform/
+/docs/research/

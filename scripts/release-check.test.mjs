@@ -105,7 +105,7 @@ describe("release check arguments", () => {
 });
 
 describe("release documentation gate", () => {
-  it("checks the current operations and architecture documents", () => {
+  it("checks the public contributor and architecture documents", () => {
     const seen = [];
     const result = evaluateRequiredDocs({
       rootDir: "/repo",
@@ -115,24 +115,25 @@ describe("release documentation gate", () => {
       },
     });
 
-    expect(result).toEqual({ ok: true, checkedFiles: 7, missing: [] });
+    expect(result).toEqual({ ok: true, checkedFiles: 5, missing: [] });
     expect(seen).toEqual(expect.arrayContaining([
-      "/repo/audit/README.md",
-      "/repo/audit/OPERATIONAL_RUNBOOK.md",
-      "/repo/docs/platform/PLATFORM-GOAL.md",
       "/repo/docs/ARCHITECTURE.md",
+      "/repo/README.md",
+      "/repo/CONTRIBUTING.md",
+      "/repo/SECURITY.md",
+      "/repo/CODE_OF_CONDUCT.md",
     ]));
   });
 
   it("reports missing required files", () => {
     expect(evaluateRequiredDocs({
       rootDir: "/repo",
-      required: ["README.md", "audit/README.md"],
-      fileExistsImpl: (path) => path.endsWith("README.md") && !path.includes("audit/"),
+      required: ["README.md", "SECURITY.md"],
+      fileExistsImpl: (path) => path.endsWith("README.md"),
     })).toEqual({
       ok: false,
       checkedFiles: 2,
-      missing: ["audit/README.md"],
+      missing: ["SECURITY.md"],
     });
   });
 });
