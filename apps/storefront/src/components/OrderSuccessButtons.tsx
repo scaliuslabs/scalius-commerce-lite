@@ -37,6 +37,27 @@ function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
   }
 }
 
+function getSupportRequestStatusMessage(request: OrderReceiptSupportRequest) {
+  switch (request.status) {
+    case "submitted":
+      return "The store received your request and will review it before making changes.";
+    case "under_review":
+      return "The store team is reviewing this request.";
+    case "approved":
+      return "The store accepted this request. Check the order status for progress.";
+    case "rejected":
+      return "The store could not accept this request. Contact the store if you still need help.";
+    case "withdrawn":
+      return "This request was withdrawn.";
+    case "completed":
+      return "This request is complete.";
+    default:
+      return request.active
+        ? "The store team is reviewing this request."
+        : "This request is settled. Contact the store if you still need help.";
+  }
+}
+
 function getApiMessage(payload: unknown, fallback: string) {
   if (typeof payload !== "object" || payload === null) return fallback;
   const record = payload as Record<string, unknown>;
@@ -338,9 +359,7 @@ export default function OrderSuccessButtons({
           <div className={`mt-4 rounded-lg border px-3 py-2 text-sm ${getSupportToneClass((activeSupportRequest ?? latestSupportRequest)!.severity)}`}>
             <p className="font-medium">{(activeSupportRequest ?? latestSupportRequest)!.label}</p>
             <p className="mt-1 text-xs opacity-80">
-              {(activeSupportRequest ?? latestSupportRequest)!.active
-                ? "The store team will review this request before making any order changes."
-                : "This request is already settled. Contact the store if you still need help."}
+              {getSupportRequestStatusMessage((activeSupportRequest ?? latestSupportRequest)!)}
             </p>
           </div>
         ) : supportRequestActions.length > 0 ? (

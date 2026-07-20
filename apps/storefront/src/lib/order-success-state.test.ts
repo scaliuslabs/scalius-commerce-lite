@@ -103,7 +103,7 @@ describe("order success state", () => {
     expect(getOrderSuccessViewState(order).shouldFinalizeClientSide).toBe(true);
   });
 
-  it("does not finalize failed or refunded receipts", () => {
+  it("keeps failed payments actionable without treating cancelled orders as payment failures", () => {
     expect(
       getOrderSuccessStateKind(makeOrder({
         paymentMethod: "stripe",
@@ -118,7 +118,27 @@ describe("order success state", () => {
         paymentStatus: "unpaid",
         status: "cancelled",
       })),
-    ).toBe("payment_issue");
+    ).toBe("order_updated");
+  });
+
+  it("renders paid returned orders as a post-sale update without firing purchase finalization", () => {
+    const view = getOrderSuccessViewState(makeOrder({
+      paymentMethod: "cod",
+      paymentStatus: "paid",
+      status: "returned",
+      paidAmount: 1200,
+      balanceDue: 0,
+    }));
+
+    expect(view).toMatchObject({
+      kind: "order_updated",
+      shouldFinalizeClientSide: false,
+      title: "Order Returned",
+      orderStatusLabel: "Returned",
+      paymentStatusLabel: "Paid",
+    });
+    expect(view.message).toContain("Any refund appears separately");
+    expect(view.message).not.toContain("payment is not complete");
   });
 
   it("builds a non-PII analytics payload", () => {

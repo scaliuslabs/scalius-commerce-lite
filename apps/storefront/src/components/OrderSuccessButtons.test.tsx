@@ -68,4 +68,38 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
       "Return requests are available after the order ships.",
     );
   });
+
+  it("shows accepted request progress instead of stale review copy", () => {
+    act(() => {
+      root.render(
+        <OrderSuccessButtons
+          orderId="ord_1"
+          supportRequests={[{
+            id: "request_1",
+            orderId: "ord_1",
+            customerId: null,
+            type: "return",
+            status: "approved",
+            active: true,
+            severity: "success",
+            label: "Return request approved",
+            actionLabel: "Request return",
+            reason: "The size is not suitable.",
+            message: null,
+            submittedAt: "2026-07-21T00:00:00.000Z",
+            resolvedAt: null,
+            createdAt: "2026-07-21T00:00:00.000Z",
+            updatedAt: "2026-07-21T00:05:00.000Z",
+          }]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain(
+      "The store accepted this request. Check the order status for progress.",
+    );
+    expect(host.textContent).not.toContain(
+      "The store team will review this request before making any order changes.",
+    );
+  });
 });

@@ -422,10 +422,20 @@ export function useResolveOrderSupportRequest() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.orders.detail(variables.orderId),
       });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.returns(variables.orderId),
+      });
       toast.success("Customer request updated");
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update customer request")),
+    onError: (err, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.detail(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders.returns(variables.orderId),
+      });
+      toast.error(getServerFnError(err, "Failed to update customer request"));
+    },
   });
 }
 

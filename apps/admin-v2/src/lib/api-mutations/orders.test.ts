@@ -43,6 +43,7 @@ vi.mock("../api-functions/orders", () => ({
   reconcileShipment: vi.fn(),
   receiveOrderReturn: vi.fn(),
   refundOrder: vi.fn(),
+  resolveOrderSupportRequest: vi.fn(),
   resendOrderNotification: vi.fn(),
   retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
@@ -57,12 +58,14 @@ import {
   createOrderReturn,
   bulkShipOrders,
   issueOrderPaymentRecoveryLink,
+  resolveOrderSupportRequest,
   resendOrderNotification,
 } from "../api-functions/orders";
 import {
   useBulkShipOrders,
   useCreateOrderReturn,
   useIssueOrderPaymentRecoveryLink,
+  useResolveOrderSupportRequest,
   useRefundOrder,
   useReconcileRefundAttempt,
   useResendOrderNotification,
@@ -384,6 +387,43 @@ describe("item-level return mutations", () => {
     });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.detail("ord_123"),
+    });
+  });
+});
+
+describe("customer return request mutations", () => {
+  it("forwards the return creation payload and refreshes the linked return workspace", () => {
+    const mutation = useResolveOrderSupportRequest() as MutationOptions;
+    const variables = {
+      orderId: "ord_123",
+      requestId: "request_1",
+      status: "approved",
+      returnRequest: {
+        commandKey: "return:support:request-1",
+        expectedOrderVersion: 4,
+        reason: "Wrong size",
+        lines: [{ orderItemId: "item_1", quantity: 1 }],
+      },
+    };
+
+    mutation.mutationFn?.(variables);
+    mutation.onSuccess?.({}, variables);
+
+    expect(resolveOrderSupportRequest).toHaveBeenCalledWith({ data: variables });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.returns("ord_123"),
+    });
+
+    reactQueryMocks.queryClient.invalidateQueries.mockClear();
+    mutation.onError?.(new Error("stale order"), variables);
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.detail("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.returns("ord_123"),
     });
   });
 });

@@ -5,8 +5,10 @@ import {
   Loader2,
   MessageSquareText,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@scalius/shared/utils";
 import { useResolveOrderSupportRequest } from "@/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
@@ -27,8 +29,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { orderReturnsQueryOptions } from "@/lib/api-query-options/orders";
+import {
+  StableReturnCommandKey,
+  getRemainingReturnableQuantities,
+  type OrderReturnDto,
+} from "@/lib/order-return-workflow";
 import type { Order, OrderSupportRequest, OrderTimestamp } from "./types";
 import { formatOrderTimestamp } from "./formatters";
+import {
+  createReturnCommandKey,
+  getOrderItemName,
+  parseReturnQuantity,
+} from "./order-returns/shared";
+
+const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 
 const SEVERITY_CLASS: Record<string, string> = {
   info: "border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-100",
@@ -50,7 +67,7 @@ const RESOLUTION_OPTIONS: Record<ResolutionStatus, {
     icon: Clock,
   },
   approved: {
-    label: "Approve",
+    label: "Accept request",
     description: "Accept the customer request and keep it open for follow-up.",
     icon: CheckCircle2,
   },
@@ -109,7 +126,7 @@ function RequestRow({
 
   return (
     <div className="space-y-2 border-b border-border p-4 last:border-b-0">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Icon className="h-4 w-4 text-muted-foreground" />
@@ -128,7 +145,7 @@ function RequestRow({
             </p>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2">
+        <div className="flex w-full shrink-0 items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end">
           {submittedAt ? (
             <div className="text-right text-xs text-muted-foreground">
               {submittedAt}
@@ -151,12 +168,12 @@ function RequestRow({
 }
 
 function ResolveSupportRequestDialog({
-  orderId,
+  order,
   request,
   open,
   onOpenChange,
 }: {
-  orderId: string;
+  order: Order;
   request: OrderSupportRequest | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -167,37 +184,97 @@ function ResolveSupportRequestDialog({
   const requestStatus = request?.status ?? null;
   const [selectedStatus, setSelectedStatus] = useState<ResolutionStatus | null>(null);
   const [note, setNote] = useState("");
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, number>>({});
+  const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  const canAcceptReturn = request?.type === "return" && options.includes("approved");
+  const isReturnApproval = request?.type === "return" && selectedStatus === "approved";
+  const returnsQuery = useQuery({
+    ...orderReturnsQueryOptions(order.id),
+    enabled: open && isReturnApproval,
+  });
+  const returns = returnsQuery.data?.returns ?? EMPTY_RETURNS;
+  const remaining = useMemo(
+    () => getRemainingReturnableQuantities(order.items, returns),
+    [order.items, returns],
+  );
+  const eligibleItems = useMemo(
+    () => order.items.filter((item) => (remaining.get(item.id) ?? 0) > 0),
+    [order.items, remaining],
+  );
+  const returnLines = eligibleItems
+    .map((item) => ({
+      orderItemId: item.id,
+      quantity: Math.min(returnQuantities[item.id] ?? 0, remaining.get(item.id) ?? 0),
+      reason: request?.reason ?? null,
+    }))
+    .filter((line) => line.quantity > 0);
 
   useEffect(() => {
     if (!open || !requestStatus) return;
     setSelectedStatus(getResolutionStatuses(requestStatus)[0] ?? null);
     setNote("");
+    setReturnQuantities({});
+    commandKey.current.clear();
   }, [open, requestId, requestStatus]);
 
   if (!request) return null;
 
   const handleSubmit = () => {
     if (!selectedStatus) return;
+    if (isReturnApproval && (!returnsQuery.isSuccess || returnLines.length === 0)) return;
+    const returnRequest = isReturnApproval ? {
+      expectedOrderVersion: order.version,
+      reason: request.reason,
+      notes: request.message?.trim() || null,
+      lines: returnLines,
+    } : null;
     mutation.mutate({
-      orderId,
+      orderId: order.id,
       requestId: request.id,
       status: selectedStatus,
       note: note.trim() || null,
+      ...(returnRequest ? {
+        returnRequest: {
+          commandKey: commandKey.current.get("support-request", returnRequest),
+          ...returnRequest,
+        },
+      } : {}),
     }, {
-      onSuccess: () => onOpenChange(false),
+      onSuccess: () => {
+        commandKey.current.clear();
+        onOpenChange(false);
+      },
     });
   };
+
+  const canSubmit = Boolean(
+    selectedStatus
+    && !mutation.isPending
+    && (!isReturnApproval || returnsQuery.isSuccess && returnLines.length > 0),
+  );
+  const submitLabel = isReturnApproval
+    ? "Accept and create return case"
+    : selectedStatus === "under_review"
+      ? "Mark under review"
+      : selectedStatus === "approved"
+        ? "Accept request"
+        : selectedStatus === "rejected"
+          ? "Reject request"
+          : "Complete request";
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
       if (!mutation.isPending) onOpenChange(nextOpen);
     }}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Resolve customer request</DialogTitle>
+          <DialogTitle>Review customer request</DialogTitle>
           <DialogDescription>
-            Update this request record only. Complete refunds, shipment changes,
-            payment updates, or order status changes separately.
+            {canAcceptReturn
+              ? "Accepting opens a requested return case. Authorize and receive it from Returns; refunds remain separate."
+              : request.type === "return"
+                ? "Complete this request after the linked return work is finished. Refunds remain separate."
+              : "Choose the request outcome. Payment, shipment, inventory, and order status changes remain separate."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -218,6 +295,7 @@ function ResolveSupportRequestDialog({
                 <button
                   key={status}
                   type="button"
+                  aria-pressed={selected}
                   className={cn(
                     "rounded-md border p-3 text-left transition-colors",
                     "hover:border-primary/40 hover:bg-primary/5",
@@ -239,6 +317,65 @@ function ResolveSupportRequestDialog({
             })}
           </div>
 
+          {isReturnApproval ? (
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <div>
+                <h3 className="text-sm font-medium">Items to return</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Choose shipped or delivered quantities. This opens a requested return case; it does not authorize, refund, or restock items.
+                </p>
+              </div>
+              {returnsQuery.isLoading ? (
+                <div className="flex min-h-20 items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading returnable items…
+                </div>
+              ) : returnsQuery.isError ? (
+                <div className="flex min-h-20 flex-col items-center justify-center gap-2 text-center">
+                  <p className="text-sm text-destructive">Returnable items could not be loaded.</p>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void returnsQuery.refetch()}>
+                    <RefreshCw className="h-4 w-4" /> Retry
+                  </Button>
+                </div>
+              ) : eligibleItems.length === 0 ? (
+                <p className="rounded-md bg-muted/40 p-3 text-sm text-muted-foreground">
+                  No shipped or delivered quantity remains available. Choose another outcome or refresh the order.
+                </p>
+              ) : (
+                <div className="overflow-hidden rounded-md border border-border">
+                  {eligibleItems.map((item) => {
+                    const max = remaining.get(item.id) ?? 0;
+                    return (
+                      <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem] items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{getOrderItemName(item)}</p>
+                          <p className="text-xs text-muted-foreground">{max} available</p>
+                        </div>
+                        <div>
+                          <Label htmlFor={`support-return-${item.id}`} className="sr-only">
+                            Return quantity for {getOrderItemName(item)}
+                          </Label>
+                          <Input
+                            id={`support-return-${item.id}`}
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={max}
+                            value={returnQuantities[item.id] ?? 0}
+                            onChange={(event) => setReturnQuantities((current) => ({
+                              ...current,
+                              [item.id]: parseReturnQuantity(event.target.value, max),
+                            }))}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
@@ -259,10 +396,10 @@ function ResolveSupportRequestDialog({
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={!selectedStatus || mutation.isPending}
+            disabled={!canSubmit}
           >
             {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Save
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -309,7 +446,7 @@ export function OrderSupportRequestsCard({ order }: { order: Order }) {
         ))}
       </CardContent>
       <ResolveSupportRequestDialog
-        orderId={order.id}
+        order={order}
         request={selectedRequest}
         open={resolveDialogOpen}
         onOpenChange={setResolveDialogOpen}

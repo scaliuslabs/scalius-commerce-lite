@@ -2,15 +2,22 @@ import type { OrderItem, OrderReceipt } from "./api/types";
 
 const ONLINE_PAYMENT_METHODS = new Set(["stripe", "sslcommerz", "polar"]);
 const NON_FINAL_ORDER_STATUSES = new Set(["incomplete"]);
-const FAILED_ORDER_STATUSES = new Set([
-  "cancelled",
+const PAYMENT_ISSUE_ORDER_STATUSES = new Set([
   "failed",
+]);
+const UPDATED_ORDER_STATUSES = new Set([
+  "confirmed",
+  "processing",
+  "shipped",
+  "delivered",
+  "completed",
+  "cancelled",
   "refunded",
   "returned",
   "partially_refunded",
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
-const FAILED_PAYMENT_STATUSES = new Set(["failed", "refunded"]);
+const FAILED_PAYMENT_STATUSES = new Set(["failed"]);
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cod: "Cash on Delivery",
   polar: "Polar",
@@ -20,6 +27,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 export type OrderSuccessStateKind =
   | "order_placed"
+  | "order_updated"
   | "payment_pending"
   | "payment_issue";
 
@@ -69,8 +77,15 @@ export function getOrderSuccessStateKind(
   const orderStatus = normalize(order.status);
   const paymentStatus = normalize(order.paymentStatus);
 
-  if (FAILED_ORDER_STATUSES.has(orderStatus) || FAILED_PAYMENT_STATUSES.has(paymentStatus)) {
+  if (
+    PAYMENT_ISSUE_ORDER_STATUSES.has(orderStatus)
+    || FAILED_PAYMENT_STATUSES.has(paymentStatus)
+  ) {
     return "payment_issue";
+  }
+
+  if (UPDATED_ORDER_STATUSES.has(orderStatus) || paymentStatus === "refunded") {
+    return "order_updated";
   }
 
   if (!isOnlinePaymentMethod(order.paymentMethod)) {
@@ -120,6 +135,70 @@ export function getOrderSuccessViewState(order: OrderReceipt): OrderSuccessViewS
       orderStatusLabel: "Payment pending",
       paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
       badgeClass: "bg-amber-100 text-amber-800",
+    };
+  }
+
+  if (kind === "order_updated") {
+    const orderStatus = normalize(order.status);
+    const updatedCopy: Record<string, { title: string; message: string; badgeClass: string }> = {
+      confirmed: {
+        title: "Order Confirmed",
+        message: `Order #${order.id} is confirmed and being prepared.`,
+        badgeClass: "bg-sky-100 text-sky-800",
+      },
+      processing: {
+        title: "Order Processing",
+        message: `Order #${order.id} is being prepared.`,
+        badgeClass: "bg-sky-100 text-sky-800",
+      },
+      shipped: {
+        title: "Order Shipped",
+        message: `Order #${order.id} is on the way.`,
+        badgeClass: "bg-sky-100 text-sky-800",
+      },
+      delivered: {
+        title: "Order Delivered",
+        message: `Order #${order.id} has been delivered.`,
+        badgeClass: "bg-emerald-100 text-emerald-800",
+      },
+      completed: {
+        title: "Order Completed",
+        message: `Order #${order.id} is complete.`,
+        badgeClass: "bg-emerald-100 text-emerald-800",
+      },
+      cancelled: {
+        title: "Order Cancelled",
+        message: `Order #${order.id} was cancelled. Any payment refund appears in the payment details below.`,
+        badgeClass: "bg-slate-100 text-slate-800",
+      },
+      refunded: {
+        title: "Order Refunded",
+        message: `The refund for order #${order.id} has been recorded. See the payment details below.`,
+        badgeClass: "bg-emerald-100 text-emerald-800",
+      },
+      returned: {
+        title: "Order Returned",
+        message: `The return for order #${order.id} has been recorded. Any refund appears separately in the payment details below.`,
+        badgeClass: "bg-emerald-100 text-emerald-800",
+      },
+      partially_refunded: {
+        title: "Order Partially Refunded",
+        message: `A partial refund for order #${order.id} has been recorded. See the payment details below.`,
+        badgeClass: "bg-emerald-100 text-emerald-800",
+      },
+    };
+    const copy = updatedCopy[orderStatus] ?? {
+      title: "Order Updated",
+      message: `Order #${order.id} has been updated.`,
+      badgeClass: "bg-slate-100 text-slate-800",
+    };
+
+    return {
+      kind,
+      shouldFinalizeClientSide: false,
+      ...copy,
+      orderStatusLabel: formatOrderSuccessLabel(order.status),
+      paymentStatusLabel: formatOrderSuccessLabel(order.paymentStatus),
     };
   }
 
