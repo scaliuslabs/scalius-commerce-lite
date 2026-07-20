@@ -148,7 +148,7 @@ export function SearchableSelect({
           aria-required={required || undefined}
           disabled={disabled}
           className={cn(
-            "h-9 min-w-0 justify-between gap-2 px-3 text-sm font-normal",
+            "h-11 min-w-0 justify-between gap-2 px-3 text-sm font-normal sm:h-9",
             triggerClassName,
           )}
         >
@@ -173,7 +173,7 @@ export function SearchableSelect({
         )}
       >
         <div className="bg-popover text-popover-foreground">
-          <div className="flex h-9 items-center gap-2 border-b px-3">
+          <div className="flex h-11 items-center gap-2 border-b px-3 sm:h-9">
             <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
@@ -237,7 +237,7 @@ export function SearchableSelect({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectOption(option)}
                 className={cn(
-                  "flex min-h-8 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none",
+                  "flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none sm:min-h-8",
                   index === safeActiveIndex && "bg-accent text-accent-foreground",
                   "focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
                 )}

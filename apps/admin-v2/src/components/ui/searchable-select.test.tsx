@@ -76,6 +76,11 @@ describe("SearchableSelect", () => {
     expect(
       document.body.querySelector('[data-slot="searchable-select-list"]')?.className,
     ).toContain("max-h-60");
+    expect(trigger.className).toContain("h-11");
+    expect(trigger.className).toContain("sm:h-9");
+    expect(
+      document.body.querySelector('[role="option"]')?.className,
+    ).toContain("min-h-11");
 
     await act(async () => {
       setInputValue(search, "drink");

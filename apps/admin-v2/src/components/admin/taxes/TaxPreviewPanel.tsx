@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   previewTaxConfiguration,
@@ -43,6 +44,21 @@ export function TaxPreviewPanel({
   const areas = useMemo(
     () => configuration.jurisdictions.filter((option) => option.type === "area" && (!zone || option.parentId === zone)),
     [configuration.jurisdictions, zone],
+  );
+  const cityOptions = useMemo(
+    () => cities.map((option) => ({ value: option.id, label: option.name })),
+    [cities],
+  );
+  const zoneOptions = useMemo(
+    () => zones.map((option) => ({ value: option.id, label: option.name })),
+    [zones],
+  );
+  const areaOptions = useMemo(
+    () => [
+      { value: NO_AREA, label: "No area" },
+      ...areas.map((option) => ({ value: option.id, label: option.name })),
+    ],
+    [areas],
   );
 
   const parsed = {
@@ -94,28 +110,53 @@ export function TaxPreviewPanel({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>City</Label>
-              <Select value={city} onValueChange={(value) => { setCity(value); setZone(""); setArea(NO_AREA); }}>
-                <SelectTrigger aria-label="Preview city"><SelectValue placeholder="Choose city" /></SelectTrigger>
-                <SelectContent>{cities.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label htmlFor="preview-city">City</Label>
+              <SearchableSelect
+                id="preview-city"
+                value={city}
+                options={cityOptions}
+                onValueChange={(value) => { setCity(value); setZone(""); setArea(NO_AREA); }}
+                placeholder="Choose city"
+                searchPlaceholder="Search cities…"
+                emptyMessage="No matching cities."
+                ariaLabel="Preview city"
+                required
+                maxVisibleOptions={100}
+                triggerClassName="w-full"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Zone</Label>
-              <Select value={zone} disabled={!city} onValueChange={(value) => { setZone(value); setArea(NO_AREA); }}>
-                <SelectTrigger aria-label="Preview zone"><SelectValue placeholder="Choose zone" /></SelectTrigger>
-                <SelectContent>{zones.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label htmlFor="preview-zone">Zone</Label>
+              <SearchableSelect
+                id="preview-zone"
+                value={zone}
+                options={zoneOptions}
+                onValueChange={(value) => { setZone(value); setArea(NO_AREA); }}
+                placeholder="Choose zone"
+                searchPlaceholder="Search zones…"
+                emptyMessage="No matching zones."
+                ariaLabel="Preview zone"
+                disabled={!city}
+                required
+                maxVisibleOptions={100}
+                triggerClassName="w-full"
+              />
             </div>
             <div className="space-y-2">
-              <Label>Area (optional)</Label>
-              <Select value={area} disabled={!zone} onValueChange={setArea}>
-                <SelectTrigger aria-label="Preview area"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_AREA}>No area</SelectItem>
-                  {areas.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="preview-area">Area (optional)</Label>
+              <SearchableSelect
+                id="preview-area"
+                value={area}
+                options={areaOptions}
+                onValueChange={setArea}
+                placeholder="No area"
+                searchPlaceholder="Search areas…"
+                emptyMessage="No matching areas."
+                ariaLabel="Preview area"
+                disabled={!zone}
+                maxVisibleOptions={100}
+                triggerClassName="w-full"
+              />
             </div>
           </div>
           {cities.length === 0 ? (
