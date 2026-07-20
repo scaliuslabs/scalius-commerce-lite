@@ -30,16 +30,17 @@ const categories = rail.enabled ? rail.categories : [];
                 width: 520,
                 height: 620,
                 fit: "cover",
-                gravity: "center",
+                gravity: "auto",
                 quality: 84,
                 format: "auto",
               })
             : null;
           const srcset = category.imageUrl
             ? getResponsiveSrcSet(category.imageUrl, [240, 360, 520], {
+                width: 520,
                 height: 620,
                 fit: "cover",
-                gravity: "center",
+                gravity: "auto",
                 quality: 84,
                 format: "auto",
               })

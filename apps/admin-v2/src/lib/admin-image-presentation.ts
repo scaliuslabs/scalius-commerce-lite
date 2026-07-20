@@ -12,6 +12,7 @@ export const ADMIN_IMAGE_PRESETS = {
     height: 96,
     quality: 82,
     fit: "cover",
+    gravity: "face",
   },
   brandLogo: {
     width: 320,
@@ -24,6 +25,7 @@ export const ADMIN_IMAGE_PRESETS = {
     height: 96,
     quality: 80,
     fit: "cover",
+    gravity: "auto",
   },
   favicon: {
     width: 96,

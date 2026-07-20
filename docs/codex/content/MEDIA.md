@@ -369,3 +369,32 @@ buffered in a Worker invocation.
   transformation for the month, so finite named presets are a cost and cache
   contract as well as a visual one. New compact surfaces should reuse the
   nearest preset rather than inventing another width/height/quality tuple.
+
+### Responsive crop-integrity follow-up (2026-07-20)
+
+- A production source/runtime audit found one shared responsive-image trap:
+  callers could provide a target height without an authored base width. The
+  helper then changed only the width for every `srcset` candidate, silently
+  changing the crop ratio at each breakpoint. Height-only requests now omit the
+  height; an exact cropped frame must declare both dimensions so candidates can
+  scale the same ratio proportionally.
+- The homepage category rail now owns one explicit 520 x 620 portrait contract.
+  Its live candidates are 240 x 286, 360 x 429, and 520 x 620, all using
+  Cloudflare `gravity=auto` as the saliency fallback for merchant-supplied
+  category artwork. Hero slides remain different: their saved merchant focal
+  point is still the crop authority and is not replaced by automatic gravity.
+- Compact admin category art uses the same saliency fallback, while circular
+  administrator avatars use `gravity=face`. Whole-asset logo, favicon, media,
+  and product-card presets remain bounded, non-cropping transforms.
+- Product-gallery thumbnails now use `contain`, and product/variant social plus
+  JSON-LD images use `pad` in the required 1200 x 630 frame. This preserves the
+  complete item as commercial evidence instead of irreversibly cropping it for
+  a secondary surface. No product-page layout, interaction, typography, or
+  gallery composition was redesigned.
+- Admin version `525dd6a0-7c78-4217-9a39-b1d8a3ef4700` and Storefront version
+  `89fa5db0-efe6-4e48-bb1a-d2190197e379` (build
+  `src-6f3a5e1ac0204ab0`) are live at 100%. The live homepage emitted the exact
+  proportional category candidates above; the Weekender Duffel page emitted
+  `fit=contain` 140 x 140 thumbnails and `fit=pad` Open Graph/Product schema
+  images. Forty-one focused tests, sequential Shared/Admin/Storefront
+  typechecks, the production ops smoke, and the full release smoke passed.

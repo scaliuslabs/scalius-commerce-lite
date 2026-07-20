@@ -10,7 +10,9 @@ function readSource(relativePath: string): string {
 describe("admin image presentation presets", () => {
   it("limits crop transforms to presentations that explicitly need a crop", () => {
     expect(ADMIN_IMAGE_PRESETS.avatar.fit).toBe("cover");
+    expect(ADMIN_IMAGE_PRESETS.avatar.gravity).toBe("face");
     expect(ADMIN_IMAGE_PRESETS.categoryTile.fit).toBe("cover");
+    expect(ADMIN_IMAGE_PRESETS.categoryTile.gravity).toBe("auto");
 
     for (const key of [
       "brandLogo",
