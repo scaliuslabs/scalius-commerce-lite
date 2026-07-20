@@ -49,7 +49,9 @@ describe("customer auth resilience source boundaries", () => {
 
     expect(source).toContain("const session = await readCustomerSessionForCheckout();");
     expect(source).toContain("if (session.unavailable) {");
-    expect(source).toContain("alert(session.error || \"We could not verify your account right now. Please try again.\")");
+    expect(source).toMatch(
+      /alert\(\s*session\.error\s*\|\|\s*"We could not verify your account right now\. Please try again\."\s*,?\s*\)/,
+    );
     expect(source).toContain("if (!session.authenticated) {");
     expect(source).toContain("window.dispatchEvent(new CustomEvent(\"open-auth-modal\"));");
   });
