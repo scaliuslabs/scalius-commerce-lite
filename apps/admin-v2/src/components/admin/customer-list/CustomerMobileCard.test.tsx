@@ -57,7 +57,7 @@ const buyer: CustomerListBuyer = {
   areaName: null,
   totalOrders: 3,
   totalSpent: 1250,
-  lastOrderAt: "2026-07-10T00:00:00.000Z",
+  lastOrderAt: "2026-07-20T21:00:00.000Z",
   createdAt: "2026-07-01T00:00:00.000Z",
   updatedAt: "2026-07-10T00:00:00.000Z",
   accountClaimedAt: "2026-07-02T00:00:00.000Z",
@@ -104,6 +104,7 @@ describe("CustomerMobileCard", () => {
     expect(host.textContent).toContain("12 Lake Road, Dhanmondi, Dhaka");
     expect(host.textContent).toContain("Paid spend");
     expect(host.textContent).toContain("৳1,250");
+    expect(host.textContent).toContain("Jul 21, 2026");
     expect(host.textContent).toContain("View order history");
     expect(host.querySelector('[aria-label="Select Samira Rahman"]')).toBeTruthy();
   });

@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { formatDateShort } from "@scalius/shared/timestamps";
 import { Mail, MapPin, Phone } from "lucide-react";
 
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { Checkbox } from "~/components/ui/checkbox";
+import { formatAdminDate } from "~/lib/admin-time";
 import { CustomerAccountBadge } from "./CustomerAccountBadge";
 import {
   customerHasAccount,
@@ -122,8 +122,8 @@ export function CustomerMobileCard({
         </div>
         <div className="min-w-0 px-2">
           <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Last order</dt>
-          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground" suppressHydrationWarning>
-            {customer.lastOrderAt ? formatDateShort(customer.lastOrderAt) : "No orders"}
+          <dd className="mt-0.5 truncate text-[11px] font-medium text-foreground">
+            {formatAdminDate(customer.lastOrderAt) ?? "No orders"}
           </dd>
         </div>
       </dl>

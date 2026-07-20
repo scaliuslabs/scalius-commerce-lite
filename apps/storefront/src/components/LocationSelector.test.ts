@@ -22,4 +22,14 @@ describe("resolveLocationOption", () => {
   it("ignores empty saved values", () => {
     expect(resolveLocationOption(locations, " ", null)).toBeUndefined();
   });
+
+  it("repairs a saved duplicate ID through its normalized display name", () => {
+    expect(
+      resolveLocationOption(
+        [{ id: "area_canonical", name: "Mohakhali Flyover" }],
+        "area_retired_duplicate",
+        " mohakhali   flyover ",
+      )?.id,
+    ).toBe("area_canonical");
+  });
 });

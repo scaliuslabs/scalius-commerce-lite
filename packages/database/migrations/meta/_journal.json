@@ -281,6 +281,20 @@
       "when": 1784538609292,
       "tag": "0039_awesome_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1784571759245,
+      "tag": "0040_normalize_delivery_locations",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "6",
+      "when": 1784574818176,
+      "tag": "0041_enforce_delivery_location_identity",
+      "breakpoints": true
     }
   ]
 }

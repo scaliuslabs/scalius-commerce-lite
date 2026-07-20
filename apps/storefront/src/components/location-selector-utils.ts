@@ -19,11 +19,22 @@ export function resolveLocationOption<T extends LocationOptionLike>(
 ): T | undefined {
   const candidates = [idOrName, displayName]
     .map((value) => value?.trim())
-    .filter(Boolean);
+    .filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    const exactId = locations.find((location) => location.id === candidate);
+    if (exactId) return exactId;
+  }
+
+  const normalizedNames = new Set(
+    candidates.map((candidate) =>
+      candidate.replace(/\s+/gu, " ").toLocaleLowerCase("en-US"),
+    ),
+  );
 
   return locations.find((location) =>
-    candidates.some(
-      (candidate) => location.id === candidate || location.name === candidate,
+    normalizedNames.has(
+      location.name.trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-US"),
     ),
   );
 }

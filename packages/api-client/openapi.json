@@ -146620,6 +146620,11 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "city",
+                "zone",
+                "area"
+              ],
               "description": "Location type filter"
             },
             "required": false,
@@ -146630,6 +146635,8 @@
           {
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
               "description": "Parent ID filter"
             },
             "required": false,
@@ -146640,6 +146647,7 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 120,
               "description": "Search term"
             },
             "required": false,
@@ -146649,8 +146657,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "default": 1,
               "description": "Page number"
             },
@@ -146661,8 +146669,8 @@
           },
           {
             "schema": {
-              "type": "number",
-              "nullable": true,
+              "type": "integer",
+              "minimum": 1,
               "maximum": 500,
               "default": 100,
               "description": "Items per page"
@@ -147050,7 +147058,8 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 120
                   },
                   "type": {
                     "type": "string",
@@ -147062,7 +147071,9 @@
                   },
                   "parentId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
                   },
                   "externalIds": {
                     "type": "object",
@@ -147090,7 +147101,9 @@
                     "default": true
                   },
                   "sortOrder": {
-                    "type": "number",
+                    "type": "integer",
+                    "minimum": -100000,
+                    "maximum": 100000,
                     "default": 0
                   }
                 },
@@ -147453,8 +147466,12 @@
                   "ids": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   }
                 },
                 "required": [
@@ -148422,11 +148439,14 @@
                 "properties": {
                   "name": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 120
                   },
                   "parentId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 128
                   },
                   "externalIds": {
                     "type": "object",
@@ -148451,7 +148471,9 @@
                     "type": "boolean"
                   },
                   "sortOrder": {
-                    "type": "number"
+                    "type": "integer",
+                    "minimum": -100000,
+                    "maximum": 100000
                   }
                 }
               }

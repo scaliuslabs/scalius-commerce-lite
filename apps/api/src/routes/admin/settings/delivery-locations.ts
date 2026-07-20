@@ -2,7 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
 import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
-import { createLocation, getLocationById } from "@scalius/core/modules/delivery/locations";
+import {
+    createLocation,
+    getLocationById,
+    updateLocation,
+} from "@scalius/core/modules/delivery/locations";
 import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
@@ -42,19 +46,84 @@ async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
     }
 }
 
-async function isActiveCity(db: Parameters<typeof getCheckoutDeliveryReadiness>[0], id: string | null | undefined) {
-    if (!id) return false;
-    const row = await db
-        .select({ id: deliveryLocations.id })
+async function assertValidLocationParent(
+    db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
+    type: "city" | "zone" | "area",
+    parentId: string | null | undefined,
+    isActive: boolean,
+) {
+    if (type === "city") {
+        if (parentId) throw new ValidationError("A city cannot have a parent location.");
+        return;
+    }
+
+    if (!parentId) {
+        throw new ValidationError(type === "zone" ? "Select a parent city." : "Select a parent zone.");
+    }
+
+    const expectedType = type === "zone" ? "city" : "zone";
+    const parent = await db
+        .select({ id: deliveryLocations.id, isActive: deliveryLocations.isActive })
         .from(deliveryLocations)
         .where(and(
-            eq(deliveryLocations.id, id),
-            eq(deliveryLocations.type, "city"),
-            eq(deliveryLocations.isActive, true),
+            eq(deliveryLocations.id, parentId),
+            eq(deliveryLocations.type, expectedType),
             isNull(deliveryLocations.deletedAt),
         ))
         .get();
-    return !!row;
+
+    if (!parent) {
+        throw new ValidationError(type === "zone" ? "Select an existing city." : "Select an existing zone.");
+    }
+    if (isActive && !parent.isActive) {
+        throw new ValidationError(`Activate the parent ${expectedType} before activating this ${type}.`);
+    }
+}
+
+async function assertActiveLocationIdentityAvailable(
+    db: Parameters<typeof getCheckoutDeliveryReadiness>[0],
+    type: "city" | "zone" | "area",
+    parentId: string | null | undefined,
+    name: string,
+    isActive: boolean,
+    currentId?: string,
+) {
+    if (!isActive) return;
+
+    const parentCondition = parentId
+        ? eq(deliveryLocations.parentId, parentId)
+        : isNull(deliveryLocations.parentId);
+    const existing = await db
+        .select({ id: deliveryLocations.id })
+        .from(deliveryLocations)
+        .where(and(
+            eq(deliveryLocations.type, type),
+            parentCondition,
+            eq(deliveryLocations.isActive, true),
+            isNull(deliveryLocations.deletedAt),
+            sql`lower(trim(${deliveryLocations.name})) = lower(trim(${name}))`,
+        ))
+        .get();
+
+    if (existing && existing.id !== currentId) {
+        throw new ValidationError(
+            `An active ${type} named “${name}” already exists under this parent.`,
+        );
+    }
+}
+
+function rethrowDeliveryLocationIdentityConflict(error: unknown): never {
+    if (
+        error instanceof Error &&
+        /delivery_locations_active_(?:city_name|child_name)_uidx|UNIQUE constraint failed:\s*delivery_locations/i.test(
+            error.message,
+        )
+    ) {
+        throw new ValidationError(
+            "An active location with this name already exists under the same parent.",
+        );
+    }
+    throw error;
 }
 
 const parseJsonObject = (value: string | null): Record<string, unknown> => {
@@ -66,22 +135,22 @@ const parseJsonObject = (value: string | null): Record<string, unknown> => {
 };
 
 const locationSchema = z.object({
-    name: z.string().min(1, "Name is required"),
+    name: z.string().trim().min(1, "Name is required").max(120),
     type: z.enum(["city", "zone", "area"]),
-    parentId: z.string().nullish(),
+    parentId: z.string().trim().min(1).max(128).nullish(),
     externalIds: z.record(z.string(), z.union([z.string(), z.number()])).optional().default({}),
     metadata: z.record(z.string(), z.string()).optional().default({}),
     isActive: z.boolean().optional().default(true),
-    sortOrder: z.number().optional().default(0)
+    sortOrder: z.number().int().min(-100000).max(100000).optional().default(0)
 });
 
 const updateLocationSchema = z.object({
-    name: z.string().min(1, "Name is required").optional(),
-    parentId: z.string().nullish().optional(),
+    name: z.string().trim().min(1, "Name is required").max(120).optional(),
+    parentId: z.string().trim().min(1).max(128).nullish().optional(),
     externalIds: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
     metadata: z.record(z.string(), z.string()).optional(),
     isActive: z.boolean().optional(),
-    sortOrder: z.number().optional()
+    sortOrder: z.number().int().min(-100000).max(100000).optional()
 });
 
 // ── List Locations ──
@@ -105,11 +174,11 @@ const listRoute = createRoute({
     summary: "List delivery locations",
     request: {
         query: z.object({
-            type: z.string().optional().openapi({ description: "Location type filter" }),
-            parentId: z.string().optional().openapi({ description: "Parent ID filter" }),
-            search: z.string().optional().openapi({ description: "Search term" }),
-            page: z.coerce.number().default(1).openapi({ description: "Page number" }),
-            limit: z.coerce.number().max(500).default(100).openapi({ description: "Items per page" })
+            type: z.enum(["city", "zone", "area"]).optional().openapi({ description: "Location type filter" }),
+            parentId: z.string().trim().min(1).max(128).optional().openapi({ description: "Parent ID filter" }),
+            search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
+            limit: z.coerce.number().int().min(1).max(500).default(100).openapi({ description: "Items per page" })
         })
     },
     responses: {
@@ -122,7 +191,7 @@ app.openapi(listRoute, async (c) => {
     try {
         const db = c.get("db");
         const query = c.req.valid("query");
-        const type = query.type as "city" | "zone" | "area" | undefined;
+        const type = query.type;
         const parentId = query.parentId;
         const search = query.search;
         const page = query.page;
@@ -196,12 +265,20 @@ app.openapi(createLocationRoute, (async (c) => {
     try {
         const db = c.get("db");
         const data = c.req.valid("json");
+        await assertValidLocationParent(db, data.type, data.parentId, data.isActive);
+        await assertActiveLocationIdentityAvailable(
+            db,
+            data.type,
+            data.parentId,
+            data.name,
+            data.isActive,
+        );
         const newLocation = await createLocation(db, data);
         await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
         return created(c, { location: newLocation });
     } catch (error: unknown) {
+        rethrowDeliveryLocationIdentityConflict(error);
         console.error("Error creating delivery location:", error);
-        throw error;
     }
 }) as AppRouteHandler<typeof createLocationRoute>);
 
@@ -241,7 +318,9 @@ const bulkDeleteRoute = createRoute({
     tags: ["Admin - Delivery Locations"],
     summary: "Bulk soft-delete delivery locations",
     request: {
-        body: { content: { "application/json": { schema: z.object({ ids: z.array(z.string()) }) } } }
+        body: { content: { "application/json": { schema: z.object({
+            ids: z.array(z.string().trim().min(1).max(128)).min(1).max(90),
+        }) } } }
     },
     responses: {
         200: { description: "Locations deleted", content: { "application/json": { schema: messageResponse } } },
@@ -253,8 +332,6 @@ app.openapi(bulkDeleteRoute, async (c) => {
     try {
         const db = c.get("db");
         const { ids } = c.req.valid("json");
-        if (ids.length === 0) throw new ValidationError("An array of location IDs is required");
-
         await assertDeliveryLocationsCanBeRemovedFromCheckout(db, ids);
 
         await db
@@ -325,6 +402,7 @@ app.openapi(updateLocationRoute, async (c) => {
         const currentLocation = await db
             .select({
                 id: deliveryLocations.id,
+                name: deliveryLocations.name,
                 type: deliveryLocations.type,
                 parentId: deliveryLocations.parentId,
                 isActive: deliveryLocations.isActive,
@@ -335,44 +413,38 @@ app.openapi(updateLocationRoute, async (c) => {
 
         if (!currentLocation) throw new NotFoundError("Location not found");
 
+        const nextParentId = parsedData.parentId !== undefined
+            ? parsedData.parentId
+            : currentLocation.parentId;
+        const nextIsActive = parsedData.isActive ?? currentLocation.isActive;
+        const nextName = parsedData.name ?? currentLocation.name;
+        await assertValidLocationParent(db, currentLocation.type, nextParentId, nextIsActive);
+        await assertActiveLocationIdentityAvailable(
+            db,
+            currentLocation.type,
+            nextParentId,
+            nextName,
+            nextIsActive,
+            id,
+        );
+
         const removesCurrentLocationFromReadiness =
             currentLocation.isActive &&
-            (parsedData.isActive === false ||
-                (currentLocation.type === "zone" &&
-                    parsedData.parentId !== undefined &&
-                    !(await isActiveCity(db, parsedData.parentId))));
+            parsedData.isActive === false;
         if (removesCurrentLocationFromReadiness) {
             await assertDeliveryLocationsCanBeRemovedFromCheckout(db, [id]);
         }
 
-        const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
-        if (parsedData.name !== undefined) updateData.name = parsedData.name;
-        if (parsedData.parentId !== undefined) updateData.parentId = parsedData.parentId;
-        if (parsedData.externalIds !== undefined) updateData.externalIds = JSON.stringify(parsedData.externalIds);
-        if (parsedData.metadata !== undefined) updateData.metadata = JSON.stringify(parsedData.metadata);
-        if (parsedData.isActive !== undefined) updateData.isActive = parsedData.isActive;
-        if (parsedData.sortOrder !== undefined) updateData.sortOrder = parsedData.sortOrder;
-
-        const [updatedLocation] = await db
-            .update(deliveryLocations)
-            .set(updateData)
-            .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)))
-            .returning();
+        const updatedLocation = await updateLocation(db, id, parsedData);
 
         if (!updatedLocation) throw new NotFoundError("Location not found");
 
-        const externalIds = parseJsonObject(updatedLocation.externalIds);
-        const metadata = parseJsonObject(updatedLocation.metadata);
         await invalidateApiAndScheduleStorefrontGroups(CHECKOUT_CACHE_GROUPS, c);
-        return ok(c, {
-            ...updatedLocation,
-            externalIds,
-            metadata
-        });
+        return ok(c, updatedLocation);
     } catch (error: unknown) {
         if (error instanceof Error && error.name === "NotFoundError") throw error;
+        rethrowDeliveryLocationIdentityConflict(error);
         console.error("Error updating location:", error);
-        throw error;
     }
 });
 
