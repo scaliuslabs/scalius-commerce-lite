@@ -21,9 +21,14 @@ import {
 
 export function DeliveryLocationsContainer() {
   const state = useDeliveryLocations();
+  const labels = {
+    city: { singular: "city", plural: "cities", title: "City" },
+    zone: { singular: "zone", plural: "zones", title: "Zone" },
+    area: { singular: "area", plural: "areas", title: "Area" },
+  }[state.activeTab];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Pathao Import Progress Banner */}
       <PathaoImportProgressBanner
         importProgress={state.importProgress}
@@ -42,19 +47,21 @@ export function DeliveryLocationsContainer() {
           state.setSearchQuery("");
         }}
       >
-        <div className="flex items-center justify-between">
-          <TabsList>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="w-full justify-start sm:w-auto">
             <TabsTrigger value="city">Cities</TabsTrigger>
             <TabsTrigger value="zone">Zones</TabsTrigger>
             <TabsTrigger value="area">Areas</TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-2">
-            <PathaoImportButton
-              hasPathaoProvider={state.hasPathaoProvider}
-              importing={state.importing}
-              onShowConfirm={() => state.setShowImportConfirm(true)}
-            />
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+            <div className="col-span-2 [&>button]:w-full sm:col-span-1 sm:[&>button]:w-auto">
+              <PathaoImportButton
+                hasPathaoProvider={state.hasPathaoProvider}
+                importing={state.importing}
+                onShowConfirm={() => state.setShowImportConfirm(true)}
+              />
+            </div>
 
             <Button variant="outline" size="sm" onClick={state.handleCleanAll}>
               <Trash2 className="mr-2 h-4 w-4" />
@@ -63,7 +70,7 @@ export function DeliveryLocationsContainer() {
 
             <Button size="sm" onClick={() => state.setShowAddDialog(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Add {state.activeTab.charAt(0).toUpperCase() + state.activeTab.slice(1)}
+              Add {labels.title}
             </Button>
 
             {state.selectedLocationIds.length > 0 && (
@@ -72,6 +79,7 @@ export function DeliveryLocationsContainer() {
                 size="sm"
                 onClick={state.handleBulkDelete}
                 disabled={state.selectedLocationIds.length === 0}
+                className="col-span-2 sm:col-span-1"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Selected ({state.selectedLocationIds.length})
@@ -80,12 +88,12 @@ export function DeliveryLocationsContainer() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-4">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder={`Search ${state.activeTab}s...`}
+              placeholder={`Search ${labels.plural}...`}
               className="pl-8"
               value={state.searchQuery}
               onChange={(e) => state.setSearchQuery(e.target.value)}
@@ -93,7 +101,7 @@ export function DeliveryLocationsContainer() {
           </div>
 
           {state.activeTab !== "city" && (
-            <div className="w-64">
+            <div className="w-full sm:w-64">
               <Select
                 value={state.selectedParent || "_all"}
                 onValueChange={(value) =>
