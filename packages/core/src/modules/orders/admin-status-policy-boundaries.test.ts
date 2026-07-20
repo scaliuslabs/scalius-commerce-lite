@@ -33,4 +33,12 @@ describe("generic order status mutation boundaries", () => {
       'validateTransition("order", currentStatus, nextStatus)',
     );
   });
+
+  it("advances only provider-less manual shipments from merchant delivery commands", () => {
+    expect(fulfillmentSource).toContain("markManualDeliveryEvidence");
+    expect(fulfillmentSource).toContain('eq(deliveryShipments.providerType, "manual")');
+    expect(fulfillmentSource).toContain("sql`${deliveryShipments.providerId} IS NULL`");
+    expect(fulfillmentSource).toContain("status: ShipmentStatus.IN_TRANSIT");
+    expect(fulfillmentSource).toContain("status: ShipmentStatus.DELIVERED");
+  });
 });

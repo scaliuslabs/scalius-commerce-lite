@@ -335,6 +335,7 @@ const ShipmentHistoryItem = ({
             }}
             onStatusUpdated={onStatusUpdated}
             canRefresh={canRefreshShipment}
+            showLastChecked={hasRefreshableProvider}
             refreshDisabledReason={
               canManageShipments && hasRefreshableProvider
                 ? refreshDisabledReason

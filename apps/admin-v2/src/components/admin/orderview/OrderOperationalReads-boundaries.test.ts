@@ -38,9 +38,8 @@ describe("order operational reads", () => {
   });
 
   it("describes COD collection and failure dialogs for assistive technology", () => {
-    expect(paymentSource).toContain(
-      "Record the exact outstanding cash received from the courier.",
-    );
+    expect(paymentSource).toContain("Confirm the cash received after delivery.");
+    expect(paymentSource).toContain("order delivered");
     expect(paymentSource).toContain(
       "Record the failed cash-on-delivery attempt and its reason.",
     );

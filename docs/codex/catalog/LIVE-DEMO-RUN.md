@@ -1003,6 +1003,16 @@ The cleanup bullets below describe the two-product proof store that preceded the
   PDF**. The result confirms the intended two-speed interface: row-level
   **Print label** is a one-SKU entry point, while single and batch jobs share
   the same physically previewed A4/adhesive/thermal/custom workspace.
+- The reserved barcode proof order `VHQK8M` then became the manual-delivery
+  lifecycle proof. The live own-courier dialog created `OWN-VHQK8M-1`; the
+  dashboard showed Shipped/Complete and one **In Transit** provider-less
+  shipment. COD collection of `৳5,510.80` moved the order to
+  Delivered/Paid/Complete and, after a clean load, the same shipment to
+  Delivered without provider polling copy. Remote D1 confirmed the line item,
+  manual shipment, payment, zero balance, and COD collection evidence all
+  agree. API `bb51fdb5-9bd6-457f-a31d-743ce24033d0` owns the lifecycle repair;
+  admin `b1af5dc9-0dea-42a8-9a7d-7f09a031bdc8` keeps shipment history current
+  after COD commands and explains the command's delivery/payment/stock effects.
 
 ### Storefront image and social-accessibility checkpoint (2026-07-20)
 

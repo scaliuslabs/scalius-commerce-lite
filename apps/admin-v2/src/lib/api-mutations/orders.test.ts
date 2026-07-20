@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("order COD mutations", () => {
-  it("invalidates order list, detail, payments, and COD queries after successful COD actions", () => {
+  it("invalidates every order projection changed by a successful COD action", () => {
     const mutation = useUpdateOrderCod() as MutationOptions;
 
     mutation.onSuccess?.({}, { orderId: "ord_123" });
@@ -97,6 +97,9 @@ describe("order COD mutations", () => {
     });
     expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.orders.cod("ord_123"),
+    });
+    expect(reactQueryMocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.orders.shipments("ord_123"),
     });
   });
 });

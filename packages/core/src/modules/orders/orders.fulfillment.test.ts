@@ -6,10 +6,12 @@ import {
   paymentSessionAttempts,
   refundAttempts,
   CodStatus,
+  ItemFulfillmentStatus,
   OrderStatus,
   PaymentMethod,
   PaymentRecordStatus,
   PaymentStatus,
+  ShipmentStatus,
 } from "@scalius/database/schema";
 
 const mocks = vi.hoisted(() => ({
@@ -531,7 +533,7 @@ describe("orders fulfillment side-effect ordering", () => {
   });
 
   it("records COD collection before reconciling delivered inventory", async () => {
-    const { db, updates } = createDbMock({
+    const { db, updates, batches } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
         version: 3,
@@ -555,7 +557,15 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.applyInventoryForStatusChange.mock.invocationCallOrder[0]!,
     );
-    expect(updates.at(-1)).toMatchObject({ inventoryAction: "deducted" });
+    expect(updates).toContainEqual(expect.objectContaining({ inventoryAction: "deducted" }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: ShipmentStatus.DELIVERED,
+      rawStatus: ShipmentStatus.DELIVERED,
+    }));
+    expect(batches).toHaveLength(1);
   });
 
   it("rolls back the delivered claim when COD collection recording fails", async () => {
@@ -749,7 +759,7 @@ describe("orders fulfillment side-effect ordering", () => {
   });
 
   it("retries COD collection inventory reconciliation when the order is already delivered", async () => {
-    const { db, updates } = createDbMock({
+    const { db, updates, batches } = createDbMock({
       selectedOrder: {
         status: OrderStatus.DELIVERED,
         version: 4,
@@ -766,8 +776,16 @@ describe("orders fulfillment side-effect ordering", () => {
       collectedAmount: 100,
     });
 
-    expect(updates).toHaveLength(1);
-    expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+    expect(updates).toHaveLength(3);
+    expect(updates).toContainEqual(expect.objectContaining({ inventoryAction: "deducted" }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      fulfillmentStatus: ItemFulfillmentStatus.DELIVERED,
+    }));
+    expect(updates).toContainEqual(expect.objectContaining({
+      status: ShipmentStatus.DELIVERED,
+      rawStatus: ShipmentStatus.DELIVERED,
+    }));
+    expect(batches).toHaveLength(1);
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
     expect(mocks.recordCODCollection).toHaveBeenCalled();
   });
@@ -963,6 +981,11 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(updates[0]).not.toHaveProperty("status");
     expect(updates[0]).not.toHaveProperty("fulfillmentStatus");
     expect(batches).toHaveLength(1);
+    expect(batches[0]?.[0]).toMatchObject({
+      status: ShipmentStatus.IN_TRANSIT,
+      rawStatus: ShipmentStatus.IN_TRANSIT,
+      isFinalShipment: true,
+    });
     expect(updates.some((entry) =>
       entry.status === OrderStatus.SHIPPED && entry.fulfillmentStatus === "complete"
     )).toBe(true);
