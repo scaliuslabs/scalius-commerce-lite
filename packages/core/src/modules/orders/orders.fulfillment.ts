@@ -58,6 +58,10 @@ import {
     getOrderReturn,
     listOrderReturns,
 } from "./order-returns";
+import {
+    bulkShipOrderSchema,
+    type ShipmentCreationOptionsInput,
+} from "./orders.validation";
 
 async function reconcileInventoryForStatus(
     db: Database,
@@ -493,20 +497,37 @@ export async function bulkShipOrders(
     db: Database,
     orderIds: string[],
     providerId: string,
-    options: Record<string, unknown>,
+    options: ShipmentCreationOptionsInput | undefined,
     encryptionKey?: string,
 ) {
+    const parsedInput = bulkShipOrderSchema.safeParse({
+        orderIds,
+        providerId,
+        options,
+    });
+    if (!parsedInput.success) {
+        throw new ValidationError(
+            parsedInput.error.issues[0]?.message ?? "Invalid bulk shipment request",
+        );
+    }
+    const validatedOrderIds = parsedInput.data.orderIds;
+    const validatedProviderId = parsedInput.data.providerId;
+    const validatedOptions = parsedInput.data.options ?? {};
     const results = [];
-    const providerReadiness = await getDeliveryProviderActionReadiness(db, providerId, encryptionKey);
+    const providerReadiness = await getDeliveryProviderActionReadiness(
+        db,
+        validatedProviderId,
+        encryptionKey,
+    );
     if (!providerReadiness.ready) {
-        return orderIds.map((orderId) => ({
+        return validatedOrderIds.map((orderId) => ({
             orderId,
             success: false,
             error: providerReadiness.message,
         }));
     }
 
-    for (const orderId of orderIds) {
+    for (const orderId of validatedOrderIds) {
         try {
             const order = await db.select({
                 status: orders.status,
@@ -560,7 +581,14 @@ export async function bulkShipOrders(
                 continue;
             }
 
-            const shipment = await createShipment(db, orderId, providerId, options, encryptionKey, { shipmentId: claimId });
+            const shipment = await createShipment(
+                db,
+                orderId,
+                validatedProviderId,
+                validatedOptions,
+                encryptionKey,
+                { shipmentId: claimId },
+            );
             if (shipment.reconciliationRequired) {
                 await holdShipmentClaimForReconciliation(db, orderId, claimId);
                 results.push({

@@ -177,6 +177,28 @@ describe("orders fulfillment side-effect ordering", () => {
     mocks.approveOrderReturn.mockResolvedValue({ returnId: "ret_1", status: "approved" });
   });
 
+  it("rejects duplicate and oversized bulk jobs before provider readiness work", async () => {
+    const { db } = createDbMock({
+      selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },
+      updateResults: [[{ id: "order_1" }]],
+    });
+
+    await expect(
+      bulkShipOrders(db as never, ["order_1", "order_1"], "provider_1", {}),
+    ).rejects.toThrow("Each order can appear only once");
+    await expect(
+      bulkShipOrders(
+        db as never,
+        Array.from({ length: 91 }, (_, index) => `order_${index}`),
+        "provider_1",
+        {},
+      ),
+    ).rejects.toThrow("Ship at most 90 orders at a time");
+
+    expect(mocks.getDeliveryProviderActionReadiness).not.toHaveBeenCalled();
+    expect(mocks.createShipment).not.toHaveBeenCalled();
+  });
+
   it("does not call the delivery provider when a bulk ship order claim loses CAS", async () => {
     const { db } = createDbMock({
       selectedOrder: { status: OrderStatus.CONFIRMED, version: 7 },

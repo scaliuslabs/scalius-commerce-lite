@@ -107019,19 +107019,41 @@
                 "type": "object",
                 "properties": {
                   "providerId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "options": {
                     "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
+                    "properties": {
+                      "deliveryType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemWeight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
                     },
-                    "description": "Provider-specific options"
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "providerId"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -118179,20 +118201,50 @@
                   "orderIds": {
                     "type": "array",
                     "items": {
-                      "type": "string"
-                    }
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
                   },
                   "providerId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
                   },
                   "options": {
-                    "nullable": true
+                    "type": "object",
+                    "properties": {
+                      "deliveryType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemType": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000
+                      },
+                      "itemWeight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "maximum": 10000
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 500
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "orderIds",
                   "providerId"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }

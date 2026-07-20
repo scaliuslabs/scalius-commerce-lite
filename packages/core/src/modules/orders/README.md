@@ -155,13 +155,20 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 ### Bulk Ship Orders
 
 `bulkShipOrders()` applies CAS protection per order:
-1. Reads order status and version
-2. If the order is already `shipped`, treats the call as a retry and reconciles inventory without calling the provider again
-3. For unshipped orders: claims by version, calls the provider, CAS-updates status to `shipped`, then deducts inventory
-4. Provider-success/local-finalization failures leave the shipment `reconcile_required` and keep the matching order shipment claim until repair succeeds
-5. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
+1. Validates one unique batch of 1–90 order IDs before provider readiness or
+   order reads. Provider options accept only bounded merchant choices; COD
+   amount, item count, and item description are derived from the fresh order
+   and line projection immediately before the provider call.
+2. Reads order status and version
+3. If the order is already `shipped`, treats the call as a retry and reconciles inventory without calling the provider again
+4. For unshipped orders: claims by version, calls the provider, CAS-updates status to `shipped`, then deducts inventory
+5. Provider-success/local-finalization failures leave the shipment `reconcile_required` and keep the matching order shipment claim until repair succeeds
+6. CAS conflicts (concurrent admin + webhook edits) are logged and skipped gracefully
 
-Admin bulk-shipping UI must submit one `/bulk-ship` request with all selected order ids and render the aggregate per-order result. Do not loop over `/:id/shipments` from the browser for selected rows.
+Admin bulk-shipping UI must submit one `/bulk-ship` request with all selected
+order IDs and render the aggregate per-order result. Do not loop over
+`/:id/shipments` from the browser for selected rows, repeat an ID, exceed 90,
+or submit browser-authored order money/content as provider options.
 
 ### Archive Flow
 

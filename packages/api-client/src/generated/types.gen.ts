@@ -31068,11 +31068,11 @@ export type GetApiV1AdminOrdersByIdShipmentsResponse = GetApiV1AdminOrdersByIdSh
 export type PostApiV1AdminOrdersByIdShipmentsData = {
     body?: {
         providerId: string;
-        /**
-         * Provider-specific options
-         */
         options?: {
-            [key: string]: string;
+            deliveryType?: number;
+            itemType?: number;
+            itemWeight?: number;
+            note?: string;
         };
     };
     path: {
@@ -34093,7 +34093,12 @@ export type PostApiV1AdminOrdersBulkShipData = {
     body?: {
         orderIds: Array<string>;
         providerId: string;
-        options?: unknown;
+        options?: {
+            deliveryType?: number;
+            itemType?: number;
+            itemWeight?: number;
+            note?: string;
+        };
     };
     path?: never;
     query?: never;

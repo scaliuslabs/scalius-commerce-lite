@@ -455,11 +455,21 @@ export async function createShipment(
     .map((i) => `${i.productName || "Product"} x${i.quantity}`)
     .join(", ");
 
-  // Merge enriched options with caller-provided options
+  // Provider money and contents are order authority, never browser/provider-
+  // form authority. Keep only genuine merchant choices from the caller and
+  // overwrite every commerce fact with the fresh saved order projection.
+  const amountToCollect = Math.max(
+    0,
+    order.balanceDue ?? (order.totalAmount - (order.paidAmount || 0)),
+  );
   const enrichedOptions: ShipmentOptions = {
+    deliveryType: options?.deliveryType,
+    itemType: options?.itemType,
+    itemWeight: options?.itemWeight,
+    note: options?.note,
+    codAmount: amountToCollect,
     itemCount: totalItemCount,
     itemDescription,
-    ...options,
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST

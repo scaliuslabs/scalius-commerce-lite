@@ -20,6 +20,7 @@ import {
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
+import { shipmentCreationOptionsSchema } from "@scalius/core/modules/orders/orders.validation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -407,9 +408,9 @@ app.openapi(getShipmentsRoute, async (c) => {
 // ─── POST /:id/shipments ─────────────────────────────────────────────────────
 
 const createShipmentBodySchema = z.object({
-    providerId: z.string(),
-    options: z.record(z.string(), z.string()).optional().openapi({ description: "Provider-specific options" })
-});
+    providerId: z.string().trim().min(1).max(180),
+    options: shipmentCreationOptionsSchema.optional(),
+}).strict();
 
 const createShipmentRoute = createRoute({
     method: "post",

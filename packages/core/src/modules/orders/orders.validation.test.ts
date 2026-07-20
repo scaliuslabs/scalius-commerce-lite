@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
     archiveOrdersSchema,
+    bulkShipOrderSchema,
     createOrderSchema,
     restoreOrderSchema,
+    shipmentCreationOptionsSchema,
     updateOrderSchema,
 } from "./orders.validation";
 
@@ -130,5 +132,46 @@ describe("order archive concurrency", () => {
         expect(restoreOrderSchema.safeParse({}).success).toBe(false);
         expect(restoreOrderSchema.safeParse({ expectedVersion: 0 }).success).toBe(false);
         expect(restoreOrderSchema.safeParse({ expectedVersion: 3 }).success).toBe(true);
+    });
+});
+
+describe("shipment creation input", () => {
+    it("requires one bounded set of unique order IDs", () => {
+        const valid = {
+            orderIds: ["ord_1", "ord_2"],
+            providerId: "provider_1",
+            options: {},
+        };
+
+        expect(bulkShipOrderSchema.safeParse(valid).success).toBe(true);
+        expect(bulkShipOrderSchema.safeParse({ ...valid, orderIds: [] }).success).toBe(false);
+        expect(bulkShipOrderSchema.safeParse({
+            ...valid,
+            orderIds: ["ord_1", "ord_1"],
+        }).success).toBe(false);
+        expect(bulkShipOrderSchema.safeParse({
+            ...valid,
+            orderIds: Array.from({ length: 91 }, (_, index) => `ord_${index}`),
+        }).success).toBe(false);
+    });
+
+    it("accepts only bounded merchant-chosen provider options", () => {
+        expect(shipmentCreationOptionsSchema.safeParse({
+            deliveryType: 48,
+            itemType: 2,
+            itemWeight: 1.5,
+            note: "Leave at reception",
+        }).success).toBe(true);
+
+        for (const disallowed of [
+            { codAmount: 0 },
+            { itemCount: 999 },
+            { itemDescription: "Browser-authored contents" },
+            { unknownProviderFlag: true },
+            { itemWeight: -1 },
+            { note: "x".repeat(501) },
+        ]) {
+            expect(shipmentCreationOptionsSchema.safeParse(disallowed).success).toBe(false);
+        }
     });
 });
