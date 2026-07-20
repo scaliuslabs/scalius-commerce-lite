@@ -104,16 +104,12 @@ describe("StorefrontUrlBuilder", () => {
     });
   }
 
-  it("explains that SEO proof needs a full absolute Store URL", async () => {
+  it("explains why the public Store URL must be absolute", async () => {
     await renderBuilder();
 
     expect(host.textContent).toContain(
-      "SEO discovery proof needs a full absolute http(s) Store URL",
+      "Use the absolute public URL so previews, discovery files, and cache refreshes target the correct store.",
     );
-    expect(host.textContent).toContain(
-      'Path-only values such as "/" or "/store" only help dashboard preview/sidebar navigation',
-    );
-    expect(host.textContent).toContain('"View Store" link');
   });
 
   it("invalidates the SEO live proof after saving the Store URL", async () => {

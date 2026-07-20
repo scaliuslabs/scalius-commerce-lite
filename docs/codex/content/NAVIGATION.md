@@ -263,6 +263,11 @@ the proven editor in a separate live demo-data run.
 - Stored header/footer JSON is validated on read and write. Malformed persisted
   settings fail explicitly instead of becoming an empty-success response, and
   label-only menu nodes render without fake `#` anchors.
+- Header and footer recovery is isolated per section. Invalid persisted data
+  locks only the affected builder and never exposes assumed defaults that could
+  overwrite the saved document. Safely normalized legacy data remains editable
+  but requires one explicit **Save typed format** action before it is treated as
+  current. Other General Settings panels remain usable in both cases.
 - The interim JSON model enforces bounded labels, stable unique node IDs,
   three menu levels, 150 total nodes, four footer columns, and eight
   credential-free HTTPS social destinations per placement.

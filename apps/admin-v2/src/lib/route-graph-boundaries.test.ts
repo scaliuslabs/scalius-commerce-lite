@@ -1653,8 +1653,8 @@ describe("admin route graph boundaries", () => {
 
     expect(routeSource).toContain("const isHydrated = useHydrated()");
     expect(routeSource).toContain("enabled: isHydrated");
-    expect(routeSource).toContain("const hydratedShipments = isHydrated ? shipments : []");
-    expect(routeSource).toContain("isHydrated && Array.isArray(providers)");
+    expect(routeSource).toContain("const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)");
+    expect(routeSource).toContain("isHydrated && Array.isArray(providersQuery.data)");
     expect(paymentSource).toContain("const isHydrated = useHydrated()");
     expect(paymentSource).toContain("enabled: isHydrated");
     expect(paymentSource).toContain("enabled: isHydrated && isCOD");

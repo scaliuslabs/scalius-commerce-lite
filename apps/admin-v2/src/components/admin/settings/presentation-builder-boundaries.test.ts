@@ -27,19 +27,17 @@ describe("header and footer builder workflow boundaries", () => {
     expect(footerMenus).not.toContain('getStorefrontPath={() => "#"}');
   });
 
-  it("resets transient navigation feedback after save or discard", () => {
+  it("keeps navigation mutations in the dedicated workspace", () => {
     const headerBuilder = source("../header-builder/HeaderBuilder.tsx");
-    const headerNavigation = source("../header-builder/NavigationSection.tsx");
     const footerBuilder = source("../footer-builder/FooterBuilder.tsx");
-    const footerNavigation = source("../footer-builder/NavigationMenusSection.tsx");
 
     for (const builder of [headerBuilder, footerBuilder]) {
-      expect(builder).toContain("navigationEditorEpoch");
-      expect(builder).toContain("setNavigationEditorEpoch");
       expect(builder).toContain("onClick={handleDiscard}");
+      expect(builder).toContain('to="/admin/navigation"');
+      expect(builder).not.toContain("navigationEditorEpoch");
     }
-    expect(headerNavigation).toContain("key={editorEpoch}");
-    expect(footerNavigation).toContain('key={`${editorEpoch}:${selectedMenu.id}`}');
+    expect(headerBuilder).toContain("const { navigation: _navigation, ...storedConfig }");
+    expect(footerBuilder).toContain("const { menus: _menus, ...storedConfig }");
   });
 
   it("keeps nested presentation workspaces addressable", () => {

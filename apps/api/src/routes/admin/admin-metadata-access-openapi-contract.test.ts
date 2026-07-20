@@ -133,7 +133,7 @@ describe("admin metadata/access OpenAPI error responses", () => {
             "404",
             "500",
         ]);
-        expectResponses(spec, "/api/v1/admin/navigation", "post", [
+        expectResponses(spec, "/api/v1/admin/navigation/menus", "post", [
             "200",
             "400",
             "401",

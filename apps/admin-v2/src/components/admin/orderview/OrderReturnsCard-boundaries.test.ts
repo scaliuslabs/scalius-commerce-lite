@@ -10,14 +10,14 @@ const RECEIVE_DIALOG_SOURCE = fileURLToPath(new URL("./order-returns/ReceiveRetu
 const RETURN_ROW_SOURCE = fileURLToPath(new URL("./order-returns/OrderReturnRow.tsx", import.meta.url));
 
 describe("OrderReturnsCard boundaries", () => {
-  it("keeps the item-level return workflow lazy, payment-independent, and recovery-aware", () => {
+  it("keeps the item-level return workflow deterministic, payment-independent, and recovery-aware", () => {
     const card = readFileSync(CARD_SOURCE, "utf8");
     const orderView = readFileSync(ORDER_VIEW_SOURCE, "utf8");
     const createDialog = readFileSync(CREATE_DIALOG_SOURCE, "utf8");
     const receiveDialog = readFileSync(RECEIVE_DIALOG_SOURCE, "utf8");
     const returnRow = readFileSync(RETURN_ROW_SOURCE, "utf8");
 
-    expect(orderView).toContain('import("./orderview/OrderReturnsCard")');
+    expect(orderView).toContain('import { OrderReturnsCard } from "./orderview/OrderReturnsCard"');
     expect(card).toContain("getRemainingReturnableQuantities");
     expect(card).toContain("itemsById={itemsById}");
     expect(createDialog).toContain("Requesting a return does not refund payment or change stock.");
