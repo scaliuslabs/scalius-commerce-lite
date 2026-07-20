@@ -8,6 +8,7 @@ import { createSelectColumn, createDateColumn, createActionsColumn } from "./col
 import type { Category } from "~/types/api-responses";
 import { getPlainText } from "~/lib/format-utils";
 import { Badge } from "~/components/ui/badge";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 /** Extended category type that includes the product count from list responses */
 export interface CategoryListItem extends Category {
@@ -55,7 +56,10 @@ export function getCategoryColumns(
             {category.imageUrl ? (
               <div className="h-11 w-11 rounded-lg overflow-hidden border bg-muted shrink-0">
                 <img
-                  src={getOptimizedImageUrl(category.imageUrl)}
+                  src={getOptimizedImageUrl(
+                    category.imageUrl,
+                    ADMIN_IMAGE_PRESETS.categoryTile,
+                  )}
                   alt={category.name}
                   className="h-full w-full object-cover"
                   loading="lazy"

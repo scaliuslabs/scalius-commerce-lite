@@ -102,7 +102,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           {
             logo.src ? (
               <img
-                src={getOptimizedImageUrl(logo.src, { width: 344, height: 256, fit: "contain" })}
+                src={getOptimizedImageUrl(logo.src, { width: 344, height: 256, fit: "scale-down" })}
                 alt={logo.alt}
                 width={344}
                 height={256}

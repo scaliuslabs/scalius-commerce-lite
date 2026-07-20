@@ -73,7 +73,7 @@ const { headerData } = Astro.props;
                 src={getOptimizedImageUrl(headerData.logo.src, {
                   width: 240,
                   height: 80,
-                  fit: "contain",
+                  fit: "scale-down",
                 })}
                 alt={headerData.logo.alt}
                 class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"

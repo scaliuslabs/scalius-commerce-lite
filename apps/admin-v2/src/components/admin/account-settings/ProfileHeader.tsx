@@ -24,6 +24,8 @@ import { useRouter } from "@tanstack/react-router";
 import { getServerFnError } from "~/lib/api-helpers";
 import { updateProfile } from "~/lib/api-functions/auth-management";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 
 function getInitials(nameStr: string): string {
   return nameStr
@@ -135,7 +137,7 @@ export function ProfileHeader({ user }: ProfileHeaderProps) {
             <div className="h-12 w-12 overflow-hidden rounded-full border bg-muted">
               {image ? (
                 <img
-                  src={image}
+                  src={getOptimizedImageUrl(image, ADMIN_IMAGE_PRESETS.avatar)}
                   alt={name}
                   className="h-full w-full object-cover"
                   loading="lazy"
