@@ -23,6 +23,7 @@ import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseHeaderDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
+import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 import { Card } from "~/components/ui/card";
 
 import { BrandingSection } from "./BrandingSection";
@@ -66,6 +67,7 @@ export function HeaderBuilder({
   activePanel,
   initialConfig,
   initialRevision = 0,
+  readiness,
   onPanelChange,
   onSave,
 }: HeaderBuilderProps) {
@@ -90,9 +92,14 @@ export function HeaderBuilder({
     revision: number;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [normalizationSaved, setNormalizationSaved] = useState(false);
   const [internalActivePanel, setInternalActivePanel] =
     useState<HeaderBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
+  const isEditingLocked = readiness?.state === "invalid";
+  const requiresNormalizationSave =
+    readiness?.state === "legacy_normalized" && !normalizationSaved;
+  const hasPendingSave = isDirty || requiresNormalizationSave;
   useEffect(() => {
     if (!isDirty && !revisionConflict) setRevision(initialRevision);
   }, [initialRevision, isDirty, revisionConflict]);
@@ -122,7 +129,7 @@ export function HeaderBuilder({
   };
 
   const handleSave = async () => {
-    if (isLoading || revisionConflict) return;
+    if (isLoading || revisionConflict || isEditingLocked) return;
 
     if (!config.logo.src) {
       toast.error("Logo Required", { description: "Please select a logo before saving." });
@@ -143,6 +150,7 @@ export function HeaderBuilder({
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       setRevision(saved.revision);
       markSaved(draftBeingSaved);
+      setNormalizationSaved(true);
       toast.success("Header saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       const conflict = readSitePresentationRevisionConflict(error, "header");
@@ -190,12 +198,30 @@ export function HeaderBuilder({
           <span
             className={cn(
               "h-2 w-2 rounded-full",
-              isDirty ? "bg-amber-500" : "bg-emerald-500",
+              isEditingLocked
+                ? "bg-destructive"
+                : hasPendingSave
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
             )}
           />
-          {isDirty ? "Unsaved changes" : "All changes saved"}
+          {isEditingLocked
+            ? "Needs repair"
+            : isDirty
+              ? "Unsaved changes"
+              : requiresNormalizationSave
+                ? "Review required"
+                : "All changes saved"}
         </div>
       </div>
+
+      <NavigationConfigReadinessNotice
+        section="header"
+        readiness={normalizationSaved ? { state: "ready" } : readiness}
+      />
+
+      {isEditingLocked ? null : (
+        <>
 
       {revisionConflict ? (
         <PresentationRevisionConflictNotice
@@ -303,7 +329,7 @@ export function HeaderBuilder({
             isLoading ||
             Boolean(revisionConflict) ||
             !config.logo.src ||
-            !isDirty
+            !hasPendingSave
           }
           className="relative min-w-[124px]"
           size="sm"
@@ -314,10 +340,14 @@ export function HeaderBuilder({
             </div>
           ) : null}
           <span className={cn(isLoading ? "opacity-0" : "opacity-100")}>
-            Save changes
+            {requiresNormalizationSave && !isDirty
+              ? "Save typed format"
+              : "Save changes"}
           </span>
         </Button>
       </div>
+        </>
+      )}
     </div>
   );
 }

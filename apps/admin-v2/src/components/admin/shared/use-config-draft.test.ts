@@ -11,6 +11,6 @@ describe("settings config draft boundary", () => {
   it("preserves unsaved input across query refreshes and browser navigation", () => {
     expect(source).toContain("if (!isDirty)");
     expect(source).toContain('window.addEventListener("beforeunload"');
-    expect(source).toContain("setSavedConfig(cloneConfig(config))");
+    expect(source).toContain("setSavedConfig(cloneConfig(value ?? config))");
   });
 });

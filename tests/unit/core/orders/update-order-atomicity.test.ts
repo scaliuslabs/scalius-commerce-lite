@@ -76,20 +76,6 @@ const releaseFailure = {
   ],
   error: "release failed",
 };
-const restoreFailure = {
-  success: false,
-  results: [
-    {
-      success: false,
-      variantId: EXISTING_VARIANT_ID,
-      previousStock: 5,
-      newStock: 5,
-      error: "restore failed",
-    },
-  ],
-  error: "restore failed",
-};
-
 function activeLocationRows() {
   return [
     {
@@ -203,8 +189,23 @@ function createUpdateOrderDb(options: {
     },
   ];
   const selectResults = [
-    options.locationRows ?? activeLocationRows(),
     options.existingOrder,
+    {
+      status: options.existingOrder.status,
+      paymentStatus: options.existingOrder.paymentStatus,
+      paidAmount: options.existingOrder.paidAmount,
+      fulfillmentStatus: options.existingOrder.fulfillmentStatus,
+      shipmentClaimId: options.existingOrder.shipmentClaimId ?? null,
+      shipmentClaimExpiresAt:
+        options.existingOrder.shipmentClaimExpiresAt ?? null,
+      hasTaxSnapshot: 0,
+      hasPaymentHistory: 0,
+      hasShipmentHistory: 0,
+      hasRefundHistory: 0,
+      hasReturnHistory: 0,
+      hasInvoiceHistory: 0,
+    },
+    options.locationRows ?? activeLocationRows(),
     options.activeRefundAttempt ?? null,
     options.legacyPendingRefund ?? null,
     options.activePaymentSessionAttemptRows ?? [],
@@ -241,29 +242,18 @@ function createUpdateOrderDb(options: {
 }
 
 function createRestoreOrderDb(options: {
-  order: ReturnType<typeof seedOrder> & {
+  order: {
+    id: string;
+    archivedAt: number | Date | null;
     deletedAt: number | Date | null;
-    shipmentClaimId?: string | null;
-    shipmentClaimExpiresAt?: Date | number | null;
+    version: number;
   };
-  items?: ReturnType<typeof seedOrderItem>[];
   orderUpdateResult?: unknown[];
-  activeRefundAttempt?: Record<string, unknown> | null;
-  legacyPendingRefund?: Record<string, unknown> | null;
-  activePaymentSessionAttemptRows?: Array<Record<string, unknown>>;
 }) {
-  let selectIndex = 0;
-  const selectResults = [
-    options.order,
-    options.activeRefundAttempt ?? null,
-    options.legacyPendingRefund ?? null,
-    options.activePaymentSessionAttemptRows ?? [],
-    options.items ?? [item(1)],
-  ];
   const updateSets: unknown[] = [];
 
   const db = {
-    select: vi.fn(() => createChain(selectResults[selectIndex++])),
+    select: vi.fn(() => createChain(options.order)),
     update: vi.fn(() => {
       const chain = createChain(options.orderUpdateResult ?? [{ id: ORDER_ID }]);
       chain.set = vi.fn((value) => {
@@ -296,17 +286,18 @@ function existingOrder(overrides: Partial<SeedOrderWithVersion> = {}): SeedOrder
   };
 }
 
-function deletedRestoredOrder(status: string, overrides: Partial<SeedOrderWithVersion> = {}) {
+function archivedOrder(overrides: Partial<{
+  id: string;
+  archivedAt: number | Date | null;
+  deletedAt: number | Date | null;
+  version: number;
+}> = {}) {
   return {
-    ...existingOrder({
-      status,
-      inventoryAction: "restored",
-      inventoryPool: "regular",
-      ...overrides,
-    }),
-    deletedAt: 1_800_000,
-    shipmentClaimId: null,
-    shipmentClaimExpiresAt: null,
+    id: ORDER_ID,
+    archivedAt: 1_800_000,
+    deletedAt: null,
+    version: 1,
+    ...overrides,
   };
 }
 
@@ -323,6 +314,7 @@ function item(quantity: number, variantId = EXISTING_VARIANT_ID) {
 
 function updateData(overrides: Partial<Parameters<UpdateOrder>[2]> = {}): Parameters<UpdateOrder>[2] {
   return {
+    expectedVersion: 1,
     customerName: "Atomic Customer",
     customerPhone: "+8801700000000",
     customerEmail: null,
@@ -393,7 +385,7 @@ describe("updateOrder inventory atomicity", () => {
     await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
-      message: "Order has an active shipment creation in progress. Please retry shortly.",
+      message: "Fulfillment or shipment evidence already exists. Use the shipment, return, or replacement-order workflows instead.",
     });
 
     expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
@@ -462,7 +454,7 @@ describe("updateOrder inventory atomicity", () => {
       orderUpdateResult: [],
     });
 
-    await expect(updateOrder(db as never, ORDER_ID, updateData())).rejects.toMatchObject({
+    await expect(updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 7 }))).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
       message: "Order was modified by another request. Please reload and try again.",
@@ -487,88 +479,35 @@ describe("updateOrder inventory atomicity", () => {
     expect(events).toEqual(["validate", "reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
   });
 
-  it("reserves and deducts deducted-order positive deltas before write, then restores deducted stock on CAS failure", async () => {
+  it.each([
+    { status: "shipped", inventoryAction: "deducted", version: 3 },
+    { status: "cancelled", inventoryAction: "restored", version: 4 },
+  ])("blocks full-editor inventory rewrites after an order reaches $status", async ({ status, inventoryAction, version }) => {
     const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted", version: 3 }),
+      existingOrder: existingOrder({ status, inventoryAction, version }),
       existingItems: [item(1)],
-      orderUpdateResult: [],
     });
-
-    await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ status: "shipped", items: [item(4)] })),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-    });
-
-    const positiveEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 3, pool: "regular" }];
-    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 3, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v3:reserve-positive-deducted" },
-    );
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(1, db, {
-      orderId: ORDER_ID,
-      operation: "deduct",
-      entries: positiveEntries,
-      claimKey: "admin-order-edit:v1:ord_atomicity:v3:deduct-positive",
-      pool: "regular",
-    });
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(2, db, {
-      orderId: ORDER_ID,
-      operation: "restore",
-      entries: positiveEntries,
-      claimKey: "admin-order-edit:v1:ord_atomicity:v3:compensate-deducted:regular",
-      pool: "regular",
-    });
-    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["reserve", "deduct", "order-cas-update", "atomic-order-edit-batch", "restore-deducted"]);
-  });
-
-  it("reserves restored-order reactivation items before write and releases them on CAS failure", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({
-        status: "cancelled",
-        inventoryAction: "restored",
-        version: 4,
-      }),
-      existingItems: [item(1)],
-      orderUpdateResult: [],
-    });
-    const newItem = item(2, NEW_VARIANT_ID);
 
     await expect(
       updateOrder(
         db as never,
         ORDER_ID,
-        updateData({ status: "pending", items: [newItem] }),
+        updateData({ expectedVersion: version, status, items: [item(4)] }),
       ),
     ).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
+      message: "The full editor is available only before shipment, cancellation, completion, return, or refund. Use the dedicated order actions instead.",
     });
 
-    const newEntries = [{ variantId: NEW_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: NEW_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v4:reserve-reactivation" },
-    );
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      newEntries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v4:compensate-acquired" },
-    );
+    expect(inventoryMocks.validateStockBatchAvailability).not.toHaveBeenCalled();
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
     expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["reserve", "order-cas-update", "atomic-order-edit-batch", "release"]);
+    expect(db.update).not.toHaveBeenCalled();
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.delete).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
   });
 
   it("fails reserved quantity decreases before item replacement when reservation release fails", async () => {
@@ -609,7 +548,7 @@ describe("updateOrder inventory atomicity", () => {
     });
 
     await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
+      updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 11, items: [item(1)] })),
     ).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
@@ -633,113 +572,31 @@ describe("updateOrder inventory atomicity", () => {
     expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
   });
 
-  it("fails deducted quantity decreases before item replacement when deducted restore fails", async () => {
+  it("rejects lifecycle changes in the full editor before inventory writes", async () => {
     const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted" }),
-      existingItems: [item(3)],
-    });
-    inventoryMocks.applyClaimedInventoryEntryBatch.mockImplementation(async (_db, input) => {
-      events.push("restore-deducted");
-      if (input.operation === "restore") throw new Error(restoreFailure.error);
+      existingOrder: existingOrder({ inventoryAction: "reserved", version: 13 }),
+      existingItems: [item(2)],
     });
 
     await expect(
       updateOrder(
         db as never,
         ORDER_ID,
-        updateData({ status: "shipped", items: [item(1)] }),
+        updateData({ expectedVersion: 13, status: "cancelled", items: [] }),
       ),
     ).rejects.toMatchObject({
       name: "ValidationError",
       code: "VALIDATION_ERROR",
-      message: restoreFailure.error,
+      message: "Use the order status action for operational progress. The full editor only changes customer, item, shipping-charge, and discount details.",
     });
 
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenCalledWith(db, {
-      orderId: ORDER_ID,
-      operation: "restore",
-      entries: [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }],
-      claimKey: "admin-order-edit:v1:ord_atomicity:v1:restore-negative:regular",
-      pool: "regular",
-    });
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
     expect(db.delete).not.toHaveBeenCalled();
     expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["restore-deducted"]);
-  });
-
-  it("compensates restored deducted deltas when the order CAS fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ status: "shipped", inventoryAction: "deducted", version: 12 }),
-      existingItems: [item(3)],
-      orderUpdateResult: [],
-    });
-
-    await expect(
-      updateOrder(
-        db as never,
-        ORDER_ID,
-        updateData({ status: "shipped", items: [item(1)] }),
-      ),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-    });
-
-    const restoredEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(1, db, {
-      orderId: ORDER_ID,
-      operation: "restore",
-      entries: restoredEntries,
-      claimKey: "admin-order-edit:v1:ord_atomicity:v12:restore-negative:regular",
-      pool: "regular",
-    });
-    expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenNthCalledWith(2, db, {
-      orderId: ORDER_ID,
-      operation: "deduct",
-      entries: restoredEntries,
-      claimKey: "admin-order-edit:v1:ord_atomicity:v12:compensate-restored:deduct:regular",
-      pool: "regular",
-    });
-    expect(db.insert).toHaveBeenCalledTimes(1);
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(["restore-deducted", "order-cas-update", "atomic-order-edit-batch", "deduct"]);
-  });
-
-  it("compensates full reserved-order cancellation release when the order CAS fails", async () => {
-    const db = createUpdateOrderDb({
-      existingOrder: existingOrder({ inventoryAction: "reserved", version: 13 }),
-      existingItems: [item(2)],
-      orderUpdateResult: [],
-    });
-
-    await expect(
-      updateOrder(
-        db as never,
-        ORDER_ID,
-        updateData({ status: "cancelled", items: [] }),
-      ),
-    ).rejects.toMatchObject({
-      name: "ConflictError",
-      code: "CONFLICT",
-    });
-
-    const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      releasedEntries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v13:release-all" },
-    );
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v13:compensate-released:reserve:regular" },
-    );
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
+    expect(events).toEqual([]);
   });
 
   it("compensates inventory if atomic item replacement fails after the order CAS", async () => {
@@ -750,7 +607,7 @@ describe("updateOrder inventory atomicity", () => {
     });
 
     await expect(
-      updateOrder(db as never, ORDER_ID, updateData({ items: [item(1)] })),
+      updateOrder(db as never, ORDER_ID, updateData({ expectedVersion: 14, items: [item(1)] })),
     ).rejects.toThrow("item batch failed");
 
     const releasedEntries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
@@ -770,7 +627,7 @@ describe("updateOrder inventory atomicity", () => {
     expect(events).toEqual(["release", "order-cas-update", "atomic-order-edit-batch", "reserve"]);
   });
 
-  it("reconciles inventory when retrying an edit after status already reached shipped", async () => {
+  it("does not use the full editor as a shipped-order inventory reconciliation command", async () => {
     const db = createUpdateOrderDb({
       existingOrder: existingOrder({
         status: "shipped",
@@ -784,205 +641,86 @@ describe("updateOrder inventory atomicity", () => {
       updateOrder(
         db as never,
         ORDER_ID,
-        updateData({ status: "shipped", items: [item(2)] }),
+        updateData({ expectedVersion: 8, status: "shipped", items: [item(2)] }),
       ),
-    ).resolves.toEqual({ id: ORDER_ID });
+    ).rejects.toMatchObject({
+      name: "ConflictError",
+      code: "CONFLICT",
+      message: "The full editor is available only before shipment, cancellation, completion, return, or refund. Use the dedicated order actions instead.",
+    });
 
-    expect(inventoryMocks.applyInventoryForStatusChange).toHaveBeenCalledWith(
-      db,
-      ORDER_ID,
-      "shipped",
-    );
+    expect(inventoryMocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
   });
 });
 
-describe("restoreOrder trash inventory safety", () => {
-  it("re-reserves restored inventory only for pre-shipment live statuses", async () => {
+describe("restoreOrder archive safety", () => {
+  it("restores only the archive marker without rewriting order or inventory facts", async () => {
     const { db, updateSets } = createRestoreOrderDb({
-      order: deletedRestoredOrder("pending"),
-      items: [item(2)],
+      order: archivedOrder(),
     });
 
-    await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
+    await expect(restoreOrder(db as never, ORDER_ID, 1)).resolves.toBeUndefined();
 
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
-    );
-    expect(updateSets.at(-1)).toMatchObject({
-      deletedAt: null,
-      inventoryAction: "reserved",
-    });
-  });
-
-  it("re-reserves incomplete restored orders when variant items exist", async () => {
-    const { db, updateSets } = createRestoreOrderDb({
-      order: deletedRestoredOrder("incomplete"),
-      items: [item(2)],
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
-
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
-    );
-    expect(updateSets.at(-1)).toMatchObject({
-      deletedAt: null,
-      inventoryAction: "reserved",
-    });
-  });
-
-  it("restores cancelled orders without re-reserving stock", async () => {
-    const { db, updateSets } = createRestoreOrderDb({
-      order: deletedRestoredOrder("cancelled"),
-      items: [item(2)],
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
-
+    expect(updateSets).toHaveLength(1);
+    expect(updateSets[0]).toMatchObject({ archivedAt: null });
     expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(4);
-    expect(updateSets.at(-1)).toMatchObject({
-      deletedAt: null,
-      inventoryAction: "restored",
-    });
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.applyClaimedInventoryEntryBatch).not.toHaveBeenCalled();
   });
 
-  it("restores no-variant incomplete orders without creating an inventory reservation", async () => {
-    const { db, updateSets } = createRestoreOrderDb({
-      order: deletedRestoredOrder("incomplete"),
-      items: [{ ...item(2), variantId: null }],
-    });
-
-    await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
-
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-    expect(db.select).toHaveBeenCalledTimes(5);
-    expect(updateSets.at(-1)).toMatchObject({
-      deletedAt: null,
-      inventoryAction: "none",
-    });
-  });
-
-  it.each(["shipped", "delivered", "completed", "refunded", "partially_refunded"])(
-    "allows %s orders that are already deducted",
-    async (status) => {
-      const { db, updateSets } = createRestoreOrderDb({
-        order: deletedRestoredOrder(status, { inventoryAction: "deducted" }),
-        items: [item(2)],
-      });
-
-      await expect(restoreOrder(db as never, ORDER_ID)).resolves.toBeUndefined();
-
-      expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-      expect(updateSets.at(-1)).toMatchObject({
-        deletedAt: null,
-        inventoryAction: "deducted",
-      });
-    },
-  );
-
-  it.each(["cancelled", "returned", "refunded"])(
-    "rejects %s orders that still claim reserved inventory",
-    async (status) => {
-      const { db } = createRestoreOrderDb({
-        order: deletedRestoredOrder(status, { inventoryAction: "reserved" }),
-        items: [item(2)],
-      });
-
-      await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
-        name: "ValidationError",
-        code: "VALIDATION_ERROR",
-        message: expect.stringContaining(`status "${status}"`),
-      });
-
-      expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-      expect(db.update).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["shipped", "delivered", "completed", "partially_refunded"])(
-    "rejects %s orders whose inventory was restored during trashing",
-    async (status) => {
-      const { db } = createRestoreOrderDb({
-        order: deletedRestoredOrder(status),
-        items: [item(2)],
-      });
-
-      await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
-        name: "ValidationError",
-        code: "VALIDATION_ERROR",
-        message: expect.stringContaining(`status "${status}"`),
-      });
-
-      expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
-      expect(db.select).toHaveBeenCalledTimes(4);
-      expect(db.update).not.toHaveBeenCalled();
-    },
-  );
-
-  it("does not clear deletedAt when re-reservation fails", async () => {
+  it("rejects legacy soft-deleted orders instead of guessing how to restore evidence", async () => {
     const { db } = createRestoreOrderDb({
-      order: deletedRestoredOrder("confirmed"),
-      items: [item(2)],
+      order: archivedOrder({ deletedAt: 1_700_000 }),
     });
-    inventoryMocks.reserveStockBatch.mockResolvedValueOnce(validationFailure);
 
-    await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
+    await expect(restoreOrder(db as never, ORDER_ID, 1)).rejects.toMatchObject({
       name: "ValidationError",
       code: "VALIDATION_ERROR",
-      message: expect.stringContaining(validationFailure.error),
+      message: "This legacy-deleted order cannot be restored from the archive.",
     });
-
     expect(db.update).not.toHaveBeenCalled();
   });
 
-  it("rejects active refund attempts before restore re-reserves inventory", async () => {
+  it("rejects a live order that is not archived", async () => {
     const { db } = createRestoreOrderDb({
-      order: deletedRestoredOrder("confirmed"),
-      items: [item(2)],
-      activeRefundAttempt: { id: "rfa_active", orderId: ORDER_ID, status: "reconcile_required" },
+      order: archivedOrder({ archivedAt: null }),
     });
 
-    await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
+    await expect(restoreOrder(db as never, ORDER_ID, 1)).rejects.toMatchObject({
+      name: "ValidationError",
+      code: "VALIDATION_ERROR",
+      message: "Order is not archived",
+    });
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale restore version before the archive marker changes", async () => {
+    const { db } = createRestoreOrderDb({
+      order: archivedOrder({ version: 4 }),
+    });
+
+    await expect(restoreOrder(db as never, ORDER_ID, 3)).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
-      message: "Order has an active refund operation. Complete or reconcile the refund before changing this order.",
+      message: "Order was modified by another request. Reload and try again.",
     });
-
-    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
     expect(db.update).not.toHaveBeenCalled();
   });
 
-  it("compensates a re-reservation when the final restore CAS loses the race", async () => {
+  it("reports a CAS race without any inventory compensation side effects", async () => {
     const { db } = createRestoreOrderDb({
-      order: deletedRestoredOrder("confirmed"),
-      items: [item(2)],
+      order: archivedOrder({ version: 5 }),
       orderUpdateResult: [],
     });
 
-    await expect(restoreOrder(db as never, ORDER_ID)).rejects.toMatchObject({
+    await expect(restoreOrder(db as never, ORDER_ID, 5)).rejects.toMatchObject({
       name: "ConflictError",
       code: "CONFLICT",
     });
-
-    const entries = [{ variantId: EXISTING_VARIANT_ID, quantity: 2, pool: "regular" }];
-    expect(inventoryMocks.reserveStockBatch).toHaveBeenCalledWith(
-      db,
-      [{ variantId: EXISTING_VARIANT_ID, quantity: 2, orderId: ORDER_ID }],
-      "regular",
-      { reservationKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore" },
-    );
-    expect(inventoryMocks.releaseReservedStockBatch).toHaveBeenCalledWith(
-      db,
-      entries,
-      ORDER_ID,
-      { releaseKey: "admin-order-edit:v1:ord_atomicity:v1:trash-restore-cas-rollback" },
-    );
+    expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
+    expect(inventoryMocks.releaseReservedStockBatch).not.toHaveBeenCalled();
   });
 });

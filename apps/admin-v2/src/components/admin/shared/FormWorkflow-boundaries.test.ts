@@ -66,11 +66,12 @@ describe("admin form workflow boundaries", () => {
     expect(analyticsFormSource).toContain("PERMISSIONS.ANALYTICS_EDIT");
     expect(orderFormSource).toContain("orderActions.canCreateOrders");
     expect(orderFormSource).toContain("orderActions.canEditOrders");
-    expect(orderFormSource).toContain("canSave && !isSubmitting");
-    expect(orderFormSource).toContain("onSubmit={canSave && form.formState.isDirty");
+    expect(orderFormSource).toContain("canSave &&\n          manualQuote.isCurrent &&\n          !isSubmitting");
+    expect(orderFormSource).toContain("onSubmit={canSubmit && form.formState.isDirty");
     expect(collectionFormSource).toContain("onSubmit={canSave && form.formState.isDirty");
     expect(collectionFormSource).toContain("canSave={canSave}");
-    for (const source of [categoryFormSource, pageFormSource, customerFormSource, analyticsFormSource, orderFormSource, collectionFormSource]) {
+    expect(orderFormSource).toContain("canSave={canSubmit}");
+    for (const source of [categoryFormSource, pageFormSource, customerFormSource, analyticsFormSource, collectionFormSource]) {
       expect(source).toContain("canSave={canSave}");
     }
   });

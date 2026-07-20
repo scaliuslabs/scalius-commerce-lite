@@ -58,7 +58,7 @@ describe("account settings permission context", () => {
 
     expect(profileHeaderSource).toContain("trigger={");
     expect(profileHeaderSource).toContain("min-h-11 shrink-0");
-    expect(profileHeaderSource).toContain("Save changes");
+    expect(profileHeaderSource).toContain("Save profile");
     expect(profileHeaderSource).toContain("Cancel");
     expect(profileHeaderSource).toContain("disabled={isLoading || !hasChanges}");
     expect(profileHeaderSource).not.toContain('className="w-full"');

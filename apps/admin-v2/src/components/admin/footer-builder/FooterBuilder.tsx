@@ -16,6 +16,7 @@ import { readSitePresentationRevisionConflict } from "~/lib/admin-api-error";
 import { useConfigDraft } from "~/components/admin/shared/use-config-draft";
 import { rebaseFooterDraft } from "~/components/admin/shared/presentation-draft";
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
+import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 import { Card } from "~/components/ui/card";
 
 import { BrandingSection } from "./BrandingSection";
@@ -58,6 +59,7 @@ export function FooterBuilder({
   activePanel,
   initialConfig,
   initialRevision = 0,
+  readiness,
   onPanelChange,
   onSave,
 }: FooterBuilderProps) {
@@ -82,9 +84,14 @@ export function FooterBuilder({
     revision: number;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [normalizationSaved, setNormalizationSaved] = useState(false);
   const [internalActivePanel, setInternalActivePanel] =
     useState<FooterBuilderPanel>("branding");
   const activeTab = activePanel ?? internalActivePanel;
+  const isEditingLocked = readiness?.state === "invalid";
+  const requiresNormalizationSave =
+    readiness?.state === "legacy_normalized" && !normalizationSaved;
+  const hasPendingSave = isDirty || requiresNormalizationSave;
   useEffect(() => {
     if (!isDirty && !revisionConflict) setRevision(initialRevision);
   }, [initialRevision, isDirty, revisionConflict]);
@@ -114,7 +121,7 @@ export function FooterBuilder({
   };
 
   const handleSave = async () => {
-    if (isLoading || revisionConflict) return;
+    if (isLoading || revisionConflict || isEditingLocked) return;
 
     setIsLoading(true);
     try {
@@ -129,6 +136,7 @@ export function FooterBuilder({
       queryClient.invalidateQueries({ queryKey: ["settings", "general"] });
       setRevision(saved.revision);
       markSaved(draftBeingSaved);
+      setNormalizationSaved(true);
       toast.success("Footer saved", { description: "Storefront layout is refreshing." });
     } catch (error: unknown) {
       const conflict = readSitePresentationRevisionConflict(error, "footer");
@@ -176,12 +184,30 @@ export function FooterBuilder({
           <span
             className={cn(
               "h-2 w-2 rounded-full",
-              isDirty ? "bg-amber-500" : "bg-emerald-500",
+              isEditingLocked
+                ? "bg-destructive"
+                : hasPendingSave
+                  ? "bg-amber-500"
+                  : "bg-emerald-500",
             )}
           />
-          {isDirty ? "Unsaved changes" : "All changes saved"}
+          {isEditingLocked
+            ? "Needs repair"
+            : isDirty
+              ? "Unsaved changes"
+              : requiresNormalizationSave
+                ? "Review required"
+                : "All changes saved"}
         </div>
       </div>
+
+      <NavigationConfigReadinessNotice
+        section="footer"
+        readiness={normalizationSaved ? { state: "ready" } : readiness}
+      />
+
+      {isEditingLocked ? null : (
+        <>
 
       {revisionConflict ? (
         <PresentationRevisionConflictNotice
@@ -280,14 +306,18 @@ export function FooterBuilder({
           disabled={
             isLoading ||
             Boolean(revisionConflict) ||
-            !isDirty
+            !hasPendingSave
           }
           size="sm"
         >
           {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Save changes
+          {requiresNormalizationSave && !isDirty
+            ? "Save typed format"
+            : "Save changes"}
         </Button>
       </div>
+        </>
+      )}
     </div>
   );
 }
