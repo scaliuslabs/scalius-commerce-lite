@@ -1,6 +1,6 @@
 # Media Authority, Video, and Workflow Audit
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-07-20
 
 ## Current truth
 
@@ -298,6 +298,24 @@ buffered in a Worker invocation.
   dashboard auth, API readiness, storefront pages/cache headers, discovery
   XML/feeds, UCP catalog discovery, and a live product route; only the known
   logs-only ops-monitor email configuration warnings remain.
+
+### Compact touch-target checkpoint (2026-07-20)
+
+- A renewed exact 390 x 844 production audit found that the Media workspace's
+  deliberately enlarged compact controls were still only 36 px high. Upload,
+  search, type/sort, selection, bulk lifecycle, folder rail, card preview and
+  actions, Close, retry, and load-more controls now expose 44 px mobile targets
+  while retaining the established dense 28/32 px desktop workbench sizes.
+- Admin version `f9cdbfd6-6117-4030-92ea-9aac6adc294c` is live at 100%.
+  Production retained two gallery columns and exact 390 px document/body width
+  on mobile, five columns at 1440 px, and an empty selection when **Select**
+  opened. **Select all shown** selected exactly the 24 loaded assets; Clear and
+  Cancel returned to normal mode without a write. Every visible selection and
+  lifecycle command measured 44 px, and browser logs remained empty.
+- Six focused files passed 25 tests and the single sequential Admin typecheck
+  passed before deployment. This presentation correction does not change
+  upload limits, R2/D1 authority, media dependencies, or product/storefront
+  rendering policy.
 
 ## Platform evidence
 

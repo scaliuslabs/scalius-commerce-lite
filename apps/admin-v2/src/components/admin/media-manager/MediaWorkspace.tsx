@@ -69,8 +69,8 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           )}
           <p className="truncate text-xs text-muted-foreground">Images up to 20 MiB · videos up to 100 MiB · 50 files per batch</p>
         </div>
-        {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-9 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-9 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
-        {onClose && <Button type="button" variant="ghost" size="sm" className="h-9 sm:h-8" onClick={onClose}>Close</Button>}
+        {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
+        {onClose && <Button type="button" variant="ghost" size="sm" className="h-11 sm:h-8" onClick={onClose}>Close</Button>}
       </header>
 
       <MediaUploadQueue queue={mm.queue} onPause={mm.pause} onResume={mm.resume} onCancel={mm.cancel} onClearFinished={mm.clearFinished} />
