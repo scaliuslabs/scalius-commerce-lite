@@ -1224,6 +1224,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
   focused Theme/settings tests and the sequential Admin typecheck passed before
   deployment.
 
+### Barcode physical-media safety checkpoint (2026-07-20)
+
+- Current Shopify and Square first-party workflows were rechecked against the
+  built-in Scalius label composer, alongside Medusa/Vendure/Saleor's
+  variant-data or extension boundaries. The existing two-speed decision still
+  holds: a row **Print label** action starts one exact-SKU job, while single and
+  batch work share the same A4/adhesive/thermal/custom preview, quantities,
+  test output, and browser Print/Save PDF workspace rather than a blocking
+  wizard or immediate print icon.
+- The renewed media-maker check found one missed physical edge case: many
+  adhesive sheets and any cut or damaged sheet should not be re-fed. **Start at
+  cell** now means leaving leading cells blank and, only when used, shows a
+  compact warning to follow both media and printer guidance. Fresh-sheet jobs
+  remain visually quiet.
+- Admin version `54fabcde-bb41-4a4d-80ca-7fdca07f4be7` is live at 100%.
+  Production preserved exact Aster Studio Clogs `39 / Cream` in the URL,
+  rendered its saved Code 128 identity at A4 adhesive cell 5, kept Test and
+  Print/PDF enabled as 44 px mobile targets, and measured document/body width
+  exactly 390 px with no console errors. Twenty-eight focused tests and the
+  sequential Admin typecheck passed before deployment.
+
 ### Bulk-shipment authority checkpoint (2026-07-20)
 
 - API version `82b7fb11-2880-497a-8647-1ae3a18c37c5` closes the unbounded

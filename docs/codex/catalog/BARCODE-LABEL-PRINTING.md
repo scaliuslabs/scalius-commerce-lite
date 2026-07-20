@@ -164,10 +164,15 @@ guessing from current stock.
   zones. Scalius must not shrink a barcode merely to make a crowded template
   look tidy.
 - [Avery's current print options](https://www.avery.com/help/article/printing-steps-and-options-in-design-and-print)
-  explicitly support starting on a later label and printing only part of a
-  sheet. That is why Scalius keeps `Start at cell` as part of the physical job
-  instead of asking office-printer merchants to rebuild a partly used A4 sheet
-  in a design canvas.
+  support selecting a later starting label and printing only part of a sheet,
+  but its separate [sheet-reuse guidance](https://www.avery.com/help/article/can-i-print-a-few-labels-and-save-the-label-sheet-for-future-printing)
+  warns that many adhesive sheets should pass through an inkjet or laser
+  printer only once because heat, curl, exposed adhesive, or a missing leading
+  label can cause a jam. Scalius therefore keeps `Start at cell` for deliberate
+  placement without presenting re-feeding as universally safe. A contextual
+  warning appears only after the merchant skips cells and tells them not to
+  re-feed cut, damaged, or adhesive stock unless both the media maker and
+  printer permit it.
 - [Brother P-touch database printing](https://support.brother.com/g/s/es/dev/en/print/database_editor/index.html?navi=offall)
   uses Excel or other tabular data as the merge source for specialist label
   templates. Scalius therefore offers a collapsed **External label software**
@@ -251,11 +256,12 @@ catalog order, or inventory data. Shopify's fixed alphabetical output is not a
 reason to remove merchant control from mixed shelf, cutting, or replenishment
 batches.
 
-For partially used multi-label sheets, `Start at cell` skips the already-used
-slots. The scaled page preview is also an interactive cell picker, while the
-numeric field remains the compact keyboard/mobile fallback. This offset is
+For deliberate placement on multi-label sheets, `Start at cell` leaves leading
+slots blank. The scaled page preview is also an interactive cell picker, while
+the numeric field remains the compact keyboard/mobile fallback. This offset is
 applied to the real print page and test page, but is never persisted into the
-next job.
+next job. Skipping cells does not certify a sheet for another printer pass; the
+contextual warning owns that physical-media boundary.
 
 A compact previous/next control reviews every generated page without adding a
 second spreadsheet or preview mode. Preview navigation changes no job facts.
@@ -528,6 +534,17 @@ feeds, structured data, or external marketplaces.
   extra-wide cut**, switched to a 1 x 10 full-width plain-paper sheet, and
   enabled Test and Print/PDF without changing the saved barcode. The browser
   console remained free of warnings and errors.
+- Admin version `54fabcde-bb41-4a4d-80ca-7fdca07f4be7` closes the physical
+  sheet-reuse ambiguity found in the renewed platform and media-maker review.
+  **Start at cell** now describes deliberate blank leading cells instead of
+  asserting that they were safely used before. Skipping a cell exposes one
+  compact 11 px warning against re-feeding cut, damaged, or adhesive stock
+  unless both the sheet maker and printer allow it. The warning remains absent
+  for a fresh sheet. The mobile Test and Print/PDF actions are now 44 px touch
+  targets. Production retained the exact SKU in the URL, a real A4 adhesive
+  preview at cell 5, zero 390 px overflow, enabled output, and no console
+  warnings or errors. Twenty-eight focused workspace/model/route checks and
+  the sequential Admin typecheck passed before deployment.
 
 ## Product boundary and future extensions
 
@@ -547,8 +564,8 @@ This matches the useful coverage of Shopify/Square-style template and batch
 printing while avoiding a separate label app and adds the A4/manual-cut flow
 that small merchants otherwise assemble by hand. The workspace already covers
 exact single/batch SKUs, stock-derived quantities, A4/plain/adhesive/thermal/
-custom formats, partially used sheets, physical fit, test pages, bounded
-alignment, vector output, and browser PDF.
+custom formats, deliberate sheet placement with media-safety guidance,
+physical fit, test pages, bounded alignment, vector output, and browser PDF.
 
 Receiving-derived quantities, team-shared templates, native ZPL, and location,
 package, lot, or serial labels are later inventory/fulfilment capabilities and
