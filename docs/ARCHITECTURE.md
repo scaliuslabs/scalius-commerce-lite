@@ -332,9 +332,9 @@ If status changed:
 
 Numeric architecture scores and blanket “production-ready” claims are not used.
 They hide the difference between a sensible module boundary and a verified
-commerce lifecycle. Stable-release confidence comes from the release bar in
-`docs/platform/PLATFORM-GOAL.md`, focused invariant tests, the sequential package
-gates, deployed Cloudflare smokes, and current operational evidence. The
+commerce lifecycle. Stable-release confidence comes from focused invariant
+tests, sequential package gates, deployed Cloudflare
+smokes, and current operational evidence. The
 orders/payments/inventory triangle remains intentionally coupled at its atomic
 D1 commit boundary; every other dependency should be justified by current code
 and boundary tests.

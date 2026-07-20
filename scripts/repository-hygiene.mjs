@@ -17,7 +17,15 @@ const blockedExactPaths = new Set([
   "GEMINI.md",
   "secret-scanning-alerts.json",
 ]);
-const blockedPrefixes = [".claude/", ".codex/", ".cursor/", "docs/codex/"];
+const blockedPrefixes = [
+  ".claude/",
+  ".codex/",
+  ".cursor/",
+  "audit/",
+  "docs/codex/",
+  "docs/platform/",
+  "docs/research/",
+];
 const blockedMarkdownText = [
   /\bChatGPT\b/iu,
   /\bOpenAI Codex\b/iu,

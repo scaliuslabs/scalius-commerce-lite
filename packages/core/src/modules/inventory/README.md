@@ -188,7 +188,7 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `created_by`    | text      | Admin user ID (for manual adjustments)                        |
 | `created_at`    | timestamp | Unix epoch seconds                                            |
 
-New production counter writes use `ledger_version = 2` and additionally record `pool`, `reservation_generation`, `stock_version_before/after`, and before/after/delta values for physical, reserved, and preorder counters. `(variant_id, stock_version_after)` is unique, so the CAS version is also the deterministic per-SKU ledger sequence. Legacy rows remain version 1 history and are not falsely backfilled with counter facts that were never recorded. See `docs/platform/catalog/INVENTORY-LEDGER-V2.md` for the complete event and generation contract.
+New production counter writes use `ledger_version = 2` and additionally record `pool`, `reservation_generation`, `stock_version_before/after`, and before/after/delta values for physical, reserved, and preorder counters. `(variant_id, stock_version_after)` is unique, so the CAS version is also the deterministic per-SKU ledger sequence. Legacy rows remain version 1 history and are not falsely backfilled with counter facts that were never recorded.
 
 Indexes: `variant_id`, `order_id`, `created_at`
 

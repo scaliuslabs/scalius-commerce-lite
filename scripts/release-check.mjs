@@ -104,13 +104,11 @@ const stringOptions = new Set([
 const knownOptions = new Set([...booleanOptions, ...stringOptions]);
 
 const requiredDocs = [
-  "audit/README.md",
-  "audit/OPERATIONAL_RUNBOOK.md",
-  "docs/platform/PLATFORM-GOAL.md",
-  "docs/platform/README.md",
   "docs/ARCHITECTURE.md",
   "README.md",
-  "AGENTS.md",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "CODE_OF_CONDUCT.md",
 ];
 
 function errorMessage(error) {
