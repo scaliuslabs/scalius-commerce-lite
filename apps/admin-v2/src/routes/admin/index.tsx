@@ -21,12 +21,6 @@ const RecentOrders = lazy(() =>
     default: mod.RecentOrders,
   })),
 );
-const WelcomeBanner = lazy(() =>
-  import("~/components/admin/WelcomeBanner").then((mod) => ({
-    default: mod.WelcomeBanner,
-  })),
-);
-
 const EMPTY_DASHBOARD_SUMMARY: DashboardSummaryData = {
   stats: {
     totalProducts: 0,
@@ -89,10 +83,10 @@ function DashboardPage() {
   const isSummaryInitialLoading = summaryQuery.isPending && !summaryQuery.data;
 
   return (
-    <div className="space-y-8">
-      <Suspense fallback={<WelcomeBannerLoading />}>
-        <WelcomeBanner />
-      </Suspense>
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+      </header>
 
       {summaryQuery.isError && (
         <div
@@ -145,7 +139,6 @@ function DashboardPage() {
     </div>
   );
 }
-
 function useDashboardActivityEnabled() {
   const [enabled, setEnabled] = useState(false);
 
@@ -199,23 +192,6 @@ function DashboardMetricsLoading() {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function WelcomeBannerLoading() {
-  return (
-    <div
-      className="mb-4 min-h-[76px] overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-900/50"
-      aria-hidden="true"
-    >
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-7 w-7 rounded-full" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-5 w-40" />
-          <Skeleton className="h-4 w-full max-w-xl" />
-        </div>
-      </div>
     </div>
   );
 }

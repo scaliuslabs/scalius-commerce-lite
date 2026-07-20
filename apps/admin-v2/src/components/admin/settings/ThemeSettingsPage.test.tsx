@@ -28,7 +28,6 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     }),
   };
 });
-
 vi.mock("~/lib/api-functions/settings", () => ({
   getThemeWorkspace: getThemeWorkspaceMock,
   saveThemeDraft: saveThemeDraftMock,
@@ -81,6 +80,19 @@ describe("ThemeSettingsPage read authority", () => {
       });
     }
   }
+
+  it("keeps the page title visible while the workspace loads", () => {
+    getThemeWorkspaceMock.mockReturnValueOnce(new Promise(() => undefined));
+
+    act(() =>
+      root.render(
+        <ThemeSettingsPage section="system" onSectionChange={() => undefined} />,
+      ),
+    );
+
+    expect(host.querySelector("h1")?.textContent).toBe("Storefront style");
+    expect(host.querySelector('[aria-busy="true"]')).toBeTruthy();
+  });
 
   it("does not expose editable assumed defaults when the published read fails", async () => {
     getThemeWorkspaceMock.mockRejectedValueOnce(new Error("offline"));

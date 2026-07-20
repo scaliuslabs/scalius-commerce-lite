@@ -28,7 +28,6 @@ const EMPTY_FLAGS: FlagState = { desktop: false, mobile: false };
 function cloneSlider(slider: HeroSlider | null): HeroSlider | null {
   return slider ? structuredClone(slider) : null;
 }
-
 function sliderChanged(
   saved: HeroSlider | null,
   draft: HeroSlider | null,
@@ -176,9 +175,12 @@ export function HeroSliderContainer({
 
   if (loading) {
     return (
-      <div className="flex h-48 items-center justify-center" role="status">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="sr-only">Loading hero sliders</span>
+      <div className="mx-auto max-w-6xl space-y-4 py-4" aria-busy="true">
+        <h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>
+        <div className="flex h-40 items-center justify-center" role="status">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="sr-only">Loading hero sliders</span>
+        </div>
       </div>
     );
   }

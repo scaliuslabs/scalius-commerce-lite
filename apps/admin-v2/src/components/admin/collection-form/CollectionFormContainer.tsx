@@ -232,11 +232,6 @@ export function CollectionForm({
             <h1 className="text-xl font-semibold tracking-tight">
               {isEdit ? "Edit Collection" : "Create Collection"}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isEdit
-                ? "Update collection membership, layout, and discovery settings."
-                : "Start as a draft, choose its products, and publish when the preview is ready."}
-            </p>
             {!canSave ? (
               <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
                 Read-only access. Collection changes require catalog edit permission.

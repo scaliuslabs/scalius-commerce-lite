@@ -27,6 +27,13 @@ const carouselSource = readFileSync(
 );
 
 describe("hero slider workflow boundaries", () => {
+  it("keeps the page title visible while the workspace loads", () => {
+    expect(containerSource).toContain(
+      '<h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>',
+    );
+    expect(containerSource).toContain('aria-busy="true"');
+  });
+
   it("uses one explicit revision-guarded save instead of debounced field writes", () => {
     expect(containerSource).not.toContain("useDebouncedCallback");
     expect(containerSource).toContain("expectedRevision: draft.revision");
