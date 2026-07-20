@@ -1,6 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
-import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import {
   Clock,
@@ -13,6 +12,7 @@ import {
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
 import { CustomerAccountBadge } from "~/components/admin/customer-list/CustomerAccountBadge";
+import { formatAdminDate } from "~/lib/admin-time";
 import {
   customerHasAccount,
   formatCustomerLocation,
@@ -122,8 +122,8 @@ export function getCustomerColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          <span suppressHydrationWarning>
-            {formatDate(row.original.lastOrderAt)}
+          <span>
+            {formatAdminDate(row.original.lastOrderAt) ?? "No orders"}
           </span>
         </div>
       ),

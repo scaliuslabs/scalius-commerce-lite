@@ -15,6 +15,10 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { deliveryLocations } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { createId } from "@paralleldrive/cuid2";
+import {
+  normalizeDeliveryLocationName,
+  shouldSuppressPathaoLocationName,
+} from "./location-names";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -113,6 +117,75 @@ interface LocationRow {
   type: string;
   parentId: string | null;
   externalIds: string;
+  isActive: boolean;
+}
+
+export interface PathaoLocationImportItem {
+  name: string;
+  type: "city" | "zone" | "area";
+  parentId: string | null;
+  pathaoId: number;
+  metadata?: Record<string, unknown>;
+}
+
+export function preparePathaoLocationItems(items: PathaoLocationImportItem[]): {
+  accepted: PathaoLocationImportItem[];
+  rejected: PathaoLocationImportItem[];
+} {
+  const candidatesByPathaoId = new Map<number, PathaoLocationImportItem>();
+  const rejected: PathaoLocationImportItem[] = [];
+
+  for (const item of items) {
+    const normalized = {
+      ...item,
+      name: normalizeDeliveryLocationName(item.name),
+    };
+    const validPathaoId = Number.isInteger(item.pathaoId) && item.pathaoId > 0;
+    if (
+      !validPathaoId ||
+      shouldSuppressPathaoLocationName(normalized.name, item.type)
+    ) {
+      rejected.push(normalized);
+    } else if (candidatesByPathaoId.has(item.pathaoId)) {
+      rejected.push(normalized);
+    } else {
+      candidatesByPathaoId.set(item.pathaoId, normalized);
+    }
+  }
+
+  const acceptedByIdentity = new Map<string, PathaoLocationImportItem>();
+  for (const item of candidatesByPathaoId.values()) {
+    const identity = [
+      item.type,
+      item.parentId ?? "",
+      item.name.toLocaleLowerCase("en-US"),
+    ].join("\u0000");
+    const current = acceptedByIdentity.get(identity);
+    if (!current) {
+      acceptedByIdentity.set(identity, item);
+      continue;
+    }
+
+    if (item.pathaoId < current.pathaoId) {
+      rejected.push(current);
+      acceptedByIdentity.set(identity, item);
+    } else {
+      rejected.push(item);
+    }
+  }
+
+  return { accepted: [...acceptedByIdentity.values()], rejected };
+}
+
+function parseExternalIds(value: string): Record<string, string | number> {
+  try {
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, string | number>
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Load all existing locations of a type into a map keyed by pathao ID */
@@ -127,6 +200,7 @@ async function loadExistingByPathaoId(
       type: deliveryLocations.type,
       parentId: deliveryLocations.parentId,
       externalIds: deliveryLocations.externalIds,
+      isActive: deliveryLocations.isActive,
     })
     .from(deliveryLocations)
     .where(and(eq(deliveryLocations.type, type), isNull(deliveryLocations.deletedAt)))
@@ -145,18 +219,14 @@ async function loadExistingByPathaoId(
 /** Bulk upsert locations — fast path with pre-loaded existing data */
 async function bulkUpsert(
   db: Database,
-  items: Array<{
-    name: string;
-    type: "city" | "zone" | "area";
-    parentId: string | null;
-    pathaoId: number;
-    metadata?: Record<string, unknown>;
-  }>,
+  items: PathaoLocationImportItem[],
   existing: Map<string, LocationRow>,
 ): Promise<{ created: number; updated: number; idMap: Map<number, string> }> {
   let created = 0;
   let updated = 0;
   const idMap = new Map<number, string>(); // pathaoId → our dbId
+
+  if (items.length === 0) return { created, updated, idMap };
 
   // Also load all locations of this type for name matching
   const allRows = await db
@@ -165,6 +235,7 @@ async function bulkUpsert(
       name: deliveryLocations.name,
       parentId: deliveryLocations.parentId,
       externalIds: deliveryLocations.externalIds,
+      isActive: deliveryLocations.isActive,
     })
     .from(deliveryLocations)
     .where(and(eq(deliveryLocations.type, items[0]?.type || "city"), isNull(deliveryLocations.deletedAt)))
@@ -176,7 +247,7 @@ async function bulkUpsert(
   }
 
   // Separate into updates and inserts
-  const updates: Array<{ id: string; name: string; parentId: string | null; pathaoId: number; metadata?: Record<string, unknown> }> = [];
+  const updates: Array<{ id: string; name: string; parentId: string | null; pathaoId: number; externalIds: string; metadata?: Record<string, unknown> }> = [];
   const inserts: Array<{ id: string; name: string; type: string; parentId: string | null; pathaoId: number; metadata?: Record<string, unknown> }> = [];
 
   for (const item of items) {
@@ -185,7 +256,7 @@ async function bulkUpsert(
 
     if (existingByPathao) {
       // Already mapped — update name if changed
-      updates.push({ id: existingByPathao.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
+      updates.push({ id: existingByPathao.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, externalIds: existingByPathao.externalIds, metadata: item.metadata });
       idMap.set(item.pathaoId, existingByPathao.id);
       updated++;
     } else {
@@ -195,7 +266,7 @@ async function bulkUpsert(
 
       if (existingByName) {
         // Found by name — add pathao ID
-        updates.push({ id: existingByName.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, metadata: item.metadata });
+        updates.push({ id: existingByName.id, name: item.name, parentId: item.parentId, pathaoId: item.pathaoId, externalIds: existingByName.externalIds, metadata: item.metadata });
         idMap.set(item.pathaoId, existingByName.id);
         updated++;
       } else {
@@ -210,8 +281,7 @@ async function bulkUpsert(
 
   // Execute updates in batches
   for (const u of updates) {
-    const currentIds = existing.get(String(u.pathaoId));
-    const parsedIds = currentIds ? JSON.parse((currentIds.externalIds as string) || "{}") : {};
+    const parsedIds = parseExternalIds(u.externalIds);
     parsedIds.pathao = String(u.pathaoId);
 
     await db.update(deliveryLocations).set({
@@ -219,6 +289,7 @@ async function bulkUpsert(
       parentId: u.parentId,
       externalIds: JSON.stringify(parsedIds),
       metadata: u.metadata ? JSON.stringify(u.metadata) : undefined,
+      isActive: true,
       updatedAt: sql`(unixepoch())`,
     }).where(eq(deliveryLocations.id, u.id));
   }
@@ -238,6 +309,29 @@ async function bulkUpsert(
   }
 
   return { created, updated, idMap };
+}
+
+async function deactivateRejectedPathaoLocations(
+  db: Database,
+  rejected: PathaoLocationImportItem[],
+  existing: Map<string, LocationRow>,
+): Promise<number> {
+  let updated = 0;
+  for (const item of rejected) {
+    const row = existing.get(String(item.pathaoId));
+    if (!row) continue;
+
+    await db
+      .update(deliveryLocations)
+      .set({
+        name: item.name || row.name,
+        isActive: false,
+        updatedAt: sql`(unixepoch())`,
+      })
+      .where(eq(deliveryLocations.id, row.id));
+    updated += 1;
+  }
+  return updated;
 }
 
 // ─── Progress Management ─────────────────────────────────────────────────────
@@ -275,21 +369,28 @@ export async function processPathaoImportChunk(
       const pathaoCities = res.data?.data || [];
 
       const existing = await loadExistingByPathaoId(db, "city");
+      const preparedCities = preparePathaoLocationItems(
+        pathaoCities.map(c => ({ name: c.city_name, type: "city" as const, parentId: null, pathaoId: c.city_id })),
+      );
       const { created, updated, idMap } = await bulkUpsert(
         db,
-        pathaoCities.map(c => ({ name: c.city_name, type: "city" as const, parentId: null, pathaoId: c.city_id })),
+        preparedCities.accepted,
         existing,
       );
+      const suppressed = await deactivateRejectedPathaoLocations(db, preparedCities.rejected, existing);
 
-      progress.cities = pathaoCities.map(c => ({ pathaoId: c.city_id, dbId: idMap.get(c.city_id)!, name: c.city_name }));
+      progress.cities = preparedCities.accepted.flatMap(c => {
+        const dbId = idMap.get(c.pathaoId);
+        return dbId ? [{ pathaoId: c.pathaoId, dbId, name: c.name }] : [];
+      });
       progress.stats.citiesCreated += created;
-      progress.stats.citiesUpdated += updated;
+      progress.stats.citiesUpdated += updated + suppressed;
       progress.status = "zones";
       await saveProgress(kv, progress);
 
       return {
         status: "importing", phase: "cities",
-        progress: { current: pathaoCities.length, total: pathaoCities.length, label: `${pathaoCities.length} cities imported` },
+        progress: { current: progress.cities.length, total: pathaoCities.length, label: `${progress.cities.length} cities imported` },
         stats: progress.stats,
       };
     }
@@ -311,22 +412,24 @@ export async function processPathaoImportChunk(
       );
 
       // Flatten and upsert all zones
-      const allZoneItems = results.flatMap(r =>
+      const preparedZones = preparePathaoLocationItems(results.flatMap(r =>
         r.zones.map(z => ({ name: z.zone_name, type: "zone" as const, parentId: r.city.dbId, pathaoId: z.zone_id }))
-      );
+      ));
 
-      const { created, updated, idMap } = await bulkUpsert(db, allZoneItems, existing);
+      const { created, updated, idMap } = await bulkUpsert(db, preparedZones.accepted, existing);
+      const suppressed = await deactivateRejectedPathaoLocations(db, preparedZones.rejected, existing);
 
-      for (const r of results) {
-        for (const z of r.zones) {
-          allZones.push({ pathaoId: z.zone_id, dbId: idMap.get(z.zone_id)!, name: z.zone_name, cityDbId: r.city.dbId });
+      for (const zone of preparedZones.accepted) {
+        const dbId = idMap.get(zone.pathaoId);
+        if (dbId && zone.parentId) {
+          allZones.push({ pathaoId: zone.pathaoId, dbId, name: zone.name, cityDbId: zone.parentId });
         }
       }
 
       progress.zones = allZones;
       progress.zoneIndex = 0;
       progress.stats.zonesCreated += created;
-      progress.stats.zonesUpdated += updated;
+      progress.stats.zonesUpdated += updated + suppressed;
       progress.status = "areas";
       await saveProgress(kv, progress);
 
@@ -371,7 +474,7 @@ export async function processPathaoImportChunk(
       );
 
       // Flatten and upsert
-      const allAreaItems = results.flatMap(r =>
+      const preparedAreas = preparePathaoLocationItems(results.flatMap(r =>
         r.areas.map(a => ({
           name: a.area_name,
           type: "area" as const,
@@ -379,12 +482,13 @@ export async function processPathaoImportChunk(
           pathaoId: a.area_id,
           metadata: { home_delivery_available: a.home_delivery_available, pickup_available: a.pickup_available },
         }))
-      );
+      ));
 
-      if (allAreaItems.length > 0) {
-        const { created, updated } = await bulkUpsert(db, allAreaItems, existing);
+      if (preparedAreas.accepted.length > 0 || preparedAreas.rejected.length > 0) {
+        const { created, updated } = await bulkUpsert(db, preparedAreas.accepted, existing);
+        const suppressed = await deactivateRejectedPathaoLocations(db, preparedAreas.rejected, existing);
         progress.stats.areasCreated += created;
-        progress.stats.areasUpdated += updated;
+        progress.stats.areasUpdated += updated + suppressed;
       }
 
       progress.zoneIndex = batchEnd;

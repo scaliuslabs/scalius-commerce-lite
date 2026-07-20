@@ -42019,7 +42019,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsData = {
         /**
          * Location type filter
          */
-        type?: string;
+        type?: 'city' | 'zone' | 'area';
         /**
          * Parent ID filter
          */
@@ -42031,11 +42031,11 @@ export type GetApiV1AdminSettingsDeliveryLocationsData = {
         /**
          * Page number
          */
-        page?: number | null;
+        page?: number;
         /**
          * Items per page
          */
-        limit?: number | null;
+        limit?: number;
     };
     url: '/api/v1/admin/settings/delivery-locations';
 };

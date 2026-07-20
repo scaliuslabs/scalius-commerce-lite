@@ -12,6 +12,7 @@ describe("customer desktop columns", () => {
     expect(source).toContain("CustomerAccountBadge");
     expect(source).toContain("customerHasAccount(customer)");
     expect(source).toContain('title="Paid Spend"');
+    expect(source).toContain("formatAdminDate(row.original.lastOrderAt)");
     expect(source).toContain("opts.canViewHistory");
   });
 });

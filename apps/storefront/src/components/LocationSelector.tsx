@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import CustomDropdown from "@/components/CustomDropdown";
-import SimpleDropdown from "@/components/SimpleDropdown";
 import { getZones, getAreas, type LocationData } from "@/lib/api";
 import {
   resolveLocationOption,
@@ -263,7 +262,7 @@ export default function LocationSelector({
           >
             {areaLabel}
           </Label>
-          <SimpleDropdown
+          <CustomDropdown
             id="area"
             name="area"
             placeholder="Select an area (optional)"

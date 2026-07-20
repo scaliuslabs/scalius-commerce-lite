@@ -1,7 +1,8 @@
 // src/db/schema/delivery.ts
 // Delivery domain tables: deliveryLocations, deliveryProviders, deliveryShipments.
 
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
@@ -27,6 +28,12 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
 }, (table) => [
     index("delivery_locations_parent_id_idx").on(table.parentId),
     index("delivery_locations_type_idx").on(table.type),
+    uniqueIndex("delivery_locations_active_city_name_uidx")
+        .on(sql`lower(trim(${table.name}))`)
+        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.type} = 'city'`),
+    uniqueIndex("delivery_locations_active_child_name_uidx")
+        .on(table.type, table.parentId, sql`lower(trim(${table.name}))`)
+        .where(sql`${table.deletedAt} IS NULL AND ${table.isActive} = 1 AND ${table.type} IN ('zone', 'area') AND ${table.parentId} IS NOT NULL`),
 ]);
 
 export const deliveryProviders = sqliteTable("delivery_providers", {

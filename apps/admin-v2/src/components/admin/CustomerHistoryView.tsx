@@ -260,7 +260,7 @@ export function CustomerHistoryView({
               <div className="space-y-1 rounded-md border bg-muted/30 p-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <DollarSign className="h-3.5 w-3.5" />
-                  <span>Total Spent</span>
+                  <span>Paid Spend</span>
                 </div>
                 <p className="text-xl font-semibold">
                   {symbol}

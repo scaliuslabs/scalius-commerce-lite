@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { deliveryLocations } from "@scalius/database/schema";
 import { and, eq, isNull, like, sql } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
+import { normalizeRequiredDeliveryLocationName } from "./location-names";
 
 // ─────────────────────────────────────────
 // Types
@@ -107,21 +108,22 @@ export async function searchLocations(
 /** Create a new location */
 export async function createLocation(db: Database, data: LocationData) {
   const id = data.id || createId();
+  const name = normalizeRequiredDeliveryLocationName(data.name);
 
   await db.insert(deliveryLocations).values({
     id,
-    name: data.name,
+    name,
     type: data.type,
     parentId: data.parentId || null,
     externalIds: JSON.stringify(data.externalIds),
     metadata: JSON.stringify(data.metadata),
     isActive: data.isActive !== undefined ? data.isActive : true,
-    sortOrder: data.sortOrder || 0,
+    sortOrder: data.sortOrder ?? 0,
     createdAt: sql`(unixepoch())`,
     updatedAt: sql`(unixepoch())`,
   });
 
-  return { id, ...data };
+  return { id, ...data, name };
 }
 
 /** Update an existing location */
@@ -130,7 +132,9 @@ export async function updateLocation(db: Database, id: string, data: Partial<Loc
     updatedAt: sql`(unixepoch())`,
   };
 
-  if (data.name !== undefined) updateData.name = data.name;
+  if (data.name !== undefined) {
+    updateData.name = normalizeRequiredDeliveryLocationName(data.name);
+  }
   if (data.parentId !== undefined) updateData.parentId = data.parentId;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.sortOrder !== undefined) updateData.sortOrder = data.sortOrder;
@@ -146,7 +150,7 @@ export async function updateLocation(db: Database, id: string, data: Partial<Loc
   await db
     .update(deliveryLocations)
     .set(updateData)
-    .where(eq(deliveryLocations.id, id));
+    .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
 
   return getLocationById(db, id);
 }
