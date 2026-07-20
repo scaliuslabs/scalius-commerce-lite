@@ -545,6 +545,24 @@ feeds, structured data, or external marketplaces.
   preview at cell 5, zero 390 px overflow, enabled output, and no console
   warnings or errors. Twenty-eight focused workspace/model/route checks and
   the sequential Admin typecheck passed before deployment.
+- The renewed 2026-07-20 mobile interaction audit kept that information
+  architecture and found no reason to introduce a second wizard or immediate
+  print action. It did identify a narrower presentation defect: several
+  secondary controls still inherited the 28–36 px desktop targets at 390 px.
+  The responsive workspace now gives its back action, quantity stepper,
+  selection shortcuts, SKU search/pagination, format selectors, starting-cell
+  input, fit recovery, advanced disclosures, CSV export, and preview paging
+  44 px mobile targets while preserving the original compact desktop heights.
+  Full picker rows remain the checkbox hit area, so the 16 px checkmark is a
+  visual indicator rather than the only touch target.
+- Admin version `fb27b83a-0d40-4529-a373-922d5f7c7729` is live at 100%.
+  Production proved one exact-SKU and two-SKU jobs, explicit `On hand`
+  quantities, partial-sheet cell 5, safe blocking of an over-wide Code 128
+  symbol, one-click recovery to A4 wide cut, two-page preview navigation, and
+  a compatible 14-digit Code 128 label on 50 x 25 mm thermal stock. Every
+  touched mobile target measured 44 px, width stayed exactly 390 px, the
+  desktop workspace retained its 28/32/36 px density, and the browser log was
+  empty.
 
 ## Product boundary and future extensions
 

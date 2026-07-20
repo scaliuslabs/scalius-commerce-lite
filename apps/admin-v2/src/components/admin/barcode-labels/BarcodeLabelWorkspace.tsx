@@ -118,7 +118,7 @@ function MillimetreInput({
             const next = event.target.valueAsNumber;
             if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, next)));
           }}
-          className="h-8 pr-8 text-sm tabular-nums"
+          className="h-11 pr-8 text-sm tabular-nums sm:h-8"
         />
         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">mm</span>
       </div>
@@ -215,11 +215,11 @@ function QuantityControl({
   label: string;
 }) {
   return (
-    <div className="flex h-8 items-center overflow-hidden rounded-md border bg-background">
+    <div className="flex h-11 items-center overflow-hidden rounded-md border bg-background sm:h-8">
       <button
         type="button"
         onClick={() => onChange(Math.max(0, value - 1))}
-        className="grid h-full w-8 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="grid h-full w-11 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:w-8"
         aria-label={`Decrease labels for ${label}`}
       >
         <Minus className="h-3.5 w-3.5" />
@@ -231,12 +231,12 @@ function QuantityControl({
         value={value}
         onChange={(event) => onChange(Math.max(0, Math.min(MAX_LABEL_COPIES, Math.trunc(event.target.valueAsNumber || 0))))}
         aria-label={`Label quantity for ${label}`}
-        className="h-full w-14 rounded-none border-x border-y-0 px-1 text-center text-sm tabular-nums shadow-none focus-visible:ring-0"
+        className="h-full w-16 rounded-none border-x border-y-0 px-1 text-center text-sm tabular-nums shadow-none focus-visible:ring-0 sm:w-14"
       />
       <button
         type="button"
         onClick={() => onChange(Math.min(MAX_LABEL_COPIES, value + 1))}
-        className="grid h-full w-8 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="grid h-full w-11 place-items-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:w-8"
         aria-label={`Increase labels for ${label}`}
       >
         <Plus className="h-3.5 w-3.5" />
@@ -620,7 +620,7 @@ export function BarcodeLabelWorkspace({
       <div className="label-workspace-screen mx-auto max-w-[1440px] space-y-3 px-2 pb-24 sm:px-4 sm:pb-8">
         <div className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-2.5">
-            <Button asChild variant="ghost" size="icon" className="mt-0.5 h-8 w-8 shrink-0">
+            <Button asChild variant="ghost" size="icon" className="mt-0.5 h-11 w-11 shrink-0 sm:h-8 sm:w-8">
               <Link to="/admin/inventory" search={{ section: "variants" }} aria-label="Back to inventory">
                 <ArrowLeft className="h-4 w-4" />
               </Link>
@@ -653,15 +653,15 @@ export function BarcodeLabelWorkspace({
                 </div>
                 {selectedVariants.length > 0 ? (
                   <div className="flex flex-wrap items-center gap-1">
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to on-hand stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Match tracked SKUs to available stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("available")}>Available</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Set every selected SKU to one label" onClick={() => setAllQuantities("one")}>One each</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Match tracked SKUs to on-hand stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("onHand")}>On hand</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Match tracked SKUs to available stock; keep manual counts for untracked SKUs" onClick={() => setAllQuantities("available")}>Available</Button>
                     {nonPrintingVariantIds.length > 0 ? (
-                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" title="Remove SKUs with zero labels from this print job" onClick={() => removeVariantsFromJob(nonPrintingVariantIds)}>
+                      <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs sm:h-7 sm:px-2" title="Remove SKUs with zero labels from this print job" onClick={() => removeVariantsFromJob(nonPrintingVariantIds)}>
                         Remove {nonPrintingVariantIds.length} zero
                       </Button>
                     ) : null}
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" title="Start a new empty label job without changing products or inventory" onClick={clearJob}>Clear job</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-xs text-muted-foreground hover:text-destructive sm:h-7 sm:px-2" title="Start a new empty label job without changing products or inventory" onClick={clearJob}>Clear job</Button>
                   </div>
                 ) : null}
               </CardHeader>
@@ -707,7 +707,7 @@ export function BarcodeLabelWorkspace({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-8 sm:w-8"
                               aria-label={`Remove ${variant.productName} ${variant.optionLabel ?? variant.sku}`}
                               onClick={() => updateSelected(variant.id, false)}
                             >
@@ -746,7 +746,7 @@ export function BarcodeLabelWorkspace({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-7 shrink-0 border-amber-400 bg-white px-2 text-xs text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900"
+                    className="h-11 shrink-0 border-amber-400 bg-white px-3 text-xs text-amber-950 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900 sm:h-7 sm:px-2"
                     onClick={() => setPresetId(compatiblePreset.id)}
                   >
                     Use {compatiblePreset.name}
@@ -766,14 +766,14 @@ export function BarcodeLabelWorkspace({
               <CardContent className="border-t p-0">
                 <div className="border-b p-2.5">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       type="search"
                       value={searchInput}
                       onChange={(event) => { setSearchInput(event.target.value); setSearchPage(1); }}
                       placeholder="Find product, SKU, or barcode…"
                       aria-label="Find SKUs for barcode labels"
-                      className="h-8 pl-8 text-sm"
+                      className="h-11 pl-8 text-sm sm:h-8"
                     />
                   </div>
                 </div>
@@ -808,9 +808,9 @@ export function BarcodeLabelWorkspace({
                   <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
                     <span>{pickerPagination.total} SKUs</span>
                     <div className="flex items-center gap-1">
-                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={searchPage <= 1} onClick={() => setSearchPage((page) => Math.max(1, page - 1))} aria-label="Previous SKU page"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" variant="outline" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={searchPage <= 1} onClick={() => setSearchPage((page) => Math.max(1, page - 1))} aria-label="Previous SKU page"><ChevronLeft className="h-3.5 w-3.5" /></Button>
                       <span className="min-w-16 text-center">{searchPage} / {pickerPagination.totalPages}</span>
-                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={searchPage >= pickerPagination.totalPages} onClick={() => setSearchPage((page) => Math.min(pickerPagination.totalPages, page + 1))} aria-label="Next SKU page"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" variant="outline" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={searchPage >= pickerPagination.totalPages} onClick={() => setSearchPage((page) => Math.min(pickerPagination.totalPages, page + 1))} aria-label="Next SKU page"><ChevronRight className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
                 ) : null}
@@ -825,7 +825,7 @@ export function BarcodeLabelWorkspace({
                 <div className="space-y-1.5">
                   <Label htmlFor="barcode-label-preset" className="text-xs">Paper or roll</Label>
                   <Select value={presetId} onValueChange={(value) => setPresetId(value as LabelPresetId)}>
-                    <SelectTrigger id="barcode-label-preset" className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="barcode-label-preset" className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {LABEL_PRESETS.map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.detail}</SelectItem>)}
                     </SelectContent>
@@ -834,7 +834,7 @@ export function BarcodeLabelWorkspace({
                 <div className="space-y-1.5">
                   <Label htmlFor="barcode-label-order" className="text-xs">Label order</Label>
                   <Select value={labelOrder} onValueChange={(value) => setLabelOrder(value as LabelOrder)}>
-                    <SelectTrigger id="barcode-label-order" className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="barcode-label-order" className="h-11 sm:h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="selected">As selected</SelectItem>
                       <SelectItem value="product">Product and variant A–Z</SelectItem>
@@ -848,11 +848,11 @@ export function BarcodeLabelWorkspace({
                     <MillimetreInput id="custom-page-height" label="Page height" value={customPreset.pageHeightMm} min={15} max={450} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, pageHeightMm: value }))} />
                     <div className="space-y-1">
                       <Label htmlFor="custom-columns" className="text-[11px] font-normal text-muted-foreground">Columns</Label>
-                      <Input id="custom-columns" type="number" min={1} max={10} value={customPreset.columns} onChange={(event) => setCustomPreset((current) => ({ ...current, columns: Math.max(1, Math.min(10, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-8 text-sm tabular-nums" />
+                      <Input id="custom-columns" type="number" min={1} max={10} value={customPreset.columns} onChange={(event) => setCustomPreset((current) => ({ ...current, columns: Math.max(1, Math.min(10, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-11 text-sm tabular-nums sm:h-8" />
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="custom-rows" className="text-[11px] font-normal text-muted-foreground">Rows</Label>
-                      <Input id="custom-rows" type="number" min={1} max={20} value={customPreset.rows} onChange={(event) => setCustomPreset((current) => ({ ...current, rows: Math.max(1, Math.min(20, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-8 text-sm tabular-nums" />
+                      <Input id="custom-rows" type="number" min={1} max={20} value={customPreset.rows} onChange={(event) => setCustomPreset((current) => ({ ...current, rows: Math.max(1, Math.min(20, Math.trunc(event.target.valueAsNumber || 1))) }))} className="h-11 text-sm tabular-nums sm:h-8" />
                     </div>
                     <MillimetreInput id="custom-margin-x" label="Side margin" value={customPreset.marginXmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginXmm: value }))} />
                     <MillimetreInput id="custom-margin-y" label="Vertical margin" value={customPreset.marginYmm} min={0} max={30} step={0.5} onChange={(value) => setCustomPreset((current) => ({ ...current, marginYmm: value }))} />
@@ -878,7 +878,7 @@ export function BarcodeLabelWorkspace({
                         max={capacity}
                         value={startOffset + 1}
                         onChange={(event) => setStartOffset(Math.max(0, Math.min(capacity - 1, Math.trunc(event.target.valueAsNumber || 1) - 1)))}
-                        className="h-8 w-20 text-center text-sm tabular-nums"
+                        className="h-11 w-20 text-center text-sm tabular-nums sm:h-8"
                       />
                     </div>
                     {startOffset > 0 ? (
@@ -903,7 +903,7 @@ export function BarcodeLabelWorkspace({
                   ))}
                 </div>
                 <details className="group border-t pt-3">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden sm:min-h-0">
                     <span className="flex items-center gap-1">
                       <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                       Print alignment
@@ -936,7 +936,7 @@ export function BarcodeLabelWorkspace({
                     <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                       <span>Positive moves right or down. Adjust only after a test sheet.</span>
                       {(alignment.xMm !== 0 || alignment.yMm !== 0) ? (
-                        <Button type="button" variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => setAlignment(DEFAULT_LABEL_PRINT_ALIGNMENT)}>
+                        <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-[10px] sm:h-6 sm:px-1.5" onClick={() => setAlignment(DEFAULT_LABEL_PRINT_ALIGNMENT)}>
                           Reset
                         </Button>
                       ) : null}
@@ -944,7 +944,7 @@ export function BarcodeLabelWorkspace({
                   </div>
                 </details>
                 <details className="group border-t pt-3">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium marker:hidden sm:min-h-0">
                     <span className="flex items-center gap-1">
                       <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                       External label software
@@ -959,7 +959,7 @@ export function BarcodeLabelWorkspace({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-7 shrink-0 px-2 text-xs"
+                      className="h-11 shrink-0 px-3 text-xs sm:h-7 sm:px-2"
                       disabled={!canExportLabelData}
                       onClick={downloadLabelData}
                     >
@@ -985,7 +985,7 @@ export function BarcodeLabelWorkspace({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-11 w-11 sm:h-7 sm:w-7"
                       disabled={previewPageIndex === 0}
                       onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current - 1, pages.length))}
                       aria-label="Preview previous label page"
@@ -999,7 +999,7 @@ export function BarcodeLabelWorkspace({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-11 w-11 sm:h-7 sm:w-7"
                       disabled={previewPageIndex >= pages.length - 1}
                       onClick={() => setPreviewPageIndex((current) => clampLabelPreviewPageIndex(current + 1, pages.length))}
                       aria-label="Preview next label page"
