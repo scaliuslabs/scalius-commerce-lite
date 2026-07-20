@@ -1104,6 +1104,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/auth/users/*/suspension": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE },
   },
+  "/api/v1/admin/auth/users/*/resend-setup": {
+    POST: { permission: PERMISSIONS.TEAM_MANAGE },
+  },
   "/api/v1/admin/auth/change-password": {
     POST: { allowAnyAdmin: true },
   },

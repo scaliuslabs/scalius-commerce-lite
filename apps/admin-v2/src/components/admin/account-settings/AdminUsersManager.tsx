@@ -58,6 +58,27 @@ function getInitials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
 
+function isInvitationStatus(status: AdminUserStatus): boolean {
+  return status === "invite_pending"
+    || status === "invite_expired"
+    || status === "invite_delivery_failed";
+}
+
+function getInvitationActionLabel(status: AdminUserStatus): string {
+  if (status === "invite_expired") return "Send new link";
+  if (status === "invite_delivery_failed") return "Retry delivery";
+  return "Resend setup";
+}
+
+function getInvitationTiming(expiresAt: string | null | undefined): string | null {
+  if (!expiresAt) return null;
+  const remainingMs = new Date(expiresAt).getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+  const remainingMinutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  if (remainingMinutes < 60) return `${remainingMinutes}m`;
+  return `${Math.ceil(remainingMinutes / 60)}h`;
+}
+
 interface AdminUsersManagerProps {
   currentUserId: string;
 }
@@ -423,8 +444,11 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <AdminStatusBadge status={status} />
-                  {canManageTeam && status === "password_setup" && (
+                  <AdminStatusBadge
+                    status={status}
+                    invitation={adminUser.invitation}
+                  />
+                  {canManageTeam && isInvitationStatus(status) && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -438,7 +462,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       ) : (
                         <RefreshCw className="h-3.5 w-3.5" />
                       )}
-                      Resend setup
+                      {getInvitationActionLabel(status)}
                     </Button>
                   )}
                   {canManageRoles && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
@@ -453,7 +477,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       Permissions
                     </Button>
                   )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "password_setup" && (
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && isInvitationStatus(status) && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Revoke invitation for ${adminUser.name}`} disabled={!userAuthorityReady}>
@@ -496,7 +520,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       Restore access
                     </Button>
                   )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status !== "password_setup" && status !== "suspended" && (
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && !isInvitationStatus(status) && status !== "password_setup" && status !== "suspended" && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -554,20 +578,33 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   );
 }
 
-function AdminStatusBadge({ status }: { status: AdminUserStatus }) {
+function AdminStatusBadge({
+  status,
+  invitation,
+}: {
+  status: AdminUserStatus;
+  invitation: AdminUser["invitation"];
+}) {
   const copy = ADMIN_USER_STATUS_COPY[status];
+  const timing = status === "invite_pending"
+    ? getInvitationTiming(invitation?.expiresAt)
+    : null;
+  const title = invitation?.expiresAt && status === "invite_pending"
+    ? `Setup link expires ${new Date(invitation.expiresAt).toLocaleString()}.`
+    : copy.description;
   const tone = status === "ready"
     ? "border-primary/25 bg-primary/5 text-primary"
-    : status === "suspended"
+    : status === "suspended" || status === "invite_delivery_failed"
       ? "border-destructive/25 bg-destructive/5 text-destructive"
       : "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 
   return (
     <span
-      title={copy.description}
+      title={title}
       className={`inline-flex min-h-7 items-center rounded-full border px-2 py-1 text-xs font-medium ${tone}`}
     >
       {copy.label}
+      {timing ? ` · ${timing}` : ""}
     </span>
   );
 }

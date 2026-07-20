@@ -13,6 +13,11 @@ export interface AdminUser {
   mustChangePassword: boolean;
   mustEnrollTwoFactor: boolean;
   suspended: boolean;
+  invitation: {
+    status: "pending" | "expired" | "delivery_failed";
+    expiresAt: string | null;
+    lastSentAt: string | null;
+  } | null;
   isSuperAdmin: boolean;
   createdAt: string | number;
   roles: { id: string; name: string; displayName: string }[];

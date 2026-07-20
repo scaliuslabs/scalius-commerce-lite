@@ -390,7 +390,10 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(createNext).toHaveBeenCalledTimes(1);
   });
 
-  it("requires team management permission for administrator suspension", async () => {
+  it.each([
+    "/api/v1/admin/auth/users/admin_2/suspension",
+    "/api/v1/admin/auth/users/admin_2/resend-setup",
+  ])("requires team management permission for %s", async (pathname) => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.TEAM_VIEW]),
     );
@@ -398,10 +401,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
 
     await expect(
       adminAuthMiddleware(
-        createContext(
-          "/api/v1/admin/auth/users/admin_2/suspension",
-          "POST",
-        ) as never,
+        createContext(pathname, "POST") as never,
         next,
       ),
     ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
@@ -410,10 +410,7 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
       new Set([PERMISSIONS.TEAM_MANAGE]),
     );
     await adminAuthMiddleware(
-      createContext(
-        "/api/v1/admin/auth/users/admin_2/suspension",
-        "POST",
-      ) as never,
+      createContext(pathname, "POST") as never,
       next,
     );
     expect(next).toHaveBeenCalledOnce();

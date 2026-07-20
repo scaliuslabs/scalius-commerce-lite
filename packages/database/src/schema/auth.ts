@@ -137,6 +137,36 @@ export const adminSetupRateLimits = sqliteTable("admin_setup_rate_limits", {
     index("admin_setup_rate_limits_window_idx").on(table.windowExpiresAt),
 ]);
 
+export const adminInvitations = sqliteTable("admin_invitations", {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+        .references(() => user.id, { onDelete: "set null" }),
+    invitedByUserId: text("invited_by_user_id")
+        .references(() => user.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    status: text("status", { enum: ["pending", "accepted", "revoked"] })
+        .notNull()
+        .default("pending"),
+    deliveryStatus: text("delivery_status", { enum: ["pending", "sent", "failed"] })
+        .notNull()
+        .default("pending"),
+    expiresAt: integer("expires_at", { mode: "timestamp" }),
+    lastSentAt: integer("last_sent_at", { mode: "timestamp" }),
+    acceptedAt: integer("accepted_at", { mode: "timestamp" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("admin_invitations_user_uq").on(table.userId),
+    index("admin_invitations_status_expiry_idx").on(table.status, table.expiresAt),
+    index("admin_invitations_email_created_idx").on(table.email, table.createdAt),
+]);
+
 export const scannerTokenClaims = sqliteTable("scanner_token_claims", {
     tokenHash: text("token_hash").primaryKey(),
     adminId: text("admin_id")
@@ -161,4 +191,5 @@ export type Verification = InferSelectModel<typeof verification>;
 export type TwoFactor = InferSelectModel<typeof twoFactor>;
 export type AdminSetupClaim = InferSelectModel<typeof adminSetupClaims>;
 export type AdminSetupRateLimit = InferSelectModel<typeof adminSetupRateLimits>;
+export type AdminInvitation = InferSelectModel<typeof adminInvitations>;
 export type ScannerTokenClaim = InferSelectModel<typeof scannerTokenClaims>;

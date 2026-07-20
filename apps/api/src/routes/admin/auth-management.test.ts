@@ -106,8 +106,10 @@ beforeEach(() => {
 });
 
 function createDbMock(options: { matchingSession?: boolean } = {}) {
-  const updateWhere = vi.fn(async () => undefined);
+  const updateWhere = vi.fn(() => ({ kind: "update" }));
   const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const insertValues = vi.fn(() => ({ kind: "insert" }));
+  const batch = vi.fn(async () => []);
   const deleteWhere = vi.fn(async () => undefined);
   const get = vi.fn(async () =>
     options.matchingSession === false ? null : { id: "session_1" },
@@ -117,6 +119,9 @@ function createDbMock(options: { matchingSession?: boolean } = {}) {
     __deleteWhere: deleteWhere,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
+    __insertValues: insertValues,
+    batch,
+    insert: vi.fn(() => ({ values: insertValues })),
     delete: vi.fn(() => ({ where: deleteWhere })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -230,6 +235,11 @@ function createAdminUserListDbMock(options: {
     mustEnrollTwoFactor: boolean;
     banned: boolean;
     banExpires: Date | null;
+    invitationId: string | null;
+    invitationStatus: "pending" | "accepted" | "revoked" | null;
+    invitationDeliveryStatus: "pending" | "sent" | "failed" | null;
+    invitationExpiresAt: Date | null;
+    invitationLastSentAt: Date | null;
     isSuperAdmin: boolean;
     createdAt: number;
   }>;
@@ -248,6 +258,11 @@ function createAdminUserListDbMock(options: {
       mustEnrollTwoFactor: false,
       banned: false,
       banExpires: null,
+      invitationId: null,
+      invitationStatus: null,
+      invitationDeliveryStatus: null,
+      invitationExpiresAt: null,
+      invitationLastSentAt: null,
       isSuperAdmin: false,
       createdAt: 1,
     },
@@ -265,7 +280,9 @@ function createAdminUserListDbMock(options: {
       from: vi.fn(() => ({
         leftJoin: vi.fn(() => ({
           leftJoin: vi.fn(() => ({
-            where: vi.fn(async () => adminUsers),
+            leftJoin: vi.fn(() => ({
+              where: vi.fn(async () => adminUsers),
+            })),
           })),
         })),
       })),
@@ -298,6 +315,8 @@ function createAdminDeleteDbMock(options: {
     role: string | null;
     isSuperAdmin: boolean;
     mustChangePassword: boolean;
+    invitationId: string | null;
+    invitationStatus: "pending" | "accepted" | "revoked" | null;
   } | null;
   targetPrincipalRows?: Array<{ id: string }>;
   adminPrincipalRows?: Array<{ id: string }>;
@@ -307,23 +326,32 @@ function createAdminDeleteDbMock(options: {
     role: "user",
     isSuperAdmin: false,
     mustChangePassword: true,
+    invitationId: "invite_1",
+    invitationStatus: "pending",
   };
   const targetPrincipalRows = options.targetPrincipalRows ?? [{ id: "rbac_admin" }];
   const adminPrincipalRows = options.adminPrincipalRows ?? [
     { id: "user_1" },
     { id: "rbac_admin" },
   ];
-  const deleteWhere = vi.fn(async () => undefined);
+  const deleteWhere = vi.fn(() => ({ kind: "delete" }));
+  const updateWhere = vi.fn(() => ({ kind: "update" }));
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const batch = vi.fn(async () => []);
   const principalWhereCalls: unknown[] = [];
 
   return {
     __deleteWhere: deleteWhere,
     __principalWhereCalls: principalWhereCalls,
+    batch,
     delete: vi.fn(() => ({ where: deleteWhere })),
+    update: vi.fn(() => ({ set: updateSet })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => targetUser),
+        leftJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => targetUser),
+          })),
         })),
       })),
     })),
@@ -402,13 +430,19 @@ function createAdminInviteDbMock() {
     vi.fn(async () => ({ id: "role_1" })),
     vi.fn(async () => null),
   ];
-  const updateWhere = vi.fn(async () => undefined);
+  const updateWhere = vi.fn(() => ({ kind: "update" }));
   const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const insertValues = vi.fn(() => ({ kind: "insert" }));
+  const batch = vi.fn(async () => []);
 
   return {
     __getQueue: getQueue,
+    __batch: batch,
+    __insertValues: insertValues,
     __updateSet: updateSet,
     __updateWhere: updateWhere,
+    batch,
+    insert: vi.fn(() => ({ values: insertValues })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -425,6 +459,8 @@ function createAdminResendSetupDbMock(options: {
     id: string;
     email: string;
     mustChangePassword: boolean;
+    invitationId: string | null;
+    invitationStatus: "pending" | "accepted" | "revoked" | null;
   } | null;
   principalRows?: Array<{ id: string }>;
 } = {}) {
@@ -434,14 +470,23 @@ function createAdminResendSetupDbMock(options: {
         id: "pending_admin",
         email: "pending@example.com",
         mustChangePassword: true,
+        invitationId: "invite_1",
+        invitationStatus: "pending",
       };
   const principalRows = options.principalRows ?? [{ id: "pending_admin" }];
+  const updateWhere = vi.fn(async () => undefined);
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
 
   return {
+    __updateSet: updateSet,
+    __updateWhere: updateWhere,
+    update: vi.fn(() => ({ set: updateSet })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => target),
+        leftJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            get: vi.fn(async () => target),
+          })),
         })),
       })),
     })),
@@ -643,6 +688,11 @@ describe("admin auth management user permissions", () => {
           mustEnrollTwoFactor: false,
           banned: false,
           banExpires: null,
+          invitationId: null,
+          invitationStatus: null,
+          invitationDeliveryStatus: null,
+          invitationExpiresAt: null,
+          invitationLastSentAt: null,
           isSuperAdmin: false,
           createdAt: 1,
         },
@@ -693,6 +743,11 @@ describe("admin auth management user permissions", () => {
         mustEnrollTwoFactor: false,
         banned: true,
         banExpires: null,
+        invitationId: null,
+        invitationStatus: null,
+        invitationDeliveryStatus: null,
+        invitationExpiresAt: null,
+        invitationLastSentAt: null,
         isSuperAdmin: false,
         createdAt: 1,
       }],
@@ -706,6 +761,71 @@ describe("admin auth management user permissions", () => {
 
     expect(response.status).toBe(200);
     expect(body.data?.users?.[0]?.suspended).toBe(true);
+  });
+
+  it("projects truthful pending, expired, and failed invitation states", async () => {
+    const baseAdmin = {
+      emailVerified: true,
+      image: null,
+      twoFactorEnabled: false,
+      mustChangePassword: true,
+      mustEnrollTwoFactor: true,
+      banned: false,
+      banExpires: null,
+      invitationStatus: "pending" as const,
+      isSuperAdmin: false,
+      createdAt: 1,
+    };
+    const db = createAdminUserListDbMock({
+      adminUsers: [
+        {
+          ...baseAdmin,
+          id: "pending_admin",
+          name: "Pending Admin",
+          email: "pending@example.com",
+          invitationId: "invite_pending",
+          invitationDeliveryStatus: "sent",
+          invitationExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+          invitationLastSentAt: new Date(),
+        },
+        {
+          ...baseAdmin,
+          id: "expired_admin",
+          name: "Expired Admin",
+          email: "expired@example.com",
+          invitationId: "invite_expired",
+          invitationDeliveryStatus: "sent",
+          invitationExpiresAt: new Date(Date.now() - 1_000),
+          invitationLastSentAt: new Date(Date.now() - 61 * 60 * 1000),
+        },
+        {
+          ...baseAdmin,
+          id: "failed_admin",
+          name: "Failed Admin",
+          email: "failed@example.com",
+          invitationId: "invite_failed",
+          invitationDeliveryStatus: "failed",
+          invitationExpiresAt: null,
+          invitationLastSentAt: null,
+        },
+      ],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users", { method: "GET" });
+    const body = await response.json() as {
+      data?: { users?: Array<{ id: string; invitation: { status: string } | null }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.users?.map(({ id, invitation }) => ({
+      id,
+      status: invitation?.status,
+    }))).toEqual([
+      { id: "pending_admin", status: "pending" },
+      { id: "expired_admin", status: "expired" },
+      { id: "failed_admin", status: "delivery_failed" },
+    ]);
   });
 
   it("does not re-check legacy user.role inside user-management handlers", () => {
@@ -734,6 +854,7 @@ describe("admin auth management user permissions", () => {
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(db.__deleteWhere).toHaveBeenCalledOnce();
+    expect(db.batch).toHaveBeenCalledOnce();
     expect(db.__principalWhereCalls).toHaveLength(2);
   });
 
@@ -760,6 +881,8 @@ describe("admin auth management user permissions", () => {
         role: "admin",
         isSuperAdmin: false,
         mustChangePassword: false,
+        invitationId: "invite_ready",
+        invitationStatus: "accepted",
       },
       targetPrincipalRows: [{ id: "ready_admin" }],
     });
@@ -949,6 +1072,15 @@ describe("admin auth management team invites", () => {
       mustChangePassword: true,
       mustEnrollTwoFactor: true,
     });
+    expect(db.__insertValues).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "new_admin",
+      invitedByUserId: "user_1",
+      name: "Ops Admin",
+      email: "ops@example.com",
+      status: "pending",
+      deliveryStatus: "pending",
+    }));
+    expect(db.__batch).toHaveBeenCalledOnce();
     expect(mocks.assignRoleToUser).toHaveBeenCalledWith(
       db,
       "new_admin",
@@ -1015,6 +1147,8 @@ describe("admin auth management team invites", () => {
         id: "ready_admin",
         email: "ready@example.com",
         mustChangePassword: false,
+        invitationId: "invite_ready",
+        invitationStatus: "accepted",
       },
       principalRows: [{ id: "ready_admin" }],
     });
@@ -1030,6 +1164,25 @@ describe("admin auth management team invites", () => {
 
     expect(response.status).toBe(400);
     expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("records setup-link delivery failure for an invited administrator", async () => {
+    const db = createAdminResendSetupDbMock();
+    const requestPasswordReset = vi.fn().mockRejectedValue(new Error("provider unavailable"));
+    mocks.createAuth.mockReturnValue({ api: { requestPasswordReset } });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/pending_admin/resend-setup",
+      { method: "POST" },
+      { BETTER_AUTH_URL: "https://admin.scalius.test" } as never,
+    );
+
+    expect(response.status).toBe(503);
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryStatus: "failed",
+      expiresAt: null,
+    }));
   });
 });
 

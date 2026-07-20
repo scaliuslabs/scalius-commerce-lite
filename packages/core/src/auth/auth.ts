@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
-import { getDb } from "@scalius/database/client";
+import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
@@ -60,6 +60,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       enabled: true,
       requireEmailVerification: false,
       minPasswordLength: 12,
+      resetPasswordTokenExpiresIn: 60 * 60,
       revokeSessionsOnPasswordReset: true,
       // Email verification callback - called when user needs to verify email
       sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
@@ -92,20 +93,24 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
       // Password reset callback
       sendResetPassword: async ({ user, url }: { user: { id: string; email: string; name: string }; url: string }) => {
         const { sendEmail } = await import("../integrations/email");
-        let isAdminInviteSetup = false;
-        try {
-          const inviteState = await db
-            .select({
-              role: schema.user.role,
-              mustChangePassword: schema.user.mustChangePassword,
-            })
-            .from(schema.user)
-            .where(eq(schema.user.id, user.id))
-            .get();
-          isAdminInviteSetup = inviteState?.role === "admin" && inviteState.mustChangePassword === true;
-        } catch (error) {
-          console.warn("[Auth] Could not resolve reset-email onboarding state:", error instanceof Error ? error.message : "Unknown error");
-        }
+        const inviteState = await db
+          .select({
+            role: schema.user.role,
+            mustChangePassword: schema.user.mustChangePassword,
+            invitationId: schema.adminInvitations.id,
+            invitationStatus: schema.adminInvitations.status,
+          })
+          .from(schema.user)
+          .leftJoin(
+            schema.adminInvitations,
+            eq(schema.adminInvitations.userId, schema.user.id),
+          )
+          .where(eq(schema.user.id, user.id))
+          .get();
+        const invitationId = inviteState?.invitationId ?? null;
+        const isAdminInviteSetup = inviteState?.role === "admin"
+          && inviteState.mustChangePassword === true
+          && inviteState.invitationStatus === "pending";
         const subject = isAdminInviteSetup
           ? `Set up your ${appName} admin account`
           : `Reset your password for ${appName}`;
@@ -114,7 +119,7 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
           ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
           : "We received a request to reset your password. Click the button below to create a new password.";
         const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
-        await sendEmail({
+        const delivery = await sendEmail({
           to: user.email,
           subject,
           html: `
@@ -138,12 +143,48 @@ export function createAuth(env?: Env | NodeJS.ProcessEnv) {
             </div>
           `,
         }, emailRuntimeContext);
+
+        if (!delivery.success) {
+          if (invitationId) {
+            await db
+              .update(schema.adminInvitations)
+              .set({
+                deliveryStatus: "failed",
+                expiresAt: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.adminInvitations.id, invitationId));
+          }
+          throw new Error("Password reset email delivery failed");
+        }
+
+        if (invitationId && isAdminInviteSetup) {
+          const sentAt = new Date();
+          await db
+            .update(schema.adminInvitations)
+            .set({
+              deliveryStatus: "sent",
+              lastSentAt: sentAt,
+              expiresAt: new Date(sentAt.getTime() + 60 * 60 * 1000),
+              updatedAt: sentAt,
+            })
+            .where(eq(schema.adminInvitations.id, invitationId));
+        }
       },
       onPasswordReset: async ({ user }: { user: { id: string } }) => {
-        await db
-          .update(schema.user)
-          .set({ mustChangePassword: false, updatedAt: new Date() })
-          .where(eq(schema.user.id, user.id));
+        const acceptedAt = new Date();
+        await safeBatch(db, [
+          db.update(schema.user)
+            .set({ mustChangePassword: false, updatedAt: acceptedAt })
+            .where(eq(schema.user.id, user.id)),
+          db.update(schema.adminInvitations)
+            .set({
+              status: "accepted",
+              acceptedAt,
+              updatedAt: acceptedAt,
+            })
+            .where(eq(schema.adminInvitations.userId, user.id)),
+        ]);
       },
     },
     session: {

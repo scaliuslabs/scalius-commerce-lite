@@ -95,9 +95,17 @@ describe("theme and account settings workspace", () => {
     const usersSource = readSource(
       "components/admin/account-settings/AdminUsersManager.tsx",
     );
+    const userStatusSource = readSource(
+      "components/admin/account-settings/admin-user-status.ts",
+    );
     expect(usersSource).toContain("Administrators are unavailable");
     expect(usersSource).toContain("Find administrators");
     expect(usersSource).toContain("getAdminUserStatus");
+    expect(userStatusSource).toContain("Invite pending");
+    expect(userStatusSource).toContain("Invite expired");
+    expect(userStatusSource).toContain("Delivery failed");
+    expect(usersSource).toContain("Retry delivery");
+    expect(usersSource).toContain("Send new link");
     expect(usersSource).toContain("Suspend administrator?");
     expect(usersSource).toContain("Restore access");
     expect(usersSource).toContain("Revoke this invitation?");

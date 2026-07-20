@@ -100,6 +100,13 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.CATEGORIES_EDIT });
   });
 
+  it("authorizes administrator invitation delivery commands", () => {
+    expect(getRoutePermission(
+      "/api/v1/admin/auth/users/admin_2/resend-setup",
+      "POST",
+    )).toEqual({ permission: PERMISSIONS.TEAM_MANAGE });
+  });
+
   it("keeps hosted-payment recovery queue and export read-only", () => {
     expect(getRoutePermission("/api/v1/admin/orders/payment-recovery", "GET"))
       .toEqual({ permission: PERMISSIONS.ORDERS_VIEW });
