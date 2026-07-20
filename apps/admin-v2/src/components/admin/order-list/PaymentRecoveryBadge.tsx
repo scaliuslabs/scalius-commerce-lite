@@ -42,7 +42,7 @@ export function PaymentRecoveryBadge({
   return (
     <Badge
       variant="outline"
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-xs font-medium ${style.className}`}
       title={recovery.message ?? recovery.label}
     >
       <Icon className={`h-3 w-3 shrink-0 ${recovery.state === "processing" ? "animate-spin" : ""}`} />
@@ -92,7 +92,7 @@ export function RefundRecoveryBadge({
   return (
     <Badge
       variant="outline"
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-xs font-medium ${style.className}`}
       title={operation.message}
     >
       <Icon className={`h-3 w-3 shrink-0 ${operation.severity === "info" ? "animate-spin" : ""}`} />
@@ -137,7 +137,7 @@ export function ShipmentRecoveryBadge({
   return (
     <Badge
       variant="outline"
-      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[10px] font-medium ${style.className}`}
+      className={`inline-flex max-w-full items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-xs font-medium ${style.className}`}
       title={recovery.message ?? recovery.label}
     >
       <Icon className={`h-3 w-3 shrink-0 ${recovery.state === "creating" ? "animate-spin" : ""}`} />

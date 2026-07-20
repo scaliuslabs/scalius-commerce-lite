@@ -76,7 +76,7 @@ function PaymentMethodLabel({ method }: { method: string }) {
             : method;
 
   return (
-    <span className="text-[10px] text-[var(--muted-foreground)] uppercase">
+    <span className="text-xs uppercase leading-4 text-[var(--muted-foreground)]">
       {label}
     </span>
   );

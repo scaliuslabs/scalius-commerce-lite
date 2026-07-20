@@ -49,6 +49,7 @@ import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import type { BulkShipOrdersPayload } from "~/lib/api-functions/orders";
 import type { BulkShipResultSummary } from "~/components/admin/order-list/BulkShipDialog";
+import { getOrderAutoRefreshPauseReason } from "./-order-auto-refresh";
 
 const ArchiveOrderDialog = lazy(() =>
   import("~/components/admin/order-list/ArchiveOrderDialog").then((module) => ({
@@ -337,6 +338,7 @@ function OrdersPage() {
   const orderListFetchingRef = useRef(false);
   const orderListRefreshInFlightRef = useRef(false);
   const lastOrderListRefreshAtRef = useRef(0);
+  const autoRefreshPausedRef = useRef(false);
 
   // ── Mutations ─────────────────────────────────────────────────
   const statusMutation = useUpdateOrderStatus();
@@ -701,6 +703,15 @@ function OrdersPage() {
       .filter((order) => selectedOrderIds.has(order.id))
       .map((order) => ({ id: order.id, expectedVersion: order.version }));
   }, [selectedIds, table]);
+  const autoRefreshPauseReason = getOrderAutoRefreshPauseReason({
+    selectedCount: selectedIds.length,
+    actionDialogOpen: isArchiveDialogOpen || isShippingDialogOpen,
+    mutationInFlight: isShipping || archiveMut.isPending,
+  });
+
+  useEffect(() => {
+    autoRefreshPausedRef.current = autoRefreshPauseReason !== null;
+  }, [autoRefreshPauseReason]);
   const archiveActivePaymentSetupCount = isBulkArchiveOpen
     ? selectedActivePaymentSetupOrders.length
     : orderToArchive
@@ -752,7 +763,11 @@ function OrdersPage() {
 
   const refreshActiveOrderList = useCallback(() => {
     const refetchActiveOrders = activeOrderListRefreshRef.current;
-    if (!refetchActiveOrders || isDocumentHidden()) return false;
+    if (
+      !refetchActiveOrders ||
+      isDocumentHidden() ||
+      autoRefreshPausedRef.current
+    ) return false;
     if (orderListFetchingRef.current || orderListRefreshInFlightRef.current) {
       return false;
     }
@@ -796,6 +811,7 @@ function OrdersPage() {
       countdownIntervalRef.current = window.setInterval(() => {
         if (isDocumentHidden()) return;
         setCountdown((prev) => {
+          if (autoRefreshPausedRef.current) return prev;
           if (prev <= 1) {
             refreshActiveOrderList();
             return ORDER_AUTO_REFRESH_SECONDS;
@@ -1194,6 +1210,7 @@ function OrdersPage() {
           : "Export current page"
       }
       autoRefreshEnabled={autoRefreshEnabled}
+      autoRefreshPauseReason={autoRefreshPauseReason}
       onToggleAutoRefresh={toggleAutoRefresh}
       countdown={countdown}
       orderActions={orderActions}

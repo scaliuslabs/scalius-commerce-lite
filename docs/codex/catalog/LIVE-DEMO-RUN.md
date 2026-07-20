@@ -997,12 +997,20 @@ The cleanup bullets below describe the two-product proof store that preceded the
   [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md); neither an immediate
   row print nor a blocking wizard should replace the shared progressive job.
 - A renewed 2026-07-20 operator check opened the live label workspace against
-  the 177-SKU demo catalog, selected exact Aster Studio Clogs `39 / Cream`, and
+  the demo catalog, selected exact Aster Studio Clogs `39 / Cream`, and
   rendered its saved Code 128 identity with `14 on hand · 14 available`, one
   label, one A4 page, a real start-cell picker, **Test page**, and **Print / Save
   PDF**. The result confirms the intended two-speed interface: row-level
   **Print label** is a one-SKU entry point, while single and batch jobs share
   the same physically previewed A4/adhesive/thermal/custom workspace.
+- The same renewed run found 181 live SKUs, added `39 / Sage`, and applied the
+  explicit **On hand** shortcut. The job became 26 labels across two fresh A4
+  pages; starting at cell 5 truthfully skipped four used positions and changed
+  the output to three pages. At 390 × 844 the URL retained both exact variant
+  identities, the fixed Test/Print actions remained reachable, and document
+  width stayed exactly 390 px. A separate inventory-row **Print label** action
+  opened Ridge Chelsea Boots `44 / Tan` with quantity one and a ready physical
+  preview rather than printing immediately.
 - The reserved barcode proof order `VHQK8M` then became the manual-delivery
   lifecycle proof. The live own-courier dialog created `OWN-VHQK8M-1`; the
   dashboard showed Shipped/Complete and one **In Transit** provider-less
@@ -1132,6 +1140,18 @@ The cleanup bullets below describe the two-product proof store that preceded the
 - Eighty-nine focused validation, fulfillment, delivery, and OpenAPI tests,
   generated-client refresh, targeted lint, and sequential Core, API,
   API-client, and Admin typechecks passed before deployment.
+
+### Order-list continuity checkpoint (2026-07-20)
+
+- Admin version `44562aa3-4be3-428c-9eb9-85f8e3e825d2` is live at 100%.
+  With Auto enabled, selecting an order paused the countdown with a named
+  selection reason; clearing the selection resumed at 60 seconds. Opening the
+  archive dialog paused it with a separate action-open reason and cancelling
+  made no order change.
+- The same list rendered ten mobile cards at 390 × 844 with document and body
+  widths exactly 390 px. Order-specific view, edit, archive, fraud, and shipment
+  actions remained named, and recovery/payment operational labels no longer use
+  10 px text.
 
 ## Required continuation checks
 

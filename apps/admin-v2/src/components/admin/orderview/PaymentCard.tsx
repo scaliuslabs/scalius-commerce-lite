@@ -783,7 +783,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       <span className="font-medium">
                         {PAYMENT_METHOD_LABELS[latestPaymentWebhookIssue.provider] ?? latestPaymentWebhookIssue.provider}
                       </span>
-                      <Badge variant="destructive" className="text-[10px]">
+                      <Badge variant="destructive" className="text-xs">
                         {latestPaymentWebhookIssue.label}
                       </Badge>
                       <span className="font-mono text-[11px] opacity-80">{latestPaymentWebhookIssue.eventType}</span>
@@ -802,7 +802,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                           <span className="font-medium">
                             {PAYMENT_METHOD_LABELS[issue.provider] ?? issue.provider}
                           </span>
-                          <Badge variant="destructive" className="text-[10px]">{issue.label}</Badge>
+                          <Badge variant="destructive" className="text-xs">{issue.label}</Badge>
                           <span className="font-mono text-[11px] opacity-80">{issue.eventType}</span>
                           {issue.processedLabel && <span className="opacity-70">{issue.processedLabel}</span>}
                         </div>
@@ -839,7 +839,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{view.label}</span>
-                        <Badge variant={view.badgeVariant} className="text-[10px]">
+                        <Badge variant={view.badgeVariant} className="text-xs">
                           {attempt.status}
                         </Badge>
                       </div>
@@ -1049,7 +1049,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-foreground">{attempt.label}</span>
-                        <Badge variant={attempt.severity === "danger" ? "destructive" : attempt.severity === "success" ? "default" : "secondary"} className="text-[10px]">
+                        <Badge variant={attempt.severity === "danger" ? "destructive" : attempt.severity === "success" ? "default" : "secondary"} className="text-xs">
                           {attempt.status}
                         </Badge>
                       </div>

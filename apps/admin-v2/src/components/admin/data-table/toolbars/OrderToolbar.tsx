@@ -105,6 +105,7 @@ interface OrderToolbarProps {
   exportLabel: string;
   // Auto-refresh
   autoRefreshEnabled: boolean;
+  autoRefreshPauseReason: string | null;
   onToggleAutoRefresh: () => void;
   countdown: number;
   orderActions: OrderActionPermissions;
@@ -251,6 +252,7 @@ export function OrderToolbar({
   onExportCSV,
   exportLabel,
   autoRefreshEnabled,
+  autoRefreshPauseReason,
   onToggleAutoRefresh,
   countdown,
   orderActions,
@@ -414,7 +416,10 @@ export function OrderToolbar({
         ariaLabel="Filter by fulfillment status"
         onChange={onFulfillmentStatusFilterChange}
       />
-      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-md border border-border/50">
+      <div
+        className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-xs text-muted-foreground"
+        title={autoRefreshPauseReason ?? undefined}
+      >
         <Checkbox
           id="auto-refresh"
           checked={autoRefreshEnabled}
@@ -426,12 +431,15 @@ export function OrderToolbar({
           className="cursor-pointer select-none flex items-center gap-1.5"
         >
           <RefreshCw
-            className={`h-3 w-3 ${autoRefreshEnabled ? "animate-spin" : ""}`}
+            className={`h-3 w-3 ${autoRefreshEnabled && !autoRefreshPauseReason ? "animate-spin" : ""}`}
           />
           <span>Auto</span>
           {autoRefreshEnabled && (
-            <span className="font-mono font-medium text-primary">
-              {countdown}s
+            <span
+              aria-live="polite"
+              className="font-mono font-medium text-primary"
+            >
+              {autoRefreshPauseReason ? "Paused" : `${countdown}s`}
             </span>
           )}
         </label>

@@ -137,7 +137,7 @@ export function DateRangePickerWithPresets({
         <div className="flex bg-popover rounded-lg border shadow-lg overflow-hidden">
           {/* Presets */}
           <div className="flex flex-col gap-0.5 p-2 border-r min-w-[120px]">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60 px-2 pb-1">
+            <span className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
               Quick select
             </span>
             {PRESETS.map((preset) => (
