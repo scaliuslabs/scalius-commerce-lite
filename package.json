@@ -54,19 +54,19 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@scalius/tsconfig": "workspace:*",
-    "country-flag-icons": "1.6.17",
+    "country-flag-icons": "1.6.20",
     "domhandler": "6.0.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^10.5.0",
+    "eslint": "^10.7.0",
     "eslint-plugin-astro": "^2.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.6.0",
+    "globals": "^17.7.0",
     "htmlparser2": "12.0.0",
-    "turbo": "^2.9.18",
+    "turbo": "^2.10.5",
     "typescript": "^6.0.3",
     "typescript7": "npm:typescript@7.0.2",
-    "typescript-eslint": "^8.62.0",
-    "vitest": "^4.1.9"
+    "typescript-eslint": "8.64.0",
+    "vitest": "^4.1.10"
   },
   "packageManager": "pnpm@11.15.1"
 }

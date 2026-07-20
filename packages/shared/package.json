@@ -14,7 +14,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260719.1",
     "@scalius/tsconfig": "workspace:*",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -52,8 +52,8 @@
     "@cloudflare/workers-types": "^5.20260719.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
-    "happy-dom": "^20.10.3",
-    "prettier": "^3.8.4",
+    "happy-dom": "^20.11.0",
+    "prettier": "^3.9.5",
     "prettier-plugin-astro": "^0.14.1",
     "vite": "^8.1.5",
     "wrangler": "4.112.0"
