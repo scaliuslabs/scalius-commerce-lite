@@ -5,6 +5,7 @@ import type {
   PromotionAggregate,
   UpdatePromotionDraftInput,
 } from "~/lib/api-functions/promotions";
+import { ADMIN_TIME_ZONE } from "~/lib/admin-time";
 
 export const PROMOTION_TARGETS = ["line", "order", "shipping"] as const;
 export type PromotionTarget = (typeof PROMOTION_TARGETS)[number];
@@ -56,14 +57,6 @@ export interface PromotionPayloadResult {
 const CODE_PATTERN = /^[A-Z0-9_-]{3,50}$/u;
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/u;
 
-function browserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Dhaka";
-  } catch {
-    return "Asia/Dhaka";
-  }
-}
-
 export function createPromotionDraft(currencyCode = "BDT"): PromotionEditorDraft {
   return {
     name: "",
@@ -79,7 +72,9 @@ export function createPromotionDraft(currencyCode = "BDT"): PromotionEditorDraft
     },
     startsAtLocal: "",
     endsAtLocal: "",
-    timezone: browserTimezone(),
+    // Promotion schedules describe store time, not the viewing device's time.
+    // A deterministic default also keeps the server render and hydration equal.
+    timezone: ADMIN_TIME_ZONE,
     maxRedemptions: "",
     maxRedemptionsPerCustomer: "",
     maxDiscountSpend: "",
