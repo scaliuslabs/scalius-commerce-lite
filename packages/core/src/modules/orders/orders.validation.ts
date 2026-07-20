@@ -132,10 +132,42 @@ export const restoreOrderSchema = orderRevisionSchema.pick({ expectedVersion: tr
 
 export type RestoreOrderInput = z.infer<typeof restoreOrderSchema>;
 
+const shipmentResourceIdSchema = z.string().trim().min(1).max(180);
+
+/**
+ * Provider shipment inputs that a merchant may choose. Money, line count, and
+ * item description are deliberately absent: those facts are derived from the
+ * current order immediately before the provider call.
+ */
+export const shipmentCreationOptionsSchema = z.object({
+    deliveryType: z.number().int().min(0).max(1_000_000).optional(),
+    itemType: z.number().int().min(0).max(1_000_000).optional(),
+    itemWeight: z.number().finite().positive().max(10_000).optional(),
+    note: z.string().trim().max(500).optional(),
+}).strict();
+
+export type ShipmentCreationOptionsInput = z.infer<typeof shipmentCreationOptionsSchema>;
+
 export const bulkShipOrderSchema = z.object({
-    orderIds: z.array(z.string()),
-    providerId: z.string(),
-    options: z.any().optional(),
-});
+    orderIds: z
+        .array(shipmentResourceIdSchema)
+        .min(1, "Select at least one order")
+        .max(90, "Ship at most 90 orders at a time")
+        .superRefine((orderIds, ctx) => {
+            const seen = new Set<string>();
+            orderIds.forEach((orderId, index) => {
+                if (seen.has(orderId)) {
+                    ctx.addIssue({
+                        code: "custom",
+                        message: "Each order can appear only once",
+                        path: [index],
+                    });
+                }
+                seen.add(orderId);
+            });
+        }),
+    providerId: shipmentResourceIdSchema,
+    options: shipmentCreationOptionsSchema.optional(),
+}).strict();
 
 export type BulkShipOrderInput = z.infer<typeof bulkShipOrderSchema>;

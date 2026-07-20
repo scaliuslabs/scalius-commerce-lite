@@ -1118,6 +1118,21 @@ The cleanup bullets below describe the two-product proof store that preceded the
   lint, the sequential 327-file Astro diagnostic, and the production
   storefront build passed before deployment.
 
+### Bulk-shipment authority checkpoint (2026-07-20)
+
+- API version `82b7fb11-2880-497a-8647-1ae3a18c37c5` closes the unbounded
+  shipment-request boundary. Bulk jobs now contain 1–90 unique bounded order
+  IDs; the single and bulk endpoints share a strict provider-options object.
+  Courier COD amount, item count, and item description are always derived from
+  the current order and saved lines rather than accepted from the browser.
+- Authenticated production requests deliberately submitted `UWXZV7` twice,
+  submitted 91 synthetic order IDs, and attempted to override `codAmount`.
+  Every request returned 400 before provider work. A fresh detail read showed
+  `UWXZV7` remained `confirmed` at version 1 before and after the checks.
+- Eighty-nine focused validation, fulfillment, delivery, and OpenAPI tests,
+  generated-client refresh, targeted lint, and sequential Core, API,
+  API-client, and Admin typechecks passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

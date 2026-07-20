@@ -135,9 +135,14 @@ function createSequentialSelectDb(results: unknown[][]) {
   const updates: Array<Record<string, unknown>> = [];
   const db = {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => thenableRows(selectResults.shift() ?? [])),
-      })),
+      from: vi.fn(() => {
+        const rows = selectResults.shift() ?? [];
+        const chain = {
+          leftJoin: vi.fn(() => chain),
+          where: vi.fn(() => thenableRows(rows)),
+        };
+        return chain;
+      }),
     })),
     insert: vi.fn(() => ({
       values: vi.fn(async (values: Record<string, unknown>) => {
@@ -480,6 +485,59 @@ describe("testDeliveryProvider durable proof", () => {
 });
 
 describe("delivery provider active-state authority", () => {
+  it("derives COD money and item facts instead of accepting caller overrides", async () => {
+    const provider = await readyPathaoProvider();
+    const providerCreateShipment = vi.fn(async () => ({
+      success: true,
+      data: {
+        externalId: "external_1",
+        trackingId: "tracking_1",
+        status: "pending",
+      },
+    }));
+    mocks.createProvider.mockResolvedValueOnce({
+      createShipment: providerCreateShipment,
+    });
+    const { db } = createSequentialSelectDb([
+      [{
+        id: "order_1",
+        totalAmount: 180,
+        paidAmount: 30,
+        balanceDue: 150,
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+      }],
+      [provider],
+      [{ id: "city_1", externalIds: JSON.stringify({ pathao: 1 }) }],
+      [{ id: "zone_1", externalIds: JSON.stringify({ pathao: 2 }) }],
+      [{ quantity: 2, productName: "Aster Clogs" }],
+    ]);
+
+    await expect(createShipment(
+      db as never,
+      "order_1",
+      "provider_pathao",
+      {
+        deliveryType: 48,
+        codAmount: 1,
+        itemCount: 999,
+        itemDescription: "Browser-authored contents",
+      },
+      TEST_FINGERPRINT_KEY,
+    )).resolves.toMatchObject({ success: true });
+
+    expect(providerCreateShipment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "order_1" }),
+      expect.objectContaining({
+        deliveryType: 48,
+        codAmount: 150,
+        itemCount: 2,
+        itemDescription: "Aster Clogs x2",
+      }),
+    );
+  });
+
   it("does not create a shipment through an inactive provider", async () => {
     const provider = await readyPathaoProvider({ isActive: false });
     const { db, inserts } = createSequentialSelectDb([

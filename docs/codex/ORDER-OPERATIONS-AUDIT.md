@@ -191,7 +191,6 @@ The admin order workspace supports create, approve/reject, receive/disposition, 
   contains every filtered row.
 - Some desktop/mobile row actions still need a complete accessible-name audit. Tooltips are not a substitute for an accessible name.
 - Recovery and payment labels use text as small as 10px in several places. Operational states must remain legible at browser zoom and under common low-vision settings.
-- Bulk ship still needs the same strict duplicate and bounded-input audit already applied to archive.
 - List refreshes can move rows while the user is selecting or editing filters. Preserve selection only for still-visible IDs, announce refresh changes, and avoid auto-refresh while a destructive dialog is open.
 - No saved views, column selection, or queue presets. These are P2 productivity features after correctness work.
 
@@ -204,6 +203,19 @@ identity, order count, paid-spend truth, last-order date, and order-history
 navigation. Admin bundle `index-BBo_gS3k.js` proves the bounded order export now
 renders “Export current page” on desktop and mobile; the previous ambiguous
 “Export CSV” control is absent.
+
+**Bulk-shipment input checkpoint — 2026-07-20:** API version
+`82b7fb11-2880-497a-8647-1ae3a18c37c5` accepts one unique batch of 1–90
+bounded order IDs and a strict provider-options object. COD amount, item count,
+and item description are no longer request inputs; delivery derives them from
+the current order balance and saved lines immediately before provider work.
+The core service repeats the same validation so non-HTTP callers cannot bypass
+it. Authenticated production requests for a duplicate order, 91-order job, and
+browser-authored `codAmount` each returned 400. Order `UWXZV7` remained
+`confirmed` at version 1 before and after all three checks, proving the rejected
+requests did not claim or mutate it. Eighty-nine focused validation,
+fulfillment, delivery, and OpenAPI tests plus sequential Core, API, API-client,
+and Admin typechecks passed before deployment.
 
 ### 2. Manual order creation
 
