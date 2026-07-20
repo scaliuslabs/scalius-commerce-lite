@@ -39,7 +39,7 @@ export function MediaGallery(props: MediaGalleryProps) {
           <span className="mb-3 rounded-xl border border-destructive/20 bg-destructive/5 p-3"><AlertCircle className="h-6 w-6 text-destructive" /></span>
           <h3 className="text-sm font-semibold">Media could not be loaded</h3>
           <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.loadError}</p>
-          <Button type="button" size="sm" variant="outline" className="mt-4 h-8" onClick={props.onRetry}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Try again</Button>
+          <Button type="button" size="sm" variant="outline" className="mt-4 h-11 sm:h-8" onClick={props.onRetry}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Try again</Button>
         </div>
       );
     }
@@ -48,7 +48,7 @@ export function MediaGallery(props: MediaGalleryProps) {
         <span className="mb-3 rounded-xl border bg-muted/40 p-3"><ImageIcon className="h-6 w-6 text-muted-foreground" /></span>
         <h3 className="text-sm font-semibold">{props.view === "trash" ? "Trash is empty" : "No matching assets"}</h3>
         <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.view === "trash" ? "Assets moved to trash stay here until restored or permanently deleted." : "Change the search, folder, or type filter—or upload a new asset."}</p>
-        {props.view === "ready" && props.onUploadClick && <Button type="button" size="sm" className="mt-4 h-8" onClick={props.onUploadClick}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload assets</Button>}
+        {props.view === "ready" && props.onUploadClick && <Button type="button" size="sm" className="mt-4 h-11 sm:h-8" onClick={props.onUploadClick}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload assets</Button>}
       </div>
     );
   }
@@ -72,7 +72,7 @@ export function MediaGallery(props: MediaGalleryProps) {
           />
         ))}
       </div>
-      {props.hasMore && <div className="flex justify-center pb-4"><Button type="button" size="sm" variant="outline" className="h-9 sm:h-8" disabled={props.isLoadingMore} onClick={props.onLoadMore}>{props.isLoadingMore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Load more</Button></div>}
+      {props.hasMore && <div className="flex justify-center pb-4"><Button type="button" size="sm" variant="outline" className="h-11 sm:h-8" disabled={props.isLoadingMore} onClick={props.onLoadMore}>{props.isLoadingMore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}Load more</Button></div>}
     </ScrollArea>
   );
 }

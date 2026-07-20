@@ -1293,6 +1293,25 @@ The cleanup bullets below describe the two-product proof store that preceded the
   focused action-bar, unsaved-guard, and Page-list tests plus the single
   sequential Admin typecheck passed before deployment.
 
+### Media compact-control checkpoint (2026-07-20)
+
+- The live Media library was rerun at 1440 px and exact 390 × 844. Desktop kept
+  its five-column inspection grid and dense 28/32 px workbench controls; mobile
+  kept two 165 px columns, the horizontal folder rail, complete contain
+  thumbnails, and document/body width exactly 390 px.
+- The renewed mobile measurement exposed a missed accessibility defect: the
+  compact workspace called its controls touch-sized while Upload, Select,
+  filters, folder rows, and card actions were only 36 px high. The full compact
+  interaction surface now uses 44 px targets, including selection/lifecycle,
+  Close, retry, and load-more actions, without enlarging desktop.
+- **Select** still began at `0 selected`. **Select all shown** deliberately
+  selected the 24 loaded assets, and Clear then Cancel exited without changing
+  library data. The selection toolbar, folder destination, Move, and Move to
+  trash controls all measured 44 px and the browser log remained empty.
+- Admin version `f9cdbfd6-6117-4030-92ea-9aac6adc294c` is live at 100%. Six
+  focused Media files passed 25 tests and the single sequential Admin typecheck
+  passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

@@ -86,12 +86,12 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, allowManag
       </button>
 
       {!selectionMode && <div className="absolute right-1.5 top-1.5 flex gap-1">
-        <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
+        <Button type="button" variant="secondary" size="icon" className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7" onClick={onPreview} aria-label={`Preview ${file.filename}`}>
           <Eye className="h-3.5 w-3.5" />
         </Button>
         {allowManagement && <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="secondary" size="icon" className="h-9 w-9 bg-background/90 sm:h-7 sm:w-7" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
+            <Button type="button" variant="secondary" size="icon" className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7" onClick={(event) => event.stopPropagation()} aria-label={`Actions for ${file.filename}`}>
               <MoreHorizontal className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>

@@ -13,7 +13,7 @@ describe("media workspace polish boundaries", () => {
     expect(filters).toContain("Move to trash");
     expect(filters).toContain("Delete permanently");
     expect(filters).toContain('aria-label="Destination folder"');
-    expect(filters).toContain('className="h-9 px-2 text-xs sm:h-7"');
+    expect(filters).toContain('className="h-11 px-2 text-xs sm:h-7"');
   });
 
   it("uses a single-row folder rail on mobile and a stable sidebar on desktop", () => {
@@ -23,8 +23,11 @@ describe("media workspace polish boundaries", () => {
   });
 
   it("keeps top-level media controls touch-sized on mobile and dense on desktop", () => {
-    expect(workspace.match(/h-9 px-2\.5 text-xs sm:h-7/g)).toHaveLength(2);
-    expect(workspace).toContain('className="h-9 sm:h-8"');
+    expect(workspace.match(/h-11 px-2\.5 text-xs sm:h-7/g)).toHaveLength(2);
+    expect(workspace).toContain('className="h-11 sm:h-8"');
+    expect(filters).toContain('className="h-11 sm:h-8"');
+    expect(folders).toContain('compact ? "h-11 max-w-40 border bg-background"');
+    expect(card).toContain('className="h-11 w-11 bg-background/90 sm:h-7 sm:w-7"');
   });
 
   it("keeps library-management commands out of picker workspaces", () => {
