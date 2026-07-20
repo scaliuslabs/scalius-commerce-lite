@@ -52,7 +52,7 @@
     "./utils/*": "./src/utils/*.ts"
   },
   "dependencies": {
-    "@better-auth/utils": "0.4.1",
+    "@better-auth/utils": "0.4.2",
     "@firebase/app": "^0.14.13",
     "@firebase/messaging": "^0.13.0",
     "@paralleldrive/cuid2": "^3.3.0",
@@ -60,10 +60,9 @@
     "@scalius/database": "workspace:*",
     "@scalius/shared": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.18",
+    "better-auth": "^1.6.23",
     "currency.js": "^2.0.4",
     "drizzle-orm": "^0.45.2",
-    "fast-xml-parser": "^5.8.0",
     "mimetext": "^3.0.28",
     "nanoid": "^5.1.11",
     "standardwebhooks": "^1.0.0",
