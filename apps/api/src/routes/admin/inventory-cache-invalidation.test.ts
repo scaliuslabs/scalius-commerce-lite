@@ -144,6 +144,18 @@ describe("admin inventory cache invalidation", () => {
     expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
   });
 
+  it("documents the buyer-effective price used by barcode label artwork", () => {
+    const { app } = createTestApp();
+    const spec = app.getOpenAPIDocument({
+      openapi: "3.0.0",
+      info: { title: "Inventory label contract", version: "1.0.0" },
+    });
+    const operation = spec.paths?.["/api/v1/admin/inventory/labels/preview"]?.post;
+
+    expect(operation).toBeDefined();
+    expect(JSON.stringify(operation)).toContain('"effectivePrice"');
+  });
+
   it.each([
     {
       label: "adjust inventory",

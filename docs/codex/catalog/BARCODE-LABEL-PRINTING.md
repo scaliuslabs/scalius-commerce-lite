@@ -374,11 +374,29 @@ feeds, structured data, or external marketplaces.
 - Admin route: `/admin/inventory/labels?variants=<exact variant ids>`.
 - Entry points: inventory row, inventory page selection, direct workspace, and
   persisted rows selected in the product SKU matrix.
+- The 2026-07-20 merchant-printing review reconfirmed the hybrid interface:
+  the individual row action opens one exact SKU at quantity one, while the
+  same workspace handles mixed batches, ordinary A4 sheets, pre-cut stock,
+  thermal rolls, partially used sheets, test output, and Print/Save as PDF.
+  It must not regress into either an immediate-print icon or a blocking wizard.
+  Current Shopify, Square, Medusa, and Vendure documentation plus GS1/Avery
+  print guidance were rechecked before the live production run.
+- That review also found and closed an API-contract drift: label artwork used
+  the authoritative buyer-effective price returned by the inventory service,
+  but the OpenAPI response schema omitted `effectivePrice`. The response
+  contract and generated SDK now expose the same price fact the live label
+  renderer consumes, guarded by a focused OpenAPI regression test.
 - Production authenticated smoke: direct SKU load, second-SKU selection,
   reload-safe URL state, `On hand` quantity expansion, A4 2 x 7 recovery for a
   legacy long Code 128 value, custom-stock bounds and print blocking,
   numeric/interactive start-cell selection, 390 px responsive layout, no
   horizontal overflow, and no browser console warning/error.
+- The deployed two-SKU mobile batch on admin version
+  `89a8ad39-14c7-4092-a59b-09e0fda12602` expanded real on-hand quantities to
+  12 labels on one A4 page at 390 x 844 px. Its fixed Test and Print/PDF action
+  bar stayed visible and enabled without horizontal overflow. API version
+  `ea1cfcec-34d2-4b10-9994-a50a1dd12cfb` published the corrected 321-path
+  OpenAPI contract; production ops and the complete release smoke passed.
 - The 2026-07-19 competitive re-audit used the current Shopify Retail Barcode
   Labels instructions, Shopify printer guidance, Square Retail label workflow,
   and current Vendure/Medusa/Saleor product/admin documentation. The live

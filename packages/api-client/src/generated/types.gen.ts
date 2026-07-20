@@ -15931,6 +15931,7 @@ export type PostApiV1AdminInventoryLabelsPreviewResponses = {
                 sku: string;
                 optionLabel: string | null;
                 price: number;
+                effectivePrice: number;
                 stock: number;
                 reservedStock: number;
                 available: number;
