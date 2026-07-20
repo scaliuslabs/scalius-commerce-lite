@@ -46,6 +46,12 @@ interface LocationsTableProps {
   areAllSelected: boolean;
 }
 
+const locationPlural = {
+  city: "cities",
+  zone: "zones",
+  area: "areas",
+} as const;
+
 const LocationRow = React.memo(function LocationRow({
   location,
   type,
@@ -97,20 +103,21 @@ const LocationRow = React.memo(function LocationRow({
             onCheckedChange={() =>
               onToggleActive(location.id, location.isActive)
             }
+            aria-label={`${location.isActive ? "Deactivate" : "Activate"} ${location.name}`}
           />
           <Badge
             variant={location.isActive ? "default" : "secondary"}
             className={
               location.isActive
-                ? "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/30"
-                : "bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-800/30 dark:text-gray-300 dark:hover:bg-gray-800/30"
+                ? "hidden bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/30 sm:inline-flex"
+                : "hidden bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-800/30 dark:text-gray-300 dark:hover:bg-gray-800/30 sm:inline-flex"
             }
           >
             {location.isActive ? "Active" : "Inactive"}
           </Badge>
         </div>
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden sm:table-cell">
         <div className="flex flex-wrap gap-1">
           {Object.entries(location.externalIds).map(
             ([provider, id]) => (
@@ -137,6 +144,7 @@ const LocationRow = React.memo(function LocationRow({
             size="icon"
             onClick={() => onEdit(location)}
             className="h-8 w-8"
+            aria-label={`Edit ${location.name}`}
           >
             <Edit className="h-4 w-4" />
           </Button>
@@ -145,6 +153,7 @@ const LocationRow = React.memo(function LocationRow({
             size="icon"
             onClick={() => onDelete(location.id)}
             className="h-8 w-8"
+            aria-label={`Delete ${location.name}`}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -181,7 +190,7 @@ export function LocationsTable({
   if (locations.length === 0) {
     return (
       <Alert className="bg-muted/50">
-        <AlertTitle>No {type}s found</AlertTitle>
+        <AlertTitle>No {locationPlural[type]} found</AlertTitle>
         <AlertDescription>
           {type === "city"
             ? "Try importing from Pathao or adding cities manually."
@@ -214,7 +223,7 @@ export function LocationsTable({
                 <TableHead>{type === "zone" ? "City" : "Zone"}</TableHead>
               )}
               <TableHead>Status</TableHead>
-              <TableHead>External IDs</TableHead>
+              <TableHead className="hidden sm:table-cell">External IDs</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -236,8 +245,8 @@ export function LocationsTable({
         </Table>
 
         {locations.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-start sm:gap-3">
               <div className="text-xs text-gray-500">
                 Showing{" "}
                 <span className="font-medium">
@@ -253,7 +262,7 @@ export function LocationsTable({
                   )}
                 </span>{" "}
                 of <span className="font-medium">{pagination.total}</span>{" "}
-                {type}s
+                {locationPlural[type]}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -285,7 +294,7 @@ export function LocationsTable({
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
