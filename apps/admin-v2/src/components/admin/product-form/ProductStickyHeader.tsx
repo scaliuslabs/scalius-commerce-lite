@@ -31,14 +31,14 @@ export function ProductActionBar({
 
   const bar = (
     <div className="border-t bg-background">
-      <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="flex h-14 items-center justify-between gap-2 px-4 sm:h-12 sm:gap-4 sm:px-6">
         <div className="flex items-center gap-2 text-sm min-w-0">
           {hasRevisionConflict ? (
-            <span className="text-xs font-medium text-amber-600 dark:text-amber-500">
+            <span className="sr-only text-xs font-medium text-amber-600 dark:text-amber-500 sm:not-sr-only">
               Out of date · Draft kept
             </span>
           ) : isDirty ? (
-            <span className="text-xs text-amber-600 dark:text-amber-500 font-medium">
+            <span className="sr-only text-xs font-medium text-amber-600 dark:text-amber-500 sm:not-sr-only">
               Unsaved changes
             </span>
           ) : null}
@@ -50,7 +50,7 @@ export function ProductActionBar({
               size="sm"
               type="button"
               disabled
-              className="h-8 text-xs"
+              className="h-11 text-xs sm:h-8"
             >
               Discard
             </Button>
@@ -60,7 +60,7 @@ export function ProductActionBar({
               size="sm"
               type="button"
               asChild
-              className="h-8 text-xs"
+              className="h-11 text-xs sm:h-8"
             >
               <Link to={cancelUrl}>Discard</Link>
             </Button>
@@ -97,7 +97,7 @@ export function ProductActionBar({
             type="button"
             disabled={isSubmitting || (isEdit && !isDirty && !hasRevisionConflict)}
             onClick={onSave}
-            className="h-8 text-xs font-medium"
+            className="h-11 text-xs font-medium sm:h-8"
           >
             {isSubmitting && (
               <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />

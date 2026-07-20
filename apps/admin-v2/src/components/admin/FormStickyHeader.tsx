@@ -59,10 +59,10 @@ export function FormActionBar({
 
   const bar = (
     <div className="border-t bg-background">
-      <div className="flex h-12 items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="flex h-14 items-center justify-between gap-2 px-4 sm:h-12 sm:gap-4 sm:px-6">
         <div className="flex items-center gap-2 text-sm min-w-0">
           {isDirty && (
-            <span className="text-xs text-amber-600 dark:text-amber-500 font-medium">
+            <span className="sr-only text-xs font-medium text-amber-600 dark:text-amber-500 sm:not-sr-only">
               Unsaved changes
             </span>
           )}
@@ -74,7 +74,7 @@ export function FormActionBar({
               size="sm"
               type="button"
               disabled
-              className="h-8 text-xs"
+              className="h-11 text-xs sm:h-8"
             >
               Discard
             </Button>
@@ -84,7 +84,7 @@ export function FormActionBar({
               size="sm"
               type="button"
               asChild
-              className="h-8 text-xs"
+              className="h-11 text-xs sm:h-8"
             >
               <Link to={cancelUrl} onClick={onDiscard}>Discard</Link>
             </Button>
@@ -128,7 +128,7 @@ export function FormActionBar({
             onClick={() => {
               if (canSave && isDirty) onSave();
             }}
-            className="h-8 text-xs font-medium"
+            className="h-11 text-xs font-medium sm:h-8"
           >
             {isSubmitting && (
               <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />

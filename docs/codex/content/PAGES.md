@@ -1,6 +1,6 @@
 # CMS Pages Audit and Decisions
 
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-20
 
 ## Verified current strengths
 
@@ -63,15 +63,31 @@ Last reviewed: 2026-07-19
   disposable page through the bulk confirmation flow. Draft and Live list
   filters also survived canonical URL reloads.
 
+## Closed responsive editor defects (2026-07-20)
+
+- The deployed editor already follows the compact product-form pattern: a
+  two-column desktop workspace keeps content primary and publication,
+  discovery, and page controls in the right rail; mobile collapses to one
+  readable column without horizontal overflow. The older audit note claiming
+  this conversion was still outstanding was stale and has been removed.
+- The shared fixed form action bar used by Pages and other entity editors had
+  only 32 px Discard and Save targets on mobile. Both shared and product form
+  bars now provide 44 px mobile targets inside a 56 px bar while preserving
+  the existing 32 px desktop density. Dirty/conflict text remains exposed to
+  assistive technology on narrow screens and stays visibly rendered from the
+  desktop breakpoint, so it cannot crowd the two critical mobile actions.
+- Admin version `167ce913-9218-42f9-ac98-c56548adb31b` was verified at exact
+  390 x 844 and 1440 px widths. The live About editor preserved its URL,
+  enabled Save only for a real local change, returned to a clean state when
+  the original title was restored, and did not save test data. The public
+  `/about` page rendered its title, featured media, full content, header, and
+  footer at 390 px with document and body widths exactly 390 px.
+
 ## Remaining P2 workflow defects
 
 - Page content has no recoverable revision history. Add immutable revisions for
   meaningful saves after CAS is established; history is not a substitute for
   optimistic concurrency.
-- The editor should use the successful product form pattern: compact two-column
-  desktop surface, content as the primary work area, a visible status/readiness
-  card, Search and discovery in the right rail, sticky save/dirty/conflict
-  state, and no nested card padding that creates empty space.
 
 ## Accepted implementation model
 
@@ -96,10 +112,9 @@ Last reviewed: 2026-07-19
   delete races, reserved routes, slug restore collisions, and 90/91-ID bounds.
 - Draft-first create and publish-readiness UI with permission-disabled controls,
   dirty-state navigation protection, retryable loader errors, and real-device
-  mobile layout proof. The 2026-07-19 in-app Browser viewport override did not
-  change its reported 1280 px viewport, so the responsive implementation is in
-  place but a true 320/360/390/430 px browser matrix remains part of the broader
-  admin release audit rather than being falsely claimed here.
+  mobile layout proof. Exact 390 x 844 Chrome emulation passed on 2026-07-20;
+  the remaining 320/360/430 px matrix stays part of the broader admin release
+  audit.
 - Public 404 versus 503, canonical/noindex/sitemap truth, shortcode failure
   fallback, featured-media safety, cache invalidation for old/new slugs, and
   live sitemap/page rendering after deployment.
