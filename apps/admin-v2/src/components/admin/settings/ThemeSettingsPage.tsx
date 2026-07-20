@@ -7,6 +7,7 @@ import {
   CircleAlert,
   Eye,
   Loader2,
+  MoreHorizontal,
   Palette,
   RotateCcw,
   Save,
@@ -33,6 +34,12 @@ import {
 } from "~/lib/api-functions/settings";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   getThemeColorError,
   getThemeColorPickerHex,
@@ -774,21 +781,51 @@ export default function ThemeSettingsPage({
         />
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)]">
+      <div
+        data-testid="theme-action-bar"
+        className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/85 lg:left-[var(--sidebar-width,0px)] sm:py-3 sm:pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+      >
         <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {dirty
               ? "Unsaved in this tab"
               : hasUnpublishedChanges
                 ? `Draft r${draftRevision || "new"} saved · not published`
                 : "Published style is current"}
           </p>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div
+            data-testid="theme-primary-actions"
+            className="grid grid-cols-[2.75rem_repeat(3,minmax(0,1fr))] gap-2 sm:flex"
+          >
+            <div className="sm:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="More theme actions"
+                    title="More theme actions"
+                    disabled={operation !== null}
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="top" className="w-52">
+                  <DropdownMenuItem onSelect={handleDiscard} disabled={!dirty}>
+                    Discard tab changes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={handleReset} disabled={!canManage}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restore store defaults
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <button
               type="button"
               onClick={handleDiscard}
               disabled={operation !== null || !dirty}
-              className="min-h-11 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
+              className="hidden min-h-10 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:inline-flex sm:items-center sm:justify-center"
             >
               Discard
             </button>
@@ -796,7 +833,7 @@ export default function ThemeSettingsPage({
               type="button"
               onClick={handleReset}
               disabled={!canManage || operation !== null}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:min-h-10"
+              className="hidden min-h-10 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 sm:inline-flex"
             >
               <RotateCcw className="h-4 w-4" />
               Defaults
@@ -804,17 +841,19 @@ export default function ThemeSettingsPage({
             <button
               type="button"
               onClick={() => void handleSaveDraft()}
+              aria-label={operation === "saving" ? "Saving theme draft" : "Save draft"}
               disabled={!canManage || operation !== null || !dirty || publishBlocked || Boolean(conflict)}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
+              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border bg-background px-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-3"
             >
               {operation === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {operation === "saving" ? "Saving…" : "Save draft"}
+              <span className="truncate">{operation === "saving" ? "Saving…" : "Save"}</span>
+              <span className="sr-only"> draft</span>
             </button>
             <button
               type="button"
               onClick={() => void handlePreview()}
               disabled={operation !== null || publishBlocked || Boolean(conflict) || !configuredStorefrontUrl || (!canManage && draftRevision === 0)}
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10"
+              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md border bg-background px-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-3"
             >
               {operation === "previewing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
               {operation === "previewing" ? "Opening…" : "Preview"}
@@ -823,7 +862,7 @@ export default function ThemeSettingsPage({
               type="button"
               onClick={() => void handlePublish()}
               disabled={!canManage || operation !== null || !hasUnpublishedChanges || publishBlocked || Boolean(conflict)}
-              className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-1 sm:min-h-10"
+              className="inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10 sm:px-4"
             >
               {operation === "publishing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {operation === "publishing" ? "Publishing…" : "Publish"}

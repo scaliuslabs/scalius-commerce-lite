@@ -1208,6 +1208,22 @@ The cleanup bullets below describe the two-product proof store that preceded the
   `pnpm ops:check` and `pnpm release:check` passed afterward; the only warnings
   remain the known logs-only operations email configuration.
 
+### Theme mobile publishing checkpoint (2026-07-20)
+
+- The live Theme authority was rechecked on desktop and at an exact 390 x 844
+  viewport. URL-backed section/path/device state, the real mobile storefront
+  draft preview, immutable published history, restore-as-new-revision, and the
+  desktop action workflow remained healthy with no console errors or
+  horizontal overflow.
+- The fixed mobile action bar no longer wraps five actions over three rows and
+  cover the preview controls. **Discard** and **Defaults** remain available in
+  **More theme actions**, while **Save**, **Preview**, and **Publish** occupy one
+  44 px-target row. Production measured the complete bar at 85 px instead of
+  roughly 190 px; desktop retains all five direct actions.
+- Admin version `a81fffca-60cb-476f-b9f6-9b15b1f3fa4a` is live at 100%. Eight
+  focused Theme/settings tests and the sequential Admin typecheck passed before
+  deployment.
+
 ### Bulk-shipment authority checkpoint (2026-07-20)
 
 - API version `82b7fb11-2880-497a-8647-1ae3a18c37c5` closes the unbounded
