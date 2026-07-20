@@ -54840,6 +54840,9 @@
                               "price": {
                                 "type": "number"
                               },
+                              "effectivePrice": {
+                                "type": "number"
+                              },
                               "stock": {
                                 "type": "integer"
                               },
@@ -54868,6 +54871,7 @@
                               "sku",
                               "optionLabel",
                               "price",
+                              "effectivePrice",
                               "stock",
                               "reservedStock",
                               "available",

@@ -201,6 +201,7 @@ const inventoryLabelVariantSchema = z.object({
     sku: z.string(),
     optionLabel: z.string().nullable(),
     price: z.number(),
+    effectivePrice: z.number(),
     stock: z.number().int(),
     reservedStock: z.number().int(),
     available: z.number().int(),
