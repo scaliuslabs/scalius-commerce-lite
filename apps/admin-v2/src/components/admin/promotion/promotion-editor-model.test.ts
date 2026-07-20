@@ -11,6 +11,10 @@ import {
 } from "./promotion-editor-model";
 
 describe("promotion editor model", () => {
+  it("uses deterministic store time for a new schedule", () => {
+    expect(createPromotionDraft("BDT").timezone).toBe("Asia/Dhaka");
+  });
+
   it("normalizes unique bulk codes and rejects unsupported identities", () => {
     const result = addPromotionCodes(
       [{ code: "WELCOME10", isActive: true }],
