@@ -106,6 +106,8 @@ if (recoveryState) {
 
 const orderItemsFromApi: OrderItem[] = order?.items || [];
 const orderSuccessView = order ? getOrderSuccessViewState(order) : null;
+const showsPositiveOrderState = orderSuccessView?.kind === "order_placed"
+  || orderSuccessView?.kind === "order_updated";
 const retryPaymentType = order
   ? resolveOrderSuccessRetryPaymentType(order, requestedPaymentType)
   : null;
@@ -146,7 +148,7 @@ const legacySubtotal = order
   >
     {order && orderSuccessView ? (
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
-      {orderSuccessView.shouldFinalizeClientSide ? (
+      {showsPositiveOrderState ? (
         <div class="success-checkmark" aria-hidden="true">
           <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>

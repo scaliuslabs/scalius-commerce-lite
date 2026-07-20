@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Loader2 } from "lucide-react";
 import type { CheckoutSettingsSection } from "./checkout-settings-sections";
@@ -57,6 +57,8 @@ export default function CheckoutSettingsPage({
     const [mountedTabs, setMountedTabs] = useState<Set<string>>(
         () => new Set([section])
     );
+    const tabListRef = useRef<HTMLDivElement>(null);
+    const tabRefs = useRef(new Map<CheckoutSettingsSection, HTMLButtonElement>());
 
     useEffect(() => {
         setMountedTabs((prev) => {
@@ -65,6 +67,22 @@ export default function CheckoutSettingsPage({
             next.add(section);
             return next;
         });
+    }, [section]);
+
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => {
+            const list = tabListRef.current;
+            const activeTab = tabRefs.current.get(section);
+            if (!list || !activeTab) return;
+            const maxScroll = Math.max(0, list.scrollWidth - list.clientWidth);
+            const centered = activeTab.offsetLeft
+                - (list.clientWidth - activeTab.offsetWidth) / 2;
+            list.scrollTo({
+                left: Math.max(0, Math.min(maxScroll, centered)),
+                behavior: "auto",
+            });
+        });
+        return () => window.cancelAnimationFrame(frame);
     }, [section]);
 
     const handleTabChange = (value: string) => {
@@ -87,11 +105,19 @@ export default function CheckoutSettingsPage({
                 onValueChange={handleTabChange}
                 className="w-full"
             >
-                <TabsList className="h-auto w-full justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin]">
+                <TabsList
+                    ref={tabListRef}
+                    aria-label="Checkout settings sections"
+                    className="h-auto w-full scroll-px-3 justify-start gap-0 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 [scrollbar-width:thin]"
+                >
                     {tabs.map((tab) => (
                         <TabsTrigger
                             key={tab.value}
                             value={tab.value}
+                            ref={(element) => {
+                                if (element) tabRefs.current.set(tab.value, element);
+                                else tabRefs.current.delete(tab.value);
+                            }}
                             className="shrink-0 rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground sm:px-4"
                         >
                             {tab.label}

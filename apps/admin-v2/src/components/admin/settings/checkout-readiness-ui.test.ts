@@ -106,6 +106,10 @@ describe("checkout settings status presentation", () => {
   it("keeps the tab strip mobile-safe and explains that refund requests are not automatic refunds", () => {
     expect(pageSource).toContain("overflow-x-auto");
     expect(pageSource).toContain("shrink-0 rounded-none");
+    expect(pageSource).toContain('aria-label="Checkout settings sections"');
+    expect(pageSource).toContain("list.scrollTo");
+    expect(pageSource).toContain("list.scrollWidth - list.clientWidth");
+    expect(pageSource).toContain("activeTab.offsetLeft");
     expect(requestsSource).toContain(
       "Approval and payment processing stay with the order.",
     );

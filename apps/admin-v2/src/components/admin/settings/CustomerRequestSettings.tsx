@@ -47,6 +47,21 @@ const ACTION_SWITCHES: Array<{
   },
 ];
 
+function policiesEqual(
+  left: CustomerRequestPolicy | null,
+  right: CustomerRequestPolicy | null,
+): boolean {
+  return Boolean(
+    left
+    && right
+    && left.cancellationEnabled === right.cancellationEnabled
+    && left.returnEnabled === right.returnEnabled
+    && left.refundEnabled === right.refundEnabled
+    && left.visibility === right.visibility
+    && left.introText === right.introText,
+  );
+}
+
 export default function CustomerRequestSettings() {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
@@ -59,25 +74,17 @@ export default function CustomerRequestSettings() {
   const [previewState, setPreviewState] = useState("pre_shipment");
 
   useEffect(() => {
-    if (data?.policy) {
-      // A background query refresh must not erase an in-progress merchant
-      // draft. Successful writes replace both snapshots explicitly below.
-      setPolicy((current) => current ?? data.policy);
-      setSavedPolicy((current) => current ?? data.policy);
-    }
-  }, [data]);
+    if (!data?.policy) return;
+    const hasUnsavedDraft = Boolean(
+      policy && savedPolicy && !policiesEqual(policy, savedPolicy),
+    );
+    if (hasUnsavedDraft) return;
+    // Refresh clean forms from the authoritative read while preserving drafts.
+    setPolicy(data.policy);
+    setSavedPolicy(data.policy);
+  }, [data?.policy, policy, savedPolicy]);
 
-  const dirty = Boolean(
-    policy
-    && savedPolicy
-    && (
-      policy.cancellationEnabled !== savedPolicy.cancellationEnabled
-      || policy.returnEnabled !== savedPolicy.returnEnabled
-      || policy.refundEnabled !== savedPolicy.refundEnabled
-      || policy.visibility !== savedPolicy.visibility
-      || policy.introText !== savedPolicy.introText
-    ),
-  );
+  const dirty = Boolean(policy && savedPolicy && !policiesEqual(policy, savedPolicy));
 
   const preview = useMemo(
     () => (policy ? getCustomerRequestPolicyPreview(policy) : []),
@@ -99,6 +106,7 @@ export default function CustomerRequestSettings() {
       toast.error(getServerFnError(error, "Customer request policy could not be saved"));
     },
   });
+  const canEdit = canManage && !saveMutation.isPending;
 
   if (isLoading || !policy) {
     if (isError) {
@@ -154,7 +162,7 @@ export default function CustomerRequestSettings() {
                   <Switch
                     id={action.key}
                     checked={policy[action.key]}
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onCheckedChange={(checked) => setPolicy((current) => ({
                       ...current!,
                       [action.key]: checked,
@@ -174,7 +182,7 @@ export default function CustomerRequestSettings() {
             <CardContent>
               <RadioGroup
                 value={policy.visibility}
-                disabled={!canManage}
+                disabled={!canEdit}
                 onValueChange={(value) => setPolicy((current) => ({
                   ...current!,
                   visibility: value as CustomerRequestPolicy["visibility"],
@@ -212,8 +220,9 @@ export default function CustomerRequestSettings() {
                   introText: event.target.value || null,
                 }))}
                 maxLength={CUSTOMER_REQUEST_INTRO_MAX_LENGTH}
-                disabled={!canManage}
+                disabled={!canEdit}
                 rows={3}
+                aria-label="Customer request introduction"
                 placeholder="Send a request and the store will review it…"
               />
               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">

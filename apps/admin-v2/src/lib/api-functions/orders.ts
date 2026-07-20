@@ -192,11 +192,14 @@ export type ResendOrderNotificationPayload =
   ApiData<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponse>;
 export type ResolveOrderSupportRequestStatus =
   ApiBody<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData>["status"];
+type ResolveOrderSupportRequestBody =
+  ApiBody<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData>;
 export interface ResolveOrderSupportRequestInput {
   orderId: string;
   requestId: string;
   status: ResolveOrderSupportRequestStatus;
   note?: string | null;
+  returnRequest?: ResolveOrderSupportRequestBody["returnRequest"];
 }
 export type ResolveOrderSupportRequestPayload =
   ApiData<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse>;
@@ -456,6 +459,7 @@ export const resolveOrderSupportRequest = createServerFn({ method: "POST" })
       {
         status: data.status,
         note: data.note ?? null,
+        returnRequest: data.returnRequest,
       },
     );
   });
