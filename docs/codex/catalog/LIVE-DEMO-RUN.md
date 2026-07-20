@@ -1100,6 +1100,24 @@ The cleanup bullets below describe the two-product proof store that preceded the
   parity; those controls remain deliberately absent until the evaluator and
   immutable allocation authority support them.
 
+### Checkout payment-policy recovery checkpoint (2026-07-20)
+
+- A live buyer entered checkout under **Standard** with SSLCommerz saved as the
+  default. The merchant then changed the revisioned flow to **COD only**. Fresh
+  public configuration removed every online method, exposing a real recovery
+  defect: COD was the sole rendered choice but remained unchecked behind a
+  disabled **Select a payment method** action.
+- Storefront version `6606ba62-fc31-4cc4-936f-be54005886ef`, build
+  `src-44bcf53e98a61f60`, now auto-selects the sole eligible method when a saved
+  default has become invalid. The deployed checkout showed checked COD and an
+  enabled **Place Order — Pay on Delivery** action without placing an order.
+- The demo store was restored through the admin workflow to **Standard** at
+  revision 5. A fresh 390 × 844 load returned Stripe, SSLCommerz, Polar, and
+  COD; SSLCommerz was selected, the payment action was enabled, and the page
+  had zero horizontal overflow. Sixty-nine focused checkout tests, targeted
+  lint, the sequential 327-file Astro diagnostic, and the production
+  storefront build passed before deployment.
+
 ## Required continuation checks
 
 1. Preserve the two protected trash products and Shoes category until an explicit audit-retention policy replaces them.

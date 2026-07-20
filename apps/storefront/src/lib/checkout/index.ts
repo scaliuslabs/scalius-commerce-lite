@@ -453,6 +453,7 @@ function renderGateways(): void {
     authoritativeTaxQuote.totalAmount,
   );
   const renderedMethodIds = new Set<string>();
+  const renderedGateways: CheckoutConfig["gateways"] = [];
   let renderedCount = 0;
 
   for (const gw of gateways) {
@@ -491,6 +492,7 @@ function renderGateways(): void {
     card.addEventListener("click", () => selectMethod(gw.id, gw));
     container.appendChild(card);
     renderedMethodIds.add(gw.id);
+    renderedGateways.push(gw);
     renderedCount += 1;
   }
 
@@ -504,6 +506,16 @@ function renderGateways(): void {
   const defaultGateway = gateways.find((gw) => gw.id === defaultMethod);
   if (defaultMethod && defaultGateway && renderedMethodIds.has(defaultMethod)) {
     void selectMethod(defaultMethod, defaultGateway);
+    return;
+  }
+
+  // A checkout policy may change while a buyer is already on this page. If
+  // that removes the saved default but leaves one usable method, select the
+  // only truthful choice instead of stranding the buyer behind a disabled
+  // "Select a payment method" action.
+  if (renderedGateways.length === 1) {
+    const [onlyGateway] = renderedGateways;
+    if (onlyGateway) void selectMethod(onlyGateway.id, onlyGateway);
   }
 }
 

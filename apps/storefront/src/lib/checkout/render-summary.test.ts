@@ -447,6 +447,40 @@ describe("initCheckoutPage", () => {
 
   });
 
+  it("preselects the only eligible method when a saved default is no longer available", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1, name: "Product" },
+      }),
+      shippingCharge: "0",
+      discountAmount: "0",
+      customerName: "Buyer",
+      shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "sslcommerz",
+      gateways: [{ id: "cod", name: "Cash on Delivery" }],
+    };
+
+    await initCheckoutPage();
+
+    const codMethod = document.querySelector('[data-method="cod"]');
+    expect(codMethod?.getAttribute("aria-checked")).toBe("true");
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+    expect(document.getElementById("payButtonText")?.textContent).toContain("Place Order");
+  });
+
   it("emits safe AddPaymentInfo analytics only when the buyer confirms the selected method", async () => {
     vi.stubGlobal("fetch", successfulCheckoutFetch(taxQuote({
       subtotalMinor: 50_000,
