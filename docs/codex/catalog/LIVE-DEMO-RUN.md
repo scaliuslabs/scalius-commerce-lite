@@ -922,6 +922,27 @@ The cleanup bullets below describe the two-product proof store that preceded the
   during the live smoke because every existing demo administrator is already
   beyond password setup.
 
+### Durable administrator invitation checkpoint (2026-07-20)
+
+- API `eb89effe-c4d2-4a31-82d4-9f8d129ff5be` and Admin
+  `9a23ba01-d95f-46b2-a13f-c00e08ca2909` are live at 100%. Migration 0039
+  introduced durable invitation authority and backfilled unfinished legacy
+  administrators into an honest retryable delivery state.
+- An authenticated merchant run invited `Codex Invite QA` with the Product
+  Specialist role. The team workspace exposed `Invite pending`, the exact
+  setup-link expiry, Resend setup, Permissions, and Revoke invitation. Remote
+  D1 proved `pending` + `sent` and an exact 3,600-second delivery window.
+- The first live resend exposed a missing nested RBAC route mapping rather than
+  hiding it behind a generic success state. The central policy and middleware
+  regressions were corrected, API redeployed, and a second live resend moved
+  the expiry forward by one hour. The invitation was then revoked through its
+  confirmation flow; the row disappeared from the active team list, the D1
+  invitation became `revoked` with `user_id = NULL`, and no unfinished user
+  identity remained.
+- Focused invitation, auth-callback, status-model, route, and middleware tests
+  passed together with sequential database/core/API/Admin typechecks and SDK
+  regeneration. No reset/setup token was queried, logged, copied, or exposed.
+
 ### Discount create-route checkpoint (2026-07-19)
 
 - Admin `668b3516-2a52-4143-94c3-88915ac5540e` is live at 100%. The selected

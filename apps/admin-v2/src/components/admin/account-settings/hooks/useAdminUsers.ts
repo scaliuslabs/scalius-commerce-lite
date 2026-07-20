@@ -84,8 +84,8 @@ export function useAdminUsers() {
 
   const deleteUser = async (userId: string) => {
     try {
-      await deleteAdminUser({ data: { userId } });
-      toast.success("Administrator access removed");
+      const result = await deleteAdminUser({ data: { userId } });
+      toast.success(result.message);
       await fetchAdminUsers();
     } catch (err) {
       toast.error(getServerFnError(err, "Failed to delete admin user"));
@@ -98,6 +98,8 @@ export function useAdminUsers() {
       toast.success(result.message);
     } catch (err) {
       throw new Error(getServerFnError(err, "Could not resend the setup email"));
+    } finally {
+      await fetchAdminUsers();
     }
   };
 

@@ -160,7 +160,7 @@ Cloudflare state, and deployed browser behavior remain authoritative.
 | Tax | Basis points, class hierarchy, destination scope, compound layers, version/CAS, immutable order snapshots, shared checkout calculator, truthful coverage states, and bounded saved-hierarchy stacking diagnostics | Five equally weighted tabs, merchant-facing priority field, no bulk classification, no customer exemption workflow, incomplete region/readiness mental model, and insufficient refund/rounding regression matrix. |
 | Checkout/payment | D1 authority; fail-closed public config; encrypted secrets; provider readiness; checkout-policy compatibility; payment session/idempotency/webhook/refund machinery; customer-request policy | Six unrelated domains in local-state tabs; no route/deep link; gateway setup and checkout visibility are interleaved; no first-class test transaction/connection/webhook-health center; no credential rotation lifecycle; partial payment is a single fixed amount without balance-policy authoring. |
 | Theme | One versioned semantic presentation document, durable drafts, real route/device preview, contrast gates, publication history, rollback, revision CAS, and cache invalidation | Header, footer, navigation, heroes, and Theme remain separate authorities; a future unified Presentation workspace must compose them without making Theme an unbounded CSS editor or changing the protected product-detail composition. |
-| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, one-use reset links, RBAC roles/overrides, permission checks, bounded personal session/device revocation, a dedicated Profile workspace, and URL-owned Profile/security/team sections | The current blocked-user invitation model now supports setup-email resend but is not yet a first-class pending-invite entity with expiry/revoke/copy-link state. Suspend/reactivate, recent security-event history, bulk user operations, and path-separated authority routes remain unavailable. |
+| Account | Better Auth sessions, forced invite password setup and 2FA enrollment, durable pending/accepted/revoked invitation authority, one-hour one-use setup links, delivery state, resend/revoke, RBAC roles/overrides, permission checks, bounded personal session/device revocation, suspension/reactivation, a dedicated Profile workspace, and URL-owned Profile/security/team sections | Recent security-event history, bulk user operations, and path-separated authority routes remain unavailable. Setup links intentionally cannot be copied from the admin because possession is password authority; delivery is through the configured email channel. |
 
 ### Code evidence
 
@@ -859,9 +859,33 @@ retained. What changes is lifecycle visibility and operational control.
   destructive suspended state, exposes exact suspend/restore/revoke actions,
   and searches by lifecycle status as well as name, email, and role.
 
-This remains an honest intermediate lifecycle. A dedicated invitation entity
-with expiry/revoke timestamps, recent security-event history, bulk operations,
-and path-separated authority routes remain required.
+### Implemented durable administrator invitation slice (2026-07-20)
+
+- `admin_invitations` now owns pending, accepted, and revoked invitation state
+  separately from the administrator identity. It records delivery
+  pending/sent/failed, one-hour setup-link expiry, last delivery, acceptance,
+  and revocation timestamps without storing or exposing a copyable setup link.
+- Creating an administrator atomically creates the blocked pending identity and
+  invitation. A successful password setup clears the forced-password flag and
+  accepts the invitation in the same D1 batch. Revoking is limited to pending
+  invitations, records the revocation, detaches the invitation, and removes
+  only that unfinished identity; completed administrators remain suspension-
+  only so historical ownership is preserved.
+- The team workspace distinguishes `Invite pending`, expired, and delivery-
+  failed states, provides resend/retry/new-link actions, and refreshes authority
+  after every delivery attempt. Legacy unfinished administrator rows are
+  backfilled as pending with failed delivery so the merchant sees a truthful
+  retry state rather than fabricated email success.
+- The central RBAC map explicitly covers the nested resend command. A live
+  merchant run caught that omission after the first deployment; the corrected
+  route now requires `team.manage`, the one-hour expiry advanced in D1 after a
+  real resend, and revocation removed the demo identity while retaining a
+  revoked audit row with no setup bearer material.
+
+Recent security-event history, bulk operations, and path-separated authority
+routes remain required. Copy-link is deliberately not a gap: setup proof is
+delivered through email and must not become a bearer value in dashboard UI,
+URLs, logs, or clipboard history.
 
 ## Shared UI contract
 

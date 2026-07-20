@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmailRuntimeContext } from "../integrations/email/provider";
+import type {
+  EmailRuntimeContext,
+  SendEmailResult,
+} from "../integrations/email/provider";
 
 const mocks = vi.hoisted(() => ({
   admin: vi.fn((options: unknown) => ({ id: "admin", options })),
   betterAuth: vi.fn((options: unknown) => ({ options })),
   drizzleAdapter: vi.fn(() => ({ id: "drizzle-adapter" })),
   getDb: vi.fn(() => ({ id: "db" })),
-  sendEmail: vi.fn(async (_message: unknown, _context: EmailRuntimeContext | undefined) => ({
+  safeBatch: vi.fn(async (_db: unknown, statements: unknown[]) => statements),
+  sendEmail: vi.fn(async (
+    _message: unknown,
+    _context: EmailRuntimeContext | undefined,
+  ): Promise<SendEmailResult> => ({
     success: false,
     provider: "log" as const,
   })),
@@ -28,6 +35,7 @@ vi.mock("better-auth/plugins", () => ({
 
 vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
+  safeBatch: mocks.safeBatch,
 }));
 
 vi.mock("../integrations/email", () => ({
@@ -232,12 +240,126 @@ describe("createAuth", () => {
 
     await options.emailAndPassword?.onPasswordReset?.({ user: { id: "user_1" } });
 
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(set).toHaveBeenCalledWith(expect.objectContaining({
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(set).toHaveBeenNthCalledWith(1, expect.objectContaining({
       mustChangePassword: false,
       updatedAt: expect.any(Date),
     }));
-    expect(where).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      status: "accepted",
+      acceptedAt: expect.any(Date),
+      updatedAt: expect.any(Date),
+    }));
+    expect(where).toHaveBeenCalledTimes(2);
+    expect(mocks.safeBatch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([expect.anything(), expect.anything()]),
+    );
+  });
+
+  it("records a delivered administrator setup link with its real one-hour lifetime", async () => {
+    const inviteGet = vi.fn(async () => ({
+      role: "admin",
+      mustChangePassword: true,
+      invitationId: "invite_1",
+      invitationStatus: "pending",
+    }));
+    const updateWhere = vi.fn(async () => undefined);
+    const updateSet = vi.fn((_value: Record<string, unknown>) => ({ where: updateWhere }));
+    mocks.getDb.mockReturnValueOnce({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(() => ({ get: inviteGet })),
+          })),
+        })),
+      })),
+      update: vi.fn(() => ({ set: updateSet })),
+    } as never);
+    mocks.sendEmail.mockResolvedValueOnce({ success: true, provider: "resend" });
+
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+    } as never);
+    const options = mocks.betterAuth.mock.calls.at(-1)?.[0] as {
+      emailAndPassword?: {
+        resetPasswordTokenExpiresIn?: number;
+        sendResetPassword?: (input: {
+          user: { id: string; email: string; name: string };
+          url: string;
+        }) => Promise<void>;
+      };
+    };
+
+    const before = Date.now();
+    expect(options.emailAndPassword?.resetPasswordTokenExpiresIn).toBe(60 * 60);
+    await options.emailAndPassword?.sendResetPassword?.({
+      user: { id: "user_1", email: "invite@example.com", name: "Invitee" },
+      url: "https://dashboard.example.com/auth/reset-password?token=secret",
+    });
+    const sentState = updateSet.mock.calls.at(-1)?.[0] as {
+      deliveryStatus?: string;
+      lastSentAt?: Date;
+      expiresAt?: Date;
+    };
+
+    expect(sentState.deliveryStatus).toBe("sent");
+    expect(sentState.lastSentAt?.getTime()).toBeGreaterThanOrEqual(before);
+    expect(sentState.expiresAt?.getTime()).toBe(
+      (sentState.lastSentAt?.getTime() ?? 0) + 60 * 60 * 1000,
+    );
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "Set up your Scalius Commerce admin account",
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("records failed setup delivery and does not claim that a link was sent", async () => {
+    const updateWhere = vi.fn(async () => undefined);
+    const updateSet = vi.fn((_value: Record<string, unknown>) => ({ where: updateWhere }));
+    mocks.getDb.mockReturnValueOnce({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(() => ({
+              get: vi.fn(async () => ({
+                role: "admin",
+                mustChangePassword: true,
+                invitationId: "invite_1",
+                invitationStatus: "pending",
+              })),
+            })),
+          })),
+        })),
+      })),
+      update: vi.fn(() => ({ set: updateSet })),
+    } as never);
+    mocks.sendEmail.mockResolvedValueOnce({ success: false, provider: "log" });
+
+    createAuth({
+      BETTER_AUTH_SECRET: "test-secret",
+      PUBLIC_API_BASE_URL: "http://localhost:8787",
+    } as never);
+    const options = mocks.betterAuth.mock.calls.at(-1)?.[0] as {
+      emailAndPassword?: {
+        sendResetPassword?: (input: {
+          user: { id: string; email: string; name: string };
+          url: string;
+        }) => Promise<void>;
+      };
+    };
+
+    await expect(options.emailAndPassword?.sendResetPassword?.({
+      user: { id: "user_1", email: "invite@example.com", name: "Invitee" },
+      url: "https://dashboard.example.com/auth/reset-password?token=secret",
+    })).rejects.toThrow("Password reset email delivery failed");
+    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      deliveryStatus: "failed",
+      expiresAt: null,
+    }));
   });
 
   it("does not reuse the cached auth instance when auth URLs or trusted origins change", () => {

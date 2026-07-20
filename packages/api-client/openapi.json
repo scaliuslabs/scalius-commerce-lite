@@ -131183,6 +131183,33 @@
                               "suspended": {
                                 "type": "boolean"
                               },
+                              "invitation": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "pending",
+                                      "expired",
+                                      "delivery_failed"
+                                    ]
+                                  },
+                                  "expiresAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "lastSentAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "expiresAt",
+                                  "lastSentAt"
+                                ]
+                              },
                               "isSuperAdmin": {
                                 "type": "boolean"
                               },
@@ -131250,6 +131277,7 @@
                               "mustChangePassword",
                               "mustEnrollTwoFactor",
                               "suspended",
+                              "invitation",
                               "isSuperAdmin",
                               "createdAt",
                               "roles",

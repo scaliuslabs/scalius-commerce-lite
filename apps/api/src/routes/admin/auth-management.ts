@@ -10,6 +10,7 @@ import {
     type Database,
 } from "@scalius/database/client";
 import {
+    adminInvitations,
     permissions,
     roles,
     session as sessionTable,
@@ -130,6 +131,11 @@ const adminUserSchema = z.object({
     mustChangePassword: z.boolean(),
     mustEnrollTwoFactor: z.boolean(),
     suspended: z.boolean(),
+    invitation: z.object({
+        status: z.enum(["pending", "expired", "delivery_failed"]),
+        expiresAt: z.string().nullable(),
+        lastSentAt: z.string().nullable(),
+    }).nullable(),
     isSuperAdmin: z.boolean(),
     createdAt: z.union([z.string(), z.number()]),
     roles: z.array(z.object({ id: z.string(), name: z.string(), displayName: z.string() })),
@@ -163,6 +169,11 @@ app.openapi(listUsersRoute, async (c) => {
                 mustEnrollTwoFactor: user.mustEnrollTwoFactor,
                 banned: user.banned,
                 banExpires: user.banExpires,
+                invitationId: adminInvitations.id,
+                invitationStatus: adminInvitations.status,
+                invitationDeliveryStatus: adminInvitations.deliveryStatus,
+                invitationExpiresAt: adminInvitations.expiresAt,
+                invitationLastSentAt: adminInvitations.lastSentAt,
                 isSuperAdmin: user.isSuperAdmin,
                 createdAt: user.createdAt
             })
@@ -172,6 +183,7 @@ app.openapi(listUsersRoute, async (c) => {
                 eq(userPermissions.userId, user.id),
                 eq(userPermissions.granted, true),
             ))
+            .leftJoin(adminInvitations, eq(adminInvitations.userId, user.id))
             .where(adminPrincipalPredicate());
 
         const usersWithRoles = await Promise.all(
@@ -198,14 +210,49 @@ app.openapi(listUsersRoute, async (c) => {
                 const grants = overrides.filter((o) => o.granted).map((o) => o.permissionName);
                 const denials = overrides.filter((o) => !o.granted).map((o) => o.permissionName);
 
-                const { banned, banExpires, ...publicAdminUser } = adminUser;
+                const {
+                    banned,
+                    banExpires,
+                    invitationId,
+                    invitationStatus,
+                    invitationDeliveryStatus,
+                    invitationExpiresAt,
+                    invitationLastSentAt,
+                    ...publicAdminUser
+                } = adminUser;
                 const banExpiresAt = banExpires instanceof Date
                     ? banExpires.getTime()
                     : Number(banExpires ?? 0) * 1000;
+                const pendingInvitation = invitationId
+                    && invitationStatus === "pending"
+                    && publicAdminUser.mustChangePassword;
+                const invitationExpiryMs = invitationExpiresAt instanceof Date
+                    ? invitationExpiresAt.getTime()
+                    : Number(invitationExpiresAt ?? 0) * 1000;
+                const invitation = pendingInvitation
+                    ? {
+                        status: invitationDeliveryStatus === "failed"
+                            ? "delivery_failed" as const
+                            : invitationExpiresAt && invitationExpiryMs <= Date.now()
+                                ? "expired" as const
+                                : "pending" as const,
+                        expiresAt: invitationExpiresAt
+                            ? new Date(invitationExpiryMs).toISOString()
+                            : null,
+                        lastSentAt: invitationLastSentAt
+                            ? new Date(
+                                invitationLastSentAt instanceof Date
+                                    ? invitationLastSentAt.getTime()
+                                    : Number(invitationLastSentAt) * 1000,
+                            ).toISOString()
+                            : null,
+                    }
+                    : null;
 
                 return {
                     ...publicAdminUser,
                     suspended: Boolean(banned && (!banExpires || banExpiresAt > Date.now())),
+                    invitation,
                     roles: userRoleData,
                     overrides: { grants, denials }
                 };
@@ -284,15 +331,29 @@ app.openapi(createUserRoute, async (c) => {
             throw new ServiceUnavailableError("Could not create admin user");
         }
 
-        await db
-            .update(user)
-            .set({
-                role: "admin",
-                emailVerified: true,
-                mustChangePassword: true,
-                mustEnrollTwoFactor: true,
-            })
-            .where(eq(user.id, signUpResult.user.id));
+        const invitationId = `invite_${crypto.randomUUID()}`;
+        const createdAt = new Date();
+        await safeBatch(db, [
+            db.update(user)
+                .set({
+                    role: "admin",
+                    emailVerified: true,
+                    mustChangePassword: true,
+                    mustEnrollTwoFactor: true,
+                })
+                .where(eq(user.id, signUpResult.user.id)),
+            db.insert(adminInvitations).values({
+                id: invitationId,
+                userId: signUpResult.user.id,
+                invitedByUserId: sessionUser.id,
+                name,
+                email,
+                status: "pending",
+                deliveryStatus: "pending",
+                createdAt,
+                updatedAt: createdAt,
+            }),
+        ]);
 
         if (roleId) {
             await assignRoleToUser(db, signUpResult.user.id, roleId, sessionUser.id, env.CACHE as KVNamespace | undefined);
@@ -307,9 +368,17 @@ app.openapi(createUserRoute, async (c) => {
                     redirectTo: "/auth/reset-password",
                 },
             });
-        } catch (emailError: unknown) {
-            console.error("Failed to send admin setup email:", emailError);
+        } catch {
+            console.warn("[Auth management] Administrator setup email delivery failed");
             emailFailed = true;
+            await db
+                .update(adminInvitations)
+                .set({
+                    deliveryStatus: "failed",
+                    expiresAt: null,
+                    updatedAt: new Date(),
+                })
+                .where(eq(adminInvitations.id, invitationId));
         }
 
         if (emailFailed) {
@@ -361,8 +430,11 @@ app.openapi(resendAdminSetupRoute, async (c) => {
             id: user.id,
             email: user.email,
             mustChangePassword: user.mustChangePassword,
+            invitationId: adminInvitations.id,
+            invitationStatus: adminInvitations.status,
         })
         .from(user)
+        .leftJoin(adminInvitations, eq(adminInvitations.userId, user.id))
         .where(eq(user.id, userId))
         .get();
 
@@ -384,6 +456,9 @@ app.openapi(resendAdminSetupRoute, async (c) => {
     if (!invitedUser.mustChangePassword) {
         throw new ValidationError("Password setup is already complete");
     }
+    if (!invitedUser.invitationId || invitedUser.invitationStatus !== "pending") {
+        throw new ValidationError("This administrator does not have a pending invitation");
+    }
 
     const auth = createAuth(env);
     try {
@@ -395,6 +470,14 @@ app.openapi(resendAdminSetupRoute, async (c) => {
             },
         });
     } catch {
+        await db
+            .update(adminInvitations)
+            .set({
+                deliveryStatus: "failed",
+                expiresAt: null,
+                updatedAt: new Date(),
+            })
+            .where(eq(adminInvitations.id, invitedUser.invitationId));
         throw new ServiceUnavailableError("The setup email could not be sent. Check email delivery and try again.");
     }
 
@@ -430,11 +513,18 @@ app.openapi(deleteUserRoute, async (c) => {
             role: user.role,
             isSuperAdmin: user.isSuperAdmin,
             mustChangePassword: user.mustChangePassword,
-        }).from(user).where(eq(user.id, userId)).get();
+            invitationId: adminInvitations.id,
+            invitationStatus: adminInvitations.status,
+        }).from(user)
+            .leftJoin(adminInvitations, eq(adminInvitations.userId, user.id))
+            .where(eq(user.id, userId)).get();
         if (!userToDelete) throw new NotFoundError("User not found");
         if (userToDelete.isSuperAdmin) throw new ValidationError("Cannot delete a super admin user");
         if (!userToDelete.mustChangePassword) {
             throw new ValidationError("Completed administrator access must be suspended instead of deleted");
+        }
+        if (!userToDelete.invitationId || userToDelete.invitationStatus !== "pending") {
+            throw new ValidationError("Only a pending administrator invitation can be revoked");
         }
 
         const targetAdminPrincipal = await db
@@ -459,7 +549,21 @@ app.openapi(deleteUserRoute, async (c) => {
             .where(adminPrincipalPredicate());
         if (adminCount.length <= 1) throw new ValidationError("Cannot delete the last admin user");
 
-        await db.delete(user).where(eq(user.id, userId));
+        const revokedAt = new Date();
+        await safeBatch(db, [
+            db.update(adminInvitations)
+                .set({
+                    status: "revoked",
+                    userId: null,
+                    revokedAt,
+                    updatedAt: revokedAt,
+                })
+                .where(and(
+                    eq(adminInvitations.id, userToDelete.invitationId),
+                    eq(adminInvitations.status, "pending"),
+                )),
+            db.delete(user).where(eq(user.id, userId)),
+        ]);
 
         return ok(c, { message: "Administrator invitation revoked" });
     } catch (error: unknown) {
