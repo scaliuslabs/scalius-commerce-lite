@@ -865,20 +865,28 @@ export function BarcodeLabelWorkspace({
                   </div>
                 ) : null}
                 {capacity > 1 ? (
-                  <div className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2">
-                    <div className="min-w-0">
-                      <Label htmlFor="barcode-start-cell" className="text-xs">Start at cell</Label>
-                      <p className="truncate text-[10px] text-muted-foreground">{startOffset === 0 ? "New sheet" : `Skip ${startOffset} already-used ${startOffset === 1 ? "label" : "labels"}`}</p>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2">
+                      <div className="min-w-0">
+                        <Label htmlFor="barcode-start-cell" className="text-xs">Start at cell</Label>
+                        <p className="truncate text-[10px] text-muted-foreground">{startOffset === 0 ? "New sheet" : `Leave the first ${startOffset} ${startOffset === 1 ? "cell" : "cells"} blank`}</p>
+                      </div>
+                      <Input
+                        id="barcode-start-cell"
+                        type="number"
+                        min={1}
+                        max={capacity}
+                        value={startOffset + 1}
+                        onChange={(event) => setStartOffset(Math.max(0, Math.min(capacity - 1, Math.trunc(event.target.valueAsNumber || 1) - 1)))}
+                        className="h-8 w-20 text-center text-sm tabular-nums"
+                      />
                     </div>
-                    <Input
-                      id="barcode-start-cell"
-                      type="number"
-                      min={1}
-                      max={capacity}
-                      value={startOffset + 1}
-                      onChange={(event) => setStartOffset(Math.max(0, Math.min(capacity - 1, Math.trunc(event.target.valueAsNumber || 1) - 1)))}
-                      className="h-8 w-20 text-center text-sm tabular-nums"
-                    />
+                    {startOffset > 0 ? (
+                      <p className="flex gap-1.5 px-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400" role="note">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        Do not re-feed cut, damaged, or adhesive sheets unless the sheet maker and printer allow it.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2 border-t pt-3">
@@ -1030,10 +1038,10 @@ export function BarcodeLabelWorkspace({
             </div>
             <div className="truncate text-[11px] text-muted-foreground">{printReadiness}</div>
           </div>
-          <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={!canPrint} onClick={() => startPrint("test")}>
+          <Button type="button" variant="outline" size="sm" className="min-h-11 shrink-0" disabled={!canPrint} onClick={() => startPrint("test")}>
             <FileText className="mr-1.5 h-3.5 w-3.5" /> Test
           </Button>
-          <Button type="button" size="sm" className="shrink-0" disabled={!canPrint} onClick={() => startPrint("job")}>
+          <Button type="button" size="sm" className="min-h-11 shrink-0" disabled={!canPrint} onClick={() => startPrint("job")}>
             <Printer className="mr-1.5 h-3.5 w-3.5" /> Print / PDF
           </Button>
         </div>

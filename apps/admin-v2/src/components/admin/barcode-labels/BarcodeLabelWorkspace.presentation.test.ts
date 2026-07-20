@@ -40,4 +40,16 @@ describe("BarcodeLabelWorkspace presentation boundary", () => {
     expect(readinessNotice).toBeLessThan(skuPicker);
     expect(readinessNotice).toBeLessThan(pagePreview);
   });
+
+  it("warns only when a merchant deliberately skips sheet cells", () => {
+    expect(source).toContain("Leave the first ${startOffset}");
+    expect(source).toContain("{startOffset > 0 ? (");
+    expect(source).toContain(
+      "Do not re-feed cut, damaged, or adhesive sheets unless the sheet maker and printer allow it.",
+    );
+  });
+
+  it("keeps the primary mobile print targets at least 44 pixels tall", () => {
+    expect(source.match(/className="min-h-11 shrink-0"/g)).toHaveLength(2);
+  });
 });
