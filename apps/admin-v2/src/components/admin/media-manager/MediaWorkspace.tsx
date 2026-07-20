@@ -62,7 +62,11 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
 
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-3 py-2">
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold">{picker ? `Choose ${capability === "both" ? "media" : capability}` : "Media"}</h2>
+          {picker ? (
+            <h2 className="text-sm font-semibold">Choose {capability === "both" ? "media" : capability}</h2>
+          ) : (
+            <h1 className="text-sm font-semibold">Media</h1>
+          )}
           <p className="truncate text-xs text-muted-foreground">Images up to 20 MiB · videos up to 100 MiB · 50 files per batch</p>
         </div>
         {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-9 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-9 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}

@@ -39,7 +39,7 @@ import {
   type ProductListItem,
 } from "~/components/admin/data-table/columns/product-columns";
 import { ProductToolbar } from "~/components/admin/data-table/toolbars/ProductToolbar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { StatCard } from "~/components/admin/shared/StatCard";
 import { ProductMobileRow } from "~/components/admin/product-list/ProductMobileRow";
@@ -430,9 +430,9 @@ function ProductsPage() {
         <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-base font-semibold tracking-tight">
+              <h1 className="text-base font-semibold tracking-tight">
                 {showTrashed ? "Trash" : "Products"}
-              </CardTitle>
+              </h1>
               <CardDescription className="mt-0 text-xs text-muted-foreground">
                 {showTrashed
                   ? "View and manage deleted products."
