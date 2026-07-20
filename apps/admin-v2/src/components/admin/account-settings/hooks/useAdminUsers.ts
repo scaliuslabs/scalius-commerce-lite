@@ -6,6 +6,7 @@ import {
   deleteAdminUser,
   getAdminUsers,
   resendAdminSetup,
+  setAdminSuspension,
   type AdminUser,
 } from "~/lib/api-functions/auth-management";
 import { getRbacRoles } from "~/lib/api-functions/rbac";
@@ -100,6 +101,23 @@ export function useAdminUsers() {
     }
   };
 
+  const updateSuspension = async (userId: string, suspended: boolean) => {
+    try {
+      const result = await setAdminSuspension({ data: { userId, suspended } });
+      toast.success(result.message);
+      await fetchAdminUsers();
+    } catch (err) {
+      throw new Error(
+        getServerFnError(
+          err,
+          suspended
+            ? "Could not suspend this administrator"
+            : "Could not restore this administrator",
+        ),
+      );
+    }
+  };
+
   return {
     adminUsers,
     availableRoles,
@@ -110,6 +128,7 @@ export function useAdminUsers() {
     addUser,
     deleteUser,
     resendSetup,
+    updateSuspension,
     refetch: fetchAdminUsers,
     refetchRoles: fetchRoles,
   };

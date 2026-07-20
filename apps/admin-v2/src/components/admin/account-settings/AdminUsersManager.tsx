@@ -37,6 +37,8 @@ import {
   Users,
   RefreshCw,
   Search,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
@@ -73,6 +75,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     refetch,
     refetchRoles,
     resendSetup,
+    updateSuspension,
   } = useAdminUsers();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUserName, setNewUserName] = useState("");
@@ -82,6 +85,7 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const { hasPermission } = usePermissions();
   const canManageTeam = hasPermission(PERMISSIONS.TEAM_MANAGE);
@@ -95,13 +99,15 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return adminUsers;
 
-    return adminUsers.filter((adminUser) =>
-      [
+    return adminUsers.filter((adminUser) => {
+      const status = getAdminUserStatus(adminUser);
+      return [
         adminUser.name,
         adminUser.email,
+        ADMIN_USER_STATUS_COPY[status].label,
         ...adminUser.roles.map((role) => role.displayName),
-      ].some((value) => value.toLowerCase().includes(normalizedQuery)),
-    );
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
   }, [adminUsers, query]);
 
   const resetInviteForm = () => {
@@ -139,6 +145,23 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
       setError(err instanceof Error ? err.message : "Could not send this invitation");
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleSuspension = async (adminUser: AdminUser, suspended: boolean) => {
+    setUpdatingUserId(adminUser.id);
+    try {
+      await updateSuspension(adminUser.id, suspended);
+    } catch (suspensionError) {
+      toast.error(
+        suspensionError instanceof Error
+          ? suspensionError.message
+          : suspended
+            ? "Could not suspend this administrator"
+            : "Could not restore this administrator",
+      );
+    } finally {
+      setUpdatingUserId(null);
     }
   };
 
@@ -430,18 +453,18 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                       Permissions
                     </Button>
                   )}
-                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && (
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "password_setup" && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Remove ${adminUser.name}`} disabled={!userAuthorityReady}>
+                        <Button variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9" aria-label={`Revoke invitation for ${adminUser.name}`} disabled={!userAuthorityReady}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                        <AlertDialogTitle>Remove administrator?</AlertDialogTitle>
+                        <AlertDialogTitle>Revoke this invitation?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            <strong>{adminUser.name}</strong> will lose admin access immediately. Their historical activity remains in the audit trail.
+                            <strong>{adminUser.name}</strong> will no longer be able to use the setup link. You can invite them again later.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -450,7 +473,61 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
                             onClick={() => deleteUser(adminUser.id)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
-                            Remove access
+                            Revoke invitation
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status === "suspended" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 text-xs sm:min-h-9"
+                      onClick={() => void handleSuspension(adminUser, false)}
+                      disabled={!userAuthorityReady || updatingUserId !== null}
+                    >
+                      {updatingUserId === adminUser.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <UserCheck className="h-3.5 w-3.5" />
+                      )}
+                      Restore access
+                    </Button>
+                  )}
+                  {canManageTeam && adminUser.id !== currentUserId && !adminUser.isSuperAdmin && status !== "password_setup" && status !== "suspended" && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-9 sm:w-9"
+                          aria-label={`Suspend ${adminUser.name}`}
+                          disabled={!userAuthorityReady || updatingUserId !== null}
+                        >
+                          {updatingUserId === adminUser.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <UserX className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Suspend administrator?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            <strong>{adminUser.name}</strong> will be signed out on every device and cannot sign in until access is restored. Their role and activity history stay intact.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => void handleSuspension(adminUser, true)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Suspend access
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -479,16 +556,16 @@ export function AdminUsersManager({ currentUserId }: AdminUsersManagerProps) {
 
 function AdminStatusBadge({ status }: { status: AdminUserStatus }) {
   const copy = ADMIN_USER_STATUS_COPY[status];
-  const ready = status === "ready";
+  const tone = status === "ready"
+    ? "border-primary/25 bg-primary/5 text-primary"
+    : status === "suspended"
+      ? "border-destructive/25 bg-destructive/5 text-destructive"
+      : "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
 
   return (
     <span
       title={copy.description}
-      className={`inline-flex min-h-7 items-center rounded-full border px-2 py-1 text-xs font-medium ${
-        ready
-          ? "border-primary/25 bg-primary/5 text-primary"
-          : "border-destructive/25 bg-destructive/5 text-destructive"
-      }`}
+      className={`inline-flex min-h-7 items-center rounded-full border px-2 py-1 text-xs font-medium ${tone}`}
     >
       {copy.label}
     </span>

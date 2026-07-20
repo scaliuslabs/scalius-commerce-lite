@@ -228,6 +228,8 @@ function createAdminUserListDbMock(options: {
     twoFactorEnabled: boolean;
     mustChangePassword: boolean;
     mustEnrollTwoFactor: boolean;
+    banned: boolean;
+    banExpires: Date | null;
     isSuperAdmin: boolean;
     createdAt: number;
   }>;
@@ -244,6 +246,8 @@ function createAdminUserListDbMock(options: {
       twoFactorEnabled: true,
       mustChangePassword: false,
       mustEnrollTwoFactor: false,
+      banned: false,
+      banExpires: null,
       isSuperAdmin: false,
       createdAt: 1,
     },
@@ -289,7 +293,12 @@ function createAdminUserListDbMock(options: {
 }
 
 function createAdminDeleteDbMock(options: {
-  targetUser?: { id: string; role: string | null; isSuperAdmin: boolean } | null;
+  targetUser?: {
+    id: string;
+    role: string | null;
+    isSuperAdmin: boolean;
+    mustChangePassword: boolean;
+  } | null;
   targetPrincipalRows?: Array<{ id: string }>;
   adminPrincipalRows?: Array<{ id: string }>;
 } = {}) {
@@ -297,6 +306,7 @@ function createAdminDeleteDbMock(options: {
     id: "rbac_admin",
     role: "user",
     isSuperAdmin: false,
+    mustChangePassword: true,
   };
   const targetPrincipalRows = options.targetPrincipalRows ?? [{ id: "rbac_admin" }];
   const adminPrincipalRows = options.adminPrincipalRows ?? [
@@ -326,6 +336,59 @@ function createAdminDeleteDbMock(options: {
               return principalWhereCalls.length === 1
                 ? targetPrincipalRows
                 : adminPrincipalRows;
+            }),
+          })),
+        })),
+      })),
+    })),
+  };
+}
+
+function createAdminSuspensionDbMock(options: {
+  target?: { id: string; isSuperAdmin: boolean; banned: boolean } | null;
+  principalRows?: Array<{ id: string }>;
+  otherActiveAdminRows?: Array<{ id: string }>;
+  batchError?: Error;
+} = {}) {
+  const target = Object.prototype.hasOwnProperty.call(options, "target")
+    ? options.target
+    : { id: "admin_2", isSuperAdmin: false, banned: false };
+  const principalRows = options.principalRows ?? [{ id: "admin_2" }];
+  const otherActiveAdminRows = options.otherActiveAdminRows ?? [{ id: "user_1" }];
+  const updateWhere = vi.fn(() => ({ kind: "update" }));
+  const updateSet = vi.fn(() => ({ where: updateWhere }));
+  const deleteWhere = vi.fn(() => ({ kind: "delete" }));
+  const batch = vi.fn(async () => {
+    if (options.batchError) throw options.batchError;
+    return [];
+  });
+  let principalCall = 0;
+
+  return {
+    __batch: batch,
+    __deleteWhere: deleteWhere,
+    __updateSet: updateSet,
+    __updateWhere: updateWhere,
+    batch,
+    delete: vi.fn(() => ({ where: deleteWhere })),
+    update: vi.fn(() => ({ set: updateSet })),
+    select: vi.fn((selection: Record<string, unknown>) => {
+      if ("batchGuard" in selection) {
+        return { from: vi.fn(() => ({ kind: "guard" })) };
+      }
+      return {
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({ get: vi.fn(async () => target) })),
+        })),
+      };
+    }),
+    selectDistinct: vi.fn(() => ({
+      from: vi.fn(() => ({
+        leftJoin: vi.fn(() => ({
+          leftJoin: vi.fn(() => ({
+            where: vi.fn(async () => {
+              principalCall += 1;
+              return principalCall === 1 ? principalRows : otherActiveAdminRows;
             }),
           })),
         })),
@@ -578,6 +641,8 @@ describe("admin auth management user permissions", () => {
           twoFactorEnabled: true,
           mustChangePassword: false,
           mustEnrollTwoFactor: false,
+          banned: false,
+          banExpires: null,
           isSuperAdmin: false,
           createdAt: 1,
         },
@@ -613,6 +678,34 @@ describe("admin auth management user permissions", () => {
         },
       }),
     ]);
+  });
+
+  it("projects indefinite bans as suspended administrator state", async () => {
+    const db = createAdminUserListDbMock({
+      adminUsers: [{
+        id: "suspended_admin",
+        name: "Suspended Admin",
+        email: "suspended@example.com",
+        emailVerified: true,
+        image: null,
+        twoFactorEnabled: true,
+        mustChangePassword: false,
+        mustEnrollTwoFactor: false,
+        banned: true,
+        banExpires: null,
+        isSuperAdmin: false,
+        createdAt: 1,
+      }],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users", { method: "GET" });
+    const body = await response.json() as {
+      data?: { users?: Array<{ suspended: boolean }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data?.users?.[0]?.suspended).toBe(true);
   });
 
   it("does not re-check legacy user.role inside user-management handlers", () => {
@@ -658,6 +751,122 @@ describe("admin auth management user permissions", () => {
     expect(response.status).toBe(400);
     expect(body.error?.code).toBe("VALIDATION_ERROR");
     expect(db.__deleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("preserves completed administrator identities for suspension instead of hard deletion", async () => {
+    const db = createAdminDeleteDbMock({
+      targetUser: {
+        id: "ready_admin",
+        role: "admin",
+        isSuperAdmin: false,
+        mustChangePassword: false,
+      },
+      targetPrincipalRows: [{ id: "ready_admin" }],
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request("/api/v1/admin/auth/users/ready_admin", {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(400);
+    expect(db.__deleteWhere).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin auth management suspension lifecycle", () => {
+  it("does not count unfinished invitations as lockout-safe administrators", () => {
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "auth-management.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("eq(user.mustChangePassword, false)");
+    expect(source).toContain("other_admin.must_change_password");
+    expect(source).toContain("other_admin.must_enroll_two_factor");
+    expect(source).toContain("other_admin.two_factor_enabled");
+  });
+
+  it("suspends an administrator and revokes every active session atomically", async () => {
+    const db = createAdminSuspensionDbMock();
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/admin_2/suspension",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suspended: true }),
+      },
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      banned: true,
+      banReason: "Store access suspended by an administrator",
+      banExpires: null,
+    }));
+    expect(db.__deleteWhere).toHaveBeenCalledOnce();
+    expect(db.__batch).toHaveBeenCalledOnce();
+  });
+
+  it("blocks suspension when it would remove the last active administrator", async () => {
+    const db = createAdminSuspensionDbMock({ otherActiveAdminRows: [] });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/admin_2/suspension",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suspended: true }),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(db.__batch).not.toHaveBeenCalled();
+  });
+
+  it("reactivates a suspended administrator without changing roles", async () => {
+    const db = createAdminSuspensionDbMock({
+      target: { id: "admin_2", isSuperAdmin: false, banned: true },
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/admin_2/suspension",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suspended: false }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.__updateSet).toHaveBeenCalledWith(expect.objectContaining({
+      banned: false,
+      banReason: null,
+      banExpires: null,
+    }));
+    expect(db.__batch).not.toHaveBeenCalled();
+  });
+
+  it("turns a concurrent authority change into a retryable conflict", async () => {
+    const db = createAdminSuspensionDbMock({
+      batchError: new Error("malformed JSON"),
+    });
+    const app = createTestApp(db);
+
+    const response = await app.request(
+      "/api/v1/admin/auth/users/admin_2/suspension",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suspended: true }),
+      },
+    );
+
+    expect(response.status).toBe(409);
   });
 });
 

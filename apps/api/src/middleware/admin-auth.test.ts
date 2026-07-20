@@ -390,6 +390,35 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(createNext).toHaveBeenCalledTimes(1);
   });
 
+  it("requires team management permission for administrator suspension", async () => {
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.TEAM_VIEW]),
+    );
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      adminAuthMiddleware(
+        createContext(
+          "/api/v1/admin/auth/users/admin_2/suspension",
+          "POST",
+        ) as never,
+        next,
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+
+    mocks.getUserPermissions.mockResolvedValue(
+      new Set([PERMISSIONS.TEAM_MANAGE]),
+    );
+    await adminAuthMiddleware(
+      createContext(
+        "/api/v1/admin/auth/users/admin_2/suspension",
+        "POST",
+      ) as never,
+      next,
+    );
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   it("stores the Better Auth session on the Hono context", async () => {
     mocks.getUserPermissions.mockResolvedValue(
       new Set([PERMISSIONS.PRODUCTS_VIEW]),

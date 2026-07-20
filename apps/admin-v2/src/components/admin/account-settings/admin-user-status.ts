@@ -2,16 +2,19 @@ export interface AdminUserStatusInput {
   twoFactorEnabled: boolean;
   mustChangePassword: boolean;
   mustEnrollTwoFactor: boolean;
+  suspended: boolean;
 }
 
 export type AdminUserStatus =
   | "ready"
+  | "suspended"
   | "password_setup"
   | "two_factor_setup";
 
 export function getAdminUserStatus(
   user: AdminUserStatusInput,
 ): AdminUserStatus {
+  if (user.suspended) return "suspended";
   if (user.mustChangePassword) return "password_setup";
   if (user.mustEnrollTwoFactor || !user.twoFactorEnabled) {
     return "two_factor_setup";
@@ -26,6 +29,10 @@ export const ADMIN_USER_STATUS_COPY: Record<
   ready: {
     label: "Ready",
     description: "Password and two-factor authentication are configured.",
+  },
+  suspended: {
+    label: "Suspended",
+    description: "This administrator cannot sign in until access is restored.",
   },
   password_setup: {
     label: "Password setup",

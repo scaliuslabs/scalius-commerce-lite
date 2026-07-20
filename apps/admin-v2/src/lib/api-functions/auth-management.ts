@@ -12,6 +12,7 @@ export interface AdminUser {
   twoFactorEnabled: boolean;
   mustChangePassword: boolean;
   mustEnrollTwoFactor: boolean;
+  suspended: boolean;
   isSuperAdmin: boolean;
   createdAt: string | number;
   roles: { id: string; name: string; displayName: string }[];
@@ -45,6 +46,15 @@ export interface DeleteAdminUserInput {
 
 export interface ResendAdminSetupInput {
   userId: string;
+}
+
+export interface SetAdminSuspensionInput {
+  userId: string;
+  suspended: boolean;
+}
+
+export interface SetAdminSuspensionResponse extends MessageResponse {
+  suspended: boolean;
 }
 
 export interface MessageResponse {
@@ -177,6 +187,15 @@ export const resendAdminSetup = createServerFn({ method: "POST" })
     return apiPost<MessageResponse>(
       `/auth/users/${encodeURIComponent(data.userId)}/resend-setup`,
       {},
+    );
+  });
+
+export const setAdminSuspension = createServerFn({ method: "POST" })
+  .validator((data: SetAdminSuspensionInput) => data)
+  .handler(async ({ data }) => {
+    return apiPost<SetAdminSuspensionResponse>(
+      `/auth/users/${encodeURIComponent(data.userId)}/suspension`,
+      { suspended: data.suspended },
     );
   });
 
