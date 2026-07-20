@@ -11,6 +11,12 @@ const FAILED_ORDER_STATUSES = new Set([
 ]);
 const ACCEPTED_PAYMENT_STATUSES = new Set(["paid", "partial"]);
 const FAILED_PAYMENT_STATUSES = new Set(["failed", "refunded"]);
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cod: "Cash on Delivery",
+  polar: "Polar",
+  sslcommerz: "SSLCommerz",
+  stripe: "Stripe",
+};
 
 export type OrderSuccessStateKind =
   | "order_placed"
@@ -81,6 +87,8 @@ export function getOrderSuccessStateKind(
 export function formatOrderSuccessLabel(value: string | null | undefined): string {
   const normalized = normalize(value);
   if (!normalized) return "Not available";
+  const knownPaymentMethod = PAYMENT_METHOD_LABELS[normalized];
+  if (knownPaymentMethod) return knownPaymentMethod;
   return normalized
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

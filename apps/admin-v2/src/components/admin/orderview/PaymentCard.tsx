@@ -60,6 +60,11 @@ import type { UpdateOrderCodInput } from "@/lib/api-functions/orders";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 import { useHydrated } from "@/hooks/use-hydrated";
+import {
+  formatSavedMajorAmount,
+  formatSavedMinorAmount,
+  resolveSavedOrderMoneySummary,
+} from "@/lib/order-tax-presentation";
 
 type CodFailureReason = Extract<
   UpdateOrderCodInput,
@@ -336,6 +341,7 @@ interface PaymentCardProps {
 
 export function PaymentCard({ order }: PaymentCardProps) {
   const { symbol } = useCurrency();
+  const savedSummary = resolveSavedOrderMoneySummary(order);
   const isHydrated = useHydrated();
   const orderActions = useOrderActionPermissions();
   const canIssuePaymentRecoveryLink = orderActions.canEditOrders;
@@ -632,40 +638,34 @@ export function PaymentCard({ order }: PaymentCardProps) {
             </Badge>
           </div>
 
-          {/* Amount breakdown */}
+          {/* Payment balance. The detailed immutable calculation lives with the order items. */}
           <div className="space-y-1.5 text-sm rounded-lg bg-muted/30 p-3">
-            {(order.shippingCharge > 0 || (order.discountAmount ?? 0) > 0) && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal</span>
-                <span>{symbol}{formatOrderAmount(order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0))}</span>
-              </div>
-            )}
-            {order.shippingCharge > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>Shipping</span>
-                <span>{symbol}{formatOrderAmount(order.shippingCharge)}</span>
-              </div>
-            )}
-            {(order.discountAmount ?? 0) > 0 && (
-              <div className="flex justify-between text-green-600">
-                <span>Discount</span>
-                <span>-{symbol}{formatOrderAmount(order.discountAmount ?? 0)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-semibold border-t border-border pt-1.5 mt-1.5">
+            <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>{symbol}{formatOrderAmount(grandTotal)}</span>
+              <span>
+                {savedSummary
+                  ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)
+                  : `${symbol}${formatOrderAmount(grandTotal)}`}
+              </span>
             </div>
             {(order.paidAmount ?? 0) > 0 && (
-              <div className="flex justify-between text-green-600">
+              <div className="flex justify-between border-t border-border pt-1.5 text-green-600">
                 <span>Paid</span>
-                <span>{symbol}{formatOrderAmount(order.paidAmount ?? 0)}</span>
+                <span>
+                  {savedSummary
+                    ? formatSavedMajorAmount(order.paidAmount ?? 0, savedSummary)
+                    : `${symbol}${formatOrderAmount(order.paidAmount ?? 0)}`}
+                </span>
               </div>
             )}
             {(order.balanceDue ?? 0) > 0 && (
-              <div className="flex justify-between text-amber-600 font-medium">
+              <div className="flex justify-between border-t border-border pt-1.5 text-amber-600 font-medium">
                 <span>Balance due</span>
-                <span>{symbol}{formatOrderAmount(order.balanceDue ?? 0)}</span>
+                <span>
+                  {savedSummary
+                    ? formatSavedMajorAmount(order.balanceDue ?? 0, savedSummary)
+                    : `${symbol}${formatOrderAmount(order.balanceDue ?? 0)}`}
+                </span>
               </div>
             )}
           </div>

@@ -116,9 +116,19 @@ const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
     : null;
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatPrice } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
+const configuredCurrencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
+const receiptCurrencyCode = savedMoneySummary?.currencyCode ?? configuredCurrencyCode;
+const receiptCurrencySymbol = savedMoneySummary
+  ? `${receiptCurrencyCode} `
+  : currencySymbol;
+const formatReceiptAmount = (amount: number) => formatPrice(amount, {
+  symbol: receiptCurrencySymbol,
+  code: receiptCurrencyCode,
+  precision: savedMoneySummary?.decimalPlaces,
+});
 const legacySubtotal = order
   ? order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)
   : 0;
@@ -137,13 +147,10 @@ const legacySubtotal = order
     {order && orderSuccessView ? (
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
       {orderSuccessView.shouldFinalizeClientSide ? (
-        <div class="success-checkmark">
-          <div class="check-icon">
-            <span class="icon-line line-tip"></span>
-            <span class="icon-line line-long"></span>
-            <div class="icon-circle"></div>
-            <div class="icon-fix"></div>
-          </div>
+        <div class="success-checkmark" aria-hidden="true">
+          <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+          </svg>
         </div>
       ) : (
         <div class={`mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full ${orderSuccessView.kind === "payment_issue" ? "bg-destructive/10 text-destructive" : "bg-amber-100 text-amber-700"}`}>
@@ -259,25 +266,25 @@ const legacySubtotal = order
             <div class="space-y-3 border-t border-gray-200 pt-4">
               <div class="flex justify-between gap-4">
                 <span class="text-gray-600">Subtotal:</span>
-                <span class="font-medium">{currencySymbol}{legacySubtotal.toFixed(2)}</span>
+                <span class="font-medium">{formatReceiptAmount(legacySubtotal)}</span>
               </div>
               {order.shippingCharge > 0 && (
                 <div class="flex justify-between gap-4">
                   <span class="text-gray-600">Shipping Charge:</span>
-                  <span class="font-medium">{currencySymbol}{order.shippingCharge.toFixed(2)}</span>
+                  <span class="font-medium">{formatReceiptAmount(order.shippingCharge)}</span>
                 </div>
               )}
               {(order.discountAmount ?? 0) > 0 && (
                 <div class="flex justify-between">
                   <span class="text-gray-600">Discount:</span>
                   <span class="font-medium text-primary">
-                    -{currencySymbol}{(order.discountAmount ?? 0).toFixed(2)}
+                    −{formatReceiptAmount(order.discountAmount ?? 0)}
                   </span>
                 </div>
               )}
               <div class="flex justify-between gap-4 border-t border-gray-200 pt-3">
                 <span class="font-semibold text-gray-900">Total Amount:</span>
-                <span class="font-semibold text-gray-900">{currencySymbol}{order.totalAmount.toFixed(2)}</span>
+                <span class="font-semibold text-gray-900">{formatReceiptAmount(order.totalAmount)}</span>
               </div>
             </div>
           )}
@@ -286,7 +293,7 @@ const legacySubtotal = order
               <div class="flex justify-between">
                 <span class="text-gray-600">Paid Amount:</span>
                 <span class="font-medium text-emerald-700">
-                  {currencySymbol}{order.paidAmount.toFixed(2)}
+                  {formatReceiptAmount(order.paidAmount)}
                 </span>
               </div>
             )
@@ -296,7 +303,7 @@ const legacySubtotal = order
               <div class="flex justify-between">
                 <span class="text-gray-600">Balance Due:</span>
                 <span class="font-medium">
-                  {currencySymbol}{order.balanceDue.toFixed(2)}
+                  {formatReceiptAmount(order.balanceDue)}
                 </span>
               </div>
             )
@@ -396,7 +403,7 @@ const legacySubtotal = order
                     <p class="text-sm text-gray-600 mt-1">
                       Quantity: {item.quantity} × {savedLine && savedMoneySummary
                         ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
-                        : `${currencySymbol}${item.price.toFixed(2)}`}
+                        : formatReceiptAmount(item.price)}
                     </p>
                     {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
                       <p class="mt-1 text-xs text-gray-500">
@@ -414,7 +421,7 @@ const legacySubtotal = order
                     <p class="font-medium">
                       {savedLine && savedMoneySummary
                         ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
-                        : `${currencySymbol}${(item.quantity * item.price).toFixed(2)}`}
+                        : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>
                 </div>
@@ -688,159 +695,28 @@ const legacySubtotal = order
 </script>
 
 <style>
-  /* Success checkmark animation */
+  /* A short, unambiguous success cue that remains visible after motion ends. */
   .success-checkmark {
     width: 80px;
     height: 80px;
     margin: 0 auto 20px;
-    position: relative;
-  }
-
-  .success-checkmark .check-icon {
-    width: 80px;
-    height: 80px;
-    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 50%;
-    box-sizing: content-box;
-    border: 4px solid var(--color-primary);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 38%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    animation: success-pop 320ms ease-out both;
   }
 
-  .success-checkmark .check-icon::before {
-    top: 3px;
-    left: -2px;
-    width: 30px;
-    transform-origin: 100% 50%;
-    border-radius: 100px 0 0 100px;
+  @keyframes success-pop {
+    from { opacity: 0; transform: scale(0.86); }
+    to { opacity: 1; transform: scale(1); }
   }
 
-  .success-checkmark .check-icon::after {
-    top: 0;
-    left: 30px;
-    width: 60px;
-    transform-origin: 0 50%;
-    border-radius: 0 100px 100px 0;
-    animation: rotate-circle 4.25s ease-in;
-  }
-
-  .success-checkmark .check-icon::before,
-  .success-checkmark .check-icon::after {
-    content: "";
-    height: 100px;
-    position: absolute;
-    background: #ffffff;
-    transform: rotate(-45deg);
-  }
-
-  .success-checkmark .check-icon .icon-line {
-    display: block;
-    border-radius: 2px;
-    position: absolute;
-    z-index: 10;
-  }
-
-  .success-checkmark .check-icon .icon-line.line-tip {
-    top: 46px;
-    left: 14px;
-    width: 25px;
-    transform: rotate(45deg);
-    animation: icon-line-tip 0.75s;
-  }
-
-  .success-checkmark .check-icon .icon-line.line-long {
-    top: 38px;
-    right: 8px;
-    width: 47px;
-    transform: rotate(-45deg);
-    animation: icon-line-long 0.75s;
-  }
-
-  .success-checkmark .check-icon .icon-circle {
-    top: -4px;
-    left: -4px;
-    z-index: 10;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    position: absolute;
-    box-sizing: content-box;
-    border: 4px solid var(--color-primary);
-  }
-
-  .success-checkmark .check-icon .icon-fix {
-    top: 8px;
-    width: 5px;
-    left: 26px;
-    z-index: 1;
-    height: 85px;
-    position: absolute;
-    transform: rotate(-45deg);
-    background-color: #ffffff;
-  }
-
-  @keyframes rotate-circle {
-    0% {
-      transform: rotate(-45deg);
-    }
-    5% {
-      transform: rotate(-45deg);
-    }
-    12% {
-      transform: rotate(-405deg);
-    }
-    100% {
-      transform: rotate(-405deg);
-    }
-  }
-
-  @keyframes icon-line-tip {
-    0% {
-      width: 0;
-      left: 1px;
-      top: 19px;
-    }
-    54% {
-      width: 0;
-      left: 1px;
-      top: 19px;
-    }
-    70% {
-      width: 50px;
-      left: -8px;
-      top: 37px;
-    }
-    84% {
-      width: 17px;
-      left: 21px;
-      top: 48px;
-    }
-    100% {
-      width: 25px;
-      left: 14px;
-      top: 46px;
-    }
-  }
-
-  @keyframes icon-line-long {
-    0% {
-      width: 0;
-      right: 46px;
-      top: 54px;
-    }
-    65% {
-      width: 0;
-      right: 46px;
-      top: 54px;
-    }
-    84% {
-      width: 55px;
-      right: 0px;
-      top: 35px;
-    }
-    100% {
-      width: 47px;
-      right: 8px;
-      top: 38px;
-    }
+  @media (prefers-reduced-motion: reduce) {
+    .success-checkmark { animation: none; }
   }
 
   /* Fade in animation */

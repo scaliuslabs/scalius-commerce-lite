@@ -37,6 +37,7 @@ describe("storefront saved order tax presentation", () => {
     });
     expect(formatSavedMinorAmount(summary!.taxMinor, summary!)).toBe("BDT 25.00");
     expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("BDT 275.00");
+    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("BDT 12,345.00");
   });
 
   it("falls back for legacy or inconsistent rows instead of inventing tax", () => {

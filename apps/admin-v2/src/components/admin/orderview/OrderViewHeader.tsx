@@ -29,6 +29,11 @@ import { useUpdateFulfillmentStatus } from "@/lib/api-mutations/orders";
 import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
+import {
+  formatSavedMinorAmount,
+  resolveSavedOrderMoneySummary,
+} from "@/lib/order-tax-presentation";
+import { formatLocationParts } from "@/lib/location-presentation";
 
 type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];
 
@@ -70,6 +75,13 @@ const InfoItem = ({
 
 export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const { symbol } = useCurrency();
+  const savedSummary = resolveSavedOrderMoneySummary(order);
+  const shippingLocation = formatLocationParts(
+    order.shippingAddress,
+    order.areaName,
+    order.zoneName,
+    order.cityName,
+  );
   const orderActions = useOrderActionPermissions();
   const fulfillmentMutation = useUpdateFulfillmentStatus();
   const activeRefundOperation = order.activeRefundOperation;
@@ -108,7 +120,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
   const PAYMENT_METHOD_LABELS: Record<string, string> = {
     stripe: "Stripe",
     sslcommerz: "SSLCommerz",
-    cod: "COD",
+    cod: "Cash on Delivery",
     polar: "Polar",
   };
 
@@ -156,12 +168,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
 
             {order.shippingAddress && (
               <InfoItem icon={MapPin} label="Shipping Address" isAddress>
-                <div>{order.shippingAddress}</div>
-                <div className="text-sm text-muted-foreground">
-                  {order.areaName && `${order.areaName}, `}
-                  {order.zoneName || "Unknown Zone"},{" "}
-                  {order.cityName || "Unknown City"}
-                </div>
+                <div>{shippingLocation}</div>
               </InfoItem>
             )}
           </div>
@@ -183,7 +190,9 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             </InfoItem>
             <InfoItem icon={DollarSign} label="Grand Total">
               <span className="font-semibold">
-                {symbol}{formatOrderAmount(grandTotal)}
+                {savedSummary
+                  ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary)
+                  : `${symbol}${formatOrderAmount(grandTotal)}`}
               </span>
             </InfoItem>
             {order.paymentStatus && (
