@@ -13,6 +13,7 @@ import {
     orderNotificationOutbox,
     orderTaxSnapshots,
     orders,
+    codTracking,
     promotionRedemptions,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -26,7 +27,7 @@ import {
     isOrderEligibleForMetaPurchase,
     processExistingMetaPurchaseOutboxForOrder,
 } from "../../integrations/meta/purchase-outbox";
-import { initCODTracking } from "../payments/cod";
+import { createCODTrackingInsertValues } from "../payments/cod";
 import {
     buildOrderCreatedNotificationDedupeKey,
     createOrderNotificationOutboxInsertValues,
@@ -473,6 +474,12 @@ function buildOrderWriteBatch(
         }),
     );
 
+    if (od.paymentMethod === "cod") {
+        writes.push(
+            db.insert(codTracking).values(createCODTrackingInsertValues(od.id)),
+        );
+    }
+
     if (payload.items.length > 0) {
         writes.push(
             db.insert(orderItems).values(
@@ -753,12 +760,6 @@ export async function runStorefrontOrderPostCommitSideEffects(
     env: StorefrontOrderCommitRuntime | undefined,
     payload: StorefrontOrderCommitPayload,
 ): Promise<void> {
-    if (payload.orderData.paymentMethod === "cod") {
-        await initCODTracking(db, { orderId: payload.orderData.id }).catch((error: unknown) =>
-            console.error("[orders/commit] COD tracking init failed for order", payload.orderData.id, error),
-        );
-    }
-
     await processExistingMetaPurchaseOutboxForOrder({
         db,
         orderId: payload.orderData.id,

@@ -725,6 +725,11 @@ describe("resolveAdminOrderItemInventory", () => {
             status: "confirmed",
             inventoryAction: "none",
         });
+        expect(insertValues).toContainEqual(expect.objectContaining({
+            orderId: expect.any(String),
+            deliveryAttempts: 0,
+            codStatus: "pending",
+        }));
     });
 
     it.each([

@@ -218,6 +218,11 @@ renders “Export current page” on desktop and mobile; the previous ambiguous
   prices for the desktop table and compact mobile item cards. A hidden or stale
   browser `price` value cannot create a staff price override.
 - Server validation requires at least one sellable line, rejects missing/deleted/mismatched SKUs, prevents an excessive discount, and commits order/customer/items, immutable order and line tax snapshots, minor-unit allocations, idempotency evidence, and inventory reservations in one D1 batch.
+- The same batch owns the initial COD tracking row. Manual admin creation and
+  storefront ingestion cannot commit a COD order that the later **Mark
+  Collected**, delivery-failure, or return-to-sender commands cannot operate on.
+  Collection remains fail closed if legacy/corrupt data lacks this evidence;
+  the UI does not silently invent payment tracking during collection.
 - Tracked inventory remains reserved while fulfillment is pending. Manual creation no longer invokes shipped semantics or deducts on-hand stock before a fulfillment command owns that transition.
 - Actor-scoped request idempotency replays the original committed result after a lost response and preserves one stock/order identity across retries.
 - Lazy-loaded SKU projections are retained beside unsaved lines, so the exact merchant option label remains visible immediately after adding it.
@@ -267,6 +272,32 @@ error. A read-only remote D1 query proved `unit_price_minor = 551080`,
 fulfillment, 24 on hand, and 3 total reservations across the SKU's open
 orders. Focused validation proves a browser-supplied legacy `price` key is
 stripped and cannot alter the quote or persisted line.
+
+**Atomic COD-tracking repair and live replay — 2026-07-20:** The live run above
+found that `L81PGQ` had committed as a valid-looking COD order without its
+required `cod_tracking` row. **Mark Collected** correctly refused to synthesize
+that evidence and reported `COD tracking record is missing for this order`.
+The root cause was two order-creation boundaries: manual creation omitted the
+row, while storefront ingestion added it only as a post-commit best-effort
+side effect. API version `f99f5d54-cc21-4304-afde-21fb451cd5c6` now puts the
+canonical pending tracking insert in both authoritative D1 batches; admin
+version `4752cb47-e0e2-4ecd-aaf7-53718314f2fb` also adds accessible,
+operator-specific descriptions to the COD collection/failure dialogs. Sixty
+focused core tests, four admin operational-boundary tests, sequential core and
+admin typechecks, and changed-file lint passed before deployment.
+
+The exact legacy demo order was repaired once with an explicit pending
+tracking row, then the live UI recorded `৳11,141.60` collected by **Own courier
+lifecycle smoke**. The order became Delivered/Paid with balance zero, one
+successful COD transaction, collected tracking evidence, and one delivery
+attempt. A completely fresh post-deploy admin order `VHQK8M` then proved the
+real creation path without repair: the browser submitted one exact Dock SKU,
+navigated to its detail route, and a read-only remote D1 query immediately
+found the order, one reserved unit, and pending `cod_tracking` row
+`fdb3ef59-b998-4fc9-b2b9-80390f9e7d21` in committed state. Opening **Mark
+Collected** showed the outstanding `৳5,510.80` plus the new explanation; the
+dialog was cancelled so the proof order remains confirmed, unpaid, and
+reserved for later lifecycle testing.
 
 ### 3. Full edit
 
@@ -409,7 +440,7 @@ proves the deployed current/empty paths, not a simulated production outage.
 
 **Implemented**
 
-- Shared state-machine validation, version CAS during status mutation, refund/payment/shipment locks, inventory reconciliation, status notification outbox integration, COD collect/fail/return actions, amount validation, and recorded COD evidence.
+- Shared state-machine validation, version CAS during status mutation, refund/payment/shipment locks, inventory reconciliation, status notification outbox integration, COD collect/fail/return actions, amount validation, recorded COD evidence, and atomic initial tracking on every COD order-creation boundary.
 
 **Proven**
 

@@ -200,6 +200,24 @@ describe("admin order list boundaries", () => {
     );
   });
 
+  it("commits manual COD tracking before the order-create attempt is finalized", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const createSource = source.slice(
+      source.indexOf("export async function createOrder"),
+      source.indexOf("interface UpdateOrderItem"),
+    );
+
+    const trackingInsert = createSource.indexOf(
+      "db.insert(codTracking).values(createCODTrackingInsertValues(orderId))",
+    );
+    const attemptCommit = createSource.indexOf(
+      "writeBatch.push(buildAdminOrderCreateAttemptCommit(db, attempt, response))",
+    );
+
+    expect(trackingInsert).toBeGreaterThan(-1);
+    expect(trackingInsert).toBeLessThan(attemptCommit);
+  });
+
   it("recomputes admin order payment state when totals are created or edited", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
 
