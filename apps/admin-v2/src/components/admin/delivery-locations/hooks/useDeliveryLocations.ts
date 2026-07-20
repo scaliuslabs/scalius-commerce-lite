@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
   deliveryLocationsQueryOptions,
+  allDeliveryLocationsQueryOptions,
   deliveryProvidersQueryOptions,
   importPathaoStatusQueryOptions,
 } from "~/lib/api-query-options/delivery";
@@ -136,12 +137,35 @@ export function useDeliveryLocations() {
   const parentType = activeTab === "zone" ? "city" : "zone";
   const parentQueryEnabled = activeTab === "zone" || activeTab === "area";
 
-  const { data: parentData, isLoading: loadingParents } = useQuery({
-    ...deliveryLocationsQueryOptions({ type: parentType, limit: 500 }),
+  const { data: parentData, isLoading: loadingParentLocations } = useQuery({
+    ...allDeliveryLocationsQueryOptions({ type: parentType }),
     enabled: parentQueryEnabled,
   });
 
-  const parentLocations = parentData?.locations ?? [];
+  const { data: parentCityData, isLoading: loadingParentCities } = useQuery({
+    ...allDeliveryLocationsQueryOptions({ type: "city" }),
+    enabled: activeTab === "area",
+  });
+
+  const parentCityNames = useMemo(
+    () => new Map(
+      (parentCityData?.locations ?? []).map((city) => [city.id, city.name]),
+    ),
+    [parentCityData?.locations],
+  );
+  const parentLocations = useMemo(
+    () => (parentData?.locations ?? []).map((location) => {
+      if (activeTab !== "area" || !location.parentId) return location;
+      const cityName = parentCityNames.get(location.parentId);
+      return {
+        ...location,
+        displayName: cityName ? `${location.name} — ${cityName}` : location.name,
+      };
+    }),
+    [activeTab, parentCityNames, parentData?.locations],
+  );
+  const loadingParents = loadingParentLocations ||
+    (activeTab === "area" && loadingParentCities);
 
   // Pathao provider check
   const { data: providersData } = useQuery(deliveryProvidersQueryOptions());

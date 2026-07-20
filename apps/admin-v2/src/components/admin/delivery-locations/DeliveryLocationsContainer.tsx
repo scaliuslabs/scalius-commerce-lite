@@ -2,13 +2,7 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../ui/tabs";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../../ui/select";
+import { SearchableSelect } from "../../ui/searchable-select";
 import { useDeliveryLocations } from "./hooks/useDeliveryLocations";
 import { LocationsTable } from "./LocationsTable";
 import { LocationFormDialog } from "./LocationFormDialog";
@@ -102,32 +96,36 @@ export function DeliveryLocationsContainer() {
 
           {state.activeTab !== "city" && (
             <div className="w-full sm:w-64">
-              <Select
+              <SearchableSelect
                 value={state.selectedParent || "_all"}
                 onValueChange={(value) =>
                   state.setSelectedParent(value === "_all" ? null : value)
                 }
-              >
-                <SelectTrigger className="bg-background border-border text-foreground">
-                  <SelectValue
-                    placeholder={`Filter by ${state.activeTab === "zone" ? "city" : "zone"}`}
-                  />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border text-foreground">
-                  <SelectItem value="_all" className="text-foreground">
-                    All {state.activeTab === "zone" ? "Cities" : "Zones"}
-                  </SelectItem>
-                  {state.parentLocations.map((parent) => (
-                    <SelectItem
-                      key={parent.id}
-                      value={parent.id}
-                      className="text-foreground"
-                    >
-                      {parent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                options={[
+                  {
+                    value: "_all",
+                    label: `All ${state.activeTab === "zone" ? "cities" : "zones"}`,
+                  },
+                  ...state.parentLocations.map((parent) => ({
+                    value: parent.id,
+                    label: `${parent.displayName ?? parent.name}${
+                      parent.isActive ? "" : " (inactive)"
+                    }`,
+                    keywords: parent.displayName ? [parent.name] : undefined,
+                  })),
+                ]}
+                placeholder={
+                  state.loadingParents
+                    ? `Loading ${state.activeTab === "zone" ? "cities" : "zones"}…`
+                    : `All ${state.activeTab === "zone" ? "cities" : "zones"}`
+                }
+                searchPlaceholder={`Search ${state.activeTab === "zone" ? "cities" : "zones"}…`}
+                emptyMessage={`No ${state.activeTab === "zone" ? "cities" : "zones"} found.`}
+                ariaLabel={`Filter ${labels.plural} by ${state.activeTab === "zone" ? "city" : "zone"}`}
+                triggerClassName="w-full"
+                maxVisibleOptions={100}
+                disabled={state.loadingParents}
+              />
             </div>
           )}
         </div>

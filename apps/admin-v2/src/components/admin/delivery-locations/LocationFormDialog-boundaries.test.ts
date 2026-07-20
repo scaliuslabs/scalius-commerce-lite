@@ -25,4 +25,25 @@ describe("LocationFormDialog external mapping boundaries", () => {
     expect(source).toContain("normalizeExternalIds");
     expect(source).toContain("next.pathao = Number(pathaoId.trim())");
   });
+
+  it("uses a searchable, bounded parent selector for large location trees", () => {
+    const source = readFileSync(FORM_SOURCE, "utf8");
+
+    expect(source).toContain("<SearchableSelect");
+    expect(source).toContain("maxVisibleOptions={100}");
+    expect(source).toContain("parent.displayName ?? parent.name");
+    expect(source).toContain("disabled: formData.isActive && !parent.isActive");
+    expect(source).toContain('parentLabel === "City" ? "cities" : "zones"');
+    expect(source).not.toContain("citys");
+    expect(source).not.toContain("<SelectContent");
+  });
+
+  it("loads every parent page and disambiguates zones by city", () => {
+    const source = readFileSync(HOOK_SOURCE, "utf8");
+
+    expect(source).toContain("allDeliveryLocationsQueryOptions({ type: parentType })");
+    expect(source).toContain('allDeliveryLocationsQueryOptions({ type: "city" })');
+    expect(source).toContain("`${location.name} — ${cityName}`");
+    expect(source).not.toContain("type: parentType, limit: 500");
+  });
 });

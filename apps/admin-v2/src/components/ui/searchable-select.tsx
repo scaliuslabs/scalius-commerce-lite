@@ -24,6 +24,8 @@ interface SearchableSelectProps {
   searchPlaceholder?: string;
   emptyMessage?: string;
   disabled?: boolean;
+  required?: boolean;
+  maxVisibleOptions?: number;
   id?: string;
   ariaLabel?: string;
   triggerClassName?: string;
@@ -42,6 +44,8 @@ export function SearchableSelect({
   searchPlaceholder = "Search options...",
   emptyMessage = "No options found.",
   disabled = false,
+  required = false,
+  maxVisibleOptions,
   id,
   ariaLabel,
   triggerClassName,
@@ -54,19 +58,51 @@ export function SearchableSelect({
   const listId = React.useId();
   const selectedOption = options.find((option) => option.value === value);
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const filteredOptions = options.filter((option) => {
-    if (!normalizedQuery) return true;
-    return [option.label, option.value, ...(option.keywords ?? [])].some((term) =>
-      term.toLocaleLowerCase().includes(normalizedQuery),
+  const filteredOptions = React.useMemo(
+    () => options.filter((option) => {
+      if (!normalizedQuery) return true;
+      return [option.label, option.value, ...(option.keywords ?? [])].some(
+        (term) => term.toLocaleLowerCase().includes(normalizedQuery),
+      );
+    }),
+    [normalizedQuery, options],
+  );
+  const boundedVisibleLimit = maxVisibleOptions === undefined
+    ? undefined
+    : Math.max(1, Math.trunc(maxVisibleOptions));
+  const visibleOptions = React.useMemo(() => {
+    if (
+      boundedVisibleLimit === undefined ||
+      filteredOptions.length <= boundedVisibleLimit
+    ) {
+      return filteredOptions;
+    }
+
+    const firstOptions = filteredOptions.slice(0, boundedVisibleLimit);
+    const selectedFilteredOption = filteredOptions.find(
+      (option) => option.value === value,
     );
-  });
-  const selectableIndexes = filteredOptions.flatMap((option, index) =>
+
+    if (
+      !selectedFilteredOption ||
+      firstOptions.some((option) => option.value === selectedFilteredOption.value)
+    ) {
+      return firstOptions;
+    }
+
+    return [
+      selectedFilteredOption,
+      ...firstOptions.slice(0, Math.max(0, boundedVisibleLimit - 1)),
+    ];
+  }, [boundedVisibleLimit, filteredOptions, value]);
+  const hiddenOptionCount = filteredOptions.length - visibleOptions.length;
+  const selectableIndexes = visibleOptions.flatMap((option, index) =>
     option.disabled ? [] : [index],
   );
   const safeActiveIndex = selectableIndexes.includes(activeIndex)
     ? activeIndex
     : (selectableIndexes[0] ?? 0);
-  const activeOption = filteredOptions[safeActiveIndex];
+  const activeOption = visibleOptions[safeActiveIndex];
 
   const focusSearch = React.useCallback(() => {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -109,6 +145,7 @@ export function SearchableSelect({
           aria-controls={listId}
           aria-expanded={open}
           aria-haspopup="listbox"
+          aria-required={required || undefined}
           disabled={disabled}
           className={cn(
             "h-9 min-w-0 justify-between gap-2 px-3 text-sm font-normal",
@@ -182,11 +219,11 @@ export function SearchableSelect({
             data-slot="searchable-select-list"
             className="max-h-60 overflow-y-auto overscroll-contain p-1"
           >
-            {filteredOptions.length === 0 ? (
+            {visibleOptions.length === 0 ? (
               <p className="px-3 py-5 text-center text-sm text-muted-foreground">
                 {emptyMessage}
               </p>
-            ) : filteredOptions.map((option, index) => (
+            ) : visibleOptions.map((option, index) => (
               <button
                 key={option.value}
                 id={`${listId}-option-${index}`}
@@ -215,6 +252,14 @@ export function SearchableSelect({
                 <span className="min-w-0 truncate">{option.label}</span>
               </button>
             ))}
+            {hiddenOptionCount > 0 ? (
+              <p
+                data-slot="searchable-select-overflow-hint"
+                className="border-t px-3 py-2 text-xs text-muted-foreground"
+              >
+                Showing {visibleOptions.length} of {filteredOptions.length}. Search to narrow results.
+              </p>
+            ) : null}
           </div>
         </div>
       </PopoverContent>
