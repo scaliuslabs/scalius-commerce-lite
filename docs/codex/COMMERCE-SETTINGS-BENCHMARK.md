@@ -454,6 +454,13 @@ Explicit Scalius decisions:
   result. The production list then showed the active code, combined outcome,
   minimum-subtotal requirement, and no-end-date schedule without reopening the
   form.
+- A subsequent buyer checkout committed order `8HOECG` with `৳10,280`
+  merchandise, free delivery, and an exact `৳1,028` order allocation. D1 held
+  one matching redemption plus two immutable line allocations (`৳379` and
+  `৳649`). The list and editor now expose committed uses and discount-spend
+  consumption, while order detail attributes the saved promotion name, code,
+  and revision and labels each line amount as its promotion share. These are
+  saved-order facts rather than a recalculation of the current rule.
 
 ### Builder information architecture
 

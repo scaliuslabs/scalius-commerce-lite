@@ -28,6 +28,7 @@ import {
   createPromotionDraft,
   draftsEqual,
   hydratePromotionDraft,
+  promotionUsageSummary,
   summarizePromotionDraft,
   type PromotionEditorDraft,
   type PromotionTarget,
@@ -182,6 +183,7 @@ export function PromotionBuilder({
     && !isDirty
     && Boolean(promotion);
   const outcomeSummary = summarizePromotionDraft(draft, symbol);
+  const usageSummary = promotion ? promotionUsageSummary(promotion, symbol) : null;
   const displayPromotion = promotion
     ? { ...promotion, status: serverStatus, revision: serverRevision ?? promotion.revision }
     : null;
@@ -556,6 +558,18 @@ export function PromotionBuilder({
                   <div className="text-base font-semibold tabular-nums">{serverRevision ?? "—"}</div>
                   <div className="text-[11px] text-muted-foreground">revision</div>
                 </div>
+                {usageSummary ? (
+                  <>
+                    <div className="bg-background px-2 py-2.5">
+                      <div className="truncate text-sm font-semibold tabular-nums">{usageSummary.uses.replace(/ uses?$/u, "")}</div>
+                      <div className="text-[11px] text-muted-foreground">committed uses</div>
+                    </div>
+                    <div className="bg-background px-2 py-2.5">
+                      <div className="truncate text-sm font-semibold tabular-nums">{usageSummary.spend ?? `${symbol}0`}</div>
+                      <div className="text-[11px] text-muted-foreground">discount spend</div>
+                    </div>
+                  </>
+                ) : null}
               </div>
               {payload.readiness.saveIssues.length > 0 ? (
                 <ul className="space-y-1.5 rounded-lg bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">

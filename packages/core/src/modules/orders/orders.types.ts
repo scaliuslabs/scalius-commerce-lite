@@ -136,6 +136,15 @@ export interface OrderDetails extends OrderListItem {
     totalAmountMinor: number | null;
     taxLabel: string | null;
     pricesIncludeTax: boolean;
+    /** Immutable promotion attribution captured when the order committed. */
+    promotion: {
+        id: string;
+        revision: number;
+        evaluatorVersion: number;
+        method: "automatic" | "code";
+        name: string;
+        code: string | null;
+    } | null;
     items: {
         id: string;
         productId: string;

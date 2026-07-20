@@ -147,6 +147,14 @@ export interface Order {
   totalAmountMinor?: number | null;
   taxLabel?: string | null;
   pricesIncludeTax?: boolean | null;
+  promotion?: {
+    id: string;
+    revision: number;
+    evaluatorVersion: number;
+    method: "automatic" | "code";
+    name: string;
+    code: string | null;
+  } | null;
   customerId: string | null;
   cityName?: string;
   zoneName?: string;

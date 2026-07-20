@@ -21,6 +21,7 @@ import {
     codTracking,
     refundAttempts,
     paymentPlans,
+    orderDiscountAllocations,
     OrderStatus,
     PaymentMethod,
     PaymentPlanStatus,
@@ -1681,7 +1682,7 @@ async function getOrderDetailsOnce(
 
     if (!order) return null;
 
-    const [items, latestShipments, refundAttemptViews, supportRequests] = await Promise.all([
+    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows] = await Promise.all([
         db
             .select({
                 id: orderItems.id,
@@ -1728,6 +1729,19 @@ async function getOrderDetailsOnce(
             .limit(1),
         listOrderRefundAttempts(db, id, { audience: "admin" }),
         listOrderSupportRequests(db, id),
+        db
+            .select({
+                id: orderDiscountAllocations.promotionId,
+                revision: orderDiscountAllocations.promotionRevision,
+                evaluatorVersion: orderDiscountAllocations.evaluatorVersion,
+                method: orderDiscountAllocations.method,
+                name: orderDiscountAllocations.promotionName,
+                code: orderDiscountAllocations.promotionCode,
+            })
+            .from(orderDiscountAllocations)
+            .where(eq(orderDiscountAllocations.orderId, id))
+            .orderBy(orderDiscountAllocations.id)
+            .limit(1),
     ]);
 
     const formattedItems = items.map((item) => ({
@@ -1774,6 +1788,7 @@ async function getOrderDetailsOnce(
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,
+        promotion: promotionRows[0] ?? null,
         items: formattedItems,
         latestShipment,
         shipmentRecovery: buildShipmentRecoverySummary(order, latestShipment, nowSeconds),
