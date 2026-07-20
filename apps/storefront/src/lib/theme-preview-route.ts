@@ -85,6 +85,20 @@ export function normalizeThemePreviewDevice(value: unknown): ThemePreviewDevice 
 }
 
 /**
+ * Keep the preview canvas addressable without touching its cookie-held bearer.
+ * The returned URL preserves the selected storefront path and any harmless
+ * route query while replacing only the bounded preview-device control.
+ */
+export function createThemePreviewDeviceUrl(
+  currentUrl: string,
+  device: unknown,
+): string {
+  const parsed = new URL(currentUrl);
+  parsed.searchParams.set("device", normalizeThemePreviewDevice(device));
+  return parsed.toString();
+}
+
+/**
  * Theme-preview tokens may be accepted only from the configured dashboard
  * origin. Never derive this authority from Referrer or a request parameter.
  */

@@ -121,18 +121,41 @@ if (token && !preview) {
       </main>
     )}
     <script>
+      import {
+        createThemePreviewDeviceUrl,
+        normalizeThemePreviewDevice,
+      } from "@/lib/theme-preview-route";
+
       const frame = document.querySelector<HTMLElement>("[data-preview-frame]");
       const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-device]"));
+
+      const renderDevice = (value: unknown) => {
+        const device = normalizeThemePreviewDevice(value);
+        if (!frame) return;
+        frame.dataset.device = device;
+        for (const candidate of buttons) {
+          candidate.setAttribute(
+            "aria-pressed",
+            candidate.dataset.device === device ? "true" : "false",
+          );
+        }
+      };
+
       for (const button of buttons) {
         button.addEventListener("click", () => {
           const device = button.dataset.device;
           if (!frame || !device) return;
-          frame.dataset.device = device;
-          for (const candidate of buttons) {
-            candidate.setAttribute("aria-pressed", candidate === button ? "true" : "false");
+          const nextUrl = createThemePreviewDeviceUrl(window.location.href, device);
+          if (nextUrl !== window.location.href) {
+            window.history.pushState(null, "", nextUrl);
           }
+          renderDevice(device);
         });
       }
+
+      window.addEventListener("popstate", () => {
+        renderDevice(new URL(window.location.href).searchParams.get("device"));
+      });
     </script>
   </body>
 </html>
