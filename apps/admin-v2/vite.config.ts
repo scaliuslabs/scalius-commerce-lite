@@ -29,13 +29,13 @@ export default defineConfig({
   },
   plugins: [
     // Official TanStack Start + Cloudflare plugin order:
-    // tailwind → cloudflare → tanstackStart → react
-    tailwindcss(),
+    // cloudflare → tanstackStart → react
     cloudflare({
       viteEnvironment: { name: "ssr" },
       persistState: { path: persistStatePath },
     }),
     tanstackStart(),
     viteReact(),
+    tailwindcss(),
   ],
 });

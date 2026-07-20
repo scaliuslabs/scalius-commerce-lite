@@ -31,7 +31,7 @@
     "@scalius/shared": "workspace:*",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "astro": "^7.1.1",
+    "astro": "^7.1.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "embla-carousel-react": "^8.6.0",
@@ -49,14 +49,14 @@
     "typescript": "^6.0.3"
   },
   "devDependencies": {
-    "@astrojs/cloudflare": "^14.1.3",
-    "@cloudflare/workers-types": "^4.20260702.1",
+    "@astrojs/cloudflare": "^14.1.4",
+    "@cloudflare/workers-types": "^5.20260719.1",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.1",
     "happy-dom": "^20.10.3",
     "prettier": "^3.8.4",
     "prettier-plugin-astro": "^0.14.1",
-    "vite": "^8.1.0",
-    "wrangler": "4.107.1"
+    "vite": "^8.1.5",
+    "wrangler": "4.112.0"
   }
 }
