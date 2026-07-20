@@ -1150,6 +1150,24 @@ The cleanup bullets below describe the two-product proof store that preceded the
   parity; those controls remain deliberately absent until the evaluator and
   immutable allocation authority support them.
 
+### Promotion commitment and merchant-observability checkpoint (2026-07-20)
+
+- A fresh guest checkout applied `WEEKENDSHIP` to Echo Mini Bluetooth Speaker
+  and Weekender Duffel 35L Olive. The buyer cart and payment review both held
+  `৳10,280` merchandise, `৳0` delivery, `৳1,028` discount, and `৳9,252`
+  total; COD committed order `8HOECG` without changing those amounts.
+- Remote D1 proof found one `৳1,028` redemption and two immutable allocation
+  rows totalling exactly `৳1,028`. Order detail now identifies `Welcome order
+  + delivery`, code `WEEKENDSHIP`, saved revision 4, and the `৳379`/`৳649`
+  promotion shares. Promotions list and editor expose `1 / 100` committed uses
+  and `৳1,028 / ৳100,000` spend instead of hiding budget consumption.
+- API version `5a5746fb-69c4-4a03-a97e-131f61e6ad21` and Admin version
+  `04a2316c-7aeb-46bd-b54c-c6ced1c77f64` are live. Twenty-one focused files
+  passed 170 tests, and Core, API client, API, Admin, and Database typechecks
+  passed sequentially. The current commit authority remains deliberately
+  code-only and one-promotion-per-order; the UI does not advertise automatic
+  or stacked rules that checkout cannot yet honor.
+
 ### Checkout payment-policy recovery checkpoint (2026-07-20)
 
 - A live buyer entered checkout under **Standard** with SSLCommerz saved as the

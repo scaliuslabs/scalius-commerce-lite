@@ -2,13 +2,18 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   CalendarClock,
+  Gauge,
   Search,
   Sparkles,
   TicketPercent,
 } from "lucide-react";
 
 import { PromotionStatusBadge } from "./PromotionStatusBadge";
-import { filterPromotions, minorToMajor } from "./promotion-editor-model";
+import {
+  filterPromotions,
+  minorToMajor,
+  promotionUsageSummary,
+} from "./promotion-editor-model";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
@@ -118,6 +123,25 @@ function CodeStack({ promotion }: { promotion: PromotionAggregate }) {
   );
 }
 
+function PromotionUsage({
+  promotion,
+  currencySymbol,
+}: {
+  promotion: PromotionAggregate;
+  currencySymbol: string;
+}) {
+  const usage = promotionUsageSummary(promotion, currencySymbol);
+  return (
+    <div className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground">
+      <Gauge className="mt-0.5 size-3.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-medium text-foreground/80">{usage.uses}</p>
+        {usage.spend ? <p className="truncate">{usage.spend}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function PromotionCard({
   promotion,
   currencySymbol,
@@ -143,6 +167,7 @@ function PromotionCard({
       <p className="mt-1 text-xs text-muted-foreground">
         {requirementSummary(promotion, currencySymbol)}
       </p>
+      <div className="mt-3"><PromotionUsage promotion={promotion} currencySymbol={currencySymbol} /></div>
       <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
         <span className="flex min-w-0 items-center gap-1.5 truncate">
           <CalendarClock className="size-3.5 shrink-0" />
@@ -238,11 +263,12 @@ export function PromotionList({
             <table className="w-full table-fixed text-sm">
               <thead className="border-b bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="w-[28%] px-4 py-2.5">Promotion</th>
-                  <th className="w-[29%] px-4 py-2.5">Outcome</th>
-                  <th className="w-[22%] px-4 py-2.5">Schedule</th>
-                  <th className="w-[13%] px-4 py-2.5">Status</th>
-                  <th className="w-[8%] px-4 py-2.5"><span className="sr-only">Actions</span></th>
+                  <th className="w-[25%] px-4 py-2.5">Promotion</th>
+                  <th className="w-[27%] px-4 py-2.5">Outcome</th>
+                  <th className="w-[17%] px-4 py-2.5">Usage</th>
+                  <th className="w-[17%] px-4 py-2.5">Schedule</th>
+                  <th className="w-[10%] px-4 py-2.5">Status</th>
+                  <th className="w-[4%] px-4 py-2.5"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -263,6 +289,9 @@ export function PromotionList({
                       <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                         {requirementSummary(promotion, currencySymbol)}
                       </p>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <PromotionUsage promotion={promotion} currencySymbol={currencySymbol} />
                     </td>
                     <td className="px-4 py-3 align-top text-sm text-muted-foreground">
                       {formatSchedule(promotion)}

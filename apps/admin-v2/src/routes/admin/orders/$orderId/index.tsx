@@ -120,6 +120,7 @@ function toOrderViewModel(
     totalAmountMinor: order.totalAmountMinor,
     taxLabel: order.taxLabel,
     pricesIncludeTax: order.pricesIncludeTax,
+    promotion: order.promotion,
     customerId: order.customerId,
     cityName: toOptionalString(order.cityName),
     zoneName: toOptionalString(order.zoneName),

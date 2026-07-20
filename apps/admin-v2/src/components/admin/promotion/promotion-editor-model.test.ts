@@ -6,6 +6,7 @@ import {
   createPromotionDraft,
   epochSecondsToZonedLocal,
   majorToMinor,
+  promotionUsageSummary,
   zonedLocalToEpochSeconds,
 } from "./promotion-editor-model";
 
@@ -27,6 +28,26 @@ describe("promotion editor model", () => {
     expect(majorToMinor("10.05", "BDT")).toBe(1005);
     expect(majorToMinor("10.005", "BDT")).toBeNull();
     expect(majorToMinor("500", "JPY")).toBe(500);
+  });
+
+  it("presents committed promotion usage against merchant budgets", () => {
+    expect(promotionUsageSummary({
+      redemptionCount: 1,
+      maxRedemptions: 100,
+      discountSpendMinor: 102_800,
+      maxDiscountSpendMinor: 10_000_000,
+      budgetCurrencyCode: "BDT",
+    }, "৳")).toEqual({
+      uses: "1 / 100 uses",
+      spend: "৳1028 / ৳100000",
+    });
+    expect(promotionUsageSummary({
+      redemptionCount: 0,
+      maxRedemptions: null,
+      discountSpendMinor: 0,
+      maxDiscountSpendMinor: null,
+      budgetCurrencyCode: null,
+    }, "৳")).toEqual({ uses: "0 uses", spend: null });
   });
 
   it("round trips schedule wall time through the selected timezone", () => {

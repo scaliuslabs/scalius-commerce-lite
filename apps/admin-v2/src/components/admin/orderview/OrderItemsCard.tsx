@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package, ArrowRight } from "lucide-react";
+import { Package, ArrowRight, TicketPercent } from "lucide-react";
 import type { Order, OrderItem } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatOrderAmount } from "./formatters";
@@ -20,10 +20,12 @@ const OrderItemRow = ({
   item,
   symbol,
   savedSummary,
+  hasPromotion,
 }: {
   item: OrderItem;
   symbol: string;
   savedSummary: SavedOrderMoneySummary | null;
+  hasPromotion: boolean;
 }) => {
   const savedLine = resolveSavedOrderLineMoney(item, savedSummary);
   const unitPrice = savedLine && savedSummary
@@ -78,7 +80,7 @@ const OrderItemRow = ({
           </Link>
           {savedLine && savedSummary && savedLine.discountMinor > 0 && (
             <p className="text-xs text-muted-foreground">
-              Item discount: −{formatSavedMinorAmount(savedLine.discountMinor, savedSummary)}
+              {hasPromotion ? "Promotion share" : "Item discount"}: −{formatSavedMinorAmount(savedLine.discountMinor, savedSummary)}
             </p>
           )}
           {savedLine && savedSummary && savedLine.taxMinor > 0 && (
@@ -139,13 +141,43 @@ export function OrderItemsCard({ order }: OrderItemsCardProps) {
       <CardContent className="p-0">
         <div className="divide-y divide-border">
           {order.items.map((item) => (
-            <OrderItemRow key={item.id} item={item} symbol={symbol} savedSummary={savedSummary} />
+            <OrderItemRow
+              key={item.id}
+              item={item}
+              symbol={symbol}
+              savedSummary={savedSummary}
+              hasPromotion={Boolean(order.promotion)}
+            />
           ))}
         </div>
 
         {/* Order Summary */}
         <div className="border-t border-border bg-muted/5 p-4">
           <div className="ml-auto w-full space-y-1.5 sm:w-80">
+            {order.promotion ? (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border bg-background px-3 py-2.5 text-xs">
+                <TicketPercent className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Link
+                      to="/admin/promotions/$promotionId/edit"
+                      params={{ promotionId: order.promotion.id }}
+                      className="truncate font-medium underline-offset-4 hover:underline"
+                    >
+                      {order.promotion.name}
+                    </Link>
+                    {order.promotion.code ? (
+                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">
+                        {order.promotion.code}
+                      </code>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Saved promotion revision {order.promotion.revision}
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {savedSummary ? (
               <>
                 <SummaryRow label="Subtotal" value={formatSavedMinorAmount(savedSummary.subtotalMinor, savedSummary)} />

@@ -118971,6 +118971,47 @@
                         "pricesIncludeTax": {
                           "type": "boolean"
                         },
+                        "promotion": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "revision": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "evaluatorVersion": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true
+                            },
+                            "method": {
+                              "type": "string",
+                              "enum": [
+                                "automatic",
+                                "code"
+                              ]
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "revision",
+                            "evaluatorVersion",
+                            "method",
+                            "name",
+                            "code"
+                          ]
+                        },
                         "status": {
                           "type": "string"
                         },
@@ -119788,6 +119829,7 @@
                         "totalAmountMinor",
                         "taxLabel",
                         "pricesIncludeTax",
+                        "promotion",
                         "status",
                         "paymentStatus",
                         "paymentMethod",

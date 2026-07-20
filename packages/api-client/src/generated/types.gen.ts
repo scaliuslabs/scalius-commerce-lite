@@ -34332,6 +34332,14 @@ export type GetApiV1AdminOrdersByIdResponses = {
             totalAmountMinor: number | null;
             taxLabel: string | null;
             pricesIncludeTax: boolean;
+            promotion: {
+                id: string;
+                revision: number;
+                evaluatorVersion: number;
+                method: 'automatic' | 'code';
+                name: string;
+                code: string | null;
+            } | null;
             status: string;
             paymentStatus: string | null;
             paymentMethod: string | null;

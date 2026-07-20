@@ -250,6 +250,30 @@ export function minorToMajor(value: number, currencyCode: string): string {
   return precision === 0 ? result : result.replace(/\.0+$/u, "").replace(/(\.\d*?)0+$/u, "$1");
 }
 
+export function promotionUsageSummary(
+  promotion: Pick<
+    PromotionAggregate,
+    | "redemptionCount"
+    | "maxRedemptions"
+    | "discountSpendMinor"
+    | "maxDiscountSpendMinor"
+    | "budgetCurrencyCode"
+  >,
+  currencySymbol: string,
+): { uses: string; spend: string | null } {
+  const uses = promotion.maxRedemptions === null
+    ? `${promotion.redemptionCount} ${promotion.redemptionCount === 1 ? "use" : "uses"}`
+    : `${promotion.redemptionCount} / ${promotion.maxRedemptions} uses`;
+  const currencyCode = promotion.budgetCurrencyCode ?? "BDT";
+  const usedSpend = `${currencySymbol}${minorToMajor(promotion.discountSpendMinor, currencyCode)}`;
+  const spend = promotion.maxDiscountSpendMinor !== null
+    ? `${usedSpend} / ${currencySymbol}${minorToMajor(promotion.maxDiscountSpendMinor, currencyCode)}`
+    : promotion.discountSpendMinor > 0
+      ? `${usedSpend} spent`
+      : null;
+  return { uses, spend };
+}
+
 function timezoneIsValid(timezone: string): boolean {
   try {
     new Intl.DateTimeFormat("en", { timeZone: timezone }).format(0);
