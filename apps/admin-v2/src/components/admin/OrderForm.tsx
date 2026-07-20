@@ -378,6 +378,23 @@ export function OrderForm({
           className="-mt-4 pb-6 space-y-4"
           noValidate
         >
+          <div className="flex min-h-8 items-center px-1">
+            <h1 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+              {isEdit ? (
+                <>
+                  Edit order
+                  {defaultValues?.id ? (
+                    <>
+                      {" "}
+                      <span className="ml-2 font-mono text-sm font-medium text-muted-foreground">
+                        #{defaultValues.id}
+                      </span>
+                    </>
+                  ) : null}
+                </>
+              ) : "New order"}
+            </h1>
+          </div>
           <OrderFormProvider
             form={form}
             products={products}

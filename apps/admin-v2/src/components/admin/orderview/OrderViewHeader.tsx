@@ -118,9 +118,10 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
         {/* Customer Info */}
         <div className="lg:col-span-5">
           <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h2 className="text-xl font-semibold text-foreground">
+            <h1 className="text-xl font-semibold text-foreground">
+              <span className="sr-only">Order #{order.id} for </span>
               {order.customerName}
-            </h2>
+            </h1>
             {getStatusBadge(order.status)}
             {order.customerId && (
               <Link

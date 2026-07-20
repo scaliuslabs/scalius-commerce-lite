@@ -12,7 +12,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Table,
@@ -433,7 +432,7 @@ export function InventoryManager({
       <CardHeader className="px-2 pt-2 pb-1.5 sm:px-3 sm:pt-3 sm:pb-2 border-b">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-base font-semibold tracking-tight">Inventory</CardTitle>
+            <h1 className="text-base font-semibold tracking-tight">Inventory</h1>
             <CardDescription className="mt-0 text-xs text-muted-foreground">
               Monitor stock levels, adjust quantities, and track movements across {stats?.totalVariants || 0} variants.
             </CardDescription>

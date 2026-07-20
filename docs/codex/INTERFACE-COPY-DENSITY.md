@@ -1,6 +1,6 @@
 # Admin Interface Copy and Density Contract
 
-Last reviewed: 2026-07-14
+Last reviewed: 2026-07-20
 
 Status: accepted design rule for new work and incremental admin audits. This is
 not permission for an indiscriminate dashboard-wide copy deletion.
@@ -30,8 +30,12 @@ keyboard users must receive the same meaning without hover.
 
 ## Page budget
 
-- One page title. Add one short subtitle only when the title and navigation do
-  not already establish scope.
+- One page title, rendered as the route's single semantic `h1`. Its visual size
+  follows the workspace density; semantic correctness is not a reason to add a
+  large hero block. Reusable picker/dialog content uses `h2` beneath the
+  dialog's accessible title, while the same content uses `h1` on its standalone
+  route. Add one short subtitle only when the title and navigation do not
+  already establish scope.
 - A primary section may have a short heading. Do not repeat the page subtitle in
   the section, tab, empty state, and card.
 - A field always keeps its label. Add helper text only for a non-obvious format,
@@ -84,4 +88,3 @@ instructions into hover-only UI.
 - Atlassian's content guidance favors clear, concise UI sentences and reserves
   tooltips for unavoidable truncation and icon-button accessibility.
   <https://atlassian.design/foundations/content/language-and-grammar>
-

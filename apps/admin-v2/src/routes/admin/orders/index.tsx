@@ -43,7 +43,7 @@ import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { getOrderColumns } from "~/components/admin/data-table/columns/order-columns";
 import { OrderToolbar } from "~/components/admin/data-table/toolbars/OrderToolbar";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { ShoppingBag } from "lucide-react";
 import { OrderMobileCard } from "~/components/admin/order-list/OrderMobileCard";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -1207,9 +1207,9 @@ function OrdersPage() {
       <Card className="overflow-hidden border border-border bg-card shadow-sm backdrop-blur-xl">
         <CardHeader className="space-y-1 pb-3">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
               {showTrashed ? "Archived Orders" : "Orders"}
-            </CardTitle>
+            </h1>
             {!showTrashed && (
               <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
                 {pagination.total}{" "}
