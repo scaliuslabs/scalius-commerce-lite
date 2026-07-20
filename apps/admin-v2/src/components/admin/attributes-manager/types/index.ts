@@ -135,4 +135,3 @@ export interface AttributeDeleteDialogProps {
   onOpenChange: () => void;
   onConfirm: () => void;
 }
-

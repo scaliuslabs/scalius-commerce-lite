@@ -22,7 +22,7 @@ export interface Product {
       discountAmount?: number | null;
     }[];
   }
-  
+
   export interface DeliveryLocation {
     id: string;
     name: string;
@@ -33,21 +33,21 @@ export interface Product {
     isActive: boolean;
     sortOrder: number;
   }
-  
+
   export interface OrderItem {
     productId: string;
     variantId: string | null;
     quantity: number;
     price: number;
   }
-  
+
   // This will be useful for the new, refactored OrderForm props
   export interface OrderFormProps {
     products: Product[];
     defaultValues?: Partial<z.infer<typeof orderFormSchema>>;
     isEdit?: boolean;
   }
-  
+
   // We need to import z and define the schema here to use it in OrderFormProps
   // This avoids circular dependencies later.
   import { z } from "zod";
@@ -103,5 +103,5 @@ export interface Product {
       .min(0, "Shipping charge must be greater than or equal to 0"),
     status: z.string().min(1, "Status is required").optional(),
   });
-  
+
   export type OrderFormValues = z.infer<typeof orderFormSchema>;

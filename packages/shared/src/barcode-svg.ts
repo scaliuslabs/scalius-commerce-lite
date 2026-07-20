@@ -198,4 +198,3 @@ export function generateBarcodeSvg(
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${totalHeight}" width="${totalWidth}" height="${totalHeight}">${bars}${text}</svg>`;
 }
-

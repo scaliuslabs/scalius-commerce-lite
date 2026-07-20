@@ -11,4 +11,3 @@ export function getPurgeTokenFromHeaders(headers: Headers): string | null {
 
   return headers.get(PURGE_TOKEN_HEADER)?.trim() || null;
 }
-

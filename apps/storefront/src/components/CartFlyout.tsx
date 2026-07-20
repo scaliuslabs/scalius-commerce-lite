@@ -188,7 +188,7 @@ export default function CartFlyout() {
         <SheetDescription className="sr-only">
           Review cart items, change quantities, or continue to checkout.
         </SheetDescription>
-        {/* 
+        {/*
           SWIPE ZONE (Mobile Only)
           Visible drag handle with animation to suggest pulling down
         */}

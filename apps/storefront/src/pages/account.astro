@@ -57,7 +57,7 @@ const layoutData = await getLayoutData();
 
     <!-- Authenticated state -->
     <div id="authState" class="hidden max-w-5xl mx-auto">
-      
+
       <!-- Top header / Breadcrumb area (optional) -->
       <div class="flex items-center justify-between mb-8">
         <h1 class="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Account Overview</h1>
@@ -76,7 +76,7 @@ const layoutData = await getLayoutData();
       <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
         <!-- Sidebar: Profile & Delivery -->
         <div class="w-full lg:w-1/3 space-y-6">
-          
+
           <!-- Identity Card -->
           <div class="bg-muted rounded-2xl p-6 sm:p-8">
             <div class="flex items-start justify-between mb-6">
@@ -398,7 +398,7 @@ const layoutData = await getLayoutData();
            <div class="divide-y divide-border">
              ${itemDetails}
            </div>
-           
+
            <div class="mt-3 pt-3 border-t border-border flex flex-col items-end gap-1 text-sm bg-muted/50 p-3 rounded-lg">
              ${order.shippingCharge > 0 ? `<div class="w-full sm:w-64 flex justify-between text-muted-foreground text-xs"><span>Delivery Fee</span><span>${formatCurrency(order.shippingCharge)}</span></div>` : ""}
              ${(order.discountAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between text-primary text-xs"><span>Discount</span><span>-${formatCurrency(order.discountAmount!)}</span></div>` : ""}
@@ -613,7 +613,7 @@ const layoutData = await getLayoutData();
     // Load locations and handle City/Zone dependent dropdowns
     if (fCity && fZone) {
       const cities = await getCities() || [];
-      
+
       // Populate cities
       fCity.innerHTML = '<option value="">Select City</option>';
       cities.forEach(city => {
@@ -640,7 +640,7 @@ const layoutData = await getLayoutData();
       fCity.onchange = async (e) => {
         const target = e.target as HTMLSelectElement;
         const cityId = target.value;
-        
+
         fZone.innerHTML = '<option value="">Select Zone</option>';
         fZone.disabled = true;
 
@@ -667,7 +667,7 @@ const layoutData = await getLayoutData();
           fZone.appendChild(option);
         });
         fZone.disabled = false;
-        
+
         const initialZoneId = dbCustomer?.zone || "";
         const initialZoneName = dbCustomer?.zoneName || latestOrder?.zoneName || "";
         if (initialZoneId || initialZoneName) {

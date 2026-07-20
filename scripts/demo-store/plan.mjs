@@ -46,4 +46,3 @@ export function formatDemoStorePlan(plan) {
     `Validation: passed`,
   ].join("\n");
 }
-

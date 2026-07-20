@@ -39,4 +39,3 @@ export function createApplyClient({ adminOrigin, cookieHeader, fetchImpl = fetch
     },
   };
 }
-

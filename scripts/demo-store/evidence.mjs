@@ -61,4 +61,3 @@ export async function writeEvidenceBundle({
   }, { appendFileImpl });
   return { runId, runDir, files };
 }
-
