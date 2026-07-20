@@ -281,6 +281,28 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     }));
   });
 
+  it("commits COD tracking in the same write batch as a COD order", async () => {
+    const db = createDbMock();
+    mocks.safeBatch.mockResolvedValue([]);
+
+    await commitStorefrontOrderPayload(db, createPayload({
+      discountUsage: null,
+      orderData: {
+        ...createPayload().orderData,
+        paymentMethod: "cod",
+        status: "pending",
+        inventoryAction: "none",
+      },
+    }));
+
+    expect(db.insertValues).toContainEqual(expect.objectContaining({
+      orderId: "order_discount",
+      deliveryAttempts: 0,
+      codStatus: "pending",
+    }));
+    expect(mocks.safeBatch).toHaveBeenCalledOnce();
+  });
+
   it("releases stock and retries one guest phone race without double CRM writes", async () => {
     const db = createDbMock({
       customerReads: [

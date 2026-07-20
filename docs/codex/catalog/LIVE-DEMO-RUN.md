@@ -996,6 +996,13 @@ The cleanup bullets below describe the two-product proof store that preceded the
   suites passed 39 tests. The full decision and competitive boundary remain in
   [BARCODE-LABEL-PRINTING.md](BARCODE-LABEL-PRINTING.md); neither an immediate
   row print nor a blocking wizard should replace the shared progressive job.
+- A renewed 2026-07-20 operator check opened the live label workspace against
+  the 177-SKU demo catalog, selected exact Aster Studio Clogs `39 / Cream`, and
+  rendered its saved Code 128 identity with `14 on hand · 14 available`, one
+  label, one A4 page, a real start-cell picker, **Test page**, and **Print / Save
+  PDF**. The result confirms the intended two-speed interface: row-level
+  **Print label** is a one-SKU entry point, while single and batch jobs share
+  the same physically previewed A4/adhesive/thermal/custom workspace.
 
 ### Storefront image and social-accessibility checkpoint (2026-07-20)
 

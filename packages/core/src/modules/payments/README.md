@@ -190,7 +190,15 @@ Payment webhook handlers attach the source `webhookEventId` to queued payment me
 
 - **No external gateway**: All operations are DB-only
 - **Tracking lifecycle**: `pending` -> `collected` (success) or `failed` (delivery attempt failed) -> `returned` (all attempts exhausted)
-- **`initCODTracking()`**: Creates a `codTracking` record with `deliveryAttempts: 0`, `codStatus: "pending"`
+- **Order-creation invariant**: Every COD order commits its initial `codTracking`
+  row in the same D1 batch as the order, items, money/tax snapshots,
+  idempotency result, and inventory reservation. Manual admin creation and
+  storefront ingestion both use `createCODTrackingInsertValues()`; a committed
+  COD order without tracking is invalid state, not a recoverable UI default.
+- **`initCODTracking()`**: Idempotently ensures the same initial tracking row
+  for provider-oriented compatibility paths. It uses
+  `onConflictDoNothing(orderId)` and must not be used as a post-commit order
+  lifecycle side effect.
 - **`recordCODCollection()`**: Idempotent only when both the succeeded COD payment and collected tracking evidence exist. New collection fails closed if the COD tracking row is missing; otherwise it atomically via `db.batch()`: updates `codTracking` (collected status + details), inserts `orderPayments` (status: succeeded), updates `orders` (paymentStatus: PAID, paidAmount, balanceDue: 0). Amounts and the payment-ledger currency come from the immutable order currency snapshot; a mismatched existing payment row fails before mutation. Admin COD collection records this evidence before inventory reconciliation so retries can safely repair stock/status without duplicating payment rows.
 - **`recordCODFailure()`**: Increments `deliveryAttempts`, sets `codStatus: "failed"`, records `failureReason` (not_home/refused/no_cash/wrong_address/other)
 - **`markCODReturned()`**: Sets `codStatus: "returned"` and fails closed if no COD tracking row is updated; admin COD return records this marker before inventory restoration and rolls back the visible returned status claim if the marker or restoration step fails before `inventoryAction` changes.

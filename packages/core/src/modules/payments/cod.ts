@@ -103,6 +103,22 @@ export function validateCODCollectionDetails(
 }
 
 /**
+ * Canonical initial COD authority. Order-creation paths use these values in
+ * the same D1 batch as the order row so a committed COD order can never exist
+ * without its collection lifecycle record.
+ */
+export function createCODTrackingInsertValues(orderId: string) {
+  return {
+    id: crypto.randomUUID(),
+    orderId,
+    deliveryAttempts: 0,
+    codStatus: "pending" as const,
+    createdAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
+  };
+}
+
+/**
  * Create a COD tracking record when a COD order is placed.
  * Called during order creation.
  */
@@ -110,14 +126,10 @@ export async function initCODTracking(
   db: Database,
   params: InitCODTrackingParams
 ): Promise<void> {
-  await db.insert(codTracking).values({
-    id: crypto.randomUUID(),
-    orderId: params.orderId,
-    deliveryAttempts: 0,
-    codStatus: "pending",
-    createdAt: sql`unixepoch()`,
-    updatedAt: sql`unixepoch()`,
-  });
+  await db
+    .insert(codTracking)
+    .values(createCODTrackingInsertValues(params.orderId))
+    .onConflictDoNothing({ target: codTracking.orderId });
 }
 
 /**

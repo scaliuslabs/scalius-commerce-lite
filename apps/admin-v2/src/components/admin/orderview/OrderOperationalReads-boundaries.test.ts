@@ -36,4 +36,13 @@ describe("order operational reads", () => {
     expect(paymentSource).toContain("codReadState.status === \"ready\"");
     expect(paymentSource).toContain("Retry");
   });
+
+  it("describes COD collection and failure dialogs for assistive technology", () => {
+    expect(paymentSource).toContain(
+      "Record the exact outstanding cash received from the courier.",
+    );
+    expect(paymentSource).toContain(
+      "Record the failed cash-on-delivery attempt and its reason.",
+    );
+  });
 });

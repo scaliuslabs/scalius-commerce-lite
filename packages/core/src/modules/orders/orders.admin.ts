@@ -18,6 +18,7 @@ import {
     deliveryProviders,
     paymentSessionAttempts,
     orderPayments,
+    codTracking,
     refundAttempts,
     paymentPlans,
     OrderStatus,
@@ -68,6 +69,7 @@ import type {
 import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { computeOrderPaymentState } from "../payments/payment-state";
+import { createCODTrackingInsertValues } from "../payments/cod";
 import {
     createOrderCurrencySnapshot,
     resolveOrderCurrencySnapshot,
@@ -2033,6 +2035,13 @@ export async function createOrder(
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
+    );
+
+    // A COD order and its collection lifecycle are one durable fact. Keeping
+    // this inside the create batch prevents a shippable order whose cash can
+    // never be recorded because a later initialization call failed.
+    writeBatch.push(
+        db.insert(codTracking).values(createCODTrackingInsertValues(orderId)),
     );
 
     // Order items

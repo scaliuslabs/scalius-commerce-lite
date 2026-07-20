@@ -1161,6 +1161,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Record COD Collection</DialogTitle>
+            <DialogDescription>
+              Record the exact outstanding cash received from the courier. This completes the order payment; it does not change fulfillment or stock.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -1197,6 +1200,9 @@ export function PaymentCard({ order }: PaymentCardProps) {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Record Delivery Failure</DialogTitle>
+            <DialogDescription>
+              Record the failed cash-on-delivery attempt and its reason. The order remains unpaid until cash is collected or the shipment is returned.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
