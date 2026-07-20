@@ -49,4 +49,3 @@ export async function readAdminCredentials({ input = process.stdin, output = pro
   if (!password) throw new Error("Admin password is required.");
   return { email, password };
 }
-

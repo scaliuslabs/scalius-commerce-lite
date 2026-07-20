@@ -21,14 +21,14 @@ function hydrate() {
           console.error("Product shortcode is missing data-props attribute.", el);
           return;
         }
-        
+
         const props = JSON.parse(decodeURIComponent(propsString));
         const root = createRoot(el);
-        
+
         root.render(
           React.createElement(ProductShortcode, { productData: props })
         );
-        
+
         // Mark element as hydrated
         el._reactRoot = root;
 

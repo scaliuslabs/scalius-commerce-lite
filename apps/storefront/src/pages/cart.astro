@@ -424,7 +424,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
         <!-- Optional customer login trigger -->
         <div class="mb-3">
-          <button 
+          <button
             type="button"
             onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))"
             class="w-full text-left rounded-lg bg-primary/10 border border-border px-4 py-3 text-sm text-primary hover:bg-primary/20 transition-colors shadow-sm flex items-center justify-between group"
@@ -675,7 +675,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   void initCartFunctionality();
 
   // ── Customer login pre-fill ───────────────────────────────────────────────
-  
+
   // Helper to normalize phone numbers — pass through E.164 or raw value
   const normalizePhone = (phone: string | undefined | null) => {
     if (!phone) return "";
@@ -950,7 +950,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 
         submitButton.disabled = true;
         submitButton.textContent = "Redirecting to Payment...";
-        
+
         if (loadingOverlay) {
           const loadingTitle = loadingOverlay.querySelector("h3");
           const loadingMsg = loadingOverlay.querySelector("p");

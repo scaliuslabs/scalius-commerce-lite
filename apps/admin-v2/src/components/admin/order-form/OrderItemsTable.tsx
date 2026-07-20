@@ -28,7 +28,7 @@ export function OrderItemsTable({
 }: OrderItemsTableProps) {
   const { form, products, isEdit, manualQuote } = useOrderForm();
   const { symbol } = useCurrency();
-  
+
   // Directly get the items from the form state.
   // We'll use form.watch() to re-render the component when items change.
   const items = form.watch("items");

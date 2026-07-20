@@ -12,7 +12,7 @@ export async function sha256(input: string): Promise<string> {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-  
+
   /**
    * Normalizes and hashes an email address for Meta CAPI.
    * @param email The email address.
@@ -22,7 +22,7 @@ export async function sha256(input: string): Promise<string> {
     const normalized = email.trim().toLowerCase();
     return sha256(normalized);
   }
-  
+
   /**
    * Normalizes and hashes a phone number for Meta CAPI.
    * @param phone The phone number.

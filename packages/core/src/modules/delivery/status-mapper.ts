@@ -134,4 +134,3 @@ function mapSteadfastStatus(status: string): string {
   console.warn(`[status-mapper] Unmapped Steadfast status: "${status}" - defaulting to ${ShipmentStatusCode.UNKNOWN}`);
   return ShipmentStatusCode.UNKNOWN;
 }
-

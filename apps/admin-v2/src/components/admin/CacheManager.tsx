@@ -522,11 +522,11 @@ export function CacheManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {groupNames.map((groupName) => {
           const group = groups[groupName];
-          const config = GROUP_CONFIG[groupName] || { 
-            icon: Database, 
-            bgColor: "bg-gray-100 dark:bg-gray-900/40", 
-            iconColor: "text-gray-600 dark:text-gray-400", 
-            hoverBorder: "hover:border-gray-500/50" 
+          const config = GROUP_CONFIG[groupName] || {
+            icon: Database,
+            bgColor: "bg-gray-100 dark:bg-gray-900/40",
+            iconColor: "text-gray-600 dark:text-gray-400",
+            hoverBorder: "hover:border-gray-500/50"
           };
           const Icon = config.icon;
           const lastCleared = timestamps[groupName];

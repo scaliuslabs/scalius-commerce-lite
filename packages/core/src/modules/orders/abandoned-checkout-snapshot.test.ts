@@ -84,4 +84,3 @@ describe("abandoned checkout snapshot normalization", () => {
         })).toThrow("Invalid checkout session identifier");
     });
 });
-
