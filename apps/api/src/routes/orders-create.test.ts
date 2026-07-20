@@ -1823,6 +1823,9 @@ describe("create order commit/KV ordering", () => {
       discountError,
     );
     const statusKey = await getCheckoutStatusKvKey(DEFAULT_STATUS_TOKEN);
+    await vi.waitFor(() => {
+      expect(kv.put).toHaveBeenCalled();
+    });
     const failedStatusWrite = kv.put.mock.calls.at(-1) as [string, string] | undefined;
     expect(failedStatusWrite?.[0]).toBe(statusKey);
     expect(statusKey).not.toContain("chk_order_discount_limit");

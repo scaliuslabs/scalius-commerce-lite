@@ -35,7 +35,7 @@ overrides:
   diff: ">=5.2.2"
   lodash: ">=4.17.23"
   undici: ">=8.5.0"
-  wrangler: "4.107.1"
+  wrangler: "4.112.0"
   partyserver: "0.5.6"
   better-call: "1.3.6"
   "@daveyplate/better-auth-ui>better-call": "1.3.6"
@@ -59,17 +59,19 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - '@astrojs/markdown-satteri@0.3.1'
-  - '@astrojs/react@6.0.0'
-  - astro@7.0.0
-  - '@astrojs/cloudflare@14.0.0'
+  - '@astrojs/react@6.0.1'
+  - astro@7.1.3
+  - '@astrojs/cloudflare@14.1.4'
   - '@vitejs/plugin-react@6.0.3'
-  - vite@8.1.0
-  - '@cloudflare/workers-types@4.20260702.1'
-  - '@cloudflare/workerd-darwin-64@1.20260702.1'
-  - '@cloudflare/workerd-darwin-arm64@1.20260702.1'
-  - '@cloudflare/workerd-linux-64@1.20260702.1'
-  - '@cloudflare/workerd-linux-arm64@1.20260702.1'
-  - '@cloudflare/workerd-windows-64@1.20260702.1'
-  - miniflare@4.20260702.0
-  - workerd@1.20260702.1
-  - wrangler@4.107.1
+  - vite@8.1.5
+  - '@cloudflare/workers-types@5.20260719.1'
+  - '@cloudflare/workerd-darwin-64@1.20260714.1'
+  - '@cloudflare/workerd-darwin-arm64@1.20260714.1'
+  - '@cloudflare/workerd-linux-64@1.20260714.1'
+  - '@cloudflare/workerd-linux-arm64@1.20260714.1'
+  - '@cloudflare/workerd-windows-64@1.20260714.1'
+  - miniflare@4.20260714.0
+  - workerd@1.20260714.1
+  - wrangler@4.112.0
+  - '@tanstack/query-core@5.101.3'
+  - '@tanstack/react-query@5.101.3'
