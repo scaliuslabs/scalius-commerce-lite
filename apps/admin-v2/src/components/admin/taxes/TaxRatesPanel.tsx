@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -81,6 +82,13 @@ export function TaxRatesPanel({
   const availableJurisdictions = useMemo(
     () => configuration.jurisdictions.filter((option) => option.type === draft.jurisdictionType),
     [configuration.jurisdictions, draft.jurisdictionType],
+  );
+  const jurisdictionOptions = useMemo(
+    () => availableJurisdictions.map((option) => ({
+      value: option.id,
+      label: option.name,
+    })),
+    [availableJurisdictions],
   );
   const parsedRateBps = percentToBasisPoints(draft.percent);
   const parsedPriority = /^\d{1,4}$/.test(draft.priority) ? Number(draft.priority) : -1;
@@ -258,15 +266,21 @@ export function TaxRatesPanel({
             </div>
             {draft.jurisdictionType !== "all" ? (
               <div className="space-y-2">
-                <Label>Saved destination</Label>
-                <Select value={draft.jurisdictionId} disabled={!canManage} onValueChange={(jurisdictionId) => setDraft((current) => ({ ...current, jurisdictionId }))}>
-                  <SelectTrigger aria-label={`Saved ${draft.jurisdictionType}`}><SelectValue placeholder={`Choose ${draft.jurisdictionType}`} /></SelectTrigger>
-                  <SelectContent>
-                    {availableJurisdictions.map((option) => (
-                      <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="tax-rate-jurisdiction">Saved destination</Label>
+                <SearchableSelect
+                  id="tax-rate-jurisdiction"
+                  value={draft.jurisdictionId}
+                  options={jurisdictionOptions}
+                  disabled={!canManage}
+                  onValueChange={(jurisdictionId) => setDraft((current) => ({ ...current, jurisdictionId }))}
+                  placeholder={`Choose ${draft.jurisdictionType}`}
+                  searchPlaceholder={`Search ${draft.jurisdictionType === "city" ? "cities" : `${draft.jurisdictionType}s`}…`}
+                  emptyMessage={`No matching ${draft.jurisdictionType}.`}
+                  ariaLabel={`Saved ${draft.jurisdictionType}`}
+                  required
+                  maxVisibleOptions={100}
+                  triggerClassName="w-full"
+                />
                 {availableJurisdictions.length === 0 ? (
                   <p className="text-xs text-destructive">Add an active {draft.jurisdictionType} under Checkout → Delivery Locations first.</p>
                 ) : null}
