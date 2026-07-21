@@ -1,4 +1,6 @@
 import React from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import {
@@ -44,6 +46,8 @@ import {
   updatePage,
   type CreatePageInput,
   type PageFeaturedImageDto,
+  type PageIdPayload,
+  type PageMutationPayload,
 } from "@/lib/api-functions/pages";
 import { pageFormSchema, type PageFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
@@ -100,6 +104,7 @@ function toPageInput(values: PageFormValues): CreatePageInput {
 }
 
 export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
+  const navigate = useNavigate();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
   const { hasPermission } = usePermissions();
@@ -156,6 +161,23 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
       ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/pages",
+    onSuccess: (result) => {
+      const mutation = result as PageMutationPayload & Partial<PageIdPayload>;
+      const id = mutation.id || defaultValues?.id;
+      form.reset({
+        ...form.getValues(),
+        ...(id ? { id } : {}),
+        revision: mutation.revision,
+      });
+      toast.success(isEdit ? "Page saved" : "Page created");
+      if (!isEdit && mutation.id) {
+        void navigate({
+          to: "/admin/pages/$pageId/edit",
+          params: { pageId: mutation.id },
+          replace: true,
+        });
+      }
+    },
   });
 
   const handleSubmit = (values: PageFormValues) => {

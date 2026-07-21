@@ -140,22 +140,37 @@ export function CollectionForm({
       if (isEdit) {
         const entityId = defaultValues?.id || values.id;
         if (!entityId) throw new Error("Collection ID is required for update");
-        const expectedVersion = defaultValues?.version || values.version;
+        const expectedVersion = values.version || defaultValues?.version;
         if (!expectedVersion) throw new Error("Collection version is required for update");
-        await updateCollection({ data: { ...submission, id: entityId, expectedVersion } });
+        const result = await updateCollection({
+          data: { ...submission, id: entityId, expectedVersion },
+        });
+        form.reset({
+          ...values,
+          id: result.id,
+          version: result.version,
+        });
         queryClient.invalidateQueries({ queryKey: ["collections", "detail", entityId] });
+        toast.success("Collection saved");
       } else {
-        await createCollection({ data: submission });
+        const result = await createCollection({ data: submission });
+        form.reset({
+          ...values,
+          id: result.id,
+          version: result.version,
+        });
+        toast.success("Collection created");
+        void navigate({
+          to: "/admin/collections/$collectionId/edit",
+          params: { collectionId: result.id },
+          replace: true,
+        });
       }
 
       // Invalidate queries so list page shows fresh data
       queryClient.invalidateQueries({ queryKey: ["collections", "list"] });
       queryClient.invalidateQueries({ queryKey: ["collections", "form-options"] });
 
-      toast.success(
-        `Collection ${isEdit ? "updated" : "created"} successfully`,
-      );
-      void navigate({ to: "/admin/collections" });
     } catch (error: unknown) {
       console.error("Error submitting form:", error);
       toast.error("Failed to save collection", {
