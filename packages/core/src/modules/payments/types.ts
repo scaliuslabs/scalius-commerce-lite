@@ -172,7 +172,7 @@ export interface FindReusablePolarCheckoutParams {
 export interface PolarRefundParams {
   polarOrderId: string; // The ID of the order within Polar, which usually matches checkoutId
   amount: number; // In smallest currency unit. Must be explicitly provided.
-  reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee" | "dispute_prevention";
+  reason?: "fraudulent" | "customer_request" | "duplicate" | "other" | "service_disruption" | "satisfaction_guarantee";
   comment?: string;
   metadata?: Record<string, string | number | boolean>;
 }
