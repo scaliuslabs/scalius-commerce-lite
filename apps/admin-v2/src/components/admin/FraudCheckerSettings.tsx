@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +40,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ExternalLink, Loader2, Plus, Pencil, ShieldCheck, Trash2, TestTube } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+  Plus,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  TestTube,
+} from "lucide-react";
 import {
   FRAUD_CHECK_PROVIDER_TYPES,
   FRAUD_CHECK_PROVIDER_DEFINITIONS,
@@ -51,6 +62,9 @@ import {
   OfficialProviderMark,
 } from "~/components/admin/settings/provider-marks";
 import { getFraudProviderMarkId } from "./fraud-provider-presentation";
+import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 // ── Types & Validation ──
 
@@ -83,6 +97,11 @@ type ProviderFormValues = z.infer<typeof providerSchema>;
 
 interface FraudCheckerSettingsProps {
   providers: FraudCheckerProviderPayload[];
+}
+
+interface ProviderTestState {
+  status: "passed" | "failed";
+  message: string;
 }
 
 const DEFAULT_PROVIDER_TYPE: FraudCheckProviderType = "default";
@@ -123,6 +142,9 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FraudProvider | null>(null);
+  const [testStates, setTestStates] = useState<Record<string, ProviderTestState>>({});
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission(ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT);
 
   const form = useForm<ProviderFormValues>({
     resolver: zodResolver(providerSchema),
@@ -201,6 +223,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   };
 
   const handleCreate = () => {
+    if (!canEdit) return;
     resetForm();
     setIsCreating(true);
     setIsEditing(true);
@@ -208,7 +231,7 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
   };
 
   const handleEdit = () => {
-    if (!selectedProvider) return;
+    if (!selectedProvider || !canEdit) return;
     resetForm(selectedProvider);
     setIsEditing(true);
     setIsCreating(false);
@@ -237,6 +260,11 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
       }
 
       setSelectedProvider(saved);
+      setTestStates((current) => {
+        const next = { ...current };
+        delete next[saved.id];
+        return next;
+      });
       resetForm(saved);
       setIsEditing(false);
       setIsCreating(false);
@@ -270,60 +298,138 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
     setIsTesting(true);
     try {
       const result = await testFraudCheckerProvider({ data: { id: selectedProvider.id } });
+      setTestStates((current) => ({
+        ...current,
+        [selectedProvider.id]: {
+          status: result.success ? "passed" : "failed",
+          message:
+            result.message ||
+            (result.success ? "Connection succeeded." : "Connection failed."),
+        },
+      }));
       if (result.success) {
         toast.success(result.message || "Connection successful");
       } else {
         toast.error(result.message || "Connection failed");
       }
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to test provider");
+      const message =
+        error instanceof Error ? error.message : "Failed to test provider";
+      setTestStates((current) => ({
+        ...current,
+        [selectedProvider.id]: { status: "failed", message },
+      }));
+      toast.error(message);
     } finally {
       setIsTesting(false);
     }
   };
 
+  const selectedDefinition = selectedProvider
+    ? getFraudCheckProviderDefinition(selectedProvider.providerType)
+    : null;
+  const selectedTestState = selectedProvider
+    ? testStates[selectedProvider.id]
+    : undefined;
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Provider List */}
-        <Card>
+    <div className="space-y-4">
+      <UnsavedChangesGuard
+        isDirty={isEditing && form.formState.isDirty}
+        isSubmitting={isSaving}
+      />
+
+      {!canEdit && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Read-only access</AlertTitle>
+          <AlertDescription>
+            You can inspect providers and test saved connections, but you cannot
+            change their configuration.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {providers.length === 0 && !isCreating ? (
+        <Card className="shadow-none">
+          <CardContent className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="grid size-10 place-items-center rounded-full bg-muted">
+              <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h2 className="mt-3 text-base font-semibold">No fraud provider yet</h2>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              {canEdit
+                ? "Add a provider to run optional, on-demand risk checks from Orders."
+                : "No provider is available for on-demand risk checks from Orders."}{" "}
+              Fraud checks do not block checkout automatically.
+            </p>
+            {canEdit && (
+              <Button
+                type="button"
+                className="mt-4 min-h-11 gap-1.5 sm:min-h-9"
+                onClick={handleCreate}
+              >
+                <Plus className="h-4 w-4" />
+                Add provider
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,2fr)]">
+        <Card className="shadow-none">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Providers</CardTitle>
-              <Button type="button" variant="outline" size="sm" onClick={handleCreate} className="h-7 text-xs">
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add
-              </Button>
+              <CardTitle className="text-base">Providers</CardTitle>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreate}
+                  disabled={isEditing}
+                  className="min-h-11 gap-1.5 text-xs sm:min-h-8"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             {providers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No providers configured</p>
+              <p className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                Finish or cancel this new provider to return to the empty state.
+              </p>
             ) : (
               <ul className="space-y-1.5">
                 {providers.map((provider) => (
-                  <li
-                    key={provider.id}
-                    className={`flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm transition-colors ${
-                      selectedProvider?.id === provider.id
-                        ? "bg-accent border border-border"
-                        : "hover:bg-accent/50 border border-transparent"
-                    }`}
-                    onClick={() => handleSelect(provider)}
-                  >
-                    <span
-                      className={`w-2 h-2 rounded-full shrink-0 ${
-                        provider.isActive ? "bg-green-500" : "bg-muted-foreground/30"
+                  <li key={provider.id}>
+                    <button
+                      type="button"
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-md border p-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        selectedProvider?.id === provider.id
+                          ? "border-border bg-accent"
+                          : "border-transparent hover:bg-accent/50"
                       }`}
-                    />
-                    <FraudProviderMark providerType={provider.providerType} />
-                    <span className="font-medium truncate">{provider.name}</span>
-                    <Badge variant="outline" className="hidden sm:inline-flex text-[10px] px-1.5 py-0">
-                      {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
-                    </Badge>
-                    <Badge variant={provider.isActive ? "default" : "secondary"} className="ml-auto text-[10px] px-1.5 py-0">
-                      {provider.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                      aria-pressed={selectedProvider?.id === provider.id}
+                      disabled={isEditing}
+                      onClick={() => handleSelect(provider)}
+                    >
+                      <FraudProviderMark providerType={provider.providerType} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{provider.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {getFraudCheckProviderDefinition(provider.providerType).shortLabel}
+                        </span>
+                      </span>
+                      <Badge
+                        variant={provider.isActive ? "default" : "secondary"}
+                        className="shrink-0 text-[10px]"
+                      >
+                        {provider.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -331,21 +437,20 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
           </CardContent>
         </Card>
 
-        {/* Provider Detail / Form */}
-        <Card className="md:col-span-2">
+        <Card className="min-w-0 shadow-none">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <CardTitle className="flex items-center gap-2 text-base">
               {(selectedProvider || isCreating) ? (
                 <FraudProviderMark
                   providerType={isCreating ? providerType : selectedProvider?.providerType}
                   size="md"
                 />
               ) : null}
-              {isCreating ? "New Provider" : selectedProvider ? "Provider Details" : "Select a Provider"}
+              {isCreating ? "Add provider" : selectedProvider ? selectedProvider.name : "Select a provider"}
             </CardTitle>
             {!isCreating && !selectedProvider && (
               <CardDescription className="text-xs">
-                Select a provider to view details, or add a new one.
+                Choose a provider to review setup, usage, and connection state.
               </CardDescription>
             )}
           </CardHeader>
@@ -358,9 +463,9 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 noValidate
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="providerType" className="text-xs">Provider</Label>
+                  <Label htmlFor="providerType">Provider</Label>
                   <Select value={providerType} onValueChange={handleProviderTypeChange}>
-                    <SelectTrigger id="providerType" className="h-8 text-sm">
+                    <SelectTrigger id="providerType" className="min-h-11 text-sm sm:min-h-8">
                       <SelectValue placeholder="Select provider" />
                     </SelectTrigger>
                     <SelectContent>
@@ -375,32 +480,18 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">{providerDefinition.helpText}</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span>{providerDefinition.requestFormatHint}</span>
-                    {providerDefinition.docsUrl && (
-                      <a
-                        href={providerDefinition.docsUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        Provider docs
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
                   {form.formState.errors.providerType && (
                     <p className="text-xs text-destructive">{form.formState.errors.providerType.message}</p>
                   )}
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs">Name</Label>
+                  <Label htmlFor="name">Internal name</Label>
                   <Input
                     id="name"
                     {...form.register("name")}
-                    className="h-8 text-sm"
-                    placeholder="Provider name"
+                    className="min-h-11 text-sm sm:min-h-8"
+                    placeholder="For example, FraudBD production"
                   />
                   {form.formState.errors.name && (
                     <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
@@ -408,11 +499,11 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apiUrl" className="text-xs">API URL</Label>
+                  <Label htmlFor="apiUrl">API URL</Label>
                   <Input
                     id="apiUrl"
                     {...form.register("apiUrl")}
-                    className="h-8 text-sm"
+                    className="min-h-11 text-sm sm:min-h-8"
                     placeholder="https://fraudchecker.link/api/v1/qc/"
                   />
                   {form.formState.errors.apiUrl && (
@@ -421,12 +512,12 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="apiKey" className="text-xs">{providerDefinition.apiKeyLabel}</Label>
+                  <Label htmlFor="apiKey">{providerDefinition.apiKeyLabel}</Label>
                   <Input
                     id="apiKey"
                     type="password"
                     {...form.register("apiKey")}
-                    className="h-8 text-sm"
+                    className="min-h-11 text-sm sm:min-h-8"
                     placeholder={credentialPlaceholder(providerDefinition.apiKeyLabel, "Enter API key")}
                   />
                   {form.formState.errors.apiKey && (
@@ -436,12 +527,12 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
 
                 {needsApiSecret && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="apiSecret" className="text-xs">{providerDefinition.apiSecretLabel}</Label>
+                    <Label htmlFor="apiSecret">{providerDefinition.apiSecretLabel}</Label>
                     <Input
                       id="apiSecret"
                       type="password"
                       {...form.register("apiSecret")}
-                      className="h-8 text-sm"
+                      className="min-h-11 text-sm sm:min-h-8"
                       placeholder={credentialPlaceholder(providerDefinition.apiSecretLabel, "Enter API secret")}
                     />
                     {form.formState.errors.apiSecret && (
@@ -452,11 +543,11 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
 
                 {needsUserId && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="userId" className="text-xs">{providerDefinition.userIdLabel}</Label>
+                    <Label htmlFor="userId">{providerDefinition.userIdLabel}</Label>
                     <Input
                       id="userId"
                       {...form.register("userId")}
-                      className="h-8 text-sm"
+                      className="min-h-11 text-sm sm:min-h-8"
                       placeholder={credentialPlaceholder(providerDefinition.userIdLabel, "Enter user ID")}
                     />
                     {form.formState.errors.userId && (
@@ -465,132 +556,176 @@ const FraudCheckerSettings: FC<FraudCheckerSettingsProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="isActive"
-                    checked={form.watch("isActive")}
-                    onCheckedChange={(checked) => form.setValue("isActive", checked)}
-                  />
-                  <Label htmlFor="isActive" className="text-xs cursor-pointer">
-                    {form.watch("isActive") ? "Active" : "Inactive"}
-                  </Label>
+                <div className="rounded-md border px-3 py-2.5">
+                  <div className="flex min-h-11 items-center justify-between gap-3">
+                    <div>
+                      <Label htmlFor="isActive" className="cursor-pointer text-sm font-medium">
+                        Use for order risk checks
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        This enables manual checks in Orders. Checkout is not blocked automatically.
+                      </p>
+                    </div>
+                    <Switch
+                      id="isActive"
+                      checked={form.watch("isActive")}
+                      onCheckedChange={(checked) =>
+                        form.setValue("isActive", checked, { shouldDirty: true })
+                      }
+                    />
+                  </div>
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t">
-                  <Button type="submit" size="sm" disabled={isSaving} className="h-7 text-xs">
-                    {isSaving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                    Save
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="h-7 text-xs">
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            ) : selectedProvider ? (
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Provider</Label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      {getFraudCheckProviderDefinition(selectedProvider.providerType).label}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {getFraudCheckProviderDefinition(selectedProvider.providerType).helpText}
-                    </span>
-                    {getFraudCheckProviderDefinition(selectedProvider.providerType).docsUrl && (
+                <details className="rounded-md border px-3 py-2 text-sm">
+                  <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-8">
+                    Technical details
+                  </summary>
+                  <div className="mt-2 flex flex-wrap items-center gap-3 border-t pt-2 text-xs text-muted-foreground">
+                    <span>{providerDefinition.requestFormatHint}</span>
+                    {providerDefinition.docsUrl && (
                       <a
-                        href={getFraudCheckProviderDefinition(selectedProvider.providerType).docsUrl}
+                        href={providerDefinition.docsUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center gap-1 text-primary hover:underline sm:min-h-8"
                       >
                         Provider docs
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {getFraudCheckProviderDefinition(selectedProvider.providerType).requestFormatHint}
+                </details>
+
+                <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row">
+                  <Button type="submit" size="sm" disabled={isSaving} className="min-h-11 sm:min-h-8">
+                    {isSaving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                    Save
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="min-h-11 sm:min-h-8">
+                    Cancel
+                  </Button>
+                  <span className="self-center text-xs text-muted-foreground" aria-live="polite">
+                    {form.formState.isDirty ? "Unsaved changes" : "No changes"}
+                  </span>
+                </div>
+              </form>
+            ) : selectedProvider ? (
+              <div className="space-y-4">
+                <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="rounded-md border bg-muted/20 px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">Setup</dt>
+                    <dd className="mt-1 text-sm font-medium">Credentials saved</dd>
+                  </div>
+                  <div className="rounded-md border bg-muted/20 px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">Used in Orders</dt>
+                    <dd className="mt-1 text-sm font-medium">
+                      {selectedProvider.isActive ? "Active" : "Inactive"}
+                    </dd>
+                  </div>
+                  <div className="rounded-md border bg-muted/20 px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">Connection</dt>
+                    <dd className="mt-1 text-sm font-medium">
+                      {selectedTestState?.status === "passed"
+                        ? "Passed this session"
+                        : selectedTestState?.status === "failed"
+                          ? "Failed this session"
+                          : "Not checked this session"}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div>
+                  <Badge variant="outline">{selectedDefinition?.label}</Badge>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {selectedDefinition?.helpText}
                   </p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs">Name</Label>
-                  <p className="text-sm">{selectedProvider.name}</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="apiUrl" className="text-xs">API URL</Label>
-                  <p className="text-sm font-mono text-muted-foreground">{selectedProvider.apiUrl}</p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{getFraudCheckProviderDefinition(selectedProvider.providerType).apiKeyLabel}</Label>
-                  <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
-                </div>
-
-                {getFraudCheckProviderDefinition(selectedProvider.providerType).requiredFields.includes("apiSecret") && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {getFraudCheckProviderDefinition(selectedProvider.providerType).apiSecretLabel}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">{"*".repeat(12)}</p>
-                  </div>
+                {selectedTestState && (
+                  <Alert variant={selectedTestState.status === "failed" ? "destructive" : "default"}>
+                    {selectedTestState.status === "passed" ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4" />
+                    )}
+                    <AlertTitle>
+                      {selectedTestState.status === "passed" ? "Connection passed" : "Connection failed"}
+                    </AlertTitle>
+                    <AlertDescription>{selectedTestState.message}</AlertDescription>
+                  </Alert>
                 )}
 
-                {getFraudCheckProviderDefinition(selectedProvider.providerType).requiredFields.includes("userId") && (
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {getFraudCheckProviderDefinition(selectedProvider.providerType).userIdLabel}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">{selectedProvider.userId || "Not configured"}</p>
-                  </div>
-                )}
+                <details className="rounded-md border px-3 py-2 text-sm">
+                  <summary className="flex min-h-11 cursor-pointer items-center font-medium sm:min-h-8">
+                    Technical details
+                  </summary>
+                  <dl className="mt-2 space-y-2 border-t pt-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">API URL</dt>
+                      <dd className="break-all font-mono">{selectedProvider.apiUrl}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Credentials</dt>
+                      <dd>Stored securely</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Request</dt>
+                      <dd>{selectedDefinition?.requestFormatHint}</dd>
+                    </div>
+                  </dl>
+                  {selectedDefinition?.docsUrl && (
+                    <a
+                      href={selectedDefinition.docsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex min-h-11 items-center gap-1 text-xs text-primary hover:underline sm:min-h-8"
+                    >
+                      Provider docs
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </details>
 
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="isActive"
-                    checked={selectedProvider.isActive}
-                    disabled
-                  />
-                  <Label htmlFor="isActive" className="text-xs">
-                    {selectedProvider.isActive ? "Active" : "Inactive"}
-                  </Label>
+                <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap">
+                  {canEdit && (
+                    <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="min-h-11 sm:min-h-8">
+                      <Pencil className="mr-1 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  )}
+                  <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="min-h-11 sm:min-h-8">
+                    {isTesting ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <TestTube className="mr-1 h-3.5 w-3.5" />}
+                    Test connection
+                  </Button>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteTarget(selectedProvider)}
+                      className="min-h-11 sm:min-h-8"
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  )}
                 </div>
-
-                <div className="flex gap-2 pt-2 border-t">
-                  <Button type="button" variant="outline" size="sm" onClick={handleEdit} className="h-7 text-xs">
-                    <Pencil className="h-3.5 w-3.5 mr-1" />
-                    Edit
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={handleTest} disabled={isTesting} className="h-7 text-xs">
-                    {isTesting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <TestTube className="h-3.5 w-3.5 mr-1" />}
-                    Test
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setDeleteTarget(selectedProvider)}
-                    className="h-7 text-xs"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete
-                  </Button>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Testing sends one provider lookup with the platform test number. Results are shown for this browser session only.
+                </p>
               </div>
             ) : null}
           </CardContent>
         </Card>
       </div>
+      )}
 
-      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Provider</AlertDialogTitle>
+            <AlertDialogTitle>Delete provider?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteTarget?.name}"? This action cannot be undone.
+              “{deleteTarget?.name}” will no longer be available for order risk checks. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
