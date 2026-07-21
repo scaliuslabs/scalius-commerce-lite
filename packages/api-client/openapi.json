@@ -87007,7 +87007,8 @@
                     "type": "string"
                   },
                   "invoiceLogoUrl": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 2048
                   }
                 }
               }

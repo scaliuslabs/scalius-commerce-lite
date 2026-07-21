@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveMediaUrl } from "./media-url";
+import { normalizePublicMediaUrl, resolveMediaUrl } from "./media-url";
+
+describe("normalizePublicMediaUrl", () => {
+  it("accepts HTTPS media and safe root-relative application assets", () => {
+    expect(normalizePublicMediaUrl(" https://cdn.example.com/logo.png?width=320 "))
+      .toBe("https://cdn.example.com/logo.png?width=320");
+    expect(normalizePublicMediaUrl("/assets/invoice-logo.svg")).toBe(
+      "/assets/invoice-logo.svg",
+    );
+  });
+
+  it("keeps HTTP local and rejects unsafe public sources", () => {
+    expect(normalizePublicMediaUrl("http://localhost:8787/logo.png")).toBe(
+      "http://localhost:8787/logo.png",
+    );
+    expect(normalizePublicMediaUrl("http://cdn.example.com/logo.png")).toBeNull();
+    expect(normalizePublicMediaUrl("//cdn.example.com/logo.png")).toBeNull();
+    expect(normalizePublicMediaUrl("https://user:pass@cdn.example.com/logo.png"))
+      .toBeNull();
+    expect(normalizePublicMediaUrl("javascript:alert(1)")).toBeNull();
+  });
+});
 
 describe("resolveMediaUrl", () => {
   const cdnBase = "https://cdn.scalius.test";

@@ -58,6 +58,12 @@ function getAliasHosts(
 }
 
 const HTTP_URL_RE = /^https?:\/\//i;
+const LOOPBACK_MEDIA_HOSTS = new Set([
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+  "::1",
+]);
 
 function hasUnsafeMediaSourceChars(value: string): boolean {
   for (const char of value) {
@@ -77,6 +83,33 @@ function isSafeLocalPath(value: string): boolean {
     !value.startsWith("//") &&
     !hasUnsafeMediaSourceChars(value)
   );
+}
+
+/**
+ * Normalizes a persisted buyer/admin-visible media source.
+ *
+ * Root-relative application assets and absolute HTTPS URLs are accepted.
+ * Plain HTTP is limited to explicit loopback hosts for local development.
+ * Credentials and protocol-relative URLs are rejected.
+ */
+export function normalizePublicMediaUrl(
+  value: string | null | undefined,
+): string | null {
+  const source = value?.trim();
+  if (!source) return null;
+  if (isSafeLocalPath(source)) return source;
+  if (source.startsWith("//") || hasUnsafeMediaSourceChars(source)) return null;
+
+  try {
+    const parsed = new URL(source);
+    const isLoopbackHttp = parsed.protocol === "http:" &&
+      LOOPBACK_MEDIA_HOSTS.has(parsed.hostname);
+    if (parsed.protocol !== "https:" && !isLoopbackHttp) return null;
+    if (parsed.username || parsed.password) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 /**

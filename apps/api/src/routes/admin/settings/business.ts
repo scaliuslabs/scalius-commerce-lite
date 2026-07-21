@@ -6,6 +6,7 @@ import {
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
 import { invalidateApiAndScheduleStorefrontGroups } from "../../../utils/cache-invalidation";
+import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
@@ -45,7 +46,10 @@ const saveBusinessSchema = z.object({
     taxId: z.string().optional(),
     invoicePrefix: z.string().optional(),
     invoiceFooterText: z.string().optional(),
-    invoiceLogoUrl: z.string().optional(),
+    invoiceLogoUrl: z.string().trim().max(2048).refine(
+        (value) => value === "" || normalizePublicMediaUrl(value) !== null,
+        "Use an HTTPS image URL or a root-relative application asset.",
+    ).optional(),
 });
 
 // ─────────────────────────────────────────
