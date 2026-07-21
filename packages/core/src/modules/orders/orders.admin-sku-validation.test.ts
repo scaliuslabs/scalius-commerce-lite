@@ -16,6 +16,7 @@ const transitionMocks = vi.hoisted(() => ({
 }));
 const settingsMocks = vi.hoisted(() => ({
     getCurrencySettings: vi.fn(),
+    getAllowedCountries: vi.fn(),
 }));
 const taxMocks = vi.hoisted(() => ({
     calculateStorefrontTaxQuote: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("../inventory/inventory-transitions", () => ({
 
 vi.mock("../settings/site-settings.service", () => ({
     getCurrencySettings: settingsMocks.getCurrencySettings,
+    getAllowedCountries: settingsMocks.getAllowedCountries,
 }));
 
 vi.mock("../tax", async (importOriginal) => ({
@@ -84,6 +86,10 @@ beforeEach(() => {
         currencyCode: "BDT",
         currencySymbol: "৳",
         usdExchangeRate: "1",
+    });
+    settingsMocks.getAllowedCountries.mockResolvedValue({
+        allowedCountries: [],
+        allowedCountriesMode: "include",
     });
     taxMocks.calculateStorefrontTaxQuote.mockImplementation(async (
         _db: Database,
@@ -321,7 +327,7 @@ function createOrderInput(overrides: Partial<CreateOrderInput> = {}): CreateOrde
     return {
         requestKey: crypto.randomUUID(),
         customerName: "Test Customer",
-        customerPhone: "01775528888",
+        customerPhone: "+8801775528888",
         customerEmail: null,
         shippingAddress: "House 1, Road 2, Dhaka",
         city: "city_dhaka",

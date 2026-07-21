@@ -31,7 +31,7 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 All phone numbers are validated and stored in **E.164 format** (e.g. `+8801712345678`, `+14155552671`) using `libphonenumber-js`.
 
 - **`phoneNumberSchema`** (`@scalius/shared/customer-utils`): Zod transform that calls `validateAndFormatPhone()` -- validates via `libphonenumber-js` and returns E.164. Used in admin CRUD validation.
-- **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally applies the merchant include/exclude country policy from `settings.phone/allowed_countries`. Used in `customer-auth.service.ts` before OTP challenge mutation, account/session creation, and profile completion.
+- **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally applies the merchant include/exclude country policy from `settings.phone/allowed_countries`. Customer auth and the trusted admin customer/manual-order write boundaries enforce that policy; dashboard phone pickers are guidance, not authority.
 - **`formatPhoneForDisplay()`** (`@scalius/shared/customer-utils`): Converts E.164 back to international display format (e.g. `+880 1712-345678`).
 
 Both admin-created and storefront-created customers now use the same E.164 format, eliminating the previous format mismatch.

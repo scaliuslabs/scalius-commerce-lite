@@ -78,6 +78,7 @@ import {
     type OrderCurrencySnapshot,
 } from "../payments/order-currency";
 import { getCurrencySettings } from "../settings/site-settings.service";
+import { validateCustomerPhoneCountry } from "../settings/phone-country-policy";
 import {
     buildStorefrontTaxAllocationLineId,
     calculateStorefrontTaxQuote,
@@ -1822,6 +1823,9 @@ export async function createOrder(
     actorId: string | null,
 ): Promise<{ id: string }> {
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
+    const existingReplay = await resolveAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
+    if (existingReplay) return existingReplay.response;
+    await validateCustomerPhoneCountry(db, data.customerPhone);
     const claim = await claimAdminOrderCreateAttempt<{ id: string }>(db, attemptIdentity);
     if (claim.status === "replay") return claim.response;
     if (claim.status === "processing") {
@@ -1833,8 +1837,9 @@ export async function createOrder(
     const orderId = attempt.orderId;
     const response = { id: orderId };
 
-    // Claim first so a lost-response retry can replay the original order even
-    // when catalog, delivery, or customer facts changed after the commit.
+    // A committed response is resolved before mutable policy checks so a lost
+    // response still replays. Fresh requests validate before claiming, which
+    // lets a merchant correct a rejected phone without burning the request key.
     const prepared = await (async () => {
         const manualQuote = await prepareManualOrderQuote(db, data);
         const {
@@ -2452,6 +2457,9 @@ export async function updateOrder(db: Database, id: string, data: UpdateOrderDat
         throw new ConflictError(
             fullEditReadiness.reason ?? "This order can no longer be changed in the full editor.",
         );
+    }
+    if (data.customerPhone !== existingOrder.customerPhone) {
+        await validateCustomerPhoneCountry(db, data.customerPhone);
     }
     const { cityName, zoneName, areaName } = await resolveActiveDeliveryLocationNames(db, data);
     const currentStatus = normalizeOrderStatus(existingOrder.status);
