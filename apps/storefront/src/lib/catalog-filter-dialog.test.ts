@@ -29,10 +29,16 @@ describe("catalog filter dialog", () => {
 
   it("opens as a modal, traps focus, closes on Escape, and restores focus", () => {
     setupCatalogFilterDialog();
-    const toggle = document.querySelector<HTMLButtonElement>("#mobile-filter-toggle")!;
+    const toggle = document.querySelector<HTMLButtonElement>(
+      "#mobile-filter-toggle",
+    )!;
     const dialog = document.querySelector<HTMLElement>("#filter-section")!;
-    const close = document.querySelector<HTMLButtonElement>("#mobile-filter-close")!;
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Filter value"]')!;
+    const close = document.querySelector<HTMLButtonElement>(
+      "#mobile-filter-close",
+    )!;
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Filter value"]',
+    )!;
 
     expect(dialog.getAttribute("role")).toBe("dialog");
     expect(dialog.getAttribute("aria-hidden")).toBe("true");
@@ -44,12 +50,40 @@ describe("catalog filter dialog", () => {
     expect(document.activeElement).toBe(close);
 
     input.focus();
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Tab", bubbles: true }),
+    );
     expect(document.activeElement).toBe(close);
 
-    dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    dialog.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
     expect(dialog.classList.contains("hidden")).toBe(true);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it("supports collection-specific control IDs", () => {
+    document.body.innerHTML = `
+      <button id="collection-toggle" aria-expanded="false">Filters</button>
+      <aside id="collection-dialog" class="hidden">
+        <button id="collection-close">Close</button>
+      </aside>
+    `;
+
+    setupCatalogFilterDialog({
+      toggleId: "collection-toggle",
+      closeId: "collection-close",
+      dialogId: "collection-dialog",
+    });
+
+    const toggle =
+      document.querySelector<HTMLButtonElement>("#collection-toggle")!;
+    const dialog = document.querySelector<HTMLElement>("#collection-dialog")!;
+    toggle.click();
+
+    expect(dialog.classList.contains("hidden")).toBe(false);
+    expect(dialog.getAttribute("role")).toBe("dialog");
+    expect(document.activeElement?.id).toBe("collection-close");
   });
 });

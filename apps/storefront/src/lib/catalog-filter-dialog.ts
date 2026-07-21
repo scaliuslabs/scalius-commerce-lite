@@ -7,19 +7,36 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-export function setupCatalogFilterDialog(): void {
-  const toggle = document.getElementById("mobile-filter-toggle");
-  const close = document.getElementById("mobile-filter-close");
-  const dialog = document.getElementById("filter-section");
-  if (!(toggle instanceof HTMLButtonElement) || !(close instanceof HTMLButtonElement) || !dialog) return;
+export function setupCatalogFilterDialog({
+  toggleId = "mobile-filter-toggle",
+  closeId = "mobile-filter-close",
+  dialogId = "filter-section",
+}: {
+  toggleId?: string;
+  closeId?: string;
+  dialogId?: string;
+} = {}): void {
+  const toggle = document.getElementById(toggleId);
+  const close = document.getElementById(closeId);
+  const dialog = document.getElementById(dialogId);
+  if (
+    !(toggle instanceof HTMLButtonElement) ||
+    !(close instanceof HTMLButtonElement) ||
+    !dialog
+  )
+    return;
   if (dialog.dataset.dialogBound === "true") return;
   dialog.dataset.dialogBound = "true";
 
   const mobile = window.matchMedia("(max-width: 1023px)");
 
   const isOpen = () => mobile.matches && !dialog.classList.contains("hidden");
-  const focusable = () => [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
-    .filter((element) => !element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true");
+  const focusable = () =>
+    [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+      (element) =>
+        !element.hasAttribute("disabled") &&
+        element.getAttribute("aria-hidden") !== "true",
+    );
 
   const syncSemantics = () => {
     if (mobile.matches) {
