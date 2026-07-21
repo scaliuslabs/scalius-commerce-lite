@@ -6,6 +6,7 @@ const folders = readFileSync(new URL("./FolderBrowser.tsx", import.meta.url), "u
 const preview = readFileSync(new URL("./MediaPreview.tsx", import.meta.url), "utf8");
 const card = readFileSync(new URL("./MediaCard.tsx", import.meta.url), "utf8");
 const workspace = readFileSync(new URL("../MediaWorkspace.tsx", import.meta.url), "utf8");
+const dialog = readFileSync(new URL("../../../ui/dialog.tsx", import.meta.url), "utf8");
 
 describe("media workspace polish boundaries", () => {
   it("keeps bulk commands explicit and touch-sized on compact screens", () => {
@@ -41,6 +42,15 @@ describe("media workspace polish boundaries", () => {
     expect(preview).toContain('dirty ? "Unsaved details"');
     expect(preview).toContain("!dirty || saving");
     expect(preview).toContain("draftKeyRef.current === draftKey");
+  });
+
+  it("keeps preview and shared dialog actions touch-sized on mobile", () => {
+    expect(preview).toContain('className="h-11 text-[13px] sm:h-8"');
+    expect(preview.match(/className="h-11 flex-1 sm:h-8"/g)).toHaveLength(2);
+    expect(preview).toContain('className="h-11 sm:h-8" disabled');
+    expect(preview).toContain("h-11 w-11 -translate-y-1/2 sm:h-8 sm:w-8");
+    expect(dialog).toContain("h-11 w-11 items-center justify-center");
+    expect(dialog).toContain("sm:h-8 sm:w-8");
   });
 
   it("removes per-item lifecycle controls while bulk selection is active", () => {
