@@ -157,6 +157,17 @@ describe("product detail page SKU boundaries", () => {
     );
   });
 
+  it("preloads the same primary-image transformation rendered by the gallery", () => {
+    const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
+    const preload = source.slice(
+      source.indexOf("primaryImageUrl &&"),
+      source.indexOf("productJsonLd &&"),
+    );
+
+    expect(preload).toContain('fit: "contain"');
+    expect(preload).toContain('trim: "border"');
+  });
+
   it("resolves exact variant query state for SSR metadata and analytics", () => {
     const source = readFileSync(PRODUCT_PAGE_SOURCE, "utf8");
 

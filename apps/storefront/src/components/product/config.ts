@@ -4,6 +4,11 @@
  */
 
 export const GALLERY_CONFIG = {
+  imageTransforms: {
+    preview: 320,
+    display: 600,
+    zoom: 1400,
+  },
   // Thumbnail sizes (adjust these to change thumbnail dimensions)
   thumbnails: {
     desktop: {
