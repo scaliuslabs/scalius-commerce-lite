@@ -54,7 +54,9 @@ function renderGallery(initial = "pmed_video") {
       data-fallback-media-id="med_poster"
       data-fallback-alt="Fallback image"
     >
-      <div data-image-stage="desktop" class="hidden lg:block"></div>
+      <div data-image-stage="desktop" class="hidden lg:block">
+        <img data-desktop-main-image src="/fallback-main.jpg" />
+      </div>
       <button data-image-stage="mobile" data-mobile-image-trigger>
         <img data-mobile-main-image src="/fallback-main.jpg" />
       </button>
@@ -137,6 +139,9 @@ describe("mixed product media gallery", () => {
     const mobileImage = root.querySelector<HTMLImageElement>(
       "[data-mobile-main-image]",
     )!;
+    const desktopMainImage = root.querySelector<HTMLImageElement>(
+      "[data-desktop-main-image]",
+    )!;
     expect(video.getAttribute("src")).toBeNull();
     expect(
       root
@@ -144,6 +149,8 @@ describe("mixed product media gallery", () => {
         ?.classList.contains("hidden"),
     ).toBe(true);
     expect(mobileImage.src).toContain("/image-main.jpg");
+    expect(desktopMainImage.src).toContain("/image-main.jpg");
+    expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: "pmed_image",
@@ -180,6 +187,10 @@ describe("mixed product media gallery", () => {
       source: "variant",
     });
     expect(mobileImage.scrollIntoView).toHaveBeenCalledOnce();
+    expect(mobileImage.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "nearest",
+    });
     expect(desktopImage.scrollIntoView).not.toHaveBeenCalled();
 
     window.dispatchEvent(

@@ -108,12 +108,24 @@ export function ProductImageZoom({
     });
   }, [getZoomUrl]);
 
-  // Keep the loaded state in sync with URL changes without forcing high-res
-  // network work before the customer shows zoom intent.
+  // Recover gallery state that may have changed before this island hydrated.
   useEffect(() => {
+    const image = imageElementRef.current;
+    const gallery = image?.closest<HTMLElement>("[data-product-gallery]");
+    const activeUrl = gallery?.dataset.activeMediaUrl;
+    if (image && activeUrl) {
+      currentImageRef.current = activeUrl;
+      currentZoomImageRef.current =
+        gallery.dataset.activeMediaZoomUrl || undefined;
+      image.src = activeUrl;
+      image.alt = gallery.dataset.activeMediaAlt || alt;
+    }
     const zoomUrl = getZoomUrl();
     setIsHighResLoaded(!!zoomUrl && preloadedImages.get(zoomUrl) === true);
-  }, [getZoomUrl]);
+    if (zoomBgRef.current) {
+      zoomBgRef.current.style.backgroundImage = `url('${activeUrl || currentImageRef.current}')`;
+    }
+  }, [alt, getZoomUrl]);
 
   // Listen for the one gallery media event. Video selection is handled by the
   // Astro stage and deliberately never enters the image/zoom pipeline.
@@ -219,6 +231,7 @@ export function ProductImageZoom({
     >
       {/* Base Image (Always Visible) */}
       <img
+        data-desktop-main-image
         ref={imageElementRef}
         src={displayUrl}
         alt={alt}
