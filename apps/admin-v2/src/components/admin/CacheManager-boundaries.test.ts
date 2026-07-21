@@ -36,7 +36,7 @@ function extractObjectBody(source: string, marker: string) {
 
 function extractTopLevelObjectKeys(source: string, marker: string) {
   const body = extractObjectBody(source, marker);
-  return Array.from(body.matchAll(/^ {2}([a-z][a-z0-9_]*): \{/gim), (match) =>
+  return Array.from(body.matchAll(/^ {2}([a-z][a-z0-9_]*):/gim), (match) =>
     match[1],
   );
 }
@@ -52,7 +52,7 @@ describe("CacheManager release boundaries", () => {
     expect(source).toContain("{canManageCache ? (");
     expect(source).toContain("Manage permission required");
     expect(source).toContain("{canManageCache && (");
-    expect(source).toContain("Clear All Cache");
+    expect(source).toContain("Clear all caches");
   });
 
   it("keeps queue resolution deliberate and accessible", () => {
@@ -79,7 +79,7 @@ describe("CacheManager release boundaries", () => {
     const cacheManagerSource = readSource(CACHE_MANAGER_SOURCE);
     const apiCacheSource = readSource(API_CACHE_INVALIDATION_SOURCE);
 
-    const uiGroups = extractTopLevelObjectKeys(cacheManagerSource, "GROUP_CONFIG");
+    const uiGroups = extractTopLevelObjectKeys(cacheManagerSource, "GROUP_ICONS");
     const apiGroups = extractTopLevelObjectKeys(apiCacheSource, "INVALIDATION_GROUPS");
 
     expect(uiGroups).toEqual(expect.arrayContaining(apiGroups));
