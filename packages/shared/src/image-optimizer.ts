@@ -37,6 +37,12 @@ export interface ImageOptimizationOptions {
   format?: "auto" | "webp" | "avif" | "json";
   fit?: "scale-down" | "contain" | "cover" | "crop" | "pad";
   gravity?: "auto" | "face" | "left" | "right" | "top" | "bottom" | "center" | `${number}x${number}`;
+  /**
+   * Remove a uniform outer border before resizing. Keep this opt-in: catalog
+   * grids often need authored canvas consistency, while detail views can use
+   * border trimming to make the complete product more legible without a crop.
+   */
+  trim?: "border";
   sharpen?: number; // 0-10
   blur?: number; // 0-250
 }
@@ -104,6 +110,7 @@ function buildParams(opts: ImageOptimizationOptions): string {
   if (opts.format) parts.push(`format=${opts.format}`);
   if (opts.fit) parts.push(`fit=${opts.fit}`);
   if (opts.gravity) parts.push(`gravity=${opts.gravity}`);
+  if (opts.trim) parts.push(`trim=${opts.trim}`);
   if (opts.sharpen !== undefined) parts.push(`sharpen=${opts.sharpen}`);
   if (opts.blur !== undefined) parts.push(`blur=${opts.blur}`);
   return parts.join(",");

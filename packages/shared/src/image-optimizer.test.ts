@@ -47,6 +47,17 @@ describe("getOptimizedImageUrl", () => {
     expect(url).toContain("fit=cover,gravity=0.25x0.7");
   });
 
+  it("supports opt-in border trimming without changing the fit policy", () => {
+    const url = getOptimizedImageUrl(
+      "https://cdn.example.com/products/shoe-on-white.jpg",
+      { width: 600, height: 600, fit: "contain", trim: "border" },
+      imageContext,
+    );
+
+    expect(url).toContain("fit=contain,trim=border");
+    expect(url).not.toContain("fit=cover");
+  });
+
   it("does not rewrite an existing transform without a new presentation request", () => {
     const existing =
       "https://cdn.example.com/cdn-cgi/image/width=320,fit=contain/products/item.jpg";

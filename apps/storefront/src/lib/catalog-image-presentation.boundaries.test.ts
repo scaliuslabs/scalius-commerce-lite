@@ -45,6 +45,7 @@ describe("buyer catalog image presentation boundaries", () => {
 
   it("preserves full product evidence in gallery thumbnails and social/schema images", () => {
     expect(productGallerySource).toContain('fit: "contain"');
+    expect(productGallerySource).toContain('trim: "border"');
     expect(productGallerySource).toContain("object-contain");
     expect(productGallerySource).not.toContain('fit: "cover"');
     expect(productGallerySource).not.toContain("object-cover");
@@ -52,6 +53,14 @@ describe("buyer catalog image presentation boundaries", () => {
     expect(productPageSource).toContain('fit: "pad"');
     expect(productPageSource).not.toContain('fit: "cover"');
     expect(collectionPageSource).toContain('fit: "pad"');
+  });
+
+  it("keeps mobile product media compact without changing media geometry per selection", () => {
+    expect(productGallerySource).toContain("mobile-media-stage");
+    expect(productGallerySource).toContain(
+      "max-height: var(--gallery-mobile-max-height)",
+    );
+    expect(productGallerySource).not.toContain("data-media-aspect-ratio");
   });
 
   it("keeps editorial category crops stable and saliency-aware", () => {
