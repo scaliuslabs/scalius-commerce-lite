@@ -32,6 +32,23 @@ describe("selective cache purge policy", () => {
     })).toBe(false);
   });
 
+  it("keeps CMS page-family purges generation-scoped", () => {
+    const input = {
+      groups: ["pages"],
+      prefixes: [
+        "page_slug_",
+        "page_render_",
+        "all_pages_",
+        "sitemap_pages_",
+        "page_html_",
+      ],
+      bumpVersion: false,
+    };
+
+    expect(shouldBumpCacheVersionForSelectivePurge(input)).toBe(false);
+    expect(shouldWarmCriticalCachesForSelectivePurge(input)).toBe(false);
+  });
+
   it("bumps and warms unknown prefix-only purges so broad L2 data cannot stale", () => {
     expect(shouldWarmCriticalCachesForSelectivePurge({
       groups: ["unknown"],

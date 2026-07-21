@@ -18,7 +18,11 @@ describe("exact cache generations", () => {
     expect(shouldUseExactCacheGeneration("all_products_default")).toBe(true);
     expect(shouldUseExactCacheGeneration("category_products_shoes_default")).toBe(true);
     expect(shouldUseExactCacheGeneration("collection_by_id_col_1::page=2")).toBe(true);
+    expect(shouldUseExactCacheGeneration("page_slug_about-us")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
+    expect(shouldUseExactCacheGeneration("all_pages_default")).toBe(true);
+    expect(shouldUseExactCacheGeneration("sitemap_pages_")).toBe(true);
+    expect(shouldUseExactCacheGeneration("page_html_")).toBe(true);
     expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(true);
     expect(shouldUseExactCacheGeneration("checkout_config")).toBe(true);
     expect(shouldUseExactCacheGeneration("global_shipping_methods")).toBe(true);
@@ -48,6 +52,15 @@ describe("exact cache generations", () => {
     expect(cacheGenerationKeyForLogicalKey("collection_by_id_col_1::")).toBe(
       "collection_by_id_col_1::",
     );
+    expect(cacheGenerationKeyForLogicalKey("page_slug_about-us")).toBe(
+      "page_slug_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("page_render_about-us_build")).toBe(
+      "page_render_",
+    );
+    expect(cacheGenerationKeyForLogicalKey("all_pages_default")).toBe(
+      "all_pages_",
+    );
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
       "product_slug_fish",
@@ -63,7 +76,7 @@ describe("exact cache generations", () => {
     expect(htmlPathCacheKeyFromPath("/collections/col_1")).toBe(
       "html_path_/collections/col_1",
     );
-    expect(htmlPathCacheKeyFromPath("/about-us")).toBe("html_path_/about-us");
+    expect(htmlPathCacheKeyFromPath("/about-us")).toBe("page_html_");
     expect(htmlPathCacheKeyFromPath("/api/product-feed.xml")).toBe(
       "feed_products_",
     );
@@ -75,6 +88,9 @@ describe("exact cache generations", () => {
     );
     expect(htmlPathCacheKeyFromPath("/sitemap-products.xml?page=2")).toBe(
       "sitemap_products_",
+    );
+    expect(htmlPathCacheKeyFromPath("/sitemap-pages.xml?page=2")).toBe(
+      "sitemap_pages_",
     );
     expect(htmlPathCacheKeyFromPath("/")).toBeNull();
     expect(htmlPathCacheKeyFromPath("/search?q=fish")).toBeNull();

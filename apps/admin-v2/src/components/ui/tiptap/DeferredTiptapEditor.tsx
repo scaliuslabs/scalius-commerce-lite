@@ -33,6 +33,7 @@ interface DeferredTiptapEditorProps {
   placeholder?: string;
   className?: string;
   compact?: boolean;
+  ariaLabel?: string;
 }
 
 function EditorLoadingShell({
@@ -67,6 +68,7 @@ export function DeferredTiptapEditor({
   placeholder = "Write something...",
   className,
   compact = false,
+  ariaLabel = "Rich text content",
 }: DeferredTiptapEditorProps) {
   const isAliveRef = useRef(true);
   const mountRequestedRef = useRef(false);
@@ -114,6 +116,7 @@ export function DeferredTiptapEditor({
             className={className}
             compact={compact}
             autoFocus={autoFocusEditor}
+            ariaLabel={ariaLabel}
           />
         </Suspense>
       </div>
@@ -130,7 +133,7 @@ export function DeferredTiptapEditor({
       role="textbox"
       tabIndex={0}
       aria-multiline="true"
-      aria-label="Rich text editor"
+      aria-label={ariaLabel}
       onFocus={() => loadAndMountEditor(true)}
       onPointerDown={() => loadAndMountEditor(true)}
     >

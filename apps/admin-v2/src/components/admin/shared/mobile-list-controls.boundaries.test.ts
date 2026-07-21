@@ -10,6 +10,18 @@ const paginationSource = readFileSync(
   resolve(import.meta.dirname, "AdminListPagination.tsx"),
   "utf8",
 );
+const dataTablePaginationSource = readFileSync(
+  resolve(import.meta.dirname, "../data-table/DataTablePagination.tsx"),
+  "utf8",
+);
+const rowActionsSource = readFileSync(
+  resolve(import.meta.dirname, "../data-table/DataTableRowActions.tsx"),
+  "utf8",
+);
+const dropdownMenuSource = readFileSync(
+  resolve(import.meta.dirname, "../../ui/dropdown-menu.tsx"),
+  "utf8",
+);
 
 describe("shared mobile list controls", () => {
   it("uses touch-sized search controls while preserving desktop density", () => {
@@ -20,9 +32,17 @@ describe("shared mobile list controls", () => {
   });
 
   it("uses touch-sized pagination controls without forcing mobile overflow", () => {
-    expect(paginationSource).toContain("h-11 px-3");
-    expect(paginationSource).toContain("h-11 w-11");
-    expect(paginationSource).toContain("sm:h-8");
-    expect(paginationSource).toContain('className="flex flex-wrap items-center gap-1.5"');
+    for (const source of [paginationSource, dataTablePaginationSource]) {
+      expect(source).toContain("h-11 px-3");
+      expect(source).toContain("h-11 w-11");
+      expect(source).toContain("sm:h-8");
+      expect(source).toContain('className="flex flex-wrap items-center gap-1.5"');
+    }
+  });
+
+  it("uses touch-sized row actions and menu items before desktop density resumes", () => {
+    expect(rowActionsSource).toContain("h-11 w-11 p-0 sm:h-8 sm:w-8");
+    expect(dropdownMenuSource).toContain("min-h-11");
+    expect(dropdownMenuSource).toContain("sm:min-h-0");
   });
 });

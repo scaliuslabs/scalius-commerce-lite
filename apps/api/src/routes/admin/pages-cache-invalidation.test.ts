@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   bulkPublishPages: vi.fn(),
   bulkUnpublishPages: vi.fn(),
   restorePages: vi.fn(),
+  invalidateApiAndStorefrontGroups: vi.fn(),
   invalidateApiAndScheduleStorefrontGroups: vi.fn(),
 }));
 
@@ -36,6 +37,7 @@ vi.mock("@scalius/core/modules/pages", async () => {
 });
 
 vi.mock("../../utils/cache-invalidation", () => ({
+  invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
   invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
   MAX_STOREFRONT_EXACT_HTML_PATHS: 20,
 }));
@@ -58,13 +60,21 @@ function createPageBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createDb(publicRows = [{ slug: "about-us" }]) {
+function createDb(
+  publicRows = [{ slug: "about-us" }],
+  subsequentPublicRows: Array<Array<{ slug: string }>> = [],
+) {
+  const rowBatches = [publicRows, ...subsequentPublicRows];
+  let selectCall = 0;
   return {
     select: vi.fn(() => {
+      const rows = rowBatches[Math.min(selectCall, rowBatches.length - 1)] ?? [];
+      selectCall += 1;
       const query = {
-        from: vi.fn(() => query),
-        where: vi.fn(() => Promise.resolve(publicRows)),
+        from: vi.fn(),
+        where: vi.fn(() => Promise.resolve(rows)),
       };
+      query.from.mockReturnValue(query);
       return query;
     }),
   };
@@ -73,9 +83,10 @@ function createDb(publicRows = [{ slug: "about-us" }]) {
 function createTestApp(
   publicRows = [{ slug: "about-us" }],
   permissions = new Set([PERMISSIONS.PAGES_PUBLISH]),
+  subsequentPublicRows: Array<Array<{ slug: string }>> = [],
 ) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
-  const db = createDb(publicRows);
+  const db = createDb(publicRows, subsequentPublicRows);
   const env = {
     CACHE: { id: "api-cache-kv" },
     PURGE_URL: "https://storefront.example.com/api/purge-cache",
@@ -89,6 +100,11 @@ function createTestApp(
   mocks.bulkPublishPages.mockResolvedValue(undefined);
   mocks.bulkUnpublishPages.mockResolvedValue(undefined);
   mocks.restorePages.mockResolvedValue(undefined);
+  mocks.invalidateApiAndStorefrontGroups.mockResolvedValue({
+    attempted: true,
+    ok: true,
+    status: 200,
+  });
   mocks.invalidateApiAndScheduleStorefrontGroups.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -131,37 +147,62 @@ describe("admin page cache invalidation", () => {
     { label: "create published page", path: "", method: "POST", body: createPageBody(), status: 201 },
     { label: "update public page", path: "/page_1", method: "PUT", body: { expectedRevision: 1, title: "About Scalius" }, status: 200 },
     { label: "bulk publish pages", path: "/bulk-publish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-    { label: "bulk restore pages", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-    { label: "restore page", path: "/page_1/restore", method: "POST", body: { expectedRevision: 1 }, status: 200 },
   ])("warms exact public CMS paths after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp([{ slug: "about-us" }]);
 
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["pages", "layout"],
-      expect.objectContaining({ env }),
-      { htmlPaths: ["/about-us"] },
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      env,
+      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
     );
   });
 
-  it("does not exact-warm unpublished create/update results", async () => {
+  it.each([
+    { label: "draft create", path: "", method: "POST", body: createPageBody({ slug: "draft-page", isPublished: false }), status: 201 },
+    { label: "bulk restore", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
+    { label: "restore", path: "/page_1/restore", method: "POST", body: { expectedRevision: 1 }, status: 200 },
+  ])("refreshes discovery without warming a page after $label", async ({ path, method, body, status }) => {
     const { app, env } = createTestApp([]);
+
+    const response = await requestJson(app, env, path, method, body);
+
+    expect(response.status).toBe(status);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      env,
+      { htmlPaths: ["/sitemap-pages.xml"] },
+    );
+  });
+
+  it("purges both the previous and current public paths after a slug update", async () => {
+    const { app, env } = createTestApp(
+      [{ slug: "about-us" }],
+      new Set([PERMISSIONS.PAGES_PUBLISH]),
+      [[{ slug: "our-story" }]],
+    );
 
     const response = await requestJson(
       app,
       env,
-      "",
-      "POST",
-      createPageBody({ slug: "draft-page", isPublished: false }),
+      "/page_1",
+      "PUT",
+      { expectedRevision: 1, slug: "our-story" },
     );
 
-    expect(response.status).toBe(201);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["pages", "layout"],
-      expect.objectContaining({ env }),
-      { htmlPaths: [] },
+    expect(response.status).toBe(200);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      env,
+      {
+        htmlPaths: [
+          "/sitemap-pages.xml",
+          "/about-us",
+          "/our-story",
+        ],
+      },
     );
   });
 
@@ -198,22 +239,44 @@ describe("admin page cache invalidation", () => {
     );
   });
 
+  it("queues a durable fallback without failing the committed mutation when the immediate purge fails", async () => {
+    const { app, env } = createTestApp([{ slug: "about-us" }]);
+    mocks.invalidateApiAndStorefrontGroups.mockRejectedValueOnce(
+      new Error("storefront unavailable"),
+    );
+
+    const response = await requestJson(
+      app,
+      env,
+      "",
+      "POST",
+      createPageBody(),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      expect.objectContaining({ env }),
+      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
+    );
+  });
+
   it.each([
     { label: "soft delete", path: "/page_1", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
     { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
     { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 204 },
     { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-  ])("keeps freshness invalidation but skips warming now-hidden pages after $label", async ({ path, method, body, status }) => {
+  ])("purges the previously public path after $label", async ({ path, method, body, status }) => {
     const { app, env, db } = createTestApp([{ slug: "about-us" }]);
 
     const response = await requestJson(app, env, path, method, body);
 
     expect(response.status).toBe(status);
-    expect(db.select).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-      ["pages", "layout"],
-      expect.objectContaining({ env }),
-      {},
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      env,
+      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
     );
   });
 });

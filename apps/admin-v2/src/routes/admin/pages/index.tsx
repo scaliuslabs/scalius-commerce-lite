@@ -61,7 +61,7 @@ export const Route = createFileRoute("/admin/pages/")({
   head: ({ match }) => ({
     meta: [
       {
-        title: `${match.search.trashed ? "Page Trash" : "Pages"} | Scalius Admin`,
+        title: `${match.search.trashed ? "Page trash" : "Pages"} | Scalius Admin`,
       },
     ],
   }),
@@ -236,11 +236,11 @@ function PagesPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            {showTrashed ? "Page Trash" : "Pages"}
+            {showTrashed ? "Page trash" : "Pages"}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {showTrashed
-              ? "View, restore, or permanently delete trashed pages."
+              ? "Restore pages or delete them permanently."
               : "Manage your website pages and content."}
           </p>
         </div>
@@ -249,20 +249,20 @@ function PagesPage() {
             to="/admin/pages"
             search={(showTrashed ? {} : { trashed: true }) as never}
           >
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9">
               {showTrashed ? (
                 <FileText className="mr-2 h-4 w-4" />
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
-              {showTrashed ? "View Active" : "View Trash"}
+              {showTrashed ? "View pages" : "View trash"}
             </Button>
           </Link>
           {!showTrashed && canCreate && (
             <Link to="/admin/pages/new">
-              <Button size="sm">
+              <Button size="sm" className="h-11 sm:h-9">
                 <Plus className="mr-2 h-4 w-4" />
-                New Page
+                New page
               </Button>
             </Link>
           )}
@@ -280,7 +280,7 @@ function PagesPage() {
           title: showTrashed ? "Trash is empty" : "No pages found",
           description: showTrashed
             ? "Deleted pages will appear here."
-            : "Create your first page to get started.",
+            : "Create a page to add storefront content.",
         }}
         toolbar={
           <DataTableToolbar
@@ -302,7 +302,7 @@ function PagesPage() {
                   })) as never,
                 })}
               >
-                <SelectTrigger className="h-9 w-[150px]" aria-label="Filter pages by status">
+                <SelectTrigger className="h-11 w-[150px] sm:h-9" aria-label="Filter pages by status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -316,16 +316,16 @@ function PagesPage() {
             selectedCount={selectedIds.length}
             bulkActions={<>
               {showTrashed && canEdit ? (
-                <Button variant="outline" size="sm" onClick={() => bulkRestoreMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
+                <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => bulkRestoreMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
                   <RotateCcw className="mr-2 h-4 w-4" /> Restore
                 </Button>
               ) : null}
               {!showTrashed && canPublish ? (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => bulkPublishMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
+                  <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => bulkPublishMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
                     <Eye className="mr-2 h-4 w-4" /> Publish now
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => bulkUnpublishMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
+                  <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => bulkUnpublishMutation.mutate(selectedClaims, { onSuccess: clearSelection })}>
                     <EyeOff className="mr-2 h-4 w-4" /> Move to draft
                   </Button>
                 </>
@@ -334,7 +334,7 @@ function PagesPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-destructive text-destructive hover:bg-destructive/10"
+                  className="h-11 border-destructive text-destructive hover:bg-destructive/10 sm:h-9"
                   onClick={() => setBulkDeleteClaims(selectedClaims)}
                 >
                   <Trash2 className="mr-2 h-4 w-4" /> {showTrashed ? "Delete" : "Trash"}

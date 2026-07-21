@@ -34,6 +34,7 @@ import {
 import { pageSchema } from "../../schemas/entities";
 import {
     invalidateApiAndScheduleStorefrontGroups,
+    invalidateApiAndStorefrontGroups,
     MAX_STOREFRONT_EXACT_HTML_PATHS,
     type WaitUntilExecutionContext,
 } from "../../utils/cache-invalidation";
@@ -41,7 +42,8 @@ import {
 import { ok, created, noContent } from "../../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const PAGE_CACHE_GROUPS = ["pages", "layout"] as const;
+const PAGE_CACHE_GROUPS = ["pages"] as const;
+const PAGE_DISCOVERY_HTML_PATH = "/sitemap-pages.xml";
 const pageMutationSchema = z.object({ revision: z.number().int().min(1) });
 const pageCreateResultSchema = pageMutationSchema.extend({ id: z.string() });
 const pageRevisionBodySchema = pageRevisionClaimSchema.omit({ id: true });
@@ -70,7 +72,25 @@ async function invalidatePageCaches(
     c: { env: Env; executionCtx?: WaitUntilExecutionContext },
     options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
-    await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c, options);
+    const htmlPaths = [PAGE_DISCOVERY_HTML_PATH, ...(options.htmlPaths ?? [])];
+    try {
+        const result = await invalidateApiAndStorefrontGroups(
+            [...PAGE_CACHE_GROUPS],
+            c.env,
+            { htmlPaths },
+        );
+        if (result.ok) return;
+    } catch (error: unknown) {
+        console.error("[Pages] Immediate storefront cache purge failed; queueing fallback:", error);
+    }
+
+    await invalidateApiAndScheduleStorefrontGroups([...PAGE_CACHE_GROUPS], c, {
+        htmlPaths,
+    });
+}
+
+function uniqueHtmlPaths(...pathGroups: readonly string[][]): string[] {
+    return [...new Set(pathGroups.flat())].slice(0, MAX_STOREFRONT_EXACT_HTML_PATHS);
 }
 
 // ── List Pages ──
@@ -174,8 +194,12 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const { pages: revisionClaims, permanent } = c.req.valid("json");
+    const previousHtmlPaths = await publicPageHtmlPathsByIds(
+        db,
+        revisionClaims.map((claim) => claim.id),
+    );
     await bulkDeletePages(db, revisionClaims, permanent);
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
     return noContent(c);
 });
 
@@ -228,8 +252,13 @@ const bulkUnpublishRoute = createRoute({
 
 app.openapi(bulkUnpublishRoute, async (c) => {
     const db = c.get("db");
-    await bulkUnpublishPages(db, c.req.valid("json").pages);
-    await invalidatePageCaches(c);
+    const revisionClaims = c.req.valid("json").pages;
+    const previousHtmlPaths = await publicPageHtmlPathsByIds(
+        db,
+        revisionClaims.map((claim) => claim.id),
+    );
+    await bulkUnpublishPages(db, revisionClaims);
+    await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
     return noContent(c);
 });
 
@@ -353,11 +382,15 @@ const updatePageRoute = createRoute({
 app.openapi(updatePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
     const result = await updatePage(db, id, c.req.valid("json"), {
         canPublish: c.get("adminPermissions").has(PERMISSIONS.PAGES_PUBLISH),
     });
     await invalidatePageCaches(c, {
-        htmlPaths: await publicPageHtmlPathsByIds(db, [id]),
+        htmlPaths: uniqueHtmlPaths(
+            previousHtmlPaths,
+            await publicPageHtmlPathsByIds(db, [id]),
+        ),
     });
     return ok(c, result);
 });
@@ -389,8 +422,9 @@ const deletePageRoute = createRoute({
 app.openapi(deletePageRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
     await deletePage(db, id, c.req.valid("json").expectedRevision);
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
     return noContent(c);
 });
 
@@ -421,12 +455,13 @@ const permanentDeleteRoute = createRoute({
 app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
+    const previousHtmlPaths = await publicPageHtmlPathsByIds(db, [id]);
     await bulkDeletePages(
         db,
         [{ id, expectedRevision: c.req.valid("json").expectedRevision }],
         true,
     );
-    await invalidatePageCaches(c);
+    await invalidatePageCaches(c, { htmlPaths: previousHtmlPaths });
     return noContent(c);
 });
 

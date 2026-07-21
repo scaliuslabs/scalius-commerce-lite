@@ -79,7 +79,7 @@ export function DataTablePagination<TData>({
     <Button
       variant="outline"
       size="sm"
-      className="h-8 px-2 text-xs text-foreground"
+      className="h-11 px-3 text-xs text-foreground sm:h-8 sm:px-2"
       data-state={isPageSizeMenuOpen ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={isPageSizeMenuOpen}
@@ -125,13 +125,13 @@ export function DataTablePagination<TData>({
         )}
       </div>
 
-      <nav aria-label="Pagination" className="flex items-center gap-1.5">
+      <nav aria-label="Pagination" className="flex flex-wrap items-center gap-1.5">
         <Button
           variant="outline"
           size="sm"
           onClick={() => table.firstPage()}
           disabled={!table.getCanPreviousPage()}
-          className="h-8 w-8 p-0"
+          className="h-11 w-11 p-0 sm:h-8 sm:w-8"
           aria-label="First page"
         >
           <ChevronsLeft className="h-4 w-4" />
@@ -141,7 +141,7 @@ export function DataTablePagination<TData>({
           size="sm"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
-          className="h-8 px-2.5 text-xs"
+          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
         >
           <ChevronLeft className="mr-1 h-4 w-4" />
           Previous
@@ -159,7 +159,7 @@ export function DataTablePagination<TData>({
           size="sm"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          className="h-8 px-2.5 text-xs"
+          className="h-11 px-3 text-xs sm:h-8 sm:px-2.5"
         >
           Next
           <ChevronRight className="ml-1 h-4 w-4" />
@@ -169,7 +169,7 @@ export function DataTablePagination<TData>({
           size="sm"
           onClick={() => table.lastPage()}
           disabled={!table.getCanNextPage()}
-          className="h-8 w-8 p-0"
+          className="h-11 w-11 p-0 sm:h-8 sm:w-8"
           aria-label="Last page"
         >
           <ChevronsRight className="h-4 w-4" />

@@ -475,17 +475,17 @@ describe("storefront cache purge route", () => {
       expect.any(String),
     );
     expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
-      `g:storefront.example.com:page_render_about-us_${BUILD_ID}`,
+      "g:storefront.example.com:page_render_",
       expect.any(String),
     );
     expect(mocks.cfEnv.CACHE_CONTROL.put).toHaveBeenCalledWith(
-      "g:storefront.example.com:html_path_%2Fabout-us",
+      "g:storefront.example.com:page_html_",
       expect.any(String),
     );
     expect(mocks.clearL1ByPrefixes).toHaveBeenCalledWith([
       "page_render_about-us_",
       `page_render_about-us_${BUILD_ID}`,
-      "html_path_/about-us",
+      "page_html_",
     ]);
     const htmlDeleteArg = mocks.cacheDelete.mock.calls.find(
       ([arg]) => arg instanceof Request,
