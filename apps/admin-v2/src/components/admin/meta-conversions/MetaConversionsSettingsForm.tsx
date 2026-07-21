@@ -27,9 +27,11 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useMetaConversionsSettings } from "./hooks/useMetaConversionsSettings";
-import type { RetentionInfo } from "./hooks/useMetaConversionsLogs";
 import type { MetaPixelParityDiagnostics } from "~/types/api-responses";
 import { OfficialProviderMark } from "~/components/admin/settings/provider-marks";
+import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 
 // Local types replacing @scalius/database/schema imports
 export interface MetaConversionsSettings {
@@ -55,7 +57,6 @@ export interface FormData {
 interface MetaConversionsSettingsFormProps {
   initialSettings?: MetaConversionsSettings;
   initialPixelParity?: MetaPixelParityDiagnostics | null;
-  retentionInfo: RetentionInfo | null;
 }
 
 function getParityTitle(pixelParity: MetaPixelParityDiagnostics): string {
@@ -131,7 +132,7 @@ function MetaPixelParityPanel({
           )}
         </div>
         {pixelParity.status !== "ok" ? (
-          <Button asChild variant="outline" size="sm" className="mt-2">
+          <Button asChild variant="outline" size="sm" className="mt-2 min-h-11 sm:min-h-9">
             <Link
               to="/admin/analytics"
               search={{
@@ -158,7 +159,6 @@ function MetaPixelParityPanel({
 export function MetaConversionsSettingsForm({
   initialSettings,
   initialPixelParity,
-  retentionInfo,
 }: MetaConversionsSettingsFormProps) {
   const {
     formData,
@@ -173,21 +173,65 @@ export function MetaConversionsSettingsForm({
     handleResetForm,
     updateFormData,
   } = useMetaConversionsSettings(initialSettings, initialPixelParity);
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission(ADMIN_PERMISSIONS.ANALYTICS_EDIT);
+  const setupComplete = Boolean(
+    formData.pixelId.trim() && formData.accessToken.trim() && !settingsIssue,
+  );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <OfficialProviderMark provider="meta" />
-          Meta Conversions API Configuration
-        </CardTitle>
-        <CardDescription>
-          Configure your Meta (Facebook) Conversions API settings to track
-          events and conversions. These settings are used to send
-          server-side events to Meta for better tracking and attribution.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <>
+      <UnsavedChangesGuard
+        isDirty={hasUnsavedChanges}
+        isSubmitting={isSettingsLoading}
+      />
+      <Card className="shadow-none">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <OfficialProviderMark provider="meta" />
+            Server events
+          </CardTitle>
+          <CardDescription>
+            Send supported storefront and purchase events to Meta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <dt className="text-xs text-muted-foreground">Setup</dt>
+              <dd className="mt-1 text-sm font-medium">
+                {setupComplete ? "Credentials saved" : "Setup required"}
+              </dd>
+            </div>
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <dt className="text-xs text-muted-foreground">Server events</dt>
+              <dd className="mt-1 text-sm font-medium">
+                {formData.isEnabled ? "Active" : "Inactive"}
+              </dd>
+            </div>
+            <div className="rounded-md border bg-muted/20 px-3 py-2">
+              <dt className="text-xs text-muted-foreground">Browser Pixel</dt>
+              <dd className="mt-1 text-sm font-medium">
+                {pixelParity?.status === "ok"
+                  ? "Matched"
+                  : pixelParity
+                    ? "Needs review"
+                    : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+
+          {!canEdit ? (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Read-only access</AlertTitle>
+              <AlertDescription>
+                You can review settings and delivery activity, but you cannot
+                change the integration.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
         <form
           method="post"
           onSubmit={(e) => {
@@ -197,42 +241,50 @@ export function MetaConversionsSettingsForm({
           noValidate
         >
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="pixelId">Pixel ID</Label>
                 <Input
                   id="pixelId"
                   placeholder="Enter your Meta Pixel ID"
                   value={formData.pixelId}
+                  disabled={!canEdit || isSettingsLoading}
+                  className="min-h-11 sm:min-h-9"
                   onChange={(e) => updateFormData("pixelId", e.target.value)}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="testEventCode">
-                  Test Event Code (Optional)
+                  Test event code (optional)
                 </Label>
                 <Input
                   id="testEventCode"
                   placeholder="Enter test event code"
                   value={formData.testEventCode}
+                  disabled={!canEdit || isSettingsLoading}
+                  className="min-h-11 sm:min-h-9"
                   onChange={(e) => updateFormData("testEventCode", e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  New events appear in Meta Test Events until this code is removed.
+                </p>
               </div>
             </div>
 
             <MetaPixelParityPanel pixelParity={pixelParity} />
 
             <div className="space-y-2">
-              <Label htmlFor="accessToken">Access Token</Label>
+              <Label htmlFor="accessToken">Access token</Label>
               <div className="relative">
                 <Input
                   id="accessToken"
                   type={showAccessToken ? "text" : "password"}
                   placeholder="Enter your Meta Conversions API access token"
                   value={formData.accessToken}
+                  disabled={!canEdit || isSettingsLoading}
                   onChange={(e) => updateFormData("accessToken", e.target.value)}
-                  className="pr-10"
+                  className="min-h-11 pr-11 sm:min-h-9"
                   autoComplete="off"
                 />
                 <Button
@@ -240,6 +292,8 @@ export function MetaConversionsSettingsForm({
                   variant="ghost"
                   size="icon"
                   className="absolute right-0 top-0 h-full px-3 py-2"
+                  aria-label={showAccessToken ? "Hide access token" : "Show access token"}
+                  disabled={!canEdit || isSettingsLoading}
                   onClick={() => setShowAccessToken(!showAccessToken)}
                 >
                   {showAccessToken ? (
@@ -249,8 +303,8 @@ export function MetaConversionsSettingsForm({
                   )}
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                This token is sensitive and will be encrypted when stored.
+              <p className="text-xs text-muted-foreground">
+                Stored encrypted. The saved token is never shown again.
               </p>
             </div>
 
@@ -275,10 +329,10 @@ export function MetaConversionsSettingsForm({
               </Alert>
             ) : null}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="logRetentionDays">
-                  Log Retention (Days)
+                  Keep delivery logs (days)
                 </Label>
                 <Input
                   id="logRetentionDays"
@@ -286,6 +340,8 @@ export function MetaConversionsSettingsForm({
                   min="1"
                   max="365"
                   value={formData.logRetentionDays}
+                  disabled={!canEdit || isSettingsLoading}
+                  className="min-h-11 sm:min-h-9"
                   onChange={(e) =>
                     updateFormData(
                       "logRetentionDays",
@@ -293,64 +349,76 @@ export function MetaConversionsSettingsForm({
                     )
                   }
                 />
-                <p className="text-sm text-muted-foreground">
-                  Dashboard setting only. Actual cleanup happens every{" "}
-                  {retentionInfo?.hours || 12} hours automatically.
+                <p className="text-xs text-muted-foreground">
+                  Events older than this many days are removed by scheduled cleanup.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="isEnabled">
-                  Enable Meta Conversions API
-                </Label>
-                <div className="flex items-center space-x-2">
+                <Label htmlFor="isEnabled">Send server events</Label>
+                <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2 sm:min-h-9">
+                  <span className="text-sm text-muted-foreground">
+                    {formData.isEnabled
+                      ? "Supported events are sent to Meta"
+                      : enableIssue
+                        ? "Complete setup before enabling"
+                        : "Server delivery is off"}
+                  </span>
                   <Switch
                     id="isEnabled"
                     checked={formData.isEnabled}
-                    disabled={isSettingsLoading}
+                    disabled={!canEdit || isSettingsLoading}
                     onCheckedChange={(checked) =>
                       updateFormData("isEnabled", checked)
                     }
                   />
-                  <span className="text-sm text-muted-foreground">
-                    {formData.isEnabled
-                      ? "Enabled"
-                      : enableIssue
-                        ? "Disabled until credentials are ready"
-                        : "Disabled"}
-                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 pt-4">
-              <Button
-                type="submit"
-                disabled={isSettingsLoading || !hasUnsavedChanges || Boolean(settingsIssue)}
-                className="flex items-center gap-2"
-              >
-                {isSettingsLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Save Settings
-              </Button>
-              {hasUnsavedChanges && (
+            <Alert className="bg-muted/30">
+              <Info className="h-4 w-4" />
+              <AlertTitle>Delivery is verified separately</AlertTitle>
+              <AlertDescription>
+                Saving does not test Meta delivery. Review provider results in
+                Delivery activity.
+              </AlertDescription>
+            </Alert>
+
+            {canEdit ? (
+              <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center">
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleResetForm}
-                  className="flex items-center gap-2"
+                  type="submit"
+                  disabled={isSettingsLoading || !hasUnsavedChanges || Boolean(settingsIssue)}
+                  className="min-h-11 gap-2 sm:min-h-9"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  Reset
+                  {isSettingsLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save changes
                 </Button>
-              )}
-            </div>
+                {hasUnsavedChanges ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetForm}
+                    className="min-h-11 gap-2 sm:min-h-9"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                ) : null}
+                <span className="text-xs text-muted-foreground" aria-live="polite">
+                  {hasUnsavedChanges ? "Unsaved changes" : "Settings are up to date"}
+                </span>
+              </div>
+            ) : null}
           </div>
         </form>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </>
   );
 }

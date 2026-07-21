@@ -22,7 +22,7 @@ export function MetaConversionsContainer({
   onSectionChange,
 }: MetaConversionsContainerProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Tabs
         value={section}
         onValueChange={(value) =>
@@ -30,14 +30,14 @@ export function MetaConversionsContainer({
         }
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="settings" className="flex items-center gap-2">
+        <TabsList className="grid min-h-11 w-full grid-cols-2 sm:min-h-9">
+          <TabsTrigger value="settings" className="min-h-11 gap-2 sm:min-h-8">
             <Settings className="w-4 h-4" />
             Settings
           </TabsTrigger>
-          <TabsTrigger value="logs" className="flex items-center gap-2">
+          <TabsTrigger value="logs" className="min-h-11 gap-2 sm:min-h-8">
             <Activity className="w-4 h-4" />
-            Logs
+            Delivery activity
           </TabsTrigger>
         </TabsList>
 
@@ -45,7 +45,6 @@ export function MetaConversionsContainer({
           <MetaConversionsSettingsForm
             initialSettings={initialSettings}
             initialPixelParity={initialPixelParity}
-            retentionInfo={null}
           />
         </TabsContent>
 
