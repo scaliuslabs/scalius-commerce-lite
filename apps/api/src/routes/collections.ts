@@ -82,6 +82,13 @@ const storefrontCollectionSchema = z.object({
   updatedAt: z.string().nullable(),
 }).passthrough();
 
+const storefrontCollectionDetailSchema = storefrontCollectionSchema.extend({
+  description: z.string().nullable(),
+  content: z.string().nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+});
+
 const collectionProductSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -192,7 +199,7 @@ const getCollectionByIdRoute = createRoute({
     200: {
       description: "Collection details with resolved products",
       content: { "application/json": { schema: successEnvelope(z.object({
-        collection: storefrontCollectionSchema,
+        collection: storefrontCollectionDetailSchema,
         categories: z.array(z.object({ id: z.string(), name: z.string(), slug: z.string() }).passthrough()),
         products: z.array(collectionProductSchema),
         featuredProduct: collectionProductSchema.optional(),

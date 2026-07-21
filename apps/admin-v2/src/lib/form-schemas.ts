@@ -65,6 +65,7 @@ export const categoryFormSchema = z.object({
     .min(3, "Category name must be at least 3 characters")
     .max(100, "Category name must be less than 100 characters"),
   description: z.string().trim().max(100_000, "Description is too long").nullable(),
+  content: z.string().trim().max(100_000, "Content is too long").nullable().default(null),
   slug: z
     .string()
     .min(3, "Slug must be at least 3 characters")

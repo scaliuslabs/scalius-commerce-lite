@@ -23,4 +23,16 @@ describe("public collection catalog route", () => {
     expect(source).toContain("404: errorResponses[404]");
     expect(source).toContain("500: errorResponses[500]");
   });
+
+  it("keeps long editorial copy on detail responses only", () => {
+    const listProjection = source.slice(
+      source.indexOf("const activeCollections = await db"),
+      source.indexOf("const formattedCollections ="),
+    );
+
+    expect(source).toContain("const storefrontCollectionDetailSchema =");
+    expect(source).toContain("collection: storefrontCollectionDetailSchema");
+    expect(listProjection).not.toContain("description: collections.description");
+    expect(listProjection).not.toContain("content: collections.content");
+  });
 });

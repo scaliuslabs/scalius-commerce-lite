@@ -482,6 +482,21 @@ const collectionJsonLd =
           }
         </div>
       </div>
+
+      {
+        category?.content && !hasListingQuery && (
+          <section
+            class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
+            aria-label={`${category.name} guide`}
+          >
+            <RichContent
+              content={category.content}
+              className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
+              processShortcodes={false}
+            />
+          </section>
+        )
+      }
     </div>
   </div>
 </Layout>

@@ -225,6 +225,8 @@ export interface Category {
   name: string;
   slug: string;
   description: string | null;
+  /** Available on category detail responses; omitted from list responses. */
+  content?: string | null;
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
@@ -273,6 +275,10 @@ export interface Collection {
 }
 
 export interface CollectionWithProducts extends Collection {
+  description: string | null;
+  content: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
   categories?: CategorySummary[];
   products?: Product[];
   featuredProduct?: Product | null;

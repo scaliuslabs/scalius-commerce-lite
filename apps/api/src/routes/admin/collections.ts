@@ -31,7 +31,7 @@ import {
     messageResponse,
     noContentResponse,
 } from "../../schemas/responses";
-import { collectionSchema } from "../../schemas/entities";
+import { collectionSchema, collectionSummarySchema } from "../../schemas/entities";
 import { invalidateCatalogCaches } from "../../utils/cache-invalidation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -204,7 +204,7 @@ const listRoute = createRoute({
     responses: {
         200: {
             description: "Collection list with pagination",
-            content: { "application/json": { schema: paginatedEnvelope("collections", collectionSchema) } },
+            content: { "application/json": { schema: paginatedEnvelope("collections", collectionSummarySchema) } },
         },
         ...errorResponses,
     }

@@ -30,6 +30,17 @@ describe("collection storefront workflow boundaries", () => {
     expect(collectionPage).not.toContain('aria-modal="true"');
   });
 
+  it("separates collection identity, search metadata, and canonical-only editorial content", () => {
+    expect(collectionPage).toContain("const title = collection.metaTitle || collection.name");
+    expect(collectionPage).toContain("const plainDescription = htmlToPlainText(collection.description)");
+    expect(collectionPage).toContain("{collection.name}");
+    expect(collectionPage).toContain("collection.content && !hasListingQuery");
+    expect(collectionPage).toContain("content={collection.content}");
+    expect(collectionPage).toContain("processShortcodes={false}");
+    expect(collectionPage).toContain("!hasListingQuery &&");
+    expect(collectionPage).not.toContain("config.title || collection.name");
+  });
+
   it("links both homepage presentations to the collection route", () => {
     for (const source of [grid, carousel]) {
       expect(source).toContain(

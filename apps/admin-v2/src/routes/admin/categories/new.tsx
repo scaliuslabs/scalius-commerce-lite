@@ -5,6 +5,7 @@ const defaultValues = {
   status: "draft" as const,
   name: "",
   description: null,
+  content: null,
   slug: "",
   metaTitle: null,
   metaDescription: null,

@@ -43,7 +43,7 @@ describe("category route query boundaries", () => {
   it("keeps category-products responses carrying full category metadata", () => {
     const source = readFileSync(`${ROUTES_DIR}/categories.ts`, "utf8");
     const routeSchemaIndex = source.indexOf("const getCategoryProductsRoute = createRoute(");
-    const categorySchemaIndex = source.indexOf("category: storefrontCategorySchema", routeSchemaIndex);
+    const categorySchemaIndex = source.indexOf("category: storefrontCategoryDetailSchema", routeSchemaIndex);
     const categoryForProductsIndex = source.indexOf("const categoryForProducts = {");
     const productHelperIndex = source.indexOf("getStorefrontCategoryProducts(", categoryForProductsIndex);
 
@@ -52,6 +52,7 @@ describe("category route query boundaries", () => {
     expect(categoryForProductsIndex).toBeGreaterThan(categorySchemaIndex);
     expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("createdAt: category.createdAt");
     expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("updatedAt: category.updatedAt");
+    expect(source.slice(categoryForProductsIndex, productHelperIndex)).toContain("content: category.content");
   });
 
   it("bounds public category-product limits and normalizes search cache keys", () => {

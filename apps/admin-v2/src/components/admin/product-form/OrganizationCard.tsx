@@ -161,6 +161,7 @@ function CategoryCombobox({
           name: search.trim(),
           slug,
           description: null,
+          content: null,
           metaTitle: null,
           metaDescription: null,
           canonicalPath: null,

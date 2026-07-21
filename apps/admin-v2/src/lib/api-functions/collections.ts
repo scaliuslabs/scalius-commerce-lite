@@ -17,7 +17,7 @@ export interface CollectionConfigInput {
   subtitle?: string;
 }
 
-export interface CollectionDto {
+export interface CollectionSummaryDto {
   id: string;
   name: string;
   presentation: CollectionPresentation;
@@ -33,6 +33,13 @@ export interface CollectionDto {
   deletedAt: NullableTimestamp;
 }
 
+export interface CollectionDto extends CollectionSummaryDto {
+  description: string | null;
+  content: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+}
+
 export interface PaginationPayload {
   total: number;
   page: number;
@@ -41,7 +48,7 @@ export interface PaginationPayload {
 }
 
 export interface CollectionsListPayload {
-  collections: CollectionDto[];
+  collections: CollectionSummaryDto[];
   pagination: PaginationPayload;
 }
 
@@ -72,11 +79,15 @@ export interface CollectionsQueryInput {
 
 export interface CreateCollectionInput {
   name: string;
+  description: string | null;
+  content: string | null;
   presentation: CollectionPresentation;
   isActive: boolean;
   canonicalPath: string | null;
   noIndex: boolean;
   excludeFromSitemap: boolean;
+  metaTitle: string | null;
+  metaDescription: string | null;
   config: CollectionConfigInput;
 }
 

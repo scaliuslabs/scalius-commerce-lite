@@ -13,6 +13,12 @@ describe("category listing page boundaries", () => {
     expect(source).toContain("!hasListingQuery &&");
   });
 
+  it("renders optional buying content only on the canonical listing", () => {
+    expect(source).toContain("category?.content && !hasListingQuery");
+    expect(source).toContain("content={category.content}");
+    expect(source).toContain("processShortcodes={false}");
+  });
+
   it("distinguishes an empty category from an empty filtered result", () => {
     expect(source).toContain("No products match these filters");
     expect(source).toContain("No products in this category yet");

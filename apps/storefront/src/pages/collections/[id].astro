@@ -3,6 +3,7 @@ import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import CategoryFilters from "@/components/CategoryFilters";
 import AppliedCatalogFilters from "@/components/catalog/AppliedCatalogFilters.astro";
+import RichContent from "@/components/RichContent.astro";
 import { getCollectionByIdResult } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
@@ -15,6 +16,7 @@ import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
@@ -67,9 +69,12 @@ const facets = collection.facets ?? [];
 const pagination = collection.pagination;
 const currentFilters = queryState.currentFilters;
 const categories = collection.categories ?? [];
-const config = collection.config ?? {};
-const title = config.title || collection.name;
-const subtitle = config.subtitle || "";
+const title = collection.metaTitle || collection.name;
+const plainDescription = htmlToPlainText(collection.description);
+const description =
+  collection.metaDescription ||
+  plainDescription ||
+  `Browse ${collection.name}.`;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
 const canonicalUrl = buildResourceCanonicalSeoUrl(
@@ -98,11 +103,10 @@ const activeFilterCount = Object.keys(currentFilters)
     0,
   );
 const collectionPathname = Astro.url.pathname;
+const hasListingQuery = Astro.url.searchParams.size > 0;
 const shouldNoindexCollectionView =
   collection.noIndex === true ||
-  pagination.page > 1 ||
-  activeFilterCount > 0 ||
-  Boolean(queryState.query);
+  hasListingQuery;
 
 function getPaginationUrl(page: number) {
   return buildProductListPaginationHref({
@@ -151,13 +155,14 @@ const collectionBreadcrumbJsonLd =
 const collectionJsonLd =
   discoverySettings.structuredData.collections &&
   !collection.noIndex &&
+  !hasListingQuery &&
   canonicalUrl &&
   storefrontUrl
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "CollectionPage",
-        name: title,
-        description: subtitle || `Browse ${collection.name}.`,
+        name: collection.name,
+        description,
         url: canonicalUrl,
         numberOfItems: pagination.total,
       })
@@ -166,7 +171,7 @@ const collectionJsonLd =
 
 <Layout
   title={title}
-  description={subtitle || `Browse ${collection.name}.`}
+  description={description}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
   ogImage={ogImageUrl ?? undefined}
@@ -222,11 +227,15 @@ const collectionJsonLd =
             <h1
               class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl"
             >
-              {title}
+              {collection.name}
             </h1>
             {
-              subtitle && (
-                <p class="text-base text-gray-500 sm:text-lg">{subtitle}</p>
+              collection.description && (
+                <RichContent
+                  content={collection.description}
+                  className="text-base leading-relaxed text-gray-500 sm:text-lg"
+                  processShortcodes={false}
+                />
               )
             }
             {
@@ -255,6 +264,7 @@ const collectionJsonLd =
           </div>
         </div>
       </div>
+
     </section>
 
     <section class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -435,6 +445,21 @@ const collectionJsonLd =
           }
         </div>
       </div>
+
+      {
+        collection.content && !hasListingQuery && (
+          <section
+            class="mx-auto mt-10 max-w-4xl border-t border-gray-200 pt-8 sm:mt-12 sm:pt-10"
+            aria-label={`${collection.name} guide`}
+          >
+            <RichContent
+              content={collection.content}
+              className="prose-sm sm:prose-base prose-headings:scroll-mt-24"
+              processShortcodes={false}
+            />
+          </section>
+        )
+      }
     </section>
   </div>
 </Layout>

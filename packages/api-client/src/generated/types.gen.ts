@@ -786,6 +786,10 @@ export type GetApiV1CollectionsByIdResponses = {
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
                 updatedAt: string | null;
+                description: string | null;
+                content: string | null;
+                metaTitle: string | null;
+                metaDescription: string | null;
                 [key: string]: unknown;
             };
             categories: Array<{
@@ -4950,6 +4954,7 @@ export type GetApiV1CategoriesBySlugResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
+                content: string | null;
                 [key: string]: unknown;
             };
         };
@@ -5058,6 +5063,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
+                content: string | null;
                 [key: string]: unknown;
             };
             products: Array<{
@@ -7071,6 +7077,7 @@ export type PostApiV1AdminCategoriesData = {
     body?: {
         name: string;
         description: string | null;
+        content?: string | null;
         slug: string;
         metaTitle: string | null;
         metaDescription: string | null;
@@ -7484,6 +7491,7 @@ export type GetApiV1AdminCategoriesByIdResponses = {
             name: string;
             slug: string;
             description: string | null;
+            content: string | null;
             imageUrl: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
@@ -7517,6 +7525,7 @@ export type PutApiV1AdminCategoriesByIdData = {
     body?: {
         name: string;
         description: string | null;
+        content?: string | null;
         slug: string;
         metaTitle: string | null;
         metaDescription: string | null;
@@ -8613,11 +8622,15 @@ export type GetApiV1AdminCollectionsResponse = GetApiV1AdminCollectionsResponses
 export type PostApiV1AdminCollectionsData = {
     body?: {
         name: string;
+        description?: string | null;
+        content?: string | null;
         presentation: 'grid' | 'carousel';
         isActive: boolean;
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
         config: {
             source: 'manual' | 'dynamic';
             categoryIds?: Array<string>;
@@ -8725,6 +8738,10 @@ export type PostApiV1AdminCollectionsResponses = {
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
+            description: string | null;
+            content: string | null;
+            metaTitle: string | null;
+            metaDescription: string | null;
         };
     };
 };
@@ -9559,6 +9576,10 @@ export type GetApiV1AdminCollectionsByIdResponses = {
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
+            description: string | null;
+            content: string | null;
+            metaTitle: string | null;
+            metaDescription: string | null;
         };
     };
 };
@@ -9569,11 +9590,15 @@ export type PutApiV1AdminCollectionsByIdData = {
     body?: {
         expectedVersion: number;
         name?: string;
+        description?: string | null;
+        content?: string | null;
         presentation?: 'grid' | 'carousel';
         isActive?: boolean;
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
+        metaTitle?: string | null;
+        metaDescription?: string | null;
         config?: {
             source?: 'manual' | 'dynamic';
             categoryIds?: Array<string>;
@@ -9694,6 +9719,10 @@ export type PutApiV1AdminCollectionsByIdResponses = {
             createdAt: string | number | null;
             updatedAt: string | number | null;
             deletedAt: string | number | null;
+            description: string | null;
+            content: string | null;
+            metaTitle: string | null;
+            metaDescription: string | null;
         };
     };
 };

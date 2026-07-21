@@ -61,11 +61,15 @@ export const collectionFormSchema = z.object({
     .string()
     .min(3, "Collection name must be at least 3 characters")
     .max(100, "Collection name must be less than 100 characters"),
+  description: z.string().trim().max(100_000, "Introduction is too long").nullable().default(null),
+  content: z.string().trim().max(100_000, "Content is too long").nullable().default(null),
   presentation: z.enum(["grid", "carousel"]),
   isActive: z.boolean(),
   canonicalPath: canonicalPathSchema,
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
+  metaTitle: z.string().trim().max(70, "Meta title must be 70 characters or fewer").nullable().default(null),
+  metaDescription: z.string().trim().max(200, "Meta description must be 200 characters or fewer").nullable().default(null),
   config: z.object({
     source: z.enum(["manual", "dynamic"]),
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(90),

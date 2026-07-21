@@ -96,6 +96,10 @@ const storefrontCategorySchema = z.object({
   excludeFromSitemap: z.boolean(),
 }).passthrough();
 
+const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
+  content: z.string().nullable(),
+});
+
 type AppliedFilterValue =
   | string
   | number
@@ -153,7 +157,7 @@ const getCategoryBySlugRoute = createRoute({
     200: {
       description: "Category details",
       content: { "application/json": { schema: successEnvelope(z.object({
-        category: storefrontCategorySchema,
+        category: storefrontCategoryDetailSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -185,7 +189,7 @@ const getCategoryProductsRoute = createRoute({
     200: {
       description: "Category products with pagination and filters",
       content: { "application/json": { schema: successEnvelope(z.object({
-        category: storefrontCategorySchema,
+        category: storefrontCategoryDetailSchema,
         products: z.array(z.object({
           id: z.string(),
           name: z.string(),
@@ -233,6 +237,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     name: category.name,
     slug: category.slug,
     description: category.description,
+    content: category.content,
     imageUrl: category.imageUrl,
     metaTitle: category.metaTitle,
     metaDescription: category.metaDescription,

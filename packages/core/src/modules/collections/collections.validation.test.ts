@@ -33,6 +33,33 @@ describe("collection validation", () => {
         expect(created.config.showOnHomepage).toBe(false);
     });
 
+    it("normalizes bounded storefront and search copy", () => {
+        const created = createCollectionSchema.parse({
+            name: "Summer edit",
+            description: "  <p>Warm-weather essentials</p>  ",
+            content: "   ",
+            metaTitle: "  Summer essentials  ",
+            metaDescription: null,
+            presentation: "grid",
+            isActive: false,
+            config: { source: "manual" },
+        });
+
+        expect(created.description).toBe("<p>Warm-weather essentials</p>");
+        expect(created.content).toBeNull();
+        expect(created.metaTitle).toBe("Summer essentials");
+        expect(created.metaDescription).toBeNull();
+
+        expect(updateCollectionSchema.safeParse({
+            expectedVersion: 3,
+            metaTitle: "x".repeat(71),
+        }).success).toBe(false);
+        expect(updateCollectionSchema.safeParse({
+            expectedVersion: 3,
+            content: "x".repeat(100_001),
+        }).success).toBe(false);
+    });
+
     it("normalizes blank canonical path updates to null", () => {
         const parsed = updateCollectionSchema.parse({ expectedVersion: 3, canonicalPath: "   " });
 
