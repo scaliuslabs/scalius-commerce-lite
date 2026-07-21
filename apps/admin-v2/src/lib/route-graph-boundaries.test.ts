@@ -290,12 +290,22 @@ describe("admin route graph boundaries", () => {
     expect(notificationSource).toContain("smsProviderConfigured");
     expect(notificationSource).toContain("buildCustomerNotificationConfig");
     expect(notificationSource).toContain("serializeCustomerNotificationConfig");
-    expect(notificationSource).toContain("channelCanBeEnabled(channel, readiness)");
-    expect(notificationSource).toContain("return readiness[channel]");
+    expect(notificationSource).toContain(
+      'activeRules={countCustomerRules(channels, "email")}',
+    );
+    expect(notificationSource).toContain(
+      'activeRules={countCustomerRules(channels, "sms")}',
+    );
+    expect(notificationSource).toContain(
+      'activeRules={countCustomerRules(channels, "whatsapp")}',
+    );
+    expect(notificationSource).toContain(
+      "checked={channels[event.key][channel.key]}",
+    );
     expect(notificationSource).toContain("Saved rules stay paused.");
     expect(notificationSource).toContain("Saved push rules stay paused until delivery recovers.");
     expect(notificationSource).toContain("pushConfigured");
-    expect(notificationSource).toContain('channel === "push" && !isPushConfigured');
+    expect(notificationSource).toContain("checked={channels[event.key].push}");
     expect(policySource).toContain("Provider readiness controls delivery, not merchant intent.");
     expect(policySource).toContain("enabledChannels.includes(channel.key)");
     expect(policySource).toContain('enabledChannels.includes("push")');

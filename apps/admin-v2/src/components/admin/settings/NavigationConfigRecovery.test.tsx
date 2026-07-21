@@ -94,7 +94,11 @@ describe("navigation configuration recovery", () => {
     expect(mocks.saveHeaderConfig).toHaveBeenCalledWith({
       data: expect.objectContaining({
         expectedRevision: 1,
-        logo: { src: "/logo.svg", alt: "Store" },
+        logo: expect.objectContaining({
+          src: "/logo.svg",
+          alt: "Store",
+          width: 180,
+        }),
       }),
     });
     expect(host.textContent).not.toContain("Save navigation update");
