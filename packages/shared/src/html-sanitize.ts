@@ -1,5 +1,6 @@
 import { DomUtils, parseDocument } from "htmlparser2";
 import { isTag, isText, type ChildNode } from "domhandler";
+import { normalizeVideoEmbed } from "./video-embed";
 
 const ALLOWED_TAGS = new Set([
   "a",
@@ -33,6 +34,7 @@ const ALLOWED_TAGS = new Set([
   "header",
   "hr",
   "i",
+  "iframe",
   "img",
   "ins",
   "li",
@@ -67,7 +69,6 @@ const DROP_WITH_CONTENT = new Set([
   "applet",
   "base",
   "embed",
-  "iframe",
   "link",
   "meta",
   "object",
@@ -91,6 +92,15 @@ const TAG_ATTRIBUTES: Record<string, Set<string>> = {
   a: new Set(["href", "name", "rel", "target"]),
   button: new Set(["disabled", "type"]),
   col: new Set(["span", "width"]),
+  iframe: new Set([
+    "allow",
+    "allowfullscreen",
+    "frameborder",
+    "loading",
+    "referrerpolicy",
+    "src",
+    "title",
+  ]),
   img: new Set([
     "alt",
     "decoding",
@@ -108,7 +118,7 @@ const TAG_ATTRIBUTES: Record<string, Set<string>> = {
   th: new Set(["colspan", "headers", "rowspan", "scope"]),
 };
 
-const BOOLEAN_ATTRIBUTES = new Set(["disabled"]);
+const BOOLEAN_ATTRIBUTES = new Set(["allowfullscreen", "disabled"]);
 const URL_ATTRIBUTES = new Set(["href", "src"]);
 const IMAGE_URL_TAGS = new Set(["img", "source"]);
 const ALLOWED_BUTTON_TYPES = new Set(["button", "submit", "reset"]);
@@ -148,7 +158,7 @@ const PLAIN_TEXT_BOUNDARY_TAGS = new Set([
   "tr",
   "ul",
 ]);
-const RENDERABLE_EMPTY_TAGS = new Set(["hr", "img"]);
+const RENDERABLE_EMPTY_TAGS = new Set(["hr", "iframe", "img"]);
 
 /**
  * Sanitizes admin-authored rich HTML using a parser-backed allowlist.
@@ -255,6 +265,7 @@ function sanitizeNodes(nodes: ChildNode[] = []): ChildNode[] {
 
     node.name = tagName;
     node.attribs = sanitizeAttributes(tagName, node.attribs ?? {});
+    if (tagName === "iframe" && !node.attribs.src) continue;
     node.children = children;
     sanitized.push(node);
   }
@@ -268,10 +279,23 @@ function sanitizeAttributes(
 ): Record<string, string> {
   const sanitized: Record<string, string> = {};
 
+  if (tagName === "iframe") {
+    const embed = normalizeVideoEmbed(attributes.src);
+    if (!embed) return sanitized;
+    sanitized.src = embed.src;
+    sanitized.title = attributes.title?.trim() || `${embed.provider === "youtube" ? "YouTube" : "Vimeo"} video`;
+    sanitized.loading = "lazy";
+    sanitized.referrerpolicy = "strict-origin-when-cross-origin";
+    sanitized.allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+    sanitized.allowfullscreen = "";
+  }
+
   for (const [rawName, rawValue] of Object.entries(attributes)) {
     const name = rawName.toLowerCase();
     if (name.startsWith("on")) continue;
     if (!isAllowedAttribute(tagName, name)) continue;
+
+    if (tagName === "iframe") continue;
 
     if (BOOLEAN_ATTRIBUTES.has(name)) {
       sanitized[name] = "";

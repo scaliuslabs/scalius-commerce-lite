@@ -28,8 +28,10 @@ export function ToolbarButton({
           variant="ghost"
           size="icon"
           onClick={onClick}
+          onMouseDown={(event) => event.preventDefault()}
           disabled={disabled}
           aria-label={tooltip}
+          aria-pressed={isActive || undefined}
           className={cn(buttonSize, isActive && "bg-accent")}
         >
           {children}

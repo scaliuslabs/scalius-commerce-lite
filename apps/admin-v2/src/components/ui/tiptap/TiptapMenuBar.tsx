@@ -30,6 +30,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../tooltip";
 import { MediaManager } from "~/components/admin/media-manager";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { normalizeVideoEmbed } from "@scalius/shared/video-embed";
+import type { MediaFile } from "~/components/admin/media-manager";
 import { ToolbarButton } from "./ToolbarButton";
 import { TiptapTablePopover } from "./TiptapTablePopover";
 
@@ -52,6 +54,7 @@ export const TiptapMenuBar = ({
   const [linkOpen, setLinkOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
@@ -88,21 +91,38 @@ export const TiptapMenuBar = ({
     });
   };
 
-  const handleMediaSelect = (file: { url: string; filename: string }) => {
+  const handleMediaSelect = (file: MediaFile) => {
     const optimizedUrl = getOptimizedImageUrl(file.url);
     requestAnimationFrame(() => {
-      editor.chain().focus().setImage({ src: optimizedUrl, alt: file.filename }).run();
+      editor
+        .chain()
+        .focus()
+        .setImage({
+          src: optimizedUrl,
+          alt: file.altText?.trim() || file.filename,
+        })
+        .run();
     });
   };
 
   const addVideo = () => {
-    if (!videoUrl) return;
-    const url = videoUrl;
+    const normalized = normalizeVideoEmbed(videoUrl);
+    if (!normalized) {
+      setVideoError("Enter a valid YouTube or Vimeo video URL.");
+      return;
+    }
     setVideoUrl("");
+    setVideoError(null);
     setVideoOpen(false);
     requestAnimationFrame(() => {
-      editor.chain().focus().run();
-      editor.commands.setYoutubeVideo({ src: url });
+      editor
+        .chain()
+        .focus()
+        .setVideoEmbed({
+          src: normalized.src,
+          provider: normalized.provider,
+        })
+        .run();
     });
   };
 
@@ -115,12 +135,12 @@ export const TiptapMenuBar = ({
 
   return (
     <div className={cn(
-      "border border-input rounded-t-md bg-background flex flex-wrap items-center",
-      isFullscreen ? "justify-center" : "justify-between",
+      "flex items-center overflow-hidden rounded-t-md border border-input bg-background",
       padding,
       gapSize,
     )}>
-      <div className={cn("flex flex-wrap items-center", gapSize)}>
+      <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain scrollbar-hide">
+      <div className={cn("flex min-w-max items-center", gapSize)}>
         {/* Text formatting */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -169,15 +189,20 @@ export const TiptapMenuBar = ({
               <p className="text-xs">Insert link</p>
             </TooltipContent>
           </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <PopoverContent className="w-[calc(100vw-2rem)] max-w-80 p-2">
             <div className="flex gap-2">
               <Input
                 type="url"
+                aria-label="Link URL"
                 placeholder="https://example.com"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 className="min-h-11 flex-1 sm:min-h-9"
-                onKeyDown={(e) => e.key === "Enter" && setLink()}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  setLink();
+                }}
               />
               <Button type="button" size="sm" onClick={setLink} className="min-h-11 sm:min-h-9">
                 Set
@@ -206,15 +231,20 @@ export const TiptapMenuBar = ({
               <p className="text-xs">Insert Image URL</p>
             </TooltipContent>
           </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <PopoverContent className="w-[calc(100vw-2rem)] max-w-80 p-2">
             <div className="flex gap-2">
               <Input
                 type="url"
+                aria-label="Image URL"
                 placeholder="https://example.com/image.jpg"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
                 className="min-h-11 flex-1 sm:min-h-9"
-                onKeyDown={(e) => e.key === "Enter" && addImage()}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  addImage();
+                }}
               />
               <Button type="button" size="sm" onClick={addImage} className="min-h-11 sm:min-h-9">
                 Add
@@ -227,7 +257,7 @@ export const TiptapMenuBar = ({
           capability="image"
           onSelect={handleMediaSelect}
           triggerLabel="Media Library"
-          dialogClassName={isFullscreen ? "z-[10001] !important" : undefined}
+          dialogClassName={isFullscreen ? "z-[10001]" : undefined}
           trigger={
             <ToolbarButton
               onClick={() => undefined}
@@ -240,7 +270,13 @@ export const TiptapMenuBar = ({
         />
 
         {/* Video */}
-        <Popover open={videoOpen} onOpenChange={setVideoOpen}>
+        <Popover
+          open={videoOpen}
+          onOpenChange={(open) => {
+            setVideoOpen(open);
+            if (!open) setVideoError(null);
+          }}
+        >
           <Tooltip open={videoOpen ? false : undefined}>
             <TooltipTrigger asChild>
               <PopoverTrigger asChild>
@@ -259,23 +295,35 @@ export const TiptapMenuBar = ({
               <p className="text-xs">Embed video</p>
             </TooltipContent>
           </Tooltip>
-          <PopoverContent className="w-80 p-2" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <PopoverContent className="w-[calc(100vw-2rem)] max-w-80 p-2">
             <div className="flex gap-2">
               <Input
                 type="url"
-                placeholder="https://youtube.com/watch?v=..."
+                aria-label="Video URL"
+                placeholder="YouTube or Vimeo URL"
                 value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
+                onChange={(event) => {
+                  setVideoUrl(event.target.value);
+                  if (videoError) setVideoError(null);
+                }}
                 className="min-h-11 flex-1 sm:min-h-9"
-                onKeyDown={(e) => e.key === "Enter" && addVideo()}
+                aria-invalid={Boolean(videoError)}
+                aria-describedby={videoError ? "video-embed-error" : undefined}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  addVideo();
+                }}
               />
               <Button type="button" size="sm" onClick={addVideo} className="min-h-11 sm:min-h-9">
                 Embed
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Supports YouTube and Vimeo URLs
-            </p>
+            {videoError ? (
+              <p id="video-embed-error" role="alert" className="mt-1.5 text-xs text-destructive">
+                {videoError}
+              </p>
+            ) : null}
           </PopoverContent>
         </Popover>
 
@@ -406,10 +454,11 @@ export const TiptapMenuBar = ({
           <Redo className={iconSize} />
         </ToolbarButton>
       </div>
+      </div>
 
       {/* Fullscreen toggle */}
       {!isFullscreen ? (
-        <div>
+        <div className="shrink-0 border-l border-border bg-background">
           <ToolbarButton
             onClick={toggleModal}
             tooltip="Fullscreen"
@@ -419,7 +468,7 @@ export const TiptapMenuBar = ({
           </ToolbarButton>
         </div>
       ) : (
-        <div>
+        <div className="shrink-0 border-l border-border bg-background">
           <ToolbarButton
             onClick={toggleModal}
             tooltip="Exit Fullscreen"

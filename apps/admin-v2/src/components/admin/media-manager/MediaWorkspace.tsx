@@ -16,9 +16,18 @@ interface MediaWorkspaceProps {
   onClose?: () => void;
 }
 
+function mediaLimitHint(capability: MediaCapability, picker: boolean): string {
+  if (capability === "image") return "Images up to 20 MiB";
+  if (capability === "video") return "MP4 or WebM up to 100 MiB";
+  return picker
+    ? "Images up to 20 MiB · videos up to 100 MiB"
+    : "Images up to 20 MiB · videos up to 100 MiB · 50 files per batch";
+}
+
 export function MediaWorkspace({ manager: mm, capability, picker = false, multiple = false, onSelect, onClose }: MediaWorkspaceProps) {
   const [dragging, setDragging] = useState(false);
   const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile; bulk?: true } | null>(null);
+  const limitHint = mediaLimitHint(capability, picker);
   const { cancelSelection, selectionMode, showPreview } = mm;
   const lifecycle = (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
     if (action === "permanent") setConfirm({ file });
@@ -58,7 +67,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
       onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragging(false); }}
       onDrop={(event) => { event.preventDefault(); setDragging(false); if (mm.view === "ready") void mm.uploadFiles(event.dataTransfer.files); }}
     >
-      {dragging && mm.view === "ready" && <div className="absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/40 bg-background/95"><div className="text-center"><Upload className="mx-auto h-7 w-7" /><p className="mt-2 text-sm font-semibold">Drop to add assets</p><p className="mt-1 text-xs text-muted-foreground">Images up to 20 MiB · MP4/WebM up to 100 MiB</p></div></div>}
+      {dragging && mm.view === "ready" && <div className="absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-foreground/40 bg-background/95"><div className="text-center"><Upload className="mx-auto h-7 w-7" /><p className="mt-2 text-sm font-semibold">Drop to add assets</p><p className="mt-1 text-xs text-muted-foreground">{limitHint}</p></div></div>}
 
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-3 py-2">
         <div className="min-w-0 flex-1">
@@ -67,7 +76,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           ) : (
             <h1 className="text-sm font-semibold">Media</h1>
           )}
-          <p className="truncate text-xs text-muted-foreground">Images up to 20 MiB · videos up to 100 MiB · 50 files per batch</p>
+          <p className="truncate text-xs text-muted-foreground">{limitHint}</p>
         </div>
         {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
         {onClose && <Button type="button" variant="ghost" size="sm" className="h-11 sm:h-8" onClick={onClose}>Close</Button>}

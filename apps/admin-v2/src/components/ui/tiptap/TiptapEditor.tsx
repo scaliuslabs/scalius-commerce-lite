@@ -10,6 +10,7 @@ import { Button } from "../button";
 import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
+import { shouldApplyExternalTiptapContent } from "./tiptap-content-sync";
 
 interface TiptapEditorProps {
   content: string;
@@ -34,6 +35,7 @@ export function TiptapEditor({
   const hasAutoFocusedRef = useRef(false);
   const editorAreaRef = useRef<HTMLDivElement>(null);
   const contentWrapperRef = useRef<HTMLDivElement>(null);
+  const lastExternalContentRef = useRef(content);
   const editorViewportHeight = compact ? "200px" : "300px";
   const hasInitialContent = hasRenderableHtmlContent(content);
   const sanitizedInitialContent = useMemo(() => sanitizeHtml(content), [content]);
@@ -56,8 +58,6 @@ export function TiptapEditor({
     document.addEventListener("keydown", handleKeyDown);
     document.body.style.overflow = "hidden";
     document.documentElement.style.overflow = "hidden";
-    document.body.classList.add("editor-fullscreen-active");
-
     if (scrollbarWidth > 0) {
       document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
@@ -126,8 +126,13 @@ export function TiptapEditor({
     };
   }, [isFullscreen]);
 
+  const extensions = useMemo(
+    () => createTiptapExtensions(placeholder),
+    [placeholder],
+  );
+
   const editorInstance = useEditor({
-    extensions: createTiptapExtensions(placeholder),
+    extensions,
     content,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
@@ -146,9 +151,17 @@ export function TiptapEditor({
   });
 
   useEffect(() => {
-    if (editorInstance && content !== editorInstance.getHTML()) {
+    if (!editorInstance) return;
+    if (
+      shouldApplyExternalTiptapContent({
+        incomingContent: content,
+        lastExternalContent: lastExternalContentRef.current,
+        editorContent: editorInstance.getHTML(),
+      })
+    ) {
       editorInstance.commands.setContent(content, { emitUpdate: false });
     }
+    lastExternalContentRef.current = content;
   }, [content, editorInstance]);
 
   useEffect(() => {
@@ -168,16 +181,16 @@ export function TiptapEditor({
       className={cn(
         "flex flex-col bg-background transition-colors",
         isFullscreen
-          ? "fixed inset-0 z-[9999] h-dvh w-screen"
+          ? "fixed inset-0 z-[9999] h-dvh w-full"
           : "border rounded-md",
         !isFullscreen && className,
       )}
     >
       {/* Fullscreen header */}
       {isFullscreen && (
-        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-3 py-2 sm:px-4">
           <span className="text-sm font-medium text-muted-foreground">
-            Editing Content
+            Edit content
           </span>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -191,7 +204,7 @@ export function TiptapEditor({
               className="gap-1.5"
             >
               <Minimize2 className="h-3.5 w-3.5" />
-              Exit Fullscreen
+              Exit fullscreen
             </Button>
           </div>
         </div>
@@ -236,7 +249,7 @@ export function TiptapEditor({
       >
         <div className={cn(
           isFullscreen
-            ? "max-w-4xl mx-auto px-8 py-6 min-h-full bg-background shadow-sm border-x border-border/40"
+            ? "mx-auto min-h-full w-full max-w-4xl bg-background px-3 py-4 shadow-sm sm:border-x sm:border-border/40 sm:px-8 sm:py-6"
             : ""
         )}>
           {editorInstance ? (

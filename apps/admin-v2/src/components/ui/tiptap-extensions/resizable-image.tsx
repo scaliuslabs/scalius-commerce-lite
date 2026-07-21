@@ -6,6 +6,13 @@ export interface ResizableImageOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
+function readDisplayWidth(style: string): string | null {
+  const match = style.match(/(?:^|;)\s*width\s*:\s*([^;]+)/i);
+  const value = match?.[1]?.trim();
+  if (!value || !/^\d+(?:\.\d+)?(?:px|%)$/i.test(value)) return null;
+  return value;
+}
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     resizableImage: {
@@ -40,7 +47,11 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
       src: { default: null },
       alt: { default: null },
       title: { default: null },
-      width: { default: null },
+      width: {
+        default: null,
+        parseHTML: (element) =>
+          readDisplayWidth(element.getAttribute("style") || ""),
+      },
       textAlign: { default: "center" },
     };
   },
@@ -52,8 +63,9 @@ export const ResizableImage = Node.create<ResizableImageOptions>({
         getAttrs: (dom) => {
           const element = dom as HTMLElement;
           const style = element.getAttribute("style") || "";
-          const width =
-            element.getAttribute("width") || element.style.width || null;
+          // The HTML width/height attributes describe the transformed asset's
+          // intrinsic dimensions. Merchant-selected layout width lives in CSS.
+          const width = readDisplayWidth(style);
 
           let textAlign = "center";
           if (
