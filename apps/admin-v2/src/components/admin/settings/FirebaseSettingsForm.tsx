@@ -1,4 +1,21 @@
-import React, { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  KeyRound,
+  Loader2,
+  RotateCcw,
+  Save,
+  Smartphone,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -6,439 +23,496 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { getServerFnError } from "@/lib/api-helpers";
 import {
-  Loader2,
-  Save,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-} from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  getSettingsLoadErrorMessage,
-  useSettingsForm,
-} from "@/hooks/use-settings-form";
-import { queryKeys } from "@/lib/query-keys";
-import {
+  getAdminNotificationChannels,
   getFirebaseSettings,
+  type FirebaseSettingsPayload,
   type SettingsPayload,
   updateFirebaseSettings,
 } from "@/lib/api-functions/settings";
+import { queryKeys } from "@/lib/query-keys";
 
-interface FirebasePublicConfig {
-  apiKey?: string;
-  authDomain?: string;
-  projectId?: string;
-  storageBucket?: string;
-  messagingSenderId?: string;
-  appId?: string;
-  measurementId?: string;
-  vapidKey?: string;
+const MASKED_VALUE = "••••••••••••";
+const PUBLIC_CONFIG_FIELDS = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "storageBucket",
+  "messagingSenderId",
+  "appId",
+  "measurementId",
+  "vapidKey",
+] as const;
+const REQUIRED_BROWSER_FIELDS = [
+  "apiKey",
+  "authDomain",
+  "projectId",
+  "messagingSenderId",
+  "appId",
+  "vapidKey",
+] as const;
+
+type FirebasePublicConfigKey = (typeof PUBLIC_CONFIG_FIELDS)[number];
+
+interface FirebasePublicConfig extends Record<string, string> {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+  measurementId: string;
+  vapidKey: string;
 }
 
-interface FirebaseSettings {
+interface FirebaseDraft {
   serviceAccount: string;
   publicConfig: FirebasePublicConfig;
 }
 
-const defaultValues: FirebaseSettings = {
-  serviceAccount: "",
-  publicConfig: {},
-};
+function normalizePublicConfig(value: SettingsPayload): FirebasePublicConfig {
+  return PUBLIC_CONFIG_FIELDS.reduce<FirebasePublicConfig>((config, key) => {
+    const field = value[key];
+    config[key] = typeof field === "string" ? field : "";
+    return config;
+  }, {
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
+    measurementId: "",
+    vapidKey: "",
+  });
+}
 
-function validateServiceAccountJson(
-  json: string,
-): { valid: boolean; error?: string } {
-  if (!json || json.includes("••••")) return { valid: true }; // Skip validation for masked/empty
+function toDraft(settings: FirebaseSettingsPayload): FirebaseDraft {
+  return {
+    serviceAccount: settings.serviceAccount,
+    publicConfig: normalizePublicConfig(settings.publicConfig),
+  };
+}
+
+function draftsEqual(left: FirebaseDraft | null, right: FirebaseDraft | null): boolean {
+  return Boolean(
+    left
+    && right
+    && left.serviceAccount === right.serviceAccount
+    && PUBLIC_CONFIG_FIELDS.every(
+      (key) => left.publicConfig[key] === right.publicConfig[key],
+    ),
+  );
+}
+
+function hasCompleteBrowserConfig(value: FirebaseDraft | null): boolean {
+  return Boolean(
+    value
+    && REQUIRED_BROWSER_FIELDS.every((key) => value.publicConfig[key].trim()),
+  );
+}
+
+function validateServiceAccountJson(value: string): string | null {
+  if (!value || value === MASKED_VALUE) return null;
   try {
-    const parsed = JSON.parse(json);
-    if (!parsed.private_key)
-      return { valid: false, error: "Missing 'private_key' field" };
-    if (!parsed.client_email)
-      return { valid: false, error: "Missing 'client_email' field" };
-    if (!parsed.project_id)
-      return { valid: false, error: "Missing 'project_id' field" };
-    return { valid: true };
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    if (typeof parsed.private_key !== "string" || !parsed.private_key.trim()) {
+      return "Service account JSON is missing private_key.";
+    }
+    if (typeof parsed.client_email !== "string" || !parsed.client_email.trim()) {
+      return "Service account JSON is missing client_email.";
+    }
+    if (typeof parsed.project_id !== "string" || !parsed.project_id.trim()) {
+      return "Service account JSON is missing project_id.";
+    }
+    return null;
   } catch {
-    return { valid: false, error: "Invalid JSON format" };
+    return "Service account JSON is not valid JSON.";
   }
 }
 
-export default function FirebaseSettingsForm() {
-  const {
-    values,
-    setValue,
-    setValues,
-    isLoading,
-    isLoadError,
-    loadError,
-    isSaving,
-    handleSubmit,
-    refetch,
-  } = useSettingsForm<FirebaseSettings>({
-    queryKey: queryKeys.settings.firebase(),
-    fetchFn: () => getFirebaseSettings() as Promise<Partial<FirebaseSettings>>,
-    saveFn: (v) => {
-      // Build payload: only include serviceAccount if it's new (not masked)
-      const payload: { publicConfig: FirebasePublicConfig; serviceAccount?: string } = {
-        publicConfig: v.publicConfig,
-      };
-      if (v.serviceAccount && !v.serviceAccount.includes("••••")) {
-        payload.serviceAccount = v.serviceAccount;
-      }
-      return updateFirebaseSettings({ data: payload as unknown as SettingsPayload });
+function parseFirebaseConfig(raw: string): Partial<FirebasePublicConfig> {
+  let input = raw.trim();
+  input = input.replace(/^(const|let|var)\s+\w+\s*=\s*/, "");
+  input = input.replace(/;$/, "");
+  input = input.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
+  input = input.replace(/,(\s*[}\]])/g, "$1");
+  const parsed = JSON.parse(input) as Record<string, unknown>;
+  return PUBLIC_CONFIG_FIELDS.reduce<Partial<FirebasePublicConfig>>(
+    (config, key) => {
+      if (typeof parsed[key] === "string") config[key] = parsed[key];
+      return config;
     },
-    defaultValues,
-    successMessage: "Settings saved successfully!",
-    errorMessage: "Failed to save settings",
+    {},
+  );
+}
+
+const BROWSER_FIELDS: Array<{
+  key: FirebasePublicConfigKey;
+  label: string;
+  placeholder: string;
+}> = [
+  { key: "apiKey", label: "API key", placeholder: "AIzaSy..." },
+  { key: "authDomain", label: "Auth domain", placeholder: "your-project.firebaseapp.com" },
+  { key: "projectId", label: "Project ID", placeholder: "your-project" },
+  { key: "storageBucket", label: "Storage bucket", placeholder: "your-project.firebasestorage.app" },
+  { key: "messagingSenderId", label: "Messaging sender ID", placeholder: "123456789" },
+  { key: "appId", label: "App ID", placeholder: "1:123456789:web:abc123" },
+];
+
+export default function FirebaseSettingsForm() {
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  const queryClient = useQueryClient();
+  const firebaseQuery = useQuery({
+    queryKey: queryKeys.settings.firebase(),
+    queryFn: getFirebaseSettings,
   });
-
-  // Derive service account status from current values
-  const serviceAccountStatus: "empty" | "configured" | "invalid" = (() => {
-    if (!values.serviceAccount) return "empty";
-    if (values.serviceAccount.includes("••••")) return "configured";
-    const validation = validateServiceAccountJson(values.serviceAccount);
-    return validation.valid ? "configured" : "invalid";
-  })();
-
-  // UI-only state for the raw paste feature
+  const isLoadError = firebaseQuery.isError;
+  const loadError = firebaseQuery.error;
+  const readinessQuery = useQuery({
+    queryKey: queryKeys.settings.adminNotificationChannels(),
+    queryFn: getAdminNotificationChannels,
+  });
+  const [draft, setDraft] = useState<FirebaseDraft | null>(null);
+  const [savedDraft, setSavedDraft] = useState<FirebaseDraft | null>(null);
   const [rawPublicConfig, setRawPublicConfig] = useState("");
   const [showRawPaste, setShowRawPaste] = useState(false);
+  const dirty = Boolean(draft && savedDraft && !draftsEqual(draft, savedDraft));
 
-  const handleServiceAccountChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) => {
-    setValue("serviceAccount", e.target.value);
-  };
+  useEffect(() => {
+    if (!firebaseQuery.data || dirty) return;
+    const nextDraft = toDraft(firebaseQuery.data);
+    setDraft(nextDraft);
+    setSavedDraft(nextDraft);
+  }, [dirty, firebaseQuery.data]);
 
-  const handlePublicConfigChange = (
-    key: keyof FirebasePublicConfig,
-    value: string,
-  ) => {
-    setValues((prev) => ({
-      ...prev,
-      publicConfig: { ...prev.publicConfig, [key]: value },
-    }));
-  };
+  const saveMutation = useMutation({
+    mutationFn: async (nextDraft: FirebaseDraft) => {
+      const serviceAccountError = validateServiceAccountJson(nextDraft.serviceAccount);
+      if (serviceAccountError) throw new Error(serviceAccountError);
 
-  const handleRawPaste = () => {
-    try {
-      let input = rawPublicConfig.trim();
-
-      // Remove JavaScript variable declaration if present
-      // e.g., "const firebaseConfig = { ... };" -> "{ ... }"
-      input = input.replace(/^(const|let|var)\s+\w+\s*=\s*/, "");
-      input = input.replace(/;$/, ""); // Remove trailing semicolon
-
-      // Convert JavaScript object syntax to valid JSON
-      // Only quote keys that appear at the start of a line or after { or ,
-      // This regex matches: `  keyName:` pattern (unquoted key followed by colon)
-      // but NOT colons inside strings like URLs
-      input = input.replace(/([{,]\s*)(\w+)\s*:/g, '$1"$2":');
-
-      // Handle trailing commas (invalid in JSON but valid in JS)
-      input = input.replace(/,(\s*[}\]])/g, "$1");
-
-      const parsed = JSON.parse(input);
-      const mapped: FirebasePublicConfig = { ...values.publicConfig };
-      const keys = [
-        "apiKey",
-        "authDomain",
-        "projectId",
-        "storageBucket",
-        "messagingSenderId",
-        "appId",
-        "measurementId",
-      ] as const;
-      keys.forEach((k) => {
-        if (parsed[k]) mapped[k] = parsed[k];
-      });
-      setValues((prev) => ({ ...prev, publicConfig: mapped }));
-      setShowRawPaste(false);
-      setRawPublicConfig("");
-      toast.success("Config parsed successfully!");
-    } catch (e: unknown) {
-      if (import.meta.env.DEV) console.error("Parse error:", e);
-      toast.error("Could not parse config. Please check format.");
-    }
-  };
-
-  // Custom submit with pre-validation for service account JSON
-  const onSubmit = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-
-    if (values.serviceAccount && !values.serviceAccount.includes("••••")) {
-      const validation = validateServiceAccountJson(values.serviceAccount);
-      if (!validation.valid) {
-        toast.error(validation.error || "Invalid Service Account JSON");
-        return;
+      const payload: SettingsPayload = {
+        publicConfig: nextDraft.publicConfig,
+      };
+      if (nextDraft.serviceAccount !== MASKED_VALUE) {
+        payload.serviceAccount = nextDraft.serviceAccount;
       }
+      return updateFirebaseSettings({ data: payload });
+    },
+    onSuccess: async (_response, saved) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.settings.firebase() }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.settings.adminNotificationChannels(),
+        }),
+      ]);
+      const refreshed = queryClient.getQueryData<FirebaseSettingsPayload>(
+        queryKeys.settings.firebase(),
+      );
+      const nextDraft = refreshed ? toDraft(refreshed) : saved;
+      setDraft(nextDraft);
+      setSavedDraft(nextDraft);
+      setRawPublicConfig("");
+      setShowRawPaste(false);
+      toast.success("Firebase settings saved");
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Firebase settings could not be saved"));
+    },
+  });
+
+  const savedBrowserConfigComplete = useMemo(
+    () => hasCompleteBrowserConfig(savedDraft),
+    [savedDraft],
+  );
+  const serviceAccountSaved = firebaseQuery.data?.serviceAccount === MASKED_VALUE;
+  const providerReady = readinessQuery.data?.pushConfigured === true;
+  const setupComplete = providerReady && savedBrowserConfigComplete;
+  const canEdit = canManage && !saveMutation.isPending;
+
+  if (firebaseQuery.isLoading || !draft || !firebaseQuery.data) {
+    if (isLoadError) {
+      return (
+        <Alert variant="destructive" className="max-w-3xl">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Firebase settings unavailable</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>
+              {getSettingsLoadErrorMessage(
+                loadError,
+                "Firebase settings could not be loaded. Existing push credentials were not changed.",
+              )}
+            </p>
+            <Button type="button" variant="outline" onClick={() => void firebaseQuery.refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      );
     }
-
-    await handleSubmit();
-  };
-
-  if (isLoading) {
     return (
-      <div className="flex justify-center p-8">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  if (isLoadError) {
-    return (
-      <Alert variant="destructive" className="max-w-3xl">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Firebase settings unavailable</AlertTitle>
-        <AlertDescription className="space-y-3">
-          <p>
-            {getSettingsLoadErrorMessage(
-              loadError,
-              "Firebase settings could not be loaded. Existing push notification credentials were not changed.",
-            )}
-          </p>
-          <Button type="button" variant="outline" onClick={refetch}>
-            Retry
-          </Button>
-        </AlertDescription>
-      </Alert>
-    );
+  function updatePublicConfig(key: FirebasePublicConfigKey, value: string) {
+    setDraft((current) => ({
+      ...current!,
+      publicConfig: { ...current!.publicConfig, [key]: value },
+    }));
+  }
+
+  function fillPastedConfig() {
+    try {
+      const parsed = parseFirebaseConfig(rawPublicConfig);
+      setDraft((current) => ({
+        ...current!,
+        publicConfig: {
+          ...current!.publicConfig,
+          ...parsed,
+        } as FirebasePublicConfig,
+      }));
+      setShowRawPaste(false);
+      setRawPublicConfig("");
+      toast.success("Firebase config filled");
+    } catch {
+      toast.error("Firebase config could not be parsed");
+    }
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
-
-      {/* SECTION 1: Service Account */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            Service Account JSON
-            {serviceAccountStatus === "configured" && (
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-            )}
-            {serviceAccountStatus === "invalid" && (
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            )}
-          </CardTitle>
-          <CardDescription>
-            Required for sending notifications from the server.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+    <>
+      <UnsavedChangesGuard isDirty={dirty} isSubmitting={saveMutation.isPending} />
+      <div className="max-w-3xl space-y-5 pb-24">
+        {!canManage && (
           <Alert>
-            <AlertDescription className="text-sm">
-              <strong>Where to find:</strong> Firebase Console → Project
-              Settings →
+            <AlertDescription>
+              Your role can review Firebase settings, but cannot change them.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Card>
+          <CardContent className="space-y-3 py-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-semibold">Admin browser push</h3>
+              <Badge variant={setupComplete ? "default" : "secondary"}>
+                {setupComplete ? "Setup complete" : "Setup incomplete"}
+              </Badge>
+              {dirty && <Badge variant="outline">Unsaved changes</Badge>}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="outline">
+                {providerReady
+                  ? "Provider ready"
+                  : readinessQuery.isError
+                    ? "Provider status unavailable"
+                    : "Provider needs attention"}
+              </Badge>
+              <Badge variant="outline">
+                {savedBrowserConfigComplete ? "Browser config complete" : "Browser config incomplete"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {providerReady
+                ? "Firebase can send from the server. Configuration does not confirm a successful browser notification."
+                : readinessQuery.data?.pushError
+                  ?? (readinessQuery.isError
+                    ? "Provider readiness could not be checked. Saved settings remain unchanged."
+                    : "Checking provider readiness…")}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <KeyRound className="h-4 w-4" />
+              Server credential
+              {serviceAccountSaved && (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+            </CardTitle>
+            <CardDescription>
+              A Firebase service account lets the API send admin notifications.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="firebase-service-account">Service account JSON</Label>
+              <Textarea
+                id="firebase-service-account"
+                value={draft.serviceAccount}
+                disabled={!canEdit}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder='{ "type": "service_account", "project_id": "..." }'
+                className="min-h-40 font-mono text-xs"
+                onChange={(event) => setDraft((current) => ({
+                  ...current!,
+                  serviceAccount: event.target.value,
+                }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                {serviceAccountSaved && draft.serviceAccount === MASKED_VALUE
+                  ? "A credential is saved. Paste new JSON to replace it, or clear this field and save to remove it."
+                  : draft.serviceAccount
+                    ? "The new credential is validated before saving."
+                    : "No dashboard credential will be stored."}
+              </p>
+            </div>
+            <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
               <a
                 href="https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline ml-1"
               >
-                Service Accounts <ExternalLink className="h-3 w-3" />
+                Open service accounts <ExternalLink className="ml-2 h-4 w-4" />
               </a>
-              → Click "Generate New Private Key" → Download & paste content
-              below.
-            </AlertDescription>
-          </Alert>
-          <div className="space-y-2">
-            <Label htmlFor="serviceAccount">Service Account JSON</Label>
-            <Textarea
-              id="serviceAccount"
-              placeholder='{ "type": "service_account", "project_id": "...", "private_key": "...", ... }'
-              className="font-mono text-xs min-h-[150px]"
-              value={values.serviceAccount}
-              onChange={handleServiceAccountChange}
-            />
-            {serviceAccountStatus === "configured" &&
-              values.serviceAccount.includes("••••") && (
-                <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Credentials configured.
-                  Paste new JSON to replace.
-                </p>
-              )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* SECTION 2: Firebase Config */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Firebase Web App Config</CardTitle>
-          <CardDescription>
-            Required for the admin dashboard to receive notifications in
-            browser.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertDescription className="text-sm">
-              <strong>Where to find:</strong> Firebase Console → Project
-              Settings →
-              <a
-                href="https://console.firebase.google.com/project/_/settings/general"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline ml-1"
-              >
-                General <ExternalLink className="h-3 w-3" />
-              </a>
-              → Your apps → Web app → "Config" radio button.
-            </AlertDescription>
-          </Alert>
-
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRawPaste(!showRawPaste)}
-            >
-              {showRawPaste ? "Cancel" : "Paste firebaseConfig Object"}
             </Button>
-          </div>
+          </CardContent>
+        </Card>
 
-          {showRawPaste && (
-            <div className="p-4 border rounded-md bg-muted/50">
-              <Label className="mb-2 block">
-                Paste the entire{" "}
-                <code className="text-xs bg-muted px-1 py-0.5 rounded">
-                  firebaseConfig
-                </code>{" "}
-                object:
-              </Label>
-              <Textarea
-                value={rawPublicConfig}
-                onChange={(e) => setRawPublicConfig(e.target.value)}
-                placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }'
-                className="font-mono text-xs min-h-[100px] mb-2"
-              />
-              <Button size="sm" onClick={handleRawPaste}>
-                Parse & Fill Fields
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Smartphone className="h-4 w-4" />
+              Browser configuration
+            </CardTitle>
+            <CardDescription>
+              Public Firebase web-app values used by signed-in admin browsers.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button variant="outline" asChild className="min-h-11 sm:min-h-9">
+                <a
+                  href="https://console.firebase.google.com/project/_/settings/general"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open web app settings <ExternalLink className="ml-2 h-4 w-4" />
+                </a>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 sm:min-h-9"
+                disabled={!canEdit}
+                aria-expanded={showRawPaste}
+                onClick={() => setShowRawPaste((visible) => !visible)}
+              >
+                {showRawPaste ? "Cancel paste" : "Paste web config"}
               </Button>
             </div>
-          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>API Key</Label>
-              <Input
-                value={values.publicConfig.apiKey || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("apiKey", e.target.value)
-                }
-                placeholder="AIzaSy..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Auth Domain</Label>
-              <Input
-                value={values.publicConfig.authDomain || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("authDomain", e.target.value)
-                }
-                placeholder="your-project.firebaseapp.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Project ID</Label>
-              <Input
-                value={values.publicConfig.projectId || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("projectId", e.target.value)
-                }
-                placeholder="your-project"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Storage Bucket</Label>
-              <Input
-                value={values.publicConfig.storageBucket || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("storageBucket", e.target.value)
-                }
-                placeholder="your-project.firebasestorage.app"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Messaging Sender ID</Label>
-              <Input
-                value={values.publicConfig.messagingSenderId || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("messagingSenderId", e.target.value)
-                }
-                placeholder="123456789"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>App ID</Label>
-              <Input
-                value={values.publicConfig.appId || ""}
-                onChange={(e) =>
-                  handlePublicConfigChange("appId", e.target.value)
-                }
-                placeholder="1:123456789:web:abc123"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            {showRawPaste && (
+              <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                <Label htmlFor="firebase-config-paste">Firebase config object</Label>
+                <Textarea
+                  id="firebase-config-paste"
+                  value={rawPublicConfig}
+                  disabled={!canEdit}
+                  spellCheck={false}
+                  placeholder='{ "apiKey": "...", "authDomain": "...", "projectId": "..." }'
+                  className="min-h-28 font-mono text-xs"
+                  onChange={(event) => setRawPublicConfig(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                  disabled={!canEdit || !rawPublicConfig.trim()}
+                  onClick={fillPastedConfig}
+                >
+                  Fill fields
+                </Button>
+              </div>
+            )}
 
-      {/* SECTION 3: VAPID Key */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Web Push Certificate (VAPID Key)</CardTitle>
-          <CardDescription>
-            Required for subscribing browsers to push notifications.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertDescription className="text-sm">
-              <strong>Where to find:</strong> Firebase Console → Project
-              Settings →
+            <div className="grid gap-4 md:grid-cols-2">
+              {BROWSER_FIELDS.map((field) => {
+                const id = `firebase-${field.key}`;
+                return (
+                  <div key={field.key} className="space-y-1.5">
+                    <Label htmlFor={id}>{field.label}</Label>
+                    <Input
+                      id={id}
+                      value={draft.publicConfig[field.key]}
+                      disabled={!canEdit}
+                      autoComplete="off"
+                      placeholder={field.placeholder}
+                      className="h-11 sm:h-9"
+                      onChange={(event) => updatePublicConfig(field.key, event.target.value)}
+                    />
+                  </div>
+                );
+              })}
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="firebase-vapidKey">VAPID public key</Label>
+                <Input
+                  id="firebase-vapidKey"
+                  value={draft.publicConfig.vapidKey}
+                  disabled={!canEdit}
+                  autoComplete="off"
+                  placeholder="BKagOny0KF_2pCJQ3m..."
+                  className="h-11 font-mono text-xs sm:h-9"
+                  onChange={(event) => updatePublicConfig("vapidKey", event.target.value)}
+                />
+              </div>
+            </div>
+            <Button variant="outline" asChild className="min-h-11 w-full sm:w-auto">
               <a
                 href="https://console.firebase.google.com/project/_/settings/cloudmessaging"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary hover:underline ml-1"
               >
-                Cloud Messaging <ExternalLink className="h-3 w-3" />
+                Open Cloud Messaging <ExternalLink className="ml-2 h-4 w-4" />
               </a>
-              → Web configuration → Web Push certificates → "Generate key pair"
-              (if empty) → Copy the Key pair value.
-            </AlertDescription>
-          </Alert>
-          <div className="space-y-2">
-            <Label>VAPID Key (Public Key)</Label>
-            <Input
-              value={values.publicConfig.vapidKey || ""}
-              onChange={(e) =>
-                handlePublicConfigChange("vapidKey", e.target.value)
-              }
-              placeholder="BKagOny0KF_2pCJQ3m....moL0ewzQ8rZu"
-              className="font-mono text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              This is the long base64 string from "Key pair" in Firebase
-              Console.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+            </Button>
+          </CardContent>
+        </Card>
 
-      <div className="flex justify-end pt-4 border-t border-border">
-        <Button onClick={onSubmit} disabled={isSaving} className="min-w-[160px]">
-          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Save All Settings
-        </Button>
+        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 sm:min-h-9"
+            disabled={!canEdit || !dirty}
+            onClick={() => {
+              setDraft(savedDraft);
+              setRawPublicConfig("");
+              setShowRawPaste(false);
+            }}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            className="min-h-11 sm:min-h-9 sm:min-w-32"
+            disabled={!canEdit || !dirty}
+            onClick={() => saveMutation.mutate(draft)}
+          >
+            {saveMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save changes
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

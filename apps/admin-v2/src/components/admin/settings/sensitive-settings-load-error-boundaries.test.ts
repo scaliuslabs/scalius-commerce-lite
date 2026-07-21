@@ -42,7 +42,7 @@ describe("sensitive settings load-error boundaries", () => {
       {
         source: readFileSync(FIREBASE_SOURCE, "utf8"),
         title: "Firebase settings unavailable",
-        saveLabel: "Save All Settings",
+        saveLabel: "Save changes",
       },
       {
         source: readFileSync(AUTH_SOURCE, "utf8"),
