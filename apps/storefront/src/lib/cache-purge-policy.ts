@@ -15,8 +15,10 @@ function hasExactTargets({
   return exactKeys.length > 0 || htmlPaths.length > 0;
 }
 
-function isCheckoutOnlyPurge(groups: readonly string[]): boolean {
-  return groups.length > 0 && groups.every((group) => group === "checkout");
+function hasOnlyGenerationScopedGroups(groups: readonly string[]): boolean {
+  return groups.length > 0 && groups.every(
+    (group) => group === "checkout" || group === "pages",
+  );
 }
 
 function hasOnlyGenerationScopedPrefixes(prefixes: readonly string[]): boolean {
@@ -34,7 +36,7 @@ function shouldKeepPrefixPurgeGenerationScoped({
     !bumpVersion &&
     prefixes.length > 0 &&
     !hasExactTargets({ exactKeys, htmlPaths }) &&
-    isCheckoutOnlyPurge(groups) &&
+    hasOnlyGenerationScopedGroups(groups) &&
     hasOnlyGenerationScopedPrefixes(prefixes)
   );
 }

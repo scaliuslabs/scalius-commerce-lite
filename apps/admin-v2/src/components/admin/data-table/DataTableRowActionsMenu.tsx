@@ -80,7 +80,7 @@ export function DataTableRowActionsMenu({
                 className="text-destructive"
               >
                 <AlertTriangle className="mr-2 h-3.5 w-3.5" />
-                Delete Permanently
+                Delete permanently
               </DropdownMenuItem>
             )}
           </>
@@ -88,7 +88,7 @@ export function DataTableRowActionsMenu({
           onDelete && (
             <DropdownMenuItem onClick={onDelete} className="text-destructive">
               <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Move to Trash
+              Move to trash
             </DropdownMenuItem>
           )
         )}

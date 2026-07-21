@@ -7,7 +7,11 @@ const CATEGORY_PRODUCTS_KEY_PREFIX = "category_products_";
 const COLLECTION_BY_ID_KEY_PREFIX = "collection_by_id_";
 const FEED_PRODUCTS_KEY_PREFIX = "feed_products_";
 const SITEMAP_PRODUCTS_KEY_PREFIX = "sitemap_products_";
+const PAGE_SLUG_KEY_PREFIX = "page_slug_";
 const PAGE_RENDER_KEY_PREFIX = "page_render_";
+const ALL_PAGES_KEY_PREFIX = "all_pages_";
+const SITEMAP_PAGES_KEY_PREFIX = "sitemap_pages_";
+const PAGE_HTML_KEY_PREFIX = "page_html_";
 const HTML_PATH_KEY_PREFIX = "html_path_";
 const CHECKOUT_DATA_KEYS = [
   "checkout_config",
@@ -47,6 +51,26 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
     return SITEMAP_PRODUCTS_KEY_PREFIX;
   }
 
+  if (logicalKey.startsWith(SITEMAP_PAGES_KEY_PREFIX)) {
+    return SITEMAP_PAGES_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(ALL_PAGES_KEY_PREFIX)) {
+    return ALL_PAGES_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(PAGE_SLUG_KEY_PREFIX)) {
+    return PAGE_SLUG_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(PAGE_RENDER_KEY_PREFIX)) {
+    return PAGE_RENDER_KEY_PREFIX;
+  }
+
+  if (logicalKey.startsWith(PAGE_HTML_KEY_PREFIX)) {
+    return PAGE_HTML_KEY_PREFIX;
+  }
+
   if (logicalKey.startsWith(ALL_PRODUCTS_KEY_PREFIX)) {
     return ALL_PRODUCTS_KEY_PREFIX;
   }
@@ -65,7 +89,6 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
   if (
     logicalKey.startsWith(PRODUCT_SLUG_KEY_PREFIX) ||
     logicalKey.startsWith(PRODUCT_VARIANTS_KEY_PREFIX) ||
-    logicalKey.startsWith(PAGE_RENDER_KEY_PREFIX) ||
     logicalKey.startsWith(HTML_PATH_KEY_PREFIX)
   ) {
     return logicalKey;
@@ -125,14 +148,22 @@ export function htmlPathCacheKeyFromPath(path: string): string | null {
       return SITEMAP_PRODUCTS_KEY_PREFIX;
     }
 
-    const isExactEntityPath =
-      /^\/categories\/[^/]+$/.test(pathname) ||
-      /^\/collections\/[^/]+$/.test(pathname) ||
-      (/^\/[^/.]+$/.test(pathname) && pathname !== "/search");
-    if (!isExactEntityPath) {
-      return null;
+    if (pathname === "/sitemap-pages.xml") {
+      return SITEMAP_PAGES_KEY_PREFIX;
     }
-    return `${HTML_PATH_KEY_PREFIX}${pathname}`;
+
+    if (
+      /^\/categories\/[^/]+$/.test(pathname) ||
+      /^\/collections\/[^/]+$/.test(pathname)
+    ) {
+      return `${HTML_PATH_KEY_PREFIX}${pathname}`;
+    }
+
+    if (/^\/[^/.]+$/.test(pathname) && pathname !== "/search") {
+      return PAGE_HTML_KEY_PREFIX;
+    }
+
+    return null;
   } catch {
     return null;
   }

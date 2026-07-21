@@ -18,6 +18,7 @@ interface TiptapEditorProps {
   className?: string;
   compact?: boolean;
   autoFocus?: boolean;
+  ariaLabel?: string;
 }
 
 export function TiptapEditor({
@@ -27,6 +28,7 @@ export function TiptapEditor({
   className,
   compact = false,
   autoFocus = false,
+  ariaLabel = "Rich text content",
 }: TiptapEditorProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const hasAutoFocusedRef = useRef(false);
@@ -134,6 +136,9 @@ export function TiptapEditor({
       attributes: {
         class:
           "max-w-none p-4 min-h-[200px] focus-visible:outline-none text-sm",
+        role: "textbox",
+        "aria-label": ariaLabel,
+        "aria-multiline": "true",
       },
     },
     immediatelyRender: false,

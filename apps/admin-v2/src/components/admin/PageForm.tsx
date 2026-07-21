@@ -180,9 +180,15 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     return () => subscription.unsubscribe();
   }, [form, isClient, isEdit]);
 
-  const slug = form.watch("slug");
   const publicationMode = form.watch("publicationMode");
-  const storefrontPageUrl = getStorefrontPath(slug ? `/${slug}` : "/");
+  const committedSlug = defaultValues?.slug;
+  const committedStorefrontPageUrl = getStorefrontPath(
+    committedSlug ? `/${committedSlug}` : "/",
+  );
+  const isCommittedLivePage =
+    isEdit &&
+    Boolean(committedSlug) &&
+    defaultValues?.publicationMode === "published";
 
   const changePublicationMode = React.useCallback((mode: PagePublicationMode) => {
     form.setValue("publicationMode", mode, {
@@ -237,7 +243,11 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   Title <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input placeholder="Page title" {...field} className="text-base" />
+                  <Input
+                    placeholder="Page title"
+                    {...field}
+                    className="min-h-11 text-base sm:min-h-9"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -260,6 +270,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                         content={field.value}
                         onChange={field.onChange}
                         placeholder="Write your page content here..."
+                        ariaLabel="Page content"
                         compact={true}
                       />
                     </FormControl>
@@ -314,7 +325,10 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                       onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
                     >
                       <FormControl>
-                        <SelectTrigger aria-label="Page visibility">
+                        <SelectTrigger
+                          aria-label="Page visibility"
+                          className="min-h-11 sm:min-h-9"
+                        >
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -348,6 +362,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                       <FormControl>
                         <Input
                           type="datetime-local"
+                          className="min-h-11 sm:min-h-9"
                           value={toDateTimeLocalValue(field.value)}
                           min={toDateTimeLocalValue(new Date())}
                           onChange={(event) => field.onChange(
@@ -390,7 +405,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                         <Input
                           placeholder="page-url"
                           {...field}
-                          className="border-0 pl-0 shadow-none focus-visible:ring-0"
+                          className="min-h-11 border-0 pl-0 shadow-none focus-visible:ring-0 sm:min-h-9"
                         />
                       </FormControl>
                     </div>
@@ -399,9 +414,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                 )}
               />
 
-              {isEdit && slug && publicationMode === "published" ? (
-                <Button type="button" variant="outline" size="sm" className="w-full gap-2" asChild>
-                  <a href={storefrontPageUrl} target="_blank" rel="noopener noreferrer">
+              {isCommittedLivePage ? (
+                <Button type="button" variant="outline" size="sm" className="min-h-11 w-full gap-2 sm:min-h-9" asChild>
+                  <a href={committedStorefrontPageUrl} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-3.5 w-3.5" /> View live page
                   </a>
                 </Button>
@@ -457,6 +472,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                     <FormControl>
                       <Input
                         placeholder="SEO title (optional)"
+                        className="min-h-11 sm:min-h-9"
                         {...field}
                         value={field.value || ""}
                         onChange={(e) => {
@@ -522,6 +538,7 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                     <FormControl>
                       <Input
                         placeholder="/about-us"
+                        className="min-h-11 sm:min-h-9"
                         {...field}
                         value={field.value || ""}
                         onChange={(event) => {

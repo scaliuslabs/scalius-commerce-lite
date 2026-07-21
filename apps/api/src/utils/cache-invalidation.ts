@@ -191,9 +191,15 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   pages: {
     label: "Pages",
     description: "Static content pages",
-    kvPrefixes: ["api:pages:", "api:storefront:page:"],
-    bumpsHtml: true,
-    storefrontPrefixes: ["page_slug_", "page_render_", "all_pages_"],
+    kvPrefixes: ["api:pages:", "api:storefront:page:", "api:search:"],
+    bumpsHtml: false,
+    storefrontPrefixes: [
+      "page_slug_",
+      "page_render_",
+      "all_pages_",
+      "sitemap_pages_",
+      "page_html_",
+    ],
   },
   layout: {
     label: "Layout",
@@ -987,10 +993,19 @@ export async function invalidateApiAndScheduleStorefrontGroups(
 export async function invalidateApiAndStorefrontGroups(
   groups: readonly string[],
   env?: Env,
-): Promise<void> {
+  options: { htmlPaths?: readonly string[] } = {},
+): Promise<StorefrontPurgeResult> {
   const normalizedGroups = [...groups];
   await invalidateGroups(normalizedGroups, env?.CACHE);
-  await purgeStorefrontForGroups(normalizedGroups, env);
+  return purgeStorefrontForPrefixes(
+    getStorefrontPrefixesForGroups(normalizedGroups),
+    env,
+    {
+      groups: normalizedGroups,
+      bumpVersion: shouldBumpStorefrontVersion(normalizedGroups),
+      htmlPaths: options.htmlPaths,
+    },
+  );
 }
 
 /**

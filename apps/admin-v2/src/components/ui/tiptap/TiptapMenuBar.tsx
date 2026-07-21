@@ -106,8 +106,10 @@ export const TiptapMenuBar = ({
     });
   };
 
-  const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
-  const iconSize = compact ? "h-3 w-3" : "h-4 w-4";
+  const buttonSize = compact
+    ? "h-11 w-11 sm:h-7 sm:w-7"
+    : "h-11 w-11 sm:h-9 sm:w-9";
+  const iconSize = compact ? "h-4 w-4 sm:h-3 sm:w-3" : "h-4 w-4";
   const gapSize = compact ? "gap-0.5" : "gap-1";
   const padding = compact ? "p-0.5" : "p-1";
 
@@ -174,10 +176,10 @@ export const TiptapMenuBar = ({
                 placeholder="https://example.com"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                className="flex-1"
+                className="min-h-11 flex-1 sm:min-h-9"
                 onKeyDown={(e) => e.key === "Enter" && setLink()}
               />
-              <Button type="button" size="sm" onClick={setLink}>
+              <Button type="button" size="sm" onClick={setLink} className="min-h-11 sm:min-h-9">
                 Set
               </Button>
             </div>
@@ -211,10 +213,10 @@ export const TiptapMenuBar = ({
                 placeholder="https://example.com/image.jpg"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className="flex-1"
+                className="min-h-11 flex-1 sm:min-h-9"
                 onKeyDown={(e) => e.key === "Enter" && addImage()}
               />
-              <Button type="button" size="sm" onClick={addImage}>
+              <Button type="button" size="sm" onClick={addImage} className="min-h-11 sm:min-h-9">
                 Add
               </Button>
             </div>
@@ -264,10 +266,10 @@ export const TiptapMenuBar = ({
                 placeholder="https://youtube.com/watch?v=..."
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                className="flex-1"
+                className="min-h-11 flex-1 sm:min-h-9"
                 onKeyDown={(e) => e.key === "Enter" && addVideo()}
               />
-              <Button type="button" size="sm" onClick={addVideo}>
+              <Button type="button" size="sm" onClick={addVideo} className="min-h-11 sm:min-h-9">
                 Embed
               </Button>
             </div>

@@ -131,4 +131,29 @@ describe("TiptapMenuBar", () => {
       alt: "section-image.jpg",
     });
   });
+
+  it("keeps compact editor actions touch-sized on mobile", () => {
+    const { editor } = makeEditor();
+
+    act(() => {
+      root.render(
+        <TiptapMenuBar
+          editor={editor}
+          toggleModal={vi.fn()}
+          compact
+        />,
+      );
+    });
+
+    const namedActions = Array.from(
+      host.querySelectorAll<HTMLButtonElement>("button[aria-label]"),
+    );
+    expect(namedActions.length).toBeGreaterThan(10);
+    for (const action of namedActions) {
+      expect(action.className).toContain("h-11");
+      expect(action.className).toContain("w-11");
+      expect(action.className).toContain("sm:h-7");
+      expect(action.className).toContain("sm:w-7");
+    }
+  });
 });

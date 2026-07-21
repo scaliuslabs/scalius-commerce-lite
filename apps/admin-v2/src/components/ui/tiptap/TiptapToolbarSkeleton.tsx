@@ -43,8 +43,10 @@ export function TiptapToolbarSkeleton({
   compact = false,
   isFullscreen = false,
 }: TiptapToolbarSkeletonProps) {
-  const buttonSize = compact ? "h-7 w-7" : "h-9 w-9";
-  const iconSize = compact ? "h-3 w-3" : "h-4 w-4";
+  const buttonSize = compact
+    ? "h-11 w-11 sm:h-7 sm:w-7"
+    : "h-11 w-11 sm:h-9 sm:w-9";
+  const iconSize = compact ? "h-4 w-4 sm:h-3 sm:w-3" : "h-4 w-4";
   const gapSize = compact ? "gap-0.5" : "gap-1";
   const padding = compact ? "p-0.5" : "p-1";
 

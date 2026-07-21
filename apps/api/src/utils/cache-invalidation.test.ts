@@ -219,7 +219,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     vi.unstubAllGlobals();
   });
 
-  it("posts the matching storefront cache prefixes and HTML bump flag", async () => {
+  it("keeps CMS page purges generation-scoped", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}"));
     const waitUntil = vi.fn();
 
@@ -252,8 +252,14 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
     expect(JSON.parse(String(init?.body))).toEqual({
       groups: ["pages"],
-      prefixes: ["page_slug_", "page_render_", "all_pages_"],
-      bumpVersion: true,
+      prefixes: [
+        "page_slug_",
+        "page_render_",
+        "all_pages_",
+        "sitemap_pages_",
+        "page_html_",
+      ],
+      bumpVersion: false,
     });
   });
 
@@ -273,6 +279,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "page_slug_",
         "page_render_",
         "all_pages_",
+        "sitemap_pages_",
+        "page_html_",
         "storefront_layout_",
         "global_header_data",
         "global_footer_data",

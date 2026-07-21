@@ -69,7 +69,7 @@ export function TiptapTablePopover({
             value={tableRows}
             onChange={(e) => onTableRowsChange(e.target.value)}
             placeholder="Rows"
-            className="h-8 text-xs"
+            className="h-11 text-xs sm:h-8"
             min="1"
           />
           <Input
@@ -77,7 +77,7 @@ export function TiptapTablePopover({
             value={tableCols}
             onChange={(e) => onTableColsChange(e.target.value)}
             placeholder="Cols"
-            className="h-8 text-xs"
+            className="h-11 text-xs sm:h-8"
             min="1"
           />
         </div>
@@ -99,7 +99,7 @@ export function TiptapTablePopover({
           variant="default"
           size="sm"
           onClick={addTable}
-          className="w-full text-xs"
+          className="min-h-11 w-full text-xs sm:min-h-9"
         >
           <TableIcon className="h-3 w-3 mr-1" /> Insert Table
         </Button>
@@ -115,7 +115,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().addColumnBefore().run()}
             disabled={!editor.can().addColumnBefore()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
             Col Before
@@ -126,7 +126,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().addColumnAfter().run()}
             disabled={!editor.can().addColumnAfter()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <ChevronsLeftRight className="h-3 w-3 transform rotate-90" />{" "}
             Col After
@@ -138,7 +138,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().deleteColumn().run()}
             disabled={!editor.can().deleteColumn()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Columns className="h-3 w-3" /> Del Col
           </Button>
@@ -148,7 +148,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().addRowBefore().run()}
             disabled={!editor.can().addRowBefore()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Rows className="h-3 w-3" /> Row Before
           </Button>
@@ -158,7 +158,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().addRowAfter().run()}
             disabled={!editor.can().addRowAfter()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Rows className="h-3 w-3" /> Row After
           </Button>
@@ -169,7 +169,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().deleteRow().run()}
             disabled={!editor.can().deleteRow()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Rows className="h-3 w-3" /> Del Row
           </Button>
@@ -179,7 +179,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().deleteTable().run()}
             disabled={!editor.can().deleteTable()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Eraser className="h-3 w-3" /> Del Table
           </Button>
@@ -189,7 +189,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().mergeCells().run()}
             disabled={!editor.can().mergeCells()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Merge className="h-3 w-3" /> Merge
           </Button>
@@ -200,7 +200,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().splitCell().run()}
             disabled={!editor.can().splitCell()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Split className="h-3 w-3" /> Split
           </Button>
@@ -212,7 +212,7 @@ export function TiptapTablePopover({
               editor.chain().focus().toggleHeaderColumn().run()
             }
             disabled={!editor.can().toggleHeaderColumn()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <ChevronsLeftRight className="h-3 w-3" /> H Col
           </Button>
@@ -222,7 +222,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().toggleHeaderRow().run()}
             disabled={!editor.can().toggleHeaderRow()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <Rows className="h-3 w-3" /> H Row
           </Button>
@@ -232,7 +232,7 @@ export function TiptapTablePopover({
             size="sm"
             onClick={() => editor.chain().focus().toggleHeaderCell().run()}
             disabled={!editor.can().toggleHeaderCell()}
-            className="flex items-center gap-1 text-xs"
+            className="min-h-11 items-center gap-1 text-xs sm:min-h-9"
           >
             <TableIcon className="h-3 w-3" /> H Cell
           </Button>
