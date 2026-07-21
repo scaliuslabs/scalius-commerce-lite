@@ -31,6 +31,12 @@ import {
   MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH,
 } from "@scalius/shared/homepage-presentation";
 import {
+  HEADER_LOGO_WIDTH_DEFAULT,
+  HEADER_LOGO_WIDTH_MAX,
+  HEADER_LOGO_WIDTH_MIN,
+  HEADER_LOGO_WIDTH_STEP,
+} from "@scalius/shared/brand-presentation";
+import {
   getCurrencySettings,
   isCurrencyCodeLocked,
   saveCurrencySettings,
@@ -249,12 +255,20 @@ const socialLinkSchema = z.object({
   url: z.string(),
   iconUrl: z.string().optional(),
 });
+const headerLogoWidthSchema = z.number().int()
+  .min(HEADER_LOGO_WIDTH_MIN)
+  .max(HEADER_LOGO_WIDTH_MAX)
+  .multipleOf(HEADER_LOGO_WIDTH_STEP);
 const headerConfigSchema = z.object({
   topBar: z.object({
     text: z.string(),
     isEnabled: z.boolean().optional().default(true),
   }),
-  logo: z.object({ src: z.string(), alt: z.string() }),
+  logo: z.object({
+    src: z.string(),
+    alt: z.string(),
+    width: headerLogoWidthSchema.optional().default(HEADER_LOGO_WIDTH_DEFAULT),
+  }),
   favicon: z.object({ src: z.string(), alt: z.string() }),
   contact: z.object({
     phone: z.string(),

@@ -13,6 +13,11 @@ import {
     type NavigationTargetItem,
 } from "@scalius/shared/navigation-target";
 import { ValidationError } from "@scalius/core/errors";
+import {
+    HEADER_LOGO_WIDTH_MAX,
+    HEADER_LOGO_WIDTH_MIN,
+    HEADER_LOGO_WIDTH_STEP,
+} from "@scalius/shared/brand-presentation";
 
 export const MAX_NAVIGATION_DEPTH = 3;
 export const MAX_NAVIGATION_ITEMS = 150;
@@ -155,6 +160,11 @@ export const navigationItemSchema: z.ZodType<NavigationTargetItem> = z.lazy(() =
 const logoSchema = z.object({
     src: z.string(),
     alt: z.string(),
+    width: z.number().int()
+        .min(HEADER_LOGO_WIDTH_MIN)
+        .max(HEADER_LOGO_WIDTH_MAX)
+        .multipleOf(HEADER_LOGO_WIDTH_STEP)
+        .optional(),
 }).passthrough();
 
 const socialLinkSchema = z.object({

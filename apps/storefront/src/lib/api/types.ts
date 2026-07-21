@@ -378,7 +378,7 @@ export interface HeaderData {
     text: string;
     isEnabled?: boolean;
   };
-  logo: { src: string; alt: string };
+  logo: { src: string; alt: string; width?: number };
   favicon?: { src: string; alt: string };
   contact: {
     phone: string;

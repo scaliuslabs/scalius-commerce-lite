@@ -25,6 +25,7 @@ import { rebaseHeaderDraft } from "~/components/admin/shared/presentation-draft"
 import { PresentationRevisionConflictNotice } from "~/components/admin/shared/PresentationRevisionConflictNotice";
 import { NavigationConfigReadinessNotice } from "~/components/admin/settings/NavigationConfigReadinessNotice";
 import { Card } from "~/components/ui/card";
+import { normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 
 import { BrandingSection } from "./BrandingSection";
 import { TopBarSection } from "./TopBarSection";
@@ -55,7 +56,11 @@ export function normalizeHeaderConfig(config?: HeaderConfig | null): HeaderConfi
   if (!config) return defaultHeaderConfig;
   return {
     topBar: { ...defaultHeaderConfig.topBar, ...config.topBar },
-    logo: { ...defaultHeaderConfig.logo, ...config.logo },
+    logo: {
+      ...defaultHeaderConfig.logo,
+      ...config.logo,
+      width: normalizeHeaderLogoWidth(config.logo?.width),
+    },
     favicon: { ...defaultHeaderConfig.favicon, ...config.favicon },
     contact: { ...defaultHeaderConfig.contact, ...config.contact },
     social: Array.isArray(config.social) ? config.social : [],
@@ -235,28 +240,28 @@ export function HeaderBuilder({
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/20 p-1 lg:sticky lg:top-20 lg:flex-col lg:self-start">
           <TabsTrigger
             value="branding"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <ImageIcon className="h-4 w-4" />
             Branding
           </TabsTrigger>
           <TabsTrigger
             value="announcement"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <Megaphone className="h-4 w-4" />
             Announcement
           </TabsTrigger>
           <TabsTrigger
             value="contact-social"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <Contact className="h-4 w-4" />
             Contact & Social
           </TabsTrigger>
           <TabsTrigger
             value="navigation"
-            className="h-9 shrink-0 justify-start gap-2 px-3 lg:w-full"
+            className="h-11 shrink-0 justify-start gap-2 px-3 sm:h-9 lg:w-full"
           >
             <Menu className="h-4 w-4" />
             Navigation
@@ -319,7 +324,14 @@ export function HeaderBuilder({
       </Tabs>
 
       <div className="sticky bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur">
-        <Button type="button" variant="ghost" size="sm" onClick={handleDiscard} disabled={!isDirty || isLoading}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11 sm:min-h-9"
+          onClick={handleDiscard}
+          disabled={!isDirty || isLoading}
+        >
           <RotateCcw className="mr-2 h-4 w-4" />
           Discard
         </Button>
@@ -331,7 +343,7 @@ export function HeaderBuilder({
             !config.logo.src ||
             !hasPendingSave
           }
-          className="relative min-w-[124px]"
+          className="relative min-h-11 min-w-[124px] sm:min-h-9"
           size="sm"
         >
           {isLoading ? (

@@ -191,7 +191,7 @@ export default function GeneralSettingsPage({
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="h-10 shrink-0 justify-start rounded-none border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground transition-none hover:text-foreground data-[state=active]:border-b-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none lg:w-full lg:rounded-sm lg:border-b-0 lg:data-[state=active]:bg-muted"
+                className="h-11 shrink-0 justify-start rounded-none border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground transition-none hover:text-foreground data-[state=active]:border-b-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none sm:h-10 lg:w-full lg:rounded-sm lg:border-b-0 lg:data-[state=active]:bg-muted"
               >
                 {tab.label}
               </TabsTrigger>
