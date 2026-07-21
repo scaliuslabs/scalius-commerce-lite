@@ -34,4 +34,22 @@ describe("rich text editor mobile boundaries", () => {
       expect(source).toContain('"h-11 w-11 sm:h-9 sm:w-9"');
     }
   });
+
+  it("keeps the feature-rich toolbar to one scrollable row on mobile", () => {
+    expect(menuSource).toContain("overflow-x-auto overscroll-x-contain scrollbar-hide");
+    expect(menuSource).toContain("flex min-w-max items-center");
+    expect(menuSource).not.toContain("flex flex-wrap items-center");
+  });
+
+  it("keeps image sizing usable without a precision pointer", () => {
+    const imageViewSource = readFileSync(
+      resolve(import.meta.dirname, "../tiptap-extensions/resizable-image-view.tsx"),
+      "utf8",
+    );
+    expect(imageViewSource).toContain('aria-label="Image size"');
+    expect(imageViewSource).toContain('<option value="25%">25%</option>');
+    expect(imageViewSource).toContain('<option value="100%">Full width</option>');
+    expect(imageViewSource).toContain("onPointerDown={handleResizeStart}");
+    expect(imageViewSource).toContain('aria-label="Remove image"');
+  });
 });

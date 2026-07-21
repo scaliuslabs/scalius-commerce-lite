@@ -36,6 +36,30 @@ describe("sanitizeHtml", () => {
     expect(incomplete).not.toContain('width="600"');
     expect(incomplete).not.toContain('height="');
   });
+
+  it("preserves canonical YouTube and Vimeo embeds with safe attributes", () => {
+    const html = sanitizeHtml(
+      '<div class="rich-video-embed" data-video-provider="youtube"><iframe src="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="Demo" allow="autoplay; fullscreen" allowfullscreen onload="steal()"></iframe></div>' +
+      '<div class="rich-video-embed"><iframe src="https://vimeo.com/76979871" title="Vimeo"></iframe></div>',
+    );
+
+    expect(html).toContain(
+      'src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"',
+    );
+    expect(html).toContain('src="https://player.vimeo.com/video/76979871"');
+    expect(html).toContain('loading="lazy"');
+    expect(html).toContain('referrerpolicy="strict-origin-when-cross-origin"');
+    expect(html).not.toContain("onload");
+  });
+
+  it("drops arbitrary and executable iframe sources", () => {
+    const html = sanitizeHtml(
+      '<p>Before</p><iframe src="https://example.com/embed/123"></iframe>' +
+      '<iframe src="javascript:alert(1)"></iframe><p>After</p>',
+    );
+
+    expect(html).toBe("<p>Before</p><p>After</p>");
+  });
 });
 
 describe("htmlToPlainText", () => {

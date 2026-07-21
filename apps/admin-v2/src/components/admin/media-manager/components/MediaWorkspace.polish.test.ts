@@ -37,6 +37,12 @@ describe("media workspace polish boundaries", () => {
     expect(workspace.match(/allowManagement=\{!picker\}/g)).toHaveLength(2);
   });
 
+  it("shows only limits relevant to the active picker capability", () => {
+    expect(workspace).toContain('if (capability === "image") return "Images up to 20 MiB"');
+    expect(workspace).toContain('if (capability === "video") return "MP4 or WebM up to 100 MiB"');
+    expect(workspace).toContain("mediaLimitHint(capability, picker)");
+  });
+
   it("protects unsaved preview metadata before close or navigation", () => {
     expect(preview).toContain('setPendingAction("close")');
     expect(preview).toContain("setPendingAction(direction)");

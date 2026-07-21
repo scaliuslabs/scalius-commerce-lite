@@ -6,8 +6,8 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table/row";
 import { TableHeader } from "@tiptap/extension-table/header";
 import { TableCell } from "@tiptap/extension-table/cell";
-import { Youtube } from "@tiptap/extension-youtube";
 import { ResizableImage } from "../tiptap-extensions/resizable-image";
+import { VideoEmbed } from "../tiptap-extensions/video-embed";
 
 export function createTiptapExtensions(placeholder: string): Extensions {
   return [
@@ -39,15 +39,12 @@ export function createTiptapExtensions(placeholder: string): Extensions {
       horizontalRule: false,
     }),
     ResizableImage,
+    VideoEmbed,
     Placeholder.configure({
       placeholder,
     }),
     TextAlign.configure({
       types: ["heading", "paragraph"],
-    }),
-    Youtube.configure({
-      inline: false,
-      allowFullscreen: true,
     }),
     Table.configure({
       resizable: true,

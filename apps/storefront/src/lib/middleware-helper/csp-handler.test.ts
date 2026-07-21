@@ -100,4 +100,17 @@ describe("setPageCspHeader", () => {
     expect(scriptSrc).toContain("https://connect.facebook.net");
     expect(scriptSrc).toContain("https://www.facebook.com");
   });
+
+  it("allows only the supported rich-content video player origins", async () => {
+    const response = await setPageCspHeader(new Response("ok"), {});
+    const frameSrc = response.headers
+      .get("Content-Security-Policy")
+      ?.split("; ")
+      .find((directive) => directive.startsWith("frame-src "));
+
+    expect(frameSrc).toContain("https://www.youtube-nocookie.com");
+    expect(frameSrc).toContain("https://player.vimeo.com");
+    expect(frameSrc).not.toContain("https://*.youtube.com");
+    expect(frameSrc).not.toContain("https://*.vimeo.com");
+  });
 });

@@ -176,6 +176,8 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
     "https://js.stripe.com", // Stripe card elements use iframes
     "https://*.stripe.com",
     "https://*.sslcommerz.com", // SSLCommerz payment gateway
+    "https://www.youtube-nocookie.com", // Merchant-authored YouTube embeds
+    "https://player.vimeo.com", // Merchant-authored Vimeo embeds
     ...additionalDomains,
   ];
 }

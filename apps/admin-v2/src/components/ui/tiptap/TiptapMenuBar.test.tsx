@@ -43,6 +43,7 @@ vi.mock("./TiptapTablePopover", () => ({
 
 const makeEditor = () => {
   const setImage = vi.fn();
+  const setVideoEmbed = vi.fn();
   const run = vi.fn(() => true);
   const chain = {
     focus: vi.fn(() => chain),
@@ -51,6 +52,10 @@ const makeEditor = () => {
     unsetLink: vi.fn(() => chain),
     setImage: vi.fn((attrs: unknown) => {
       setImage(attrs);
+      return chain;
+    }),
+    setVideoEmbed: vi.fn((attrs: unknown) => {
+      setVideoEmbed(attrs);
       return chain;
     }),
     toggleBold: vi.fn(() => chain),
@@ -70,10 +75,11 @@ const makeEditor = () => {
     editor: {
       chain: vi.fn(() => chain),
       can: vi.fn(() => ({ undo: () => true, redo: () => true })),
-      commands: { setYoutubeVideo: vi.fn() },
       isActive: vi.fn(() => false),
     } as unknown as Editor,
     setImage,
+    setVideoEmbed,
+    chain,
   };
 };
 
@@ -154,6 +160,35 @@ describe("TiptapMenuBar", () => {
       expect(action.className).toContain("w-11");
       expect(action.className).toContain("sm:h-7");
       expect(action.className).toContain("sm:w-7");
+    }
+  });
+
+  it("runs lists, blockquotes, headings, alignment, formatting, and history on the active editor", () => {
+    const { editor, chain } = makeEditor();
+    act(() => {
+      root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />);
+    });
+
+    const actions = [
+      ["Bold (Ctrl+B)", chain.toggleBold],
+      ["Italic (Ctrl+I)", chain.toggleItalic],
+      ["Underline (Ctrl+U)", chain.toggleUnderline],
+      ["Align center", chain.setTextAlign],
+      ["Heading 2", chain.toggleHeading],
+      ["Bullet list", chain.toggleBulletList],
+      ["Numbered list", chain.toggleOrderedList],
+      ["Blockquote", chain.toggleBlockquote],
+      ["Undo (Ctrl+Z)", chain.undo],
+      ["Redo (Ctrl+Shift+Z)", chain.redo],
+    ] as const;
+
+    for (const [label, command] of actions) {
+      act(() => {
+        host
+          .querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+          ?.click();
+      });
+      expect(command).toHaveBeenCalled();
     }
   });
 });

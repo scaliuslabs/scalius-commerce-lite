@@ -38,35 +38,47 @@ export function ResizableImageView({
     return 300;
   }, [width]);
 
+  const getEditorWidth = useCallback(() => {
+    const editor = containerRef.current?.closest<HTMLElement>(".ProseMirror");
+    return Math.max(1, editor?.clientWidth ?? containerRef.current?.parentElement?.clientWidth ?? 1);
+  }, []);
+
   const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.PointerEvent) => {
       e.preventDefault();
       e.stopPropagation();
       const startX = e.clientX;
       const startWidth = getStartWidth();
+      const editorWidth = getEditorWidth();
       setResizing(true);
 
-      const handleMouseMove = (moveEvent: MouseEvent) => {
+      const handlePointerMove = (moveEvent: PointerEvent) => {
         const diff = moveEvent.clientX - startX;
-        const newWidth = Math.max(80, startWidth + diff);
+        const newWidth = Math.min(editorWidth, Math.max(80, startWidth + diff));
         widthRef.current = newWidth;
         setDisplayWidth(newWidth);
       };
 
-      const handleMouseUp = () => {
+      const handlePointerUp = () => {
         setResizing(false);
         if (widthRef.current) {
-          updateAttributes({ width: `${widthRef.current}px` });
+          const widthPercent = Math.max(
+            20,
+            Math.min(100, Math.round((widthRef.current / editorWidth) * 100)),
+          );
+          updateAttributes({ width: `${widthPercent}%` });
         }
         widthRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
+        document.removeEventListener("pointercancel", handlePointerUp);
       };
 
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
+      document.addEventListener("pointercancel", handlePointerUp);
     },
-    [getStartWidth, updateAttributes],
+    [getEditorWidth, getStartWidth, updateAttributes],
   );
 
   // Compute the width style for the container
@@ -123,14 +135,35 @@ export function ResizableImageView({
           />
         )}
 
-        {/* Floating toolbar - show when selected, z-[9999] ensures visibility in fullscreen */}
+        {/* Pointer resize handles supplement the accessible size presets below. */}
+        {selected && (
+          <div
+            className="resize-handle right hidden sm:block"
+            onPointerDown={handleResizeStart}
+            aria-hidden="true"
+          />
+        )}
+
+        {selected && (
+          <div
+            className="resize-handle bottom-right hidden sm:block"
+            onPointerDown={handleResizeStart}
+            aria-hidden="true"
+          />
+        )}
+      </div>
+
+      <div className="leading-normal">
         {selected && !resizing && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-background border rounded-md shadow-lg p-0.5 z-[9999]">
+          <div className="mt-2 flex max-w-full flex-wrap items-center gap-1 rounded-md border bg-background p-1 shadow-sm">
+            <div className="flex items-center" role="group" aria-label="Image alignment">
             <button
               type="button"
               onClick={() => updateAttributes({ textAlign: "left" })}
+              aria-label="Align image left"
+              title="Align image left"
               className={cn(
-                "p-1.5 rounded hover:bg-accent transition-colors",
+                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "left" && "bg-accent",
               )}
             >
@@ -139,8 +172,10 @@ export function ResizableImageView({
             <button
               type="button"
               onClick={() => updateAttributes({ textAlign: "center" })}
+              aria-label="Center image"
+              title="Center image"
               className={cn(
-                "p-1.5 rounded hover:bg-accent transition-colors",
+                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 (textAlign === "center" || !textAlign) && "bg-accent",
               )}
             >
@@ -149,38 +184,50 @@ export function ResizableImageView({
             <button
               type="button"
               onClick={() => updateAttributes({ textAlign: "right" })}
+              aria-label="Align image right"
+              title="Align image right"
               className={cn(
-                "p-1.5 rounded hover:bg-accent transition-colors",
+                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "right" && "bg-accent",
               )}
             >
               <AlignRight className="h-3.5 w-3.5" />
             </button>
-            <div className="w-px h-4 bg-border mx-0.5" />
+            </div>
+            <select
+              aria-label="Image size"
+              value={
+                ["25%", "50%", "75%", "100%"].includes(width)
+                  ? width
+                  : width
+                    ? "custom"
+                    : "auto"
+              }
+              onChange={(event) =>
+                updateAttributes({
+                  width: event.target.value === "auto" ? null : event.target.value,
+                })
+              }
+              className="h-10 rounded-md border border-input bg-background px-2 text-xs sm:h-8"
+            >
+              <option value="auto">Natural</option>
+              <option value="25%">25%</option>
+              <option value="50%">50%</option>
+              <option value="75%">75%</option>
+              <option value="100%">Full width</option>
+              <option value="custom" disabled>Custom</option>
+            </select>
+            <div className="h-5 w-px bg-border" />
             <button
               type="button"
               onClick={deleteNode}
-              className="p-1.5 rounded hover:bg-destructive/10 hover:text-destructive transition-colors"
+              aria-label="Remove image"
+              title="Remove image"
+              className="flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:w-8"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
-        )}
-
-        {/* Resize handle - right edge */}
-        {selected && (
-          <div
-            className="resize-handle right opacity-0 group-hover:opacity-100 transition-opacity"
-            onMouseDown={handleResizeStart}
-          />
-        )}
-
-        {/* Resize handle - bottom-right corner */}
-        {selected && (
-          <div
-            className="resize-handle bottom-right opacity-0 group-hover:opacity-100 transition-opacity"
-            onMouseDown={handleResizeStart}
-          />
         )}
       </div>
     </NodeViewWrapper>
