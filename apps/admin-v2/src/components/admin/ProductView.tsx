@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { RichContent } from "../ui/rich-content";
+import { VideoPlayer } from "../ui/video-player";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { useCurrency } from "@/hooks/use-currency";
@@ -413,12 +414,10 @@ function ProductMediaPreview({ item, productName, featured = false }: {
   }
   if (featured) {
     return (
-      <video
+      <VideoPlayer
         src={item.url}
         poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}
         aria-label={item.altText || `${productName} video`}
-        className="h-full w-full object-contain"
-        controls
         playsInline
         preload="metadata"
       />

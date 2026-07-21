@@ -59,6 +59,7 @@ describe("ProductView catalog truth boundaries", () => {
     const source = readFileSync(PRODUCT_VIEW_SOURCE, "utf8");
 
     expect(source).toContain('item.kind === "image"');
+    expect(source).toContain("<VideoPlayer");
     expect(source).toContain("poster={item.posterUrl ? getOptimizedImageUrl(item.posterUrl) : undefined}");
     expect(source).toContain('src={item.url}');
     expect(source).toContain('preload="metadata"');

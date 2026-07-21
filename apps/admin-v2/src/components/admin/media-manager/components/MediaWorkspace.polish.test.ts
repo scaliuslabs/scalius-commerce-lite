@@ -7,6 +7,8 @@ const preview = readFileSync(new URL("./MediaPreview.tsx", import.meta.url), "ut
 const card = readFileSync(new URL("./MediaCard.tsx", import.meta.url), "utf8");
 const workspace = readFileSync(new URL("../MediaWorkspace.tsx", import.meta.url), "utf8");
 const dialog = readFileSync(new URL("../../../ui/dialog.tsx", import.meta.url), "utf8");
+const videoPlayer = readFileSync(new URL("../../../ui/video-player.tsx", import.meta.url), "utf8");
+const globalStyles = readFileSync(new URL("../../../../styles/global.css", import.meta.url), "utf8");
 
 describe("media workspace polish boundaries", () => {
   it("keeps bulk commands explicit and touch-sized on compact screens", () => {
@@ -56,5 +58,18 @@ describe("media workspace polish boundaries", () => {
   it("removes per-item lifecycle controls while bulk selection is active", () => {
     expect(card).toContain("{!selectionMode && <div");
     expect(card).toContain('role="listitem"');
+  });
+
+  it("uses one lazy accessible player theme with native controls as fallback", () => {
+    expect(preview).toContain("<VideoPlayer");
+    expect(videoPlayer).toContain('import("@player.style/minimal")');
+    expect(videoPlayer).toContain('customElements.whenDefined(VIDEO_THEME_TAG)');
+    expect(videoPlayer).toContain("controls={!enhanced}");
+    expect(videoPlayer).toContain('slot="media"');
+    expect(videoPlayer).toContain("video?.pause()");
+    expect(globalStyles).toContain("media-theme-minimal::part(button)");
+    expect(globalStyles).toContain("min-width: 44px");
+    expect(preview).toContain('"Video description"');
+    expect(preview).not.toContain("not a timed caption track");
   });
 });
