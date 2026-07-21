@@ -26,6 +26,10 @@ import {
   getCustomerAuthInputError,
   resolveCustomerAuthUi,
 } from "@/lib/customer-auth-ui";
+import {
+  hasActivePhoneCountryPolicy,
+  validateStorefrontPhone,
+} from "@/lib/phone-country-policy";
 
 /**
  * Lightweight client-side fetch for checkout config.
@@ -158,12 +162,19 @@ export default function AuthModal() {
     return allowedCountries as Country[];
   }, [allowedCountries, allowedCountriesMode]);
 
+  const phoneCountryPolicy = useMemo(
+    () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
+    [allowedCountries, allowedCountriesMode],
+  );
+  const hasActiveCountryPolicy = hasActivePhoneCountryPolicy(phoneCountryPolicy);
+
   const effectiveDefaultCountry = useMemo(() => {
     if (effectiveCountries && effectiveCountries.length > 0) {
       return effectiveCountries[0];
     }
+    if (hasActiveCountryPolicy) return undefined;
     return "BD" as Country;
-  }, [effectiveCountries]);
+  }, [effectiveCountries, hasActiveCountryPolicy]);
 
   const hydrateProfileFields = useCallback((customerData: CustomerInfo) => {
     setProfileName(customerData.name && customerData.name !== "Customer" ? customerData.name : "");
@@ -349,6 +360,16 @@ export default function AuthModal() {
     if (validationError) {
       setError(validationError);
       return;
+    }
+    const authPhone = authUi.fields.phone.primary ? identifier : phoneInput;
+    if (authUi.fields.phone.visible && authPhone.trim()) {
+      const phoneValidation = validateStorefrontPhone(authPhone, phoneCountryPolicy);
+      if (!phoneValidation.ok) {
+        setError(phoneValidation.message || "Enter a valid phone number.");
+        return;
+      }
+      if (authUi.fields.phone.primary) setIdentifier(phoneValidation.value);
+      else setPhoneInput(phoneValidation.value);
     }
     setLoading(true);
     setError("");
@@ -577,6 +598,8 @@ export default function AuthModal() {
               ) : (
                 <PhoneInput
                   international
+                  addInternationalOption={!hasActiveCountryPolicy}
+                  countryCallingCodeEditable={!hasActiveCountryPolicy}
                   flagUrl={FLAG_URL}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}
@@ -594,6 +617,8 @@ export default function AuthModal() {
                 <label className="text-sm font-medium text-foreground">{authUi.fields.phone.label}</label>
                 <PhoneInput
                   international
+                  addInternationalOption={!hasActiveCountryPolicy}
+                  countryCallingCodeEditable={!hasActiveCountryPolicy}
                   flagUrl={FLAG_URL}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
                   defaultCountry={effectiveDefaultCountry as any}

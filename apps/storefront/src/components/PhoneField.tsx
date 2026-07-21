@@ -1,8 +1,12 @@
 import PhoneInput, { getCountries } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { Country } from "react-phone-number-input";
 import { FLAG_URL } from "@scalius/shared/phone-flags";
+import {
+  hasActivePhoneCountryPolicy,
+  validateStorefrontPhone,
+} from "@/lib/phone-country-policy";
 
 interface PhoneFieldProps {
   name: string;
@@ -28,6 +32,13 @@ export default function PhoneField({
   allowedCountriesMode = "include",
 }: PhoneFieldProps) {
   const [value, setValue] = useState(defaultValue || "");
+  const [error, setError] = useState("");
+  const errorId = useId();
+  const countryPolicy = useMemo(
+    () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
+    [allowedCountries, allowedCountriesMode],
+  );
+  const hasActiveCountryPolicy = hasActivePhoneCountryPolicy(countryPolicy);
 
   // Compute the effective countries list based on mode
   const effectiveCountries = useMemo(() => {
@@ -43,8 +54,16 @@ export default function PhoneField({
     if (effectiveCountries && effectiveCountries.length > 0) {
       return effectiveCountries[0] as Country;
     }
+    if (hasActiveCountryPolicy) return undefined;
     return defaultCountry as Country;
-  }, [effectiveCountries, defaultCountry]);
+  }, [effectiveCountries, defaultCountry, hasActiveCountryPolicy]);
+
+  const validate = useCallback(() => {
+    const result = validateStorefrontPhone(value, countryPolicy, { required });
+    setError(result.ok ? "" : result.message || "Enter a valid phone number.");
+    if (result.ok && result.value !== value) setValue(result.value);
+    return result.ok;
+  }, [countryPolicy, required, value]);
 
   // Sync hidden input whenever value changes so DOM reads always see current value
   useEffect(() => {
@@ -62,8 +81,21 @@ export default function PhoneField({
     return () => window.removeEventListener("phone-prefill", handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string; message?: string }>).detail;
+      if (detail?.name !== name) return;
+      setError(detail.message || "Enter a valid phone number.");
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLInputElement>(`#${CSS.escape(name)}-field .PhoneInputInput`)?.focus();
+      });
+    };
+    window.addEventListener("phone-validation-error", handler);
+    return () => window.removeEventListener("phone-validation-error", handler);
+  }, [name]);
+
   return (
-    <div>
+    <div id={`${name}-field`}>
       {label && (
         <label
           htmlFor={name}
@@ -76,17 +108,30 @@ export default function PhoneField({
       <input type="hidden" id={name} name={name} value={value} />
       <PhoneInput
         international
+        addInternationalOption={!hasActiveCountryPolicy}
+        countryCallingCodeEditable={!hasActiveCountryPolicy}
         defaultCountry={effectiveDefaultCountry}
         countries={effectiveCountries}
         flagUrl={FLAG_URL}
         value={value}
-        onChange={(v) => setValue(v || "")}
+        onChange={(v) => {
+          setValue(v || "");
+          setError("");
+        }}
+        onBlur={validate}
+        required={required}
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? errorId : undefined}
         placeholder={placeholder || "Phone number"}
-        className="flex h-9 w-full rounded-lg border border-input bg-muted px-3 py-1 text-sm text-foreground shadow-sm transition-all focus-within:bg-background focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:outline-none [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:h-full"
+        className={`flex min-h-11 w-full rounded-lg border bg-muted px-3 py-1 text-sm text-foreground shadow-sm transition-all md:min-h-9 ${error ? "border-destructive focus-within:border-destructive focus-within:ring-destructive/20" : "border-input focus-within:border-primary focus-within:ring-primary/20"} focus-within:bg-background focus-within:ring-1 [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-sm [&_.PhoneInputInput]:outline-none`}
       />
-      {helpText && (
+      {error ? (
+        <p id={errorId} role="alert" className="mt-1 text-xs font-medium text-destructive">
+          {error}
+        </p>
+      ) : helpText ? (
         <p className="mt-1 text-xs text-muted-foreground">{helpText}</p>
-      )}
+      ) : null}
     </div>
   );
 }
