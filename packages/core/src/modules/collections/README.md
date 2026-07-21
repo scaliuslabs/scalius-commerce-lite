@@ -35,8 +35,8 @@ The `config` column stores a JSON object:
   featuredProductId?: string  // Product shown prominently (manual type only)
   showOnHomepage: boolean    // Explicit homepage placement; default false
   maxProducts: number        // 1-24, default 8
-  title?: string             // Display title on storefront
-  subtitle?: string          // Display subtitle on storefront
+  title?: string             // Optional homepage section title
+  subtitle?: string          // Optional homepage section subtitle
 }
 ```
 
@@ -53,13 +53,18 @@ omits this internal composition flag.
 
 ## Validation (`collections.validation.ts`)
 
-**`createCollectionSchema`** (all required):
+**`createCollectionSchema`**:
 - `name`: string, 3-100 chars
+- `description`: optional nullable rich-text introduction, max 100,000 chars
+- `content`: optional nullable rich text below products, max 100,000 chars
+- `metaTitle`: optional nullable search title, max 70 chars
+- `metaDescription`: optional nullable search description, max 200 chars
 - `presentation`: enum `["grid", "carousel"]`
 - `isActive`: boolean
 - `config`: collectionConfigSchema (source, categoryIds, productIds, featuredProductId?, showOnHomepage default false, maxProducts 1-24 default 8, title?, subtitle?)
 
-**`updateCollectionSchema`** (all optional): Same fields.
+**`updateCollectionSchema`**: Same mutable fields are optional; a positive
+`expectedVersion` is required.
 
 **Exported types:** `CreateCollectionInput`, `UpdateCollectionInput`
 

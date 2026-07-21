@@ -314,6 +314,9 @@ describe("listCollections", () => {
         expect(db.batch).toHaveBeenCalledTimes(1);
         const statements = db.batch.mock.calls[0]?.[0] as QueryChain[];
         expect(statements).toHaveLength(2);
+        expect(Object.keys(statements[1]?.selection ?? {})).not.toEqual(
+            expect.arrayContaining(["description", "content", "metaTitle", "metaDescription"]),
+        );
         expect(statements[1]?.limit).toHaveBeenCalledWith(100);
         expect(statements[1]?.offset).toHaveBeenCalledWith(0);
     });

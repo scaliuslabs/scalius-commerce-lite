@@ -462,6 +462,7 @@ export const categoryDetailSchema = z
     name: z.string(),
     slug: z.string(),
     description: z.string().nullable(),
+    content: z.string().nullable(),
     imageUrl: z.string().nullable(),
     metaTitle: z.string().nullable(),
     metaDescription: z.string().nullable(),
@@ -542,8 +543,8 @@ export const customerDetailSchema = z
 // Collections
 // ─────────────────────────────────────────
 
-/** Collection — returned by listCollections / getCollectionById (admin). Full DB row. */
-export const collectionSchema = z
+/** Collection summary — returned by listCollections without large editor content. */
+export const collectionSummarySchema = z
   .object({
     id: z.string(),
     name: z.string(),
@@ -559,6 +560,14 @@ export const collectionSchema = z
     updatedAt: nullableTimestampSchema,
     deletedAt: nullableTimestampSchema,
   })
+
+/** Collection detail — returned by getCollectionById and mutations. */
+export const collectionSchema = collectionSummarySchema.extend({
+  description: z.string().nullable(),
+  content: z.string().nullable(),
+  metaTitle: z.string().nullable(),
+  metaDescription: z.string().nullable(),
+});
 
 // ─────────────────────────────────────────
 // Discounts

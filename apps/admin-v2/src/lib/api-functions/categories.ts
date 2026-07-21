@@ -51,6 +51,7 @@ export interface CategoryDetailDto {
   name: string;
   slug: string;
   description: string | null;
+  content: string | null;
   imageUrl: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
@@ -92,6 +93,7 @@ export interface CategoriesQueryInput {
 export interface CreateCategoryInput {
   name: string;
   description: string | null;
+  content: string | null;
   slug: string;
   metaTitle: string | null;
   metaDescription: string | null;

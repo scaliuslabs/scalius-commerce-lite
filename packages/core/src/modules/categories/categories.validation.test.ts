@@ -8,6 +8,7 @@ import {
 const categoryInput = {
     name: "Summer Shoes",
     description: null,
+    content: null,
     slug: "summer-shoes",
     metaTitle: null,
     metaDescription: null,
@@ -67,11 +68,13 @@ describe("category validation", () => {
         const parsed = createCategorySchema.parse({
             ...categoryInput,
             name: "  Summer Shoes  ",
+            content: "  <h2>Choose the right pair</h2>  ",
             metaTitle: "   ",
             metaDescription: "  A summer edit  ",
         });
 
         expect(parsed.name).toBe("Summer Shoes");
+        expect(parsed.content).toBe("<h2>Choose the right pair</h2>");
         expect(parsed.metaTitle).toBeNull();
         expect(parsed.metaDescription).toBe("A summer edit");
     });
@@ -84,6 +87,10 @@ describe("category validation", () => {
         expect(createCategorySchema.safeParse({
             ...categoryInput,
             metaDescription: "x".repeat(201),
+        }).success).toBe(false);
+        expect(createCategorySchema.safeParse({
+            ...categoryInput,
+            content: "x".repeat(100_001),
         }).success).toBe(false);
         expect(createCategorySchema.safeParse({
             ...categoryInput,

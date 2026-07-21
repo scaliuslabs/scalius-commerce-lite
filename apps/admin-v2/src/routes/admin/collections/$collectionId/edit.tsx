@@ -73,11 +73,15 @@ function EditCollectionPage() {
           id: c.id,
           version: c.version,
           name: c.name,
+          description: c.description,
+          content: c.content,
           presentation: c.presentation,
           isActive: c.isActive,
           canonicalPath: c.canonicalPath,
           noIndex: c.noIndex,
           excludeFromSitemap: c.excludeFromSitemap,
+          metaTitle: c.metaTitle,
+          metaDescription: c.metaDescription,
           config,
         }}
         isEdit

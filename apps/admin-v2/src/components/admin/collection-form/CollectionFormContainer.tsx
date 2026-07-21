@@ -21,6 +21,7 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { createCollection, updateCollection } from "~/lib/api-functions/collections";
 import { ProductSelectionSection } from "./ProductSelectionSection";
 import { LayoutSettingsSection } from "./LayoutSettingsSection";
+import { CollectionContentSection } from "./CollectionContentSection";
 import {
   collectionFormSchema,
   type CollectionFormValues,
@@ -56,11 +57,15 @@ export function CollectionForm({
     resolver: zodResolver(collectionFormSchema),
     defaultValues: {
       name: "",
+      description: null,
+      content: null,
       presentation: "grid",
       isActive: false,
       canonicalPath: null,
       noIndex: false,
       excludeFromSitemap: false,
+      metaTitle: null,
+      metaDescription: null,
       config: { ...DEFAULT_CONFIG },
       ...defaultValues,
     },
@@ -262,6 +267,8 @@ export function CollectionForm({
                   </FormItem>
                 )}
               />
+
+              <CollectionContentSection form={form} />
 
               <ProductSelectionSection
                 form={form}

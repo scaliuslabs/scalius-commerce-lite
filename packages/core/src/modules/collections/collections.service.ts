@@ -93,7 +93,21 @@ export async function listCollections(
         db.select({ count: sql<number>`count(*)` })
             .from(collections)
             .where(whereClause),
-        db.select()
+        db.select({
+            id: collections.id,
+            name: collections.name,
+            presentation: collections.presentation,
+            config: collections.config,
+            sortOrder: collections.sortOrder,
+            isActive: collections.isActive,
+            version: collections.version,
+            canonicalPath: collections.canonicalPath,
+            noIndex: collections.noIndex,
+            excludeFromSitemap: collections.excludeFromSitemap,
+            createdAt: collections.createdAt,
+            updatedAt: collections.updatedAt,
+            deletedAt: collections.deletedAt,
+        })
             .from(collections)
             .where(whereClause)
             .orderBy(
@@ -104,7 +118,10 @@ export async function listCollections(
             .offset(offset),
     ]);
     const countRows = batchResults[0] as { count: number }[];
-    const items = batchResults[1] as (typeof collections.$inferSelect)[];
+    const items = batchResults[1] as Array<Omit<
+        typeof collections.$inferSelect,
+        "description" | "content" | "metaTitle" | "metaDescription"
+    >>;
     const total = Number(countRows[0]?.count || 0);
 
     return {
@@ -353,11 +370,15 @@ export async function createCollection(
         .values({
             id: nanoid(),
             name: data.name,
+            description: data.description,
+            content: data.content,
             presentation: data.presentation,
             isActive: data.isActive,
             canonicalPath: data.canonicalPath ?? null,
             noIndex: data.noIndex ?? false,
             excludeFromSitemap: data.excludeFromSitemap ?? false,
+            metaTitle: data.metaTitle,
+            metaDescription: data.metaDescription,
             sortOrder: maxSortOrder,
             config: stringifyCollectionConfig(data.config),
         })
@@ -409,11 +430,15 @@ export async function updateCollection(
         updatedAt: sql`(unixepoch())`,
     };
     if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.content !== undefined) updateData.content = data.content;
     if (data.presentation !== undefined) updateData.presentation = data.presentation;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.canonicalPath !== undefined) updateData.canonicalPath = data.canonicalPath;
     if (data.noIndex !== undefined) updateData.noIndex = data.noIndex;
     if (data.excludeFromSitemap !== undefined) updateData.excludeFromSitemap = data.excludeFromSitemap;
+    if (data.metaTitle !== undefined) updateData.metaTitle = data.metaTitle;
+    if (data.metaDescription !== undefined) updateData.metaDescription = data.metaDescription;
     if (data.config !== undefined) updateData.config = stringifyCollectionConfig(nextConfig);
 
     const updated = await db

@@ -31,23 +31,11 @@ if (processedContent) {
   processedContent = optimizeRichContentImages(processedContent);
 }
 
-// CORRECTED: Drastically simplified class list.
-// The `prose` class from @tailwindcss/typography handles all the child element styling.
-// We just need to add it, its dark mode variant, and `max-w-none` to override the
-// default constrained width of the prose class. We also add any passed `className`.
 const allClasses = `prose dark:prose-invert max-w-none ${className}`;
 
-// Only render if content exists
 if (!content) {
   return null;
 }
 ---
 
 <div class={allClasses} set:html={processedContent} />
-
-<!-- REMOVED: The entire <style> block has been removed.
-     Styling for injected content (including shortcodes) should be handled
-     globally (in `src/styles/global.css`) or with utility classes,
-     as Astro's scoped styling cannot target elements inside `set:html`.
-     The `prose` class now handles all the typography styling.
--->

@@ -2354,6 +2354,22 @@
                             "updatedAt": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "description": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "content": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "metaTitle": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "metaDescription": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -2367,7 +2383,11 @@
                             "noIndex",
                             "excludeFromSitemap",
                             "createdAt",
-                            "updatedAt"
+                            "updatedAt",
+                            "description",
+                            "content",
+                            "metaTitle",
+                            "metaDescription"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -16493,6 +16513,10 @@
                             },
                             "excludeFromSitemap": {
                               "type": "boolean"
+                            },
+                            "content": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -16507,7 +16531,8 @@
                             "metaDescription",
                             "canonicalPath",
                             "noIndex",
-                            "excludeFromSitemap"
+                            "excludeFromSitemap",
+                            "content"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -16799,6 +16824,10 @@
                             },
                             "excludeFromSitemap": {
                               "type": "boolean"
+                            },
+                            "content": {
+                              "type": "string",
+                              "nullable": true
                             }
                           },
                           "required": [
@@ -16813,7 +16842,8 @@
                             "metaDescription",
                             "canonicalPath",
                             "noIndex",
-                            "excludeFromSitemap"
+                            "excludeFromSitemap",
+                            "content"
                           ],
                           "additionalProperties": {
                             "nullable": true
@@ -23945,6 +23975,11 @@
                     "nullable": true,
                     "maxLength": 100000
                   },
+                  "content": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
                   "slug": {
                     "type": "string",
                     "minLength": 3,
@@ -24754,6 +24789,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "content": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "imageUrl": {
                           "type": "string",
                           "nullable": true
@@ -24858,6 +24897,7 @@
                         "name",
                         "slug",
                         "description",
+                        "content",
                         "imageUrl",
                         "metaTitle",
                         "metaDescription",
@@ -25157,6 +25197,11 @@
                     "maxLength": 100
                   },
                   "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
+                  "content": {
                     "type": "string",
                     "nullable": true,
                     "maxLength": 100000
@@ -29186,6 +29231,16 @@
                     "minLength": 3,
                     "maxLength": 100
                   },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
+                  "content": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
                   "presentation": {
                     "type": "string",
                     "enum": [
@@ -29207,6 +29262,16 @@
                   "excludeFromSitemap": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "metaTitle": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 70
+                  },
+                  "metaDescription": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
                   },
                   "config": {
                     "type": "object",
@@ -29361,6 +29426,22 @@
                             }
                           ],
                           "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaTitle": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaDescription": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -29376,7 +29457,11 @@
                         "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
-                        "deletedAt"
+                        "deletedAt",
+                        "description",
+                        "content",
+                        "metaTitle",
+                        "metaDescription"
                       ]
                     }
                   },
@@ -31974,6 +32059,22 @@
                             }
                           ],
                           "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaTitle": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaDescription": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -31989,7 +32090,11 @@
                         "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
-                        "deletedAt"
+                        "deletedAt",
+                        "description",
+                        "content",
+                        "metaTitle",
+                        "metaDescription"
                       ]
                     }
                   },
@@ -32078,6 +32183,16 @@
                     "minLength": 3,
                     "maxLength": 100
                   },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
+                  "content": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100000
+                  },
                   "presentation": {
                     "type": "string",
                     "enum": [
@@ -32097,6 +32212,16 @@
                   },
                   "excludeFromSitemap": {
                     "type": "boolean"
+                  },
+                  "metaTitle": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 70
+                  },
+                  "metaDescription": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
                   },
                   "config": {
                     "type": "object",
@@ -32241,6 +32366,22 @@
                             }
                           ],
                           "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "content": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaTitle": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metaDescription": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -32256,7 +32397,11 @@
                         "excludeFromSitemap",
                         "createdAt",
                         "updatedAt",
-                        "deletedAt"
+                        "deletedAt",
+                        "description",
+                        "content",
+                        "metaTitle",
+                        "metaDescription"
                       ]
                     }
                   },

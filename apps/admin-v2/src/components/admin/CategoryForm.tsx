@@ -78,6 +78,7 @@ function toCategoryInput(values: CategoryFormValues): CreateCategoryInput {
   return {
     name: values.name,
     description: values.description,
+    content: values.content,
     slug: values.slug,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
@@ -112,6 +113,7 @@ export function CategoryForm({
       name: "",
       status: "draft",
       description: null,
+      content: null,
       slug: "",
       metaTitle: null,
       metaDescription: null,
@@ -239,10 +241,10 @@ export function CategoryForm({
             )}
           />
 
-          {/* Description Card */}
+          {/* Short introduction shown with the category heading. */}
           <Card>
             <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-base">Description</CardTitle>
+              <CardTitle className="text-base">Introduction</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
               <FormField
@@ -254,7 +256,32 @@ export function CategoryForm({
                       <DeferredTiptapEditor
                         content={field.value || ""}
                         onChange={field.onChange}
-                        placeholder="Enter category description with rich formatting..."
+                        placeholder="Introduce this category above the product list"
+                        compact={true}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3 pt-4 px-4">
+              <CardTitle className="text-base">Content below products</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 space-y-3">
+              <FormField
+                control={form.control}
+                name="content"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <DeferredTiptapEditor
+                        content={field.value || ""}
+                        onChange={field.onChange}
+                        placeholder="Add a buying guide, specifications, comparisons, or FAQs"
                         compact={true}
                       />
                     </FormControl>

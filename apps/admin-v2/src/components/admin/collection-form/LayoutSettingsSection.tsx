@@ -23,12 +23,14 @@ import {
 } from "../../ui/select";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
+import { Textarea } from "../../ui/textarea";
 import { Switch } from "../../ui/switch";
 import { X } from "lucide-react";
 import { ResourceDiscoveryReadiness } from "~/components/admin/shared/ResourceDiscoveryReadiness";
 import type { CollectionFormValues, Product } from "./types";
 import { collectionPresentations } from "./types";
 import { ProductPickerPopover } from "./ProductPickerPopover";
+import { CharacterCounter } from "../../ui/character-counter";
 
 const PENDING_PRODUCT_LABEL = "Loading product label...";
 
@@ -165,6 +167,68 @@ export const LayoutSettingsSection = React.memo(
               noIndex={form.watch("noIndex")}
               excludeFromSitemap={form.watch("excludeFromSitemap")}
               isActive={form.watch("isActive")}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="px-4 pb-3 pt-4">
+            <CardTitle className="text-base">Search listing</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 px-4 pb-4">
+            <FormField
+              control={form.control}
+              name="metaTitle"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Meta title</FormLabel>
+                  <FormControl>
+                    <Input
+                      maxLength={70}
+                      placeholder={form.watch("name") || "Collection title"}
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(event) => field.onChange(event.target.value || null)}
+                    />
+                  </FormControl>
+                  {field.value ? (
+                    <CharacterCounter
+                      current={field.value.length}
+                      recommended={60}
+                      max={70}
+                    />
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="metaDescription"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">Meta description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={3}
+                      maxLength={200}
+                      className="resize-none"
+                      placeholder="Describe this collection for search results"
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(event) => field.onChange(event.target.value || null)}
+                    />
+                  </FormControl>
+                  {field.value ? (
+                    <CharacterCounter
+                      current={field.value.length}
+                      recommended={160}
+                      max={200}
+                    />
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           </CardContent>
         </Card>

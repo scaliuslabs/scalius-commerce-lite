@@ -66,7 +66,7 @@ export const ProductSelectionSection = React.memo(
     return (
       <Card>
         <CardHeader className="px-4 pb-3 pt-4">
-          <CardTitle className="text-base">Collection content</CardTitle>
+          <CardTitle className="text-base">Products</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 px-4 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
@@ -88,7 +88,7 @@ export const ProductSelectionSection = React.memo(
             name="config.source"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Content source</FormLabel>
+                <FormLabel>Product selection</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                   <SelectContent>

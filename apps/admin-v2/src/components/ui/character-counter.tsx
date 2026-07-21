@@ -1,6 +1,4 @@
-// Character counter component with SEO recommendations
 import { cn } from "@scalius/shared/utils";
-import { AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface CharacterCounterProps {
   current: number;
@@ -17,46 +15,19 @@ export function CharacterCounter({
   className,
   label = "characters",
 }: CharacterCounterProps) {
-  // Determine status and styling
-  const getStatus = () => {
-    if (current <= recommended) {
-      return {
-        icon: CheckCircle2,
-        color: "text-green-600 dark:text-green-500",
-        bgColor: "bg-green-50 dark:bg-green-950/30",
-        message: `Good! ${current} ${label}`,
-      };
-    } else if (max && current <= max) {
-      return {
-        icon: AlertTriangle,
-        color: "text-yellow-600 dark:text-yellow-500",
-        bgColor: "bg-yellow-50 dark:bg-yellow-950/30",
-        message: `${current} ${label} (recommended: ${recommended})`,
-      };
-    } else {
-      return {
-        icon: AlertCircle,
-        color: "text-orange-600 dark:text-orange-500",
-        bgColor: "bg-orange-50 dark:bg-orange-950/30",
-        message: `${current} ${label} (recommended: ${recommended})`,
-      };
-    }
-  };
-
-  const status = getStatus();
-  const Icon = status.icon;
+  const limit = max ?? recommended;
 
   return (
     <div
+      aria-live="polite"
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium",
-        status.bgColor,
-        status.color,
+        "text-right text-xs tabular-nums text-muted-foreground",
+        current > recommended && "text-amber-700 dark:text-amber-400",
+        max && current >= max && "text-destructive",
         className,
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span>{status.message}</span>
+      {current} / {limit} {label}
     </div>
   );
 }

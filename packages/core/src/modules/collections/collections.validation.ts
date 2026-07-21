@@ -6,6 +6,12 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { COLLECTION_CONFIG_ID_LIMIT } from "./collection-config";
 
+const nullableText = (max: number) =>
+    z.string().trim().max(max).nullable().transform((value) => value || null).optional();
+
+const optionalNullableText = (max: number) =>
+    z.string().trim().max(max).nullable().transform((value) => value || null).optional();
+
 const canonicalPathSchema = z
     .string()
     .nullable()
@@ -83,22 +89,30 @@ function validatePublishReadiness(
 
 export const createCollectionSchema = z.object({
     name: z.string().min(3).max(100),
+    description: nullableText(100_000),
+    content: nullableText(100_000),
     presentation: z.enum(["grid", "carousel"]),
     isActive: z.boolean(),
     canonicalPath: canonicalPathSchema,
     noIndex: z.boolean().optional().default(false),
     excludeFromSitemap: z.boolean().optional().default(false),
+    metaTitle: nullableText(70),
+    metaDescription: nullableText(200),
     config: collectionConfigSchema,
 }).superRefine(validatePublishReadiness);
 
 export const updateCollectionSchema = z.object({
     expectedVersion: z.number().int().min(1),
     name: z.string().min(3).max(100).optional(),
+    description: optionalNullableText(100_000),
+    content: optionalNullableText(100_000),
     presentation: z.enum(["grid", "carousel"]).optional(),
     isActive: z.boolean().optional(),
     canonicalPath: canonicalPathUpdateSchema,
     noIndex: z.boolean().optional(),
     excludeFromSitemap: z.boolean().optional(),
+    metaTitle: optionalNullableText(70),
+    metaDescription: optionalNullableText(200),
     config: collectionConfigUpdateSchema.optional(),
 });
 

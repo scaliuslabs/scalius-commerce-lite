@@ -42,6 +42,7 @@ const imageSchema = z
 const categorySchema = z.object({
     name: z.string().trim().min(3).max(100),
     description: nullableText(100_000),
+    content: nullableText(100_000).optional(),
     slug: z
         .string()
         .trim()
