@@ -44,6 +44,7 @@ export function TaxSettingsPage({
     taxConfigurationQueryOptions(),
   );
   const readiness = getTaxReadiness(configuration);
+  const activeRateCount = configuration.rates.filter((rate) => rate.isActive).length;
   const ReadinessIcon = readiness.state === "ready" ? CheckCircle2 : CircleOff;
 
   return (
@@ -59,8 +60,12 @@ export function TaxSettingsPage({
             <Badge variant={configuration.settings.enabled ? "default" : "secondary"}>
               {configuration.settings.enabled ? "Live calculation enabled" : "Calculation disabled"}
             </Badge>
-            <Badge variant="outline">{configuration.classes.length} classes</Badge>
-            <Badge variant="outline">{configuration.rates.filter((rate) => rate.isActive).length} active rates</Badge>
+            <Badge variant="outline">
+              {configuration.classes.length} {configuration.classes.length === 1 ? "class" : "classes"}
+            </Badge>
+            <Badge variant="outline">
+              {activeRateCount} active {activeRateCount === 1 ? "rate" : "rates"}
+            </Badge>
         </div>
       </header>
 
@@ -84,7 +89,7 @@ export function TaxSettingsPage({
               ))}
             </dl>
           </div>
-          <Button type="button" variant={readiness.state === "ready" ? "outline" : "default"} onClick={() => onSectionChange(readiness.nextTab)}>
+          <Button type="button" className="min-h-11 md:min-h-10" variant={readiness.state === "ready" ? "outline" : "default"} onClick={() => onSectionChange(readiness.nextTab)}>
             {readiness.nextAction}
           </Button>
         </CardContent>
@@ -95,7 +100,7 @@ export function TaxSettingsPage({
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <TabsTrigger key={tab.value} value={tab.value} className="shrink-0 gap-2 rounded-md px-3 py-2.5 sm:px-4">
+              <TabsTrigger key={tab.value} value={tab.value} className="min-h-11 shrink-0 gap-2 rounded-md px-3 py-2.5 md:min-h-10 sm:px-4">
                 <Icon className="h-4 w-4" />
                 {tab.label}
               </TabsTrigger>

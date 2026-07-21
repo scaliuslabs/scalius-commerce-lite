@@ -87,6 +87,7 @@ export function TaxSettingsPanel({
             <div className="space-y-2">
               <Label htmlFor="tax-display-label">Buyer-facing label</Label>
               <Input
+                className="min-h-11 md:min-h-9"
                 id="tax-display-label"
                 value={form.displayLabel}
                 maxLength={80}
@@ -108,7 +109,7 @@ export function TaxSettingsPanel({
                   defaultTaxClassId: value === NO_CLASS ? null : value,
                 }))}
               >
-                <SelectTrigger aria-label="Default product tax class"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Default product tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CLASS}>Not configured</SelectItem>
                   {configuration.classes.map((taxClass) => (
@@ -129,7 +130,7 @@ export function TaxSettingsPanel({
                   shippingTaxClassId: value === NO_CLASS ? null : value,
                 }))}
               >
-                <SelectTrigger aria-label="Shipping tax class"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Shipping tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CLASS}>Use default class</SelectItem>
                   {configuration.classes.map((taxClass) => (
@@ -180,9 +181,10 @@ export function TaxSettingsPanel({
             </Alert>
           ) : null}
 
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
             <Button
               type="button"
+              className="min-h-11 md:min-h-10"
               variant="outline"
               onClick={() => setForm(savedForm)}
               disabled={!canManage || !isDirty || saveMutation.isPending}
@@ -192,6 +194,7 @@ export function TaxSettingsPanel({
             </Button>
             <Button
               type="button"
+              className="min-h-11 md:min-h-10"
               onClick={() => saveMutation.mutate()}
               disabled={!canManage || !isDirty || Boolean(issue) || saveMutation.isPending}
             >
@@ -246,7 +249,7 @@ function PolicySwitch({
         <Label htmlFor={id}>{label}</Label>
         <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
       </div>
-      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+      <Switch className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3" id={id} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
     </div>
   );
 }

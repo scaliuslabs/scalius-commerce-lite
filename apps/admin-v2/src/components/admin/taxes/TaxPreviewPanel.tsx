@@ -102,7 +102,7 @@ export function TaxPreviewPanel({
             <div className="space-y-2">
               <Label>Tax class</Label>
               <Select value={taxClassId} onValueChange={setTaxClassId}>
-                <SelectTrigger aria-label="Preview tax class"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Preview tax class"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={DEFAULT_CLASS}>Store default</SelectItem>
                   {configuration.classes.map((taxClass) => <SelectItem key={taxClass.id} value={taxClass.id}>{taxClass.name}</SelectItem>)}
@@ -162,7 +162,7 @@ export function TaxPreviewPanel({
           {cities.length === 0 ? (
             <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Import or create delivery locations before running a destination preview.</p>
           ) : null}
-          <Button disabled={!inputValid || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
+          <Button className="min-h-11 w-full sm:w-auto md:min-h-10" disabled={!inputValid || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
             {previewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
             Calculate preview
           </Button>
@@ -210,5 +210,5 @@ export function TaxPreviewPanel({
 }
 
 function NumberField({ id, label, value, onChange, integer = false }: { id: string; label: string; value: string; onChange: (value: string) => void; integer?: boolean }) {
-  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input id={id} type="number" min="0" step={integer ? "1" : "0.01"} inputMode={integer ? "numeric" : "decimal"} value={value} onChange={(event) => onChange(event.target.value)} /></div>;
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input className="min-h-11 md:min-h-9" id={id} type="number" min="0" step={integer ? "1" : "0.01"} inputMode={integer ? "numeric" : "decimal"} value={value} onChange={(event) => onChange(event.target.value)} /></div>;
 }
