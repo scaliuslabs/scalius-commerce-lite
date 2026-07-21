@@ -145,7 +145,7 @@ const CheckoutRow = React.memo(
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => onToggleSelection(checkout.id)}
-              aria-label={`Select incomplete order ${displayId}`}
+              aria-label={`Select incomplete checkout ${displayId}`}
             />
           )}
         </TableCell>
@@ -186,7 +186,7 @@ const CheckoutRow = React.memo(
             variant="ghost"
             size="icon"
             onClick={() => onViewDetails(checkout)}
-            aria-label={`View incomplete order ${displayId}`}
+            aria-label={`View incomplete checkout ${displayId}`}
             title="View details"
           >
             <Eye className="h-4 w-4" />
@@ -196,7 +196,7 @@ const CheckoutRow = React.memo(
               variant="ghost"
               size="icon"
               onClick={() => onDelete(checkout.id)}
-              aria-label={`Delete incomplete order ${displayId}`}
+              aria-label={`Delete incomplete checkout ${displayId}`}
               title={isHostedArchive ? "Delete recovery record" : "Delete checkout record"}
             >
               <Trash2 className="h-4 w-4 text-destructive" />
@@ -247,7 +247,7 @@ const CheckoutCard = React.memo(
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => onToggleSelection(checkout.id)}
-              aria-label={`Select incomplete order ${displayId}`}
+              aria-label={`Select incomplete checkout ${displayId}`}
               className="mt-0.5"
             />
           ) : null}
@@ -285,7 +285,7 @@ const CheckoutCard = React.memo(
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={() => onViewDetails(checkout)}
-              aria-label={`View incomplete order ${displayId}`}
+              aria-label={`View incomplete checkout ${displayId}`}
             >
               <Eye className="mr-1 h-3.5 w-3.5" /> View
             </Button>
@@ -295,7 +295,7 @@ const CheckoutCard = React.memo(
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => onDelete(checkout.id)}
-                aria-label={`Delete incomplete order ${displayId}`}
+                aria-label={`Delete incomplete checkout ${displayId}`}
                 title={isHostedArchive ? "Delete recovery record" : "Delete checkout record"}
               >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
@@ -320,6 +320,7 @@ const DetailsModal = ({
 
   const display = parseAbandonedCheckoutDisplay(checkout);
   const { items, total, customerInfo } = display;
+  const displayId = getCheckoutDisplayId(checkout);
 
   return (
     <Dialog open={!!checkout} onOpenChange={onClose}>
@@ -329,8 +330,12 @@ const DetailsModal = ({
             <DialogTitle>Incomplete checkout</DialogTitle>
             <DialogDescription>
               Saved recovery context for{" "}
-              <span className="font-mono text-xs">
-                {getCheckoutDisplayId(checkout)}
+              <span
+                className="font-mono text-xs"
+                title={displayId}
+                aria-label={`Checkout ID ${displayId}`}
+              >
+                {formatAbandonedCheckoutId(displayId)}
               </span>
             </DialogDescription>
           </div>
@@ -385,6 +390,14 @@ const DetailsModal = ({
                   <strong>Address:</strong> {customerInfo.address || "N/A"}
                 </span>
               </p>
+              {customerInfo.location && (
+                <p className="flex items-start gap-3">
+                  <MapPin className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
+                  <span>
+                    <strong>Location:</strong> {customerInfo.location}
+                  </span>
+                </p>
+              )}
               {customerInfo.email && (
                 <p className="flex items-start gap-3">
                   <Mail className="h-4 w-4 mt-1 text-muted-foreground shrink-0" />{" "}
@@ -410,9 +423,9 @@ const DetailsModal = ({
             </h3>
             <div className="space-y-2">
               {items.length > 0 ? (
-                items.map((item: AbandonedCheckoutCartItem) => (
+                items.map((item: AbandonedCheckoutCartItem, index) => (
                   <div
-                    key={item.id}
+                    key={`${item.id}:${item.variantId ?? index}`}
                     className="flex justify-between items-center bg-muted/50 p-3 rounded-lg border"
                   >
                     <div className="flex items-center gap-3">
@@ -622,7 +635,7 @@ export function AbandonedCheckoutsManager({
         <DataTableToolbar
           searchValue={routeState.search}
           onSearchChange={handleSearchChange}
-          searchPlaceholder="Search phone, ID, or cart item…"
+          searchPlaceholder="Search customer, phone, ID, or item…"
           selectedCount={selectedIds.size}
           filters={
             <Button
@@ -673,8 +686,8 @@ export function AbandonedCheckoutsManager({
             <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
             <p className="min-w-0 flex-1 text-muted-foreground">
               {checkouts.length > 0
-                ? "The latest incomplete orders could not be loaded. Showing the last available result."
-                : "Incomplete orders could not be loaded. No records have been assumed."}
+                ? "The latest incomplete checkouts could not be loaded. Showing the last available result."
+                : "Incomplete checkouts could not be loaded. No records have been assumed."}
             </p>
             <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => void refetch()}>
               Try again
@@ -704,7 +717,7 @@ export function AbandonedCheckoutsManager({
                 ) : isError && checkouts.length === 0 ? (
                   <div className="flex h-52 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">
                     <AlertCircle className="h-9 w-9 text-destructive" />
-                    <p className="font-medium text-foreground">Incomplete orders unavailable</p>
+                    <p className="font-medium text-foreground">Incomplete checkouts unavailable</p>
                     <p className="text-xs">Try again without losing this search or sort.</p>
                   </div>
                 ) : checkouts.length === 0 ? (
@@ -804,7 +817,7 @@ export function AbandonedCheckoutsManager({
                       <TableCell colSpan={7} className="h-64 text-center text-muted-foreground">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <AlertCircle className="h-9 w-9 text-destructive" />
-                          <p className="font-medium text-foreground">Incomplete orders unavailable</p>
+                          <p className="font-medium text-foreground">Incomplete checkouts unavailable</p>
                           <p className="text-xs">Try again without losing this search or sort.</p>
                         </div>
                       </TableCell>
@@ -864,7 +877,7 @@ export function AbandonedCheckoutsManager({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogTitle>Delete checkout records?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete {formatAbandonedCheckoutRecordCount(deleteDialog?.ids.length ?? 0)},
               including any archived hosted-payment recovery
@@ -888,7 +901,7 @@ export function AbandonedCheckoutsManager({
               {isActionLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Confirm Delete"
+                "Delete"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

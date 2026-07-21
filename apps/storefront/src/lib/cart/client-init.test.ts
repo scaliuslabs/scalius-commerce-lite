@@ -385,6 +385,34 @@ describe("initCartFunctionality", () => {
     );
   });
 
+  it("keeps readable delivery names in abandoned checkout recovery context", async () => {
+    await initCartFunctionality();
+
+    window.dispatchEvent(
+      new CustomEvent("checkout-location-change", {
+        detail: {
+          cityId: "city_dhaka",
+          cityName: "Dhaka",
+          zoneId: "zone_banani",
+          zoneName: "Banani",
+          areaId: "area_11",
+          areaName: "Road 11",
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(apiMocks.saveAbandonedCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkoutData: expect.objectContaining({
+          cityName: "Dhaka",
+          zoneName: "Banani",
+          areaName: "Road 11",
+        }),
+      }),
+    );
+  });
+
   it("rotates a failed checkout id before resubmitting a repaired cart", async () => {
     const failedCheckoutId = "chk_session_failed_claim";
     const issue: CartValidationIssue = {

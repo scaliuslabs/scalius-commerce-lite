@@ -1,0 +1,32 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { describe, expect, it } from "vitest";
+
+const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function source(path: string): string {
+  return readFileSync(resolve(srcRoot, path), "utf8");
+}
+
+describe("incomplete checkout presentation", () => {
+  it("uses checkout semantics consistently across the route and navigation", () => {
+    const route = source("routes/admin/abandoned-checkouts.tsx");
+    const navigation = source("components/admin/layout/AdminNav.ts");
+
+    expect(route).toContain("Incomplete Checkouts | Scalius Admin");
+    expect(route).toContain(">Incomplete Checkouts</h1>");
+    expect(route).not.toContain("Incomplete Orders");
+    expect(navigation).toContain('name: "Checkouts"');
+  });
+
+  it("keeps recovery IDs compact and shows readable delivery context", () => {
+    const manager = source("components/admin/AbandonedCheckoutsManager.tsx");
+
+    expect(manager).toContain("formatAbandonedCheckoutId(displayId)");
+    expect(manager).toContain("customerInfo.location");
+    expect(manager).toContain("Search customer, phone, ID, or item…");
+    expect(manager).toContain("Delete checkout records?");
+  });
+});

@@ -5,6 +5,10 @@ export interface BreadcrumbItem {
   href?: string;
 }
 
+const breadcrumbTitleOverrides: Record<string, string> = {
+  "abandoned-checkouts": "Incomplete Checkouts",
+};
+
 /**
  * Generates breadcrumb items for admin pages, handling special cases where ID segments should be excluded
  * @param currentPath - The current URL pathname
@@ -52,7 +56,7 @@ export function generateAdminBreadcrumbs(
     const isLast = i === segments.length - 1;
 
     // Friendly title: capitalize, handle hyphenated words
-    const title = segment
+    const title = breadcrumbTitleOverrides[segment] ?? segment
       .split("-")
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");

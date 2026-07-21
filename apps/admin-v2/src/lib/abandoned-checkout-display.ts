@@ -7,6 +7,7 @@ export interface AbandonedCheckoutDisplayRecord {
 
 export interface AbandonedCheckoutCartItem {
   id: string;
+  variantId?: string;
   name: string;
   quantity: number;
   price: number;
@@ -20,6 +21,7 @@ export interface AbandonedCheckoutCustomerInfo {
   address?: string | null;
   notes?: string | null;
   email?: string | null;
+  location?: string | null;
 }
 
 export type AbandonedCheckoutStageVariant = "secondary" | "outline" | "default";
@@ -69,6 +71,17 @@ function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function readableLocation(data: Record<string, unknown>): string | null {
+  const parts = [
+    asString(data.areaName),
+    asString(data.zoneName),
+    asString(data.cityName),
+  ].filter((value): value is string => Boolean(value));
+
+  const uniqueParts = [...new Set(parts)];
+  return uniqueParts.length > 0 ? uniqueParts.join(", ") : null;
+}
+
 function parseCartItems(value: unknown): AbandonedCheckoutCartItem[] {
   return Array.isArray(value)
     ? value.flatMap((item): AbandonedCheckoutCartItem[] => {
@@ -96,6 +109,7 @@ function parseCartItems(value: unknown): AbandonedCheckoutCartItem[] {
         return [{
           ...candidate,
           id: candidate.id,
+          variantId: asString(candidate.variantId) ?? undefined,
           name: candidate.name,
           quantity: candidate.quantity,
           price: candidate.price,
@@ -115,6 +129,7 @@ function parseCartShape(data: Record<string, unknown>): ParsedAbandonedCheckoutD
     address: asString(data.shippingAddress),
     notes: asString(data.notes),
     email: asString(data.customerEmail),
+    location: readableLocation(data),
   };
   const hasCustomerInfo = Object.values(customerInfo).some(Boolean);
 
@@ -160,6 +175,7 @@ function parseArchivedHostedOrder(data: Record<string, unknown>): ParsedAbandone
     address: asString(data.shippingAddress),
     notes: asString(data.notes),
     email: asString(data.customerEmail),
+    location: readableLocation(data),
   };
 
   return {

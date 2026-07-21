@@ -1599,7 +1599,7 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("Refund row:");
   });
 
-  it("normalizes stale hosted-payment archives in incomplete-order UI", () => {
+  it("normalizes stale hosted-payment archives in incomplete-checkout UI", () => {
     const source = readFileSync(
       join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
       "utf8",
@@ -1620,7 +1620,7 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("The original order record remains in Orders.");
     expect(source).not.toContain("const parseCheckoutData =");
 
-    expect(routeSource).toContain("archived hosted-payment recovery records");
+    expect(routeSource).toContain("archived hosted payments");
   });
 
   it("keeps order detail SSR formatting deterministic", () => {
