@@ -11,6 +11,7 @@ import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-or
 import {
   SCANNER_COOKIE_NAME,
   SCANNER_SESSION_TTL_SECONDS,
+  SCANNER_TOKEN_TTL_SECONDS,
   buildScannerSessionCookie,
   getScannerSessionKey,
   parseCookie,
@@ -188,7 +189,11 @@ export async function handleCreateScannerToken(
     nowMs: now,
   });
 
-  return jsonResponse({ success: true, token });
+  return jsonResponse({
+    success: true,
+    token,
+    expiresAt: now + SCANNER_TOKEN_TTL_SECONDS * 1000,
+  });
 }
 
 async function readScannerSession(
