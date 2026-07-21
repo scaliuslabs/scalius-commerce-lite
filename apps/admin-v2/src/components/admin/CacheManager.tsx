@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "../ui/card";
@@ -54,7 +53,6 @@ import type {
   StorefrontCacheQueueFailureRecord,
 } from "@/lib/api-functions/cache";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
-import { Separator } from "../ui/separator";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,19 +65,18 @@ import {
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
 
-// Group display config: icon, styling
-const GROUP_CONFIG: Record<string, { icon: ComponentType<{ className?: string }>; bgColor: string; iconColor: string; hoverBorder: string }> = {
-  products: { icon: ShoppingCart, bgColor: "bg-blue-100 dark:bg-blue-900/40", iconColor: "text-blue-600 dark:text-blue-400", hoverBorder: "hover:border-blue-500/50" },
-  categories: { icon: FolderTree, bgColor: "bg-green-100 dark:bg-green-900/40", iconColor: "text-green-600 dark:text-green-400", hoverBorder: "hover:border-green-500/50" },
-  collections: { icon: Layers3, bgColor: "bg-purple-100 dark:bg-purple-900/40", iconColor: "text-purple-600 dark:text-purple-400", hoverBorder: "hover:border-purple-500/50" },
-  pages: { icon: FileText, bgColor: "bg-orange-100 dark:bg-orange-900/40", iconColor: "text-orange-600 dark:text-orange-400", hoverBorder: "hover:border-orange-500/50" },
-  layout: { icon: PanelTop, bgColor: "bg-pink-100 dark:bg-pink-900/40", iconColor: "text-pink-600 dark:text-pink-400", hoverBorder: "hover:border-pink-500/50" },
-  media: { icon: ImageIcon, bgColor: "bg-rose-100 dark:bg-rose-900/40", iconColor: "text-rose-600 dark:text-rose-400", hoverBorder: "hover:border-rose-500/50" },
-  homepage: { icon: Home, bgColor: "bg-yellow-100 dark:bg-yellow-900/40", iconColor: "text-yellow-600 dark:text-yellow-400", hoverBorder: "hover:border-yellow-500/50" },
-  discovery: { icon: Globe2, bgColor: "bg-teal-100 dark:bg-teal-900/40", iconColor: "text-teal-600 dark:text-teal-400", hoverBorder: "hover:border-teal-500/50" },
-  checkout: { icon: CreditCard, bgColor: "bg-emerald-100 dark:bg-emerald-900/40", iconColor: "text-emerald-600 dark:text-emerald-400", hoverBorder: "hover:border-emerald-500/50" },
-  search: { icon: Search, bgColor: "bg-cyan-100 dark:bg-cyan-900/40", iconColor: "text-cyan-600 dark:text-cyan-400", hoverBorder: "hover:border-cyan-500/50" },
-  attributes: { icon: ListTree, bgColor: "bg-indigo-100 dark:bg-indigo-900/40", iconColor: "text-indigo-600 dark:text-indigo-400", hoverBorder: "hover:border-indigo-500/50" },
+const GROUP_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  products: ShoppingCart,
+  categories: FolderTree,
+  collections: Layers3,
+  pages: FileText,
+  layout: PanelTop,
+  media: ImageIcon,
+  homepage: Home,
+  discovery: Globe2,
+  checkout: CreditCard,
+  search: Search,
+  attributes: ListTree,
 };
 
 const EMPTY_GROUPS: Record<string, CacheGroupDefinition> = {};
@@ -147,6 +144,8 @@ export function CacheManager() {
     storefrontDlqQuery.data?.failures ?? EMPTY_STOREFRONT_DLQ_FAILURES;
   const loading =
     statsQuery.isLoading || timestampsQuery.isLoading || groupsQuery.isLoading;
+  const cacheReadError =
+    statsQuery.isError || timestampsQuery.isError || groupsQuery.isError;
   const refreshing =
     statsQuery.isFetching ||
     timestampsQuery.isFetching ||
@@ -204,87 +203,89 @@ export function CacheManager() {
     storefrontDlqQuery.error instanceof Error
       ? storefrontDlqQuery.error.message
       : "Could not load storefront cache queue failures.";
+  const backendCacheLabel = stats
+    ? stats.size === -1
+      ? `${(stats.cacheType || "KV").toUpperCase()} managed`
+      : `${stats.size} entries`
+    : "Unavailable";
 
   return (
-    <div className="space-y-6">
-      {/* Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-100/50 dark:border-blue-900/50 shadow-sm shadow-blue-900/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center text-lg text-blue-900 dark:text-blue-100">
-              <Database className="mr-2 h-5 w-5 text-blue-600 dark:text-blue-400" />
-              Backend KV Cache
-            </CardTitle>
-            <CardDescription className="text-blue-700/70 dark:text-blue-300/70">Cloudflare KV cache statistics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">
-                <div className="h-4 bg-muted rounded animate-pulse" />
-                <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-              </div>
-            ) : stats ? (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Type</span>
-                  <span className="font-medium capitalize">{stats.cacheType || "kv"}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Entries</span>
-                  <span className="font-medium">{stats.size === -1 ? "Managed" : stats.size}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Memory</span>
-                  <span className="font-medium">{stats.memory}</span>
-                </div>
-              </div>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Unavailable</AlertTitle>
-                <AlertDescription>Could not fetch cache statistics</AlertDescription>
-              </Alert>
-            )}
-          </CardContent>
-          <CardFooter className="pt-1">
-            <div className="w-full flex justify-between items-center">
-              <span className="text-xs text-muted-foreground flex items-center">
-                <Clock className="h-3 w-3 mr-1" />
-                {lastUpdated ? (
-                  <span suppressHydrationWarning>
-                    {new Date(lastUpdated).toLocaleTimeString()}
-                  </span>
-                ) : (
-                  "\u2014"
-                )}
-              </span>
-              <Button variant="outline" size="sm" onClick={refreshData} disabled={refreshing}>
-                <RefreshCw className={`mr-1 h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
+    <div className="space-y-4">
+      <Card className="shadow-none">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-base">Cache health</CardTitle>
+              <CardDescription>
+                Live backend, invalidation, and recovery state.
+              </CardDescription>
             </div>
-          </CardFooter>
-        </Card>
-
-        <Card className="lg:col-span-2 bg-gradient-to-br from-amber-50/50 to-orange-50/50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-100/50 dark:border-amber-900/50 shadow-sm shadow-amber-900/5">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center text-lg text-amber-900 dark:text-amber-100">
-              <Info className="mr-2 h-5 w-5 text-amber-600 dark:text-amber-400" />
-              How it works
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm text-amber-800/80 dark:text-amber-200/80 leading-relaxed">
-              Cache is organized into <strong>invalidation groups</strong>. When you edit content in the admin,
-              only the relevant groups are cleared. Groups marked{" "}
-              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800">Warms HTML</Badge>{" "}
-              are directly HTML-affecting. Groups marked{" "}
-              <Badge variant="secondary" className="inline-flex text-xs px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">Data prefixes</Badge>{" "}
-              clear matching API/storefront data prefixes; critical pages are warmed whenever the storefront cache version moves.
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 gap-1.5 sm:min-h-8"
+              onClick={refreshData}
+              disabled={refreshing}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loading ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={index}
+                  className="h-16 animate-pulse rounded-md bg-muted"
+                />
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-md border bg-muted/20 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Backend cache</dt>
+                <dd className="mt-1 text-sm font-medium">{backendCacheLabel}</dd>
+              </div>
+              <div className="rounded-md border bg-muted/20 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Groups</dt>
+                <dd className="mt-1 text-sm font-medium">
+                  {groupsQuery.isError ? "Unavailable" : groupNames.length}
+                </dd>
+              </div>
+              <div className="rounded-md border bg-muted/20 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Failed work</dt>
+                <dd className="mt-1 text-sm font-medium">
+                  {storefrontDlqCountLabel}
+                </dd>
+              </div>
+              <div className="rounded-md border bg-muted/20 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Updated</dt>
+                <dd
+                  className="mt-1 text-sm font-medium"
+                  suppressHydrationWarning
+                >
+                  {lastUpdated ? getRelativeTime(lastUpdated) : "Never"}
+                </dd>
+              </div>
+            </dl>
+          )}
+          {cacheReadError && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Some cache data is unavailable</AlertTitle>
+              <AlertDescription>
+                Refresh to retry. Clear actions stay limited to data that loaded
+                successfully.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       {!canManageCache && (
         <Alert>
@@ -297,27 +298,26 @@ export function CacheManager() {
         </Alert>
       )}
 
-      {/* Storefront queue recovery */}
       <Card className="border border-border/60 shadow-none">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
-              <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
-                <RefreshCw className="h-5 w-5 text-primary" />
-                Storefront queue recovery
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                Failed cache work
                 <Badge variant="outline" className="font-normal">
                   {storefrontDlqCountLabel}
                 </Badge>
               </CardTitle>
               <CardDescription>
-                Recent cache purge and warm messages that are waiting for replay or ignore.
+                Purge or warm jobs that exhausted automatic retries.
               </CardDescription>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 gap-1.5 self-start"
+              className="min-h-11 gap-1.5 self-start sm:min-h-8"
               onClick={() => void storefrontDlqQuery.refetch()}
               disabled={storefrontDlqQuery.isFetching}
             >
@@ -343,7 +343,7 @@ export function CacheManager() {
           ) : storefrontDlqCount === 0 ? (
             <div className="flex items-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              No pending storefront cache queue failures.
+              Queue healthy. No purge or warm failures need attention.
             </div>
           ) : (
             <>
@@ -393,7 +393,7 @@ export function CacheManager() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 gap-1.5"
+                            className="min-h-11 gap-1.5 sm:min-h-8"
                             disabled={actionBusy}
                             onClick={() =>
                               replayStorefrontDlqMutation.mutate(failure.id)
@@ -410,7 +410,7 @@ export function CacheManager() {
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 gap-1.5"
+                                className="min-h-11 gap-1.5 sm:min-h-8"
                                 disabled={actionBusy}
                               >
                                 <CheckCircle2
@@ -463,51 +463,155 @@ export function CacheManager() {
         </CardContent>
       </Card>
 
-      {/* Dependency visualization (collapsible) */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">
-            <Button
-              type="button"
-              variant="ghost"
-              className="flex h-auto w-full items-center justify-between gap-3 p-0 text-left text-lg font-semibold hover:bg-transparent"
-              aria-expanded={showDeps}
-              aria-controls="cache-dependency-mapping"
-              onClick={() => setShowDeps((current) => !current)}
-            >
-              <span className="flex items-center">
-                <ListTree className="mr-2 h-5 w-5 text-primary" />
-                Admin Action → Cache Group Mapping
+      <section className="space-y-3" aria-labelledby="cache-groups-title">
+        <div>
+          <h2 id="cache-groups-title" className="text-base font-semibold">
+            Invalidation groups
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Clear the smallest group that contains stale data.
+          </p>
+        </div>
+        {groupsQuery.isLoading ? (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div
+                key={index}
+                className="h-32 animate-pulse rounded-lg bg-muted"
+              />
+            ))}
+          </div>
+        ) : groupsQuery.isError ? (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Invalidation groups unavailable</AlertTitle>
+            <AlertDescription>
+              Refresh before clearing a group. No group defaults were assumed.
+            </AlertDescription>
+          </Alert>
+        ) : groupNames.length === 0 ? (
+          <div className="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+            No invalidation groups are configured.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {groupNames.map((groupName) => {
+              const group = groups[groupName];
+              const Icon = GROUP_ICONS[groupName] || Database;
+              const lastCleared = timestamps[groupName];
+              const isClearing = clearingGroup === groupName;
+              const label = group?.label || groupName;
+
+              return (
+                <Card key={groupName} className="shadow-none">
+                  <CardHeader className="px-4 pb-2 pt-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="grid size-8 shrink-0 place-items-center rounded-md bg-muted">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <CardTitle className="truncate text-sm font-semibold">
+                          {label}
+                        </CardTitle>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 font-normal">
+                        {group?.bumpsHtml ? "Warms pages" : "Data only"}
+                      </Badge>
+                    </div>
+                    <CardDescription className="mt-1 min-h-8 text-xs">
+                      {group?.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="flex items-center justify-between gap-3 border-t pt-3">
+                      <span className="flex items-center text-xs text-muted-foreground">
+                        <Clock className="mr-1 h-3 w-3" />
+                        Cleared{" "}
+                        {timestampsQuery.isError
+                          ? "unavailable"
+                          : getRelativeTime(lastCleared)}
+                      </span>
+                      {canManageCache && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-h-11 text-xs sm:min-h-8"
+                          aria-label={`Clear ${label} cache`}
+                          onClick={() => clearGroupMutation.mutate(groupName)}
+                          disabled={clearingGroup !== null || clearingAll}
+                        >
+                          {isClearing ? (
+                            <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="mr-1 h-3 w-3" />
+                          )}
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <Card className="shadow-none">
+        <CardHeader className="p-0">
+          <Button
+            type="button"
+            variant="ghost"
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left hover:bg-muted/50"
+            aria-expanded={showDeps}
+            aria-controls="cache-dependency-mapping"
+            onClick={() => setShowDeps((current) => !current)}
+          >
+            <span className="flex min-w-0 items-center gap-2.5">
+              <ListTree className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>
+                <span className="block text-sm font-semibold">
+                  Invalidation dependencies
+                </span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  Admin writes that clear each group.
+                </span>
               </span>
-              {showDeps ? (
-                <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-              )}
-            </Button>
-          </CardTitle>
+            </span>
+            {showDeps ? (
+              <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+          </Button>
         </CardHeader>
         {showDeps && (
-          <CardContent id="cache-dependency-mapping">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <CardContent id="cache-dependency-mapping" className="border-t pt-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {groupNames.map((groupName) => {
                 const triggers = groupTriggers[groupName] || [];
-                const config = GROUP_CONFIG[groupName];
+                const Icon = GROUP_ICONS[groupName] || Database;
                 return (
-                  <div key={groupName} className="text-sm p-3 rounded-lg bg-muted/40 border border-border/50 hover:bg-muted/60 transition-colors">
-                    <div className="font-semibold flex items-center gap-2 mb-2">
-                      {config?.icon && <config.icon className="h-4 w-4 text-muted-foreground" />}
+                  <div key={groupName} className="rounded-md border p-3 text-sm">
+                    <div className="mb-2 flex items-center gap-2 font-medium">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                       {groups[groupName]?.label || groupName}
                     </div>
-                    <div className="pl-5 space-y-0.5">
+                    <div className="space-y-1 pl-6">
                       {triggers.length > 0 ? (
                         triggers.map((path) => (
-                          <div key={path} className="text-xs text-muted-foreground font-mono">
+                          <div
+                            key={path}
+                            className="break-all font-mono text-xs text-muted-foreground"
+                          >
                             {path}
                           </div>
                         ))
                       ) : (
-                        <div className="text-xs text-muted-foreground italic">Triggered as dependency</div>
+                        <div className="text-xs text-muted-foreground">
+                          Cleared by another group.
+                        </div>
                       )}
                     </div>
                   </div>
@@ -518,123 +622,53 @@ export function CacheManager() {
         )}
       </Card>
 
-      {/* Group grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {groupNames.map((groupName) => {
-          const group = groups[groupName];
-          const config = GROUP_CONFIG[groupName] || {
-            icon: Database,
-            bgColor: "bg-gray-100 dark:bg-gray-900/40",
-            iconColor: "text-gray-600 dark:text-gray-400",
-            hoverBorder: "hover:border-gray-500/50"
-          };
-          const Icon = config.icon;
-          const lastCleared = timestamps[groupName];
-          const isClearing = clearingGroup === groupName;
-
-          return (
-            <Card key={groupName} className={`transition-all duration-300 border border-border/40 hover:shadow-md ${config.hoverBorder}`}>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${config.bgColor}`}>
-                      <Icon className={`h-4 w-4 ${config.iconColor}`} />
-                    </div>
-                    <CardTitle className="text-sm font-semibold">{group?.label || groupName}</CardTitle>
-                  </div>
-                  {group?.bumpsHtml ? (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                      Warms HTML
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                      Data prefixes
-                    </Badge>
-                  )}
-                </div>
-                <CardDescription className="text-xs mt-1">
-                  {group?.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pb-3 px-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground flex items-center">
-                    <Clock className="h-3 w-3 mr-1" />
-                    {getRelativeTime(lastCleared)}
-                  </span>
-                  {canManageCache && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => clearGroupMutation.mutate(groupName)}
-                      disabled={clearingGroup !== null || clearingAll}
-                    >
-                      {isClearing ? (
-                        <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-1 h-3 w-3" />
-                      )}
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Danger zone */}
       {canManageCache && (
-        <>
-          <Separator />
-          <Card className="border border-destructive/30 bg-destructive/5 dark:bg-destructive/10 shadow-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center text-lg text-destructive">
-                <Eraser className="mr-2 h-5 w-5" />
-                Danger Zone
-              </CardTitle>
-              <CardDescription className="text-destructive/80">
-                Clear all backend and storefront caches. This will cause a temporary performance
-                dip while caches rebuild.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    disabled={clearingAll || clearingGroup !== null}
-                    className="w-full sm:w-auto"
-                  >
-                    {clearingAll ? (
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="mr-2 h-4 w-4" />
-                    )}
-                    Clear All Cache
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear all cache?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will clear all backend API cache and purge the storefront cache.
-                      The site may be slower for a few moments while caches rebuild.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
-                      Clear all cache
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </CardContent>
-          </Card>
-        </>
+        <Card className="border border-destructive/30 shadow-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center text-base">
+              <Eraser className="mr-2 h-4 w-4 text-destructive" />
+              Clear all caches
+            </CardTitle>
+            <CardDescription>
+              Use only when stale data spans several groups. The storefront may
+              be slower while caches rebuild.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={clearingAll || clearingGroup !== null}
+                  className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                >
+                  {clearingAll ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Clear all caches
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear all caches?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This clears backend API cache and purges storefront cache.
+                    The site may be slower for a few moments while caches
+                    rebuild.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
+                    Clear all caches
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
