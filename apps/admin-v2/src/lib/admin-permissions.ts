@@ -42,6 +42,7 @@ export const ADMIN_PERMISSIONS = {
   SETTINGS_HEADER_EDIT: "settings.header.edit",
   SETTINGS_DELIVERY_PROVIDERS_VIEW: "settings.delivery_providers.view",
   SETTINGS_FRAUD_CHECKER_VIEW: "settings.fraud_checker.view",
+  SETTINGS_FRAUD_CHECKER_EDIT: "settings.fraud_checker.edit",
   SETTINGS_CACHE_VIEW: "settings.cache.view",
   SETTINGS_CACHE_MANAGE: "settings.cache.manage",
   TAXES_VIEW: "taxes.view",

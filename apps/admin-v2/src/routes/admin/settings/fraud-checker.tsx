@@ -19,14 +19,12 @@ function FraudCheckerPage() {
   const providers: FraudCheckerProviderPayload[] = Array.isArray(data) ? data : [];
 
   return (
-    <div className="container py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fraud Checker</h1>
-          <p className="text-muted-foreground">
-            Configure fraud detection providers for customer verification
-          </p>
-        </div>
+    <div className="container max-w-6xl space-y-4 py-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Fraud Checker</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Manage providers used for on-demand risk checks in Orders.
+        </p>
       </div>
       <FraudCheckerSettings providers={providers} />
     </div>
