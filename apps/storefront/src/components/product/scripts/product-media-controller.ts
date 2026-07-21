@@ -190,11 +190,17 @@ function setSelectedItem(
   const mobileImage = root.querySelector<HTMLImageElement>(
     "[data-mobile-main-image]",
   );
+  const desktopImage = root.querySelector<HTMLImageElement>(
+    "[data-desktop-main-image]",
+  );
   const mobileTrigger = root.querySelector<HTMLElement>(
     "[data-mobile-image-trigger]",
   );
 
   updateActiveThumbnails(root, item.thumbnail ? item.productMediaId : null);
+  root.dataset.activeMediaUrl = item.url;
+  root.dataset.activeMediaZoomUrl = item.zoomUrl || item.url;
+  root.dataset.activeMediaAlt = item.altText;
 
   if (item.kind === "video" && video && videoStage) {
     desktopImageStage?.classList.remove("lg:block");
@@ -228,6 +234,10 @@ function setSelectedItem(
       mobileImage.removeAttribute("sizes");
       mobileImage.src = item.url;
       mobileImage.alt = item.altText;
+    }
+    if (desktopImage) {
+      desktopImage.src = item.url;
+      desktopImage.alt = item.altText;
     }
   }
 
@@ -296,7 +306,10 @@ function bindThumbnailRail(
       button.addEventListener(
         "mouseenter",
         () => {
-          hoverTimer = window.setTimeout(() => select(button, "gallery"), 80);
+          if (button.dataset.mediaUrl) {
+            void preloadImage(button.dataset.mediaUrl);
+          }
+          hoverTimer = window.setTimeout(() => select(button, "gallery"), 40);
         },
         { signal },
       );
@@ -594,7 +607,7 @@ export function initProductMediaGallery(
         : null;
       if (target) {
         selectButton(target, event.detail.source);
-        target.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
+        target.scrollIntoView({ behavior: "auto", block: "nearest" });
         return;
       }
 
@@ -610,7 +623,7 @@ export function initProductMediaGallery(
       if (attachedFallback) {
         selectButton(attachedFallback, event.detail.source);
         attachedFallback.scrollIntoView({
-          behavior: scrollBehavior(),
+          behavior: "auto",
           block: "nearest",
         });
         return;

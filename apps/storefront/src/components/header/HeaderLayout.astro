@@ -11,13 +11,6 @@ interface Props {
 const { headerData } = Astro.props;
 ---
 
-<!-- Sentinel for Scroll Detection -->
-<div
-  id="header-sentinel"
-  class="absolute top-0 w-full h-px -translate-y-px pointer-events-none opacity-0 z-0"
->
-</div>
-
 {
   headerData.topBar.isEnabled !== false &&
     headerData.topBar.text &&
@@ -270,11 +263,13 @@ const { headerData } = Astro.props;
 
 <script>
   import { toast } from "sonner";
+  import { shouldUseCompactHeader } from "./header-scroll-state";
 
-  const header = document.getElementById("main-header");
-  const sentinel = document.getElementById("header-sentinel");
+  let isCompact = false;
+  let scrollFrame: number | null = null;
 
   function updateHeaderHeight() {
+    const header = document.getElementById("main-header");
     if (!header) return;
     const height = header.offsetHeight;
     document.documentElement.style.setProperty(
@@ -283,34 +278,21 @@ const { headerData } = Astro.props;
     );
   }
 
-  // Robust Scroll Detection using IntersectionObserver
-  function initializeScrollObserver() {
-    if (!header || !sentinel) return;
+  function applyScrollState() {
+    scrollFrame = null;
+    const header = document.getElementById("main-header");
+    if (!header) return;
+    const nextCompact = shouldUseCompactHeader(window.scrollY, isCompact);
+    if (nextCompact === isCompact) return;
+    isCompact = nextCompact;
+    header.classList.toggle("is-scrolled", isCompact);
+    header.classList.toggle("shadow-md", isCompact);
+    window.setTimeout(updateHeaderHeight, 350);
+  }
 
-    // We want to trigger when the Page is scrolled DOWN past the sentinel.
-    // Sentinel is at top: 0.
-    // When sentinel is NOT intersecting (is above viewport), we are scrolled.
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) {
-            // Sentinel is out of view -> Scrolled
-            header.classList.add("is-scrolled", "shadow-md");
-          } else {
-            // Sentinel is in view -> Top of page
-            header.classList.remove("is-scrolled", "shadow-md");
-          }
-          // Update height after transition (300ms + buffer)
-          setTimeout(updateHeaderHeight, 350);
-        });
-      },
-      {
-        root: null,
-        threshold: 0,
-      },
-    );
-
-    observer.observe(sentinel);
+  function scheduleScrollState() {
+    if (scrollFrame !== null) return;
+    scrollFrame = window.requestAnimationFrame(applyScrollState);
   }
 
   const triggerSearch = (e: Event) => {
@@ -343,13 +325,13 @@ const { headerData } = Astro.props;
   }
 
   window.addEventListener("resize", updateHeaderHeight);
-  initializeScrollObserver();
-  // Double check in case of existing scroll (InterSectionObserver handles this, but good to be same)
+  window.addEventListener("scroll", scheduleScrollState, { passive: true });
+  applyScrollState();
   updateHeaderHeight();
 
-  // Re-run on astro navigation
   document.addEventListener("astro:page-load", () => {
-    initializeScrollObserver();
+    isCompact = false;
+    applyScrollState();
     updateHeaderHeight();
   });
 
