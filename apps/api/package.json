@@ -34,11 +34,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
+    "@cloudflare/workers-types": "^5.20260721.1",
     "@scalius/tsconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
-    "wrangler": "4.112.0"
+    "wrangler": "4.113.0"
   }
 }
