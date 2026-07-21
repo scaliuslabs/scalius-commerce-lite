@@ -1,10 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import PhoneInput, { getCountries } from "react-phone-number-input";
-import "react-phone-number-input/style.css";
-import type { Country } from "react-phone-number-input";
-import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   FormControl,
   FormField,
@@ -28,12 +24,12 @@ import {
   type CreateCustomerInput,
   type UpdateCustomerInput,
 } from "@/lib/api-functions/customers";
-import { getAllowedCountries } from "@/lib/api-functions/settings";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -70,39 +66,6 @@ export function CustomerForm({
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT)
     : canCreate;
-  const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
-  const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
-
-  React.useEffect(() => {
-    getAllowedCountries()
-      .then((data: unknown) => {
-        const d = data as Record<string, unknown>;
-        if (Array.isArray(d.allowedCountries) && d.allowedCountries.length > 0) {
-          setAllowedCountries(d.allowedCountries as string[]);
-        }
-        if (d.allowedCountriesMode === "include" || d.allowedCountriesMode === "exclude") {
-          setAllowedCountriesMode(d.allowedCountriesMode as "include" | "exclude");
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const effectiveCountries = React.useMemo((): Country[] | undefined => {
-    if (allowedCountries.length === 0) return undefined;
-    if (allowedCountriesMode === "exclude") {
-      const excluded = new Set(allowedCountries);
-      return getCountries().filter((c) => !excluded.has(c));
-    }
-    return allowedCountries as Country[];
-  }, [allowedCountries, allowedCountriesMode]);
-
-  const effectiveDefaultCountry = React.useMemo(() => {
-    if (effectiveCountries && effectiveCountries.length > 0) {
-      return effectiveCountries[0];
-    }
-    return "BD" as Country;
-  }, [effectiveCountries]);
-
   const [isInitializing, setIsInitializing] = React.useState(
     isEdit &&
       defaultValues &&
@@ -235,14 +198,10 @@ export function CustomerForm({
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <PhoneInput
-                          international
-                          flagUrl={FLAG_URL}
-                          defaultCountry={effectiveDefaultCountry}
-                          countries={effectiveCountries}
+                        <AdminPhoneInput
                           value={field.value}
-                          onChange={(value) => field.onChange(value || "")}
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                          onChange={field.onChange}
+                          preserveExistingValue={isEdit ? defaultValues?.phone : undefined}
                         />
                       </FormControl>
                       <FormMessage />

@@ -1,8 +1,4 @@
 import React from "react";
-import PhoneInput, { getCountries } from "react-phone-number-input";
-import "react-phone-number-input/style.css";
-import type { Country } from "react-phone-number-input";
-import { FLAG_URL } from "@scalius/shared/phone-flags";
 import {
   Card,
   CardContent,
@@ -32,44 +28,14 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
-import { getAllowedCountries } from "@/lib/api-functions/settings";
+import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
 
 export function CustomerInfoSection() {
-  const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
+  const { form, isEdit, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
     useOrderForm();
-
-  const [allowedCountries, setAllowedCountries] = React.useState<string[]>([]);
-  const [allowedCountriesMode, setAllowedCountriesMode] = React.useState<"include" | "exclude">("include");
-
-  React.useEffect(() => {
-    getAllowedCountries()
-      .then((result: unknown) => {
-        const data = result as Record<string, unknown>;
-        if (Array.isArray(data.allowedCountries) && data.allowedCountries.length > 0) {
-          setAllowedCountries(data.allowedCountries as string[]);
-        }
-        if (data.allowedCountriesMode === "include" || data.allowedCountriesMode === "exclude") {
-          setAllowedCountriesMode(data.allowedCountriesMode);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const effectiveCountries = React.useMemo((): Country[] | undefined => {
-    if (allowedCountries.length === 0) return undefined;
-    if (allowedCountriesMode === "exclude") {
-      const excluded = new Set(allowedCountries);
-      return getCountries().filter((c) => !excluded.has(c));
-    }
-    return allowedCountries as Country[];
-  }, [allowedCountries, allowedCountriesMode]);
-
-  const effectiveDefaultCountry = React.useMemo(() => {
-    if (effectiveCountries && effectiveCountries.length > 0) {
-      return effectiveCountries[0];
-    }
-    return "BD" as Country;
-  }, [effectiveCountries]);
+  const initialPhone = React.useRef(
+    isEdit ? form.getValues("customerPhone") : undefined,
+  );
 
   const [citySearchOpen, setCitySearchOpen] = React.useState(false);
   const [zoneSearchOpen, setZoneSearchOpen] = React.useState(false);
@@ -112,15 +78,12 @@ export function CustomerInfoSection() {
               <FormItem>
                 <FormLabel>Phone Number</FormLabel>
                 <FormControl>
-                  <PhoneInput
-                    international
-                    flagUrl={FLAG_URL}
-                    defaultCountry={effectiveDefaultCountry}
-                    countries={effectiveCountries}
+                  <AdminPhoneInput
+                    ref={refs.customerPhoneRef}
                     value={field.value}
-                    onChange={(value) => field.onChange(value || "")}
+                    onChange={field.onChange}
+                    preserveExistingValue={initialPhone.current}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
                   />
                 </FormControl>
                 <FormMessage />

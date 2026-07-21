@@ -41,6 +41,7 @@ import {
     getCustomerRequestIntro,
     getCustomerRequestPolicy,
 } from "../settings/customer-request-policy";
+import { validateCustomerPhoneCountry } from "../settings/phone-country-policy";
 
 // Re-export schemas from the canonical validation module
 export {
@@ -491,6 +492,7 @@ export async function createCustomer(
     db: Database,
     data: CreateCustomerInput,
 ): Promise<{ id: string }> {
+    await validateCustomerPhoneCountry(db, data.phone);
     const existing = await db
         .select({ id: customers.id })
         .from(customers)
@@ -566,6 +568,7 @@ export async function updateCustomer(
     if (!existing) throw new NotFoundError("Customer not found");
 
     if (data.phone && data.phone !== existing.phone) {
+        await validateCustomerPhoneCountry(db, data.phone);
         const phoneConflict = await db
             .select({ id: customers.id })
             .from(customers)
