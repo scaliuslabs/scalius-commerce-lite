@@ -18,6 +18,10 @@ const search = readFileSync(
   storefrontSourcePath("pages/search/index.astro"),
   "utf8",
 );
+const collection = readFileSync(
+  storefrontSourcePath("pages/collections/[id].astro"),
+  "utf8",
+);
 
 describe("catalog filter UI boundaries", () => {
   it("uses multi-select checkboxes and progressively discloses large facets", () => {
@@ -31,8 +35,13 @@ describe("catalog filter UI boundaries", () => {
   it("keeps mobile actions reachable in a full-width filter dialog", () => {
     expect(filters).toContain("safe-area-inset-bottom");
     expect(filters).not.toContain('finalParams.set("page", "1")');
-    for (const source of [category, search]) {
+    for (const source of [category, search, collection]) {
       expect(source).toContain("flex h-full w-full flex-col bg-white");
+      expect(source).toContain("z-60");
+      expect(source).toContain("lg:z-0");
+      expect(source).not.toContain("lg:z-auto");
+    }
+    for (const source of [category, search]) {
       expect(source).toContain("data-catalog-sort");
     }
   });
@@ -41,7 +50,7 @@ describe("catalog filter UI boundaries", () => {
     expect(appliedFilters).toContain('aria-label="Applied filters"');
     expect(appliedFilters).toContain("Remove ${filter.label} filter");
     expect(appliedFilters).toContain("Clear all");
-    for (const source of [category, search]) {
+    for (const source of [category, search, collection]) {
       expect(source).toContain("AppliedCatalogFilters");
     }
   });
