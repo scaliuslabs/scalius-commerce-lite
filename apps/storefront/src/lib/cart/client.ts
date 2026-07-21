@@ -79,8 +79,11 @@ let cartValidationSequence = 0;
 let cartTaxQuoteSequence = 0;
 let latestCheckoutLocation: {
   cityId: string;
+  cityName: string;
   zoneId: string;
+  zoneName: string;
   areaId: string;
+  areaName: string;
 } | null = null;
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
 
@@ -179,6 +182,12 @@ function getCheckoutFormData(): CheckoutFormData {
         fee: getEffectiveCartShippingFee(items, selectedShipping.fee),
       }
     : undefined;
+
+  if (latestCheckoutLocation) {
+    data.cityName = latestCheckoutLocation.cityName;
+    data.zoneName = latestCheckoutLocation.zoneName;
+    data.areaName = latestCheckoutLocation.areaName;
+  }
 
   return data;
 }
@@ -1159,14 +1168,20 @@ export async function initCartFunctionality() {
       const detail = (
         event as CustomEvent<{
           cityId?: unknown;
+          cityName?: unknown;
           zoneId?: unknown;
+          zoneName?: unknown;
           areaId?: unknown;
+          areaName?: unknown;
         }>
       ).detail;
       latestCheckoutLocation = {
         cityId: typeof detail?.cityId === "string" ? detail.cityId : "",
+        cityName: typeof detail?.cityName === "string" ? detail.cityName : "",
         zoneId: typeof detail?.zoneId === "string" ? detail.zoneId : "",
+        zoneName: typeof detail?.zoneName === "string" ? detail.zoneName : "",
         areaId: typeof detail?.areaId === "string" ? detail.areaId : "",
+        areaName: typeof detail?.areaName === "string" ? detail.areaName : "",
       };
       void updateTotals();
       handleAbandonedCheckout();

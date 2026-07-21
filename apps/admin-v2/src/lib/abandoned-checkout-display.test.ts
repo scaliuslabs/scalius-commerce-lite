@@ -34,11 +34,15 @@ describe("abandoned checkout display parsing", () => {
       checkoutData: JSON.stringify({
         customerName: "Buyer",
         shippingAddress: "Dhaka",
+        cityName: "Dhaka",
+        zoneName: "Banani",
+        areaName: "Road 11",
         cart: {
           totalAmount: 1200,
           items: [
             {
               id: "item_1",
+              variantId: "variant_sand",
               name: "Shoe",
               quantity: 2,
               price: 600,
@@ -57,9 +61,11 @@ describe("abandoned checkout display parsing", () => {
         name: "Buyer",
         phone: "+8801712345678",
         address: "Dhaka",
+        location: "Road 11, Banani, Dhaka",
       },
     });
     expect(display.items).toHaveLength(1);
+    expect(display.items[0]?.variantId).toBe("variant_sand");
     expect(display.items[0]?.options).toEqual([{ name: "Color", value: "Sand" }]);
   });
 

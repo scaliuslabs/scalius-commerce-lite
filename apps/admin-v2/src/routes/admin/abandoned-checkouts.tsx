@@ -5,7 +5,7 @@ import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/abandoned-checkouts")({
   validateSearch: validateAbandonedCheckoutSearch,
-  head: () => ({ meta: [{ title: "Incomplete Orders | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "Incomplete Checkouts | Scalius Admin" }] }),
   errorComponent: RouteErrorComponent,
   component: AbandonedCheckoutsPage,
 });
@@ -17,10 +17,10 @@ function AbandonedCheckoutsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Incomplete Orders</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Incomplete Checkouts</h1>
         <p className="text-sm text-muted-foreground">
-          Review active checkout sessions and archived hosted-payment recovery records.
-          Completed orders are cleared automatically.
+          Review active checkout sessions and archived hosted payments. Completed
+          checkouts clear automatically.
         </p>
       </div>
       <AbandonedCheckoutsManager

@@ -222,7 +222,7 @@ export const allNavSections: NavSection[] = [
             requiredPermission: NAV_PERMISSIONS.ORDERS_VIEW,
           },
           {
-            name: "Abandoned",
+            name: "Checkouts",
             href: "/admin/abandoned-checkouts",
             icon: ShoppingCart,
             requiredPermission: NAV_PERMISSIONS.ORDERS_VIEW,

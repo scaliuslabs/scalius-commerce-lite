@@ -43,6 +43,7 @@ describe("AdminNav icon taxonomy", () => {
 
     expect(leafItem("/admin/products").icon).toBe(Package);
     expect(leafItem("/admin/abandoned-checkouts").icon).toBe(ShoppingCart);
+    expect(leafItem("/admin/abandoned-checkouts").name).toBe("Checkouts");
     expect(leafItem("/admin/discounts").icon).toBe(BadgePercent);
     expect(leafItem("/admin/promotions").icon).toBe(Megaphone);
     expect(leafItem("/admin/discounts").name).toBe("Discounts");
