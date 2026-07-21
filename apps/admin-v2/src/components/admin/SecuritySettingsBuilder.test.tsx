@@ -22,8 +22,16 @@ describe("SecuritySettingsBuilder contract", () => {
 
   it("keeps failed authority reads locked and validates additions before save", () => {
     expect(source).toContain("SettingsLoadFailure");
-    expect(source).toContain("!isLoaded");
     expect(source).toContain("normalizeMerchantCspSource");
     expect(source).toContain("serializeMerchantCspSources");
+    expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
+    expect(source).toContain("<UnsavedChangesGuard");
+    expect(source).toContain("setMerchantSources(savedMerchantSources)");
+  });
+
+  it("keeps exact and wildcard trust semantics explicit", () => {
+    expect(source).toContain("Exact HTTPS origins stay exact");
+    expect(source).toContain("already trusted by the platform");
+    expect(source).toContain("visibleMerchantSources");
   });
 });

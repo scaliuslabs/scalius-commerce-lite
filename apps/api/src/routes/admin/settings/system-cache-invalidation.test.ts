@@ -717,6 +717,29 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("keeps merchant CSP sources exact and removes inherited platform origins", async () => {
+    const { app, env, executionCtx } = createTestApp();
+    Object.assign(env, {
+      STOREFRONT_URL: "https://storefront.example.com",
+      PUBLIC_API_BASE_URL: "https://api.example.com",
+      CDN_DOMAIN_URL: "media.example.com",
+    });
+
+    const response = await requestJson(app, env, executionCtx, "/security", {
+      cspAllowedDomains: [
+        "https://storefront.example.com",
+        "https://payments.example.com",
+        "https://*.widgets.example.com",
+      ].join(","),
+    });
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(env.CACHE.put).toHaveBeenCalledWith(
+      "security:csp_allowed_domains",
+      "https://payments.example.com,https://*.widgets.example.com",
+    );
+  });
+
   it("returns email provider status without exposing provider secrets", async () => {
     const { app, env, executionCtx } = createTestApp();
 
