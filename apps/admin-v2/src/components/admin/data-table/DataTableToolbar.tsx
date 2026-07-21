@@ -100,13 +100,14 @@ export function DataTableToolbar({
             placeholder={searchPlaceholder}
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="h-9 pl-8 pr-8"
+            className="h-11 pl-8 pr-11 sm:h-9 sm:pr-9"
           />
           {localSearch && (
             <button
               type="button"
               onClick={clearSearch}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+              className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground sm:h-9 sm:w-9"
             >
               <X className="h-3.5 w-3.5" />
             </button>

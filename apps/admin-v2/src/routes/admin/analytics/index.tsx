@@ -155,6 +155,7 @@ function AnalyticsPage() {
           <Button
             variant="outline"
             size="sm"
+            className="h-11 sm:h-9"
             onClick={() => updateSearch({
               trashed: !search.trashed,
               status: undefined,
@@ -165,7 +166,7 @@ function AnalyticsPage() {
             {search.trashed ? "View integrations" : "View trash"}
           </Button>
           {!search.trashed && canCreate ? (
-            <Button size="sm" asChild>
+            <Button size="sm" className="h-11 sm:h-9" asChild>
               <Link to="/admin/analytics/new">
                 <Plus className="mr-2 h-4 w-4" />
                 Add integration
@@ -191,7 +192,10 @@ function AnalyticsPage() {
                   page: 1,
                 })}
               >
-                <SelectTrigger className="h-9 w-[190px]">
+                <SelectTrigger
+                  aria-label="Filter by analytics provider"
+                  className="h-11 w-[190px] sm:h-9"
+                >
                   <SelectValue placeholder="All providers" />
                 </SelectTrigger>
                 <SelectContent>
@@ -222,7 +226,10 @@ function AnalyticsPage() {
                     page: 1,
                   })}
                 >
-                  <SelectTrigger className="h-9 w-[140px]">
+                  <SelectTrigger
+                    aria-label="Filter by analytics status"
+                    className="h-11 w-[140px] sm:h-9"
+                  >
                     <SelectValue placeholder="Any status" />
                   </SelectTrigger>
                   <SelectContent>

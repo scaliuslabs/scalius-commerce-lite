@@ -86,7 +86,7 @@ export function AnalyticsProviderHealth({ health }: AnalyticsProviderHealthProps
             <p className="line-clamp-2 text-xs text-muted-foreground sm:line-clamp-1">
               {summary.blockedProviders > 0
                 ? `${summary.blockedProviders} provider${summary.blockedProviders === 1 ? "" : "s"} need attention before reliable tracking.`
-                : `${summary.browserReadyProviders} browser and ${summary.serverReadyProviders} server integrations are ready.`}
+                : `Browser ready: ${summary.browserReadyProviders} · Server ready: ${summary.serverReadyProviders}.`}
             </p>
           </div>
         </div>

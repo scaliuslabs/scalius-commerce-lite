@@ -42,4 +42,14 @@ describe("analytics list presentation boundaries", () => {
     expect(listSource).not.toMatch(/script\.config(?!Issue)/);
     expect(mobileSource).not.toMatch(/script\.config(?!Issue)/);
   });
+
+  it("keeps mobile actions touch-friendly and filter controls named", () => {
+    expect(mobileSource).toContain('className="h-11 px-3"');
+    expect(routeSource).toContain('className="h-11 sm:h-9"');
+    expect(routeSource).toContain('aria-label="Filter by analytics provider"');
+    expect(routeSource).toContain('aria-label="Filter by analytics status"');
+    expect(healthSource).toContain("Browser ready:");
+    expect(healthSource).toContain("Server ready:");
+    expect(healthSource).not.toContain("browser and ${summary.serverReadyProviders} server integrations");
+  });
 });

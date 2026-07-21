@@ -79,7 +79,11 @@ describe("AnalyticsMobileCard", () => {
     );
     expect(activate).toBeTruthy();
     expect(trash).toBeTruthy();
-    expect(host.querySelector("a")?.textContent?.trim()).toBe("Edit");
+    const edit = host.querySelector("a");
+    expect(edit?.textContent?.trim()).toBe("Edit");
+    for (const action of [activate, trash, edit]) {
+      expect(action?.className).toContain("h-11");
+    }
 
     act(() => activate?.click());
     act(() => trash?.click());
