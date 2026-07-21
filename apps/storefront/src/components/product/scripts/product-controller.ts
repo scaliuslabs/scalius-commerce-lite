@@ -16,6 +16,7 @@ import {
   loadVariantsFromDOM,
   reconcileSelectionForValue,
   resolveExactVariantSelection,
+  resolveVariantImageForSelection,
   shouldShowStartingVariantPrice,
   validateSelection,
   type Variant,
@@ -462,11 +463,14 @@ function updatePrice() {
 function updateVariantImage() {
   if (!state.hasRequestedVariant && !state.hasVariantSelectionInteraction)
     return;
-  const exact = exactVariant();
+  const productMediaId = resolveVariantImageForSelection(
+    state.variants,
+    state.selection,
+  );
   window.dispatchEvent(
     new CustomEvent("product-media-select", {
       detail: {
-        productMediaId: exact?.imageId ?? null,
+        productMediaId,
         source: "variant",
       },
     }),
