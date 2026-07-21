@@ -151,6 +151,12 @@ function collectConfigNames(config) {
     }
   }
 
+  for (const binding of config.ratelimits ?? []) {
+    if (typeof binding.name === "string") {
+      names.add(binding.name);
+    }
+  }
+
   return names;
 }
 

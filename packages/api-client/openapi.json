@@ -3389,6 +3389,27 @@
                               },
                               "hasVariants": {
                                 "type": "boolean"
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "uri"
+                              },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "categoryName": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -3399,7 +3420,12 @@
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
-                              "hasVariants"
+                              "hasVariants",
+                              "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
+                              "categoryId",
+                              "categoryName"
                             ],
                             "additionalProperties": {
                               "nullable": true

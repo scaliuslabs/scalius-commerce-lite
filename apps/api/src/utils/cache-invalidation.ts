@@ -144,7 +144,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     kvPrefixes: [
       PRODUCT_API_CACHE_NAMESPACE,
       "api:categories:",
-      "api:search:",
       "api:storefront:homepage:",
     ],
     bumpsHtml: true,
@@ -164,7 +163,6 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
     kvPrefixes: [
       "api:categories:",
       "api:navigation:",
-      "api:search:",
       "api:attributes:category",
       "api:storefront:homepage:",
     ],
@@ -191,7 +189,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   pages: {
     label: "Pages",
     description: "Static content pages",
-    kvPrefixes: ["api:pages:", "api:storefront:page:", "api:search:"],
+    kvPrefixes: ["api:pages:", "api:storefront:page:"],
     bumpsHtml: false,
     storefrontPrefixes: [
       "page_slug_",
@@ -287,7 +285,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   search: {
     label: "Search",
     description: "Search index and filtering",
-    kvPrefixes: ["api:search:", "api:attributes:search-filters"],
+    kvPrefixes: ["api:attributes:search-filters"],
     bumpsHtml: true,
     storefrontPrefixes: ["all_products_", "filterable_attrs_"],
   },
@@ -1387,7 +1385,6 @@ export function getProductAvailabilityApiCachePatterns(
       )
       .map((subject) => getProductApiQueryCachePattern(subject.slug)),
     getProductApiQueryCachePattern("search"),
-    "api:search:*",
   ];
 }
 

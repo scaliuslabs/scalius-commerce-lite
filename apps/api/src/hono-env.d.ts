@@ -47,6 +47,7 @@ declare global {
     CACHE: KVNamespace;
     BUCKET: R2Bucket;
     SHARED_AUTH_CACHE: KVNamespace;
+    SEARCH_RATE_LIMITER: RateLimit;
     EMAIL?: CloudflareSendEmailBinding;
 
     // Cloudflare Queue bindings
