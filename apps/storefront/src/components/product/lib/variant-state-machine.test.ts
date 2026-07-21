@@ -5,6 +5,7 @@ import {
   getVariantOptionAvailabilityMap,
   reconcileSelectionForValue,
   resolveExactVariantSelection,
+  resolveVariantImageForSelection,
   validateSelection,
   type Variant,
 } from "./variant-state-machine";
@@ -81,5 +82,33 @@ describe("generic product option selection", () => {
     expect(validateSelection({ size: "small" }, options, variants).valid).toBe(false);
     expect(validateSelection({ size: "small", finish: "gloss" }, options, variants).valid).toBe(false);
     expect(validateSelection({ size: "large", finish: "matte" }, options, variants).valid).toBe(true);
+  });
+
+  it("uses a partial selection image only when every matching SKU agrees", () => {
+    const imaged = variants.map((item) => ({
+      ...item,
+      imageId: item.selectedOptions[1]?.optionValueId === "matte"
+        ? "pmed_matte"
+        : "pmed_gloss",
+    }));
+
+    expect(resolveVariantImageForSelection(imaged, { finish: "matte" })).toBe(
+      "pmed_matte",
+    );
+    expect(resolveVariantImageForSelection(imaged, { size: "small" })).toBeNull();
+    expect(resolveVariantImageForSelection(imaged, {
+      size: "large",
+      finish: "gloss",
+    })).toBe("pmed_gloss");
+    expect(resolveVariantImageForSelection(imaged, {})).toBeNull();
+  });
+
+  it("keeps primary-image fallback when matching SKUs mix assigned and null images", () => {
+    const mixed = variants.map((item, index) => ({
+      ...item,
+      imageId: index === 0 ? "pmed_matte" : null,
+    }));
+
+    expect(resolveVariantImageForSelection(mixed, { size: "small" })).toBeNull();
   });
 });

@@ -33,6 +33,17 @@ export function filterVariantsBySelection(
   return variants.filter((variant) => variantMatchesSelection(variant, selection));
 }
 
+export function resolveVariantImageForSelection(
+  variants: Variant[],
+  selection: VariantSelection,
+): string | null {
+  if (Object.keys(selection).length === 0) return null;
+  const candidates = filterVariantsBySelection(variants, selection);
+  if (candidates.length === 0) return null;
+  const imageIds = new Set(candidates.map((variant) => variant.imageId ?? null));
+  return imageIds.size === 1 ? (candidates[0]?.imageId ?? null) : null;
+}
+
 export function resolveExactVariantSelection(
   variants: Variant[],
   selection: VariantSelection | { variantId?: string | null },

@@ -44,6 +44,7 @@ interface GalleryItem extends ProductMediaChangeDetail {
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
+const imagePreloads = new Map<string, Promise<void>>();
 let activeController: AbortController | null = null;
 
 function prefersReducedMotion(): boolean {
@@ -65,15 +66,23 @@ function canPreloadImages(): boolean {
 
 function preloadImage(url: string): Promise<void> {
   if (!url || imageCache.has(url)) return Promise.resolve();
-  return new Promise((resolve) => {
+  const existing = imagePreloads.get(url);
+  if (existing) return existing;
+  const request = new Promise<void>((resolve) => {
     const image = new Image();
     image.onload = () => {
       imageCache.set(url, image);
+      imagePreloads.delete(url);
       resolve();
     };
-    image.onerror = () => resolve();
+    image.onerror = () => {
+      imagePreloads.delete(url);
+      resolve();
+    };
     image.src = url;
   });
+  imagePreloads.set(url, request);
+  return request;
 }
 
 function optional(value: string | undefined): string | null {
@@ -518,20 +527,23 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
 
 function scheduleInitialImagePreload(root: HTMLElement): void {
   if (!canPreloadImages()) return;
-  const urls = Array.from(
+  const buttons = Array.from(
     root.querySelectorAll<HTMLButtonElement>(
-      "[data-gallery-thumbnail][data-media-kind='image']",
+      "[data-thumbnail-rail='desktop'] [data-gallery-thumbnail][data-media-kind='image']",
     ),
-  )
-    .flatMap((button) =>
-      button.dataset.mediaUrl ? [button.dataset.mediaUrl] : [],
-    )
-    .filter((url, index, values) => values.indexOf(url) === index)
-    .slice(0, 2);
+  );
+  const currentUrl = root.dataset.activeMediaUrl;
+  const candidateUrls = [
+    ...buttons.filter((button) => button.dataset.variantImage === "true"),
+    ...buttons.slice(0, 2),
+  ].flatMap((button) => button.dataset.mediaUrl ? [button.dataset.mediaUrl] : []);
+  const urls = candidateUrls
+    .filter((url, index, values) => url !== currentUrl && values.indexOf(url) === index)
+    .slice(0, 4);
   const run = () => urls.forEach((url) => void preloadImage(url));
   const requestIdleCallback = (window as BrowserWindow).requestIdleCallback;
-  if (requestIdleCallback) requestIdleCallback(run, { timeout: 2_000 });
-  else window.setTimeout(run, 500);
+  if (requestIdleCallback) requestIdleCallback(run, { timeout: 750 });
+  else window.setTimeout(run, 250);
 }
 
 function preferredThumbnail(

@@ -13,24 +13,31 @@ interface ProductImageZoomProps {
 
 // Global image cache to persist across component updates
 const preloadedImages = new Map<string, boolean>();
+const imagePreloads = new Map<string, Promise<boolean>>();
 
 function preloadImage(url: string): Promise<boolean> {
   if (!url) return Promise.resolve(false);
   if (preloadedImages.has(url)) {
     return Promise.resolve(preloadedImages.get(url) === true);
   }
-  return new Promise((resolve) => {
+  const existing = imagePreloads.get(url);
+  if (existing) return existing;
+  const request = new Promise<boolean>((resolve) => {
     const img = new Image();
     img.onload = () => {
       preloadedImages.set(url, true);
+      imagePreloads.delete(url);
       resolve(true);
     };
     img.onerror = () => {
       preloadedImages.set(url, false);
+      imagePreloads.delete(url);
       resolve(false);
     };
     img.src = url;
   });
+  imagePreloads.set(url, request);
+  return request;
 }
 
 function canLoadHighResImage(): boolean {
@@ -64,6 +71,7 @@ export function ProductImageZoom({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
+  const zoomPreloadTimerRef = useRef<number | null>(null);
   const latestPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
 
   // Generate high-res URL from Cloudflare optimized URL
@@ -108,6 +116,19 @@ export function ProductImageZoom({
     });
   }, [getZoomUrl]);
 
+  const scheduleZoomImagePreload = useCallback((zoomUrl: string, delay: number) => {
+    if (zoomPreloadTimerRef.current !== null) {
+      window.clearTimeout(zoomPreloadTimerRef.current);
+    }
+    if (!zoomUrl || !canLoadHighResImage()) return;
+    zoomPreloadTimerRef.current = window.setTimeout(() => {
+      zoomPreloadTimerRef.current = null;
+      void preloadImage(zoomUrl).then((loaded) => {
+        if (loaded && getZoomUrl() === zoomUrl) setIsHighResLoaded(true);
+      });
+    }, delay);
+  }, [getZoomUrl]);
+
   // Recover gallery state that may have changed before this island hydrated.
   useEffect(() => {
     const image = imageElementRef.current;
@@ -126,6 +147,11 @@ export function ProductImageZoom({
       zoomBgRef.current.style.backgroundImage = `url('${activeUrl || currentImageRef.current}')`;
     }
   }, [alt, getZoomUrl]);
+
+  useEffect(() => {
+    const zoomUrl = getZoomUrl();
+    scheduleZoomImagePreload(zoomUrl, 400);
+  }, [getZoomUrl, scheduleZoomImagePreload]);
 
   // Listen for the one gallery media event. Video selection is handled by the
   // Astro stage and deliberately never enters the image/zoom pipeline.
@@ -162,6 +188,7 @@ export function ProductImageZoom({
       const zoomUrl = newZoomUrl || getHighResUrl(newUrl);
       const alreadyLoaded = preloadedImages.get(zoomUrl) === true;
       setIsHighResLoaded(alreadyLoaded);
+      if (!alreadyLoaded) scheduleZoomImagePreload(zoomUrl, 250);
 
       // Update zoom background
       if (zoomBgRef.current) {
@@ -173,13 +200,16 @@ export function ProductImageZoom({
     return () => {
       window.removeEventListener("product-media-change", handleMediaChange);
     };
-  }, [getHighResUrl]);
+  }, [getHighResUrl, scheduleZoomImagePreload]);
 
   // Cleanup RAF on unmount
   useEffect(() => {
     return () => {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
+      }
+      if (zoomPreloadTimerRef.current !== null) {
+        window.clearTimeout(zoomPreloadTimerRef.current);
       }
     };
   }, []);

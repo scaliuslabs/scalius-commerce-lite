@@ -1,5 +1,5 @@
 ---
-import type { Product, ProductMedia } from "@/lib/api";
+import type { Product, ProductMedia, ProductVariant } from "@/lib/api";
 import { GALLERY_CONFIG } from "./config";
 import { ProductImageZoom } from "./ProductImageZoom";
 import {
@@ -20,9 +20,10 @@ import {
 interface Props {
   product: Product;
   media: ProductMedia[];
+  variants: ProductVariant[];
 }
 
-const { product, media } = Astro.props;
+const { product, media, variants } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 
@@ -152,6 +153,9 @@ const initialImageZoomUrl = initialImage?.zoomUrl ?? productFallbackZoomUrl;
 const initialImageAlt =
   initialImage?.altText ?? product.imageAlt?.trim() ?? product.name;
 const hasMultipleMedia = optimizedMedia.length > 1;
+const variantImageIds = new Set(
+  variants.flatMap((variant) => variant.imageId ? [variant.imageId] : []),
+);
 ---
 
 <div
@@ -205,6 +209,9 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 data-poster-url={itemData.posterUrl ?? undefined}
                 data-zoom-url={itemData.zoomUrl ?? undefined}
                 data-alt-text={itemData.altText}
+                data-variant-image={variantImageIds.has(itemData.item.id)
+                  ? "true"
+                  : undefined}
                 aria-label={
                   itemData.item.kind === "video"
                     ? `Play video ${index + 1}: ${itemData.altText}`
@@ -401,6 +408,9 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                       data-poster-url={itemData.posterUrl ?? undefined}
                       data-zoom-url={itemData.zoomUrl ?? undefined}
                       data-alt-text={itemData.altText}
+                      data-variant-image={variantImageIds.has(itemData.item.id)
+                        ? "true"
+                        : undefined}
                       aria-label={
                         itemData.item.kind === "video"
                           ? `Play video ${index + 1}: ${itemData.altText}`

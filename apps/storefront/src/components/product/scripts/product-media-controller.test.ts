@@ -16,6 +16,9 @@ const API_TYPES_SOURCE = storefrontSourcePath("lib/api/types.ts");
 const PRODUCT_CONTROLLER_SOURCE = storefrontSourcePath(
   "components/product/scripts/product-controller.ts",
 );
+const PRODUCT_ZOOM_SOURCE = storefrontSourcePath(
+  "components/product/ProductImageZoom.tsx",
+);
 
 function thumbnail(
   id: string,
@@ -278,10 +281,29 @@ describe("storefront mixed-media source boundaries", () => {
     expect(page).not.toContain("const images = media.flatMap");
     expect(types).not.toContain("interface ProductImage");
     expect(controller).toContain('new CustomEvent("product-media-select"');
+    expect(controller).toContain("resolveVariantImageForSelection(");
     expect(controller).toContain("resolveVariantCartMedia(validation.variant");
     expect(controller).toContain("imageMediaId: cache.container.dataset.productImageMediaId");
     expect(controller).not.toContain("currentDisplayedImage");
     expect(controller).not.toContain("product-image-change");
     expect(controller).not.toContain("controller-image-update");
+  });
+
+  it("marks exact SKU images for bounded fast-connection warming", () => {
+    const gallery = readFileSync(GALLERY_SOURCE, "utf8");
+    const controller = readFileSync(
+      storefrontSourcePath(
+        "components/product/scripts/product-media-controller.ts",
+      ),
+      "utf8",
+    );
+    const zoom = readFileSync(PRODUCT_ZOOM_SOURCE, "utf8");
+    expect(gallery).toContain("data-variant-image");
+    expect(gallery).toContain("variantImageIds.has(itemData.item.id)");
+    expect(controller).toContain('button.dataset.variantImage === "true"');
+    expect(controller).toContain(".slice(0, 4)");
+    expect(controller).toContain("imagePreloads");
+    expect(zoom).toContain("scheduleZoomImagePreload(zoomUrl, 250)");
+    expect(zoom).toContain("imagePreloads");
   });
 });
