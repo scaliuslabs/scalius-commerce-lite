@@ -91,8 +91,16 @@ describe("taxes route authority", () => {
     expect(validateTaxesSearch({ section: "preview" })).toEqual({
       section: "preview",
     });
-    expect(validateTaxesSearch({ section: "unknown" })).toEqual({
+    expect(validateTaxesSearch({
+      section: "unknown",
+      kind: "variant",
+      query: "  CLOG  ",
+      page: "3",
+    })).toEqual({
       section: "policy",
+      kind: "variant",
+      query: "CLOG",
+      page: 3,
     });
     expect(Route.options.validateSearch).toBe(validateTaxesSearch);
   });

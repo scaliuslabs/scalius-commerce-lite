@@ -1,6 +1,7 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ import {
 import { getServerFnError } from "@/lib/api-helpers";
 import { taxClassificationsQueryOptions } from "@/lib/api-query-options/taxes";
 import { queryKeys } from "@/lib/query-keys";
+import type { TaxClassificationRouteState } from "./tax-classification-route-state";
 
 const PAGE_SIZE = 25;
 const INHERIT = "__inherit__";
@@ -26,18 +28,20 @@ const INHERIT = "__inherit__";
 export function TaxClassificationsPanel({
   configuration,
   canManage,
+  routeState,
+  onRouteStateChange,
 }: {
   configuration: TaxConfigurationPayload;
   canManage: boolean;
+  routeState: TaxClassificationRouteState;
+  onRouteStateChange: (state: TaxClassificationRouteState) => void;
 }) {
   const queryClient = useQueryClient();
-  const [kind, setKind] = useState<TaxClassificationKind>("product");
-  const [page, setPage] = useState(1);
-  const [searchDraft, setSearchDraft] = useState("");
-  const [search, setSearch] = useState("");
+  const { kind, page, search } = routeState;
+  const [searchDraft, setSearchDraft] = useState(search);
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => setPage(1), [kind, search]);
+  useEffect(() => setSearchDraft(search), [search]);
 
   const queryInput = { kind, page, limit: PAGE_SIZE, ...(search ? { search } : {}) };
   const classificationQuery = useQuery({
@@ -70,6 +74,82 @@ export function TaxClassificationsPanel({
 
   const total = classificationQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const isTransitioning = classificationQuery.isFetching
+    && classificationQuery.isPlaceholderData;
+
+  useEffect(() => {
+    if (
+      !classificationQuery.isPending
+      && !classificationQuery.isPlaceholderData
+      && page > totalPages
+    ) {
+      onRouteStateChange({ kind, search, page: totalPages });
+    }
+  }, [
+    classificationQuery.isPending,
+    classificationQuery.isPlaceholderData,
+    kind,
+    onRouteStateChange,
+    page,
+    search,
+    totalPages,
+  ]);
+
+  function changeKind(nextKind: TaxClassificationKind) {
+    onRouteStateChange({ kind: nextKind, search: "", page: 1 });
+  }
+
+  function renderItemLink(item: TaxClassificationItem) {
+    return (
+      <Link
+        to="/admin/products/$productId/edit"
+        params={{ productId: item.productId }}
+        aria-label={`Open ${item.label} in the product editor`}
+        className="group inline-flex min-h-11 max-w-full items-center gap-1.5 font-medium text-foreground underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0"
+      >
+        <span className="truncate">{item.label}</span>
+        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+      </Link>
+    );
+  }
+
+  function renderClassificationSelect(item: TaxClassificationItem) {
+    return (
+      <div className="flex items-center gap-2">
+        <Select
+          value={item.taxClassId ?? INHERIT}
+          disabled={!canManage || updateMutation.isPending || isTransitioning}
+          onValueChange={(value) => updateMutation.mutate({
+            item,
+            taxClassId: value === INHERIT ? null : value,
+          })}
+        >
+          <SelectTrigger
+            aria-label={`Tax class for ${item.label}`}
+            className="min-h-11 min-w-0 flex-1 md:min-h-9"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={INHERIT}>
+              {kind === "variant" ? "Inherit product/default" : "Inherit store default"}
+            </SelectItem>
+            {configuration.classes.map((taxClass) => (
+              <SelectItem key={taxClass.id} value={taxClass.id}>
+                {taxClass.name}{taxClass.isExempt ? " · exempt" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {savingId === item.id ? (
+          <span role="status" className="shrink-0">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <span className="sr-only">Saving classification</span>
+          </span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <Card>
@@ -81,10 +161,10 @@ export function TaxClassificationsPanel({
           </CardDescription>
         </div>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <Tabs value={kind} onValueChange={(value) => setKind(value as TaxClassificationKind)}>
+          <Tabs value={kind} onValueChange={(value) => changeKind(value as TaxClassificationKind)}>
             <TabsList>
-              <TabsTrigger value="product">Products</TabsTrigger>
-              <TabsTrigger value="variant">SKUs</TabsTrigger>
+              <TabsTrigger value="product" className="min-h-11 md:min-h-9">Products</TabsTrigger>
+              <TabsTrigger value="variant" className="min-h-11 md:min-h-9">SKUs</TabsTrigger>
             </TabsList>
           </Tabs>
           <form
@@ -92,7 +172,11 @@ export function TaxClassificationsPanel({
             className="flex w-full max-w-md gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              setSearch(searchDraft.trim());
+              onRouteStateChange({
+                kind,
+                search: searchDraft.trim(),
+                page: 1,
+              });
             }}
           >
             <Input
@@ -101,8 +185,9 @@ export function TaxClassificationsPanel({
               onChange={(event) => setSearchDraft(event.target.value)}
               placeholder={kind === "product" ? "Search product name or slug" : "Search product, SKU, or option"}
               aria-label="Search tax classifications"
+              className="min-h-11 min-w-0 md:min-h-9"
             />
-            <Button type="submit" variant="outline" aria-label="Search">
+            <Button type="submit" variant="outline" aria-label="Search" className="min-h-11 min-w-11 md:min-h-10 md:min-w-10">
               <Search className="h-4 w-4" />
             </Button>
           </form>
@@ -112,57 +197,81 @@ export function TaxClassificationsPanel({
         {classificationQuery.isPending ? (
           <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
         ) : classificationQuery.isError ? (
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
-            {getServerFnError(classificationQuery.error, "Classifications could not be loaded.")}
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+            <p>{getServerFnError(classificationQuery.error, "Classifications could not be loaded.")}</p>
+            <Button type="button" variant="outline" className="min-h-11 md:min-h-9" onClick={() => void classificationQuery.refetch()}>
+              Try again
+            </Button>
           </div>
         ) : classificationQuery.data.items.length === 0 ? (
           <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">No matching {kind === "product" ? "products" : "SKUs"}.</div>
         ) : (
-          <Table>
-            <TableHeader><TableRow><TableHead>Catalog item</TableHead><TableHead>Current source</TableHead><TableHead className="w-[18rem]">Assigned class</TableHead></TableRow></TableHeader>
-            <TableBody>
+          <div aria-busy={isTransitioning} className={isTransitioning ? "opacity-60" : undefined}>
+            {isTransitioning ? (
+              <p role="status" className="mb-2 text-xs text-muted-foreground">Loading classifications…</p>
+            ) : null}
+
+            <div className="space-y-2 md:hidden">
               {classificationQuery.data.items.map((item) => (
-                <TableRow key={`${item.kind}:${item.id}`}>
-                  <TableCell>
-                    <div className="font-medium">{item.label}</div>
-                    <div className="text-xs text-muted-foreground">{item.sku ? `SKU ${item.sku}` : item.productId}</div>
-                  </TableCell>
-                  <TableCell>
-                    {item.taxClassName ? <Badge variant="outline">Explicit · {item.taxClassName}</Badge> : <Badge variant="secondary">Inherited</Badge>}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={item.taxClassId ?? INHERIT}
-                        disabled={!canManage || savingId === item.id}
-                        onValueChange={(value) => updateMutation.mutate({
-                          item,
-                          taxClassId: value === INHERIT ? null : value,
-                        })}
-                      >
-                        <SelectTrigger aria-label={`Tax class for ${item.label}`}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={INHERIT}>{kind === "variant" ? "Inherit product/default" : "Inherit store default"}</SelectItem>
-                          {configuration.classes.map((taxClass) => (
-                            <SelectItem key={taxClass.id} value={taxClass.id}>{taxClass.name}{taxClass.isExempt ? " · exempt" : ""}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {savingId === item.id ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
+                <div key={`${item.kind}:${item.id}`} className="rounded-lg border bg-background p-3">
+                  <div className="min-w-0">
+                    {renderItemLink(item)}
+                    {item.sku ? (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">SKU {item.sku}</p>
+                    ) : null}
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t pt-3">
+                    <span className="text-xs font-medium text-muted-foreground">Source</span>
+                    {item.taxClassName ? (
+                      <Badge variant="outline">Explicit · {item.taxClassName}</Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        {kind === "variant" ? "Product / store default" : "Store default"}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">Assigned class</p>
+                    {renderClassificationSelect(item)}
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader><TableRow><TableHead>Catalog item</TableHead><TableHead>Current source</TableHead><TableHead className="w-[18rem]">Assigned class</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {classificationQuery.data.items.map((item) => (
+                    <TableRow key={`${item.kind}:${item.id}`}>
+                      <TableCell>
+                        {renderItemLink(item)}
+                        {item.sku ? <div className="text-xs text-muted-foreground">SKU {item.sku}</div> : null}
+                      </TableCell>
+                      <TableCell>
+                        {item.taxClassName ? (
+                          <Badge variant="outline">Explicit · {item.taxClassName}</Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            {kind === "variant" ? "Product / store default" : "Store default"}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>{renderClassificationSelect(item)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         )}
 
         <div className="flex items-center justify-between border-t pt-4 text-sm text-muted-foreground">
           <span>{total.toLocaleString()} item{total === 1 ? "" : "s"}</span>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" aria-label="Previous page" disabled={page <= 1 || classificationQuery.isFetching} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="h-11 w-11 md:h-10 md:w-10" aria-label="Previous page" disabled={page <= 1 || classificationQuery.isFetching} onClick={() => onRouteStateChange({ kind, search, page: Math.max(1, page - 1) })}><ChevronLeft className="h-4 w-4" /></Button>
             <span>Page {page} of {totalPages}</span>
-            <Button variant="outline" size="icon" aria-label="Next page" disabled={page >= totalPages || classificationQuery.isFetching} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}><ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="outline" size="icon" className="h-11 w-11 md:h-10 md:w-10" aria-label="Next page" disabled={page >= totalPages || classificationQuery.isFetching} onClick={() => onRouteStateChange({ kind, search, page: Math.min(totalPages, page + 1) })}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </div>
       </CardContent>

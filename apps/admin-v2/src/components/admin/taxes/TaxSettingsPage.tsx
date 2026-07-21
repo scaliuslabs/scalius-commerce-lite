@@ -14,6 +14,7 @@ import { TaxPreviewPanel } from "./TaxPreviewPanel";
 import { TaxRatesPanel } from "./TaxRatesPanel";
 import { TaxSettingsPanel } from "./TaxSettingsPanel";
 import { getTaxReadiness } from "./tax-readiness";
+import type { TaxClassificationRouteState } from "./tax-classification-route-state";
 import type { TaxWorkspaceSection } from "./tax-workspace-sections";
 
 const tabs = [
@@ -27,11 +28,15 @@ const tabs = [
 interface TaxSettingsPageProps {
   section: TaxWorkspaceSection;
   onSectionChange: (section: TaxWorkspaceSection) => void;
+  classificationRouteState: TaxClassificationRouteState;
+  onClassificationRouteStateChange: (state: TaxClassificationRouteState) => void;
 }
 
 export function TaxSettingsPage({
   section,
   onSectionChange,
+  classificationRouteState,
+  onClassificationRouteStateChange,
 }: TaxSettingsPageProps) {
   const { hasPermission } = usePermissions();
   const canManage = hasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
@@ -100,7 +105,14 @@ export function TaxSettingsPage({
         <TabsContent value="policy"><TaxSettingsPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="classes"><TaxClassesPanel configuration={configuration} canManage={canManage} /></TabsContent>
         <TabsContent value="rates"><TaxRatesPanel configuration={configuration} canManage={canManage} onOpenClasses={() => onSectionChange("classes")} onOpenPreview={() => onSectionChange("preview")} /></TabsContent>
-        <TabsContent value="classification"><TaxClassificationsPanel configuration={configuration} canManage={canManage} /></TabsContent>
+        <TabsContent value="classification">
+          <TaxClassificationsPanel
+            configuration={configuration}
+            canManage={canManage}
+            routeState={classificationRouteState}
+            onRouteStateChange={onClassificationRouteStateChange}
+          />
+        </TabsContent>
         <TabsContent value="preview"><TaxPreviewPanel configuration={configuration} /></TabsContent>
       </Tabs>
     </div>

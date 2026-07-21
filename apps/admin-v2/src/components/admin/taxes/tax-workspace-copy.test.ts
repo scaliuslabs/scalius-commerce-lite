@@ -25,4 +25,15 @@ describe("tax workspace merchant copy", () => {
     expect(diagnostics).toContain("Review rate");
     expect(diagnostics).toContain("Test a destination");
   });
+
+  it("keeps catalog classification merchant-readable and responsive", () => {
+    const classifications = source("./TaxClassificationsPanel.tsx");
+
+    expect(classifications).toContain('to="/admin/products/$productId/edit"');
+    expect(classifications).toContain('className="space-y-2 md:hidden"');
+    expect(classifications).toContain('className="hidden md:block"');
+    expect(classifications).toContain("Product / store default");
+    expect(classifications).toContain("min-h-11");
+    expect(classifications).not.toContain('item.sku ? `SKU ${item.sku}` : item.productId');
+  });
 });
