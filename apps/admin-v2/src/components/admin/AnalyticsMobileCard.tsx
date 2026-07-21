@@ -96,10 +96,10 @@ export function AnalyticsMobileCard({
         {showTrashed ? (
           canEdit ? (
             <>
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={isMutating} onClick={onRestore}>
+              <Button type="button" variant="ghost" size="sm" className="h-11 px-3" disabled={isMutating} onClick={onRestore}>
                 <ArchiveRestore />Restore
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-destructive hover:text-destructive" disabled={isMutating} onClick={onPermanentDelete}>
+              <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-destructive hover:text-destructive" disabled={isMutating} onClick={onPermanentDelete}>
                 <Trash2 />Delete permanently
               </Button>
             </>
@@ -107,24 +107,24 @@ export function AnalyticsMobileCard({
         ) : (
           <>
             {canToggle && script.isActive ? (
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={isMutating} onClick={onDeactivate}>
+              <Button type="button" variant="ghost" size="sm" className="h-11 px-3" disabled={isMutating} onClick={onDeactivate}>
                 <PowerOff />Deactivate
               </Button>
             ) : null}
             {canToggle && !script.isActive && script.readiness === "ready_to_activate" ? (
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2" disabled={isMutating} onClick={onActivate}>
+              <Button type="button" variant="ghost" size="sm" className="h-11 px-3" disabled={isMutating} onClick={onActivate}>
                 <Power />Activate
               </Button>
             ) : null}
             {canEdit ? (
-              <Button variant="ghost" size="sm" className="h-8 px-2" asChild>
+              <Button variant="ghost" size="sm" className="h-11 px-3" asChild>
                 <Link to="/admin/analytics/$analyticsId/edit" params={{ analyticsId: script.id }}>
                   <Edit3 />Edit
                 </Link>
               </Button>
             ) : null}
             {canEdit ? (
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-destructive hover:text-destructive" disabled={isMutating} onClick={onTrash}>
+              <Button type="button" variant="ghost" size="sm" className="h-11 px-3 text-destructive hover:text-destructive" disabled={isMutating} onClick={onTrash}>
                 <Trash2 />Move to trash
               </Button>
             ) : null}
