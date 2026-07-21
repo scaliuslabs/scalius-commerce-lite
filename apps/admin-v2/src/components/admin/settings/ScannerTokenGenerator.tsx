@@ -1,6 +1,23 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import {
+  SCANNER_SESSION_TTL_SECONDS,
+  SCANNER_TOKEN_TTL_SECONDS,
+} from "@scalius/shared/scanner-auth";
+import {
+  Check,
+  Clock,
+  Copy,
+  Loader2,
+  Plus,
+  ScanBarcode,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+import { usePermissions } from "@/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,19 +25,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Loader2,
-  ScanBarcode,
-  Copy,
-  Check,
-  Clock,
-  RefreshCw,
-} from "lucide-react";
-import { toast } from "sonner";
 
-const TOKEN_LIFETIME_MS = 6 * 60 * 60 * 1000; // 6 hours
+const TOKEN_LIFETIME_MS = SCANNER_TOKEN_TTL_SECONDS * 1000;
+const TOKEN_LIFETIME_MINUTES = SCANNER_TOKEN_TTL_SECONDS / 60;
+const SESSION_IDLE_HOURS = SCANNER_SESSION_TTL_SECONDS / (60 * 60);
 
 export function ScannerTokenGenerator() {
+  const { hasAllPermissions } = usePermissions();
+  const canGenerate = hasAllPermissions([
+    ADMIN_PERMISSIONS.PRODUCTS_VIEW,
+    ADMIN_PERMISSIONS.PRODUCTS_EDIT,
+  ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -29,7 +44,6 @@ export function ScannerTokenGenerator() {
   const [copied, setCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
 
-  // Generate QR code when token changes, keeping the QR runtime off first paint.
   useEffect(() => {
     if (!token) {
       setQrDataUrl(null);
@@ -42,22 +56,19 @@ export function ScannerTokenGenerator() {
     setQrDataUrl(null);
 
     let active = true;
-
     void import("qrcode")
-      .then(({ toDataURL }) =>
-        toDataURL(url, {
-          width: 280,
-          margin: 2,
-          color: { dark: "#000000", light: "#ffffff" },
-        }),
-      )
+      .then(({ toDataURL }) => toDataURL(url, {
+        width: 280,
+        margin: 2,
+        color: { dark: "#000000", light: "#ffffff" },
+      }))
       .then((dataUrl) => {
         if (active) setQrDataUrl(dataUrl);
       })
       .catch(() => {
         if (!active) return;
         setQrDataUrl(null);
-        toast.error("Failed to generate QR code");
+        toast.error("Scanner QR code could not be created");
       });
 
     return () => {
@@ -65,7 +76,6 @@ export function ScannerTokenGenerator() {
     };
   }, [token]);
 
-  // Countdown timer
   useEffect(() => {
     if (!expiresAt) {
       setTimeLeft("");
@@ -81,147 +91,174 @@ export function ScannerTokenGenerator() {
         return;
       }
 
-      const hours = Math.floor(remaining / (1000 * 60 * 60));
-      const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-      setTimeLeft(`${hours}h ${minutes}m remaining`);
+      const totalMinutes = Math.ceil(remaining / 60_000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      setTimeLeft(
+        hours > 0
+          ? `${hours}h ${minutes}m remaining`
+          : `${minutes}m remaining`,
+      );
     };
 
     update();
-    const interval = setInterval(update, 60_000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(update, 30_000);
+    return () => window.clearInterval(interval);
   }, [expiresAt]);
 
-  const handleGenerate = async () => {
+  async function handleGenerate() {
+    if (!canGenerate) return;
     setIsGenerating(true);
     setCopied(false);
 
     try {
-      // Astro API route at pages/api/scanner-token.ts — not an API worker /api/v1/ route
-      const res = await fetch("/api/scanner-token", { method: "POST" });
-      const json = (await res.json()) as {
+      const response = await fetch("/api/scanner-token", { method: "POST" });
+      const json = (await response.json()) as {
         success: boolean;
         token?: string;
+        expiresAt?: number;
         error?: string;
       };
 
-      if (json.success && json.token) {
-        setToken(json.token);
-        setExpiresAt(new Date(Date.now() + TOKEN_LIFETIME_MS));
-        toast.success("Scanner token generated");
-      } else {
-        toast.error(json.error || "Failed to generate token");
+      if (!response.ok || !json.success || !json.token) {
+        toast.error(json.error || "Scanner link could not be created");
+        return;
       }
+
+      setToken(json.token);
+      setExpiresAt(new Date(json.expiresAt ?? Date.now() + TOKEN_LIFETIME_MS));
+      toast.success("Scanner link created");
     } catch {
-      toast.error("Network error. Please try again.");
+      toast.error("Scanner link could not be created. Check the connection and try again.");
     } finally {
       setIsGenerating(false);
     }
-  };
+  }
 
-  const handleCopy = async () => {
+  async function handleCopy() {
     if (!scannerUrl) return;
-
     try {
       await navigator.clipboard.writeText(scannerUrl);
       setCopied(true);
-      toast.success("Scanner link copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      toast.success("Scanner link copied");
+      window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("Failed to copy link");
+      toast.error("Scanner link could not be copied");
     }
-  };
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ScanBarcode className="h-5 w-5" />
-          Warehouse Scanner
-        </CardTitle>
-        <CardDescription>
-          Generate a QR code for warehouse staff to access the barcode scanner
-          on their mobile device. Each token is valid for 6 hours and can only be
-          used once.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {token && qrDataUrl ? (
-          <div className="space-y-4">
-            {/* QR Code */}
-            <div className="flex justify-center">
-              <div className="bg-white p-4 rounded-xl shadow-sm">
-                <img
-                  src={qrDataUrl}
-                  alt="Scanner QR Code"
-                  className="w-56 h-56"
-                />
+    <div className="max-w-2xl space-y-4">
+      {!canGenerate && (
+        <Alert>
+          <AlertDescription>
+            Product view and edit permissions are required to create scanner access.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ScanBarcode className="h-5 w-5" />
+            Warehouse scanner access
+          </CardTitle>
+          <CardDescription>
+            Create a one-time link for one warehouse device. It must be claimed within {TOKEN_LIFETIME_MINUTES} minutes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {token ? (
+            <div className="space-y-4">
+              <div className="flex min-h-64 items-center justify-center">
+                {qrDataUrl ? (
+                  <div className="rounded-xl bg-white p-3 shadow-sm ring-1 ring-black/5">
+                    <img
+                      src={qrDataUrl}
+                      alt="One-time warehouse scanner access QR code"
+                      className="h-56 w-56"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-56 w-56 items-center justify-center rounded-xl border bg-muted/20">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="sr-only">Creating QR code</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-center" aria-live="polite">
+                <Badge variant="secondary" className="min-h-7 gap-1.5 px-3">
+                  <Clock className="h-3.5 w-3.5" />
+                  {timeLeft || "Calculating expiry…"}
+                </Badge>
+              </div>
+
+              <Alert>
+                <AlertDescription className="text-xs leading-5">
+                  The first device to open this link claims it. Its scanner session stays active for up to {SESSION_IDLE_HOURS} hours after the latest check-in.
+                </AlertDescription>
+              </Alert>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 flex-1 sm:min-h-9"
+                  disabled={!scannerUrl}
+                  onClick={() => void handleCopy()}
+                >
+                  {copied ? (
+                    <Check className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Copy className="mr-2 h-4 w-4" />
+                  )}
+                  {copied ? "Copied" : "Copy link"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 flex-1 sm:min-h-9"
+                  disabled={isGenerating || !canGenerate}
+                  onClick={() => void handleGenerate()}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="mr-2 h-4 w-4" />
+                  )}
+                  Create another link
+                </Button>
               </div>
             </div>
-
-            {/* Expiry badge */}
-            <div className="flex justify-center">
-              <Badge
-                variant="secondary"
-                className="flex items-center gap-1.5 px-3 py-1"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                {timeLeft}
-              </Badge>
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
+          ) : (
+            <div className="flex flex-col items-center space-y-4 py-6 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <ScanBarcode className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <div className="max-w-sm space-y-1">
+                <p className="text-sm font-medium">No active scanner link</p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  The QR link can be claimed once. The claimed device receives a separate session; the token is not reused.
+                </p>
+              </div>
               <Button
-                variant="outline"
-                className="flex-1"
-                onClick={handleCopy}
-              >
-                {copied ? (
-                  <Check className="mr-2 h-4 w-4" />
-                ) : (
-                  <Copy className="mr-2 h-4 w-4" />
-                )}
-                {copied ? "Copied" : "Copy Link"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleGenerate}
-                disabled={isGenerating}
+                type="button"
+                className="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                disabled={isGenerating || !canGenerate}
+                onClick={() => void handleGenerate()}
               >
                 {isGenerating ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <ScanBarcode className="mr-2 h-4 w-4" />
                 )}
-                New Token
+                Create scanner link
               </Button>
             </div>
-
-            <p className="text-xs text-muted-foreground text-center">
-              Show this QR code to warehouse staff. They scan it with their
-              phone camera to open the scanner.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center py-6 space-y-4">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
-              <ScanBarcode className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground text-center max-w-xs">
-              Generate a one-time QR code that warehouse staff can scan to
-              access the barcode scanner app.
-            </p>
-            <Button onClick={handleGenerate} disabled={isGenerating}>
-              {isGenerating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ScanBarcode className="mr-2 h-4 w-4" />
-              )}
-              Generate Scanner Token
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

@@ -3,6 +3,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { UnauthorizedError } from "@scalius/core/errors";
 import {
   SCANNER_SESSION_TTL_SECONDS,
+  SCANNER_TOKEN_TTL_SECONDS,
   getScannerSessionKey,
 } from "@scalius/shared/scanner-auth";
 
@@ -158,6 +159,7 @@ describe("handleCreateScannerToken", () => {
     expect(await readJson(response)).toMatchObject({
       success: true,
       token: "scanner-token",
+      expiresAt: 123 + SCANNER_TOKEN_TTL_SECONDS * 1000,
     });
     expect(createTokenClaim).toHaveBeenCalledWith(
       db,
