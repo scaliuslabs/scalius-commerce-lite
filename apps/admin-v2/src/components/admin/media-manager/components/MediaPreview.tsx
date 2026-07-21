@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
+import { VideoPlayer } from "~/components/ui/video-player";
 import { MediaManager } from "../LazyMediaManager";
 import type { LibraryMediaFile, MediaFile } from "../types";
 import { formatDate, formatDuration, formatFileSize, formatFileType } from "../utils";
@@ -98,7 +99,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
             {file.kind === "image" ? (
               <img src={getOptimizedImageUrl(file.url)} alt={file.altText || file.filename} className="max-h-full max-w-full object-contain" />
             ) : (
-              <video src={file.url} poster={posterUrl ? getOptimizedImageUrl(posterUrl) : undefined} controls playsInline preload="metadata" className="max-h-full max-w-full bg-black" aria-label={file.caption || file.filename}>Your browser does not support this video.</video>
+              <VideoPlayer key={file.id} src={file.url} poster={posterUrl ? getOptimizedImageUrl(posterUrl) : undefined} playsInline preload="metadata" className="max-h-full max-w-full" aria-label={file.caption || file.filename} />
             )}
             <Button type="button" variant="secondary" size="icon" className="absolute left-3 top-1/2 h-11 w-11 -translate-y-1/2 sm:h-8 sm:w-8" disabled={index <= 0} onClick={() => requestNavigation(-1)} aria-label="Previous asset"><ChevronLeft className="h-4 w-4" /></Button>
             <Button type="button" variant="secondary" size="icon" className="absolute right-3 top-1/2 h-11 w-11 -translate-y-1/2 sm:h-8 sm:w-8" disabled={index < 0 || index >= files.length - 1} onClick={() => requestNavigation(1)} aria-label="Next asset"><ChevronRight className="h-4 w-4" /></Button>
@@ -106,7 +107,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
           <aside className="min-h-0 overflow-y-auto border-t p-4 md:border-l md:border-t-0">
             <div className="space-y-4">
               <div className="space-y-1.5"><Label htmlFor="media-filename" className="text-xs">File name</Label><Input id="media-filename" className="h-11 text-[13px] sm:h-8" maxLength={255} value={filename} onChange={(event) => setFilename(event.target.value)} /></div>
-              <div className="space-y-1.5"><Label htmlFor="media-description" className="text-xs">{file.kind === "image" ? "Alternative text" : "Caption"}</Label><Textarea id="media-description" rows={4} maxLength={file.kind === "image" ? 500 : 2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={file.kind === "image" ? "Describe the image for people who cannot see it" : "Optional buyer-facing context"} className="resize-none text-[13px]" />{file.kind === "video" && <p className="text-[11px] leading-4 text-muted-foreground">This is descriptive text, not a timed caption track.</p>}</div>
+              <div className="space-y-1.5"><Label htmlFor="media-description" className="text-xs">{file.kind === "image" ? "Alternative text" : "Video description"}</Label><Textarea id="media-description" rows={4} maxLength={file.kind === "image" ? 500 : 2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={file.kind === "image" ? "Describe the image for people who cannot see it" : "Optional context for this video"} className="resize-none text-[13px]" /></div>
               {file.kind === "video" && (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Poster image</Label>

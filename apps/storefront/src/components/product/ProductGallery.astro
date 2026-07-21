@@ -362,23 +362,30 @@ const variantImageIds = new Set(
               </span>
               <span class="text-sm font-medium">Product video</span>
             </div>
-            <video
-              data-product-video
-              controls
-              playsinline
-              preload={initialMedia?.item.kind === "video"
-                ? "metadata"
-                : "none"}
-              src={initialMedia?.item.kind === "video"
-                ? initialMedia.mainUrl
-                : undefined}
-              poster={initialMedia?.item.kind === "video"
-                ? (initialMedia.posterUrl ?? undefined)
-                : undefined}
-              class="relative z-10 h-full w-full bg-transparent object-contain"
-              aria-label={initialMedia?.item.kind === "video"
-                ? initialMedia.altText
-                : "Product video"}></video>
+            <media-theme-microvideo
+              data-product-video-player
+              class="relative z-10 block h-full w-full overflow-hidden bg-transparent"
+              style="--media-primary-color: rgb(255 255 255 / 0.96); --media-secondary-color: rgb(0 0 0 / 0.82);"
+            >
+              <video
+                data-product-video
+                slot="media"
+                controls
+                playsinline
+                preload={initialMedia?.item.kind === "video"
+                  ? "metadata"
+                  : "none"}
+                src={initialMedia?.item.kind === "video"
+                  ? initialMedia.mainUrl
+                  : undefined}
+                poster={initialMedia?.item.kind === "video"
+                  ? (initialMedia.posterUrl ?? undefined)
+                  : undefined}
+                class="h-full w-full bg-transparent object-contain"
+                aria-label={initialMedia?.item.kind === "video"
+                  ? initialMedia.altText
+                  : "Product video"}></video>
+            </media-theme-microvideo>
           </div>
         </div>
 

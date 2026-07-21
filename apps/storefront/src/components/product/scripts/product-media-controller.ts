@@ -46,6 +46,29 @@ interface GalleryItem extends ProductMediaChangeDetail {
 const imageCache = new Map<string, HTMLImageElement>();
 const imagePreloads = new Map<string, Promise<void>>();
 let activeController: AbortController | null = null;
+let videoThemePromise: Promise<void> | null = null;
+
+async function enhanceProductVideo(video: HTMLVideoElement): Promise<void> {
+  if (typeof customElements === "undefined") return;
+  if (!videoThemePromise) {
+    videoThemePromise = import("@player.style/microvideo")
+      .then(() => customElements.whenDefined("media-theme-microvideo"))
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        videoThemePromise = null;
+        throw error;
+      });
+  }
+  try {
+    await videoThemePromise;
+    if (!video.isConnected) return;
+    video.controls = false;
+    const player = video.closest<HTMLElement>("[data-product-video-player]");
+    if (player) player.dataset.enhanced = "true";
+  } catch {
+    video.controls = true;
+  }
+}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -227,6 +250,7 @@ function setSelectedItem(
       video.src = item.url;
       video.load();
     }
+    void enhanceProductVideo(video);
     placeholder?.classList.toggle("hidden", Boolean(item.posterUrl));
     closeMobileZoom(root);
   } else {

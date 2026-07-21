@@ -975,3 +975,15 @@ header {
   /* ring color with alpha */
   color: oklch(var(--foreground));
 }
+/* Media controls follow the dashboard's mobile/desktop target-size policy. */
+media-theme-minimal::part(button) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+@media (min-width: 640px) {
+  media-theme-minimal::part(button) {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}

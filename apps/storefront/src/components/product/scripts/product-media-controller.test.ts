@@ -19,6 +19,7 @@ const PRODUCT_CONTROLLER_SOURCE = storefrontSourcePath(
 const PRODUCT_ZOOM_SOURCE = storefrontSourcePath(
   "components/product/ProductImageZoom.tsx",
 );
+const GLOBAL_STYLE_SOURCE = storefrontSourcePath("styles/global.css");
 
 function thumbnail(
   id: string,
@@ -65,7 +66,9 @@ function renderGallery(initial = "pmed_video") {
       </button>
       <div data-video-stage class="hidden">
         <div data-video-placeholder></div>
-        <video data-product-video></video>
+        <media-theme-microvideo data-product-video-player>
+          <video data-product-video controls slot="media"></video>
+        </media-theme-microvideo>
       </div>
       <div data-thumbnail-rail="desktop">${buttons}</div>
       <div data-thumbnail-rail="mobile">${buttons}</div>
@@ -254,6 +257,8 @@ describe("storefront mixed-media source boundaries", () => {
     const source = readFileSync(GALLERY_SOURCE, "utf8");
     expect(source).toContain('item.kind === "video"');
     expect(source).toContain("data-product-video");
+    expect(source).toContain("media-theme-microvideo");
+    expect(source).toContain('slot="media"');
     expect(source).toContain("controls");
     expect(source).toContain("playsinline");
     expect(source).toMatch(
@@ -267,10 +272,24 @@ describe("storefront mixed-media source boundaries", () => {
     );
     expect(source).toContain("item.posterUrl");
     expect(source).toContain("absolute inset-0 z-0");
-    expect(source).toContain("relative z-10 h-full w-full");
+    expect(source).toContain("relative z-10 block h-full w-full");
     expect(source).not.toContain("absolute inset-0 z-20 flex flex-col");
     expect(source).not.toContain("<source");
     expect(source).not.toContain("product-image-change");
+
+    const controller = readFileSync(
+      storefrontSourcePath(
+        "components/product/scripts/product-media-controller.ts",
+      ),
+      "utf8",
+    );
+    expect(controller).toContain('import("@player.style/microvideo")');
+    expect(controller).toContain('customElements.whenDefined("media-theme-microvideo")');
+    expect(controller).toContain("video.controls = false");
+    expect(controller).toContain("video.controls = true");
+    const styles = readFileSync(GLOBAL_STYLE_SOURCE, "utf8");
+    expect(styles).toContain("media-theme-microvideo::part(button)");
+    expect(styles).toContain("min-width: 44px");
   });
 
   it("passes the ordered media contract directly and removes the image adapter type", () => {

@@ -478,3 +478,15 @@ html.dark {
     line-height: 1.25 !important;
   }
 }
+/* Product video controls stay thumb-friendly on phones and dense on desktop. */
+media-theme-microvideo::part(button) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+@media (min-width: 640px) {
+  media-theme-microvideo::part(button) {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
