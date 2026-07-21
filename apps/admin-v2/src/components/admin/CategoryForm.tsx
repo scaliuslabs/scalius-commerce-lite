@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -46,6 +47,8 @@ import {
   type CategoryImageInput,
   type CategoryPublishReadiness,
   type CreateCategoryInput,
+  type CategoryCreateResult,
+  type CategoryMutationResult,
 } from "@/lib/api-functions/categories";
 import { categoryFormSchema, type CategoryFormValues } from "@/lib/form-schemas";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
@@ -101,6 +104,7 @@ export function CategoryForm({
   isEdit = false,
   publishReadiness,
 }: CategoryFormProps) {
+  const navigate = useNavigate();
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
   const canSave = isEdit
@@ -147,6 +151,25 @@ export function CategoryForm({
       ...(isEdit && defaultValues?.id ? [queryKeys.categories.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/categories",
+    onSuccess: (result) => {
+      const mutation = result as CategoryMutationResult &
+        Partial<CategoryCreateResult>;
+      const id = mutation.id || defaultValues?.id;
+      form.reset({
+        ...form.getValues(),
+        ...(id ? { id } : {}),
+        revision: mutation.revision,
+        status: mutation.status,
+      });
+      toast.success(isEdit ? "Category saved" : "Category created");
+      if (!isEdit && mutation.id) {
+        void navigate({
+          to: "/admin/categories/$categoryId/edit",
+          params: { categoryId: mutation.id },
+          replace: true,
+        });
+      }
+    },
     onError: (_error, message, setFieldError) => {
       if (readCategoryRevisionConflict(_error)) {
         toast.error("This category changed in another session", {
