@@ -6,9 +6,7 @@ import Layout from "../layouts/Layout.astro";
 import { getPageRenderData, getLayoutData } from "../lib/api";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
-import {
-  setRuntimeImageCdnPolicy,
-} from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import { buildResourceCanonicalSeoUrl } from "@/lib/seo-base-url";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
 import { optimizeRichContentImages } from "@/lib/rich-content-media";
@@ -110,9 +108,13 @@ const featuredImageAlt =
   featuredImage?.altText || featuredImage?.filename || page.title;
 
 // --- SEO: canonical URL for CMS pages (per OG-03, CAN-01) ---
-const canonicalUrl = buildResourceCanonicalSeoUrl("page", `/${slug}`, page.canonicalPath);
+const canonicalUrl = buildResourceCanonicalSeoUrl(
+  "page",
+  `/${slug}`,
+  page.canonicalPath,
+);
 const richContentClasses =
-  "prose prose-lg max-w-none w-full dark:prose-invert prose-headings:text-foreground prose-p:text-muted-foreground prose-li:text-muted-foreground prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl";
+  "prose prose-lg mx-auto w-full max-w-3xl dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary hover:prose-a:text-primary/80 prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground";
 ---
 
 <Layout
@@ -143,17 +145,17 @@ const richContentClasses =
         <div class="w-full overflow-hidden" set:html={processedContent} />
       </>
     ) : (
-      <div class="w-full max-w-7xl mx-auto px-4 py-8">
-        <div class="text-center mb-8">
+      <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+        <div class="mx-auto mb-8 max-w-3xl text-center">
           {!page.hideTitle && (
-            <h1 class="text-3xl sm:text-4xl font-bold text-foreground mb-3 tracking-tight">
+            <h1 class="text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
               {page.title}
             </h1>
           )}
         </div>
 
         {featuredImageUrl && (
-          <figure class="mb-8 overflow-hidden rounded-lg bg-muted">
+          <figure class="mb-10 overflow-hidden rounded-xl bg-muted">
             <img
               src={featuredImageUrl}
               alt={featuredImageAlt}
@@ -164,31 +166,7 @@ const richContentClasses =
           </figure>
         )}
 
-        <div class="w-full">
-          <div class={richContentClasses} set:html={processedContent} />
-        </div>
-
-        <div class="text-center mt-10 pt-6 border-t border-border">
-          <a
-            href="/"
-            class="inline-flex items-center px-4 py-2 text-muted-foreground hover:text-foreground transition-colors text-sm font-medium"
-          >
-            <svg
-              class="w-4 h-4 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            Back to Home
-          </a>
-        </div>
+        <div class={richContentClasses} set:html={processedContent} />
       </div>
     )
   }

@@ -118,11 +118,7 @@ export interface ProductRichContent {
 }
 
 export type ProductOptionStandardMapping =
-  | "size"
-  | "color"
-  | "material"
-  | "pattern"
-  | "none";
+  "size" | "color" | "material" | "pattern" | "none";
 
 export interface ProductOptionDefinition {
   id: string;
@@ -307,9 +303,13 @@ export interface PageFeaturedImage {
 
 export interface Page {
   id: string;
+  contentType: "page" | "article";
   title: string;
   slug: string;
   content: string;
+  excerpt: string | null;
+  author: string | null;
+  tags: string[];
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath?: string | null;
@@ -433,9 +433,7 @@ export interface OrderItem {
 }
 
 export type OrderReceiptSupportRequestType =
-  | "cancel_pre_shipment"
-  | "return"
-  | "refund";
+  "cancel_pre_shipment" | "return" | "refund";
 
 export interface OrderReceiptSupportRequest {
   id: string;

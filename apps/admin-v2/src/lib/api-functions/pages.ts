@@ -20,9 +20,13 @@ export interface PageFeaturedImageDto {
 
 export interface PageDto {
   id: string;
+  contentType: "page" | "article";
   title: string;
   slug: string;
   content: string;
+  excerpt: string | null;
+  author: string | null;
+  tags: string[];
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath: string | null;
@@ -63,12 +67,17 @@ export interface PagesQueryInput {
   showTrashed?: boolean;
   trashed?: boolean;
   status?: "draft" | "scheduled" | "published";
+  contentType?: "page" | "article";
 }
 
 export interface CreatePageInput {
+  contentType: "page" | "article";
   title: string;
   slug: string;
   content: string;
+  excerpt: string | null;
+  author: string | null;
+  tags: string[];
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath: string | null;
@@ -114,6 +123,7 @@ function toPagesParams(input: PagesQueryInput): Record<string, string> {
   if (input.order) params.order = input.order;
   if (input.showTrashed || input.trashed) params.trashed = "true";
   if (input.status) params.status = input.status;
+  if (input.contentType) params.contentType = input.contentType;
   return params;
 }
 
@@ -167,7 +177,9 @@ export const restorePage = createServerFn({ method: "POST" })
   });
 
 export const bulkDeletePages = createServerFn({ method: "POST" })
-  .validator((data: { pages: PageRevisionClaim[]; permanent?: boolean }) => data)
+  .validator(
+    (data: { pages: PageRevisionClaim[]; permanent?: boolean }) => data,
+  )
   .handler(async ({ data }): Promise<void> => {
     return apiPost("/pages/bulk-delete", data);
   });

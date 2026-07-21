@@ -86,9 +86,13 @@ function readReturnPolicy(value: unknown): unknown {
 function normalizeSeoDiscoveryPayload(
   data: SeoSettingsPayloadWithReturnPolicy,
 ): SeoDiscoverySettingsWithReturnPolicy {
-  const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(data.discovery);
+  const discovery = normalizeSeoDiscoverySettingsWithReturnPolicy(
+    data.discovery,
+  );
   const returnPolicySource =
-    readReturnPolicy(data.discovery) ?? data.returnPolicy ?? discovery.returnPolicy;
+    readReturnPolicy(data.discovery) ??
+    data.returnPolicy ??
+    discovery.returnPolicy;
 
   return {
     ...discovery,
@@ -176,19 +180,18 @@ export function SeoSettingsBuilder() {
     isSaving,
     handleSubmit,
     refetch,
-  } =
-    useSettingsForm<SeoConfig>({
-      queryKey: queryKeys.settings.seo(),
-      fetchFn: fetchSeo,
-      saveFn: saveSeo,
-      defaultValues: defaultConfig,
-      invalidateQueryKeys: [
-        queryKeys.settings.seoDiscoveryLiveProbe(),
-        queryKeys.settings.seoFeedDiagnostics(),
-      ],
-      successMessage: "SEO settings saved successfully.",
-      errorMessage: "Failed to save SEO settings.",
-    });
+  } = useSettingsForm<SeoConfig>({
+    queryKey: queryKeys.settings.seo(),
+    fetchFn: fetchSeo,
+    saveFn: saveSeo,
+    defaultValues: defaultConfig,
+    invalidateQueryKeys: [
+      queryKeys.settings.seoDiscoveryLiveProbe(),
+      queryKeys.settings.seoFeedDiagnostics(),
+    ],
+    successMessage: "SEO settings saved successfully.",
+    errorMessage: "Failed to save SEO settings.",
+  });
 
   const updateField = useCallback(
     <K extends keyof SeoConfig>(key: K, value: SeoConfig[K]) => {
@@ -247,6 +250,7 @@ export function SeoSettingsBuilder() {
         ["categories", "Categories"] as const,
         ["collections", "Collections"] as const,
         ["pages", "Pages"] as const,
+        ["articles", "Articles"] as const,
       ],
     },
   ];
@@ -315,502 +319,549 @@ export function SeoSettingsBuilder() {
             <div className="min-w-0">
               <h3 className="text-sm font-semibold">Search appearance</h3>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                Set the fallback title and homepage summary shown to buyers and search engines.
-                Products, categories, and pages can override them.
+                Set the fallback title and homepage summary shown to buyers and
+                search engines. Products, categories, and pages can override
+                them.
               </p>
             </div>
           </div>
           <div className="space-y-4 p-4">
             <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="site-title">Fallback site title</Label>
-          <Input
-            id="site-title"
-            value={values.siteTitle}
-            onChange={(e) => updateField("siteTitle", e.target.value)}
-            placeholder="Your Awesome Store - Gadgets, Gizmos, and More"
-          />
-          {values.siteTitle && (
-            <CharacterCounter
-              current={values.siteTitle.length}
-              recommended={60}
-              max={70}
-            />
-          )}
-          <p className="text-xs leading-5 text-muted-foreground">
-            Used only when a public resource has no specific title.
-          </p>
-        </div>
+              <div className="space-y-2">
+                <Label htmlFor="site-title">Fallback site title</Label>
+                <Input
+                  id="site-title"
+                  value={values.siteTitle}
+                  onChange={(e) => updateField("siteTitle", e.target.value)}
+                  placeholder="Your Awesome Store - Gadgets, Gizmos, and More"
+                />
+                {values.siteTitle && (
+                  <CharacterCounter
+                    current={values.siteTitle.length}
+                    recommended={60}
+                    max={70}
+                  />
+                )}
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Used only when a public resource has no specific title.
+                </p>
+              </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="homepage-title">Homepage title</Label>
-          <Input
-            id="homepage-title"
-            value={values.homepageTitle}
-            onChange={(e) => updateField("homepageTitle", e.target.value)}
-            placeholder="Welcome to Your Awesome Store | Shop Online"
-          />
-          {values.homepageTitle && (
-            <CharacterCounter
-              current={values.homepageTitle.length}
-              recommended={60}
-              max={70}
-            />
-          )}
-          <p className="text-xs leading-5 text-muted-foreground">
-            Shown in the homepage browser tab and search result.
-          </p>
-        </div>
-      </div>
+              <div className="space-y-2">
+                <Label htmlFor="homepage-title">Homepage title</Label>
+                <Input
+                  id="homepage-title"
+                  value={values.homepageTitle}
+                  onChange={(e) => updateField("homepageTitle", e.target.value)}
+                  placeholder="Welcome to Your Awesome Store | Shop Online"
+                />
+                {values.homepageTitle && (
+                  <CharacterCounter
+                    current={values.homepageTitle.length}
+                    recommended={60}
+                    max={70}
+                  />
+                )}
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Shown in the homepage browser tab and search result.
+                </p>
+              </div>
+            </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="homepage-meta-description">
-          Homepage search summary
-        </Label>
-        <Textarea
-          id="homepage-meta-description"
-          value={values.homepageMetaDescription}
-          onChange={(e) =>
-            updateField("homepageMetaDescription", e.target.value)
-          }
-          placeholder="Describe your homepage in a way that attracts users from search results."
-          rows={3}
-        />
-        {values.homepageMetaDescription && (
-          <CharacterCounter
-            current={values.homepageMetaDescription.length}
-            recommended={160}
-            max={200}
-          />
-        )}
-      </div>
+            <div className="space-y-2">
+              <Label htmlFor="homepage-meta-description">
+                Homepage search summary
+              </Label>
+              <Textarea
+                id="homepage-meta-description"
+                value={values.homepageMetaDescription}
+                onChange={(e) =>
+                  updateField("homepageMetaDescription", e.target.value)
+                }
+                placeholder="Describe your homepage in a way that attracts users from search results."
+                rows={3}
+              />
+              {values.homepageMetaDescription && (
+                <CharacterCounter
+                  current={values.homepageMetaDescription.length}
+                  recommended={160}
+                  max={200}
+                />
+              )}
+            </div>
 
             <p className="text-xs leading-5 text-muted-foreground">
-              Describe the store plainly; search engines may choose different text when it
-              better matches a buyer’s query.
+              Describe the store plainly; search engines may choose different
+              text when it better matches a buyer’s query.
             </p>
           </div>
         </section>
 
-      <div className="rounded-lg border border-border">
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <div>
-            <h3 className="text-sm font-semibold">Discovery Controls</h3>
-            <p className="text-xs text-muted-foreground">
-              Choose which public discovery files and global schema are emitted.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-0 md:grid-cols-2">
-          {discoveryRows.map((section) => (
-            <div key={section.title} className="border-b border-border p-4 md:border-r">
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                <section.icon className="h-4 w-4 text-muted-foreground" />
-                {section.title}
-              </div>
-              <div className="space-y-3">
-                {section.rows.map(([key, label]) => (
-                  <label
-                    key={key}
-                    className="flex items-center justify-between gap-4 text-sm"
-                  >
-                    <span>{label}</span>
-                    <Switch
-                      checked={values.discovery.sitemap[key]}
-                      onCheckedChange={(checked) =>
-                        updateDiscovery("sitemap", key, checked)
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="border-b border-border p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Rss className="h-4 w-4 text-muted-foreground" />
-              Product Catalog Feed
-            </div>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Generate product feed XML</span>
-                <Switch
-                  checked={values.discovery.feeds.productCatalogEnabled}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("feeds", "productCatalogEnabled", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Include sold-out items</span>
-                <Switch
-                  checked={values.discovery.feeds.includeUnavailableProducts}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("feeds", "includeUnavailableProducts", checked)
-                  }
-                />
-              </label>
-              <div className="grid gap-2">
-                <Label htmlFor="feed-variant-strategy" className="text-xs">
-                  Feed output mode
-                </Label>
-                <Select
-                  value={values.discovery.feeds.variantStrategy}
-                  onValueChange={(value) =>
-                    updateDiscovery(
-                      "feeds",
-                      "variantStrategy",
-                      value as SeoFeedVariantStrategy,
-                    )
-                  }
-                >
-                  <SelectTrigger id="feed-variant-strategy">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="variants">SKU / variant rows</SelectItem>
-                    <SelectItem value="products">Product rows</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Use SKU / variant rows for products with options. Use product
-                  rows only when a catalog tool should receive one row per
-                  product.
-                </p>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="feed-title" className="text-xs">
-                  Feed title
-                </Label>
-                <Input
-                  id="feed-title"
-                  value={values.discovery.feeds.title}
-                  onChange={(event) =>
-                    updateDiscovery("feeds", "title", event.target.value)
-                  }
-                  placeholder="Product Catalog"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="feed-description" className="text-xs">
-                  Feed description
-                </Label>
-                <Input
-                  id="feed-description"
-                  value={values.discovery.feeds.description}
-                  onChange={(event) =>
-                    updateDiscovery("feeds", "description", event.target.value)
-                  }
-                  placeholder="Complete product catalog for feed tools"
-                />
-              </div>
+        <div className="rounded-lg border border-border">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-semibold">Discovery Controls</h3>
               <p className="text-xs text-muted-foreground">
-                Controls the Google/Base RSS product catalog at
-                `/api/product-feed.xml`; `/api/facebook-feed.xml` remains as a
-                compatibility alias for existing Meta catalog syncs.
+                Choose which public discovery files and global schema are
+                emitted.
               </p>
             </div>
           </div>
 
-          <div className="border-b border-border p-4 md:border-r">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              UCP Catalog Discovery
-            </div>
-            <p className="text-xs leading-5 text-muted-foreground">
-              Default-on when the Store URL is HTTPS. Exposes read-only catalog
-              search and lookup from feed-ready products only; checkout, cart,
-              orders, and payments stay hidden.
-            </p>
-          </div>
-
-          <div className="border-b border-border p-4">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Globe2 className="h-4 w-4 text-muted-foreground" />
-              robots.txt
-            </div>
-            <label className="flex items-center justify-between gap-4 text-sm">
-              <span>Advertise sitemap URL</span>
-              <Switch
-                checked={values.discovery.robots.advertiseSitemap}
-                onCheckedChange={(checked) =>
-                  updateDiscovery("robots", "advertiseSitemap", checked)
-                }
-              />
-            </label>
-          </div>
-
-          <div className="p-4 md:col-span-2">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Braces className="h-4 w-4 text-muted-foreground" />
-              Structured Data
-            </div>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Organization schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.organization}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "organization", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Website search schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.websiteSearch}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "websiteSearch", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Product schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.products}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "products", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>ProductGroup variant schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.productGroups}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "productGroups", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span className="inline-flex items-center gap-2">
-                  <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                  Offer shipping schema
-                </span>
-                <Switch
-                  checked={values.discovery.structuredData.offerShippingDetails}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "offerShippingDetails", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Breadcrumb schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.breadcrumbs}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "breadcrumbs", checked)
-                  }
-                />
-              </label>
-              <label className="flex items-center justify-between gap-4 text-sm">
-                <span>Collection schema</span>
-                <Switch
-                  checked={values.discovery.structuredData.collections}
-                  onCheckedChange={(checked) =>
-                    updateDiscovery("structuredData", "collections", checked)
-                  }
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="border-t border-border p-4 md:col-span-2">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 items-start gap-2">
-                <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">
-                    Return Policy Schema
-                  </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Saves return-policy facts for OnlineStore/Product schema;
-                    it does not change checkout, refunds, or order handling.
-                  </p>
+          <div className="grid gap-0 md:grid-cols-2">
+            {discoveryRows.map((section) => (
+              <div
+                key={section.title}
+                className="border-b border-border p-4 md:border-r"
+              >
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                  <section.icon className="h-4 w-4 text-muted-foreground" />
+                  {section.title}
+                </div>
+                <div className="space-y-3">
+                  {section.rows.map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex items-center justify-between gap-4 text-sm"
+                    >
+                      <span>{label}</span>
+                      <Switch
+                        checked={values.discovery.sitemap[key]}
+                        onCheckedChange={(checked) =>
+                          updateDiscovery("sitemap", key, checked)
+                        }
+                      />
+                    </label>
+                  ))}
                 </div>
               </div>
-              <label className="flex shrink-0 items-center justify-between gap-3 text-sm lg:min-w-[220px]">
-                <span>Emit return policy schema</span>
-                <Switch
-                  checked={returnPolicy.enabled}
-                  onCheckedChange={(checked) =>
-                    updateReturnPolicy({
-                      enabled: checked,
-                      ...(checked &&
-                      returnPolicy.category === "finite" &&
-                      returnPolicy.returnWindowDays === null
-                        ? { returnWindowDays: DEFAULT_RETURN_WINDOW_DAYS }
-                        : {}),
-                    })
-                  }
-                />
-              </label>
-            </div>
+            ))}
 
-            <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="return-policy-country" className="text-xs">
-                  Country
-                </Label>
-                <Input
-                  id="return-policy-country"
-                  value={returnPolicy.country}
-                  maxLength={2}
-                  onChange={(event) =>
-                    updateReturnPolicy({
-                      country: event.target.value
-                        .toUpperCase()
-                        .replace(/[^A-Z]/g, "")
-                        .slice(0, 2),
-                    })
-                  }
-                  placeholder="BD"
-                  className="uppercase"
-                />
+            <div className="border-b border-border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <Rss className="h-4 w-4 text-muted-foreground" />
+                Product Catalog Feed
               </div>
-
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="return-policy-category" className="text-xs">
-                  Return category
-                </Label>
-                <Select
-                  value={returnPolicy.category}
-                  onValueChange={(value) => {
-                    const category = value as SeoReturnPolicyCategory;
-                    updateReturnPolicy({
-                      category,
-                      returnWindowDays:
-                        category === "finite"
-                          ? returnPolicy.returnWindowDays ??
-                            DEFAULT_RETURN_WINDOW_DAYS
-                          : null,
-                    });
-                  }}
-                >
-                  <SelectTrigger
-                    id="return-policy-category"
-                    className="min-w-0"
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Generate product feed XML</span>
+                  <Switch
+                    checked={values.discovery.feeds.productCatalogEnabled}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("feeds", "productCatalogEnabled", checked)
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Include sold-out items</span>
+                  <Switch
+                    checked={values.discovery.feeds.includeUnavailableProducts}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery(
+                        "feeds",
+                        "includeUnavailableProducts",
+                        checked,
+                      )
+                    }
+                  />
+                </label>
+                <div className="grid gap-2">
+                  <Label htmlFor="feed-variant-strategy" className="text-xs">
+                    Feed output mode
+                  </Label>
+                  <Select
+                    value={values.discovery.feeds.variantStrategy}
+                    onValueChange={(value) =>
+                      updateDiscovery(
+                        "feeds",
+                        "variantStrategy",
+                        value as SeoFeedVariantStrategy,
+                      )
+                    }
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="finite">Finite return window</SelectItem>
-                    <SelectItem value="unlimited">Unlimited returns</SelectItem>
-                    <SelectItem value="no_returns">No returns</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {isFiniteReturnPolicy ? (
-                <div className="grid min-w-0 gap-2">
-                  <Label htmlFor="return-window-days" className="text-xs">
-                    Return window days
+                    <SelectTrigger id="feed-variant-strategy">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="variants">
+                        SKU / variant rows
+                      </SelectItem>
+                      <SelectItem value="products">Product rows</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Use SKU / variant rows for products with options. Use
+                    product rows only when a catalog tool should receive one row
+                    per product.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="feed-title" className="text-xs">
+                    Feed title
                   </Label>
                   <Input
-                    id="return-window-days"
-                    type="number"
-                    min={1}
-                    max={365}
-                    step={1}
-                    value={returnPolicy.returnWindowDays ?? ""}
+                    id="feed-title"
+                    value={values.discovery.feeds.title}
                     onChange={(event) =>
-                      updateReturnPolicy({
-                        returnWindowDays:
-                          event.target.value === ""
-                            ? null
-                            : Number(event.target.value),
-                      })
+                      updateDiscovery("feeds", "title", event.target.value)
                     }
-                    placeholder="7"
+                    placeholder="Product Catalog"
                   />
                 </div>
-              ) : null}
-
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="return-policy-fees" className="text-xs">
-                  Return fees
-                </Label>
-                <Select
-                  value={returnPolicy.returnFees}
-                  onValueChange={(value) =>
-                    updateReturnPolicy({
-                      returnFees: value as SeoReturnPolicyFees,
-                    })
-                  }
-                  disabled={isNoReturnsPolicy}
-                >
-                  <SelectTrigger id="return-policy-fees" className="min-w-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="free">Free returns</SelectItem>
-                    <SelectItem value="customer_responsibility">
-                      Buyer pays return fees
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid gap-2">
+                  <Label htmlFor="feed-description" className="text-xs">
+                    Feed description
+                  </Label>
+                  <Input
+                    id="feed-description"
+                    value={values.discovery.feeds.description}
+                    onChange={(event) =>
+                      updateDiscovery(
+                        "feeds",
+                        "description",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="Complete product catalog for feed tools"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Controls the Google/Base RSS product catalog at
+                  `/api/product-feed.xml`; `/api/facebook-feed.xml` remains as a
+                  compatibility alias for existing Meta catalog syncs.
+                </p>
               </div>
+            </div>
 
-              <div className="grid min-w-0 gap-2">
-                <Label htmlFor="return-policy-method" className="text-xs">
-                  Return method
-                </Label>
-                <Select
-                  value={returnPolicy.returnMethod}
-                  onValueChange={(value) =>
-                    updateReturnPolicy({
-                      returnMethod: value as SeoReturnPolicyMethod,
-                    })
-                  }
-                  disabled={isNoReturnsPolicy}
-                >
-                  <SelectTrigger id="return-policy-method" className="min-w-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mail">Return by mail</SelectItem>
-                    <SelectItem value="in_store">Return in store</SelectItem>
-                    <SelectItem value="both">
-                      Mail or in-store returns
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="border-b border-border p-4 md:border-r">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <Search className="h-4 w-4 text-muted-foreground" />
+                UCP Catalog Discovery
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Default-on when the Store URL is HTTPS. Exposes read-only
+                catalog search and lookup from feed-ready products only;
+                checkout, cart, orders, and payments stay hidden.
+              </p>
+            </div>
 
-              <div className="grid min-w-0 gap-2 md:col-span-2">
-                <Label htmlFor="return-policy-url" className="text-xs">
-                  Policy URL
-                </Label>
-                <Input
-                  id="return-policy-url"
-                  value={returnPolicy.policyUrl}
-                  onChange={(event) =>
-                    updateReturnPolicy({ policyUrl: event.target.value })
+            <div className="border-b border-border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <Globe2 className="h-4 w-4 text-muted-foreground" />
+                robots.txt
+              </div>
+              <label className="flex items-center justify-between gap-4 text-sm">
+                <span>Advertise sitemap URL</span>
+                <Switch
+                  checked={values.discovery.robots.advertiseSitemap}
+                  onCheckedChange={(checked) =>
+                    updateDiscovery("robots", "advertiseSitemap", checked)
                   }
-                  onBlur={(event) =>
-                    updateReturnPolicy({ policyUrl: event.target.value.trim() })
-                  }
-                  placeholder="/returns"
                 />
-                {returnPolicyUrlInvalid ? (
-                  <p className="text-xs leading-5 text-amber-700">
-                    Use a same-origin path like /returns or an absolute http(s)
-                    URL. Invalid policy URLs are omitted on save.
-                  </p>
-                ) : (
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Optional. Leave blank until the public return policy page is
-                    ready.
-                  </p>
-                )}
+              </label>
+            </div>
+
+            <div className="p-4 md:col-span-2">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <Braces className="h-4 w-4 text-muted-foreground" />
+                Structured Data
+              </div>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Organization schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.organization}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("structuredData", "organization", checked)
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Website search schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.websiteSearch}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery(
+                        "structuredData",
+                        "websiteSearch",
+                        checked,
+                      )
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Product schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.products}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("structuredData", "products", checked)
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>ProductGroup variant schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.productGroups}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery(
+                        "structuredData",
+                        "productGroups",
+                        checked,
+                      )
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span className="inline-flex items-center gap-2">
+                    <Truck className="h-3.5 w-3.5 text-muted-foreground" />
+                    Offer shipping schema
+                  </span>
+                  <Switch
+                    checked={
+                      values.discovery.structuredData.offerShippingDetails
+                    }
+                    onCheckedChange={(checked) =>
+                      updateDiscovery(
+                        "structuredData",
+                        "offerShippingDetails",
+                        checked,
+                      )
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Breadcrumb schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.breadcrumbs}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("structuredData", "breadcrumbs", checked)
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Collection schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.collections}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("structuredData", "collections", checked)
+                    }
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>Article schema</span>
+                  <Switch
+                    checked={values.discovery.structuredData.articles}
+                    onCheckedChange={(checked) =>
+                      updateDiscovery("structuredData", "articles", checked)
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="border-t border-border p-4 md:col-span-2">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 items-start gap-2">
+                  <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">
+                      Return Policy Schema
+                    </div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Saves return-policy facts for OnlineStore/Product schema;
+                      it does not change checkout, refunds, or order handling.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex shrink-0 items-center justify-between gap-3 text-sm lg:min-w-[220px]">
+                  <span>Emit return policy schema</span>
+                  <Switch
+                    checked={returnPolicy.enabled}
+                    onCheckedChange={(checked) =>
+                      updateReturnPolicy({
+                        enabled: checked,
+                        ...(checked &&
+                        returnPolicy.category === "finite" &&
+                        returnPolicy.returnWindowDays === null
+                          ? { returnWindowDays: DEFAULT_RETURN_WINDOW_DAYS }
+                          : {}),
+                      })
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
+                <div className="grid min-w-0 gap-2">
+                  <Label htmlFor="return-policy-country" className="text-xs">
+                    Country
+                  </Label>
+                  <Input
+                    id="return-policy-country"
+                    value={returnPolicy.country}
+                    maxLength={2}
+                    onChange={(event) =>
+                      updateReturnPolicy({
+                        country: event.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z]/g, "")
+                          .slice(0, 2),
+                      })
+                    }
+                    placeholder="BD"
+                    className="uppercase"
+                  />
+                </div>
+
+                <div className="grid min-w-0 gap-2">
+                  <Label htmlFor="return-policy-category" className="text-xs">
+                    Return category
+                  </Label>
+                  <Select
+                    value={returnPolicy.category}
+                    onValueChange={(value) => {
+                      const category = value as SeoReturnPolicyCategory;
+                      updateReturnPolicy({
+                        category,
+                        returnWindowDays:
+                          category === "finite"
+                            ? (returnPolicy.returnWindowDays ??
+                              DEFAULT_RETURN_WINDOW_DAYS)
+                            : null,
+                      });
+                    }}
+                  >
+                    <SelectTrigger
+                      id="return-policy-category"
+                      className="min-w-0"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="finite">
+                        Finite return window
+                      </SelectItem>
+                      <SelectItem value="unlimited">
+                        Unlimited returns
+                      </SelectItem>
+                      <SelectItem value="no_returns">No returns</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isFiniteReturnPolicy ? (
+                  <div className="grid min-w-0 gap-2">
+                    <Label htmlFor="return-window-days" className="text-xs">
+                      Return window days
+                    </Label>
+                    <Input
+                      id="return-window-days"
+                      type="number"
+                      min={1}
+                      max={365}
+                      step={1}
+                      value={returnPolicy.returnWindowDays ?? ""}
+                      onChange={(event) =>
+                        updateReturnPolicy({
+                          returnWindowDays:
+                            event.target.value === ""
+                              ? null
+                              : Number(event.target.value),
+                        })
+                      }
+                      placeholder="7"
+                    />
+                  </div>
+                ) : null}
+
+                <div className="grid min-w-0 gap-2">
+                  <Label htmlFor="return-policy-fees" className="text-xs">
+                    Return fees
+                  </Label>
+                  <Select
+                    value={returnPolicy.returnFees}
+                    onValueChange={(value) =>
+                      updateReturnPolicy({
+                        returnFees: value as SeoReturnPolicyFees,
+                      })
+                    }
+                    disabled={isNoReturnsPolicy}
+                  >
+                    <SelectTrigger id="return-policy-fees" className="min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free">Free returns</SelectItem>
+                      <SelectItem value="customer_responsibility">
+                        Buyer pays return fees
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid min-w-0 gap-2">
+                  <Label htmlFor="return-policy-method" className="text-xs">
+                    Return method
+                  </Label>
+                  <Select
+                    value={returnPolicy.returnMethod}
+                    onValueChange={(value) =>
+                      updateReturnPolicy({
+                        returnMethod: value as SeoReturnPolicyMethod,
+                      })
+                    }
+                    disabled={isNoReturnsPolicy}
+                  >
+                    <SelectTrigger
+                      id="return-policy-method"
+                      className="min-w-0"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mail">Return by mail</SelectItem>
+                      <SelectItem value="in_store">Return in store</SelectItem>
+                      <SelectItem value="both">
+                        Mail or in-store returns
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid min-w-0 gap-2 md:col-span-2">
+                  <Label htmlFor="return-policy-url" className="text-xs">
+                    Policy URL
+                  </Label>
+                  <Input
+                    id="return-policy-url"
+                    value={returnPolicy.policyUrl}
+                    onChange={(event) =>
+                      updateReturnPolicy({ policyUrl: event.target.value })
+                    }
+                    onBlur={(event) =>
+                      updateReturnPolicy({
+                        policyUrl: event.target.value.trim(),
+                      })
+                    }
+                    placeholder="/returns"
+                  />
+                  {returnPolicyUrlInvalid ? (
+                    <p className="text-xs leading-5 text-amber-700">
+                      Use a same-origin path like /returns or an absolute
+                      http(s) URL. Invalid policy URLs are omitted on save.
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Optional. Leave blank until the public return policy page
+                      is ready.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
         <section className="rounded-lg border border-border bg-background p-4">
           <div className="space-y-2">
@@ -824,28 +875,29 @@ export function SeoSettingsBuilder() {
               className="font-mono text-sm"
             />
             <p className="text-xs leading-5 text-muted-foreground">
-              Add crawler allow or disallow rules only. Sitemap lines are managed by the
-              Advertise sitemap URL switch and normalized to the current Store URL.
+              Add crawler allow or disallow rules only. Sitemap lines are
+              managed by the Advertise sitemap URL switch and normalized to the
+              current Store URL.
             </p>
           </div>
         </section>
 
-      <div className="flex justify-end pt-4 border-t border-border">
-        <Button
-          onClick={handleSubmit}
-          disabled={isSaving}
-          className="min-w-[120px]"
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save discovery settings"
-          )}
-        </Button>
-      </div>
+        <div className="flex justify-end pt-4 border-t border-border">
+          <Button
+            onClick={handleSubmit}
+            disabled={isSaving}
+            className="min-w-[120px]"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save discovery settings"
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

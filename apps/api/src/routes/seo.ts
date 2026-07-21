@@ -21,7 +21,7 @@ app.use(
     // Bump the nested namespace when the public SEO payload shape changes.
     // The broader api:seo: invalidation group still clears versioned entries.
     keyPrefix: "api:seo:v4:",
-    methods: ["GET"]
+    methods: ["GET"],
   }),
 );
 
@@ -40,6 +40,7 @@ const discoverySchema = z.object({
     categories: z.boolean(),
     collections: z.boolean(),
     pages: z.boolean(),
+    articles: z.boolean(),
   }),
   feeds: z.object({
     productCatalogEnabled: z.boolean(),
@@ -59,6 +60,7 @@ const discoverySchema = z.object({
     offerShippingDetails: z.boolean(),
     breadcrumbs: z.boolean(),
     collections: z.boolean(),
+    articles: z.boolean(),
   }),
 });
 
@@ -81,17 +83,23 @@ const getSeoSettingsRoute = createRoute({
   responses: {
     200: {
       description: "SEO settings",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        siteTitle: z.string().nullable(),
-        homepageTitle: z.string().nullable(),
-        homepageMetaDescription: z.string().nullable(),
-        robotsTxt: z.string().nullable(),
-        discovery: discoverySchema,
-        returnPolicy: returnPolicySchema,
-      })) } },
+      content: {
+        "application/json": {
+          schema: successEnvelope(
+            z.object({
+              siteTitle: z.string().nullable(),
+              homepageTitle: z.string().nullable(),
+              homepageMetaDescription: z.string().nullable(),
+              robotsTxt: z.string().nullable(),
+              discovery: discoverySchema,
+              returnPolicy: returnPolicySchema,
+            }),
+          ),
+        },
+      },
     },
     500: errorResponses[500],
-  }
+  },
 });
 
 app.openapi(getSeoSettingsRoute, async (c) => {

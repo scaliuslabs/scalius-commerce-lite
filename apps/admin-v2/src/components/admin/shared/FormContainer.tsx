@@ -91,11 +91,6 @@ export function FormContainer<T extends FieldValues>({
             <h1 className="text-xl font-semibold tracking-tight">
               {isEdit ? `Edit ${entityLabel}` : `Create ${entityLabel}`}
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isEdit
-                ? `Update this ${entityLabel.toLowerCase()} and save when ready.`
-                : `Add a new ${entityLabel.toLowerCase()} to your store.`}
-            </p>
           </div>
           {children}
         </form>

@@ -50,6 +50,9 @@ describe("SEO canonical path helpers", () => {
       isValidResourceCanonicalPath("collection", "/collections/col_1"),
     ).toBe(true);
     expect(isValidResourceCanonicalPath("page", "/returns")).toBe(true);
+    expect(
+      isValidResourceCanonicalPath("article", "/blog/choose-running-shoes"),
+    ).toBe(true);
 
     expect(isValidResourceCanonicalPath("product", "/fish/hilsa")).toBe(false);
     expect(isValidResourceCanonicalPath("product", "/shop/linen-shirt")).toBe(
@@ -68,8 +71,17 @@ describe("SEO canonical path helpers", () => {
     expect(isValidResourceCanonicalPath("page", "/products")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/health")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/order-success")).toBe(false);
-    expect(isValidResourceCanonicalPath("page", "/payment-recovery")).toBe(false);
+    expect(isValidResourceCanonicalPath("page", "/payment-recovery")).toBe(
+      false,
+    );
     expect(isValidResourceCanonicalPath("page", "/sitemap.xml")).toBe(false);
+    expect(isValidResourceCanonicalPath("page", "/blog")).toBe(false);
+    expect(
+      isValidResourceCanonicalPath("article", "/articles/choose-running-shoes"),
+    ).toBe(false);
+    expect(
+      isValidResourceCanonicalPath("article", "/blog/guides/running-shoes"),
+    ).toBe(false);
   });
 
   it("normalizes blank resource canonical paths while rejecting non-routable overrides", () => {

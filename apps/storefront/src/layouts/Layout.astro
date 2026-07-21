@@ -9,9 +9,7 @@ import type { AnalyticsConfig } from "@/lib/api";
 import CommandPalette from "@/components/search/CommandPalette";
 import AuthModal from "@/components/AuthModal";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
-import {
-  setRuntimeImageCdnPolicy,
-} from "@/lib/api/runtime-env";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
@@ -42,7 +40,7 @@ interface Props {
   // SEO props — per CAN-01, CAN-02, OG-01 through OG-05, SEO-05, SEO-06
   canonicalUrl?: string;
   ogImage?: string;
-  ogType?: "website" | "product";
+  ogType?: "website" | "product" | "article";
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
@@ -79,7 +77,10 @@ if (themePreviewToken) {
     "private, no-cache, no-store, must-revalidate",
   );
   if (!themePreview) {
-    Astro.response.headers.append("Set-Cookie", clearThemePreviewCookieHeader());
+    Astro.response.headers.append(
+      "Set-Cookie",
+      clearThemePreviewCookieHeader(),
+    );
   }
 }
 
@@ -121,9 +122,7 @@ const faviconUrl = headerData?.favicon?.src
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const businessInfo = layoutData?.business;
 const storeSchemaName =
-  businessInfo?.companyName?.trim() ||
-  businessInfo?.legalName?.trim() ||
-  null;
+  businessInfo?.companyName?.trim() || businessInfo?.legalName?.trim() || null;
 const ogSiteName = storeSchemaName ?? "Store";
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
@@ -158,22 +157,25 @@ const orgJsonLd = onlineStoreJsonLd
   : null;
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
-const websiteJsonLd = discoverySettings.structuredData.websiteSearch && storefrontUrl && storeSchemaName
-  ? serializeJsonForInlineScript({
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      name: storeSchemaName,
-      url: storefrontUrl,
-      potentialAction: {
-        "@type": "SearchAction",
-        target: {
-          "@type": "EntryPoint",
-          urlTemplate: `${storefrontUrl}/search?q={search_term_string}`,
+const websiteJsonLd =
+  discoverySettings.structuredData.websiteSearch &&
+  storefrontUrl &&
+  storeSchemaName
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: storeSchemaName,
+        url: storefrontUrl,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: {
+            "@type": "EntryPoint",
+            urlTemplate: `${storefrontUrl}/search?q={search_term_string}`,
+          },
+          "query-input": "required name=search_term_string",
         },
-        "query-input": "required name=search_term_string",
-      },
-    })
-  : null;
+      })
+    : null;
 
 const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(ogImage);
 
@@ -301,7 +303,10 @@ const runtimeGlobalsScript = [
           "error",
           function (e) {
             const t = e.target;
-            if (!(t instanceof HTMLScriptElement || t instanceof HTMLLinkElement)) return;
+            if (!(
+              t instanceof HTMLScriptElement || t instanceof HTMLLinkElement
+            ))
+              return;
             const tag = t.tagName.toUpperCase();
             const url = t instanceof HTMLScriptElement ? t.src : t.href;
             if (
@@ -357,7 +362,11 @@ const runtimeGlobalsScript = [
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
     {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
-    {absoluteOgImageUrl && <meta property="og:image" content={absoluteOgImageUrl} />}
+    {
+      absoluteOgImageUrl && (
+        <meta property="og:image" content={absoluteOgImageUrl} />
+      )
+    }
     {absoluteOgImageUrl && <meta property="og:image:width" content="1200" />}
     {absoluteOgImageUrl && <meta property="og:image:height" content="630" />}
     {absoluteOgImageUrl && <meta property="og:image:alt" content={title} />}
@@ -368,14 +377,28 @@ const runtimeGlobalsScript = [
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     {description && <meta name="twitter:description" content={description} />}
-    {absoluteOgImageUrl && <meta name="twitter:image" content={absoluteOgImageUrl} />}
+    {
+      absoluteOgImageUrl && (
+        <meta name="twitter:image" content={absoluteOgImageUrl} />
+      )
+    }
     {absoluteOgImageUrl && <meta name="twitter:image:alt" content={title} />}
 
-    {/* Robots — public pages can be excluded from indexing while links remain crawlable. */}
-    {(noindex || isThemePreview) && <meta name="robots" content="noindex,follow" />}
+    {
+      /* Robots — public pages can be excluded from indexing while links remain crawlable. */
+    }
+    {
+      (noindex || isThemePreview) && (
+        <meta name="robots" content="noindex,follow" />
+      )
+    }
 
     {/* Global JSON-LD: Organization + WebSite — per SEO-05, SEO-06 */}
-    {orgJsonLd && <script is:inline type="application/ld+json" set:html={orgJsonLd} />}
+    {
+      orgJsonLd && (
+        <script is:inline type="application/ld+json" set:html={orgJsonLd} />
+      )
+    }
     {
       websiteJsonLd && (
         <script is:inline type="application/ld+json" set:html={websiteJsonLd} />

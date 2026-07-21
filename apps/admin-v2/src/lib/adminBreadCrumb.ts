@@ -22,7 +22,8 @@ export function generateAdminBreadcrumbs(
   // Drop the leading "admin" segment — the Breadcrumb component already
   // renders a Home icon that links to /admin, so including "Admin" as a
   // text breadcrumb would duplicate it.
-  const segments = pathSegments[0] === "admin" ? pathSegments.slice(1) : pathSegments;
+  const segments =
+    pathSegments[0] === "admin" ? pathSegments.slice(1) : pathSegments;
 
   // If we're on exactly /admin (dashboard), no extra breadcrumb items needed
   // — the Home icon alone is sufficient.
@@ -33,6 +34,7 @@ export function generateAdminBreadcrumbs(
     "categories",
     "collections",
     "pages",
+    "articles",
     "discounts",
     "promotions",
     "analytics",
@@ -56,10 +58,12 @@ export function generateAdminBreadcrumbs(
     const isLast = i === segments.length - 1;
 
     // Friendly title: capitalize, handle hyphenated words
-    const title = breadcrumbTitleOverrides[segment] ?? segment
-      .split("-")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ");
+    const title =
+      breadcrumbTitleOverrides[segment] ??
+      segment
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
 
     breadcrumbItems.push({
       title,

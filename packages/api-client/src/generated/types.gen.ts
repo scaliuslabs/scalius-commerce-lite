@@ -1592,9 +1592,13 @@ export type GetApiV1PagesResponses = {
         data: {
             pages: Array<{
                 id: string;
+                contentType: 'page' | 'article';
                 title: string;
                 slug: string;
                 content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -1693,9 +1697,13 @@ export type GetApiV1PagesSlugBySlugResponses = {
         data: {
             page: {
                 id: string;
+                contentType: 'page' | 'article';
                 title: string;
                 slug: string;
                 content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -1777,9 +1785,13 @@ export type GetApiV1PagesByIdResponses = {
         data: {
             page: {
                 id: string;
+                contentType: 'page' | 'article';
                 title: string;
                 slug: string;
                 content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -1815,6 +1827,190 @@ export type GetApiV1PagesByIdResponses = {
 };
 
 export type GetApiV1PagesByIdResponse = GetApiV1PagesByIdResponses[keyof GetApiV1PagesByIdResponses];
+
+export type GetApiV1ArticlesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        page?: number;
+        tag?: string;
+    };
+    url: '/api/v1/articles';
+};
+
+export type GetApiV1ArticlesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ArticlesError = GetApiV1ArticlesErrors[keyof GetApiV1ArticlesErrors];
+
+export type GetApiV1ArticlesResponses = {
+    /**
+     * Published article list with pagination
+     */
+    200: {
+        success: true;
+        data: {
+            articles: Array<{
+                id: string;
+                contentType: 'page' | 'article';
+                title: string;
+                slug: string;
+                content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                isPublished: boolean;
+                hideHeader: boolean;
+                hideFooter: boolean;
+                hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown;
+                } | null;
+                publishedAt?: string | number | null;
+                sortOrder: number;
+                revision: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            }>;
+            pagination: {
+                page: number;
+                limit: number;
+                total: number;
+                totalPages: number;
+            };
+        };
+    };
+};
+
+export type GetApiV1ArticlesResponse = GetApiV1ArticlesResponses[keyof GetApiV1ArticlesResponses];
+
+export type GetApiV1ArticlesSlugBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/articles/slug/{slug}';
+};
+
+export type GetApiV1ArticlesSlugBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ArticlesSlugBySlugError = GetApiV1ArticlesSlugBySlugErrors[keyof GetApiV1ArticlesSlugBySlugErrors];
+
+export type GetApiV1ArticlesSlugBySlugResponses = {
+    /**
+     * Published article detail
+     */
+    200: {
+        success: true;
+        data: {
+            article: {
+                id: string;
+                contentType: 'page' | 'article';
+                title: string;
+                slug: string;
+                content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
+                metaTitle: string | null;
+                metaDescription: string | null;
+                canonicalPath: string | null;
+                noIndex: boolean;
+                excludeFromSitemap: boolean;
+                isPublished: boolean;
+                hideHeader: boolean;
+                hideFooter: boolean;
+                hideTitle: boolean;
+                featuredImage?: {
+                    id: string;
+                    url: string;
+                    filename: string;
+                    size: number;
+                    mimeType?: string;
+                    altText?: string | null;
+                    width?: number | null;
+                    height?: number | null;
+                    folderId?: string | null;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    [key: string]: unknown;
+                } | null;
+                publishedAt?: string | number | null;
+                sortOrder: number;
+                revision: number;
+                createdAt: string | number | null;
+                updatedAt: string | number | null;
+                deletedAt: string | number | null;
+            };
+        };
+    };
+};
+
+export type GetApiV1ArticlesSlugBySlugResponse = GetApiV1ArticlesSlugBySlugResponses[keyof GetApiV1ArticlesSlugBySlugResponses];
 
 export type PostApiV1DiscountsValidateData = {
     body: {
@@ -2138,9 +2334,13 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
         data: {
             page: {
                 id: string;
+                contentType: 'page' | 'article';
                 title: string;
                 slug: string;
                 content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -4259,6 +4459,7 @@ export type GetApiV1SeoResponses = {
                     categories: boolean;
                     collections: boolean;
                     pages: boolean;
+                    articles: boolean;
                 };
                 feeds: {
                     productCatalogEnabled: boolean;
@@ -4278,6 +4479,7 @@ export type GetApiV1SeoResponses = {
                     offerShippingDetails: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
+                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -10541,6 +10743,10 @@ export type GetApiV1AdminPagesData = {
          */
         status?: 'draft' | 'scheduled' | 'published';
         /**
+         * Content type
+         */
+        contentType?: 'page' | 'article';
+        /**
          * Sort field
          */
         sort?: 'title' | 'createdAt' | 'updatedAt';
@@ -10632,9 +10838,13 @@ export type GetApiV1AdminPagesResponses = {
         data: {
             pages: Array<{
                 id: string;
+                contentType: 'page' | 'article';
                 title: string;
                 slug: string;
                 content: string;
+                excerpt: string | null;
+                author: string | null;
+                tags: Array<string>;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -10682,6 +10892,9 @@ export type PostApiV1AdminPagesData = {
         title: string;
         slug: string;
         content: string;
+        excerpt?: string | null;
+        author?: string | null;
+        tags?: Array<string>;
         metaTitle: string | null;
         metaDescription: string | null;
         canonicalPath?: string | null;
@@ -10701,6 +10914,7 @@ export type PostApiV1AdminPagesData = {
             updatedAt?: string | number | string;
             [key: string]: unknown;
         } | null;
+        contentType?: 'page' | 'article';
         publishedAt?: string | string | null;
         isPublished?: boolean;
         hideHeader?: boolean;
@@ -11519,9 +11733,13 @@ export type GetApiV1AdminPagesByIdResponses = {
         success: true;
         data: {
             id: string;
+            contentType: 'page' | 'article';
             title: string;
             slug: string;
             content: string;
+            excerpt: string | null;
+            author: string | null;
+            tags: Array<string>;
             metaTitle: string | null;
             metaDescription: string | null;
             canonicalPath: string | null;
@@ -11563,6 +11781,9 @@ export type PutApiV1AdminPagesByIdData = {
         title?: string;
         slug?: string;
         content?: string;
+        excerpt?: string | null;
+        author?: string | null;
+        tags?: Array<string>;
         metaTitle?: string | null;
         metaDescription?: string | null;
         canonicalPath?: string | null;
@@ -24179,6 +24400,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
                     categories: boolean;
                     collections: boolean;
                     pages: boolean;
+                    articles: boolean;
                 };
                 feeds: {
                     productCatalogEnabled: boolean;
@@ -24198,6 +24420,7 @@ export type GetApiV1AdminSettingsSeoResponses = {
                     offerShippingDetails: boolean;
                     breadcrumbs: boolean;
                     collections: boolean;
+                    articles: boolean;
                 };
             };
             returnPolicy: {
@@ -24229,6 +24452,7 @@ export type PostApiV1AdminSettingsSeoData = {
                 categories?: boolean;
                 collections?: boolean;
                 pages?: boolean;
+                articles?: boolean;
             };
             feeds?: {
                 productCatalogEnabled?: boolean;
@@ -24248,6 +24472,7 @@ export type PostApiV1AdminSettingsSeoData = {
                 offerShippingDetails?: boolean;
                 breadcrumbs?: boolean;
                 collections?: boolean;
+                articles?: boolean;
             };
         };
         returnPolicy?: {

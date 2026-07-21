@@ -117,8 +117,7 @@ export interface StorefrontCacheWarmQueueMessage {
 }
 
 export type StorefrontCacheQueueMessage =
-  | StorefrontCachePurgeQueueMessage
-  | StorefrontCacheWarmQueueMessage;
+  StorefrontCachePurgeQueueMessage | StorefrontCacheWarmQueueMessage;
 
 type StorefrontCacheQueue = Pick<Queue<StorefrontCacheQueueMessage>, "send">;
 type StorefrontPurgeEnv = Pick<Env, "PURGE_URL" | "PURGE_TOKEN"> & {
@@ -188,7 +187,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   },
   pages: {
     label: "Pages",
-    description: "Static content pages",
+    description: "Static pages and articles",
     kvPrefixes: ["api:pages:", "api:storefront:page:"],
     bumpsHtml: false,
     storefrontPrefixes: [
@@ -197,6 +196,11 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
       "all_pages_",
       "sitemap_pages_",
       "page_html_",
+      "article_slug_",
+      "all_articles_",
+      "article_html_",
+      "sitemap_articles_",
+      "blog_feed_",
     ],
   },
   layout: {
@@ -231,11 +235,7 @@ export const INVALIDATION_GROUPS: Record<string, InvalidationGroupDef> = {
   homepage: {
     label: "Homepage",
     description: "Hero sliders and SEO settings",
-    kvPrefixes: [
-      "api:hero:",
-      "api:seo:",
-      "api:storefront:homepage:",
-    ],
+    kvPrefixes: ["api:hero:", "api:seo:", "api:storefront:homepage:"],
     bumpsHtml: true,
     storefrontPrefixes: [
       "homepage_hero_sliders",
@@ -331,45 +331,208 @@ export interface SettingsCacheDependencyDef {
 
 /** Every merchant-settings mutation surface and its shared-cache policy. */
 export const SETTINGS_CACHE_DEPENDENCIES = {
-  currency: { path: "/api/v1/admin/settings/currency", groups: ["layout", "checkout"], strategy: "shared-projection", note: "Layout currency and checkout totals." },
-  header: { path: "/api/v1/admin/settings/header", groups: ["layout"], strategy: "shared-projection", note: "Global storefront header." },
-  footer: { path: "/api/v1/admin/settings/footer", groups: ["layout"], strategy: "shared-projection", note: "Global storefront footer." },
-  navigation: { path: "/api/v1/admin/navigation", groups: ["layout"], strategy: "shared-projection", note: "Header and footer menu trees." },
-  business: { path: "/api/v1/admin/settings/business", groups: ["layout"], strategy: "shared-projection", note: "Public business and schema identity." },
-  theme: { path: "/api/v1/admin/settings/theme", groups: ["layout"], strategy: "shared-projection", note: "Global storefront presentation." },
-  media: { path: "/api/v1/admin/settings/media", groups: ["media"], strategy: "shared-projection", note: "Layout/homepage image policy." },
-  seo: { path: "/api/v1/admin/settings/seo", groups: ["homepage", "layout", "discovery"], strategy: "shared-projection", note: "Metadata, discovery and schema." },
-  storefrontUrl: { path: "/api/v1/admin/settings/storefront-url", groups: ["homepage", "layout", "discovery"], strategy: "shared-projection", note: "Discovery origins plus gw:storefront_url." },
-  heroSliders: { path: "/api/v1/admin/settings/hero-sliders", groups: ["homepage"], strategy: "shared-projection", note: "Homepage hero." },
-  analytics: { path: "/api/v1/admin/analytics", groups: ["layout"], strategy: "shared-projection", note: "Browser analytics injection." },
-  metaConversions: { path: "/api/v1/admin/settings/meta-conversions", groups: ["layout"], strategy: "shared-projection", note: "Browser readiness; dispatch reads D1." },
-  security: { path: "/api/v1/admin/settings/security", groups: ["layout"], strategy: "shared-projection", note: "CSP projections and Partytown write-through." },
-  allowedCountries: { path: "/api/v1/admin/settings/allowed-countries", groups: ["checkout"], strategy: "shared-projection", note: "Checkout phone-country policy." },
-  checkoutFlow: { path: "/api/v1/admin/settings/checkout-flow", groups: ["checkout"], strategy: "shared-projection", note: "Buyer checkout flow." },
-  customerAuth: { path: "/api/v1/admin/settings/auth", groups: ["checkout"], strategy: "shared-projection", note: "Customer sign-in readiness." },
-  email: { path: "/api/v1/admin/settings/email", groups: ["checkout"], strategy: "shared-projection", note: "Sign-in readiness; dispatch reads D1." },
-  sms: { path: "/api/v1/admin/settings/sms", groups: ["checkout"], strategy: "shared-projection", note: "Sign-in readiness; dispatch reads D1." },
-  firebase: { path: "/api/v1/admin/settings/firebase", groups: [], strategy: "credential-scoped", note: "D1 settings; OAuth KV key includes credential fingerprint." },
-  notificationChannels: { path: "/api/v1/admin/settings/notification-channels", groups: [], strategy: "authoritative-read", note: "Dispatch resolves D1 policy." },
-  paymentMethods: { path: "/api/v1/admin/settings/payment-methods", groups: ["checkout"], strategy: "shared-projection", note: "Buyer payment allowlist." },
-  stripe: { path: "/api/v1/admin/settings/stripe", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
-  sslcommerz: { path: "/api/v1/admin/settings/sslcommerz", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
-  polar: { path: "/api/v1/admin/settings/polar", groups: ["checkout"], strategy: "shared-projection", note: "Checkout plus provider cache." },
-  shippingMethods: { path: "/api/v1/admin/settings/shipping-methods", groups: ["checkout", "product-schema"], strategy: "shared-projection", note: "Checkout and Product shippingDetails." },
-  deliveryLocations: { path: "/api/v1/admin/settings/delivery-locations", groups: ["checkout"], strategy: "shared-projection", note: "Checkout location hierarchy." },
-  deliveryProviders: { path: "/api/v1/admin/settings/delivery-providers", groups: ["checkout"], strategy: "shared-projection", note: "Delivery readiness; fulfillment reads D1." },
-  checkoutLanguages: { path: "/api/v1/admin/settings/checkout-languages", groups: ["checkout"], strategy: "shared-projection", note: "Checkout labels and fields." },
-  tax: { path: "/api/v1/admin/taxes", groups: ["checkout"], strategy: "shared-projection", note: "Checkout/order tax authority." },
-  customerRequests: { path: "/api/v1/admin/settings/customer-requests", groups: [], strategy: "authoritative-read", note: "Private eligibility reads D1." },
-  fraud: { path: "/api/v1/admin/fraud-checker", groups: [], strategy: "authoritative-read", note: "Risk lookup reads D1." },
-  cacheOperations: { path: "/api/v1/cache", groups: [], strategy: "cache-operation", note: "Purges/replays mutate cache state, not merchant facts." },
+  currency: {
+    path: "/api/v1/admin/settings/currency",
+    groups: ["layout", "checkout"],
+    strategy: "shared-projection",
+    note: "Layout currency and checkout totals.",
+  },
+  header: {
+    path: "/api/v1/admin/settings/header",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Global storefront header.",
+  },
+  footer: {
+    path: "/api/v1/admin/settings/footer",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Global storefront footer.",
+  },
+  navigation: {
+    path: "/api/v1/admin/navigation",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Header and footer menu trees.",
+  },
+  business: {
+    path: "/api/v1/admin/settings/business",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Public business and schema identity.",
+  },
+  theme: {
+    path: "/api/v1/admin/settings/theme",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Global storefront presentation.",
+  },
+  media: {
+    path: "/api/v1/admin/settings/media",
+    groups: ["media"],
+    strategy: "shared-projection",
+    note: "Layout/homepage image policy.",
+  },
+  seo: {
+    path: "/api/v1/admin/settings/seo",
+    groups: ["homepage", "layout", "discovery"],
+    strategy: "shared-projection",
+    note: "Metadata, discovery and schema.",
+  },
+  storefrontUrl: {
+    path: "/api/v1/admin/settings/storefront-url",
+    groups: ["homepage", "layout", "discovery"],
+    strategy: "shared-projection",
+    note: "Discovery origins plus gw:storefront_url.",
+  },
+  heroSliders: {
+    path: "/api/v1/admin/settings/hero-sliders",
+    groups: ["homepage"],
+    strategy: "shared-projection",
+    note: "Homepage hero.",
+  },
+  analytics: {
+    path: "/api/v1/admin/analytics",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Browser analytics injection.",
+  },
+  metaConversions: {
+    path: "/api/v1/admin/settings/meta-conversions",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "Browser readiness; dispatch reads D1.",
+  },
+  security: {
+    path: "/api/v1/admin/settings/security",
+    groups: ["layout"],
+    strategy: "shared-projection",
+    note: "CSP projections and Partytown write-through.",
+  },
+  allowedCountries: {
+    path: "/api/v1/admin/settings/allowed-countries",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout phone-country policy.",
+  },
+  checkoutFlow: {
+    path: "/api/v1/admin/settings/checkout-flow",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Buyer checkout flow.",
+  },
+  customerAuth: {
+    path: "/api/v1/admin/settings/auth",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Customer sign-in readiness.",
+  },
+  email: {
+    path: "/api/v1/admin/settings/email",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Sign-in readiness; dispatch reads D1.",
+  },
+  sms: {
+    path: "/api/v1/admin/settings/sms",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Sign-in readiness; dispatch reads D1.",
+  },
+  firebase: {
+    path: "/api/v1/admin/settings/firebase",
+    groups: [],
+    strategy: "credential-scoped",
+    note: "D1 settings; OAuth KV key includes credential fingerprint.",
+  },
+  notificationChannels: {
+    path: "/api/v1/admin/settings/notification-channels",
+    groups: [],
+    strategy: "authoritative-read",
+    note: "Dispatch resolves D1 policy.",
+  },
+  paymentMethods: {
+    path: "/api/v1/admin/settings/payment-methods",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Buyer payment allowlist.",
+  },
+  stripe: {
+    path: "/api/v1/admin/settings/stripe",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout plus provider cache.",
+  },
+  sslcommerz: {
+    path: "/api/v1/admin/settings/sslcommerz",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout plus provider cache.",
+  },
+  polar: {
+    path: "/api/v1/admin/settings/polar",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout plus provider cache.",
+  },
+  shippingMethods: {
+    path: "/api/v1/admin/settings/shipping-methods",
+    groups: ["checkout", "product-schema"],
+    strategy: "shared-projection",
+    note: "Checkout and Product shippingDetails.",
+  },
+  deliveryLocations: {
+    path: "/api/v1/admin/settings/delivery-locations",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout location hierarchy.",
+  },
+  deliveryProviders: {
+    path: "/api/v1/admin/settings/delivery-providers",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Delivery readiness; fulfillment reads D1.",
+  },
+  checkoutLanguages: {
+    path: "/api/v1/admin/settings/checkout-languages",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout labels and fields.",
+  },
+  tax: {
+    path: "/api/v1/admin/taxes",
+    groups: ["checkout"],
+    strategy: "shared-projection",
+    note: "Checkout/order tax authority.",
+  },
+  customerRequests: {
+    path: "/api/v1/admin/settings/customer-requests",
+    groups: [],
+    strategy: "authoritative-read",
+    note: "Private eligibility reads D1.",
+  },
+  fraud: {
+    path: "/api/v1/admin/fraud-checker",
+    groups: [],
+    strategy: "authoritative-read",
+    note: "Risk lookup reads D1.",
+  },
+  cacheOperations: {
+    path: "/api/v1/cache",
+    groups: [],
+    strategy: "cache-operation",
+    note: "Purges/replays mutate cache state, not merchant facts.",
+  },
 } as const satisfies Record<string, SettingsCacheDependencyDef>;
 
 export interface CatalogCacheInvalidationOptions {
   htmlPaths?: readonly string[];
 }
 
-const CATALOG_DEFAULT_HTML_PATHS: Record<CatalogCacheDomain, readonly string[]> = {
+const CATALOG_DEFAULT_HTML_PATHS: Record<
+  CatalogCacheDomain,
+  readonly string[]
+> = {
   products: ["/search"],
   categories: ["/search"],
   collections: [],
@@ -511,7 +674,9 @@ export function normalizeStorefrontPurgeUrl(purgeUrl: string): string {
   return url.toString();
 }
 
-function hasStorefrontPurgeConfig<T extends Pick<Env, "PURGE_URL" | "PURGE_TOKEN">>(
+function hasStorefrontPurgeConfig<
+  T extends Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
+>(
   env?: T,
 ): env is T & {
   PURGE_URL: string;
@@ -520,7 +685,9 @@ function hasStorefrontPurgeConfig<T extends Pick<Env, "PURGE_URL" | "PURGE_TOKEN
   return Boolean(env?.PURGE_URL && env.PURGE_TOKEN);
 }
 
-function buildStorefrontGroupPurgeBody(groups: readonly string[]): StorefrontPurgeBody | null {
+function buildStorefrontGroupPurgeBody(
+  groups: readonly string[],
+): StorefrontPurgeBody | null {
   const validGroups = groups.filter((g) => g in INVALIDATION_GROUPS);
   if (validGroups.length === 0) return null;
 
@@ -543,7 +710,9 @@ function buildStorefrontPrefixPurgeBody(
   } = {},
 ): StorefrontPurgeBody | null {
   const uniquePrefixes = [...new Set(prefixes.filter(Boolean))];
-  const uniqueExactKeys = [...new Set((options.exactKeys ?? []).filter(Boolean))];
+  const uniqueExactKeys = [
+    ...new Set((options.exactKeys ?? []).filter(Boolean)),
+  ];
   const uniqueHtmlPaths = normalizeStorefrontHtmlPaths(options.htmlPaths ?? []);
   if (
     uniquePrefixes.length === 0 &&
@@ -601,11 +770,18 @@ export async function enqueueStorefrontCachePurge(
 
 export const enqueueStorefrontCacheWarm = enqueueStorefrontCachePurge;
 
-function shouldWarmCriticalPathForPurge(payload: StorefrontCachePurgeQueueMessage): boolean {
+function shouldWarmCriticalPathForPurge(
+  payload: StorefrontCachePurgeQueueMessage,
+): boolean {
   if (payload.bumpVersion) return true;
-  const hasExactTargets = Boolean(payload.exactKeys?.length || payload.htmlPaths?.length);
+  const hasExactTargets = Boolean(
+    payload.exactKeys?.length || payload.htmlPaths?.length,
+  );
   if (payload.prefixes.length === 0 || hasExactTargets) return false;
-  return !(payload.groups.length > 0 && payload.groups.every((group) => group === "checkout"));
+  return !(
+    payload.groups.length > 0 &&
+    payload.groups.every((group) => group === "checkout")
+  );
 }
 
 export function getStorefrontWarmPathsForPurge(
@@ -639,7 +815,10 @@ function isRetryableWarmStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
 }
 
-async function warmStorefrontPath(baseUrl: string, path: string): Promise<{
+async function warmStorefrontPath(
+  baseUrl: string,
+  path: string,
+): Promise<{
   path: string;
   ok: boolean;
   retryable: boolean;
@@ -682,7 +861,11 @@ async function warmStorefrontPathsInBatches(
 ): Promise<StorefrontWarmPathResult[]> {
   const results: StorefrontWarmPathResult[] = [];
 
-  for (let index = 0; index < paths.length; index += STOREFRONT_WARM_PATH_BATCH_SIZE) {
+  for (
+    let index = 0;
+    index < paths.length;
+    index += STOREFRONT_WARM_PATH_BATCH_SIZE
+  ) {
     const batch = paths.slice(index, index + STOREFRONT_WARM_PATH_BATCH_SIZE);
     const batchResults = await Promise.all(
       batch.map((path) => warmStorefrontPath(baseUrl, path)),
@@ -729,10 +912,15 @@ export async function warmStorefrontHtmlPaths(
   const successful = results.filter((result) => result.ok).length;
   const retryableFailures = results
     .filter((result) => !result.ok && result.retryable)
-    .map((result) => `${result.path}${result.status ? ` (${result.status})` : ""}${result.error ? ` (${result.error})` : ""}`);
+    .map(
+      (result) =>
+        `${result.path}${result.status ? ` (${result.status})` : ""}${result.error ? ` (${result.error})` : ""}`,
+    );
   const skippedFailures = results
     .filter((result) => !result.ok && !result.retryable)
-    .map((result) => `${result.path}${result.status ? ` (${result.status})` : ""}`);
+    .map(
+      (result) => `${result.path}${result.status ? ` (${result.status})` : ""}`,
+    );
 
   return {
     attempted: true,
@@ -991,10 +1179,17 @@ export async function invalidateApiAndScheduleStorefrontGroups(
 export async function invalidateApiAndStorefrontGroups(
   groups: readonly string[],
   env?: Env,
-  options: { htmlPaths?: readonly string[] } = {},
+  options: {
+    htmlPaths?: readonly string[];
+    cleanupExecutionCtx?: WaitUntilExecutionContext;
+  } = {},
 ): Promise<StorefrontPurgeResult> {
   const normalizedGroups = [...groups];
-  await invalidateGroups(normalizedGroups, env?.CACHE);
+  await invalidateGroups(normalizedGroups, env?.CACHE, {
+    ...(options.cleanupExecutionCtx
+      ? { cleanupExecutionCtx: options.cleanupExecutionCtx }
+      : {}),
+  });
   return purgeStorefrontForPrefixes(
     getStorefrontPrefixesForGroups(normalizedGroups),
     env,
@@ -1013,6 +1208,7 @@ export async function invalidateApiAndStorefrontGroups(
 export async function invalidateGroups(
   groups: string[],
   kv?: KVNamespace,
+  options: { cleanupExecutionCtx?: WaitUntilExecutionContext } = {},
 ): Promise<void> {
   const prefixes = new Set<string>();
   for (const g of groups) {
@@ -1033,9 +1229,14 @@ export async function invalidateGroups(
 
   await bumpApiCacheFences(uniquePrefixes, kv);
 
-  await Promise.all(
+  const cleanup = Promise.all(
     uniquePrefixes.map((prefix) => deleteCacheByPattern(`${prefix}*`, kv)),
   );
+  if (options.cleanupExecutionCtx) {
+    options.cleanupExecutionCtx.waitUntil(cleanup);
+    return;
+  }
+  await cleanup;
 }
 
 /**
@@ -1128,7 +1329,9 @@ export function collectCmsShortcodePageInvalidation(
       (target) =>
         `api:storefront:page:/api/v1/storefront/pages/slug/${target.slug}*`,
     ),
-    storefrontPrefixes: uniqueTargets.map((target) => `page_render_${target.slug}_`),
+    storefrontPrefixes: uniqueTargets.map(
+      (target) => `page_render_${target.slug}_`,
+    ),
     storefrontHtmlPaths: uniqueTargets.map((target) => `/${target.slug}`),
     bumpVersion: uniqueTargets.length > MAX_STOREFRONT_EXACT_HTML_PATHS,
   };
@@ -1144,7 +1347,10 @@ async function tryResolveCmsShortcodePageTargets(
       failed: false,
     };
   } catch (error) {
-    console.error("[Cache] Failed to resolve CMS shortcode page targets:", error);
+    console.error(
+      "[Cache] Failed to resolve CMS shortcode page targets:",
+      error,
+    );
     return { targets: [], failed: true };
   }
 }
@@ -1173,7 +1379,11 @@ function uniqueCollectionCacheTargets(
 
 function chunkValues(values: readonly string[]): string[][] {
   const chunks: string[][] = [];
-  for (let index = 0; index < values.length; index += D1_CACHE_SUBJECT_ID_CHUNK_SIZE) {
+  for (
+    let index = 0;
+    index < values.length;
+    index += D1_CACHE_SUBJECT_ID_CHUNK_SIZE
+  ) {
     chunks.push(values.slice(index, index + D1_CACHE_SUBJECT_ID_CHUNK_SIZE));
   }
   return chunks;
@@ -1238,11 +1448,13 @@ export async function resolveCollectionCacheTargets(
   const rows = await db
     .selectDistinct({ id: collections.id })
     .from(collections)
-    .where(and(
-      eq(collections.isActive, true),
-      isNull(collections.deletedAt),
-      dependencyCondition,
-    ));
+    .where(
+      and(
+        eq(collections.isActive, true),
+        isNull(collections.deletedAt),
+        dependencyCondition,
+      ),
+    );
 
   return uniqueCollectionCacheTargets(rows);
 }
@@ -1361,8 +1573,11 @@ export function getProductAvailabilityApiCacheKeys(
     getProductApiCacheKey("feed"),
     getProductApiCacheKey("sitemap"),
     ...normalizedSubjects
-      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
-        typeof subject.slug === "string" && subject.slug.length > 0,
+      .filter(
+        (
+          subject,
+        ): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+          typeof subject.slug === "string" && subject.slug.length > 0,
       )
       .map((subject) => getProductApiCacheKey(subject.slug)),
     getProductApiCacheKey("search"),
@@ -1380,8 +1595,11 @@ export function getProductAvailabilityApiCachePatterns(
     getProductApiQueryCachePattern("feed"),
     getProductApiQueryCachePattern("sitemap"),
     ...normalizedSubjects
-      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
-        typeof subject.slug === "string" && subject.slug.length > 0,
+      .filter(
+        (
+          subject,
+        ): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+          typeof subject.slug === "string" && subject.slug.length > 0,
       )
       .map((subject) => getProductApiQueryCachePattern(subject.slug)),
     getProductApiQueryCachePattern("search"),
@@ -1414,10 +1632,14 @@ export function collectProductAvailabilityCacheInvalidation(
   return {
     apiKeys: getProductAvailabilityApiCacheKeys(normalizedSubjects),
     apiPatterns: getProductAvailabilityApiCachePatterns(normalizedSubjects),
-    storefrontPrefixes: getProductAvailabilityStorefrontPrefixes(normalizedSubjects),
+    storefrontPrefixes:
+      getProductAvailabilityStorefrontPrefixes(normalizedSubjects),
     storefrontHtmlPaths: normalizedSubjects
-      .filter((subject): subject is ProductAvailabilityCacheSubject & { slug: string } =>
-        typeof subject.slug === "string" && subject.slug.length > 0,
+      .filter(
+        (
+          subject,
+        ): subject is ProductAvailabilityCacheSubject & { slug: string } =>
+          typeof subject.slug === "string" && subject.slug.length > 0,
       )
       .map((subject) => `/products/${subject.slug}`),
   };
@@ -1431,13 +1653,17 @@ export async function invalidateProductAvailabilityCacheSubjects(
   const normalizedSubjects = uniqueAvailabilitySubjects(subjects);
   if (normalizedSubjects.length === 0) return;
 
-  const invalidation = collectProductAvailabilityCacheInvalidation(normalizedSubjects);
+  const invalidation =
+    collectProductAvailabilityCacheInvalidation(normalizedSubjects);
   const productSlugs = normalizedSubjects
     .map((subject) => subject.slug)
-    .filter((slug): slug is string => typeof slug === "string" && slug.length > 0);
-  const shortcodeResult = db && productSlugs.length > 0
-    ? await tryResolveCmsShortcodePageTargets(db, { productSlugs })
-    : { targets: [], failed: false };
+    .filter(
+      (slug): slug is string => typeof slug === "string" && slug.length > 0,
+    );
+  const shortcodeResult =
+    db && productSlugs.length > 0
+      ? await tryResolveCmsShortcodePageTargets(db, { productSlugs })
+      : { targets: [], failed: false };
   const shortcodeInvalidation = collectCmsShortcodePageInvalidation(
     shortcodeResult.targets,
   );
@@ -1446,18 +1672,15 @@ export async function invalidateProductAvailabilityCacheSubjects(
         productIds: normalizedSubjects.map((subject) => subject.productId),
         categoryIds: normalizedSubjects
           .map((subject) => subject.categoryId)
-          .filter((categoryId): categoryId is string => (
-            typeof categoryId === "string" && categoryId.length > 0
-          )),
+          .filter(
+            (categoryId): categoryId is string =>
+              typeof categoryId === "string" && categoryId.length > 0,
+          ),
       })
     : [];
-  const collectionInvalidation = collectCollectionCacheInvalidation(
-    collectionTargets,
-  );
-  const apiKeys = [
-    ...invalidation.apiKeys,
-    ...collectionInvalidation.apiKeys,
-  ];
+  const collectionInvalidation =
+    collectCollectionCacheInvalidation(collectionTargets);
+  const apiKeys = [...invalidation.apiKeys, ...collectionInvalidation.apiKeys];
   const apiPatterns = [
     ...invalidation.apiPatterns,
     ...shortcodeInvalidation.apiPatterns,
@@ -1479,9 +1702,7 @@ export async function invalidateProductAvailabilityCacheSubjects(
   );
 
   await Promise.all([
-    ...apiKeys.map((key) =>
-      deleteVersionedCacheKeyFamily(key, c.env?.CACHE),
-    ),
+    ...apiKeys.map((key) => deleteVersionedCacheKeyFamily(key, c.env?.CACHE)),
     ...apiPatterns.map((pattern) =>
       deleteCacheByPattern(pattern, c.env?.CACHE),
     ),
@@ -1490,9 +1711,10 @@ export async function invalidateProductAvailabilityCacheSubjects(
   const body = buildStorefrontPrefixPurgeBody(
     shortcodeInvalidation.storefrontPrefixes,
     {
-      groups: collectionTargets.length > 0
-        ? ["products", "collections"]
-        : ["products"],
+      groups:
+        collectionTargets.length > 0
+          ? ["products", "collections"]
+          : ["products"],
       bumpVersion: shortcodeInvalidation.bumpVersion || shortcodeResult.failed,
       exactKeys: [
         ...invalidation.storefrontPrefixes,

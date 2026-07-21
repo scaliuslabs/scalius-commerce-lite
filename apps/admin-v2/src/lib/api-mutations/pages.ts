@@ -45,49 +45,52 @@ export function useUpdatePage() {
   });
 }
 
-export function useDeletePage() {
+export function useDeletePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (claim: PageRevisionClaim) => deletePage({ data: claim }),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
-      toast.success("Page moved to trash");
+      toast.success(`${entityName} moved to trash`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to delete page")),
   });
 }
 
-export function usePermanentDeletePage() {
+export function usePermanentDeletePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (claim: PageRevisionClaim) => permanentDeletePage({ data: claim }),
+    mutationFn: (claim: PageRevisionClaim) =>
+      permanentDeletePage({ data: claim }),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       queryClient.removeQueries({ queryKey: queryKeys.pages.detail(claim.id) });
-      toast.success("Page permanently deleted");
+      toast.success(`${entityName} permanently deleted`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to permanently delete page")),
   });
 }
 
-export function useRestorePage() {
+export function useRestorePage(entityName = "Page") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (claim: PageRevisionClaim) => restorePage({ data: claim }),
     onSuccess: (_data, claim) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pages.detail(claim.id) });
-      toast.success("Page restored");
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.pages.detail(claim.id),
+      });
+      toast.success(`${entityName} restored`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore page")),
   });
 }
 
-export function useBulkDeletePages() {
+export function useBulkDeletePages(entityPlural = "pages") {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { pages: PageRevisionClaim[]; permanent?: boolean }) =>
@@ -96,8 +99,8 @@ export function useBulkDeletePages() {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
       toast.success(
         variables.permanent
-          ? `${variables.pages.length} pages permanently deleted`
-          : `${variables.pages.length} pages moved to trash`,
+          ? `${variables.pages.length} ${entityPlural} permanently deleted`
+          : `${variables.pages.length} ${entityPlural} moved to trash`,
       );
     },
     onError: (err) =>
@@ -105,39 +108,52 @@ export function useBulkDeletePages() {
   });
 }
 
-export function useBulkRestorePages() {
+export function useBulkRestorePages(entityPlural = "pages") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pages: PageRevisionClaim[]) => bulkRestorePages({ data: { pages } }),
+    mutationFn: (pages: PageRevisionClaim[]) =>
+      bulkRestorePages({ data: { pages } }),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      toast.success(`${pages.length} pages restored`);
+      toast.success(`${pages.length} ${entityPlural} restored`);
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to restore pages")),
   });
 }
 
-export function useBulkPublishPages() {
+export function useBulkPublishPages(
+  entitySingular = "page",
+  entityPlural = "pages",
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pages: PageRevisionClaim[]) => bulkPublishPages({ data: { pages } }),
+    mutationFn: (pages: PageRevisionClaim[]) =>
+      bulkPublishPages({ data: { pages } }),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      toast.success(`${pages.length} ${pages.length === 1 ? "page" : "pages"} published`);
+      toast.success(
+        `${pages.length} ${pages.length === 1 ? entitySingular : entityPlural} published`,
+      );
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to publish pages")),
   });
 }
 
-export function useBulkUnpublishPages() {
+export function useBulkUnpublishPages(
+  entitySingular = "page",
+  entityPlural = "pages",
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pages: PageRevisionClaim[]) => bulkUnpublishPages({ data: { pages } }),
+    mutationFn: (pages: PageRevisionClaim[]) =>
+      bulkUnpublishPages({ data: { pages } }),
     onSuccess: (_data, pages) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.pages.list() });
-      toast.success(`${pages.length} ${pages.length === 1 ? "page" : "pages"} moved to draft`);
+      toast.success(
+        `${pages.length} ${pages.length === 1 ? entitySingular : entityPlural} moved to draft`,
+      );
     },
     onError: (err) =>
       toast.error(getServerFnError(err, "Failed to unpublish pages")),

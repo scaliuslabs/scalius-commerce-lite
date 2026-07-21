@@ -8,6 +8,7 @@ import { createMockDb } from "../../../setup";
 
 const pageRecord = {
   id: "page_1",
+  contentType: "page",
   title: "Landing",
   slug: "landing",
   content: '<section onclick="x">Copy<script>alert(1)</script></section>',
@@ -56,7 +57,9 @@ describe("page content sanitization", () => {
       { canPublish: true },
     );
 
-    const valuesCall = db._calls.find((call) => call.method === "insert.values");
+    const valuesCall = db._calls.find(
+      (call) => call.method === "insert.values",
+    );
     expect(valuesCall?.args[0]).toMatchObject({
       content: "<img><p>Copy</p>",
     });

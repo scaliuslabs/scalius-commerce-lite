@@ -29,7 +29,9 @@ describe("sitemap index route", () => {
     mocks.getSeoSettings.mockResolvedValue({
       discovery: undefined,
     });
-    mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
+    mocks.getRuntimeStorefrontUrl.mockReturnValue(
+      "https://storefront.example.test",
+    );
   });
 
   it("returns non-cacheable 503 when product count cannot be read", async () => {
@@ -54,7 +56,9 @@ describe("sitemap index route", () => {
   });
 
   it("returns non-cacheable 503 when the storefront URL includes a path", async () => {
-    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce("https://storefront.example.test/base?x=1");
+    mocks.getRuntimeStorefrontUrl.mockReturnValueOnce(
+      "https://storefront.example.test/base?x=1",
+    );
 
     const response = await GET({} as never);
     const body = await response.text();
@@ -76,11 +80,22 @@ describe("sitemap index route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("<sitemapindex");
-    expect(body).toContain("https://storefront.example.test/sitemap-static.xml");
-    expect(body).toContain("https://storefront.example.test/sitemap-categories.xml");
-    expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-static.xml",
+    );
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-categories.xml",
+    );
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-collections.xml",
+    );
     expect(body).toContain("https://storefront.example.test/sitemap-pages.xml");
-    expect(body).toContain("https://storefront.example.test/sitemap-products.xml?page=1");
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-articles.xml",
+    );
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-products.xml?page=1",
+    );
     expect(body).not.toContain("/api/facebook-feed.xml");
   });
 
@@ -108,6 +123,7 @@ describe("sitemap index route", () => {
           categories: false,
           collections: true,
           pages: false,
+          articles: false,
         },
       },
     });
@@ -117,10 +133,13 @@ describe("sitemap index route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getSitemapProducts).not.toHaveBeenCalled();
-    expect(body).toContain("https://storefront.example.test/sitemap-collections.xml");
+    expect(body).toContain(
+      "https://storefront.example.test/sitemap-collections.xml",
+    );
     expect(body).not.toContain("sitemap-static.xml");
     expect(body).not.toContain("sitemap-products.xml");
     expect(body).not.toContain("sitemap-categories.xml");
     expect(body).not.toContain("sitemap-pages.xml");
+    expect(body).not.toContain("sitemap-articles.xml");
   });
 });

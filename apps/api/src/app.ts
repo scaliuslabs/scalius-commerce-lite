@@ -18,6 +18,7 @@ import { headerRoutes } from "./routes/header";
 import { navigationRoutes } from "./routes/navigation";
 import { footerRoutes } from "./routes/footer";
 import { pagesRoutes } from "./routes/pages";
+import { articleRoutes } from "./routes/articles";
 import { orderRoutes } from "./routes/orders";
 import { stripePaymentRoutes } from "./routes/payment/stripe-routes";
 import { sslcommerzPaymentRoutes } from "./routes/payment/sslcommerz-routes";
@@ -152,7 +153,13 @@ app.use("*", async (c, next) => {
   const corsMiddleware = cors({
     origin: await getCorsOriginContext(c),
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowHeaders: ["Content-Type", "Authorization", "X-API-Token", "Accept", "X-Request-Id"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-API-Token",
+      "Accept",
+      "X-Request-Id",
+    ],
     exposeHeaders: ["Content-Type", "Cache-Control", "X-Request-Id"],
     credentials: true,
   });
@@ -214,6 +221,7 @@ app.route("/header", headerRoutes);
 app.route("/navigation", navigationRoutes);
 app.route("/footer", footerRoutes);
 app.route("/pages", pagesRoutes);
+app.route("/articles", articleRoutes);
 app.route("/discounts", discountRoutes);
 app.route("/analytics", analyticsRoutes);
 app.route("/meta", metaConversionsRoutes);
@@ -338,16 +346,18 @@ app.get("/docs", swaggerUI({ url: "/api/v1/openapi.json" }));
 // Add OpenAPI specification
 app.get("/openapi.json", (c) => {
   try {
-    const spec = finalizeOpenApiContract(app.getOpenAPIDocument({
-      openapi: "3.0.0",
-      info: {
-        title: "Scalius Commerce API",
-        version: "1.0.0",
-        description:
-          "E-commerce platform API powering admin dashboard and storefront",
-      },
-      servers: [{ url: "/", description: "Default" }],
-    }));
+    const spec = finalizeOpenApiContract(
+      app.getOpenAPIDocument({
+        openapi: "3.0.0",
+        info: {
+          title: "Scalius Commerce API",
+          version: "1.0.0",
+          description:
+            "E-commerce platform API powering admin dashboard and storefront",
+        },
+        servers: [{ url: "/", description: "Default" }],
+      }),
+    );
     c.header("Cache-Control", "no-store");
     return c.json(spec);
   } catch (error: unknown) {

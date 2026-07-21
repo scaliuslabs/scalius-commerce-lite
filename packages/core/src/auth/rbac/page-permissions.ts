@@ -50,6 +50,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/pages": { permission: PERMISSIONS.PAGES_VIEW },
   "/admin/pages/new": { permission: PERMISSIONS.PAGES_CREATE },
   "/admin/pages/trash": { permission: PERMISSIONS.PAGES_VIEW },
+  "/admin/articles": { permission: PERMISSIONS.PAGES_VIEW },
+  "/admin/articles/new": { permission: PERMISSIONS.PAGES_CREATE },
 
   // Reusable storefront menus
   "/admin/navigation": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
@@ -81,11 +83,19 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/account": { allowAnyAdmin: true },
   "/admin/settings": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/theme": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/notifications": { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
-  "/admin/settings/hero-sliders": { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  "/admin/settings/notifications": {
+    permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+  },
+  "/admin/settings/hero-sliders": {
+    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
+  },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  "/admin/settings/delivery-providers": { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
-  "/admin/settings/fraud-checker": { permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW },
+  "/admin/settings/delivery-providers": {
+    permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+  },
+  "/admin/settings/fraud-checker": {
+    permission: PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
+  },
   "/admin/settings/meta-conversion": { permission: PERMISSIONS.ANALYTICS_VIEW },
   "/admin/settings/cache": { permission: PERMISSIONS.SETTINGS_CACHE_VIEW },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
@@ -97,37 +107,76 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   pattern: RegExp;
   config: PagePermissionConfig;
 }> = [
-    // Products
-    { pattern: /^\/admin\/products\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PRODUCTS_EDIT } },
-    { pattern: /^\/admin\/products\/[^/]+$/, config: { permission: PERMISSIONS.PRODUCTS_VIEW } },
+  // Products
+  {
+    pattern: /^\/admin\/products\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  {
+    pattern: /^\/admin\/products\/[^/]+$/,
+    config: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
 
-    // Categories
-    { pattern: /^\/admin\/categories\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CATEGORIES_EDIT } },
+  // Categories
+  {
+    pattern: /^\/admin\/categories\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.CATEGORIES_EDIT },
+  },
 
-    // Collections
-    { pattern: /^\/admin\/collections\/[^/]+\/edit$/, config: { permission: PERMISSIONS.COLLECTIONS_EDIT } },
+  // Collections
+  {
+    pattern: /^\/admin\/collections\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.COLLECTIONS_EDIT },
+  },
 
-    // Orders
-    { pattern: /^\/admin\/orders\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ORDERS_EDIT } },
-    { pattern: /^\/admin\/orders\/[^/]+$/, config: { permission: PERMISSIONS.ORDERS_VIEW } },
+  // Orders
+  {
+    pattern: /^\/admin\/orders\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  {
+    pattern: /^\/admin\/orders\/[^/]+$/,
+    config: { permission: PERMISSIONS.ORDERS_VIEW },
+  },
 
-    // Customers
-    { pattern: /^\/admin\/customers\/[^/]+\/edit$/, config: { permission: PERMISSIONS.CUSTOMERS_EDIT } },
-    { pattern: /^\/admin\/customers\/[^/]+\/history$/, config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY } },
+  // Customers
+  {
+    pattern: /^\/admin\/customers\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  {
+    pattern: /^\/admin\/customers\/[^/]+\/history$/,
+    config: { permission: PERMISSIONS.CUSTOMERS_VIEW_HISTORY },
+  },
 
-    // Discounts
-    { pattern: /^\/admin\/discounts\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
+  // Discounts
+  {
+    pattern: /^\/admin\/discounts\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+  },
 
-    // Promotions
-    { pattern: /^\/admin\/promotions\/[^/]+\/edit$/, config: { permission: PERMISSIONS.DISCOUNTS_EDIT } },
+  // Promotions
+  {
+    pattern: /^\/admin\/promotions\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.DISCOUNTS_EDIT },
+  },
 
-    // Analytics
-    { pattern: /^\/admin\/analytics\/[^/]+\/edit$/, config: { permission: PERMISSIONS.ANALYTICS_EDIT } },
+  // Analytics
+  {
+    pattern: /^\/admin\/analytics\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.ANALYTICS_EDIT },
+  },
 
-    // Pages
-    { pattern: /^\/admin\/pages\/[^/]+\/edit$/, config: { permission: PERMISSIONS.PAGES_EDIT } },
-
-  ];
+  // Pages
+  {
+    pattern: /^\/admin\/pages\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.PAGES_EDIT },
+  },
+  {
+    pattern: /^\/admin\/articles\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.PAGES_EDIT },
+  },
+];
 
 const DEFAULT_ADMIN_PAGE_CANDIDATES = [
   "/admin",
@@ -137,6 +186,7 @@ const DEFAULT_ADMIN_PAGE_CANDIDATES = [
   "/admin/categories",
   "/admin/collections",
   "/admin/pages",
+  "/admin/articles",
   "/admin/media",
   "/admin/settings/account",
 ] as const;
@@ -145,11 +195,14 @@ const DEFAULT_ADMIN_PAGE_CANDIDATES = [
  * Get the permission config for a given admin page route.
  * Returns undefined if no specific permission is required (e.g., /admin/settings/account).
  */
-export function getPagePermission(pathname: string): PagePermissionConfig | undefined {
+export function getPagePermission(
+  pathname: string,
+): PagePermissionConfig | undefined {
   // Strip trailing slash for consistent matching
-  const normalizedPath = pathname.endsWith("/") && pathname !== "/"
-    ? pathname.slice(0, -1)
-    : pathname;
+  const normalizedPath =
+    pathname.endsWith("/") && pathname !== "/"
+      ? pathname.slice(0, -1)
+      : pathname;
 
   // Check exact match first (static routes)
   const exactMatch = PAGE_PERMISSION_MAP[normalizedPath];
@@ -174,7 +227,7 @@ export function getPagePermission(pathname: string): PagePermissionConfig | unde
 export function hasPageAccess(
   permissions: Set<string>,
   isSuperAdmin: boolean,
-  pathname: string
+  pathname: string,
 ): boolean {
   if (isSuperAdmin) return true;
 
@@ -199,11 +252,11 @@ export function hasPageAccess(
 
 export function getDefaultAdminPage(
   permissions: Set<string>,
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
 ): string | null {
   return (
     DEFAULT_ADMIN_PAGE_CANDIDATES.find((path) =>
-      hasPageAccess(permissions, isSuperAdmin, path)
+      hasPageAccess(permissions, isSuperAdmin, path),
     ) ?? null
   );
 }

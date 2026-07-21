@@ -114,6 +114,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
               <sitemap><loc>https://shop.example.com/sitemap-categories.xml</loc></sitemap>
               <sitemap><loc>https://shop.example.com/sitemap-collections.xml</loc></sitemap>
               <sitemap><loc>https://shop.example.com/sitemap-pages.xml</loc></sitemap>
+              <sitemap><loc>https://shop.example.com/sitemap-articles.xml</loc></sitemap>
             </sitemapindex>`,
             {
               contentType: "application/xml",
@@ -122,13 +123,10 @@ describe("runSeoDiscoveryLiveProbe", () => {
           );
         }
         if (url.includes("/sitemap-")) {
-          return textResponse(
-            `<urlset><url><loc>${url}</loc></url></urlset>`,
-            {
-              contentType: "application/xml",
-              cacheControl: "public, max-age=600",
-            },
-          );
+          return textResponse(`<urlset><url><loc>${url}</loc></url></urlset>`, {
+            contentType: "application/xml",
+            cacheControl: "public, max-age=600",
+          });
         }
         if (url.endsWith("/.well-known/ucp")) {
           return ucpProfileResponse();
@@ -163,6 +161,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
       "https://shop.example.com/sitemap-categories.xml",
       "https://shop.example.com/sitemap-collections.xml",
       "https://shop.example.com/sitemap-pages.xml",
+      "https://shop.example.com/sitemap-articles.xml",
     ]);
     for (const [, init] of fetchMock.mock.calls) {
       expect(init).toBeDefined();
@@ -205,8 +204,8 @@ describe("runSeoDiscoveryLiveProbe", () => {
           kind: "sitemap",
           ok: true,
           status: 200,
-          counts: { sitemapLocs: 5 },
-          minimumSitemapLocs: 5,
+          counts: { sitemapLocs: 6 },
+          minimumSitemapLocs: 6,
         }),
         expect.objectContaining({
           key: "productFeed",
@@ -350,6 +349,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
           categories: false,
           collections: false,
           pages: false,
+          articles: false,
         },
         feeds: { productCatalogEnabled: false },
         robots: { advertiseSitemap: false },
@@ -371,9 +371,12 @@ describe("runSeoDiscoveryLiveProbe", () => {
       if (url.endsWith("/.well-known/ucp")) {
         return ucpProfileResponse();
       }
-      return textResponse("<urlset><url><loc>https://shop.example.com/</loc></url></urlset>", {
-        contentType: "application/xml",
-      });
+      return textResponse(
+        "<urlset><url><loc>https://shop.example.com/</loc></url></urlset>",
+        {
+          contentType: "application/xml",
+        },
+      );
     });
 
     const result = await runSeoDiscoveryLiveProbe({
@@ -546,7 +549,9 @@ describe("runSeoDiscoveryLiveProbe", () => {
       "https://shop.example.com/.well-known/ucp",
     ]);
     expect(
-      fetchMock.mock.calls.some((call) => String(call[0]).includes("/ucp/catalog")),
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("/ucp/catalog"),
+      ),
     ).toBe(false);
     expect(result.ok).toBe(false);
     expect(result.resources).toEqual(
@@ -650,7 +655,7 @@ describe("runSeoDiscoveryLiveProbe", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.resources).toHaveLength(10);
+    expect(result.resources).toHaveLength(11);
     expect(
       result.resources.every(
         (resource) => resource.error === "Redirect blocked.",

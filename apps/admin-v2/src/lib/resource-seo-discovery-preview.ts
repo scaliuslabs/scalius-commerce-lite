@@ -8,13 +8,10 @@ import {
   normalizeCanonicalPathInput,
 } from "@scalius/shared/seo-canonical";
 
-export type ResourceDiscoveryKind = "category" | "collection" | "page";
+export type ResourceDiscoveryKind =
+  "category" | "collection" | "article" | "page";
 export type ResourceDiscoveryTone =
-  | "ok"
-  | "warning"
-  | "disabled"
-  | "draft"
-  | "info";
+  "ok" | "warning" | "disabled" | "draft" | "info";
 export type ResourceDiscoveryPolicySource = "current" | "default";
 
 export interface ResourceDiscoveryRow {
@@ -97,7 +94,8 @@ const RESOURCE_COPY: Record<
   collection: {
     subject: "collection",
     urlName: "collection",
-    slugMissing: "Save the collection once to preview the public collection URL.",
+    slugMissing:
+      "Save the collection once to preview the public collection URL.",
     sitemapKey: "collections",
     sitemapPath: "/sitemap-collections.xml",
     sitemapOffTitle: "Collections sitemap off",
@@ -111,6 +109,24 @@ const RESOURCE_COPY: Record<
     noIndexSitemapSummary:
       "The collection page stays public while active, but it is removed from collections sitemap XML while search indexing is prevented.",
     schemaLabel: "Collection JSON-LD",
+  },
+  article: {
+    subject: "article",
+    urlName: "article",
+    slugMissing: "Set an article slug to preview the public URL.",
+    sitemapKey: "articles",
+    sitemapPath: "/sitemap-articles.xml",
+    sitemapOffTitle: "Articles sitemap off",
+    sitemapOffSummary: "The articles sitemap section is disabled globally.",
+    sitemapReadyTitle: "Expected in articles sitemap",
+    sitemapReadySummary:
+      "Article should appear in articles sitemap XML after save.",
+    sitemapExcludedTitle: "Excluded from articles sitemap",
+    sitemapExcludedSummary:
+      "The article stays public when published, but is removed from articles sitemap XML.",
+    noIndexSitemapSummary:
+      "The article stays public when published, but is removed from articles sitemap XML while search indexing is prevented.",
+    schemaLabel: "Article JSON-LD",
   },
   page: {
     subject: "CMS page",
@@ -165,7 +181,9 @@ function getDefaultPath(input: ResourceDiscoveryPreviewInput): string | null {
 
   const slug = normalizeSlug(input.slug);
   if (!slug) return null;
-  return input.kind === "category" ? `/categories/${slug}` : `/${slug}`;
+  if (input.kind === "category") return `/categories/${slug}`;
+  if (input.kind === "article") return `/blog/${slug}`;
+  return `/${slug}`;
 }
 
 function hasValidSlug(input: ResourceDiscoveryPreviewInput): boolean {
@@ -176,7 +194,9 @@ function hasValidSlug(input: ResourceDiscoveryPreviewInput): boolean {
 
 function isPublicAfterSave(input: ResourceDiscoveryPreviewInput): boolean {
   if (input.kind === "collection") return input.isActive === true;
-  if (input.kind === "page") return input.isPublished === true;
+  if (input.kind === "page" || input.kind === "article") {
+    return input.isPublished === true;
+  }
   return true;
 }
 
@@ -184,8 +204,8 @@ function publicDraftSummary(kind: ResourceDiscoveryKind): string {
   if (kind === "collection") {
     return "Inactive collections stay out of public discovery surfaces.";
   }
-  if (kind === "page") {
-    return "Unpublished CMS pages are not public discovery targets.";
+  if (kind === "page" || kind === "article") {
+    return `Unpublished ${kind === "article" ? "articles" : "CMS pages"} are not public discovery targets.`;
   }
   return "";
 }
@@ -375,6 +395,46 @@ function buildStructuredDataStatus({
   canonical: ResourceDiscoveryPreview["canonical"];
   absoluteStorefrontUrl: URL | null;
 }): ResourceDiscoveryRow {
+  if (input.kind === "article") {
+    if (!discovery.structuredData.articles) {
+      return {
+        tone: "disabled",
+        title: "Article JSON-LD off",
+        summary: "Article structured data is disabled globally.",
+      };
+    }
+    if (input.noIndex === true) {
+      return {
+        tone: "disabled",
+        title: "JSON-LD off while noindexed",
+        summary:
+          "Article JSON-LD is suppressed because search indexing is prevented.",
+      };
+    }
+    if (!canonical.path || !isPublicAfterSave(input)) {
+      return {
+        tone: "draft",
+        title: "Article JSON-LD pending",
+        summary: canonical.path
+          ? publicDraftSummary(input.kind)
+          : "Article JSON-LD needs a valid public URL.",
+      };
+    }
+    if (!absoluteStorefrontUrl) {
+      return {
+        tone: "warning",
+        title: "Article JSON-LD needs Store URL",
+        summary: "Article URL fields require an absolute Store URL.",
+      };
+    }
+    return {
+      tone: "ok",
+      title: "Article JSON-LD on",
+      summary:
+        "The storefront should emit truthful Article metadata after save.",
+    };
+  }
+
   if (input.kind === "page") {
     if (input.noIndex === true) {
       return {
@@ -461,7 +521,9 @@ function buildStructuredDataStatus({
         ? "CollectionPage + Breadcrumb JSON-LD on"
         : "Partial JSON-LD on",
     summary: [
-      collectionSchemaEnabled ? "CollectionPage schema on" : "CollectionPage schema off",
+      collectionSchemaEnabled
+        ? "CollectionPage schema on"
+        : "CollectionPage schema off",
       breadcrumbsEnabled ? "Breadcrumbs on" : "Breadcrumbs off",
     ].join("; "),
   };

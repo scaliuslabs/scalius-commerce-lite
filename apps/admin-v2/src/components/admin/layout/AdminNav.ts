@@ -31,6 +31,7 @@ import {
   ShoppingBasket,
   Megaphone,
   Menu,
+  Newspaper,
 } from "lucide-react";
 import { ADMIN_PERMISSIONS } from "../../../lib/admin-permissions";
 
@@ -195,6 +196,12 @@ export const allNavSections: NavSection[] = [
             requiredPermission: NAV_PERMISSIONS.PAGES_VIEW,
           },
           {
+            name: "Articles",
+            href: "/admin/articles",
+            icon: Newspaper,
+            requiredPermission: NAV_PERMISSIONS.PAGES_VIEW,
+          },
+          {
             name: "Media",
             href: "/admin/media",
             icon: Images,
@@ -304,7 +311,8 @@ export const allNavSections: NavSection[] = [
             name: "Delivery",
             href: "/admin/settings/delivery-providers",
             icon: Truck,
-            requiredPermission: NAV_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+            requiredPermission:
+              NAV_PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
           },
           {
             name: "Fraud Checker",
