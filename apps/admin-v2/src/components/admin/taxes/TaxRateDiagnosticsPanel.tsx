@@ -87,7 +87,7 @@ export function TaxRateDiagnosticsPanel({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-8 shrink-0 px-2 text-xs"
+                    className="min-h-11 shrink-0 px-3 text-xs md:min-h-8 md:px-2"
                     disabled={!canManage}
                     aria-label={`Add all-destination rate for ${item.className}`}
                     onClick={() => onAddBroadRate(item.classId)}
@@ -101,7 +101,7 @@ export function TaxRateDiagnosticsPanel({
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3">
             <p className="text-sm text-muted-foreground">Create a tax class before adding destination rates.</p>
-            <Button type="button" variant="outline" size="sm" disabled={!canManage} onClick={onOpenClasses}>Create a class</Button>
+            <Button type="button" className="min-h-11 md:min-h-8" variant="outline" size="sm" disabled={!canManage} onClick={onOpenClasses}>Create a class</Button>
           </div>
         )}
 
@@ -109,7 +109,7 @@ export function TaxRateDiagnosticsPanel({
           <div className="space-y-2" aria-label="Rate stacking checks">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rates added together</p>
-              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 px-2 text-xs" onClick={onOpenPreview}>
+              <Button type="button" variant="ghost" size="sm" className="min-h-11 gap-1 px-2 text-xs md:min-h-8" onClick={onOpenPreview}>
                 Test a destination <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
             </div>
@@ -124,7 +124,7 @@ export function TaxRateDiagnosticsPanel({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-8 shrink-0 px-2 text-xs hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                  className="min-h-11 shrink-0 px-3 text-xs hover:bg-amber-100 md:min-h-8 md:px-2 dark:hover:bg-amber-900/50"
                   disabled={!canManage || item.rateIds.length === 0}
                   onClick={() => item.rateIds[0] && onReviewRate(item.rateIds[0])}
                 >

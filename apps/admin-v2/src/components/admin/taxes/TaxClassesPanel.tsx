@@ -121,7 +121,7 @@ export function TaxClassesPanel({
 
   return (
     <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
-      <Card className="h-fit">
+      <Card className="min-w-0 h-fit">
         <CardHeader>
           <CardTitle>{editing ? "Edit class" : "Create a class"}</CardTitle>
           <CardDescription>
@@ -132,6 +132,7 @@ export function TaxClassesPanel({
           <div className="space-y-2">
             <Label htmlFor="tax-class-name">Name</Label>
             <Input
+              className="min-h-11 md:min-h-9"
               id="tax-class-name"
               value={draft.name}
               maxLength={120}
@@ -157,6 +158,7 @@ export function TaxClassesPanel({
               <p className="mt-1 text-xs text-muted-foreground">Always produces zero tax.</p>
             </div>
             <Switch
+              className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
               id="tax-class-exempt"
               checked={draft.isExempt}
               disabled={!canManage}
@@ -165,7 +167,7 @@ export function TaxClassesPanel({
           </div>
           <div className="flex gap-2">
             <Button
-              className="flex-1"
+              className="min-h-11 flex-1 md:min-h-10"
               disabled={!canManage || !draft.name.trim() || saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
@@ -176,6 +178,7 @@ export function TaxClassesPanel({
               <Button
                 variant="outline"
                 size="icon"
+                className="h-11 w-11 md:h-10 md:w-10"
                 aria-label="Cancel editing"
                 onClick={() => {
                   setEditing(null);
@@ -189,7 +192,7 @@ export function TaxClassesPanel({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Tax classes</CardTitle>
           <CardDescription>
@@ -202,46 +205,81 @@ export function TaxClassesPanel({
               Create the first class before enabling tax.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Treatment</TableHead>
-                  <TableHead>Rates</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <div className="space-y-2 md:hidden">
                 {configuration.classes.map((taxClass) => (
-                  <TableRow key={taxClass.id}>
-                    <TableCell>
-                      <div className="font-medium">{taxClass.name}</div>
-                      <div className="max-w-md truncate text-xs text-muted-foreground">
+                  <article key={taxClass.id} className="space-y-3 rounded-xl border p-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-medium">{taxClass.name}</h3>
+                        {taxClass.isExempt ? (
+                          <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3 w-3" /> Exempt</Badge>
+                        ) : (
+                          <Badge variant="outline">Taxable</Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">
                         {taxClass.description || "No description"}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {taxClass.isExempt ? (
-                        <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3 w-3" /> Exempt</Badge>
-                      ) : (
-                        <Badge variant="outline">Taxable</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{ratesByClass.get(taxClass.id) ?? 0}</TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Edit ${taxClass.name}`} onClick={() => beginEdit(taxClass)}>
-                          <Edit3 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Delete ${taxClass.name}`} onClick={() => setDeleting(taxClass)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Saved rates</span>
+                      <span className="font-medium">{ratesByClass.get(taxClass.id) ?? 0}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button className="min-h-11" variant="outline" disabled={!canManage} aria-label={`Edit ${taxClass.name}`} onClick={() => beginEdit(taxClass)}>
+                        <Edit3 className="h-4 w-4" /> Edit
+                      </Button>
+                      <Button className="min-h-11" variant="outline" disabled={!canManage} aria-label={`Delete ${taxClass.name}`} onClick={() => setDeleting(taxClass)}>
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </Button>
+                    </div>
+                  </article>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Class</TableHead>
+                      <TableHead>Treatment</TableHead>
+                      <TableHead>Rates</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {configuration.classes.map((taxClass) => (
+                      <TableRow key={taxClass.id}>
+                        <TableCell>
+                          <div className="font-medium">{taxClass.name}</div>
+                          <div className="max-w-md truncate text-xs text-muted-foreground">
+                            {taxClass.description || "No description"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {taxClass.isExempt ? (
+                            <Badge variant="secondary" className="gap-1"><ShieldCheck className="h-3 w-3" /> Exempt</Badge>
+                          ) : (
+                            <Badge variant="outline">Taxable</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{ratesByClass.get(taxClass.id) ?? 0}</TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Edit ${taxClass.name}`} onClick={() => beginEdit(taxClass)}>
+                              <Edit3 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Delete ${taxClass.name}`} onClick={() => setDeleting(taxClass)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>

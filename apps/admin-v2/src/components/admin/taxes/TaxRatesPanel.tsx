@@ -213,7 +213,7 @@ export function TaxRatesPanel({
       />
 
       <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
-        <Card className="h-fit">
+        <Card className="h-fit min-w-0">
           <CardHeader>
             <CardTitle>{editing ? "Edit rate" : "Create a rate"}</CardTitle>
             <CardDescription>Rates that match the same checkout are added together. Use priority and compound only when you intentionally layer rates.</CardDescription>
@@ -222,7 +222,7 @@ export function TaxRatesPanel({
             <div className="space-y-2">
               <Label>Tax class</Label>
               <Select value={draft.taxClassId} disabled={!canManage} onValueChange={(taxClassId) => setDraft((current) => ({ ...current, taxClassId }))}>
-                <SelectTrigger aria-label="Tax class"><SelectValue placeholder="Choose a class" /></SelectTrigger>
+                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Tax class"><SelectValue placeholder="Choose a class" /></SelectTrigger>
                 <SelectContent>
                   {configuration.classes.map((taxClass) => (
                     <SelectItem key={taxClass.id} value={taxClass.id}>{taxClass.name}</SelectItem>
@@ -232,16 +232,16 @@ export function TaxRatesPanel({
             </div>
             <div className="space-y-2">
               <Label htmlFor="tax-rate-name">Rate name</Label>
-              <Input ref={rateNameRef} id="tax-rate-name" value={draft.name} maxLength={120} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Dhaka standard" />
+              <Input className="min-h-11 md:min-h-9" ref={rateNameRef} id="tax-rate-name" value={draft.name} maxLength={120} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Dhaka standard" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="tax-rate-percent">Rate (%)</Label>
-                <Input id="tax-rate-percent" inputMode="decimal" value={draft.percent} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, percent: event.target.value }))} placeholder="15.00" />
+                <Input className="min-h-11 md:min-h-9" id="tax-rate-percent" inputMode="decimal" value={draft.percent} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, percent: event.target.value }))} placeholder="15.00" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tax-rate-priority">Priority (advanced)</Label>
-                <Input id="tax-rate-priority" inputMode="numeric" value={draft.priority} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} />
+                <Input className="min-h-11 md:min-h-9" id="tax-rate-priority" inputMode="numeric" value={draft.priority} disabled={!canManage} onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value }))} />
               </div>
             </div>
             <div className="space-y-2">
@@ -255,7 +255,7 @@ export function TaxRatesPanel({
                   jurisdictionId: "",
                 }))}
               >
-                <SelectTrigger aria-label="Jurisdiction type"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="min-h-11 md:min-h-9" aria-label="Jurisdiction type"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All destinations</SelectItem>
                   <SelectItem value="city">City</SelectItem>
@@ -302,12 +302,12 @@ export function TaxRatesPanel({
               </p>
             ) : null}
             <div className="flex gap-2">
-              <Button className="flex-1" disabled={!canManage || !canSave || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              <Button className="min-h-11 flex-1 md:min-h-10" disabled={!canManage || !canSave || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                 {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? <Edit3 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                 {editing ? "Save rate" : "Create rate"}
               </Button>
               {editing ? (
-                <Button variant="outline" size="icon" aria-label="Cancel editing" onClick={() => { setEditing(null); setDraft(EMPTY_DRAFT); }}>
+                <Button className="h-11 w-11 md:h-10 md:w-10" variant="outline" size="icon" aria-label="Cancel editing" onClick={() => { setEditing(null); setDraft(EMPTY_DRAFT); }}>
                   <X className="h-4 w-4" />
                 </Button>
               ) : null}
@@ -315,7 +315,7 @@ export function TaxRatesPanel({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Saved rates</CardTitle>
             <CardDescription>{configuration.rates.length} merchant-defined rule{configuration.rates.length === 1 ? "" : "s"}</CardDescription>
@@ -324,26 +324,57 @@ export function TaxRatesPanel({
             {configuration.rates.length === 0 ? (
               <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">No rates have been saved.</div>
             ) : (
-              <Table>
-                <TableHeader><TableRow><TableHead>Rate</TableHead><TableHead>Scope</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
-                <TableBody>
+              <>
+                <div className="space-y-2 md:hidden">
                   {configuration.rates.map((rate) => (
-                    <TableRow key={rate.id}>
-                      <TableCell>
-                        <div className="font-medium">{rate.name} · {basisPointsToPercent(rate.rateBps)}%</div>
-                        <div className="text-xs text-muted-foreground">{className(rate.taxClassId)}{rate.isCompound ? " · compound" : ""}</div>
-                      </TableCell>
-                      <TableCell>{rate.jurisdictionType === "all" ? "All destinations" : rate.jurisdictionLabel ?? rate.jurisdictionType}</TableCell>
-                      <TableCell>{rate.priority}</TableCell>
-                      <TableCell><Badge variant={rate.isActive ? "default" : "secondary"}>{rate.isActive ? "Active" : "Inactive"}</Badge></TableCell>
-                      <TableCell><div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Edit ${rate.name}`} onClick={() => beginEdit(rate)}><Edit3 className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Delete ${rate.name}`} onClick={() => setDeleting(rate)}><Trash2 className="h-4 w-4" /></Button>
-                      </div></TableCell>
-                    </TableRow>
+                    <article key={rate.id} className="space-y-3 rounded-xl border p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="break-words font-medium">{rate.name} · {basisPointsToPercent(rate.rateBps)}%</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">{className(rate.taxClassId)}{rate.isCompound ? " · Compound" : ""}</p>
+                        </div>
+                        <Badge variant={rate.isActive ? "default" : "secondary"}>{rate.isActive ? "Active" : "Inactive"}</Badge>
+                      </div>
+                      <dl className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="min-w-0">
+                          <dt className="text-xs text-muted-foreground">Scope</dt>
+                          <dd className="mt-1 break-words font-medium">{rate.jurisdictionType === "all" ? "All destinations" : rate.jurisdictionLabel ?? rate.jurisdictionType}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Priority</dt>
+                          <dd className="mt-1 font-medium">{rate.priority}</dd>
+                        </div>
+                      </dl>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button className="min-h-11" variant="outline" disabled={!canManage} aria-label={`Edit ${rate.name}`} onClick={() => beginEdit(rate)}><Edit3 className="h-4 w-4" /> Edit</Button>
+                        <Button className="min-h-11" variant="outline" disabled={!canManage} aria-label={`Delete ${rate.name}`} onClick={() => setDeleting(rate)}><Trash2 className="h-4 w-4" /> Delete</Button>
+                      </div>
+                    </article>
                   ))}
-                </TableBody>
-              </Table>
+                </div>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Rate</TableHead><TableHead>Scope</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {configuration.rates.map((rate) => (
+                        <TableRow key={rate.id}>
+                          <TableCell>
+                            <div className="font-medium">{rate.name} · {basisPointsToPercent(rate.rateBps)}%</div>
+                            <div className="text-xs text-muted-foreground">{className(rate.taxClassId)}{rate.isCompound ? " · compound" : ""}</div>
+                          </TableCell>
+                          <TableCell>{rate.jurisdictionType === "all" ? "All destinations" : rate.jurisdictionLabel ?? rate.jurisdictionType}</TableCell>
+                          <TableCell>{rate.priority}</TableCell>
+                          <TableCell><Badge variant={rate.isActive ? "default" : "secondary"}>{rate.isActive ? "Active" : "Inactive"}</Badge></TableCell>
+                          <TableCell><div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Edit ${rate.name}`} onClick={() => beginEdit(rate)}><Edit3 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" disabled={!canManage} aria-label={`Delete ${rate.name}`} onClick={() => setDeleting(rate)}><Trash2 className="h-4 w-4" /></Button>
+                          </div></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -375,5 +406,5 @@ export function TaxRatesPanel({
 }
 
 function ToggleField({ label, checked, disabled, onCheckedChange }: { label: string; checked: boolean; disabled: boolean; onCheckedChange: (checked: boolean) => void }) {
-  return <div className="flex items-center justify-between rounded-xl border p-3"><Label>{label}</Label><Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} aria-label={label} /></div>;
+  return <div className="flex items-center justify-between rounded-xl border p-3"><Label>{label}</Label><Switch className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3" checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} aria-label={label} /></div>;
 }

@@ -36,4 +36,25 @@ describe("tax workspace merchant copy", () => {
     expect(classifications).toContain("min-h-11");
     expect(classifications).not.toContain('item.sku ? `SKU ${item.sku}` : item.productId');
   });
+
+  it("keeps the full tax workspace practical on a phone", () => {
+    const workspace = source("./TaxSettingsPage.tsx");
+    const policy = source("./TaxSettingsPanel.tsx");
+    const classes = source("./TaxClassesPanel.tsx");
+    const rates = source("./TaxRatesPanel.tsx");
+    const diagnostics = source("./TaxRateDiagnosticsPanel.tsx");
+    const preview = source("./TaxPreviewPanel.tsx");
+
+    expect(workspace).toContain("min-h-11");
+    expect(workspace).toContain('configuration.classes.length === 1 ? "class" : "classes"');
+    expect(workspace).toContain('activeRateCount === 1 ? "rate" : "rates"');
+    expect(policy).toContain("min-h-11");
+    expect(classes).toContain('className="space-y-2 md:hidden"');
+    expect(classes).toContain('className="hidden md:block"');
+    expect(rates).toContain('className="space-y-2 md:hidden"');
+    expect(rates).toContain('className="hidden md:block"');
+    expect(rates).toContain("sm:grid-cols-2");
+    expect(diagnostics).toContain("min-h-11");
+    expect(preview).toContain("min-h-11");
+  });
 });
