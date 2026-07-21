@@ -40,13 +40,13 @@ Both admin-created and storefront-created customers now use the same E.164 forma
 
 `totalOrders`, `totalSpent`, and `lastOrderAt` are denormalized columns on the `customers` table. They are NOT updated by this module -- they are materialized by the orders domain:
 
-- **`orders.admin.ts`**: Recalculates stats via `calculateCustomerStats()` after order create/update, using `db.batch()` for atomicity
+- **`orders.admin.ts`**: Increments existing-customer stats with SQL expressions inside the manual-create batch so concurrent creates cannot overwrite one another; the protected legacy full editor recalculates after its versioned update
 - **`orders.ingest.ts`**: Increments stats inline (`totalOrders + 1`, `totalSpent + amount`) inside the synchronous storefront order commit batch for authenticated customer orders
 - **`orders.storefront.ts`**: Carries the authenticated customer identity resolved by the API checkout policy into the prepared commit payload
 
 ### Customer History Audit Log
 
-Every create, update, and soft delete writes a snapshot to `customerHistory` with a `changeType` of `"created"`, `"updated"`, or `"deleted"`. Includes all fields at that point in time (name, email, phone, address, location IDs and resolved names). History is displayed in the admin UI as a timeline.
+Every customer create, profile update, and soft delete writes a snapshot to `customerHistory` with a `changeType` of `"created"`, `"updated"`, or `"deleted"`. Order creation does not write a fake profile-update event when it only advances denormalized order statistics. Snapshots include all profile fields at that point in time (name, email, phone, address, location IDs and resolved names). History is displayed in the admin UI as a timeline.
 
 ### OTP Authentication (`customer-auth.service.ts`)
 

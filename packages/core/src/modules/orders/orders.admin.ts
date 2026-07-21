@@ -1856,21 +1856,6 @@ export async function createOrder(
             .from(customers)
             .where(eq(customers.phone, data.customerPhone))
             .get();
-
-        let customerStats: { totalOrders: number; totalSpent: number; lastOrderAt: Date | null } | null = null;
-        if (existingCustomer) {
-            const customerOrders = await db
-                .select({ paidAmount: orders.paidAmount, createdAt: orders.createdAt })
-                .from(orders)
-                .where(and(
-                    eq(orders.customerId, existingCustomer.id),
-                    isNull(orders.deletedAt),
-                ));
-            customerStats = calculateCustomerStats([
-                ...customerOrders,
-                { paidAmount: initialPaymentState.paidAmount, createdAt: new Date() },
-            ]);
-        }
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
             .map((item) => ({
@@ -1904,7 +1889,6 @@ export async function createOrder(
             zoneName,
             areaName,
             existingCustomer,
-            customerStats,
             trackedItems,
             allocationLineIds,
             taxQuote,
@@ -1922,7 +1906,6 @@ export async function createOrder(
         zoneName,
         areaName,
         existingCustomer,
-        customerStats,
         trackedItems,
         allocationLineIds,
         taxQuote,
@@ -1975,26 +1958,11 @@ export async function createOrder(
     } else {
         writeBatch.push(
             db.update(customers).set({
-                totalOrders: customerStats!.totalOrders,
-                totalSpent: customerStats!.totalSpent,
-                lastOrderAt: customerStats!.lastOrderAt ? sql`${Math.floor(customerStats!.lastOrderAt.getTime() / 1000)}` : null,
+                totalOrders: sql`${customers.totalOrders} + 1`,
+                totalSpent: sql`${customers.totalSpent} + ${initialPaymentState.paidAmount}`,
+                lastOrderAt: sql`unixepoch()`,
                 updatedAt: sql`unixepoch()`,
             }).where(eq(customers.id, existingCustomer.id)),
-        );
-        writeBatch.push(
-            db.insert(customerHistory).values({
-                id: "hist_" + nanoid(),
-                customerId: existingCustomer.id,
-                name: data.customerName,
-                email: data.customerEmail,
-                phone: data.customerPhone,
-                address: data.shippingAddress,
-                city: data.city,
-                zone: data.zone,
-                area: data.area,
-                changeType: "updated",
-                createdAt: sql`unixepoch()`,
-            }),
         );
     }
 

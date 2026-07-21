@@ -194,7 +194,7 @@ describe("admin order list boundaries", () => {
   it("commits manual-order idempotency evidence with the order write", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const createSource = source.slice(
-      source.indexOf("export async function createOrder"),
+      source.indexOf("export async function createOrder(\n"),
       source.indexOf("interface UpdateOrderItem"),
     );
 
@@ -214,7 +214,7 @@ describe("admin order list boundaries", () => {
   it("commits manual COD tracking before the order-create attempt is finalized", () => {
     const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
     const createSource = source.slice(
-      source.indexOf("export async function createOrder"),
+      source.indexOf("export async function createOrder(\n"),
       source.indexOf("interface UpdateOrderItem"),
     );
 
@@ -227,6 +227,23 @@ describe("admin order list boundaries", () => {
 
     expect(trackingInsert).toBeGreaterThan(-1);
     expect(trackingInsert).toBeLessThan(attemptCommit);
+  });
+
+  it("increments existing-customer order aggregates atomically with manual creation", () => {
+    const source = readFileSync(ORDERS_ADMIN_SOURCE, "utf8");
+    const createSource = source.slice(
+      source.indexOf("export async function createOrder(\n"),
+      source.indexOf("interface UpdateOrderItem"),
+    );
+
+    expect(createSource).not.toContain("const customerOrders = await db");
+    expect(createSource).not.toContain("customerStats");
+    expect(createSource).toContain("totalOrders: sql`${customers.totalOrders} + 1`");
+    expect(createSource).toContain(
+      "totalSpent: sql`${customers.totalSpent} + ${initialPaymentState.paidAmount}`",
+    );
+    expect(createSource).toContain("lastOrderAt: sql`unixepoch()`");
+    expect(createSource.match(/db\.insert\(customerHistory\)/g)).toHaveLength(1);
   });
 
   it("recomputes admin order payment state when totals are created or edited", () => {
