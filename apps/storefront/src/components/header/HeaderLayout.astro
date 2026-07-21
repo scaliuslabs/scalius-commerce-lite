@@ -33,7 +33,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 
 <div
   id="main-header"
-  class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
+  class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
 >
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- ROW 1 -->
@@ -75,7 +75,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
                   fit: "scale-down",
                 })}
                 alt={headerData.logo.alt}
-                class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
+                class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-[max-height,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
                 style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}
                 width={240}
                 height={80}
@@ -97,13 +97,13 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
         class="hidden lg:flex flex-1 items-center justify-center px-8 min-w-0 relative h-full z-10"
       >
         <div
-          class="w-full max-w-lg transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] opacity-100 scale-100 translate-y-0 group-[.is-scrolled]/header:opacity-0 group-[.is-scrolled]/header:scale-90 group-[.is-scrolled]/header:-translate-y-4 group-[.is-scrolled]/header:pointer-events-none absolute"
+          class="header-expanded-center absolute w-full max-w-lg"
         >
           <SearchBar />
         </div>
         <!-- Compact Nav (Visible on Scroll) -->
         <div
-          class="transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] opacity-0 scale-95 translate-y-4 pointer-events-none group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100 group-[.is-scrolled]/header:translate-y-0 group-[.is-scrolled]/header:pointer-events-auto absolute w-full inset-x-0 flex justify-center"
+          class="header-compact-center absolute inset-x-0 flex w-full justify-center"
         >
           <slot name="desktop-nav-compact" />
         </div>
@@ -269,6 +269,45 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 </div>
 
 <style>
+  .header-expanded-center,
+  .header-compact-center {
+    transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear;
+  }
+
+  .header-expanded-center {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition-delay: 160ms, 160ms, 160ms;
+  }
+
+  .header-compact-center {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+    transition-delay: 0ms, 0ms, 120ms;
+  }
+
+  #main-header.is-scrolled .header-expanded-center {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.96);
+    transition-delay: 0ms, 0ms, 120ms;
+  }
+
+  #main-header.is-scrolled .header-compact-center {
+    pointer-events: auto;
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition-delay: 160ms, 160ms, 160ms;
+  }
+
   .storefront-header-logo {
     max-width: var(--header-logo-mobile-width);
   }
@@ -276,6 +315,13 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
   @media (min-width: 64rem) {
     .storefront-header-logo {
       max-width: var(--header-logo-width);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .header-expanded-center,
+    .header-compact-center {
+      transition: none;
     }
   }
 </style>
