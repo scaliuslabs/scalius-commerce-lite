@@ -2,13 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Phone,
   Mail,
   MapPin,
@@ -25,8 +18,6 @@ import type { Order } from "./types";
 import { getStatusBadgeClass } from "@scalius/shared/utils";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { useUpdateFulfillmentStatus } from "@/lib/api-mutations/orders";
-import type { UpdateFulfillmentStatusInput } from "@/lib/api-functions/orders";
 import { formatOrderAmount, formatOrderTimestamp } from "./formatters";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
@@ -34,14 +25,6 @@ import {
   resolveSavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
 import { formatLocationParts } from "@/lib/location-presentation";
-
-type FulfillmentStatus = UpdateFulfillmentStatusInput["status"];
-
-const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
-
-function isFulfillmentStatus(value: string): value is FulfillmentStatus {
-  return FULFILLMENT_STATUSES.includes(value as FulfillmentStatus);
-}
 
 interface OrderViewHeaderProps {
   order: Order;
@@ -83,7 +66,6 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
     order.cityName,
   );
   const orderActions = useOrderActionPermissions();
-  const fulfillmentMutation = useUpdateFulfillmentStatus();
   const activeRefundOperation = order.activeRefundOperation;
   const refundLocked = Boolean(activeRefundOperation?.active);
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
@@ -220,36 +202,12 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             )}
             {order.fulfillmentStatus && (
               <InfoItem icon={Package} label="Fulfillment">
-                <Select
-                  value={order.fulfillmentStatus}
-                  onValueChange={(value) => {
-                    if (refundLocked || shipmentLocked || !orderActions.canManageOrderShipments) return;
-                    if (
-                      value !== order.fulfillmentStatus &&
-                      isFulfillmentStatus(value)
-                    ) {
-                      fulfillmentMutation.mutate({ orderId: order.id, status: value });
-                    }
-                  }}
-                  disabled={
-                    fulfillmentMutation.isPending ||
-                    refundLocked ||
-                    shipmentLocked ||
-                    !orderActions.canManageOrderShipments
-                  }
+                <Badge
+                  variant="secondary"
+                  className={`text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
                 >
-                  <SelectTrigger
-                    aria-label="Fulfillment status"
-                    className={`h-7 w-auto min-w-[100px] gap-1 rounded-full border-0 px-2.5 text-xs font-medium ${FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus] ?? ""}`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="partial">Partial</SelectItem>
-                    <SelectItem value="complete">Complete</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {order.fulfillmentStatus.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}
+                </Badge>
               </InfoItem>
             )}
           </div>

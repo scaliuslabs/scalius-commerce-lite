@@ -47,7 +47,6 @@ vi.mock("../api-functions/orders", () => ({
   resendOrderNotification: vi.fn(),
   retryOrderNotification: vi.fn(),
   restoreOrder: vi.fn(),
-  updateFulfillmentStatus: vi.fn(),
   updateOrder: vi.fn(),
   updateOrderCod: vi.fn(),
   updateOrderStatus: vi.fn(),

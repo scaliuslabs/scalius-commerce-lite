@@ -33,18 +33,13 @@ describe("admin shipment status route boundaries", () => {
     expect(source).not.toContain("checkAndSyncShipmentStatus({\n        db,\n        shipment,\n        encryptionKey,\n        c,\n        source: \"orders-shipment-reconcile\"");
   });
 
-  it("keeps direct fulfillment-status updates blocked during active refunds", () => {
+  it("keeps fulfillment aggregate state owned by shipment workflows", () => {
     const source = readFileSync(ORDERS_STATUS_SOURCE, "utf8");
 
-    expect(source).toContain("assertNoActiveRefundAttempt");
-    expect(source).toContain("await assertNoActiveRefundAttempt(db, orderId)");
-  });
-
-  it("keeps direct fulfillment-status updates blocked during active hosted payment setup", () => {
-    const source = readFileSync(ORDERS_STATUS_SOURCE, "utf8");
-
-    expect(source).toContain("assertNoActivePaymentSessionAttempt");
-    expect(source).toContain("await assertNoActivePaymentSessionAttempt(db, orderId)");
+    expect(source).not.toContain('path: "/{id}/fulfillment-status"');
+    expect(source).not.toContain("Manually update order fulfillment status");
+    expect(source).not.toContain("validateTransition(\"fulfillment\"");
+    expect(source).not.toContain("Fulfillment status updated");
   });
 
   it("keeps standalone shipment checks on the same sync helper and boolean response contract", () => {

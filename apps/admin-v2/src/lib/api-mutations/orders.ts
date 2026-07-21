@@ -19,7 +19,6 @@ import {
   retryOrderNotification,
   restoreOrder,
   reconcileOrderReturn,
-  updateFulfillmentStatus,
   updateOrder,
   updateOrderCod,
   updateOrderStatus,
@@ -35,7 +34,6 @@ import {
   type ReconcileRefundAttemptInput,
   type ResendOrderNotificationInput,
   type ResolveOrderSupportRequestInput,
-  type UpdateFulfillmentStatusInput,
   type UpdateOrderCodInput,
   type UpdateOrderInput,
   type UpdateOrderStatusInput,
@@ -217,23 +215,6 @@ export function useCreateFulfillmentShipment() {
       toast.error(
         getServerFnError(err, "Failed to create fulfillment shipment"),
       ),
-  });
-}
-
-export function useUpdateFulfillmentStatus() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: UpdateFulfillmentStatusInput) =>
-      updateFulfillmentStatus({ data }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      invalidateDashboardQueries(queryClient);
-      toast.success("Fulfillment status updated");
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, "Failed to update fulfillment status")),
   });
 }
 
