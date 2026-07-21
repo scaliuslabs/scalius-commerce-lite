@@ -36,6 +36,7 @@ import {
   HEADER_LOGO_WIDTH_MIN,
   HEADER_LOGO_WIDTH_STEP,
 } from "@scalius/shared/brand-presentation";
+import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
   getCurrencySettings,
   isCurrencyCodeLocked,
@@ -1048,17 +1049,16 @@ const getStorefrontUrlRoute = createRoute({
 });
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
-  try {
-    const db = c.get("db");
-    const result = await getStorefrontUrlSetting(db);
-    return ok(c, result);
-  } catch {
-    return ok(c, { storefrontUrl: "/" });
-  }
+  const db = c.get("db");
+  const result = await getStorefrontUrlSetting(db);
+  return ok(c, result);
 });
 
 const saveStorefrontUrlSchema = z.object({
-  storefrontUrl: z.string().optional(),
+  storefrontUrl: z.string().trim().min(1, "Enter the public store origin.").refine(
+    (value) => normalizeStorefrontOrigin(value) !== null,
+    "Use an HTTPS origin without credentials, a path, query, or fragment. HTTP is limited to loopback development.",
+  ),
 });
 
 const saveStorefrontUrlRoute = createRoute({

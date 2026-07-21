@@ -84948,9 +84948,13 @@
                 "type": "object",
                 "properties": {
                   "storefrontUrl": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   }
-                }
+                },
+                "required": [
+                  "storefrontUrl"
+                ]
               }
             }
           }

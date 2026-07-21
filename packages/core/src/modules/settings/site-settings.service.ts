@@ -52,6 +52,7 @@ import {
   sanitizeHomepagePresentationConfig,
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
+import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 
 const MEDIA_SETTINGS_CATEGORY = "media";
 const IMAGE_OPTIMIZATION_KEY = "image_optimization";
@@ -1381,10 +1382,17 @@ export async function getStorefrontUrlSetting(db: Database) {
     .select({ storefrontUrl: siteSettings.storefrontUrl })
     .from(siteSettings)
     .limit(1);
-  return { storefrontUrl: row?.storefrontUrl || "/" };
+  return { storefrontUrl: row?.storefrontUrl?.trim() ?? "" };
 }
 
-export async function saveStorefrontUrl(db: Database, url?: string) {
+export async function saveStorefrontUrl(db: Database, url: string) {
+  const storefrontUrl = normalizeStorefrontOrigin(url);
+  if (!storefrontUrl) {
+    throw new ValidationError(
+      "Enter the HTTPS origin of the public store. Local development may use an HTTP loopback origin.",
+    );
+  }
+
   await db
     .insert(siteSettings)
     .values({
@@ -1392,14 +1400,14 @@ export async function saveStorefrontUrl(db: Database, url?: string) {
       siteName: "My Store",
       headerConfig: JSON.stringify({}),
       footerConfig: JSON.stringify({}),
-      storefrontUrl: url || "/",
+      storefrontUrl,
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     })
     .onConflictDoUpdate({
       target: siteSettings.singletonKey,
       set: {
-        storefrontUrl: url || "/",
+        storefrontUrl,
         updatedAt: sql`unixepoch()`,
       },
     });

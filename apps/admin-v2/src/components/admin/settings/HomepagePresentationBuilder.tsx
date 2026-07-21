@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GripVertical, Loader2, Trash2 } from "lucide-react";
+import { GripVertical, Loader2, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -34,7 +34,14 @@ function cloneConfig(config: HomepagePresentationConfig): HomepagePresentationCo
   };
 }
 
-export function HomepagePresentationBuilder() {
+export function HomepagePresentationBuilder({
+  onDraftStateChange,
+}: {
+  onDraftStateChange?: (state: {
+    isDirty: boolean;
+    isSubmitting: boolean;
+  }) => void;
+}) {
   const queryClient = useQueryClient();
   const presentationQuery = useQuery({
     queryKey: queryKeys.settings.homepagePresentation(),
@@ -106,6 +113,13 @@ export function HomepagePresentationBuilder() {
     },
   });
 
+  useEffect(() => {
+    onDraftStateChange?.({
+      isDirty: dirty,
+      isSubmitting: saveMutation.isPending,
+    });
+  }, [dirty, onDraftStateChange, saveMutation.isPending]);
+
   if (presentationQuery.isLoading || categoriesQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-14">
@@ -153,6 +167,7 @@ export function HomepagePresentationBuilder() {
             </p>
           </div>
           <Switch
+            className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
             id="homepage-category-rail"
             checked={config.categoryRail.enabled}
             onCheckedChange={(enabled) => setConfig((current) => ({
@@ -182,7 +197,7 @@ export function HomepagePresentationBuilder() {
               }))}
               disabled={!config.categoryRail.enabled}
               maxLength={80}
-              className="h-9"
+              className="min-h-11 md:min-h-9"
             />
           </div>
 
@@ -201,14 +216,14 @@ export function HomepagePresentationBuilder() {
                   ref={sortable.ref}
                   style={sortable.style}
                   className={cn(
-                    "flex min-h-10 items-center gap-2 rounded-lg border bg-background px-2",
+                    "flex min-h-12 items-center gap-2 rounded-lg border bg-background px-2 md:min-h-10",
                     sortable.isDragging && "relative z-10 shadow-md",
                   )}
                 >
                   <button
                     type="button"
                     aria-label={`Reorder ${item.category?.name ?? "unavailable category"}`}
-                    className="grid size-8 shrink-0 cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                    className="grid size-11 shrink-0 cursor-grab place-items-center rounded-md text-muted-foreground hover:bg-muted md:size-8 active:cursor-grabbing"
                     {...sortable.dragHandleProps}
                   >
                     <GripVertical className="size-4" />
@@ -225,7 +240,7 @@ export function HomepagePresentationBuilder() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    className="size-11 shrink-0 text-muted-foreground hover:text-destructive md:size-8"
                     aria-label={`Remove ${item.category?.name ?? "unavailable category"}`}
                     onClick={() => setConfig((current) => ({
                       ...current,
@@ -288,6 +303,7 @@ export function HomepagePresentationBuilder() {
           </p>
         </div>
         <Switch
+          className="relative after:absolute after:-inset-x-1.5 after:-inset-y-3"
           id="homepage-trust-strip"
           checked={config.trustStrip.enabled}
           onCheckedChange={(enabled) => setConfig((current) => ({
@@ -297,20 +313,32 @@ export function HomepagePresentationBuilder() {
         />
       </section>
 
-      <div className="flex items-center justify-between gap-3 border-t pt-4">
+      <div className="space-y-3 border-t pt-4 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <p className="text-xs text-muted-foreground">
           Hero stories and collection placement remain managed in their own workspaces.
         </p>
-        <Button
-          type="button"
-          onClick={() => saveMutation.mutate()}
-          disabled={!dirty || saveMutation.isPending || !saved}
-          className="min-w-28"
-        >
-          {saveMutation.isPending ? (
-            <><Loader2 className="mr-2 size-4 animate-spin" /> Saving…</>
-          ) : "Save homepage"}
-        </Button>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 md:min-h-10"
+            onClick={() => saved && setConfig(cloneConfig(saved.config))}
+            disabled={!dirty || saveMutation.isPending || !saved}
+          >
+            <RotateCcw className="size-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            onClick={() => saveMutation.mutate()}
+            disabled={!dirty || saveMutation.isPending || !saved}
+            className="min-h-11 min-w-28 md:min-h-10"
+          >
+            {saveMutation.isPending ? (
+              <><Loader2 className="mr-2 size-4 animate-spin" /> Saving…</>
+            ) : "Save homepage"}
+          </Button>
+        </div>
       </div>
     </div>
   );
