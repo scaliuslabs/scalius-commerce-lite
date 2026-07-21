@@ -4,6 +4,7 @@ import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import CategoryFilters from "@/components/CategoryFilters";
 import CatalogPagination from "@/components/catalog/CatalogPagination.astro";
+import AppliedCatalogFilters from "@/components/catalog/AppliedCatalogFilters.astro";
 import {
   getAllProducts,
   getLayoutData,
@@ -13,12 +14,7 @@ import {
   type ProductFacet,
   type LayoutData,
 } from "@/lib/api";
-import {
-  SlidersHorizontal,
-  X,
-  ArrowLeft,
-  Search,
-} from "lucide-react";
+import { SlidersHorizontal, X, ArrowLeft, Search } from "lucide-react";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
   PRODUCT_LIST_NAVIGATION_PARAMS,
@@ -87,13 +83,25 @@ function getPaginationUrl(pageNum: number) {
   });
 }
 
-const activeFilterCount = Object.keys(currentFilters).filter(
-  (key) => !PRODUCT_LIST_NAVIGATION_PARAMS.includes(key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number]) && currentFilters[key]
-).reduce((count, key) => count + (
-  Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1
-), 0);
+const activeFilterCount = Object.keys(currentFilters)
+  .filter(
+    (key) =>
+      !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
+        key as (typeof PRODUCT_LIST_NAVIGATION_PARAMS)[number],
+      ) && currentFilters[key],
+  )
+  .reduce(
+    (count, key) =>
+      count +
+      (Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1),
+    0,
+  );
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/search");
-const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== "newest" || activeFilterCount > 0;
+const shouldNoindexSearchPage =
+  Boolean(query) ||
+  pagination.page > 1 ||
+  sortBy !== "newest" ||
+  activeFilterCount > 0;
 
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -113,7 +121,11 @@ const analyticsProductData = products.map((p) => ({
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
 >
-  {shouldNoindexSearchPage && <meta slot="head" name="robots" content="noindex,follow" />}
+  {
+    shouldNoindexSearchPage && (
+      <meta slot="head" name="robots" content="noindex,follow" />
+    )
+  }
   <div
     class="min-h-screen bg-gray-50"
     data-search-query={query}
@@ -137,13 +149,13 @@ const analyticsProductData = products.map((p) => ({
         }
       </div>
 
-      <div class="flex flex-col lg:flex-row gap-6">
+      <div class="mb-4 grid grid-cols-2 gap-2 lg:hidden">
         <button
           type="button"
           id="mobile-filter-toggle"
           aria-controls="filter-section"
           aria-expanded="false"
-          class="lg:hidden flex items-center justify-center gap-2 w-full py-3 px-4 bg-primary text-primary-foreground rounded-lg shadow-sm font-medium mb-4 relative"
+          class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold text-gray-800 shadow-sm"
         >
           <SlidersHorizontal className="w-4 h-4" />
           <span>Filters</span>
@@ -156,33 +168,54 @@ const analyticsProductData = products.map((p) => ({
           }
         </button>
 
+        <label class="relative block">
+          <span class="sr-only">Sort products</span>
+          <select
+            id="sortByMobile"
+            name="sortBy"
+            data-catalog-sort
+            data-list-pathname={productListPathname}
+            data-current-filters={canonicalFilterState}
+            class="min-h-11 w-full rounded-lg border-gray-200 bg-white py-2.5 pl-3 pr-8 text-sm font-semibold text-gray-800 shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"
+          >
+            <option value="newest" selected={sortBy === "newest"}>Latest</option
+            >
+            <option value="price-asc" selected={sortBy === "price-asc"}
+              >Price: Low to High</option
+            >
+            <option value="price-desc" selected={sortBy === "price-desc"}
+              >Price: High to Low</option
+            >
+          </select>
+        </label>
+      </div>
+
+      <div class="flex flex-col lg:flex-row gap-6">
         <aside
           id="filter-section"
           aria-labelledby="mobile-filter-title"
           class="fixed inset-0 bg-black/50 z-50 hidden lg:static lg:block lg:bg-transparent lg:z-auto lg:w-80 lg:shrink-0"
         >
           <div
-            class="bg-white h-full w-4/5 max-w-sm lg:w-full flex flex-col lg:rounded-lg lg:shadow-sm lg:border lg:border-gray-100"
+            class="flex h-full w-full flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
           >
             <div
               class="flex justify-between items-center lg:hidden p-4 border-b bg-white"
             >
-              <h3 id="mobile-filter-title" class="font-semibold text-lg">Filters</h3>
+              <h3 id="mobile-filter-title" class="font-semibold text-lg">
+                Filters
+              </h3>
               <button
                 type="button"
                 id="mobile-filter-close"
                 aria-label="Close filters"
-                class="p-1 hover:bg-gray-100 rounded"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form
-              id="filterForm"
-              method="get"
-              class="grow overflow-y-auto"
-            >
+            <form id="filterForm" method="get" class="grow overflow-y-auto">
               <input type="hidden" name="page" value="1" />
               <!-- Hidden sortBy field to maintain sort state -->
               <input type="hidden" name="sortBy" value={sortBy} />
@@ -214,7 +247,7 @@ const analyticsProductData = products.map((p) => ({
 
         <div class="flex-1 min-w-0">
           <div
-            class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-100"
+            class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-gray-100 bg-white p-4 shadow-sm lg:flex"
           >
             <p class="text-sm font-medium text-gray-700">
               Showing <span class="font-bold text-primary"
@@ -225,14 +258,15 @@ const analyticsProductData = products.map((p) => ({
 
             <div class="flex items-center gap-3">
               <label
-                for="sortBy"
+                for="sortByDesktop"
                 class="text-sm font-medium text-gray-700 whitespace-nowrap"
               >
                 Sort by:
               </label>
               <select
-                id="sortBy"
+                id="sortByDesktop"
                 name="sortBy"
+                data-catalog-sort
                 data-list-pathname={productListPathname}
                 data-current-filters={canonicalFilterState}
                 class="rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-primary focus:border-primary min-w-[140px]"
@@ -249,6 +283,20 @@ const analyticsProductData = products.map((p) => ({
               </select>
             </div>
           </div>
+
+          <p class="mb-3 text-sm text-gray-600 lg:hidden">
+            <span class="font-semibold text-gray-900">{pagination.total}</span>{
+              " "
+            }
+            {pagination.total === 1 ? "product" : "products"}
+          </p>
+
+          <AppliedCatalogFilters
+            facets={facets}
+            currentFilters={currentFilters}
+            pathname={productListPathname}
+            currencySymbol={currencySymbol}
+          />
 
           {
             products.length === 0 && (
@@ -277,7 +325,11 @@ const analyticsProductData = products.map((p) => ({
               <Fragment>
                 <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 mb-8">
                   {products.map((product) => (
-                    <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+                    <ProductCard
+                      product={product}
+                      currencySymbol={currencySymbol}
+                      currencyCode={currencyCode}
+                    />
                   ))}
                 </div>
 
@@ -301,15 +353,19 @@ const analyticsProductData = products.map((p) => ({
   import { normalizeSearchQuery } from "@/lib/search-query";
   import { setupCatalogFilterDialog } from "@/lib/catalog-filter-dialog";
 
-  function readCanonicalFilters(select: HTMLSelectElement): ProductListFilterState {
+  function readCanonicalFilters(
+    select: HTMLSelectElement,
+  ): ProductListFilterState {
     try {
       const parsed = JSON.parse(select.dataset.currentFilters || "{}");
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+        return {};
       return Object.fromEntries(
         Object.entries(parsed).filter(
           ([, value]) =>
             typeof value === "string" ||
-            (Array.isArray(value) && value.every((item) => typeof item === "string")),
+            (Array.isArray(value) &&
+              value.every((item) => typeof item === "string")),
         ),
       ) as ProductListFilterState;
     } catch {
@@ -318,28 +374,32 @@ const analyticsProductData = products.map((p) => ({
   }
 
   function setupSortFunctionality() {
-    // FIX: Safely get and type-check the select element
-    const sortSelect = document.getElementById("sortBy");
-    if (!(sortSelect instanceof HTMLSelectElement)) return;
+    document
+      .querySelectorAll<HTMLSelectElement>("[data-catalog-sort]")
+      .forEach((sortSelect) => {
+        if (sortSelect.dataset.sortBound === "true") return;
+        sortSelect.dataset.sortBound = "true";
 
-    sortSelect.addEventListener("change", () => {
-      const currentFilters = readCanonicalFilters(sortSelect);
-      const rawQuery = currentFilters.q;
-      const query = normalizeSearchQuery(
-        Array.isArray(rawQuery) ? rawQuery.at(-1) : rawQuery,
-      );
-      if (query) currentFilters.q = query;
-      else delete currentFilters.q;
+        sortSelect.addEventListener("change", () => {
+          const currentFilters = readCanonicalFilters(sortSelect);
+          const rawQuery = currentFilters.q;
+          const query = normalizeSearchQuery(
+            Array.isArray(rawQuery) ? rawQuery.at(-1) : rawQuery,
+          );
+          if (query) currentFilters.q = query;
+          else delete currentFilters.q;
 
-      window.location.href = buildProductListHref({
-        pathname: sortSelect.dataset.listPathname || window.location.pathname,
-        currentFilters,
-        overrides: {
-          sortBy: sortSelect.value,
-          page: 1,
-        },
+          window.location.href = buildProductListHref({
+            pathname:
+              sortSelect.dataset.listPathname || window.location.pathname,
+            currentFilters,
+            overrides: {
+              sortBy: sortSelect.value,
+              page: 1,
+            },
+          });
+        });
       });
-    });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -364,14 +424,17 @@ const analyticsProductData = products.map((p) => ({
 
   function trackSearchResults() {
     const productListElement = document.querySelector<HTMLElement>(
-      "[data-products-for-analytics]"
+      "[data-products-for-analytics]",
     );
-    if (!productListElement || productListElement.dataset.searchTracked === "true")
+    if (
+      !productListElement ||
+      productListElement.dataset.searchTracked === "true"
+    )
       return;
 
     try {
       const productsData: ProductAnalyticsData[] = JSON.parse(
-        productListElement.dataset.productsForAnalytics || "[]"
+        productListElement.dataset.productsForAnalytics || "[]",
       );
       const searchQuery = productListElement.dataset.searchQuery || "";
 

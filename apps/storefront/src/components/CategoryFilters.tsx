@@ -58,9 +58,8 @@ const getInitialState = (
   Object.entries(currentFilters).forEach(([key, value]) => {
     if (!["q", "page", "sortBy", "minPrice", "maxPrice"].includes(key)) {
       const values = Array.isArray(value) ? value : [value];
-      filters[key] = values.length === 1 && values[0] === "true"
-        ? true
-        : values;
+      filters[key] =
+        values.length === 1 && values[0] === "true" ? true : values;
     }
   });
 
@@ -121,6 +120,9 @@ export default function CategoryFilters({
 
   // Other filter state (switches, attributes)
   const [selectedFilters, setSelectedFilters] = useState(initialState.filters);
+  const [expandedFacets, setExpandedFacets] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   /**
    * Slider State Management
@@ -204,13 +206,14 @@ export default function CategoryFilters({
       if (!form) return;
 
       const formData = new FormData(form);
-      const query = normalizeSearchQuery(currentQuery ?? formData.get("q")?.toString());
+      const query = normalizeSearchQuery(
+        currentQuery ?? formData.get("q")?.toString(),
+      );
 
       const finalParams = new URLSearchParams();
 
       // Core navigation parameters
       if (query) finalParams.set("q", query);
-      finalParams.set("page", "1"); // Always reset to first page
       const sortBy = formData.get("sortBy")?.toString();
       if (sortBy && sortBy !== "newest") finalParams.set("sortBy", sortBy);
 
@@ -227,7 +230,8 @@ export default function CategoryFilters({
       Object.entries(selectedFilters).forEach(([key, value]) => {
         if (value === false) return;
         if (Array.isArray(value)) {
-          for (const selectedValue of value) finalParams.append(key, selectedValue);
+          for (const selectedValue of value)
+            finalParams.append(key, selectedValue);
         } else if (value === true) finalParams.set(key, "true");
       });
 
@@ -383,9 +387,8 @@ export default function CategoryFilters({
    */
   const handlePriceInputChange = (type: "min" | "max", value: string) => {
     const parsedValue = Number(value);
-    const numValue = Number.isFinite(parsedValue) && parsedValue >= 0
-      ? parsedValue
-      : 0;
+    const numValue =
+      Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : 0;
 
     setPriceState((prev) => {
       const newState = {
@@ -487,29 +490,65 @@ export default function CategoryFilters({
     return 1_000;
   }, [priceState.maxRange, priceState.minRange]);
 
-  const selectedAttributeChips = useMemo(() => facets.flatMap((facet) => {
-    const rawSelected = selectedFilters[facet.slug];
-    const selected: string[] = Array.isArray(rawSelected)
-      ? rawSelected
-      : [];
-    return selected.map((value) => ({ slug: facet.slug, label: facet.name, value }));
-  }), [facets, selectedFilters]);
+  const selectedAttributeChips = useMemo(
+    () =>
+      facets.flatMap((facet) => {
+        const rawSelected = selectedFilters[facet.slug];
+        const selected: string[] = Array.isArray(rawSelected)
+          ? rawSelected
+          : [];
+        return selected.map((value) => ({
+          slug: facet.slug,
+          label: facet.name,
+          value,
+        }));
+      }),
+    [facets, selectedFilters],
+  );
   const selectedAttributeValues = (slug: string): string[] => {
     const selected = selectedFilters[slug];
     return Array.isArray(selected) ? selected : [];
+  };
+  const defaultOpenSections = useMemo(
+    () => [
+      "general",
+      "price",
+      ...facets.slice(0, 3).map((facet) => facet.slug),
+    ],
+    [facets],
+  );
+  const visibleFacetValues = (facet: ProductFacet) => {
+    if (expandedFacets.has(facet.slug) || facet.values.length <= 10) {
+      return facet.values;
+    }
+    const selected = new Set(selectedAttributeValues(facet.slug));
+    return facet.values.filter(
+      ({ value }, index) => index < 10 || selected.has(value),
+    );
+  };
+  const toggleFacetExpansion = (slug: string) => {
+    setExpandedFacets((current) => {
+      const next = new Set(current);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
   };
 
   return (
     <>
       {/* Main Filter Content */}
-      <div className="pb-24 lg:pb-4">
+      <div className="pb-28 lg:pb-4">
         <Accordion
           type="multiple"
           className="w-full space-y-3"
-          defaultValue={["general", "price", ...facets.map((facet) => facet.slug)]}
+          defaultValue={defaultOpenSections}
         >
           {selectedAttributeChips.length > 0 && (
-            <div className="flex flex-wrap gap-1.5" aria-label="Selected filters">
+            <div
+              className="flex flex-wrap gap-1.5"
+              aria-label="Selected filters"
+            >
               {selectedAttributeChips.map((chip) => (
                 <button
                   key={`${chip.slug}:${chip.value}`}
@@ -518,7 +557,9 @@ export default function CategoryFilters({
                   className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/10"
                   aria-label={`Remove ${chip.label}: ${chip.value}`}
                 >
-                  <span>{chip.label}: {chip.value}</span>
+                  <span>
+                    {chip.label}: {chip.value}
+                  </span>
                   <span aria-hidden="true">×</span>
                 </button>
               ))}
@@ -530,12 +571,14 @@ export default function CategoryFilters({
             className="border border-gray-200 rounded-lg bg-white"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="font-semibold text-gray-900">General</span>
+              <span className="font-semibold text-gray-900">
+                Shopping options
+              </span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-4">
                 {/* On Sale Switch */}
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex min-h-11 items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
                   <label
                     htmlFor="hasDiscount"
                     className="text-sm font-medium text-gray-700 cursor-pointer"
@@ -553,7 +596,7 @@ export default function CategoryFilters({
                 </div>
 
                 {/* Free Delivery Switch */}
-                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex min-h-11 items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
                   <label
                     htmlFor="freeDelivery"
                     className="text-sm font-medium text-gray-700 cursor-pointer"
@@ -579,7 +622,7 @@ export default function CategoryFilters({
             className="border border-gray-200 rounded-lg bg-white"
           >
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
-              <span className="font-semibold text-gray-900">Price Range</span>
+              <span className="font-semibold text-gray-900">Price</span>
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
               <div className="space-y-6">
@@ -607,7 +650,10 @@ export default function CategoryFilters({
                 <div className="grid grid-cols-2 gap-3">
                   {/* Min Price Input */}
                   <div>
-                    <label htmlFor="catalog-min-price" className="block text-xs font-medium text-gray-600 mb-2">
+                    <label
+                      htmlFor="catalog-min-price"
+                      className="block text-xs font-medium text-gray-600 mb-2"
+                    >
                       Minimum
                     </label>
                     <div className="relative">
@@ -632,7 +678,10 @@ export default function CategoryFilters({
 
                   {/* Max Price Input */}
                   <div>
-                    <label htmlFor="catalog-max-price" className="block text-xs font-medium text-gray-600 mb-2">
+                    <label
+                      htmlFor="catalog-max-price"
+                      className="block text-xs font-medium text-gray-600 mb-2"
+                    >
                       Maximum
                     </label>
                     <div className="relative">
@@ -670,47 +719,52 @@ export default function CategoryFilters({
                 <span className="font-semibold text-gray-900">{attr.name}</span>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4">
-                <div className="flex flex-wrap gap-2">
-                  {/* "All" Button - Clears Filter */}
-                  <button
-                    type="button"
-                    onClick={() => handleAttributeClick(attr.slug, null)}
-                    className={cn(
-                      "font-medium rounded-lg border px-3 py-2 text-sm transition-colors",
-                      selectedAttributeValues(attr.slug).length === 0
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-white hover:bg-gray-50 border-gray-200",
-                    )}
-                  >
-                    All
-                  </button>
-
-                  {/* Attribute Value Buttons */}
-                  {attr.values.map(({ value, count }) => {
-                    const selected = selectedAttributeValues(attr.slug).includes(value);
+                <div className="space-y-1">
+                  {visibleFacetValues(attr).map(({ value, count }) => {
+                    const selected = selectedAttributeValues(
+                      attr.slug,
+                    ).includes(value);
                     const disabled = count === 0 && !selected;
                     return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => handleAttributeClick(attr.slug, value)}
-                      disabled={disabled}
-                      aria-pressed={selected}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                        selected
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-white hover:bg-gray-50 border-gray-200",
-                      )}
-                    >
-                      <span>{value}</span>
-                      <span className={cn(
-                        "text-[11px] tabular-nums",
-                        selected ? "text-primary-foreground/80" : "text-gray-400",
-                      )}>{count}</span>
-                    </button>
+                      <label
+                        key={value}
+                        className={cn(
+                          "flex min-h-11 items-center gap-3 rounded-md px-2 text-sm transition-colors",
+                          disabled
+                            ? "cursor-not-allowed opacity-40"
+                            : "cursor-pointer hover:bg-gray-50",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={disabled}
+                          onChange={() =>
+                            handleAttributeClick(attr.slug, value)
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <span className="min-w-0 flex-1 truncate font-medium text-gray-700">
+                          {value}
+                        </span>
+                        <span className="tabular-nums text-xs text-gray-400">
+                          {count}
+                        </span>
+                      </label>
                     );
                   })}
+                  {attr.values.length > 10 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleFacetExpansion(attr.slug)}
+                      className="min-h-10 px-2 text-sm font-medium text-primary hover:underline"
+                      aria-expanded={expandedFacets.has(attr.slug)}
+                    >
+                      {expandedFacets.has(attr.slug)
+                        ? "Show less"
+                        : `Show ${attr.values.length - 10} more`}
+                    </button>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -720,26 +774,36 @@ export default function CategoryFilters({
         {/* Desktop Reset Button */}
         <div className="pt-6 hidden lg:block">
           <Button variant="outline" asChild className="w-full">
-            <a href={resetPath ?? (categorySlug ? `/categories/${categorySlug}` : "/search")}>
-              Reset Filters
+            <a
+              href={
+                resetPath ??
+                (categorySlug ? `/categories/${categorySlug}` : "/search")
+              }
+            >
+              Clear all
             </a>
           </Button>
         </div>
       </div>
 
       {/* Mobile Action Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-4 z-50">
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
         <div className="grid grid-cols-2 gap-3">
           {/* Mobile Reset Button */}
           <Button variant="outline" asChild className="h-12">
-            <a href={resetPath ?? (categorySlug ? `/categories/${categorySlug}` : "/search")}>
-              Reset
+            <a
+              href={
+                resetPath ??
+                (categorySlug ? `/categories/${categorySlug}` : "/search")
+              }
+            >
+              Clear all
             </a>
           </Button>
 
           {/* Mobile Apply Button */}
           <Button type="button" onClick={handleApplyFilters} className="h-12">
-            Apply
+            Apply filters
           </Button>
         </div>
       </div>

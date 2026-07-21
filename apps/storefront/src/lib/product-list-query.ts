@@ -1,8 +1,9 @@
 import type { ProductFacet, ProductListOptions } from "@/lib/api";
-import { HTML_CACHE_IGNORED_QUERY_PARAMS, buildCanonicalQueryString } from "./cache-key";
 import {
-  DEFAULT_MIN_PRICE,
-} from "./filters/price-url";
+  HTML_CACHE_IGNORED_QUERY_PARAMS,
+  buildCanonicalQueryString,
+} from "./cache-key";
+import { DEFAULT_MIN_PRICE } from "./filters/price-url";
 import { normalizeSearchQuery } from "./search-query";
 
 export const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy"] as const;
@@ -47,7 +48,7 @@ export function buildProductListHref({
 }: {
   pathname: string;
   currentFilters: ProductListFilterState;
-  overrides?: Record<string, string | number | null | undefined>;
+  overrides?: Record<string, string | number | string[] | null | undefined>;
 }): string {
   const nextFilters: Record<string, string | number | string[]> = {
     ...currentFilters,
@@ -132,7 +133,9 @@ function getLastParam(params: URLSearchParams, key: string): string | null {
   return values.length > 0 ? values[values.length - 1] : null;
 }
 
-function collectRenderableParams(params: URLSearchParams): Map<string, string[]> {
+function collectRenderableParams(
+  params: URLSearchParams,
+): Map<string, string[]> {
   const valuesByKey = new Map<string, string[]>();
   for (const [key, value] of params.entries()) {
     if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
@@ -151,7 +154,8 @@ function hasRepeatedSingletonParams(params: URLSearchParams): boolean {
       !NAVIGATION_PARAM_SET.has(key) &&
       !BOOLEAN_FILTER_SET.has(key) &&
       !PRICE_FILTER_SET.has(key)
-    ) continue;
+    )
+      continue;
     if (seen.has(key)) return true;
     seen.add(key);
   }
@@ -196,8 +200,12 @@ export function resolveProductListQueryState({
   const params = url.searchParams;
   const rawQuery = getLastParam(params, "q");
   const query = normalizeSearchQuery(rawQuery);
-  const { page, changed: pageChanged } = normalizePage(getLastParam(params, "page"));
-  const { sortBy, changed: sortChanged } = normalizeSort(getLastParam(params, "sortBy"));
+  const { page, changed: pageChanged } = normalizePage(
+    getLastParam(params, "page"),
+  );
+  const { sortBy, changed: sortChanged } = normalizeSort(
+    getLastParam(params, "sortBy"),
+  );
   const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(facets);
   const options: ProductListOptions = {
@@ -207,9 +215,7 @@ export function resolveProductListQueryState({
   };
   const currentFilters: ProductListFilterState = {};
   let shouldRedirect =
-    pageChanged ||
-    sortChanged ||
-    hasRepeatedSingletonParams(params);
+    pageChanged || sortChanged || hasRepeatedSingletonParams(params);
 
   if (query) {
     options.search = query;
@@ -230,14 +236,18 @@ export function resolveProductListQueryState({
   let maxPrice = maxPriceParam === null ? undefined : Number(maxPriceParam);
   if (
     minPrice !== undefined &&
-    (!minPriceParam || !Number.isFinite(minPrice) || minPrice <= DEFAULT_MIN_PRICE)
+    (!minPriceParam ||
+      !Number.isFinite(minPrice) ||
+      minPrice <= DEFAULT_MIN_PRICE)
   ) {
     minPrice = undefined;
     shouldRedirect = true;
   }
   if (
     maxPrice !== undefined &&
-    (!maxPriceParam || !Number.isFinite(maxPrice) || maxPrice < DEFAULT_MIN_PRICE)
+    (!maxPriceParam ||
+      !Number.isFinite(maxPrice) ||
+      maxPrice < DEFAULT_MIN_PRICE)
   ) {
     maxPrice = undefined;
     shouldRedirect = true;
@@ -256,9 +266,9 @@ export function resolveProductListQueryState({
   }
 
   for (const [key, rawValues] of renderParams.entries()) {
-    const values = Array.from(new Set(
-      rawValues.map((value) => value.trim()).filter(Boolean),
-    ));
+    const values = Array.from(
+      new Set(rawValues.map((value) => value.trim()).filter(Boolean)),
+    );
     const value = values.at(-1);
     if (!value) continue;
     if (NAVIGATION_PARAM_SET.has(key) || PRICE_FILTER_SET.has(key)) continue;

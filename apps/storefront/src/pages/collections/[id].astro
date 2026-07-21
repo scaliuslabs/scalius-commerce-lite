@@ -2,9 +2,8 @@
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import CategoryFilters from "@/components/CategoryFilters";
-import {
-  getCollectionByIdResult,
-} from "@/lib/api";
+import AppliedCatalogFilters from "@/components/catalog/AppliedCatalogFilters.astro";
+import { getCollectionByIdResult } from "@/lib/api";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
@@ -21,7 +20,15 @@ import {
   buildProductListPaginationHref,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
-import { ArrowLeft, Tags, SlidersHorizontal, X, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  Tags,
+  SlidersHorizontal,
+  X,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 const { id } = Astro.params;
 if (!id) {
@@ -34,8 +41,8 @@ let queryState = resolveProductListQueryState({
 });
 if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
 
-const { layoutData, pageData: collectionResult } = await loadPageWithLayout(() =>
-  getCollectionByIdResult(id, queryState.options),
+const { layoutData, pageData: collectionResult } = await loadPageWithLayout(
+  () => getCollectionByIdResult(id, queryState.options),
 );
 
 if (collectionResult.state === "not_found") {
@@ -75,19 +82,27 @@ const discoverySettings = normalizeSeoDiscoverySettings(
 );
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
-const firstProductImage = products.find((product) => product.imageUrl)?.imageUrl ?? null;
+const firstProductImage =
+  products.find((product) => product.imageUrl)?.imageUrl ?? null;
 const activeFilterCount = Object.keys(currentFilters)
-  .filter((key) => (
-    !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
-      key as typeof PRODUCT_LIST_NAVIGATION_PARAMS[number],
-    ) && currentFilters[key]
-  ))
-  .reduce((count, key) => count + (
-    Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1
-  ), 0);
+  .filter(
+    (key) =>
+      !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
+        key as (typeof PRODUCT_LIST_NAVIGATION_PARAMS)[number],
+      ) && currentFilters[key],
+  )
+  .reduce(
+    (count, key) =>
+      count +
+      (Array.isArray(currentFilters[key]) ? currentFilters[key].length : 1),
+    0,
+  );
 const collectionPathname = Astro.url.pathname;
-const shouldNoindexCollectionView = collection.noIndex === true ||
-  pagination.page > 1 || activeFilterCount > 0 || Boolean(queryState.query);
+const shouldNoindexCollectionView =
+  collection.noIndex === true ||
+  pagination.page > 1 ||
+  activeFilterCount > 0 ||
+  Boolean(queryState.query);
 
 function getPaginationUrl(page: number) {
   return buildProductListPaginationHref({
@@ -109,38 +124,44 @@ const ogImageUrl = firstProductImage
   : undefined;
 
 const collectionBreadcrumbJsonLd =
-  discoverySettings.structuredData.breadcrumbs && !collection.noIndex && canonicalUrl && storefrontUrl
-  ? serializeJsonForInlineScript({
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        {
-          "@type": "ListItem",
-          position: 1,
-          name: "Home",
-          item: `${storefrontUrl}/`,
-        },
-        {
-          "@type": "ListItem",
-          position: 2,
-          name: collection.name,
-          item: canonicalUrl,
-        },
-      ],
-    })
-  : null;
+  discoverySettings.structuredData.breadcrumbs &&
+  !collection.noIndex &&
+  canonicalUrl &&
+  storefrontUrl
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: `${storefrontUrl}/`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: collection.name,
+            item: canonicalUrl,
+          },
+        ],
+      })
+    : null;
 
 const collectionJsonLd =
-  discoverySettings.structuredData.collections && !collection.noIndex && canonicalUrl && storefrontUrl
-  ? serializeJsonForInlineScript({
-      "@context": "https://schema.org",
-      "@type": "CollectionPage",
-      name: title,
-      description: subtitle || `Browse ${collection.name}.`,
-      url: canonicalUrl,
-      numberOfItems: pagination.total,
-    })
-  : null;
+  discoverySettings.structuredData.collections &&
+  !collection.noIndex &&
+  canonicalUrl &&
+  storefrontUrl
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: title,
+        description: subtitle || `Browse ${collection.name}.`,
+        url: canonicalUrl,
+        numberOfItems: pagination.total,
+      })
+    : null;
 ---
 
 <Layout
@@ -153,17 +174,38 @@ const collectionJsonLd =
   noindex={shouldNoindexCollectionView}
 >
   <Fragment slot="head">
-    {collectionJsonLd && <script is:inline type="application/ld+json" set:html={collectionJsonLd} />}
-    {collectionBreadcrumbJsonLd && <script is:inline type="application/ld+json" set:html={collectionBreadcrumbJsonLd} />}
+    {
+      collectionJsonLd && (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={collectionJsonLd}
+        />
+      )
+    }
+    {
+      collectionBreadcrumbJsonLd && (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={collectionBreadcrumbJsonLd}
+        />
+      )
+    }
   </Fragment>
 
   <div class="min-h-screen bg-gray-50">
-    <section class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100">
+    <section
+      class="bg-linear-to-b from-gray-50 to-white border-b border-gray-100"
+    >
       <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <nav class="mb-4 text-sm">
           <ol class="flex items-center gap-2">
             <li>
-              <a href="/" class="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-900">
+              <a
+                href="/"
+                class="inline-flex items-center gap-1.5 text-gray-500 hover:text-gray-900"
+              >
                 <ArrowLeft className="h-4 w-4" />
                 Home
               </a>
@@ -177,10 +219,16 @@ const collectionJsonLd =
 
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="max-w-2xl space-y-2">
-            <h1 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            <h1
+              class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl"
+            >
               {title}
             </h1>
-            {subtitle && <p class="text-base text-gray-500 sm:text-lg">{subtitle}</p>}
+            {
+              subtitle && (
+                <p class="text-base text-gray-500 sm:text-lg">{subtitle}</p>
+              )
+            }
             {
               categories.length > 0 && (
                 <div class="flex flex-wrap gap-2 pt-2">
@@ -197,7 +245,9 @@ const collectionJsonLd =
             }
           </div>
 
-          <div class="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm">
+          <div
+            class="flex items-center gap-2 rounded-lg border border-gray-100 bg-white px-3 py-1.5 shadow-sm"
+          >
             <Tags className="h-4 w-4 text-gray-400" />
             <span class="text-sm font-medium text-gray-900">
               {pagination.total} products
@@ -213,32 +263,38 @@ const collectionJsonLd =
         type="button"
         aria-controls="collection-filter-section"
         aria-expanded="false"
-        class="relative mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground shadow-sm lg:hidden"
+        class="relative mb-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-sm lg:hidden"
       >
         <SlidersHorizontal className="h-4 w-4" />
         <span>Filters</span>
-        {activeFilterCount > 0 && (
-          <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs text-destructive-foreground">
-            {activeFilterCount}
-          </span>
-        )}
+        {
+          activeFilterCount > 0 && (
+            <span class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs text-destructive-foreground">
+              {activeFilterCount}
+            </span>
+          )
+        }
       </button>
 
       <div class="flex flex-col gap-6 lg:flex-row">
         <aside
           id="collection-filter-section"
           class="fixed inset-0 z-50 hidden bg-black/50 lg:static lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Collection filters"
+          aria-labelledby="collection-filter-title"
         >
-          <div class="flex h-full w-4/5 max-w-sm flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm">
-            <div class="flex items-center justify-between border-b p-4 lg:hidden">
-              <h2 class="text-lg font-semibold">Filters</h2>
+          <div
+            class="flex h-full w-full flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
+          >
+            <div
+              class="flex items-center justify-between border-b p-4 lg:hidden"
+            >
+              <h2 id="collection-filter-title" class="text-lg font-semibold">
+                Filters
+              </h2>
               <button
                 id="collection-filter-close"
                 type="button"
-                class="rounded p-1 hover:bg-gray-100"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-gray-100"
                 aria-label="Close filters"
               >
                 <X className="h-5 w-5" />
@@ -248,7 +304,9 @@ const collectionJsonLd =
               <input type="hidden" name="page" value="1" />
               <div class="p-4 lg:p-6">
                 <div class="relative mb-6">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Search
+                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                  />
                   <input
                     type="search"
                     name="q"
@@ -270,118 +328,127 @@ const collectionJsonLd =
         </aside>
 
         <div class="min-w-0 flex-1">
-          <div class="mb-5 rounded-lg border border-gray-100 bg-white px-4 py-3 shadow-sm">
+          <div
+            class="mb-5 rounded-lg border border-gray-100 bg-white px-4 py-3 shadow-sm"
+          >
             <p class="text-sm font-medium text-gray-700">
-              Showing <span class="font-bold text-primary">{products.length}</span> of{" "}
+              Showing <span class="font-bold text-primary"
+                >{products.length}</span
+              > of{" "}
               <span class="font-bold text-primary">{pagination.total}</span> products
             </p>
           </div>
 
-          {products.length > 0 ? (
-            <>
-              <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-                {products.map((product) => (
-                  <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />
-                ))}
-              </div>
+          <AppliedCatalogFilters
+            facets={facets}
+            currentFilters={currentFilters}
+            pathname={collectionPath}
+            resetPath={collectionPath}
+            currencySymbol={currencySymbol}
+          />
 
-              {pagination.totalPages > 1 && (
-                <nav class="mt-8 flex items-center justify-center" aria-label="Collection pagination">
-                  <div class="flex items-center gap-1 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
-                    {pagination.page > 1 ? (
-                      <a
-                        href={getPaginationUrl(pagination.page - 1)}
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        aria-label="Previous page"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        aria-label="Previous page"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    )}
-                    <span class="px-3 text-sm font-medium text-gray-700">
-                      Page {pagination.page} of {pagination.totalPages}
-                    </span>
-                    {pagination.page < pagination.totalPages ? (
-                      <a
-                        href={getPaginationUrl(pagination.page + 1)}
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        aria-label="Next page"
-                      >
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        aria-label="Next page"
-                        class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
-                      >
-                        <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                </nav>
-              )}
-            </>
-          ) : (
-            <div class="rounded-lg border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
-              <p class="text-sm font-medium text-gray-900">
-                {activeFilterCount > 0 || queryState.query
-                  ? "No products match these filters."
-                  : "No products in this collection yet."}
-              </p>
-              {(activeFilterCount > 0 || queryState.query) && (
-                <a href={collectionPath} class="mt-3 inline-flex text-sm font-medium text-primary hover:underline">
-                  Reset filters
-                </a>
-              )}
-            </div>
-          )}
+          {
+            products.length > 0 ? (
+              <>
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+                  {products.map((product) => (
+                    <ProductCard
+                      product={product}
+                      currencySymbol={currencySymbol}
+                      currencyCode={currencyCode}
+                    />
+                  ))}
+                </div>
+
+                {pagination.totalPages > 1 && (
+                  <nav
+                    class="mt-8 flex items-center justify-center"
+                    aria-label="Collection pagination"
+                  >
+                    <div class="flex items-center gap-1 rounded-lg border border-gray-100 bg-white p-2 shadow-sm">
+                      {pagination.page > 1 ? (
+                        <a
+                          href={getPaginationUrl(pagination.page - 1)}
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+                          aria-label="Previous page"
+                        >
+                          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          aria-label="Previous page"
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+                        >
+                          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      )}
+                      <span class="px-3 text-sm font-medium text-gray-700">
+                        Page {pagination.page} of {pagination.totalPages}
+                      </span>
+                      {pagination.page < pagination.totalPages ? (
+                        <a
+                          href={getPaginationUrl(pagination.page + 1)}
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+                          aria-label="Next page"
+                        >
+                          <ChevronRight
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          aria-label="Next page"
+                          class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-100 text-gray-300"
+                        >
+                          <ChevronRight
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                        </button>
+                      )}
+                    </div>
+                  </nav>
+                )}
+              </>
+            ) : (
+              <div class="rounded-lg border border-dashed border-gray-200 bg-white px-6 py-12 text-center">
+                <p class="text-sm font-medium text-gray-900">
+                  {activeFilterCount > 0 || queryState.query
+                    ? "No products match these filters."
+                    : "No products in this collection yet."}
+                </p>
+                {(activeFilterCount > 0 || queryState.query) && (
+                  <a
+                    href={collectionPath}
+                    class="mt-3 inline-flex text-sm font-medium text-primary hover:underline"
+                  >
+                    Reset filters
+                  </a>
+                )}
+              </div>
+            )
+          }
         </div>
       </div>
     </section>
-
   </div>
 </Layout>
 
 <script>
-  function setupCollectionFilters() {
-    const toggle = document.getElementById("collection-filter-toggle");
-    const close = document.getElementById("collection-filter-close");
-    const section = document.getElementById("collection-filter-section");
-    if (!toggle || !close || !section) return;
+  import { setupCatalogFilterDialog } from "@/lib/catalog-filter-dialog";
 
-    const openFilters = () => {
-      section.classList.remove("hidden");
-      toggle.setAttribute("aria-expanded", "true");
-      document.body.style.overflow = "hidden";
-      close.focus();
-    };
-    const closeFilters = () => {
-      section.classList.add("hidden");
-      toggle.setAttribute("aria-expanded", "false");
-      document.body.style.overflow = "";
-      toggle.focus();
-    };
-    toggle.addEventListener("click", openFilters);
-    close.addEventListener("click", closeFilters);
-    section.addEventListener("click", (event) => {
-      if (event.target === section) closeFilters();
+  const setupCollectionFilters = () =>
+    setupCatalogFilterDialog({
+      toggleId: "collection-filter-toggle",
+      closeId: "collection-filter-close",
+      dialogId: "collection-filter-section",
     });
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !section.classList.contains("hidden")) {
-        closeFilters();
-      }
-    });
-  }
 
+  document.addEventListener("DOMContentLoaded", setupCollectionFilters);
   document.addEventListener("astro:page-load", setupCollectionFilters);
 </script>

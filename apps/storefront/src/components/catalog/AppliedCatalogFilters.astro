@@ -1,0 +1,132 @@
+---
+import type { ProductFacet } from "@/lib/api";
+import {
+  buildProductListHref,
+  type ProductListFilterState,
+} from "@/lib/product-list-query";
+import { X } from "lucide-react";
+
+interface Props {
+  facets: ProductFacet[];
+  currentFilters: ProductListFilterState;
+  pathname: string;
+  resetPath?: string;
+  currencySymbol: string;
+}
+
+const { facets, currentFilters, pathname, resetPath, currencySymbol } =
+  Astro.props;
+
+const navigationKeys = new Set(["q", "page", "sortBy"]);
+const priceKeys = new Set(["minPrice", "maxPrice"]);
+const booleanLabels: Record<string, string> = {
+  hasDiscount: "On sale",
+  freeDelivery: "Free delivery",
+};
+const facetLabels = new Map(facets.map((facet) => [facet.slug, facet.name]));
+
+type AppliedFilter = {
+  key: string;
+  label: string;
+  href: string;
+};
+
+function withoutFilterValue(key: string, value?: string): string {
+  const nextFilters: ProductListFilterState = { ...currentFilters };
+  delete nextFilters.page;
+
+  if (value === undefined) {
+    delete nextFilters[key];
+  } else {
+    const current = nextFilters[key];
+    const remaining = (Array.isArray(current) ? current : [current]).filter(
+      (candidate): candidate is string =>
+        Boolean(candidate) && candidate !== value,
+    );
+    if (remaining.length > 0) nextFilters[key] = remaining;
+    else delete nextFilters[key];
+  }
+
+  return buildProductListHref({ pathname, currentFilters: nextFilters });
+}
+
+const appliedFilters: AppliedFilter[] = [];
+
+for (const [key, rawValue] of Object.entries(currentFilters)) {
+  if (navigationKeys.has(key) || priceKeys.has(key)) continue;
+  const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+  const groupLabel = booleanLabels[key] ?? facetLabels.get(key) ?? key;
+
+  for (const value of values) {
+    if (!value) continue;
+    appliedFilters.push({
+      key: `${key}:${value}`,
+      label: booleanLabels[key] ?? `${groupLabel}: ${value}`,
+      href: withoutFilterValue(key, booleanLabels[key] ? undefined : value),
+    });
+  }
+}
+
+const minPrice = Array.isArray(currentFilters.minPrice)
+  ? currentFilters.minPrice.at(-1)
+  : currentFilters.minPrice;
+const maxPrice = Array.isArray(currentFilters.maxPrice)
+  ? currentFilters.maxPrice.at(-1)
+  : currentFilters.maxPrice;
+
+if (minPrice || maxPrice) {
+  const priceLabel =
+    minPrice && maxPrice
+      ? `${currencySymbol}${minPrice}–${currencySymbol}${maxPrice}`
+      : minPrice
+        ? `From ${currencySymbol}${minPrice}`
+        : `Up to ${currencySymbol}${maxPrice}`;
+  const nextFilters = { ...currentFilters };
+  delete nextFilters.page;
+  delete nextFilters.minPrice;
+  delete nextFilters.maxPrice;
+  appliedFilters.unshift({
+    key: "price",
+    label: `Price: ${priceLabel}`,
+    href: buildProductListHref({ pathname, currentFilters: nextFilters }),
+  });
+}
+
+const clearState: ProductListFilterState = {};
+for (const key of ["q", "sortBy"] as const) {
+  const value = currentFilters[key];
+  if (value) clearState[key] = value;
+}
+const clearHref =
+  resetPath ??
+  buildProductListHref({
+    pathname,
+    currentFilters: clearState,
+  });
+---
+
+{
+  appliedFilters.length > 0 && (
+    <nav
+      aria-label="Applied filters"
+      class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap"
+    >
+      {appliedFilters.map((filter) => (
+        <a
+          href={filter.href}
+          class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
+          aria-label={`Remove ${filter.label} filter`}
+        >
+          <span>{filter.label}</span>
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </a>
+      ))}
+      <a
+        href={clearHref}
+        class="inline-flex min-h-9 shrink-0 items-center px-1 text-sm font-medium text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline"
+      >
+        Clear all
+      </a>
+    </nav>
+  )
+}

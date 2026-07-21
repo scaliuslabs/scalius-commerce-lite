@@ -22,14 +22,19 @@ const productCard = readFileSync(
 describe("collection storefront workflow boundaries", () => {
   it("uses the authoritative total and exposes an accessible mobile filter dialog", () => {
     expect(collectionPage).toContain("{pagination.total} products");
-    expect(collectionPage).toContain('aria-controls="collection-filter-section"');
-    expect(collectionPage).toContain('toggle.setAttribute("aria-expanded", "true")');
-    expect(collectionPage).toContain('role="dialog"');
+    expect(collectionPage).toContain(
+      'aria-controls="collection-filter-section"',
+    );
+    expect(collectionPage).toContain("setupCatalogFilterDialog");
+    expect(collectionPage).toContain('dialogId: "collection-filter-section"');
+    expect(collectionPage).not.toContain('aria-modal="true"');
   });
 
   it("links both homepage presentations to the collection route", () => {
     for (const source of [grid, carousel]) {
-      expect(source).toContain("/collections/${encodeURIComponent(collection.id)}");
+      expect(source).toContain(
+        "/collections/${encodeURIComponent(collection.id)}",
+      );
       expect(source).toContain("View collection");
     }
   });
@@ -40,7 +45,7 @@ describe("collection storefront workflow boundaries", () => {
   });
 
   it("does not autoplay the carousel for reduced-motion users", () => {
-    expect(carousel).toContain('prefers-reduced-motion: reduce');
+    expect(carousel).toContain("prefers-reduced-motion: reduce");
   });
 
   it("uses the shared short money formatter across homepage presentations", () => {
@@ -49,7 +54,11 @@ describe("collection storefront workflow boundaries", () => {
       expect(source).not.toContain("discountedPrice.toLocaleString()");
       expect(source).not.toContain("price.toLocaleString()");
     }
-    expect(carousel).toContain('const pricePrefix = product.priceVaries ? "From " : "";');
-    expect(carousel).toContain("{pricePrefix}{formatMoney(product.discountedPrice)}");
+    expect(carousel).toContain(
+      'const pricePrefix = product.priceVaries ? "From " : "";',
+    );
+    expect(carousel).toContain(
+      "{pricePrefix}{formatMoney(product.discountedPrice)}",
+    );
   });
 });
