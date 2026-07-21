@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, Check, Info, Loader2, Lock, Save, Search } from "lucide-react";
+import { AlertTriangle, Check, Loader2, Lock, RotateCcw, Save, Search } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@scalius/shared/utils";
@@ -26,6 +26,7 @@ import {
   updateCurrencySettings,
 } from "@/lib/api-functions/currency";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface CurrencyEntry {
   code: SupportedCurrencyCode;
@@ -242,6 +243,8 @@ export default function CurrencySettingsBuilder() {
     isLoadError,
     loadError,
     isSaving,
+    isDirty,
+    reset,
     handleSubmit,
     refetch,
   } = useSettingsForm<CurrencySettings>({
@@ -343,22 +346,16 @@ export default function CurrencySettingsBuilder() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="max-w-2xl space-y-5 [&_input]:min-h-11 md:[&_input]:min-h-9">
+      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={isSaving} />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Local Currency</CardTitle>
+          <CardTitle className="text-base">Store Currency</CardTitle>
           <CardDescription>
-            Configure your store's local currency and its exchange rate to USD.
+            Used for catalog prices, checkout, and reporting.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-sm">
-              Your local currency is used with SSLCommerz and Cash on Delivery. USD is always available via Stripe.
-            </AlertDescription>
-          </Alert>
-
           <Alert>
             {values.currencyCodeLocked ? (
               <Lock className="h-4 w-4" />
@@ -367,10 +364,8 @@ export default function CurrencySettingsBuilder() {
             )}
             <AlertDescription className="text-sm">
               {values.currencyCodeLocked
-                ? "Currency selection is locked because this store has products or orders. You can still update the symbol and USD exchange rate."
-                : "Currency selection locks after the first product or order is created."}{" "}
-              Changing the currency of existing prices requires a dedicated
-              migration and is not available on this page.
+                ? `${values.currencyCode} is locked because catalog or order amounts already exist. You can still change the display symbol and USD rate.`
+                : "Choose the code carefully. It locks after the first product or order."}
             </AlertDescription>
           </Alert>
 
@@ -382,7 +377,7 @@ export default function CurrencySettingsBuilder() {
           )}
 
           <div className="space-y-1.5" ref={containerRef}>
-            <Label>Currency</Label>
+            <Label>Store currency</Label>
             {selectedCurrency && (
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary" className="text-sm px-3 py-1">
@@ -393,25 +388,27 @@ export default function CurrencySettingsBuilder() {
                 </span>
               </div>
             )}
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by code, name, or symbol..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPickerOpen(true);
-                }}
-                onFocus={() => setPickerOpen(true)}
-                disabled={values.currencyCodeLocked}
-                aria-describedby="currency-code-lock-help"
-                className="pl-9"
-              />
-            </div>
+            {!values.currencyCodeLocked ? (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground md:top-2.5" />
+                <Input
+                  aria-label="Search currencies"
+                  placeholder="Search by code, name, or symbol"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPickerOpen(true);
+                  }}
+                  onFocus={() => setPickerOpen(true)}
+                  aria-describedby="currency-code-lock-help"
+                  className="pl-9"
+                />
+              </div>
+            ) : null}
             <p id="currency-code-lock-help" className="text-xs text-muted-foreground">
               {values.currencyCodeLocked
-                ? `${values.currencyCode} is the permanent currency code for existing catalog and order amounts.`
-                : "Choose carefully; this code becomes permanent once catalog or order data exists."}
+                ? "Changing stored price currency requires a dedicated migration."
+                : "Search by code, name, or symbol."}
             </p>
             {pickerOpen && (
               <div className="border rounded-md max-h-64 overflow-y-auto mt-1">
@@ -429,7 +426,7 @@ export default function CurrencySettingsBuilder() {
                           type="button"
                           onClick={() => handleCurrencySelect(c.code)}
                           className={cn(
-                            "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 transition-colors",
+                            "flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50",
                             isSelected && "bg-muted/30",
                           )}
                         >
@@ -463,7 +460,7 @@ export default function CurrencySettingsBuilder() {
               className="max-w-xs"
             />
             <p className="text-xs text-muted-foreground">
-              Auto-filled from currency selection. You can override if needed.
+              Auto-filled from the currency; change it only for display.
             </p>
           </div>
 
@@ -490,21 +487,38 @@ export default function CurrencySettingsBuilder() {
               </p>
             )}
             <p id="usd-exchange-rate-help" className="text-xs text-muted-foreground">
-              How many {values.currencyCode} equal 1 USD. Example: if 1 USD = 120 {values.currencyCode}, enter 120.
+              {values.currencyCode} per USD. For 1 USD = 120 {values.currencyCode}, enter 120.
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-end pt-4 border-t border-border">
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
         <Button
-          onClick={() => void submit()}
-          disabled={isSaving || !isLoaded || !isExchangeRateValid}
-          className="min-w-[140px]"
+          type="button"
+          variant="outline"
+          onClick={() => {
+            reset();
+            setSaveError(null);
+          }}
+          disabled={isSaving || !isDirty}
+          className="min-h-11 md:min-h-10"
         >
-          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
-          Save Currency Settings
+          <RotateCcw className="h-4 w-4" />
+          Reset
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void submit()}
+          disabled={isSaving || !isLoaded || !isDirty || !isExchangeRateValid}
+          className="min-h-11 min-w-[140px] md:min-h-10"
+        >
+          {isSaving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          Save currency
         </Button>
       </div>
     </div>

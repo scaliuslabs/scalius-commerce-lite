@@ -12,13 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, Save, X, Search } from "lucide-react";
+import { Loader2, RotateCcw, Save, X, Search } from "lucide-react";
 import { getServerFnError } from "@/lib/api-helpers";
 import { getAllowedCountries, updateAllowedCountries } from "@/lib/api-functions/settings";
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import en from "react-phone-number-input/locale/en";
 import type { Country } from "react-phone-number-input";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
+import { UnsavedChangesGuard } from "../shared/UnsavedChangesGuard";
 
 interface CountryOption {
   value: Country;
@@ -123,12 +124,12 @@ export default function AllowedCountriesBuilder() {
 
   const modeDescription = useMemo(() => {
     if (selected.length === 0) {
-      return "No restrictions set. All countries are currently accepted.";
+      return "No restriction. All countries are accepted.";
     }
     if (mode === "include") {
       return "Only these countries will be allowed for phone numbers.";
     }
-    return "All countries are allowed EXCEPT these.";
+    return "All countries except these are accepted.";
   }, [mode, selected.length]);
 
   if (loading) {
@@ -151,33 +152,33 @@ export default function AllowedCountriesBuilder() {
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="max-w-2xl space-y-5">
+      <UnsavedChangesGuard isDirty={isDirty} isSubmitting={saving} />
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Allowed Countries</CardTitle>
+          <CardTitle className="text-base">Customer Countries</CardTitle>
           <CardDescription>
-            Restrict which countries can be used for phone numbers during
-            checkout and customer registration.
+            Limit calling codes accepted for customer and checkout phone numbers.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Mode</Label>
+            <Label>Policy</Label>
             <RadioGroup
               value={mode}
               onValueChange={(v) => setMode(v as CountryMode)}
               className="flex flex-col gap-2 sm:flex-row sm:gap-6"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-h-11 items-center gap-2">
                 <RadioGroupItem value="include" id="mode-include" />
                 <Label htmlFor="mode-include" className="font-normal cursor-pointer">
-                  Only allow selected countries
+                  Only selected countries
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex min-h-11 items-center gap-2">
                 <RadioGroupItem value="exclude" id="mode-exclude" />
                 <Label htmlFor="mode-exclude" className="font-normal cursor-pointer">
-                  Allow all except selected countries
+                  All except selected countries
                 </Label>
               </div>
             </RadioGroup>
@@ -203,9 +204,9 @@ export default function AllowedCountriesBuilder() {
                         type="button"
                         onClick={() => removeCountry(code)}
                         aria-label={`Remove ${country ? country.label : code}`}
-                        className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                        className="ml-0.5 grid size-8 shrink-0 place-items-center rounded-full hover:bg-muted-foreground/20 md:size-6"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </Badge>
                   );
@@ -217,13 +218,13 @@ export default function AllowedCountriesBuilder() {
           <div className="space-y-1.5">
             <Label htmlFor="country-search">Search countries</Label>
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-3.5 h-4 w-4 text-muted-foreground md:top-2.5" />
               <Input
                 id="country-search"
                 placeholder="Search by name, code, or calling code..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="min-h-11 pl-9 md:min-h-9"
               />
             </div>
           </div>
@@ -270,25 +271,30 @@ export default function AllowedCountriesBuilder() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+      <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:flex sm:justify-end">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           onClick={() => {
             setSelected(savedSelected);
             setMode(savedMode);
           }}
           disabled={saving || !isDirty}
+          className="min-h-11 md:min-h-10"
         >
+          <RotateCcw className="h-4 w-4" />
           Reset
         </Button>
         <Button
           onClick={handleSave}
           disabled={saving || !hasLoaded || !isDirty}
-          className="min-w-[140px]"
+          className="min-h-11 min-w-[140px] md:min-h-10"
         >
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          <Save className="mr-2 h-4 w-4" />
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           Save country policy
         </Button>
       </div>

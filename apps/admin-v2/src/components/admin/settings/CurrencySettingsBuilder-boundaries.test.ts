@@ -9,16 +9,19 @@ const SOURCE = readFileSync(
 describe("currency settings safety boundaries", () => {
   it("disables currency selection when catalog or order history locks the code", () => {
     expect(SOURCE).toContain("type CurrencySettings = CurrencySettingsPayload");
-    expect(SOURCE).toContain("disabled={values.currencyCodeLocked}");
+    expect(SOURCE).toContain("!values.currencyCodeLocked ? (");
     expect(SOURCE).toContain(
-      "Currency selection is locked because this store has products or orders.",
+      "is locked because catalog or order amounts already exist.",
+    );
+    expect(SOURCE).toContain(
+      "Changing stored price currency requires a dedicated migration.",
     );
   });
 
   it("validates the exchange rate and surfaces rejected saves", () => {
     expect(SOURCE).toContain("Number.isFinite(rate) && rate > 0");
     expect(SOURCE).toContain(
-      "disabled={isSaving || !isLoaded || !isExchangeRateValid}",
+      "disabled={isSaving || !isLoaded || !isDirty || !isExchangeRateValid}",
     );
     expect(SOURCE).toContain('<Alert variant="destructive" role="alert">');
   });

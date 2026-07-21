@@ -82,4 +82,27 @@ describe("business settings cache invalidation", () => {
             { htmlPaths: ["/"] },
         );
     });
+
+    it.each([
+        "http://images.example.com/logo.png",
+        "//images.example.com/logo.png",
+        "https://user:pass@images.example.com/logo.png",
+        "javascript:alert(1)",
+    ])("rejects an unsafe invoice logo source: %s", async (invoiceLogoUrl) => {
+        const { app, env } = createTestApp();
+
+        const response = await app.request(
+            "/api/v1/admin/settings/business",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ invoiceLogoUrl }),
+            },
+            env,
+        );
+
+        expect(response.status).toBe(400);
+        expect(mocks.saveBusinessSettings).not.toHaveBeenCalled();
+        expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    });
 });
