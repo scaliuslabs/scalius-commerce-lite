@@ -697,6 +697,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   import { initCartFunctionality } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import { getEffectiveCartShippingFee } from "@/store/cart";
+  import { validateStorefrontPhone } from "@/lib/phone-country-policy";
   import {
     clearCheckoutTransferSession,
     writeCheckoutTransferSession,
@@ -1031,6 +1032,44 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           alert(`Please fill in all required fields: ${missing.join(", ")}`);
           return;
         }
+
+        const phoneInput = document.querySelector<HTMLInputElement>(
+          '[name="customerPhone"]',
+        );
+        const checkoutConfig = window.__CHECKOUT_CONFIG__;
+        const phonePolicy =
+          checkoutConfig && typeof checkoutConfig === "object"
+            ? {
+                countries: Array.isArray(
+                  (checkoutConfig as { allowedCountries?: unknown }).allowedCountries,
+                )
+                  ? ((checkoutConfig as { allowedCountries: string[] }).allowedCountries)
+                  : [],
+                mode:
+                  (checkoutConfig as { allowedCountriesMode?: unknown })
+                    .allowedCountriesMode === "exclude"
+                    ? ("exclude" as const)
+                    : ("include" as const),
+              }
+            : undefined;
+        const phoneValidation = validateStorefrontPhone(
+          phoneInput?.value || "",
+          phonePolicy,
+        );
+        if (!phoneValidation.ok) {
+          e.preventDefault();
+          restoreSubmitButton();
+          window.dispatchEvent(
+            new CustomEvent("phone-validation-error", {
+              detail: {
+                name: "customerPhone",
+                message: phoneValidation.message,
+              },
+            }),
+          );
+          return;
+        }
+        if (phoneInput) phoneInput.value = phoneValidation.value;
 
         if (!codOnly) {
           // ── Multi-gateway flow: intercept and redirect to /checkout ──
