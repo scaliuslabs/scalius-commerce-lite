@@ -4,6 +4,7 @@ import {
   Bell,
   ChevronDown,
   Loader2,
+  RotateCcw,
   Save,
   ShieldCheck,
 } from "lucide-react";
@@ -45,7 +46,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { usePermissions } from "@/contexts/PermissionContext";
 import { getSettingsLoadErrorMessage } from "@/hooks/use-settings-form";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import {
   getAdminNotificationChannels,
   getNotificationChannels,
@@ -60,14 +63,6 @@ const DEFAULT_WHATSAPP_TEMPLATE = {
 };
 
 type WhatsAppTemplateConfig = typeof DEFAULT_WHATSAPP_TEMPLATE;
-type CustomerChannelReadiness = Record<CustomerNotificationChannel, boolean>;
-
-function channelCanBeEnabled(
-  channel: CustomerNotificationChannel,
-  readiness: CustomerChannelReadiness,
-): boolean {
-  return readiness[channel];
-}
 
 function readinessIssueText(
   value: string | null | undefined,
@@ -125,12 +120,12 @@ function ProviderStatus({
 
 function CustomerRulesMatrix({
   channels,
-  readiness,
+  disabled,
   onToggle,
   onToggleColumn,
 }: {
   channels: CustomerNotificationConfig;
-  readiness: CustomerChannelReadiness;
+  disabled: boolean;
   onToggle: (
     event: OrderNotificationType,
     channel: CustomerNotificationChannel,
@@ -160,7 +155,7 @@ function CustomerRulesMatrix({
                     <label className="inline-flex items-center gap-2">
                       <Checkbox
                         checked={selection}
-                        disabled={!readiness[channel.key]}
+                        disabled={disabled}
                         onCheckedChange={(checked) =>
                           onToggleColumn(channel.key, checked === true)
                         }
@@ -198,7 +193,7 @@ function CustomerRulesMatrix({
                       <td key={channel.key} className="px-3 py-2 text-center">
                         <Checkbox
                           checked={channels[event.key][channel.key]}
-                          disabled={!readiness[channel.key]}
+                          disabled={disabled}
                           onCheckedChange={() =>
                             onToggle(event.key, channel.key)
                           }
@@ -236,11 +231,11 @@ function CustomerRulesMatrix({
                       {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => (
                         <label
                           key={channel.key}
-                          className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                          className="flex min-h-11 min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                         >
                           <Checkbox
                             checked={channels[event.key][channel.key]}
-                            disabled={!readiness[channel.key]}
+                            disabled={disabled}
                             onCheckedChange={() =>
                               onToggle(event.key, channel.key)
                             }
@@ -263,12 +258,12 @@ function CustomerRulesMatrix({
 
 function AdminRulesMatrix({
   channels,
-  pushReady,
+  disabled,
   onToggle,
   onToggleAll,
 }: {
   channels: AdminNotificationConfig;
-  pushReady: boolean;
+  disabled: boolean;
   onToggle: (event: OrderNotificationType, channel: AdminNotificationChannel) => void;
   onToggleAll: (enabled: boolean) => void;
 }) {
@@ -281,7 +276,7 @@ function AdminRulesMatrix({
         <label className="flex items-center gap-2">
           <Checkbox
             checked={selection}
-            disabled={!pushReady}
+            disabled={disabled}
             onCheckedChange={(checked) => onToggleAll(checked === true)}
             aria-label="Enable push for every admin event"
           />
@@ -310,7 +305,7 @@ function AdminRulesMatrix({
                   <span className="font-medium">{event.label}</span>
                   <Checkbox
                     checked={channels[event.key].push}
-                    disabled={!pushReady}
+                    disabled={disabled}
                     onCheckedChange={() => onToggle(event.key, "push")}
                     aria-label={`Admin: ${event.label} via Push`}
                   />
@@ -325,6 +320,8 @@ function AdminRulesMatrix({
 }
 
 export function NotificationChannelsBuilder() {
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const [channels, setChannels] = useState<CustomerNotificationConfig>(
     getDefaultCustomerNotificationConfig,
   );
@@ -354,15 +351,6 @@ export function NotificationChannelsBuilder() {
   const [isAdminLoading, setIsAdminLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState<string | null>(null);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
-
-  const readiness = useMemo<CustomerChannelReadiness>(
-    () => ({
-      email: isEmailConfigured,
-      sms: isSmsConfigured,
-      whatsapp: isWhatsAppConfigured,
-    }),
-    [isEmailConfigured, isSmsConfigured, isWhatsAppConfigured],
-  );
 
   const customerIssues = useMemo(
     () => [
@@ -406,6 +394,8 @@ export function NotificationChannelsBuilder() {
     () => !adminNotificationConfigsEqual(adminChannels, savedAdminChannels),
     [adminChannels, savedAdminChannels],
   );
+  const customerControlsDisabled = !canManage || isSaving;
+  const adminControlsDisabled = !canManage || isAdminSaving;
 
   const loadCustomerChannels = useCallback(async () => {
     setIsLoading(true);
@@ -487,7 +477,7 @@ export function NotificationChannelsBuilder() {
     event: OrderNotificationType,
     channel: CustomerNotificationChannel,
   ) => {
-    if (!channelCanBeEnabled(channel, readiness)) return;
+    if (customerControlsDisabled) return;
     setChannels((previous) => ({
       ...previous,
       [event]: {
@@ -501,7 +491,7 @@ export function NotificationChannelsBuilder() {
     channel: CustomerNotificationChannel,
     enabled: boolean,
   ) => {
-    if (!channelCanBeEnabled(channel, readiness)) return;
+    if (customerControlsDisabled) return;
     setChannels((previous) =>
       setCustomerChannelForEveryEvent(previous, channel, enabled),
     );
@@ -509,9 +499,9 @@ export function NotificationChannelsBuilder() {
 
   const handleAdminToggle = (
     event: OrderNotificationType,
-    channel: AdminNotificationChannel,
+    _channel: AdminNotificationChannel,
   ) => {
-    if (channel === "push" && !isPushConfigured) return;
+    if (adminControlsDisabled) return;
     setAdminChannels((previous) => ({
       ...previous,
       [event]: { push: !previous[event].push },
@@ -519,6 +509,10 @@ export function NotificationChannelsBuilder() {
   };
 
   const handleSave = async () => {
+    if (!canManage) {
+      toast.error("You do not have permission to change notification rules.");
+      return;
+    }
     if (customerLoadError || isLoading) {
       toast.error("Reload customer notification channels before saving.");
       return;
@@ -556,6 +550,10 @@ export function NotificationChannelsBuilder() {
   };
 
   const handleAdminSave = async () => {
+    if (!canManage) {
+      toast.error("You do not have permission to change notification rules.");
+      return;
+    }
     if (adminLoadError || isAdminLoading) {
       toast.error("Reload admin notification channels before saving.");
       return;
@@ -594,6 +592,14 @@ export function NotificationChannelsBuilder() {
         isSubmitting={isSaving || isAdminSaving}
       />
 
+      {!canManage && (
+        <Alert>
+          <AlertDescription>
+            Your role can review notification rules, but cannot change them.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card>
         <CardHeader className="space-y-3 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -606,20 +612,36 @@ export function NotificationChannelsBuilder() {
                 </CardDescription>
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              disabled={!customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
-              className="shrink-0"
-            >
-              {isSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              Save customer rules
-            </Button>
+            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setChannels(savedChannels);
+                  setWhatsAppTemplate(savedWhatsAppTemplate);
+                }}
+                disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
+                className="min-h-11 shrink-0 sm:min-h-9"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSave}
+                disabled={!canManage || !customerDirty || isSaving || isLoading || Boolean(customerLoadError)}
+                className="min-h-11 shrink-0 sm:min-h-9"
+              >
+                {isSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save customer rules
+              </Button>
+            </div>
           </div>
 
           {!isLoading && !customerLoadError ? (
@@ -713,6 +735,8 @@ export function NotificationChannelsBuilder() {
                       }
                       placeholder="order_status_update"
                       autoComplete="off"
+                      disabled={customerControlsDisabled}
+                      className="h-11 sm:h-9"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -728,6 +752,8 @@ export function NotificationChannelsBuilder() {
                       }
                       placeholder="en_US"
                       autoComplete="off"
+                      disabled={customerControlsDisabled}
+                      className="h-11 sm:h-9"
                     />
                   </div>
                 </div>
@@ -735,7 +761,7 @@ export function NotificationChannelsBuilder() {
 
               <CustomerRulesMatrix
                 channels={channels}
-                readiness={readiness}
+                disabled={customerControlsDisabled}
                 onToggle={handleToggle}
                 onToggleColumn={handleToggleCustomerColumn}
               />
@@ -774,20 +800,33 @@ export function NotificationChannelsBuilder() {
                 </CardDescription>
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleAdminSave}
-              disabled={!adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
-              className="shrink-0"
-            >
-              {isAdminSaving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" />
-              )}
-              Save admin rules
-            </Button>
+            <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setAdminChannels(savedAdminChannels)}
+                disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
+                className="min-h-11 shrink-0 sm:min-h-9"
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAdminSave}
+                disabled={!canManage || !adminDirty || isAdminSaving || isAdminLoading || Boolean(adminLoadError)}
+                className="min-h-11 shrink-0 sm:min-h-9"
+              >
+                {isAdminSaving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save admin rules
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="px-4 pb-4 pt-0">
@@ -827,7 +866,7 @@ export function NotificationChannelsBuilder() {
               ) : null}
               <AdminRulesMatrix
                 channels={adminChannels}
-                pushReady={isPushConfigured}
+                disabled={adminControlsDisabled}
                 onToggle={handleAdminToggle}
                 onToggleAll={(enabled) =>
                   setAdminChannels((previous) =>
