@@ -47,6 +47,7 @@ export interface SocialLinkConfig {
 export interface LogoConfig {
   src: string;
   alt: string;
+  width?: number;
 }
 
 export interface FaviconConfig {

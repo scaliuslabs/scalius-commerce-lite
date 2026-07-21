@@ -167,6 +167,18 @@ describe("navigation configuration validation", () => {
     })).toThrow(ValidationError);
   });
 
+  it("accepts only bounded, preset-aligned header logo widths", () => {
+    expect(parseNavigationConfig("header", {
+      logo: { src: "/logo.svg", alt: "Store", width: 200 },
+    })).toMatchObject({
+      logo: { width: 200 },
+    });
+
+    expect(() => parseNavigationConfig("header", {
+      logo: { src: "/logo.svg", alt: "Store", width: 245 },
+    })).toThrow(ValidationError);
+  });
+
   it("rejects blank labels and duplicate footer menu IDs", () => {
     expect(() => parseNavigationConfig("header", {
       navigation: [{

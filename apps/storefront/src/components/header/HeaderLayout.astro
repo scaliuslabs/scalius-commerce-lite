@@ -3,12 +3,18 @@ import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search, Check, Copy } from "lucide-react";
 import type { HeaderData, SocialLink } from "@/lib/api";
 import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import {
+  getMobileHeaderLogoWidth,
+  normalizeHeaderLogoWidth,
+} from "@scalius/shared/brand-presentation";
 
 interface Props {
   headerData: HeaderData;
 }
 
 const { headerData } = Astro.props;
+const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
+const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 ---
 
 {
@@ -69,7 +75,8 @@ const { headerData } = Astro.props;
                   fit: "scale-down",
                 })}
                 alt={headerData.logo.alt}
-                class="h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
+                class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-transform duration-300 group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
+                style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}
                 width={240}
                 height={80}
                 loading="eager"
@@ -260,6 +267,18 @@ const { headerData } = Astro.props;
     </div>
   </div>
 </div>
+
+<style>
+  .storefront-header-logo {
+    max-width: var(--header-logo-mobile-width);
+  }
+
+  @media (min-width: 64rem) {
+    .storefront-header-logo {
+      max-width: var(--header-logo-width);
+    }
+  }
+</style>
 
 <script>
   import { toast } from "sonner";

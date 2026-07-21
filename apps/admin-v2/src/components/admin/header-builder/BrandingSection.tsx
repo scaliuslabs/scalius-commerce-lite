@@ -15,6 +15,12 @@ import { Trash2, AlertCircle } from "lucide-react";
 import type { LogoConfig, FaviconConfig, MediaFile } from "./types";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
+import {
+  HEADER_LOGO_WIDTH_DEFAULT,
+  HEADER_LOGO_WIDTH_MAX,
+  HEADER_LOGO_WIDTH_MIN,
+  HEADER_LOGO_WIDTH_STEP,
+} from "@scalius/shared/brand-presentation";
 
 interface BrandingSectionProps {
   logo: LogoConfig;
@@ -29,12 +35,19 @@ export function BrandingSection({
   onLogoChange,
   onFaviconChange,
 }: BrandingSectionProps) {
+  const logoWidth = logo.width ?? HEADER_LOGO_WIDTH_DEFAULT;
+  const logoPreviewWidth = Math.round((logoWidth / HEADER_LOGO_WIDTH_MAX) * 104);
+
   const handleLogoSelect = (file: MediaFile) => {
-    onLogoChange({ src: file.url, alt: file.filename || "Site Logo" });
+    onLogoChange({
+      ...logo,
+      src: file.url,
+      alt: file.filename || "Site Logo",
+    });
   };
 
   const removeLogo = () => {
-    onLogoChange({ src: "", alt: "" });
+    onLogoChange({ ...logo, src: "", alt: "" });
   };
 
   const handleFaviconSelect = (file: MediaFile) => {
@@ -68,6 +81,7 @@ export function BrandingSection({
                     )}
                     alt={logo.alt || "Logo preview"}
                     className="max-h-full max-w-full object-contain"
+                    style={{ maxWidth: logoPreviewWidth }}
                     loading="lazy"
                     decoding="async"
                   />
@@ -109,6 +123,36 @@ export function BrandingSection({
                 className="h-9"
                 disabled={!logo.src}
               />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="header-logo-width" className="text-xs">
+                    Logo width
+                  </Label>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {logoWidth}px
+                  </span>
+                </div>
+                <input
+                  id="header-logo-width"
+                  type="range"
+                  min={HEADER_LOGO_WIDTH_MIN}
+                  max={HEADER_LOGO_WIDTH_MAX}
+                  step={HEADER_LOGO_WIDTH_STEP}
+                  value={logoWidth}
+                  onChange={(event) =>
+                    onLogoChange({ ...logo, width: event.target.valueAsNumber })
+                  }
+                  className="h-11 w-full accent-foreground sm:h-4"
+                  disabled={!logo.src}
+                  aria-describedby="header-logo-width-description"
+                />
+                <p
+                  id="header-logo-width-description"
+                  className="text-[11px] leading-4 text-muted-foreground"
+                >
+                  Storefront display size. Mobile uses a safe cap.
+                </p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -129,17 +173,22 @@ export function BrandingSection({
                 Preview
               </Label>
               {favicon.src ? (
-                <div className="relative group border border-border rounded-md p-2 bg-muted/30 h-20 w-20 flex items-center justify-center mx-auto">
-                  <img
-                    src={getOptimizedImageUrl(
-                      favicon.src,
-                      ADMIN_IMAGE_PRESETS.favicon,
-                    )}
-                    alt={favicon.alt || "Favicon preview"}
-                    className="h-10 w-10 object-contain"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                <div className="relative group border border-border rounded-md p-2 bg-muted/30 h-20 w-20 flex items-end justify-center gap-2 mx-auto">
+                  {[16, 32].map((size) => (
+                    <img
+                      key={size}
+                      src={getOptimizedImageUrl(
+                        favicon.src,
+                        ADMIN_IMAGE_PRESETS.favicon,
+                      )}
+                      alt={size === 32 ? favicon.alt || "Browser icon preview" : ""}
+                      aria-hidden={size === 16 ? "true" : undefined}
+                      style={{ width: size, height: size }}
+                      className="object-contain"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ))}
                   <Button
                     variant="destructive"
                     size="icon"

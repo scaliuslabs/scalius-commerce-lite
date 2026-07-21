@@ -22478,6 +22478,7 @@ export type PostApiV1AdminSettingsHeaderData = {
         logo: {
             src: string;
             alt: string;
+            width?: number;
         };
         favicon: {
             src: string;

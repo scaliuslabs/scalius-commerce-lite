@@ -4,6 +4,7 @@ import type { SocialLink, LogoConfig } from "~/components/admin/shared/builder-t
 import type { NavigationItem } from "~/components/admin/navigation/types";
 import type { MediaFile } from "~/components/admin/media-manager/types";
 import type { NavigationConfigSectionReadiness } from "~/lib/api-functions/settings";
+import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 
 export type { SocialLink, LogoConfig, NavigationItem, MediaFile };
 
@@ -81,6 +82,7 @@ export const defaultHeaderConfig: HeaderConfig = {
   logo: {
     src: "",
     alt: "",
+    width: HEADER_LOGO_WIDTH_DEFAULT,
   },
   favicon: {
     src: "",

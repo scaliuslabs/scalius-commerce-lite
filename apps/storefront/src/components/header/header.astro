@@ -5,6 +5,7 @@ import CartFlyout from "../CartFlyout";
 import HeaderLayout from "./HeaderLayout.astro";
 import DesktopNav from "./DesktopNav.astro";
 import MobileMenu from "./MobileMenu.astro";
+import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 
 interface Props {
   headerData: HeaderData;
@@ -20,7 +21,11 @@ const headerData: HeaderData = {
   },
   logo: apiHeaderData?.logo?.src
     ? apiHeaderData.logo
-    : { src: "", alt: apiHeaderData?.logo?.alt || "Store" },
+    : {
+        src: "",
+        alt: apiHeaderData?.logo?.alt || "Store",
+        width: HEADER_LOGO_WIDTH_DEFAULT,
+      },
   contact: {
     phone: apiHeaderData?.contact?.phone || "",
     text: apiHeaderData?.contact?.text || "",

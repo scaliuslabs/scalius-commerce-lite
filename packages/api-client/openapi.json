@@ -77313,6 +77313,12 @@
                       },
                       "alt": {
                         "type": "string"
+                      },
+                      "width": {
+                        "type": "integer",
+                        "minimum": 80,
+                        "maximum": 240,
+                        "default": 180
                       }
                     },
                     "required": [

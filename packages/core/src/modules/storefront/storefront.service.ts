@@ -39,6 +39,10 @@ import {
 import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 import { parseHomepagePresentationConfig } from "@scalius/shared/homepage-presentation";
 import {
+  HEADER_LOGO_WIDTH_DEFAULT,
+  normalizeHeaderLogoWidth,
+} from "@scalius/shared/brand-presentation";
+import {
   DEFAULT_CURRENCY,
   normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
@@ -552,6 +556,7 @@ export async function getLayoutData(
       logo: {
         src: logoConfig.src || "",
         alt: logoConfig.alt || "",
+        width: normalizeHeaderLogoWidth(logoConfig.width),
       },
       favicon: {
         src: faviconConfig.src || "/favicon.svg",
@@ -568,7 +573,7 @@ export async function getLayoutData(
   } else {
     headerData = {
       topBar: { text: "", isEnabled: false },
-      logo: { src: "", alt: "" },
+      logo: { src: "", alt: "", width: HEADER_LOGO_WIDTH_DEFAULT },
       favicon: { src: "/favicon.svg", alt: "" },
       contact: { phone: "", text: "", isEnabled: false },
       social: [],
