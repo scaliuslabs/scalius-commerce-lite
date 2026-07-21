@@ -23,7 +23,12 @@ vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChange: mocks.applyInventoryForStatusChange,
 }));
 
-import { createPolarCheckout, findReusablePolarCheckout, processPolarWebhookRefund } from "./polar";
+import {
+  createPolarCheckout,
+  createPolarRefund,
+  findReusablePolarCheckout,
+  processPolarWebhookRefund,
+} from "./polar";
 
 function createDbMock({
   order,
@@ -768,6 +773,7 @@ describe("Polar client cache", () => {
     vi.clearAllMocks();
     mocks.polarCheckoutCreate.mockResolvedValue({ url: "https://polar.example/checkout", id: "co_1" });
     mocks.polarCheckoutList.mockResolvedValue(checkoutPages([]));
+    mocks.polarRefundCreate.mockResolvedValue({ id: "refund_1" });
   });
 
   it("creates a new SDK client when sandbox changes with the same access token", async () => {
@@ -915,6 +921,31 @@ describe("Polar client cache", () => {
       }),
       expect.objectContaining({ retries: { strategy: "none" } }),
     );
+  });
+
+  it("uses Polar's supported customer-request reason when none is supplied", async () => {
+    const result = await createPolarRefund(
+      {
+        enabled: true,
+        accessToken: "polar_token",
+        webhookSecret: "polar_whs_test",
+        productId: "product_1",
+        sandbox: true,
+      },
+      {
+        polarOrderId: "polar_order_1",
+        amount: 1_000,
+      },
+    );
+
+    expect(result).toEqual({ success: true, refundId: "refund_1" });
+    expect(mocks.polarRefundCreate).toHaveBeenCalledWith({
+      orderId: "polar_order_1",
+      amount: 1_000,
+      reason: "customer_request",
+      comment: undefined,
+      metadata: undefined,
+    });
   });
 });
 
