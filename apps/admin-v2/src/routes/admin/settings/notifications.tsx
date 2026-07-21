@@ -41,19 +41,17 @@ function NotificationSettingsPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Notifications</h1>
         <p className="mt-0.5 max-w-2xl text-sm text-muted-foreground">
-          Decide which events send, then configure the provider that delivers
-          admin browser push. Provider readiness never changes an event rule
-          silently.
+          Choose which events send and review delivery-provider readiness.
         </p>
       </div>
 
       <Tabs value={search.section} onValueChange={handleSectionChange}>
         <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-md border bg-card p-1 sm:w-fit">
-          <TabsTrigger value="rules" className="min-h-9 gap-2 px-3">
+          <TabsTrigger value="rules" className="min-h-11 gap-2 px-3 sm:min-h-9">
             <BellRing className="h-4 w-4" aria-hidden="true" />
             Delivery rules
           </TabsTrigger>
-          <TabsTrigger value="push" className="min-h-9 gap-2 px-3">
+          <TabsTrigger value="push" className="min-h-11 gap-2 px-3 sm:min-h-9">
             <RadioTower className="h-4 w-4" aria-hidden="true" />
             Admin push
           </TabsTrigger>
@@ -75,8 +73,7 @@ function NotificationSettingsPage() {
                   Firebase Cloud Messaging
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Provider setup for admin browser push only. Customer email,
-                  SMS, and WhatsApp providers are configured independently.
+                  Credentials and browser configuration for admin push.
                 </p>
               </div>
               <FirebaseSettingsForm />

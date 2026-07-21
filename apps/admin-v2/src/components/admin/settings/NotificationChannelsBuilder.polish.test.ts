@@ -1,0 +1,29 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+const source = readFileSync(
+  new URL("./NotificationChannelsBuilder.tsx", import.meta.url),
+  "utf8",
+);
+
+describe("notification rules workspace", () => {
+  it("keeps merchant intent editable when delivery is paused", () => {
+    expect(source).not.toContain("channelCanBeEnabled");
+    expect(source).not.toContain('disabled={!readiness[channel.key]}');
+    expect(source).not.toContain('channel === "push" && !isPushConfigured');
+    expect(source).toContain("Saved rules stay paused.");
+  });
+
+  it("protects rule changes with permissions, reset, and navigation guards", () => {
+    expect(source).toContain("ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT");
+    expect(source).toContain("<UnsavedChangesGuard");
+    expect(source).toContain("setChannels(savedChannels)");
+    expect(source).toContain("setAdminChannels(savedAdminChannels)");
+  });
+
+  it("uses mobile-safe action and template controls", () => {
+    expect(source).toContain("min-h-11 shrink-0 sm:min-h-9");
+    expect(source).toContain('className="h-11 sm:h-9"');
+    expect(source).toContain("min-h-11 min-w-0");
+  });
+});
