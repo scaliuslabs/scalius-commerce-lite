@@ -129,4 +129,18 @@ describe("customer auth resilience source boundaries", () => {
     expect(source).toContain("Save your delivery profile or sign out to continue.");
     expect(source).toContain("detail: customerData");
   });
+
+  it("marks every required profile text field visibly and semantically", () => {
+    const source = readStorefrontSource("src/components/AuthModal.tsx");
+
+    expect(source).toContain('htmlFor="profile-name"');
+    expect(source).toContain('id="profile-name"');
+    expect(source).toContain('autoComplete="name"');
+    expect(source).toContain('htmlFor="profile-address"');
+    expect(source).toContain('id="profile-address"');
+    expect(source).toContain('autoComplete="street-address"');
+    expect(source.match(/<input\s+[\s\S]*?required[\s\S]*?autoComplete=/g)).toHaveLength(2);
+    expect(source.match(/aria-hidden="true"[\s\S]*?\(required\)/g)).toHaveLength(2);
+    expect(source.match(/className="h-11 w-full[\s\S]*?sm:h-10"/g)).toHaveLength(2);
+  });
 });

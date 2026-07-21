@@ -750,24 +750,34 @@ export default function AuthModal() {
 
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">Full Name</label>
+                <label htmlFor="profile-name" className="text-xs font-medium text-foreground">
+                  Full Name <span aria-hidden="true" className="ml-0.5 text-red-500">*</span><span className="sr-only"> (required)</span>
+                </label>
                 <input
+                  id="profile-name"
                   type="text"
+                  required
+                  autoComplete="name"
                   value={profileName}
                   onChange={(e) => { setProfileName(e.target.value); setError(""); }}
                   placeholder="John Doe"
-                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none transition-all"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-all focus:border-ring focus:outline-none sm:h-10"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">Full Address</label>
+                <label htmlFor="profile-address" className="text-xs font-medium text-foreground">
+                  Full Address <span aria-hidden="true" className="ml-0.5 text-red-500">*</span><span className="sr-only"> (required)</span>
+                </label>
                 <input
+                  id="profile-address"
                   type="text"
+                  required
+                  autoComplete="street-address"
                   value={profileAddress}
                   onChange={(e) => { setProfileAddress(e.target.value); setError(""); }}
                   placeholder="Apt, Street, Building"
-                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm focus:border-ring focus:outline-none transition-all"
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm transition-all focus:border-ring focus:outline-none sm:h-10"
                 />
               </div>
 
