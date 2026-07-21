@@ -69,9 +69,11 @@ describe("order detail permission boundaries", () => {
     );
 
     expect(headerSource).toContain("useOrderActionPermissions");
-    expect(headerSource).toContain("orderActions.canManageOrderShipments");
     expect(headerSource).toContain("orderActions.canEditOrders");
-    expect(headerSource).toContain('aria-label="Fulfillment status"');
+    expect(headerSource).toContain("FULFILLMENT_STATUS_COLORS[order.fulfillmentStatus]");
+    expect(headerSource).not.toContain("useUpdateFulfillmentStatus");
+    expect(headerSource).not.toContain('aria-label="Fulfillment status"');
+    expect(headerSource).not.toContain('<SelectItem value="complete">');
 
     expect(statusSource).toContain("orderActions.canChangeOrderStatus");
     expect(statusSource).not.toContain("canRefundOrders");

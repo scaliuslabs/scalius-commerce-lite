@@ -3,10 +3,7 @@ import * as OrdersService from "@scalius/core/modules/orders";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications";
 import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import { validateTransition } from "@scalius/core/modules/orders/order-state-machine";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
-import { assertNoActivePaymentSessionAttempt, assertNoActiveRefundAttempt } from "@scalius/core/modules/payments";
+import { eq } from "drizzle-orm";
 import { NotFoundError, ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -323,49 +320,6 @@ app.openapi(postFulfillRoute, async (c) => {
         source: "orders-manual-fulfillment",
     });
     return created(c, responseData);
-});
-
-// ─── PUT /:id/fulfillment-status ─────────────────────────────────────────────
-
-const updateFulfillmentStatusRoute = createRoute({
-    method: "put",
-    path: "/{id}/fulfillment-status",
-    tags: ["Admin - Orders"],
-    summary: "Manually update order fulfillment status",
-    request: {
-        params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: z.object({ status: z.enum(["pending", "partial", "complete"]) }) } } }
-    },
-    responses: {
-        200: {
-            description: "Fulfillment status updated",
-            content: { "application/json": { schema: messageResponse } },
-        },
-        ...adminMutationErrorResponses,
-    }
-});
-
-app.openapi(updateFulfillmentStatusRoute, async (c) => {
-    const db = c.get("db");
-    const orderId = c.req.valid("param").id;
-    const { status } = c.req.valid("json");
-
-    const order = await db.select({
-        fulfillmentStatus: orders.fulfillmentStatus,
-        shipmentClaimId: orders.shipmentClaimId,
-        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
-    }).from(orders).where(eq(orders.id, orderId)).get();
-    if (!order) throw new NotFoundError("Order not found");
-    assertNoActiveShipmentClaim(order);
-    await assertNoActiveRefundAttempt(db, orderId);
-    await assertNoActivePaymentSessionAttempt(db, orderId);
-
-    if (order.fulfillmentStatus !== status) {
-        validateTransition("fulfillment", order.fulfillmentStatus, status);
-        await db.update(orders).set({ fulfillmentStatus: status, updatedAt: sql`unixepoch()` }).where(eq(orders.id, orderId));
-    }
-
-    return ok(c, { message: "Fulfillment status updated" });
 });
 
 // ─── GET /:id/shipments ──────────────────────────────────────────────────────

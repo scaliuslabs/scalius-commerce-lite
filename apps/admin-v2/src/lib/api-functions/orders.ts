@@ -25,8 +25,6 @@ import type {
   PostApiV1AdminOrdersQuoteData,
   PostApiV1AdminOrdersQuoteResponse,
   PutApiV1AdminOrdersByIdData,
-  PutApiV1AdminOrdersByIdFulfillmentStatusData,
-  PutApiV1AdminOrdersByIdFulfillmentStatusResponse,
   PutApiV1AdminOrdersByIdResponse,
   PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData,
   PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponse,
@@ -113,8 +111,7 @@ export type UpdateOrderInput = { id: string } &
 export type OrderIdPayload = ApiData<PostApiV1AdminOrdersResponse>;
 export type MessagePayload =
   | ApiData<PutApiV1AdminOrdersByIdStatusResponse>
-  | ApiData<PostApiV1AdminOrdersByIdCodResponse>
-  | ApiData<PutApiV1AdminOrdersByIdFulfillmentStatusResponse>;
+  | ApiData<PostApiV1AdminOrdersByIdCodResponse>;
 export type UpdateOrderStatusInput = { orderId: string; note?: string } &
   ApiBody<PutApiV1AdminOrdersByIdStatusData>;
 export type RefundOrderInput = { orderId: string } &
@@ -229,8 +226,6 @@ export type CreateFulfillmentShipmentInput = { orderId: string } &
   ApiBody<PostApiV1AdminOrdersByIdFulfillData>;
 export type CreateFulfillmentShipmentPayload =
   ApiData<PostApiV1AdminOrdersByIdFulfillResponse>;
-export type UpdateFulfillmentStatusInput = { orderId: string } &
-  ApiBody<PutApiV1AdminOrdersByIdFulfillmentStatusData>;
 export type RefreshShipmentStatusInput = {
   orderId: string;
   shipmentId: string;
@@ -518,14 +513,6 @@ export const createFulfillmentShipment = createServerFn({ method: "POST" })
       `/orders/${orderId}/fulfill`,
       body,
     );
-  });
-
-export const updateFulfillmentStatus = createServerFn({ method: "POST" })
-  .validator((data: UpdateFulfillmentStatusInput) => data)
-  .handler(async ({ data }) => {
-    return apiPut<MessagePayload>(`/orders/${data.orderId}/fulfillment-status`, {
-      status: data.status,
-    });
   });
 
 export const refreshShipmentStatus = createServerFn({ method: "POST" })
