@@ -49,6 +49,11 @@ import {
     invalidateApiAndScheduleStorefrontGroups,
 } from "../../../utils/cache-invalidation";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
+import {
+    normalizePlatformOrigin,
+    parseMerchantCspSources,
+    serializeMerchantCspSources,
+} from "@scalius/shared/security-csp";
 
 import { ok } from "../../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
@@ -63,6 +68,24 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";
 const CHECKOUT_CACHE_GROUPS = ["checkout"] as const;
 const LAYOUT_CACHE_GROUPS = ["layout"] as const;
+
+function normalizeStoredMerchantCspSources(
+    value: string,
+    env?: Record<string, unknown>,
+): string {
+    const inherited = new Set([
+        "STOREFRONT_URL",
+        "PUBLIC_API_BASE_URL",
+        "BETTER_AUTH_URL",
+        "CDN_DOMAIN_URL",
+        "R2_PUBLIC_URL",
+    ].map((key) => normalizePlatformOrigin(env?.[key])).filter(
+        (source): source is string => Boolean(source),
+    ));
+    return serializeMerchantCspSources(
+        parseMerchantCspSources(value).filter((source) => !inherited.has(source)),
+    );
+}
 
 const customerAuthPolicySchema = z.object({
     otpChannels: z.array(z.enum(CUSTOMER_AUTH_OTP_CHANNELS)).min(1).max(3),
@@ -439,7 +462,12 @@ app.openapi(getSecurityRoute, async (c) => {
             .where(and(eq(settings.key, "csp_allowed_domains"), eq(settings.category, "security")))
             .get();
 
-        return ok(c, { cspAllowedDomains: row?.value || "" });
+        return ok(c, {
+            cspAllowedDomains: normalizeStoredMerchantCspSources(
+                row?.value || "",
+                c.env as Record<string, unknown>,
+            ),
+        });
 });
 
 const saveSecuritySchema = z.object({
@@ -463,24 +491,28 @@ app.openapi(saveSecurityRoute, async (c) => {
     const { cspAllowedDomains } = c.req.valid("json");
 
         if (typeof cspAllowedDomains === "string") {
+            const normalizedCspAllowedDomains = normalizeStoredMerchantCspSources(
+                cspAllowedDomains,
+                c.env as Record<string, unknown>,
+            );
             await db
                 .insert(settings)
                 .values({
                     id: `set_${nanoid(10)}`,
                     key: "csp_allowed_domains",
-                    value: cspAllowedDomains,
+                    value: normalizedCspAllowedDomains,
                     type: "string",
                     category: "security"
                 })
                 .onConflictDoUpdate({
                     target: [settings.key, settings.category],
-                    set: { value: cspAllowedDomains, updatedAt: sql`(unixepoch())` }
+                    set: { value: normalizedCspAllowedDomains, updatedAt: sql`(unixepoch())` }
                 });
 
             const env = c.env as Env | undefined;
             if (env?.CACHE) {
                 const cacheWrite = env.CACHE
-                    .put("security:csp_allowed_domains", cspAllowedDomains)
+                    .put("security:csp_allowed_domains", normalizedCspAllowedDomains)
                     .catch((error) => {
                         console.error("[Settings] Failed to cache CSP allowed domains:", error);
                     });

@@ -1,25 +1,33 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
   LockKeyhole,
   Plus,
+  RotateCcw,
+  Save,
   Server,
   ShieldCheck,
   X,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   normalizeMerchantCspSource,
   parseMerchantCspSources,
   serializeMerchantCspSources,
 } from "@scalius/shared/security-csp";
 
+import { UnsavedChangesGuard } from "@/components/admin/shared/UnsavedChangesGuard";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
+import { getServerFnError } from "@/lib/api-helpers";
 import {
   getSecuritySettings,
   updateSecuritySettings,
@@ -28,13 +36,8 @@ import {
   getInheritedSecuritySources,
   type InheritedSecuritySourceKind,
 } from "@/lib/api-functions/security-runtime";
-import { useSettingsForm } from "@/hooks/use-settings-form";
 import { queryKeys } from "@/lib/query-keys";
 import { SettingsLoadFailure } from "./settings/SettingsLoadFailure";
-
-interface SecurityValues {
-  cspAllowedDomains: string;
-}
 
 const SOURCE_KIND_LABELS: Record<InheritedSecuritySourceKind, string> = {
   storefront: "Storefront",
@@ -43,80 +46,110 @@ const SOURCE_KIND_LABELS: Record<InheritedSecuritySourceKind, string> = {
   media: "Media",
 };
 
-const fetchSecurity = async (): Promise<SecurityValues> => {
-  const data = (await getSecuritySettings()) as Record<string, unknown>;
-  return {
-    cspAllowedDomains: (data.cspAllowedDomains as string) || "",
-  };
-};
+function sourcesEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((source, index) => source === right[index]);
+}
 
-const saveSecurity = async (values: SecurityValues) => {
-  await updateSecuritySettings({
-    data: {
-      cspAllowedDomains: serializeMerchantCspSources(
-        parseMerchantCspSources(values.cspAllowedDomains),
-      ),
-    },
-  });
-};
+function visibleMerchantSources(
+  value: unknown,
+  inheritedSources: readonly (string | null | undefined)[],
+): string[] {
+  const inherited = new Set(inheritedSources.filter((source): source is string => Boolean(source)));
+  return parseMerchantCspSources(value).filter((source) => !inherited.has(source));
+}
 
 export function SecuritySettingsBuilder() {
-  const [sourceDraft, setSourceDraft] = useState("");
-  const [sourceError, setSourceError] = useState<string | null>(null);
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  const queryClient = useQueryClient();
+  const securityQuery = useQuery({
+    queryKey: queryKeys.settings.security(),
+    queryFn: getSecuritySettings,
+  });
   const inheritedQuery = useQuery({
     queryKey: ["settings", "security", "inherited-sources"],
-    queryFn: () => getInheritedSecuritySources(),
+    queryFn: getInheritedSecuritySources,
     staleTime: 1000 * 60 * 10,
   });
-  const {
-    values,
-    setValue,
-    isLoading,
-    isLoaded,
-    isLoadError,
-    loadError,
-    isSaving,
-    handleSubmit,
-    refetch,
-  } = useSettingsForm<SecurityValues>({
-    queryKey: queryKeys.settings.security(),
-    fetchFn: fetchSecurity,
-    saveFn: saveSecurity,
-    defaultValues: { cspAllowedDomains: "" },
-    successMessage: "Storefront security policy saved.",
-    errorMessage: "Failed to save the storefront security policy.",
-  });
+  const [merchantSources, setMerchantSources] = useState<string[] | null>(null);
+  const [savedMerchantSources, setSavedMerchantSources] = useState<string[] | null>(null);
+  const [sourceDraft, setSourceDraft] = useState("");
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const dirty = Boolean(
+    merchantSources
+    && savedMerchantSources
+    && !sourcesEqual(merchantSources, savedMerchantSources),
+  );
+  const hasPendingInput = sourceDraft.trim().length > 0;
 
-  const merchantSources = useMemo(
-    () => parseMerchantCspSources(values.cspAllowedDomains),
-    [values.cspAllowedDomains],
+  const inheritedOrigins = useMemo(
+    () => inheritedQuery.data?.map((source) => source.source) ?? [],
+    [inheritedQuery.data],
   );
 
+  useEffect(() => {
+    if (!securityQuery.data || dirty || hasPendingInput) return;
+    const nextSources = visibleMerchantSources(
+      securityQuery.data.cspAllowedDomains,
+      inheritedOrigins,
+    );
+    setMerchantSources(nextSources);
+    setSavedMerchantSources(nextSources);
+  }, [dirty, hasPendingInput, inheritedOrigins, securityQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: (nextSources: string[]) => updateSecuritySettings({
+      data: { cspAllowedDomains: serializeMerchantCspSources(nextSources) },
+    }),
+    onSuccess: (_response, saved) => {
+      const serialized = serializeMerchantCspSources(saved);
+      setMerchantSources(saved);
+      setSavedMerchantSources(saved);
+      setSourceDraft("");
+      setSourceError(null);
+      queryClient.setQueryData(queryKeys.settings.security(), {
+        cspAllowedDomains: serialized,
+      });
+      toast.success("Storefront security policy saved");
+    },
+    onError: (error) => {
+      toast.error(getServerFnError(error, "Storefront security policy could not be saved"));
+    },
+  });
+
+  const canEdit = canManage && !saveMutation.isPending;
+
   function addMerchantSource() {
+    if (!canEdit || !merchantSources) return;
     const result = normalizeMerchantCspSource(sourceDraft);
     if (!result.value) {
       setSourceError(result.error);
       return;
     }
-
-    setValue(
-      "cspAllowedDomains",
-      serializeMerchantCspSources([...merchantSources, result.value]),
-    );
+    if (inheritedOrigins.includes(result.value)) {
+      setSourceError("This origin is already trusted by the platform.");
+      return;
+    }
+    if (merchantSources.includes(result.value)) {
+      setSourceError("This origin is already in the policy.");
+      return;
+    }
+    setMerchantSources([...merchantSources, result.value]);
     setSourceDraft("");
     setSourceError(null);
   }
 
-  function removeMerchantSource(source: string) {
-    setValue(
-      "cspAllowedDomains",
-      serializeMerchantCspSources(
-        merchantSources.filter((current) => current !== source),
-      ),
-    );
-  }
-
-  if (isLoading) {
+  if (securityQuery.isLoading || !merchantSources || !savedMerchantSources) {
+    if (securityQuery.isError) {
+      return (
+        <SettingsLoadFailure
+          title="Security policy unavailable"
+          error={securityQuery.error}
+          fallback="The current storefront content-security policy could not be loaded."
+          onRetry={() => void securityQuery.refetch()}
+        />
+      );
+    }
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -124,202 +157,209 @@ export function SecuritySettingsBuilder() {
     );
   }
 
-  if (isLoadError) {
-    return (
-      <SettingsLoadFailure
-        title="Security policy unavailable"
-        error={loadError}
-        fallback="The current storefront content-security policy could not be loaded."
-        onRetry={refetch}
-      />
-    );
-  }
-
   return (
-    <div className="max-w-4xl space-y-5">
-      <section className="overflow-hidden rounded-lg border border-border bg-background">
-        <div className="flex items-start gap-3 border-b border-border px-4 py-3">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">Inherited platform trust</h3>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-              Scalius reads these origins from the deployed platform
-              configuration. They stay trusted without being copied into
-              merchant-managed text.
-            </p>
-          </div>
-        </div>
-
-        {inheritedQuery.isError ? (
-          <div className="flex items-start gap-2 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              Platform origins could not be inspected. Existing runtime trust
-              remains unchanged; reload before diagnosing an integration
-              failure.
-            </p>
-          </div>
-        ) : inheritedQuery.isLoading ? (
-          <div className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Reading deployed origins…
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {inheritedQuery.data?.map((source) => (
-              <div
-                key={source.key}
-                className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Server className="h-3.5 w-3.5 text-muted-foreground" />
-                  {source.label}
-                </div>
-                <div className="min-w-0">
-                  {source.source ? (
-                    <code className="block truncate text-xs text-foreground">
-                      {source.source}
-                    </code>
-                  ) : (
-                    <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                      Not configured or invalid
-                    </span>
-                  )}
-                  <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-                    {source.consequence}
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={
-                    source.source
-                      ? "w-fit border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
-                      : "w-fit border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
-                  }
-                >
-                  {source.source ? (
-                    <CheckCircle2 className="mr-1 h-3 w-3" />
-                  ) : (
-                    <AlertTriangle className="mr-1 h-3 w-3" />
-                  )}
-                  {SOURCE_KIND_LABELS[source.kind]}
-                </Badge>
-              </div>
-            ))}
-          </div>
+    <>
+      <UnsavedChangesGuard
+        isDirty={dirty || hasPendingInput}
+        isSubmitting={saveMutation.isPending}
+      />
+      <div className="max-w-4xl space-y-5 pb-24">
+        {!canManage && (
+          <Alert>
+            <AlertDescription>
+              Your role can review the storefront security policy, but cannot change it.
+            </AlertDescription>
+          </Alert>
         )}
-      </section>
 
-      <section className="rounded-lg border border-border bg-background p-4">
-        <div className="flex items-start gap-3">
-          <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold">
-              Additional storefront services
-            </h3>
-            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-              Add only a host required by a payment, analytics, chat, or
-              embedded service. Wildcards are explicit and are never added
-              automatically.
-            </p>
+        <section className="overflow-hidden rounded-lg border bg-background">
+          <div className="flex items-start gap-3 border-b px-4 py-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Inherited platform trust</h3>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Read-only origins from the deployed platform. They do not belong in merchant additions.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-4 space-y-2">
-          <Label htmlFor="csp-source-draft">Trusted host</Label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="csp-source-draft"
-              value={sourceDraft}
-              onChange={(event) => {
-                setSourceDraft(event.target.value);
-                if (sourceError) setSourceError(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addMerchantSource();
-                }
-              }}
-              placeholder="https://payments.example.com"
-              aria-invalid={Boolean(sourceError)}
-              aria-describedby="csp-source-help"
-              className="min-w-0 flex-1"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={addMerchantSource}
-              disabled={!sourceDraft.trim()}
-              className="shrink-0"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add host
-            </Button>
-          </div>
-          <p
-            id="csp-source-help"
-            className={`text-xs leading-5 ${sourceError ? "text-destructive" : "text-muted-foreground"}`}
-          >
-            {sourceError ??
-              "Use an exact HTTPS origin. Enter https://*.example.com only when every subdomain is required."}
-          </p>
-        </div>
-
-        <div className="mt-4 rounded-md border border-border">
-          {merchantSources.length > 0 ? (
-            <div className="divide-y divide-border">
-              {merchantSources.map((source) => (
+          {inheritedQuery.isError ? (
+            <div className="flex flex-col gap-3 px-4 py-3 text-xs text-amber-700 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>Platform origins could not be inspected. Runtime trust is unchanged.</p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="min-h-11 sm:min-h-9"
+                onClick={() => void inheritedQuery.refetch()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : inheritedQuery.isLoading ? (
+            <div className="flex items-center gap-2 px-4 py-4 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Reading deployed origins…
+            </div>
+          ) : (
+            <div className="divide-y">
+              {inheritedQuery.data?.map((source) => (
                 <div
-                  key={source}
-                  className="flex min-w-0 items-center justify-between gap-3 px-3 py-2"
+                  key={source.key}
+                  className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center"
                 >
-                  <code className="min-w-0 truncate text-xs">{source}</code>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    onClick={() => removeMerchantSource(source)}
-                    aria-label={`Remove ${source}`}
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                    {source.label}
+                  </div>
+                  <div className="min-w-0">
+                    {source.source ? (
+                      <code className="block truncate text-xs">{source.source}</code>
+                    ) : (
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                        Not configured or invalid
+                      </span>
+                    )}
+                    <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                      {source.consequence}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={source.source
+                      ? "w-fit border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                      : "w-fit border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"}
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
+                    {source.source ? (
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                    ) : (
+                      <AlertTriangle className="mr-1 h-3 w-3" />
+                    )}
+                    {SOURCE_KIND_LABELS[source.kind]}
+                  </Badge>
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="px-3 py-4 text-xs leading-5 text-muted-foreground">
-              No merchant-added hosts. Platform origins and first-class
-              integration defaults still apply.
+          )}
+        </section>
+
+        <section className="rounded-lg border bg-background p-4">
+          <div className="flex items-start gap-3">
+            <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Additional storefront services</h3>
+              <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                Add an exact origin required by a payment, analytics, chat, or embedded service.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <Label htmlFor="csp-source-draft">Trusted origin</Label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="csp-source-draft"
+                value={sourceDraft}
+                disabled={!canEdit}
+                placeholder="https://payments.example.com"
+                aria-invalid={Boolean(sourceError)}
+                aria-describedby="csp-source-help"
+                className="min-h-11 min-w-0 flex-1 sm:min-h-9"
+                onChange={(event) => {
+                  setSourceDraft(event.target.value);
+                  if (sourceError) setSourceError(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addMerchantSource();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 shrink-0 sm:min-h-9"
+                disabled={!canEdit || !sourceDraft.trim()}
+                onClick={addMerchantSource}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add origin
+              </Button>
+            </div>
+            <p
+              id="csp-source-help"
+              className={`text-xs leading-5 ${sourceError ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {sourceError ?? "Exact HTTPS origins stay exact. Use https://*.example.com only when every subdomain is required."}
             </p>
-          )}
-        </div>
+          </div>
 
-        <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
-          Additional hosts currently apply to storefront scripts, connections,
-          frames, images, and workers. Treat each addition as a security
-          decision.
-        </p>
-      </section>
+          <div className="mt-4 rounded-md border">
+            {merchantSources.length > 0 ? (
+              <div className="divide-y">
+                {merchantSources.map((source) => (
+                  <div key={source} className="flex min-w-0 items-center justify-between gap-3 px-3 py-1.5">
+                    <code className="min-w-0 truncate text-xs">{source}</code>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+                      disabled={!canEdit}
+                      onClick={() => setMerchantSources((current) => current?.filter((item) => item !== source) ?? [])}
+                      aria-label={`Remove ${source}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="px-3 py-4 text-xs leading-5 text-muted-foreground">
+                No merchant-added origins. Platform and first-class integration defaults still apply.
+              </p>
+            )}
+          </div>
 
-      <div className="flex justify-end border-t border-border pt-4">
-        <Button
-          type="button"
-          onClick={handleSubmit}
-          disabled={isSaving || !isLoaded}
-          className="min-w-[150px]"
-        >
-          {isSaving ? (
-            <>
+          <p className="mt-3 text-[11px] leading-4 text-muted-foreground">
+            Merchant additions currently apply to scripts, connections, frames, images, and workers.
+          </p>
+        </section>
+
+        <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 sm:min-h-9"
+            disabled={!canEdit || (!dirty && !hasPendingInput)}
+            onClick={() => {
+              setMerchantSources(savedMerchantSources);
+              setSourceDraft("");
+              setSourceError(null);
+            }}
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+          <Button
+            type="button"
+            className="min-h-11 sm:min-h-9 sm:min-w-36"
+            disabled={!canEdit || !dirty}
+            onClick={() => saveMutation.mutate(merchantSources)}
+          >
+            {saveMutation.isPending ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save security policy"
-          )}
-        </Button>
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            Save policy
+          </Button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

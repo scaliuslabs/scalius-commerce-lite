@@ -1,5 +1,10 @@
 // src/lib/middleware-helper/csp-handler.ts
 
+import {
+  normalizePlatformOrigin,
+  parseMerchantCspSources,
+} from "@scalius/shared/security-csp";
+
 /**
  * Essential domains that are commonly needed for modern web applications
  * These are hardcoded to avoid requiring users to manually add every service
@@ -57,24 +62,7 @@ async function parseCspAllowedDomains(env?: Record<string, unknown>): Promise<st
     console.error("Failed to read CSP_ALLOWED from KV Cache", e);
   }
 
-  if (!cspAllowed.trim()) return [];
-
-  return cspAllowed
-    .split(",")
-    .map((domain: string) => domain.trim())
-    .filter((domain: string) => domain.length > 0)
-    .flatMap((domain: string) => {
-      // Remove https:// if present to normalize
-      const cleanDomain = domain.replace(/^https?:\/\//, "");
-
-      // If it's already a wildcard, just add https
-      if (cleanDomain.startsWith("*.")) {
-        return [`https://${cleanDomain}`];
-      }
-
-      // For regular domains, add both exact and wildcard
-      return [`https://${cleanDomain}`, `https://*.${cleanDomain}`];
-    });
+  return parseMerchantCspSources(cspAllowed);
 }
 
 /**
@@ -92,27 +80,8 @@ function getPlatformDomains(env?: Record<string, unknown>): string[] {
   ];
 
   for (const key of envKeys) {
-    const raw: string | undefined = env?.[key] as string | undefined;
-    if (!raw) continue;
-
-    // CDN_DOMAIN_URL is stored as a bare domain (no scheme)
-    const value = raw.trim();
-    if (!value) continue;
-
-    try {
-      // If it already has a scheme, parse directly; otherwise treat as bare domain
-      const hasScheme = /^https?:\/\//.test(value);
-      if (hasScheme) {
-        const parsed = new URL(value);
-        urls.push(parsed.origin);
-        urls.push(`${parsed.protocol}//*.${parsed.hostname}`);
-      } else {
-        urls.push(`https://${value}`, `https://*.${value}`);
-      }
-    } catch {
-      // Not a valid URL, try as bare domain
-      urls.push(`https://${value}`, `https://*.${value}`);
-    }
+    const source = normalizePlatformOrigin(env?.[key]);
+    if (source) urls.push(source);
   }
 
   return urls;
@@ -136,7 +105,7 @@ async function getCombinedDomains(env?: Record<string, unknown>): Promise<string
 export async function setPageCspHeader(response: Response, env?: Record<string, unknown>): Promise<Response> {
   const allowedDomains = await getCombinedDomains(env);
   // Use PUBLIC_API_BASE_URL environment variable - no hardcoded fallbacks
-  const currentOrigin = String(env?.PUBLIC_API_BASE_URL || "").trim();
+  const currentOrigin = normalizePlatformOrigin(env?.PUBLIC_API_BASE_URL) ?? "";
 
   // Only allow localhost in dev mode — never in production CSP
   const isDev = currentOrigin.includes("localhost") || currentOrigin.includes("127.0.0.1");
