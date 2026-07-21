@@ -46,6 +46,7 @@ const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, {
   quality: 85,
   format: "auto",
   fit: "contain",
+  trim: "border",
 });
 const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, {
   width: 1400,
@@ -53,6 +54,7 @@ const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, {
   quality: 85,
   format: "auto",
   fit: "contain",
+  trim: "border",
 });
 
 function formatDuration(durationMs: number | null): string | null {
@@ -105,6 +107,7 @@ const optimizedMedia = galleryMedia.map((item) => {
       quality: 80,
       format: "auto",
       fit: "contain",
+      trim: "border",
     }),
     mainUrl: getProductImageUrl(item.url, {
       width: 600,
@@ -112,6 +115,7 @@ const optimizedMedia = galleryMedia.map((item) => {
       quality: 85,
       format: "auto",
       fit: "contain",
+      trim: "border",
     }),
     mainSrcSet: getProductImageSrcSet(item.url, [
       {
@@ -121,6 +125,7 @@ const optimizedMedia = galleryMedia.map((item) => {
         quality: 80,
         format: "auto",
         fit: "contain",
+        trim: "border",
       },
       {
         descriptor: "600w",
@@ -129,6 +134,7 @@ const optimizedMedia = galleryMedia.map((item) => {
         quality: 85,
         format: "auto",
         fit: "contain",
+        trim: "border",
       },
     ]),
     zoomUrl: getProductImageUrl(item.url, {
@@ -137,6 +143,7 @@ const optimizedMedia = galleryMedia.map((item) => {
       quality: 85,
       format: "auto",
       fit: "contain",
+      trim: "border",
     }),
     posterUrl: null,
   };
@@ -175,7 +182,7 @@ const variantImageIds = new Set(
         ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
         : "lg:block",
     ]}
-    style="top: 5rem;"
+  style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};`}
   >
     {
       hasMultipleMedia && (
@@ -305,7 +312,7 @@ const variantImageIds = new Set(
             data-image-stage="mobile"
             data-mobile-image-trigger
             class:list={[
-              "relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black lg:hidden motion-reduce:transition-none",
+              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black lg:hidden motion-reduce:transition-none",
               initialMedia?.item.kind === "video" && "hidden",
             ]}
             aria-label="Open product image zoom"
@@ -336,7 +343,7 @@ const variantImageIds = new Set(
           <div
             data-video-stage
             class:list={[
-              "relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100 lg:rounded-xl",
+              "mobile-media-stage relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100 lg:rounded-xl",
               initialMedia?.item.kind !== "video" && "hidden",
             ]}
           >
@@ -553,6 +560,11 @@ const variantImageIds = new Set(
   }
   .thumbnail-btn .thumb-ring.\!border-black {
     border-color: #000 !important;
+  }
+  @media (max-width: 1023px) {
+    .mobile-media-stage {
+      max-height: var(--gallery-mobile-max-height);
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     .thumbnail-btn,

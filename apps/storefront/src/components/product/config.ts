@@ -28,8 +28,8 @@ export const GALLERY_CONFIG = {
   mainImage: {
     // Aspect ratio for main product image
     aspectRatio: "1 / 1",
-    // Maximum height on mobile (in vh units)
-    maxHeightMobile: "55vh",
+    // Keep wider single-column layouts compact without shrinking normal phones.
+    maxHeightMobile: "min(55vh, 24rem)",
     // Maximum height on desktop (in vh units)
     maxHeightDesktop: "calc(100vh - 6rem)",
     // Image quality settings
