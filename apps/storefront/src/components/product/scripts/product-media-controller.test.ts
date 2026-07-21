@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { storefrontSourcePath } from "@/lib/test-source-paths";
 import {
@@ -26,7 +26,7 @@ function thumbnail(
   mediaId: string,
   kind: "image" | "video",
   url: string,
-  options: { poster?: string; zoom?: string } = {},
+  options: { poster?: string; zoom?: string; preview?: string } = {},
 ): string {
   return `<button
     data-gallery-thumbnail
@@ -34,6 +34,7 @@ function thumbnail(
     data-media-id="${mediaId}"
     data-media-kind="${kind}"
     data-media-url="${url}"
+    ${options.preview ? `data-preview-url="${options.preview}"` : ""}
     ${options.poster ? `data-poster-url="${options.poster}"` : ""}
     ${options.zoom ? `data-zoom-url="${options.zoom}"` : ""}
     data-alt-text="${kind === "video" ? "Demonstration" : "Front view"}"
@@ -47,6 +48,7 @@ function renderGallery(initial = "pmed_video") {
     }),
     thumbnail("pmed_image", "med_image", "image", "/image-main.jpg", {
       zoom: "/image-zoom.jpg",
+      preview: "/image-preview.jpg",
     }),
   ].join("");
   document.body.innerHTML = `
@@ -92,6 +94,10 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(
     () => undefined,
   );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("mixed product media gallery", () => {
@@ -154,16 +160,117 @@ describe("mixed product media gallery", () => {
         .querySelector<HTMLElement>("[data-video-stage]")
         ?.classList.contains("hidden"),
     ).toBe(true);
-    expect(mobileImage.src).toContain("/image-main.jpg");
-    expect(desktopMainImage.src).toContain("/image-main.jpg");
+    expect(mobileImage.src).toContain("/image-preview.jpg");
+    expect(desktopMainImage.src).toContain("/image-preview.jpg");
     expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: "pmed_image",
       mediaId: "med_image",
+      previewUrl: "/image-preview.jpg",
       zoomUrl: "/image-zoom.jpg",
       source: "gallery",
     });
+  });
+
+  it("shows the loaded preview immediately and promotes the decoded display image", async () => {
+    const requests: Array<{
+      src: string;
+      fetchPriority: string;
+      onload: (() => void) | null;
+    }> = [];
+    class DeferredImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      fetchPriority = "auto";
+      decode = vi.fn().mockResolvedValue(undefined);
+      private value = "";
+      set src(value: string) {
+        this.value = value;
+        requests.push(this);
+      }
+      get src() {
+        return this.value;
+      }
+    }
+    vi.stubGlobal("Image", DeferredImage);
+
+    const root = renderGallery();
+    initProductMediaGallery(root);
+    const imageButton = root.querySelector<HTMLButtonElement>(
+      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
+    )!;
+    imageButton.dataset.mediaUrl = "/promotion-full.jpg";
+    imageButton.dataset.previewUrl = "/promotion-preview.jpg";
+    imageButton.click();
+
+    const main = root.querySelector<HTMLImageElement>(
+      "[data-desktop-main-image]",
+    )!;
+    expect(main.src).toContain("/promotion-preview.jpg");
+    expect(requests[0]).toMatchObject({
+      src: "/promotion-full.jpg",
+      fetchPriority: "high",
+    });
+
+    requests[0]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(main.src).toContain("/promotion-full.jpg");
+    expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-full.jpg");
+  });
+
+  it("does not let a slower previous image replace the shopper's latest selection", async () => {
+    const requests: Array<{
+      src: string;
+      onload: (() => void) | null;
+    }> = [];
+    class DeferredImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      fetchPriority = "auto";
+      decode = vi.fn().mockResolvedValue(undefined);
+      private value = "";
+      set src(value: string) {
+        this.value = value;
+        requests.push(this);
+      }
+      get src() {
+        return this.value;
+      }
+    }
+    vi.stubGlobal("Image", DeferredImage);
+
+    const root = renderGallery();
+    initProductMediaGallery(root);
+    const imageButton = root.querySelector<HTMLButtonElement>(
+      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
+    )!;
+    const main = root.querySelector<HTMLImageElement>(
+      "[data-desktop-main-image]",
+    )!;
+
+    imageButton.dataset.productMediaId = "pmed_first";
+    imageButton.dataset.mediaUrl = "/first-full.jpg";
+    imageButton.dataset.previewUrl = "/first-preview.jpg";
+    imageButton.click();
+
+    imageButton.dataset.productMediaId = "pmed_latest";
+    imageButton.dataset.mediaUrl = "/latest-full.jpg";
+    imageButton.dataset.previewUrl = "/latest-preview.jpg";
+    imageButton.click();
+    expect(main.src).toContain("/latest-preview.jpg");
+
+    requests[0]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(main.src).toContain("/latest-preview.jpg");
+
+    requests[1]!.onload?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(main.src).toContain("/latest-full.jpg");
   });
 
   it("uses exact SKU images and an image representation for unmapped SKUs", () => {
@@ -308,7 +415,7 @@ describe("storefront mixed-media source boundaries", () => {
     expect(controller).not.toContain("controller-image-update");
   });
 
-  it("marks exact SKU images for bounded fast-connection warming", () => {
+  it("uses one reusable preview transform and defers full and zoom work until intent", () => {
     const gallery = readFileSync(GALLERY_SOURCE, "utf8");
     const controller = readFileSync(
       storefrontSourcePath(
@@ -319,10 +426,14 @@ describe("storefront mixed-media source boundaries", () => {
     const zoom = readFileSync(PRODUCT_ZOOM_SOURCE, "utf8");
     expect(gallery).toContain("data-variant-image");
     expect(gallery).toContain("variantImageIds.has(itemData.item.id)");
-    expect(controller).toContain('button.dataset.variantImage === "true"');
-    expect(controller).toContain(".slice(0, 4)");
+    expect(gallery).toContain("data-preview-url");
+    expect(gallery).toContain("imageTransforms.preview");
+    expect(controller).toContain('preloadImage(item.url, "high")');
+    expect(controller).toContain("activeMediaDisplayUrl");
     expect(controller).toContain("imagePreloads");
-    expect(zoom).toContain("scheduleZoomImagePreload(zoomUrl, 250)");
+    expect(controller).not.toContain("scheduleInitialImagePreload");
+    expect(zoom).not.toContain("scheduleZoomImagePreload");
+    expect(zoom).toContain("requestZoomImage");
     expect(zoom).toContain("imagePreloads");
   });
 });

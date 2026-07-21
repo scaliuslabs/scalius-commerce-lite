@@ -71,7 +71,6 @@ export function ProductImageZoom({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
-  const zoomPreloadTimerRef = useRef<number | null>(null);
   const latestPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.5 });
 
   // Generate high-res URL from Cloudflare optimized URL
@@ -116,19 +115,6 @@ export function ProductImageZoom({
     });
   }, [getZoomUrl]);
 
-  const scheduleZoomImagePreload = useCallback((zoomUrl: string, delay: number) => {
-    if (zoomPreloadTimerRef.current !== null) {
-      window.clearTimeout(zoomPreloadTimerRef.current);
-    }
-    if (!zoomUrl || !canLoadHighResImage()) return;
-    zoomPreloadTimerRef.current = window.setTimeout(() => {
-      zoomPreloadTimerRef.current = null;
-      void preloadImage(zoomUrl).then((loaded) => {
-        if (loaded && getZoomUrl() === zoomUrl) setIsHighResLoaded(true);
-      });
-    }, delay);
-  }, [getZoomUrl]);
-
   // Recover gallery state that may have changed before this island hydrated.
   useEffect(() => {
     const image = imageElementRef.current;
@@ -138,7 +124,7 @@ export function ProductImageZoom({
       currentImageRef.current = activeUrl;
       currentZoomImageRef.current =
         gallery.dataset.activeMediaZoomUrl || undefined;
-      image.src = activeUrl;
+      image.src = gallery.dataset.activeMediaDisplayUrl || activeUrl;
       image.alt = gallery.dataset.activeMediaAlt || alt;
     }
     const zoomUrl = getZoomUrl();
@@ -147,11 +133,6 @@ export function ProductImageZoom({
       zoomBgRef.current.style.backgroundImage = `url('${activeUrl || currentImageRef.current}')`;
     }
   }, [alt, getZoomUrl]);
-
-  useEffect(() => {
-    const zoomUrl = getZoomUrl();
-    scheduleZoomImagePreload(zoomUrl, 400);
-  }, [getZoomUrl, scheduleZoomImagePreload]);
 
   // Listen for the one gallery media event. Video selection is handled by the
   // Astro stage and deliberately never enters the image/zoom pipeline.
@@ -166,6 +147,7 @@ export function ProductImageZoom({
 
       const newUrl = event.detail.url;
       const newZoomUrl = event.detail.zoomUrl ?? undefined;
+      const displayUrl = event.detail.previewUrl || newUrl;
 
       // Skip if same image
       if (newUrl === currentImageRef.current) {
@@ -180,7 +162,7 @@ export function ProductImageZoom({
 
       // Directly update DOM for instant feedback (no React re-render)
       if (imageElementRef.current) {
-        imageElementRef.current.src = newUrl;
+        imageElementRef.current.src = displayUrl;
         imageElementRef.current.alt = event.detail.altText;
       }
 
@@ -188,11 +170,9 @@ export function ProductImageZoom({
       const zoomUrl = newZoomUrl || getHighResUrl(newUrl);
       const alreadyLoaded = preloadedImages.get(zoomUrl) === true;
       setIsHighResLoaded(alreadyLoaded);
-      if (!alreadyLoaded) scheduleZoomImagePreload(zoomUrl, 250);
-
       // Update zoom background
       if (zoomBgRef.current) {
-        zoomBgRef.current.style.backgroundImage = `url('${alreadyLoaded ? zoomUrl : newUrl}')`;
+        zoomBgRef.current.style.backgroundImage = `url('${alreadyLoaded ? zoomUrl : displayUrl}')`;
       }
     };
 
@@ -200,16 +180,13 @@ export function ProductImageZoom({
     return () => {
       window.removeEventListener("product-media-change", handleMediaChange);
     };
-  }, [getHighResUrl, scheduleZoomImagePreload]);
+  }, [getHighResUrl]);
 
   // Cleanup RAF on unmount
   useEffect(() => {
     return () => {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
-      }
-      if (zoomPreloadTimerRef.current !== null) {
-        window.clearTimeout(zoomPreloadTimerRef.current);
       }
     };
   }, []);

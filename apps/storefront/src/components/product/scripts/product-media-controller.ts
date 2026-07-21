@@ -5,6 +5,7 @@ export interface ProductMediaChangeDetail {
   productMediaId: string | null;
   mediaId: string | null;
   url: string;
+  previewUrl: string | null;
   posterUrl: string | null;
   zoomUrl: string | null;
   altText: string;
@@ -22,22 +23,6 @@ declare global {
     "product-media-select": CustomEvent<ProductMediaSelectDetail>;
   }
 }
-
-type NetworkConnectionInfo = {
-  saveData?: boolean;
-  effectiveType?: string;
-};
-
-type BrowserNavigator = Navigator & {
-  connection?: NetworkConnectionInfo;
-};
-
-type BrowserWindow = Window & {
-  requestIdleCallback?: (
-    callback: () => void,
-    options?: { timeout?: number },
-  ) => number;
-};
 
 interface GalleryItem extends ProductMediaChangeDetail {
   thumbnail: HTMLButtonElement | null;
@@ -80,20 +65,22 @@ function scrollBehavior(): ScrollBehavior {
   return prefersReducedMotion() ? "auto" : "smooth";
 }
 
-function canPreloadImages(): boolean {
-  const connection = (navigator as BrowserNavigator).connection;
-  return (
-    !connection?.saveData && (!connection || connection.effectiveType === "4g")
-  );
-}
-
-function preloadImage(url: string): Promise<void> {
+function preloadImage(
+  url: string,
+  fetchPriority: "high" | "low" | "auto" = "auto",
+): Promise<void> {
   if (!url || imageCache.has(url)) return Promise.resolve();
   const existing = imagePreloads.get(url);
   if (existing) return existing;
   const request = new Promise<void>((resolve) => {
     const image = new Image();
-    image.onload = () => {
+    image.fetchPriority = fetchPriority;
+    image.onload = async () => {
+      try {
+        await image.decode?.();
+      } catch {
+        // A successful load is still usable when decode() is unavailable or rejects.
+      }
       imageCache.set(url, image);
       imagePreloads.delete(url);
       resolve();
@@ -122,6 +109,7 @@ function itemFromButton(button: HTMLButtonElement): GalleryItem | null {
     productMediaId: optional(button.dataset.productMediaId),
     mediaId: optional(button.dataset.mediaId),
     url,
+    previewUrl: kind === "image" ? optional(button.dataset.previewUrl) : null,
     posterUrl: optional(button.dataset.posterUrl),
     zoomUrl: kind === "image" ? optional(button.dataset.zoomUrl) : null,
     altText: button.dataset.altText?.trim() || "Product media",
@@ -138,6 +126,7 @@ function fallbackItem(root: HTMLElement): GalleryItem | null {
     productMediaId: optional(root.dataset.fallbackProductMediaId),
     mediaId: optional(root.dataset.fallbackMediaId),
     url,
+    previewUrl: null,
     posterUrl: null,
     zoomUrl: optional(root.dataset.fallbackZoomUrl),
     altText: root.dataset.fallbackAlt?.trim() || "Product image",
@@ -189,6 +178,7 @@ function dispatchChange(item: GalleryItem): void {
         productMediaId: item.productMediaId,
         mediaId: item.mediaId,
         url: item.url,
+        previewUrl: item.previewUrl,
         posterUrl: item.posterUrl,
         zoomUrl: item.zoomUrl,
         altText: item.altText,
@@ -262,27 +252,42 @@ function setSelectedItem(
     mobileTrigger?.removeAttribute("aria-disabled");
     placeholder?.classList.add("hidden");
 
+    const displayUrl = source === "initial" || imageCache.has(item.url)
+      ? item.url
+      : (item.previewUrl ?? item.url);
+    const presentedItem = {
+      ...item,
+      previewUrl: displayUrl === item.url ? null : displayUrl,
+    };
+    root.dataset.activeMediaDisplayUrl = displayUrl;
+
     if (mobileImage) {
       mobileImage.removeAttribute("srcset");
       mobileImage.removeAttribute("sizes");
-      mobileImage.src = item.url;
+      mobileImage.src = displayUrl;
       mobileImage.alt = item.altText;
     }
     if (desktopImage) {
-      desktopImage.src = item.url;
+      desktopImage.src = displayUrl;
       desktopImage.alt = item.altText;
     }
+
+    dispatchChange({ ...presentedItem, source });
+    if (displayUrl !== item.url) {
+      void preloadImage(item.url, "high").then(() => {
+        if (
+          root.dataset.activeMediaKey !== currentKey ||
+          !imageCache.has(item.url)
+        ) return;
+        root.dataset.activeMediaDisplayUrl = item.url;
+        if (mobileImage) mobileImage.src = item.url;
+        if (desktopImage) desktopImage.src = item.url;
+      });
+    }
+    return;
   }
 
   dispatchChange({ ...item, source });
-  if (
-    item.kind === "image" &&
-    source === "gallery" &&
-    item.zoomUrl &&
-    canPreloadImages()
-  ) {
-    void preloadImage(item.zoomUrl);
-  }
 }
 
 function closeMobileZoom(root: HTMLElement): void {
@@ -340,7 +345,7 @@ function bindThumbnailRail(
         "mouseenter",
         () => {
           if (button.dataset.mediaUrl) {
-            void preloadImage(button.dataset.mediaUrl);
+            void preloadImage(button.dataset.mediaUrl, "high");
           }
           hoverTimer = window.setTimeout(() => select(button, "gallery"), 40);
         },
@@ -549,27 +554,6 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
   );
 }
 
-function scheduleInitialImagePreload(root: HTMLElement): void {
-  if (!canPreloadImages()) return;
-  const buttons = Array.from(
-    root.querySelectorAll<HTMLButtonElement>(
-      "[data-thumbnail-rail='desktop'] [data-gallery-thumbnail][data-media-kind='image']",
-    ),
-  );
-  const currentUrl = root.dataset.activeMediaUrl;
-  const candidateUrls = [
-    ...buttons.filter((button) => button.dataset.variantImage === "true"),
-    ...buttons.slice(0, 2),
-  ].flatMap((button) => button.dataset.mediaUrl ? [button.dataset.mediaUrl] : []);
-  const urls = candidateUrls
-    .filter((url, index, values) => url !== currentUrl && values.indexOf(url) === index)
-    .slice(0, 4);
-  const run = () => urls.forEach((url) => void preloadImage(url));
-  const requestIdleCallback = (window as BrowserWindow).requestIdleCallback;
-  if (requestIdleCallback) requestIdleCallback(run, { timeout: 750 });
-  else window.setTimeout(run, 250);
-}
-
 function preferredThumbnail(
   buttons: HTMLButtonElement[],
   predicate: (button: HTMLButtonElement) => boolean,
@@ -680,5 +664,4 @@ export function initProductMediaGallery(
     const fallback = fallbackItem(root);
     if (fallback) setSelectedItem(root, fallback, "initial");
   }
-  scheduleInitialImagePreload(root);
 }

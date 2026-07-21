@@ -26,6 +26,7 @@ interface Props {
 const { product, media, variants } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
+const imageTransforms = GALLERY_CONFIG.imageTransforms;
 
 const galleryMedia = media
   .filter((item) =>
@@ -41,16 +42,16 @@ const productFallbackUrl = hasProductImage(product.imageUrl)
   ? product.imageUrl!
   : PRODUCT_IMAGE_FALLBACK;
 const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, {
-  width: 600,
-  height: 600,
+  width: imageTransforms.display,
+  height: imageTransforms.display,
   quality: 85,
   format: "auto",
   fit: "contain",
   trim: "border",
 });
 const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, {
-  width: 1400,
-  height: 1400,
+  width: imageTransforms.zoom,
+  height: imageTransforms.zoom,
   quality: 85,
   format: "auto",
   fit: "contain",
@@ -75,8 +76,8 @@ const optimizedMedia = galleryMedia.map((item) => {
       duration: formatDuration(item.durationMs),
       thumbUrl: item.posterUrl
         ? getProductImageUrl(item.posterUrl, {
-            width: desktopThumb.imageSize,
-            height: desktopThumb.imageSize,
+            width: imageTransforms.preview,
+            height: imageTransforms.preview,
             quality: 80,
             format: "auto",
             fit: "contain",
@@ -87,8 +88,8 @@ const optimizedMedia = galleryMedia.map((item) => {
       zoomUrl: null,
       posterUrl: item.posterUrl
         ? getProductImageUrl(item.posterUrl, {
-            width: 600,
-            height: 600,
+            width: imageTransforms.display,
+            height: imageTransforms.display,
             quality: 85,
             format: "auto",
             fit: "contain",
@@ -102,16 +103,16 @@ const optimizedMedia = galleryMedia.map((item) => {
     altText,
     duration: null,
     thumbUrl: getProductImageUrl(item.url, {
-      width: desktopThumb.imageSize,
-      height: desktopThumb.imageSize,
+      width: imageTransforms.preview,
+      height: imageTransforms.preview,
       quality: 80,
       format: "auto",
       fit: "contain",
       trim: "border",
     }),
     mainUrl: getProductImageUrl(item.url, {
-      width: 600,
-      height: 600,
+      width: imageTransforms.display,
+      height: imageTransforms.display,
       quality: 85,
       format: "auto",
       fit: "contain",
@@ -138,8 +139,8 @@ const optimizedMedia = galleryMedia.map((item) => {
       },
     ]),
     zoomUrl: getProductImageUrl(item.url, {
-      width: 1400,
-      height: 1400,
+      width: imageTransforms.zoom,
+      height: imageTransforms.zoom,
       quality: 85,
       format: "auto",
       fit: "contain",
@@ -213,6 +214,9 @@ const variantImageIds = new Set(
                 data-media-id={itemData.item.mediaId}
                 data-media-kind={itemData.item.kind}
                 data-media-url={itemData.mainUrl}
+                data-preview-url={itemData.item.kind === "image"
+                  ? itemData.thumbUrl
+                  : undefined}
                 data-poster-url={itemData.posterUrl ?? undefined}
                 data-zoom-url={itemData.zoomUrl ?? undefined}
                 data-alt-text={itemData.altText}
@@ -419,6 +423,9 @@ const variantImageIds = new Set(
                       data-media-id={itemData.item.mediaId}
                       data-media-kind={itemData.item.kind}
                       data-media-url={itemData.mainUrl}
+                      data-preview-url={itemData.item.kind === "image"
+                        ? itemData.thumbUrl
+                        : undefined}
                       data-poster-url={itemData.posterUrl ?? undefined}
                       data-zoom-url={itemData.zoomUrl ?? undefined}
                       data-alt-text={itemData.altText}
