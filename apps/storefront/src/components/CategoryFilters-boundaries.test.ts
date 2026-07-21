@@ -27,7 +27,9 @@ describe("buyer catalog facet controls", () => {
   it("supports multi-select values and preserves repeated URL parameters", () => {
     expect(source).toContain("selected.includes(value)");
     expect(source).toContain("finalParams.append(key, selectedValue)");
-    expect(source).toContain("aria-pressed={selected}");
+    expect(source).toContain('type="checkbox"');
+    expect(source).toContain("checked={selected}");
+    expect(source).not.toContain("aria-pressed={selected}");
     expect(source).toContain("Selected filters");
   });
 

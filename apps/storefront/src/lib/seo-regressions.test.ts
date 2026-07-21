@@ -113,7 +113,9 @@ describe("storefront SEO regressions", () => {
 
     expect(source).toContain('const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/search")');
     expect(source).toContain("canonicalUrl={canonicalUrl ?? undefined}");
-    expect(source).toContain("const shouldNoindexSearchPage = Boolean(query) || pagination.page > 1 || sortBy !== \"newest\" || activeFilterCount > 0");
+    expect(source).toMatch(
+      /const shouldNoindexSearchPage =\s*Boolean\(query\) \|\|\s*pagination\.page > 1 \|\|\s*sortBy !== "newest" \|\|\s*activeFilterCount > 0;/,
+    );
     expect(source).toContain('name="robots" content="noindex,follow"');
   });
 
