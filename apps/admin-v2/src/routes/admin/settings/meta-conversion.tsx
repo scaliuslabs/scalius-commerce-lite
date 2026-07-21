@@ -42,15 +42,12 @@ function MetaConversionPage() {
   );
 
   return (
-    <div className="container py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meta Conversions API</h1>
-          <p className="text-muted-foreground">
-            Configure and monitor your Meta (Facebook) Conversions API integration
-            for improved tracking and attribution.
-          </p>
-        </div>
+    <div className="container max-w-6xl space-y-4 py-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Meta CAPI</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Configure server events and review delivery results.
+        </p>
       </div>
       <MetaConversionsManager
         initialSettings={r.settings ?? undefined}

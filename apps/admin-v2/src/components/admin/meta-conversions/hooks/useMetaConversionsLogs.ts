@@ -17,9 +17,8 @@ export interface MetaConversionsLog {
 }
 
 export interface RetentionInfo {
+  days: number;
   hours: number;
-  cleanupIntervalHours: number;
-  nextCleanupMessage: string;
 }
 
 interface LogsPagination {
@@ -32,6 +31,7 @@ interface LogsPagination {
 export function useMetaConversionsLogs() {
   const [logs, setLogs] = useState<MetaConversionsLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [logsPagination, setLogsPagination] = useState<LogsPagination>({
     page: 1,
     limit: 20,
@@ -46,13 +46,16 @@ export function useMetaConversionsLogs() {
 
   const fetchLogs = useCallback(async () => {
     setLogsLoading(true);
+    setLogsError(null);
     try {
       const data = await getMetaConversionsLogs({ data: { page: logsPagination.page, limit: logsPagination.limit } }) as Record<string, unknown>;
       setLogs((data.logs as MetaConversionsLog[]) || []);
       setLogsPagination((prev) => (data.pagination as LogsPagination) || prev);
       setRetentionInfo((data.retention as RetentionInfo) || null);
-    } catch {
-      toast.error("Failed to load logs");
+    } catch (error: unknown) {
+      const message = getServerFnError(error, "Failed to load delivery activity");
+      setLogsError(message);
+      toast.error(message);
     } finally {
       setLogsLoading(false);
     }
@@ -86,7 +89,7 @@ export function useMetaConversionsLogs() {
     try {
       const data = await cleanupMetaConversionsLogs() as Record<string, unknown>;
       toast.success((data.message as string) || "Manual cleanup completed");
-      fetchLogs();
+      await fetchLogs();
     } catch (error: unknown) {
       toast.error(getServerFnError(error, "Failed to perform manual cleanup"));
     } finally {
@@ -106,6 +109,7 @@ export function useMetaConversionsLogs() {
   return {
     logs,
     logsLoading,
+    logsError,
     logsPagination,
     expandedLog,
     retentionInfo,

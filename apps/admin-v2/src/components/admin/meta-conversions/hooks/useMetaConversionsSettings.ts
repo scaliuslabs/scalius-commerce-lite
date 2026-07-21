@@ -50,7 +50,9 @@ export function useMetaConversionsSettings(
   );
   const [pixelParity, setPixelParity] =
     useState<MetaPixelParityDiagnostics | null>(initialPixelParity ?? null);
-  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM_DATA);
+  const [formData, setFormData] = useState<FormData>(() =>
+    formDataFromSettings(initialSettings ?? null),
+  );
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
