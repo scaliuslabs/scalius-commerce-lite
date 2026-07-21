@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { storefrontSourcePath } from "@/lib/test-source-paths";
 import {
   HEADER_COMPACT_ENTER_PX,
   HEADER_COMPACT_EXIT_PX,
@@ -21,5 +23,21 @@ describe("header scroll state", () => {
   it("expands only after the customer returns near the page top", () => {
     expect(shouldUseCompactHeader(HEADER_COMPACT_EXIT_PX + 1, true)).toBe(true);
     expect(shouldUseCompactHeader(HEADER_COMPACT_EXIT_PX, true)).toBe(false);
+  });
+
+  it("hands desktop center states off without a midpoint overlap", () => {
+    const source = readFileSync(
+      storefrontSourcePath("components", "header", "HeaderLayout.astro"),
+      "utf8",
+    );
+
+    expect(source).toContain("header-expanded-center");
+    expect(source).toContain("header-compact-center");
+    expect(source).toContain("transition-delay: 160ms, 160ms, 160ms");
+    expect(source).toContain("transition-delay: 0ms, 0ms, 120ms");
+    expect(source).toContain("transition-[max-height,transform]");
+    expect(source).not.toContain(
+      "group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100",
+    );
   });
 });
