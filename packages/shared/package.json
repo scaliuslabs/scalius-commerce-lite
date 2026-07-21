@@ -12,7 +12,7 @@
     "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
+    "@cloudflare/workers-types": "^5.20260721.1",
     "@scalius/tsconfig": "workspace:*",
     "vitest": "^4.1.10"
   },

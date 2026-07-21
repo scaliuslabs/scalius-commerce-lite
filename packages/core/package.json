@@ -75,7 +75,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
+    "@cloudflare/workers-types": "^5.20260721.1",
     "@scalius/tsconfig": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
