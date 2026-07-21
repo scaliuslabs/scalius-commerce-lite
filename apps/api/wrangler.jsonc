@@ -33,6 +33,16 @@
       "id": "9f577136c05144349f2b8013a4fc1cc5"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "SEARCH_RATE_LIMITER",
+      "namespace_id": "95462026",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "BUCKET",

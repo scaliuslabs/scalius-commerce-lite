@@ -18,6 +18,8 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("q: normalizedQuery");
     expect(source).not.toContain("q: query,");
     expect(source).not.toContain("`/search?q=${encodeURIComponent(query)}`");
+    expect(source).toContain("const searchResultCache = new Map<string, SearchResponse>();");
+    expect(source).toContain("cacheSearchResults(normalizedQuery, json.data);");
   });
 
   it("exposes dialog/listbox semantics and keeps failures distinct from empty results", async () => {
@@ -35,5 +37,9 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain("Search unavailable");
     expect(source).toContain("setSearchRetry((value) => value + 1)");
     expect(source).toContain('aria-label="Close search"');
+    expect(source).toContain('aria-busy={isLoading}');
+    expect(source).toContain("<ProductThumbnail product={p}");
+    expect(source).toContain("Pages");
+    expect(source).toContain('type: "page"');
   });
 });

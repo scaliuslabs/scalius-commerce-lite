@@ -1098,6 +1098,11 @@ export type GetApiV1SearchResponses = {
                 priceVaries: boolean;
                 availableForSale: boolean;
                 hasVariants: boolean;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                categoryId: string | null;
+                categoryName: string | null;
                 [key: string]: unknown;
             }>;
             pages: Array<{

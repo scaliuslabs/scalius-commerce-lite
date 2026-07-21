@@ -10,6 +10,7 @@ import {
   AlertCircle,
   X,
   ArrowRight,
+  FileText,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { getCurrencySymbol } from "@/lib/currency";
@@ -23,7 +24,8 @@ interface SearchResultItem {
   title?: string;
   slug: string;
   price?: number;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
   discountedPrice?: number;
   priceVaries?: boolean;
   availableForSale?: boolean;
@@ -38,6 +40,25 @@ interface SearchResponse {
 interface ApiResponse {
   success: boolean;
   data: SearchResponse;
+}
+
+// Match Shopify's predictive-search pattern: keep successful results for the
+// lifetime of the page so revisiting or refining the same query is immediate.
+// Full navigations naturally clear this small, bounded cache.
+const SEARCH_RESULT_CACHE_LIMIT = 40;
+const searchResultCache = new Map<string, SearchResponse>();
+
+function getSearchCacheKey(query: string): string {
+  return query.toLocaleLowerCase();
+}
+
+function cacheSearchResults(query: string, results: SearchResponse): void {
+  const key = getSearchCacheKey(query);
+  if (!searchResultCache.has(key) && searchResultCache.size >= SEARCH_RESULT_CACHE_LIMIT) {
+    const oldestKey = searchResultCache.keys().next().value;
+    if (oldestKey) searchResultCache.delete(oldestKey);
+  }
+  searchResultCache.set(key, results);
 }
 
 export default function CommandPalette() {
@@ -135,6 +156,17 @@ export default function CommandPalette() {
       return;
     }
 
+    const cachedResults = searchResultCache.get(getSearchCacheKey(normalizedQuery));
+    if (cachedResults) {
+      searchAbortRef.current?.abort();
+      setResults(cachedResults);
+      setSelectedIndex(0);
+      setHasSearched(true);
+      setIsLoading(false);
+      setSearchError(null);
+      return;
+    }
+
     searchAbortRef.current?.abort();
     const controller = new AbortController();
     searchAbortRef.current = controller;
@@ -161,6 +193,7 @@ export default function CommandPalette() {
         if (controller.signal.aborted || searchRunRef.current !== runId) return;
 
         if (json.success && json.data) {
+          cacheSearchResults(normalizedQuery, json.data);
           setResults(json.data);
           setSelectedIndex(0);
           setHasSearched(true);
@@ -305,6 +338,9 @@ export default function CommandPalette() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleNavigation}
               autoFocus
+              autoComplete="off"
+              autoCapitalize="none"
+              inputMode="search"
               enterKeyHint="search"
               role="combobox"
               aria-autocomplete="list"
@@ -341,6 +377,7 @@ export default function CommandPalette() {
         <div
           id="catalog-search-results"
           role="listbox"
+          aria-busy={isLoading}
           className="overflow-y-auto p-0 sm:p-2 scrollbar-hide flex-1 min-h-0 bg-gray-50/50 sm:bg-white"
           onClick={handleEmptyClick}
         >
@@ -406,23 +443,7 @@ export default function CommandPalette() {
                           }
                           id={`cmd-item-${activeIdx}`}
                         >
-                          <div className="h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0">
-                            {hasProductImage(p.imageUrl) ? (
-                              <img
-                                src={getProductImageUrl(p.imageUrl, {
-                                  width: 80,
-                                  height: 80,
-                                  quality: 75,
-                                  format: "auto",
-                                  fit: "contain",
-                                })}
-                                alt={p.name}
-                                className="h-full w-full object-contain"
-                              />
-                            ) : (
-                              <Package className="h-4 w-4 text-gray-300 m-auto mt-2" />
-                            )}
-                          </div>
+                          <ProductThumbnail product={p} active={activeIdx === selectedIndex} />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-gray-900 truncate text-sm">
                               {p.name}
@@ -468,7 +489,12 @@ export default function CommandPalette() {
                   <h3 className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-100/50 sm:bg-transparent sticky top-0 z-10 sm:static">
                     Categories
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                  <div
+                    className={cn(
+                      "grid grid-cols-1 gap-1",
+                      results.categories.length > 1 && "sm:grid-cols-2",
+                    )}
+                  >
                     {results.categories.map((c) => {
                       const activeIdx = flatResults.findIndex(
                         (f) => f.item.id === c.id && f.type === "category",
@@ -487,6 +513,41 @@ export default function CommandPalette() {
                           </div>
                           <span className="font-medium text-foreground text-sm">
                             {c.name}
+                          </span>
+                        </ResultRow>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {results.pages.length > 0 && (
+                <div>
+                  <h3 className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-100/50 sm:bg-transparent sticky top-0 z-10 sm:static">
+                    Pages
+                  </h3>
+                  <div
+                    className={cn(
+                      "grid grid-cols-1 gap-1",
+                      results.pages.length > 1 && "sm:grid-cols-2",
+                    )}
+                  >
+                    {results.pages.map((page) => {
+                      const activeIdx = flatResults.findIndex(
+                        (result) => result.item.id === page.id && result.type === "page",
+                      );
+                      return (
+                        <ResultRow
+                          key={page.id}
+                          active={activeIdx === selectedIndex}
+                          onClick={() => navigateToItem({ type: "page", item: page })}
+                          id={`cmd-item-${activeIdx}`}
+                        >
+                          <div className="h-8 w-8 rounded bg-gray-100 flex items-center justify-center mr-3 shrink-0 text-gray-500">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <span className="font-medium text-foreground text-sm truncate">
+                            {page.title}
                           </span>
                         </ResultRow>
                       );
@@ -533,6 +594,42 @@ export default function CommandPalette() {
       </div>
     </div>,
     document.body,
+  );
+}
+
+function ProductThumbnail({
+  product,
+  active,
+}: {
+  product: SearchResultItem;
+  active: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const hasImage = hasProductImage(product.imageUrl) && !failed;
+
+  return (
+    <div className="h-10 w-10 rounded bg-white p-0.5 border border-gray-100 mr-3 overflow-hidden shrink-0 flex items-center justify-center">
+      {hasImage ? (
+        <img
+          src={getProductImageUrl(product.imageUrl, {
+            width: 80,
+            height: 80,
+            quality: 75,
+            format: "auto",
+            fit: "contain",
+          })}
+          alt={product.imageAlt || product.name || ""}
+          width={40}
+          height={40}
+          decoding="async"
+          fetchPriority={active ? "high" : "auto"}
+          className="h-full w-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Package className="h-4 w-4 text-gray-300" aria-hidden="true" />
+      )}
+    </div>
   );
 }
 

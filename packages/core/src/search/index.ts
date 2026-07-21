@@ -25,10 +25,11 @@ export type ProductSearchResult = {
   availableForSale: boolean;
   hasVariants: boolean;
   slug: string;
-  imageUrl?: string | null;
-  imageMediaId?: string | null;
+  imageUrl: string | null;
+  imageMediaId: string | null;
+  imageAlt: string | null;
   categoryId: string | null;
-  categoryName?: string | null;
+  categoryName: string | null;
   type: "product";
 };
 
@@ -106,17 +107,21 @@ export async function search(
 
     const productQuery = db
       .select({
-        id: products.id,
-        name: products.name,
+        // D1 batch rows are positionally decoded by Drizzle. Explicit aliases
+        // are required for joined columns with the same database names; without
+        // them, category.id can overwrite product.id and media enrichment then
+        // looks up category IDs instead of products.
+        id: sql<string>`${products.id}`.as("search_product_id"),
+        name: sql<string>`${products.name}`.as("search_product_name"),
         description: products.description,
         price: buyerPricing.basePrice,
         discountedPrice: buyerPricing.effectivePrice,
         maxBuyerPrice: buyerPricing.maxBuyerPrice,
         availableForSale: buyerPricing.availableForSale,
         hasVariants: buyerPricing.hasCustomerOptions,
-        slug: products.slug,
-        categoryId: categories.id,
-        categoryName: sql<string>`${categories.name}`.as("categoryName"),
+        slug: sql<string>`${products.slug}`.as("search_product_slug"),
+        categoryId: sql<string | null>`${categories.id}`.as("search_category_id"),
+        categoryName: sql<string | null>`${categories.name}`.as("search_category_name"),
       })
       .from(products)
       .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
@@ -192,6 +197,7 @@ export async function search(
           priceVaries: maxBuyerPrice > product.discountedPrice,
           imageUrl: image?.url ?? null,
           imageMediaId: image?.mediaId ?? null,
+          imageAlt: image?.altText ?? null,
           type: "product" as const,
         };
       });

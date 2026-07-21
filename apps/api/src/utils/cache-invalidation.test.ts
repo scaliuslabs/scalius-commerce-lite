@@ -1008,7 +1008,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
       expect.any(String),
       { expirationTtl: 86400 * 30 },
     );
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
+    expect(kv.list).not.toHaveBeenCalledWith({ prefix: "sc:api:search:" });
   });
 
   it("schedules category catalog purges with canonical listing HTML warm paths", async () => {
@@ -1096,7 +1096,6 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "api:products:v2:/api/v1/products/phone?*",
         "api:products:v2:/api/v1/products/phone-case?*",
         "api:products:v2:/api/v1/products/search?*",
-        "api:search:*",
       ],
       storefrontPrefixes: [
         "product_slug_phone",
@@ -1126,7 +1125,6 @@ describe("triggerStorefrontPurgeForGroups", () => {
       "api:products:v2:/api/v1/products/phone?*",
       "api:products:v2:/api/v1/products/phone-case?*",
       "api:products:v2:/api/v1/products/search?*",
-      "api:search:*",
     ]);
     expect(getProductAvailabilityStorefrontPrefixes(subjects)).toEqual([
       "product_slug_phone",
@@ -1242,7 +1240,7 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:products:v2:/api/v1/products/search?",
     });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:search:" });
+    expect(kv.list).not.toHaveBeenCalledWith({ prefix: "sc:api:search:" });
     expect(waitUntil).toHaveBeenCalledTimes(1);
 
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
