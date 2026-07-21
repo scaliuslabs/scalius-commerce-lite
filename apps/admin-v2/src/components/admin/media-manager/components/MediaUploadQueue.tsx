@@ -30,7 +30,11 @@ export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFi
   const attentionCount = queue.filter((item) => item.status === "failed").length;
   return (
     <section aria-label="Upload queue" className="border-b bg-muted/20 px-3 py-2">
-      <p className="sr-only" aria-live="polite">{activeCount ? `${activeCount} uploads in progress.` : "No uploads in progress."} {completeCount ? `${completeCount} uploads ready.` : ""} {attentionCount ? `${attentionCount} uploads need attention.` : ""}</p>
+      <p className="sr-only" aria-live="polite">
+        {activeCount ? `${activeCount} upload${activeCount === 1 ? "" : "s"} in progress.` : "No uploads in progress."}{" "}
+        {completeCount ? `${completeCount} upload${completeCount === 1 ? "" : "s"} ready.` : ""}{" "}
+        {attentionCount ? `${attentionCount} upload${attentionCount === 1 ? " needs" : "s need"} attention.` : ""}
+      </p>
       <div className="mb-1.5 flex items-center justify-between">
         <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· 5 MiB parts · keep this tab open to resume</span></p>
         {finished && <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onClearFinished}>Clear finished</Button>}

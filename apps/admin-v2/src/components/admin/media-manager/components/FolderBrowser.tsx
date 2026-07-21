@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Folder, FolderOpen, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -19,10 +19,15 @@ interface FolderBrowserProps {
 }
 
 export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFolderCreate, onFolderRename, onFolderDelete }: FolderBrowserProps) {
+  const activeCompactFolderRef = useRef<HTMLDivElement | null>(null);
   const [dialog, setDialog] = useState<{ mode: "create" } | { mode: "rename"; folder: MediaFolder } | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [deleteFolder, setDeleteFolder] = useState<MediaFolder | null>(null);
+
+  useEffect(() => {
+    activeCompactFolderRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [currentFolderId, folders]);
 
   const open = (next: typeof dialog) => {
     setDialog(next);
@@ -40,7 +45,11 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
   };
 
   const row = (id: string | null | "all", label: string, icon: React.ReactNode, actions?: React.ReactNode, compact = false) => (
-    <div className={cn("group flex items-center gap-0.5", compact && "shrink-0")} key={`${compact ? "mobile" : "desktop"}-${String(id)}`}>
+    <div
+      ref={compact && currentFolderId === id ? activeCompactFolderRef : undefined}
+      className={cn("group flex items-center gap-0.5", compact && "shrink-0")}
+      key={`${compact ? "mobile" : "desktop"}-${String(id)}`}
+    >
       <button type="button" aria-current={currentFolderId === id ? "page" : undefined} onClick={() => onFolderSelect(id)} className={cn("flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", compact ? "h-11 max-w-40 border bg-background" : "h-8", currentFolderId === id && "bg-muted font-medium")}>{icon}<span className="truncate">{label}</span></button>
       {actions}
     </div>
