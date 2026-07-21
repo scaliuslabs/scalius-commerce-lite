@@ -49,6 +49,12 @@ describe("admin image presentation presets", () => {
     expect(header).toContain("ADMIN_IMAGE_PRESETS.brandLogo");
     expect(header).toContain("ADMIN_IMAGE_PRESETS.favicon");
     expect(header).toContain('id="header-logo-width"');
+    expect(header).toContain('id="header-logo-alt"');
+    expect(header).toContain('id="header-favicon-alt"');
+    expect(header).toContain('className="h-11 w-full sm:h-10"');
+    expect(header).toContain('className="h-11 sm:h-9"');
+    expect(header).toContain('"Change icon"');
+    expect(header).not.toContain('"Change Favicon"');
     expect(header).toContain("HEADER_LOGO_WIDTH_MAX");
     expect(footer).toContain("ADMIN_IMAGE_PRESETS.brandLogo");
     expect(productSelector).toContain("ADMIN_IMAGE_PRESETS.productMicro");

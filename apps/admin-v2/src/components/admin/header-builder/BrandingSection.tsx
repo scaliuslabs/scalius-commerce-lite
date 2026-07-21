@@ -11,7 +11,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { MediaManager } from "../media-manager";
-import { Trash2, AlertCircle } from "lucide-react";
+import { Trash2, AlertCircle, Upload } from "lucide-react";
 import type { LogoConfig, FaviconConfig, MediaFile } from "./types";
 import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
 import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
@@ -105,7 +105,16 @@ export function BrandingSection({
               <MediaManager
                 capability="image"
                 onSelect={handleLogoSelect}
-                triggerLabel={logo.src ? "Change Logo" : "Select Logo Image"}
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full sm:h-10"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {logo.src ? "Change logo" : "Choose logo"}
+                  </Button>
+                }
               />
               {!logo.src && (
                 <Alert variant="destructive" className="px-3 py-2">
@@ -116,13 +125,21 @@ export function BrandingSection({
                   </AlertDescription>
                 </Alert>
               )}
-              <Input
-                value={logo.alt}
-                onChange={(e) => onLogoChange({ ...logo, alt: e.target.value })}
-                placeholder="Logo description for screen readers"
-                className="h-9"
-                disabled={!logo.src}
-              />
+              <div className="space-y-1.5">
+                <Label htmlFor="header-logo-alt" className="text-xs">
+                  Alternative text
+                </Label>
+                <Input
+                  id="header-logo-alt"
+                  value={logo.alt}
+                  onChange={(e) =>
+                    onLogoChange({ ...logo, alt: e.target.value })
+                  }
+                  placeholder="Describe the logo"
+                  className="h-11 sm:h-9"
+                  disabled={!logo.src}
+                />
+              </div>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="header-logo-width" className="text-xs">
@@ -209,19 +226,32 @@ export function BrandingSection({
               <MediaManager
                 capability="image"
                 onSelect={handleFaviconSelect}
-                triggerLabel={
-                  favicon.src ? "Change Favicon" : "Select Favicon Image"
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full sm:h-10"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {favicon.src ? "Change icon" : "Choose icon"}
+                  </Button>
                 }
               />
-              <Input
-                value={favicon.alt}
-                onChange={(e) =>
-                  onFaviconChange({ ...favicon, alt: e.target.value })
-                }
-                placeholder="Icon description"
-                className="h-9"
-                disabled={!favicon.src}
-              />
+              <div className="space-y-1.5">
+                <Label htmlFor="header-favicon-alt" className="text-xs">
+                  Description
+                </Label>
+                <Input
+                  id="header-favicon-alt"
+                  value={favicon.alt}
+                  onChange={(e) =>
+                    onFaviconChange({ ...favicon, alt: e.target.value })
+                  }
+                  placeholder="Describe the icon"
+                  className="h-11 sm:h-9"
+                  disabled={!favicon.src}
+                />
+              </div>
             </div>
           </div>
         </CardContent>
