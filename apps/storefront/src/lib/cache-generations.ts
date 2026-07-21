@@ -12,6 +12,11 @@ const PAGE_RENDER_KEY_PREFIX = "page_render_";
 const ALL_PAGES_KEY_PREFIX = "all_pages_";
 const SITEMAP_PAGES_KEY_PREFIX = "sitemap_pages_";
 const PAGE_HTML_KEY_PREFIX = "page_html_";
+const ARTICLE_SLUG_KEY_PREFIX = "article_slug_";
+const ALL_ARTICLES_KEY_PREFIX = "all_articles_";
+const ARTICLE_HTML_KEY_PREFIX = "article_html_";
+const SITEMAP_ARTICLES_KEY_PREFIX = "sitemap_articles_";
+const BLOG_FEED_KEY_PREFIX = "blog_feed_";
 const HTML_PATH_KEY_PREFIX = "html_path_";
 const CHECKOUT_DATA_KEYS = [
   "checkout_config",
@@ -42,7 +47,9 @@ export function buildExactCacheGenerationKey(
   )}`;
 }
 
-export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | null {
+export function cacheGenerationKeyForLogicalKey(
+  logicalKey: string,
+): string | null {
   if (logicalKey.startsWith(FEED_PRODUCTS_KEY_PREFIX)) {
     return FEED_PRODUCTS_KEY_PREFIX;
   }
@@ -71,6 +78,16 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
     return PAGE_HTML_KEY_PREFIX;
   }
 
+  for (const prefix of [
+    ARTICLE_SLUG_KEY_PREFIX,
+    ALL_ARTICLES_KEY_PREFIX,
+    ARTICLE_HTML_KEY_PREFIX,
+    SITEMAP_ARTICLES_KEY_PREFIX,
+    BLOG_FEED_KEY_PREFIX,
+  ]) {
+    if (logicalKey.startsWith(prefix)) return prefix;
+  }
+
   if (logicalKey.startsWith(ALL_PRODUCTS_KEY_PREFIX)) {
     return ALL_PRODUCTS_KEY_PREFIX;
   }
@@ -80,7 +97,10 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
   }
 
   if (logicalKey.startsWith(COLLECTION_BY_ID_KEY_PREFIX)) {
-    const familyDelimiter = logicalKey.indexOf("::", COLLECTION_BY_ID_KEY_PREFIX.length);
+    const familyDelimiter = logicalKey.indexOf(
+      "::",
+      COLLECTION_BY_ID_KEY_PREFIX.length,
+    );
     if (familyDelimiter >= 0) {
       return logicalKey.slice(0, familyDelimiter + 2);
     }
@@ -94,7 +114,11 @@ export function cacheGenerationKeyForLogicalKey(logicalKey: string): string | nu
     return logicalKey;
   }
 
-  if (CHECKOUT_DATA_KEYS.includes(logicalKey as typeof CHECKOUT_DATA_KEYS[number])) {
+  if (
+    CHECKOUT_DATA_KEYS.includes(
+      logicalKey as (typeof CHECKOUT_DATA_KEYS)[number],
+    )
+  ) {
     return logicalKey;
   }
 
@@ -152,6 +176,13 @@ export function htmlPathCacheKeyFromPath(path: string): string | null {
       return SITEMAP_PAGES_KEY_PREFIX;
     }
 
+    if (pathname === "/sitemap-articles.xml")
+      return SITEMAP_ARTICLES_KEY_PREFIX;
+    if (pathname === "/blog/feed.xml") return BLOG_FEED_KEY_PREFIX;
+    if (pathname === "/blog" || /^\/blog\/[^/]+$/.test(pathname)) {
+      return ARTICLE_HTML_KEY_PREFIX;
+    }
+
     if (
       /^\/categories\/[^/]+$/.test(pathname) ||
       /^\/collections\/[^/]+$/.test(pathname)
@@ -189,7 +220,10 @@ export async function resolveExactCacheGeneration({
     const generation = await Promise.race([
       store.get(key),
       new Promise<string | null>((_, reject) =>
-        setTimeout(() => reject(new Error("KV generation lookup timeout")), timeoutMs),
+        setTimeout(
+          () => reject(new Error("KV generation lookup timeout")),
+          timeoutMs,
+        ),
       ),
     ]);
 
@@ -234,7 +268,10 @@ export async function bumpExactCacheGenerations({
   const uniqueKeys = [
     ...new Set(
       logicalKeys
-        .map((logicalKey) => cacheGenerationKeyForLogicalKey(logicalKey) ?? logicalKey)
+        .map(
+          (logicalKey) =>
+            cacheGenerationKeyForLogicalKey(logicalKey) ?? logicalKey,
+        )
         .filter(Boolean),
     ),
   ];
@@ -245,10 +282,7 @@ export async function bumpExactCacheGenerations({
   const generation = createExactCacheGeneration();
   await Promise.all(
     uniqueKeys.map((logicalKey) =>
-      store.put(
-        buildExactCacheGenerationKey(hostname, logicalKey),
-        generation,
-      ),
+      store.put(buildExactCacheGenerationKey(hostname, logicalKey), generation),
     ),
   );
 

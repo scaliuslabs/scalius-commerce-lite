@@ -11,12 +11,7 @@ import {
   FormLabel,
   FormMessage,
 } from "../ui/form";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
@@ -64,9 +59,46 @@ import {
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
   isEdit?: boolean;
+  contentType?: "page" | "article";
 }
 
-function serializeDate(value: Date | string | number | undefined): string | number | undefined {
+function ArticleTagsInput({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const [draft, setDraft] = React.useState(() => value.join(", "));
+
+  return (
+    <Input
+      placeholder="Guides, footwear"
+      value={draft}
+      onChange={(event) => {
+        const nextDraft = event.target.value;
+        setDraft(nextDraft);
+        const seen = new Set<string>();
+        onChange(
+          nextDraft
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter((tag) => {
+              const normalized = tag.toLocaleLowerCase("en-US");
+              if (!tag || seen.has(normalized)) return false;
+              seen.add(normalized);
+              return true;
+            }),
+        );
+      }}
+      className="min-h-11 sm:min-h-9"
+    />
+  );
+}
+
+function serializeDate(
+  value: Date | string | number | undefined,
+): string | number | undefined {
   return value instanceof Date ? value.toISOString() : value;
 }
 
@@ -87,9 +119,13 @@ function toPageInput(values: PageFormValues): CreatePageInput {
     publishedAt: values.publishedAt,
   });
   return {
+    contentType: values.contentType,
     title: values.title,
     slug: values.slug,
     content: values.content,
+    excerpt: values.contentType === "article" ? values.excerpt : null,
+    author: values.contentType === "article" ? values.author : null,
+    tags: values.contentType === "article" ? values.tags : [],
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,
     canonicalPath: values.canonicalPath,
@@ -103,16 +139,18 @@ function toPageInput(values: PageFormValues): CreatePageInput {
   };
 }
 
-export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
+export function PageForm({
+  defaultValues,
+  isEdit = false,
+  contentType = "page",
+}: PageFormProps) {
   const navigate = useNavigate();
   const [isClient, setIsClient] = React.useState(false);
   const { getStorefrontPath } = useStorefrontUrl();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.PAGES_CREATE);
   const canPublish = hasPermission(PERMISSIONS.PAGES_PUBLISH);
-  const canSave = isEdit
-    ? hasPermission(PERMISSIONS.PAGES_EDIT)
-    : canCreate;
+  const canSave = isEdit ? hasPermission(PERMISSIONS.PAGES_EDIT) : canCreate;
 
   React.useEffect(() => {
     setIsClient(true);
@@ -121,9 +159,13 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
   const form = useForm<PageFormValues>({
     resolver: zodResolver(pageFormSchema),
     defaultValues: {
+      contentType,
       title: "",
       slug: "",
       content: "",
+      excerpt: null,
+      author: null,
+      tags: [],
       metaTitle: null,
       metaDescription: null,
       canonicalPath: null,
@@ -139,46 +181,65 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
     },
   });
 
-  const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<PageFormValues>({
-    entityName: "Page",
-    isEdit,
-    entityId: defaultValues?.id,
-    createFn: (data) => createPage({ data: toPageInput(data) }),
-    updateFn: (data) => {
-      if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
-        throw new Error("Page revision is missing. Reload the page before saving.");
-      }
-      return updatePage({
-        data: {
-          id: data.id,
-          expectedRevision: data.revision,
-          ...toPageInput(data),
-        },
-      });
-    },
-    invalidateKeys: [
-      queryKeys.pages.list(),
-      ...(isEdit && defaultValues?.id ? [queryKeys.pages.detail(defaultValues.id)] : []),
-    ],
-    navigateTo: "/admin/pages",
-    onSuccess: (result) => {
-      const mutation = result as PageMutationPayload & Partial<PageIdPayload>;
-      const id = mutation.id || defaultValues?.id;
-      form.reset({
-        ...form.getValues(),
-        ...(id ? { id } : {}),
-        revision: mutation.revision,
-      });
-      toast.success(isEdit ? "Page saved" : "Page created");
-      if (!isEdit && mutation.id) {
-        void navigate({
-          to: "/admin/pages/$pageId/edit",
-          params: { pageId: mutation.id },
-          replace: true,
+  const { isSubmitting, handleSubmit: submitEntity } =
+    useEntityFormSubmit<PageFormValues>({
+      entityName: contentType === "article" ? "Article" : "Page",
+      isEdit,
+      entityId: defaultValues?.id,
+      createFn: (data) => createPage({ data: toPageInput(data) }),
+      updateFn: (data) => {
+        if (
+          !data.revision ||
+          !Number.isInteger(data.revision) ||
+          data.revision < 1
+        ) {
+          throw new Error(
+            `${contentType === "article" ? "Article" : "Page"} revision is missing. Reload before saving.`,
+          );
+        }
+        return updatePage({
+          data: {
+            id: data.id,
+            expectedRevision: data.revision,
+            ...toPageInput(data),
+          },
         });
-      }
-    },
-  });
+      },
+      invalidateKeys: [
+        queryKeys.pages.list(),
+        ...(isEdit && defaultValues?.id
+          ? [queryKeys.pages.detail(defaultValues.id)]
+          : []),
+      ],
+      navigateTo:
+        contentType === "article" ? "/admin/articles" : "/admin/pages",
+      onSuccess: (result) => {
+        const mutation = result as PageMutationPayload & Partial<PageIdPayload>;
+        const id = mutation.id || defaultValues?.id;
+        form.reset({
+          ...form.getValues(),
+          ...(id ? { id } : {}),
+          revision: mutation.revision,
+        });
+        const entity = contentType === "article" ? "Article" : "Page";
+        toast.success(isEdit ? `${entity} saved` : `${entity} created`);
+        if (!isEdit && mutation.id) {
+          if (contentType === "article") {
+            void navigate({
+              to: "/admin/articles/$articleId/edit",
+              params: { articleId: mutation.id },
+              replace: true,
+            });
+          } else {
+            void navigate({
+              to: "/admin/pages/$pageId/edit",
+              params: { pageId: mutation.id },
+              replace: true,
+            });
+          }
+        }
+      },
+    });
 
   const handleSubmit = (values: PageFormValues) => {
     submitEntity(values);
@@ -204,51 +265,67 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
   const publicationMode = form.watch("publicationMode");
   const committedSlug = defaultValues?.slug;
-  const committedStorefrontPageUrl = getStorefrontPath(
-    committedSlug ? `/${committedSlug}` : "/",
-  );
+  const publicPath = committedSlug
+    ? contentType === "article"
+      ? `/blog/${committedSlug}`
+      : `/${committedSlug}`
+    : contentType === "article"
+      ? "/blog"
+      : "/";
+  const committedStorefrontPageUrl = getStorefrontPath(publicPath);
   const isCommittedLivePage =
     isEdit &&
     Boolean(committedSlug) &&
     defaultValues?.publicationMode === "published";
 
-  const changePublicationMode = React.useCallback((mode: PagePublicationMode) => {
-    form.setValue("publicationMode", mode, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    if (mode === "draft" || mode === "published") {
-      form.setValue("publishedAt", null, {
+  const changePublicationMode = React.useCallback(
+    (mode: PagePublicationMode) => {
+      form.setValue("publicationMode", mode, {
         shouldDirty: true,
         shouldValidate: true,
       });
-      return;
-    }
-    const current = form.getValues("publishedAt");
-    form.setValue(
-      "publishedAt",
-      current && current.getTime() > Date.now()
-        ? current
-        : defaultPageScheduleDate(),
-      { shouldDirty: true, shouldValidate: true },
-    );
-  }, [form]);
+      if (mode === "draft" || mode === "published") {
+        form.setValue("publishedAt", null, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        return;
+      }
+      const current = form.getValues("publishedAt");
+      form.setValue(
+        "publishedAt",
+        current && current.getTime() > Date.now()
+          ? current
+          : defaultPageScheduleDate(),
+        { shouldDirty: true, shouldValidate: true },
+      );
+    },
+    [form],
+  );
 
   return (
     <FormContainer
-      title="Pages"
+      title={contentType === "article" ? "Articles" : "Pages"}
       entityName={form.watch("title")}
       isEdit={isEdit}
       isSubmitting={isSubmitting}
-      backUrl="/admin/pages"
-      newUrl="/admin/pages/new"
-      newLabel="New Page"
+      backUrl={contentType === "article" ? "/admin/articles" : "/admin/pages"}
+      newUrl={
+        contentType === "article" ? "/admin/articles/new" : "/admin/pages/new"
+      }
+      newLabel={contentType === "article" ? "New Article" : "New Page"}
       canCreateNew={canCreate}
       canSave={canSave}
-      saveDisabledReason={isEdit
-        ? "You do not have permission to edit pages."
-        : "You do not have permission to create pages."}
-      saveLabel={isEdit ? "Save Page" : "Create Page"}
+      saveDisabledReason={
+        isEdit
+          ? "You do not have permission to edit pages."
+          : "You do not have permission to create pages."
+      }
+      saveLabel={
+        isEdit
+          ? `Save ${contentType === "article" ? "Article" : "Page"}`
+          : `Create ${contentType === "article" ? "Article" : "Page"}`
+      }
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >
@@ -266,7 +343,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                 </FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="Page title"
+                    placeholder={
+                      contentType === "article" ? "Article title" : "Page title"
+                    }
                     {...field}
                     className="min-h-11 text-base sm:min-h-9"
                   />
@@ -291,8 +370,16 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                       <DeferredTiptapEditor
                         content={field.value}
                         onChange={field.onChange}
-                        placeholder="Write your page content here..."
-                        ariaLabel="Page content"
+                        placeholder={
+                          contentType === "article"
+                            ? "Write your article…"
+                            : "Write your page content…"
+                        }
+                        ariaLabel={
+                          contentType === "article"
+                            ? "Article content"
+                            : "Page content"
+                        }
                         compact={true}
                       />
                     </FormControl>
@@ -303,12 +390,42 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
             </CardContent>
           </Card>
 
+          {contentType === "article" ? (
+            <Card>
+              <CardHeader className="px-4 pb-3 pt-4">
+                <CardTitle className="text-base">Excerpt</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <FormField
+                  control={form.control}
+                  name="excerpt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea
+                          rows={3}
+                          placeholder="Short summary for the blog and search results"
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(event.target.value || null)
+                          }
+                        />
+                      </FormControl>
+                      <CharacterCounter
+                        current={field.value?.length ?? 0}
+                        recommended={500}
+                        max={500}
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           {/* Featured Image Card (collapsible) */}
-          <CollapsibleCard
-            title="Featured Image"
-            description="Add a featured image for this page (optional)"
-            defaultOpen={true}
-          >
+          <CollapsibleCard title="Featured Image" defaultOpen={true}>
             <FormField
               control={form.control}
               name="featuredImage"
@@ -317,9 +434,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   <FormImageUploadField
                     value={field.value}
                     onChange={field.onChange}
-                    triggerLabel="Select Featured Image"
-                    changeTriggerLabel="Change Featured Image"
-                    placeholder="No featured image selected"
+                    triggerLabel="Select image"
+                    changeTriggerLabel="Change image"
+                    placeholder="No image selected"
                   />
                   <FormMessage />
                 </FormItem>
@@ -340,15 +457,17 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                 name="publicationMode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="sr-only">Page visibility</FormLabel>
+                    <FormLabel className="sr-only">Visibility</FormLabel>
                     <Select
                       value={field.value}
                       disabled={!canPublish}
-                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                      onValueChange={(value) =>
+                        changePublicationMode(value as PagePublicationMode)
+                      }
                     >
                       <FormControl>
                         <SelectTrigger
-                          aria-label="Page visibility"
+                          aria-label={`${contentType === "article" ? "Article" : "Page"} visibility`}
                           className="min-h-11 sm:min-h-9"
                         >
                           <SelectValue />
@@ -356,18 +475,26 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="draft">
-                          <span className="flex items-center gap-2"><CircleDashed className="h-3.5 w-3.5" /> Draft</span>
+                          <span className="flex items-center gap-2">
+                            <CircleDashed className="h-3.5 w-3.5" /> Draft
+                          </span>
                         </SelectItem>
                         <SelectItem value="published">
-                          <span className="flex items-center gap-2"><Globe2 className="h-3.5 w-3.5" /> Publish now</span>
+                          <span className="flex items-center gap-2">
+                            <Globe2 className="h-3.5 w-3.5" /> Publish now
+                          </span>
                         </SelectItem>
                         <SelectItem value="scheduled">
-                          <span className="flex items-center gap-2"><CalendarClock className="h-3.5 w-3.5" /> Schedule</span>
+                          <span className="flex items-center gap-2">
+                            <CalendarClock className="h-3.5 w-3.5" /> Schedule
+                          </span>
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     {!canPublish ? (
-                      <FormDescription className="text-xs">Publish permission is required to change visibility.</FormDescription>
+                      <FormDescription className="text-xs">
+                        Publish permission is required to change visibility.
+                      </FormDescription>
                     ) : null}
                     <FormMessage />
                   </FormItem>
@@ -380,16 +507,22 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   name="publishedAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs">Publication time</FormLabel>
+                      <FormLabel className="text-xs">
+                        Publication time
+                      </FormLabel>
                       <FormControl>
                         <Input
                           type="datetime-local"
                           className="min-h-11 sm:min-h-9"
                           value={toDateTimeLocalValue(field.value)}
                           min={toDateTimeLocalValue(new Date())}
-                          onChange={(event) => field.onChange(
-                            event.target.value ? new Date(event.target.value) : null,
-                          )}
+                          onChange={(event) =>
+                            field.onChange(
+                              event.target.value
+                                ? new Date(event.target.value)
+                                : null,
+                            )
+                          }
                         />
                       </FormControl>
                       <FormMessage />
@@ -400,11 +533,20 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {publicationMode === "published" ? (
-                  <><Globe2 className="h-3.5 w-3.5 text-emerald-600" /> Buyers can open this page.</>
+                  <>
+                    <Globe2 className="h-3.5 w-3.5 text-emerald-600" /> Visible
+                    on the storefront.
+                  </>
                 ) : publicationMode === "scheduled" ? (
-                  <><CalendarClock className="h-3.5 w-3.5 text-sky-600" /> Hidden until the scheduled time.</>
+                  <>
+                    <CalendarClock className="h-3.5 w-3.5 text-sky-600" />{" "}
+                    Hidden until the scheduled time.
+                  </>
                 ) : (
-                  <><CircleDashed className="h-3.5 w-3.5" /> Only staff can edit this draft.</>
+                  <>
+                    <CircleDashed className="h-3.5 w-3.5" /> Hidden from the
+                    storefront.
+                  </>
                 )}
               </div>
             </CardContent>
@@ -412,7 +554,9 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
 
           <Card>
             <CardHeader className="px-4 py-3">
-              <CardTitle className="text-sm">Page</CardTitle>
+              <CardTitle className="text-sm">
+                {contentType === "article" ? "Organization" : "Page"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 border-t px-4 py-3">
               <FormField
@@ -422,10 +566,16 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   <FormItem>
                     <FormLabel className="text-xs">URL</FormLabel>
                     <div className="flex items-center rounded-md border border-input bg-background shadow-sm focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-                      <span className="pl-3 text-sm text-muted-foreground">/</span>
+                      <span className="pl-3 text-sm text-muted-foreground">
+                        {contentType === "article" ? "/blog/" : "/"}
+                      </span>
                       <FormControl>
                         <Input
-                          placeholder="page-url"
+                          placeholder={
+                            contentType === "article"
+                              ? "article-url"
+                              : "page-url"
+                          }
                           {...field}
                           className="min-h-11 border-0 pl-0 shadow-none focus-visible:ring-0 sm:min-h-9"
                         />
@@ -437,31 +587,101 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
               />
 
               {isCommittedLivePage ? (
-                <Button type="button" variant="outline" size="sm" className="min-h-11 w-full gap-2 sm:min-h-9" asChild>
-                  <a href={committedStorefrontPageUrl} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-3.5 w-3.5" /> View live page
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11 w-full gap-2 sm:min-h-9"
+                  asChild
+                >
+                  <a
+                    href={committedStorefrontPageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> View live
                   </a>
                 </Button>
               ) : null}
 
+              {contentType === "article" ? (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="author"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Author</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Author name"
+                            value={field.value ?? ""}
+                            onChange={(event) =>
+                              field.onChange(event.target.value || null)
+                            }
+                            className="min-h-11 sm:min-h-9"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="tags"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">Tags</FormLabel>
+                        <FormControl>
+                          <ArticleTagsInput
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          Separate tags with commas.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              ) : null}
+
               <div className="divide-y rounded-md border">
-                <FormField
-                  control={form.control}
-                  name="hideTitle"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between px-3 py-2.5">
-                      <FormLabel className="text-sm font-normal">Hide page title</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    </FormItem>
-                  )}
-                />
+                {contentType === "page" ? (
+                  <FormField
+                    control={form.control}
+                    name="hideTitle"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between px-3 py-2.5">
+                        <FormLabel className="text-sm font-normal">
+                          Hide page title
+                        </FormLabel>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                ) : null}
                 <FormField
                   control={form.control}
                   name="hideHeader"
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between px-3 py-2.5">
-                      <FormLabel className="text-sm font-normal">Hide header</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="text-sm font-normal">
+                        Hide header
+                      </FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
@@ -470,8 +690,15 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
                   name="hideFooter"
                   render={({ field }) => (
                     <FormItem className="flex items-center justify-between px-3 py-2.5">
-                      <FormLabel className="text-sm font-normal">Hide footer</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <FormLabel className="text-sm font-normal">
+                        Hide footer
+                      </FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
@@ -479,162 +706,162 @@ export function PageForm({ defaultValues, isEdit = false }: PageFormProps) {
             </CardContent>
           </Card>
 
-            {/* SEO card (collapsible) */}
-            <CollapsibleCard
-              title="Search Engine Listing"
-              description="Optimize for search engines"
-              defaultOpen={false}
-            >
+          {/* SEO card (collapsible) */}
+          <CollapsibleCard title="Search Engine Listing" defaultOpen={false}>
+            <FormField
+              control={form.control}
+              name="metaTitle"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Meta Title</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="SEO title (optional)"
+                      className="min-h-11 sm:min-h-9"
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(e) => {
+                        field.onChange(e.target.value || null);
+                      }}
+                    />
+                  </FormControl>
+                  {field.value && (
+                    <CharacterCounter
+                      current={field.value.length}
+                      recommended={60}
+                      max={70}
+                    />
+                  )}
+                  <FormDescription>
+                    Leave empty to use the title. Recommended: 50-60 characters.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="metaDescription"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Meta Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="SEO description (optional)"
+                      {...field}
+                      value={field.value || ""}
+                      rows={3}
+                      onChange={(e) => {
+                        field.onChange(e.target.value || null);
+                      }}
+                    />
+                  </FormControl>
+                  {field.value && (
+                    <CharacterCounter
+                      current={field.value.length}
+                      recommended={160}
+                      max={200}
+                    />
+                  )}
+                  <FormDescription>
+                    A brief description for search engines. Recommended: 150-160
+                    characters.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="canonicalPath"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Canonical Path</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder={
+                        contentType === "article"
+                          ? "/blog/article-url"
+                          : "/about-us"
+                      }
+                      className="min-h-11 sm:min-h-9"
+                      {...field}
+                      value={field.value || ""}
+                      onChange={(event) => {
+                        field.onChange(event.target.value || null);
+                      }}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Optional same-store canonical path. Leave blank to use this
+                    URL.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-2">
               <FormField
                 control={form.control}
-                name="metaTitle"
+                name="noIndex"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Meta Title</FormLabel>
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">
+                        Prevent search indexing
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Keep it public, but ask search engines not to index it.
+                      </FormDescription>
+                    </div>
                     <FormControl>
-                      <Input
-                        placeholder="SEO title (optional)"
-                        className="min-h-11 sm:min-h-9"
-                        {...field}
-                        value={field.value || ""}
-                        onChange={(e) => {
-                          field.onChange(e.target.value || null);
-                        }}
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
                       />
                     </FormControl>
-                    {field.value && (
-                      <CharacterCounter
-                        current={field.value.length}
-                        recommended={60}
-                        max={70}
-                      />
-                    )}
-                    <FormDescription>
-                      Leave empty to use the page title. Recommended: 50-60
-                      characters.
-                    </FormDescription>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
 
               <FormField
                 control={form.control}
-                name="metaDescription"
+                name="excludeFromSitemap"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Meta Description</FormLabel>
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-sm font-medium">
+                        Hide from sitemap
+                      </FormLabel>
+                      <FormDescription className="text-xs">
+                        Keep it public, but remove it from sitemap XML.
+                      </FormDescription>
+                    </div>
                     <FormControl>
-                      <Textarea
-                        placeholder="SEO description (optional)"
-                        {...field}
-                        value={field.value || ""}
-                        rows={3}
-                        onChange={(e) => {
-                          field.onChange(e.target.value || null);
-                        }}
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
                       />
                     </FormControl>
-                    {field.value && (
-                      <CharacterCounter
-                        current={field.value.length}
-                        recommended={160}
-                        max={200}
-                      />
-                    )}
-                    <FormDescription>
-                      A brief description of the page for search engines.
-                      Recommended: 150-160 characters.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                  )}
-                />
-
-              <FormField
-                control={form.control}
-                name="canonicalPath"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Canonical Path</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="/about-us"
-                        className="min-h-11 sm:min-h-9"
-                        {...field}
-                        value={field.value || ""}
-                        onChange={(event) => {
-                          field.onChange(event.target.value || null);
-                        }}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Optional same-store path for duplicate or campaign pages. Leave blank to use this page.
-                    </FormDescription>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
+            </div>
 
-              <div className="grid gap-2">
-                <FormField
-                  control={form.control}
-                  name="noIndex"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">
-                          Prevent search indexing
-                        </FormLabel>
-                        <FormDescription className="text-xs">
-                          Keep the page public, but ask search engines not to index it.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="excludeFromSitemap"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-sm font-medium">
-                          Hide from sitemap
-                        </FormLabel>
-                        <FormDescription className="text-xs">
-                          Keep the page public, but remove it from pages sitemap XML.
-                        </FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <ResourceDiscoveryReadiness
-                kind="page"
-                slug={form.watch("slug")}
-                canonicalPath={form.watch("canonicalPath")}
-                noIndex={form.watch("noIndex")}
-                excludeFromSitemap={form.watch("excludeFromSitemap")}
-                isPublished={form.watch("publicationMode") === "published"}
-              />
-            </CollapsibleCard>
-          </div>
+            <ResourceDiscoveryReadiness
+              kind={contentType}
+              slug={form.watch("slug")}
+              canonicalPath={form.watch("canonicalPath")}
+              noIndex={form.watch("noIndex")}
+              excludeFromSitemap={form.watch("excludeFromSitemap")}
+              isPublished={form.watch("publicationMode") === "published"}
+            />
+          </CollapsibleCard>
         </div>
+      </div>
     </FormContainer>
   );
 }

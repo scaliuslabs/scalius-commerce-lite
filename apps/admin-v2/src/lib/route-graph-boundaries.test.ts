@@ -155,11 +155,10 @@ describe("admin route graph boundaries", () => {
         path: relative(ADMIN_SRC_ROOT, path),
         source: readFileSync(path, "utf8"),
       }))
-      .filter(
-        ({ source }) =>
-          /import\s+\{[^}]*RouteErrorComponent[^}]*\}\s+from\s+["']~\/lib\/list-helpers["'];/.test(
-            source,
-          ),
+      .filter(({ source }) =>
+        /import\s+\{[^}]*RouteErrorComponent[^}]*\}\s+from\s+["']~\/lib\/list-helpers["'];/.test(
+          source,
+        ),
       )
       .map(({ path }) => path);
 
@@ -196,7 +195,9 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps narrow query-option modules from depending on the broad query barrel", () => {
-    const offenders = listSourceFiles(join(ADMIN_SRC_ROOT, "lib", "api-query-options"))
+    const offenders = listSourceFiles(
+      join(ADMIN_SRC_ROOT, "lib", "api-query-options"),
+    )
       .map((path) => ({
         path: relative(ADMIN_SRC_ROOT, path),
         source: readFileSync(path, "utf8"),
@@ -241,7 +242,9 @@ describe("admin route graph boundaries", () => {
         source: readFileSync(path, "utf8"),
       }))
       .filter(({ source }) =>
-        /(?:from\s+|import\()\s*["']@scalius\/core\/modules\/notifications["']/.test(source),
+        /(?:from\s+|import\()\s*["']@scalius\/core\/modules\/notifications["']/.test(
+          source,
+        ),
       )
       .map(({ path }) => path);
 
@@ -303,10 +306,14 @@ describe("admin route graph boundaries", () => {
       "checked={channels[event.key][channel.key]}",
     );
     expect(notificationSource).toContain("Saved rules stay paused.");
-    expect(notificationSource).toContain("Saved push rules stay paused until delivery recovers.");
+    expect(notificationSource).toContain(
+      "Saved push rules stay paused until delivery recovers.",
+    );
     expect(notificationSource).toContain("pushConfigured");
     expect(notificationSource).toContain("checked={channels[event.key].push}");
-    expect(policySource).toContain("Provider readiness controls delivery, not merchant intent.");
+    expect(policySource).toContain(
+      "Provider readiness controls delivery, not merchant intent.",
+    );
     expect(policySource).toContain("enabledChannels.includes(channel.key)");
     expect(policySource).toContain('enabledChannels.includes("push")');
     expect(policySource).not.toContain("sanitizeCustomerChannelConfig");
@@ -318,14 +325,24 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const deferredSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "ui",
+        "tiptap",
+        "DeferredTiptapEditor.tsx",
+      ),
       "utf8",
     );
 
     expect(tiptapSource).toContain("immediatelyRender: false,");
-    expect(tiptapSource).toContain('editorInstance.commands.focus("end", { scrollIntoView: false })');
+    expect(tiptapSource).toContain(
+      'editorInstance.commands.focus("end", { scrollIntoView: false })',
+    );
     expect(deferredSource).toContain("loadAndMountEditor(false);");
-    expect(deferredSource).toContain("onPointerDown={() => loadAndMountEditor(true)}");
+    expect(deferredSource).toContain(
+      "onPointerDown={() => loadAndMountEditor(true)}",
+    );
     expect(deferredSource).toContain("setShouldMountEditor(true)");
     expect(deferredSource).not.toContain("void loadTiptapEditorModule();");
     expect(deferredSource).not.toContain("requestIdleCallback");
@@ -355,8 +372,12 @@ describe("admin route graph boundaries", () => {
     expect(directSessionSource).not.toMatch(/from\s+["']@better-auth/);
     expect(directSessionSource).not.toContain("@scalius/database");
     expect(directSessionSource).not.toContain("@scalius/core/auth");
-    expect(rbacServerSource).not.toMatch(/import\s+[^;]*from\s+["']@scalius\/database\/client["']/);
-    expect(rbacServerSource).not.toMatch(/import\s+[^;]*from\s+["']@scalius\/core\/auth\/rbac/);
+    expect(rbacServerSource).not.toMatch(
+      /import\s+[^;]*from\s+["']@scalius\/database\/client["']/,
+    );
+    expect(rbacServerSource).not.toMatch(
+      /import\s+[^;]*from\s+["']@scalius\/core\/auth\/rbac/,
+    );
     expect(rbacServerSource.indexOf("knownIsSuperAdmin === true")).toBeLessThan(
       rbacServerSource.indexOf('import("cloudflare:workers")'),
     );
@@ -406,9 +427,7 @@ describe("admin route graph boundaries", () => {
     expect(adminRouteSource).not.toContain("@/components/ui/sonner");
     expect(adminHeaderSource).toContain('import("@/components/auth/UserMenu")');
     expect(adminHeaderSource).toContain("function DeferredUserMenu");
-    expect(adminHeaderSource).not.toMatch(
-      /import\s+\{\s*UserMenu\s*\}\s+from/,
-    );
+    expect(adminHeaderSource).not.toMatch(/import\s+\{\s*UserMenu\s*\}\s+from/);
     expect(adminHeaderSource).not.toContain("@/components/ui/dropdown-menu");
     expect(adminHeaderSource).not.toContain("@/components/ui/avatar");
     expect(userMenuSource).not.toMatch(/import\s+\{\s*authClient\s*\}/);
@@ -433,6 +452,7 @@ describe("admin route graph boundaries", () => {
       "routes/admin/index.tsx",
       "routes/admin/abandoned-checkouts.tsx",
       "routes/admin/analytics/index.tsx",
+      "routes/admin/articles/index.tsx",
       "routes/admin/attributes.tsx",
       "routes/admin/categories/index.tsx",
       "routes/admin/collections/index.tsx",
@@ -448,7 +468,10 @@ describe("admin route graph boundaries", () => {
 
     const eagerCommandPaths = hotEntryPaths
       .map((entry) =>
-        findStaticImportPathToTarget(join(ADMIN_SRC_ROOT, entry), commandSourcePath),
+        findStaticImportPathToTarget(
+          join(ADMIN_SRC_ROOT, entry),
+          commandSourcePath,
+        ),
       )
       .filter((path): path is string[] => path !== null);
 
@@ -468,8 +491,12 @@ describe("admin route graph boundaries", () => {
 
     expect(settingsFormSource).toContain("invalidateQueryKeys?:");
     expect(seoSettingsSource).toContain("invalidateQueryKeys:");
-    expect(seoSettingsSource).toContain("queryKeys.settings.seoDiscoveryLiveProbe()");
-    expect(seoSettingsSource).toContain("queryKeys.settings.seoFeedDiagnostics()");
+    expect(seoSettingsSource).toContain(
+      "queryKeys.settings.seoDiscoveryLiveProbe()",
+    );
+    expect(seoSettingsSource).toContain(
+      "queryKeys.settings.seoFeedDiagnostics()",
+    );
   });
 
   it("keeps admin shell nav data local while page access uses core RBAC source", () => {
@@ -525,7 +552,9 @@ describe("admin route graph boundaries", () => {
       PERMISSIONS.SETTINGS_CACHE_MANAGE,
     );
     expect(adminHeaderSource).toContain("useHasPermission");
-    expect(adminHeaderSource).toContain("ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE");
+    expect(adminHeaderSource).toContain(
+      "ADMIN_PERMISSIONS.SETTINGS_CACHE_MANAGE",
+    );
     expect(adminHeaderSource).toContain("canManageCache ? (");
     expect(cacheNukeButtonSource).toContain(
       "Invalidate API cache and purge storefront edge cache",
@@ -562,7 +591,9 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
 
-    expect(source).toMatch(/suppressHydrationWarning[^]*formatDate\(script\.updatedAt\)/);
+    expect(source).toMatch(
+      /suppressHydrationWarning[^]*formatDate\(script\.updatedAt\)/,
+    );
   });
 
   it("keeps analytics list mutations gated by exact RBAC permissions", () => {
@@ -661,7 +692,9 @@ describe("admin route graph boundaries", () => {
     expect(loginRouteSource).not.toContain("@daveyplate/better-auth-ui");
     expect(resetPasswordRouteSource).toContain("ResetPasswordForm");
     expect(resetPasswordRouteSource).not.toContain("AuthCard");
-    expect(resetPasswordRouteSource).not.toContain("@daveyplate/better-auth-ui");
+    expect(resetPasswordRouteSource).not.toContain(
+      "@daveyplate/better-auth-ui",
+    );
     expect(globalCssSource).not.toContain("@daveyplate/better-auth-ui");
     expect(authClientSource).not.toContain("adminClient");
   });
@@ -750,7 +783,9 @@ describe("admin route graph boundaries", () => {
       expect(source).not.toContain('window.location.href = "/admin"');
     }
     expect(loginFormSource).not.toContain("callbackURL");
-    expect(loginFormSource).toContain('navigate({ to: "/admin", replace: true })');
+    expect(loginFormSource).toContain(
+      'navigate({ to: "/admin", replace: true })',
+    );
     expect(loginFormSource).toContain(
       'navigate({ to: "/auth/two-factor", replace: true })',
     );
@@ -782,7 +817,12 @@ describe("admin route graph boundaries", () => {
         action: 'action="/auth/forgot-password"',
       },
       {
-        path: join(ADMIN_SRC_ROOT, "components", "auth", "ResetPasswordForm.tsx"),
+        path: join(
+          ADMIN_SRC_ROOT,
+          "components",
+          "auth",
+          "ResetPasswordForm.tsx",
+        ),
         action: 'action="/auth/reset-password"',
       },
       {
@@ -819,7 +859,9 @@ describe("admin route graph boundaries", () => {
       },
     ];
 
-    expect(hydratedHookSource).toContain("const [isHydrated, setIsHydrated] = useState(false)");
+    expect(hydratedHookSource).toContain(
+      "const [isHydrated, setIsHydrated] = useState(false)",
+    );
     expect(hydratedHookSource).toContain("setIsHydrated(true)");
     expect(loginFormSource).toContain('method="post"');
     expect(loginFormSource).toContain('action="/auth/login"');
@@ -869,7 +911,10 @@ describe("admin route graph boundaries", () => {
         const source = readFileSync(path, "utf8");
         return extractOpeningFormTags(source)
           .filter((formTag) => !/\bmethod\s*=/.test(formTag))
-          .map((formTag) => `${relative(ADMIN_SRC_ROOT, path)}: ${formTag.replace(/\s+/g, " ")}`);
+          .map(
+            (formTag) =>
+              `${relative(ADMIN_SRC_ROOT, path)}: ${formTag.replace(/\s+/g, " ")}`,
+          );
       });
 
     expect(offenders).toEqual([]);
@@ -881,16 +926,76 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "admin", "OrderForm.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "ProductForm.tsx"),
       join(ADMIN_SRC_ROOT, "components", "admin", "ShipmentForm.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "checkout-languages", "LanguageFormDialog.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "collection-form", "CollectionFormContainer.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "delivery-locations", "LocationFormDialog.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "meta-conversions", "MetaConversionsSettingsForm.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "ManualFulfillmentDialog.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "scanner", "BarcodeScanner.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PaymentGatewaysManager.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PolarSettingsForm.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "shared", "FormContainer.tsx"),
-      join(ADMIN_SRC_ROOT, "components", "admin", "shipping-methods", "MethodFormDialog.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "checkout-languages",
+        "LanguageFormDialog.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "collection-form",
+        "CollectionFormContainer.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "delivery-locations",
+        "LocationFormDialog.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "meta-conversions",
+        "MetaConversionsSettingsForm.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "orderview",
+        "ManualFulfillmentDialog.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "scanner",
+        "BarcodeScanner.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "PaymentGatewaysManager.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "PolarSettingsForm.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "shared",
+        "FormContainer.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "shipping-methods",
+        "MethodFormDialog.tsx",
+      ),
     ];
 
     for (const path of mutationForms) {
@@ -907,28 +1012,50 @@ describe("admin route graph boundaries", () => {
 
   it("keeps payment gateway visibility saves locked behind loaded settings", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "PaymentGatewaysManager.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "PaymentGatewaysManager.tsx",
+      ),
       "utf8",
     );
 
     expect(source).toContain("const [methodsLoadError, setMethodsLoadError]");
     expect(source).toContain("if (!methods) {");
-    expect(source).toContain("Reload payment status before saving buyer payment methods.");
+    expect(source).toContain(
+      "Reload payment status before saving buyer payment methods.",
+    );
     expect(source).toContain("Payment settings could not be loaded");
-    expect(source).toContain("Checkout visibility is locked until the saved payment-method settings load successfully.");
+    expect(source).toContain(
+      "Checkout visibility is locked until the saved payment-method settings load successfully.",
+    );
     expect(source).toContain("setMethods(null)");
   });
 
   it("keeps checkout flow saves locked behind payment readiness", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "settings", "CheckoutFlowSettings.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "settings",
+        "CheckoutFlowSettings.tsx",
+      ),
       "utf8",
     );
 
     expect(source).toContain("isFetching: paymentMethodsFetching");
-    expect(source).toContain("const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError");
-    expect(source).toContain("Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.");
-    expect(source).toContain("Checkout-flow saves are locked until Payment Gateways loads successfully.");
+    expect(source).toContain(
+      "const paymentMethodsUnavailable = !paymentMethods && paymentMethodsError",
+    );
+    expect(source).toContain(
+      "Payment method readiness could not be checked. Reload payment settings before saving checkout flow changes.",
+    );
+    expect(source).toContain(
+      "Checkout-flow saves are locked until Payment Gateways loads successfully.",
+    );
     expect(source).toContain("Retry payment check");
     expect(source).toContain("disabled={saving || saveBlocked}");
   });
@@ -955,8 +1082,12 @@ describe("admin route graph boundaries", () => {
       ["while", "Tap"].join(""),
     ];
 
-    expect(newRouteSource).toContain("<DiscountTypeSelector onSelect={selectType} />");
-    expect(newRouteSource).toContain("validateSearch: validateDiscountCreateSearch");
+    expect(newRouteSource).toContain(
+      "<DiscountTypeSelector onSelect={selectType} />",
+    );
+    expect(newRouteSource).toContain(
+      "validateSearch: validateDiscountCreateSearch",
+    );
     expect(newRouteSource).toContain("const DiscountCodeBuilder = lazy(");
     for (const marker of forbiddenMarkers) {
       expect(combinedSource).not.toContain(marker);
@@ -965,7 +1096,13 @@ describe("admin route graph boundaries", () => {
 
   it("keeps admin discount form values out of native GET submissions", () => {
     const discountForms = [
-      join(ADMIN_SRC_ROOT, "components", "admin", "discount", "DiscountCodeBuilder.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "discount",
+        "DiscountCodeBuilder.tsx",
+      ),
     ];
 
     for (const path of discountForms) {
@@ -984,7 +1121,10 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps admin navigation from doing focus refetch stampedes", () => {
-    const routerSource = readFileSync(join(ADMIN_SRC_ROOT, "router.tsx"), "utf8");
+    const routerSource = readFileSync(
+      join(ADMIN_SRC_ROOT, "router.tsx"),
+      "utf8",
+    );
     const queryClientSource = readFileSync(
       join(ADMIN_SRC_ROOT, "lib", "admin-query-client.ts"),
       "utf8",
@@ -994,7 +1134,14 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const orderDetailSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "orders",
+        "$orderId",
+        "index.tsx",
+      ),
       "utf8",
     );
     const orderListSource = readFileSync(
@@ -1047,7 +1194,9 @@ describe("admin route graph boundaries", () => {
     expect(orderDetailSource).toContain("refetchInterval: 30_000");
     expect(orderDetailSource).not.toContain("refetchOnWindowFocus: true");
     expect(orderDetailSource).not.toContain("refetchOnReconnect: true");
-    expect(orderListSource).toContain('document.addEventListener("visibilitychange"');
+    expect(orderListSource).toContain(
+      'document.addEventListener("visibilitychange"',
+    );
     expect(orderListSource).toContain("isDocumentHidden()");
     expect(orderListSource).toContain("activeOrderListRefreshRef");
     expect(orderListSource).toContain("orderListRefreshInFlightRef");
@@ -1068,21 +1217,27 @@ describe("admin route graph boundaries", () => {
     expect(storefrontFooterLinkSource).toContain(
       "~/lib/api-query-options/storefront-url",
     );
-    expect(appSidebarSource).not.toContain(
-      "~/lib/api-query-options/settings",
-    );
+    expect(appSidebarSource).not.toContain("~/lib/api-query-options/settings");
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollRestoration: true");
-    expect(routerSource).toContain("scrollToTopSelectors: [\"#admin-main-scroll\"]");
-    expect(routerSource).toContain("scrollRestorationBehavior: \"instant\"");
-    expect(adminRouteSource).toContain('data-scroll-restoration-id="admin-main-scroll"');
+    expect(routerSource).toContain(
+      'scrollToTopSelectors: ["#admin-main-scroll"]',
+    );
+    expect(routerSource).toContain('scrollRestorationBehavior: "instant"');
+    expect(adminRouteSource).toContain(
+      'data-scroll-restoration-id="admin-main-scroll"',
+    );
     expect(adminRouteSource).toContain("useAdminNestedScrollRestoration()");
     expect(adminScrollSource).toContain('window.addEventListener("popstate"');
-    expect(adminScrollSource).toContain("schedulePopRestore(event.toLocation.href)");
+    expect(adminScrollSource).toContain(
+      "schedulePopRestore(event.toLocation.href)",
+    );
     expect(adminScrollSource).not.toContain("scrollElement.scrollTop = 0");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_FRESH_MS");
     expect(adminRouteContextSource).toContain("ADMIN_ROUTE_CONTEXT_STALE_MS");
-    expect(adminRouteContextSource).toContain("refreshAdminRouteContextInBackground");
+    expect(adminRouteContextSource).toContain(
+      "refreshAdminRouteContextInBackground",
+    );
   });
 
   it("keeps product list route first paint independent from secondary stats", () => {
@@ -1152,7 +1307,9 @@ describe("admin route graph boundaries", () => {
       );
 
       expect(routeSource).toContain(`const ${component} = lazy(()`);
-      expect(routeSource).toContain(`import("./${file.replace(/\.tsx$/, "")}")`);
+      expect(routeSource).toContain(
+        `import("./${file.replace(/\.tsx$/, "")}")`,
+      );
       expect(routeSource).toContain(openMarker);
       expect(routeSource).not.toContain("~/components/ui/alert-dialog");
       expect(routeSource).not.toContain("AlertDialogContent");
@@ -1218,15 +1375,11 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("requestIdleCallback");
     expect(dashboardStatsSource).not.toContain("requestIdleCallback");
     expect(dashboardStatsSource).not.toContain("setShouldLoadChart");
-    expect(currencyHookSource).toContain(
-      "~/lib/api-query-options/currency",
-    );
+    expect(currencyHookSource).toContain("~/lib/api-query-options/currency");
     expect(currencyHookSource).not.toContain(
       "~/lib/api-query-options/settings",
     );
-    expect(currencyQueryOptionsSource).toContain(
-      "../api-functions/currency",
-    );
+    expect(currencyQueryOptionsSource).toContain("../api-functions/currency");
     expect(currencyQueryOptionsSource).not.toContain("getPaymentMethods");
     expect(currencyQueryOptionsSource).not.toContain("getMetaConversionsLogs");
     expect(currencyQueryOptionsSource).not.toContain("getAuthSettings");
@@ -1319,13 +1472,7 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const mediaManagerBarrelSource = readFileSync(
-      join(
-        ADMIN_SRC_ROOT,
-        "components",
-        "admin",
-        "media-manager",
-        "index.ts",
-      ),
+      join(ADMIN_SRC_ROOT, "components", "admin", "media-manager", "index.ts"),
       "utf8",
     );
 
@@ -1355,11 +1502,21 @@ describe("admin route graph boundaries", () => {
       "utf8",
     );
     const managerSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "AbandonedCheckoutsManager.tsx",
+      ),
       "utf8",
     );
     const querySource = readFileSync(
-      join(ADMIN_SRC_ROOT, "lib", "api-query-options", "abandoned-checkouts.ts"),
+      join(
+        ADMIN_SRC_ROOT,
+        "lib",
+        "api-query-options",
+        "abandoned-checkouts.ts",
+      ),
       "utf8",
     );
 
@@ -1371,7 +1528,7 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("routeState={search}");
     expect(managerSource).toContain("routeState: AbandonedCheckoutRouteState");
     expect(managerSource).toContain("onRouteStateChange");
-    expect(managerSource).not.toContain("useState(\"\")");
+    expect(managerSource).not.toContain('useState("")');
     expect(managerSource).toContain("No records have been assumed.");
     expect(managerSource).toContain("getCanonicalPageForPagination");
     expect(querySource).toContain("getAbandonedCheckouts({ data: params })");
@@ -1438,8 +1595,12 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain('placeholder="Describe your product..."');
     expect(source).not.toContain('from "@/components/ui/tiptap/TiptapEditor"');
     expect(source).not.toContain("<TiptapEditor");
-    expect(source).not.toContain('import("@/components/ui/tiptap/TiptapEditor")');
-    expect(source).not.toContain('fallback={<LoadingFallback height="h-[237px]" />}');
+    expect(source).not.toContain(
+      'import("@/components/ui/tiptap/TiptapEditor")',
+    );
+    expect(source).not.toContain(
+      'fallback={<LoadingFallback height="h-[237px]" />}',
+    );
     expect(source).not.toContain("<RichContent");
     expect(source).not.toContain("../rich-content");
     expect(source).not.toContain("TiptapToolbarSkeleton");
@@ -1496,30 +1657,44 @@ describe("admin route graph boundaries", () => {
       "useSuspenseQuery(productsByIdsQueryOptions",
     );
     expect(discountSource).toContain("Discount product label prefetch skipped");
-    expect(discountSource).toContain("Discount collection label prefetch skipped");
-    expect(collectionSource).toContain("Collection product label prefetch skipped");
+    expect(discountSource).toContain(
+      "Discount collection label prefetch skipped",
+    );
+    expect(collectionSource).toContain(
+      "Collection product label prefetch skipped",
+    );
   });
 
   it("keeps deferred rich-text editing lazy without a manual edit gate", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "DeferredTiptapEditor.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "ui",
+        "tiptap",
+        "DeferredTiptapEditor.tsx",
+      ),
       "utf8",
     );
 
-    expect(source).toContain("import { RichContent } from \"../rich-content\"");
-    expect(source).toContain("import { TiptapToolbarSkeleton } from \"./TiptapToolbarSkeleton\"");
-    expect(source).toContain("<RichContent content={content} variant=\"compact\" />");
+    expect(source).toContain('import { RichContent } from "../rich-content"');
+    expect(source).toContain(
+      'import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton"',
+    );
+    expect(source).toContain(
+      '<RichContent content={content} variant="compact" />',
+    );
     expect(source).toContain("<TiptapToolbarSkeleton compact={compact} />");
     expect(source).toContain("const TiptapEditor = lazy(");
     expect(source).toContain("loadTiptapEditorModule");
     expect(source).toContain("loadAndMountEditor(false);");
     expect(source).toContain("setShouldMountEditor(true)");
     expect(source).toContain("function getDeferredEditorViewportClass");
-    expect(source).toContain("compact ? \"h-[200px]\" : \"h-[300px]\"");
+    expect(source).toContain('compact ? "h-[200px]" : "h-[300px]"');
     expect(source).toContain("mountRequestedRef");
     expect(source).not.toContain("IntersectionObserver");
     expect(source).not.toContain("requestIdleCallback");
-    expect(source).not.toContain("from \"./TiptapEditor\"");
+    expect(source).not.toContain('from "./TiptapEditor"');
     expect(source).not.toContain("toPlainTextPreview");
     expect(source).not.toContain("PencilLine");
     expect(source).not.toContain("editLabel");
@@ -1529,21 +1704,35 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapEditor.tsx"),
       "utf8",
     );
-    expect(editorSource).toContain("const editorViewportHeight = compact ? \"200px\" : \"300px\"");
-    expect(editorSource).toContain("style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}");
-    expect(editorSource).toContain("import { TiptapToolbarSkeleton } from \"./TiptapToolbarSkeleton\"");
+    expect(editorSource).toContain(
+      'const editorViewportHeight = compact ? "200px" : "300px"',
+    );
+    expect(editorSource).toContain(
+      "style={!isFullscreen ? { minHeight: editorViewportHeight, maxHeight: editorViewportHeight } : undefined}",
+    );
+    expect(editorSource).toContain(
+      'import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton"',
+    );
     expect(editorSource).toContain("<TiptapToolbarSkeleton");
     expect(editorSource).toContain('from "@scalius/shared/html-sanitize"');
     expect(editorSource).toContain("hasRenderableHtmlContent");
     expect(editorSource).toContain("sanitizeHtml(content)");
-    expect(editorSource).toContain('className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"');
+    expect(editorSource).toContain(
+      'className="ProseMirror max-w-none p-4 min-h-[200px] text-sm"',
+    );
     expect(editorSource).not.toContain("<RichContent");
-    expect(editorSource).not.toContain("from \"../rich-content\"");
+    expect(editorSource).not.toContain('from "../rich-content"');
     expect(editorSource).not.toContain("setIsMounted");
     expect(editorSource).not.toContain("if (!isMounted)");
 
     const skeletonSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "ui", "tiptap", "TiptapToolbarSkeleton.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "ui",
+        "tiptap",
+        "TiptapToolbarSkeleton.tsx",
+      ),
       "utf8",
     );
     expect(skeletonSource).toContain("TOOLBAR_GROUPS");
@@ -1575,7 +1764,13 @@ describe("admin route graph boundaries", () => {
 
   it("keeps order payment history failures local to the payment card", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "PaymentCard.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "orderview",
+        "PaymentCard.tsx",
+      ),
       "utf8",
     );
 
@@ -1587,7 +1782,9 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("Retry before reviewing");
     expect(source).toContain("paymentWebhookIssues");
     expect(source).toContain("Payment webhook needs review");
-    expect(source).toContain("Check the gateway dashboard before changing payment-sensitive order state.");
+    expect(source).toContain(
+      "Check the gateway dashboard before changing payment-sensitive order state.",
+    );
     expect(source).toContain("paymentSessionAttempts");
     expect(source).toContain("Payment session attempts");
     expect(source).toContain("Preparing checkout");
@@ -1601,7 +1798,12 @@ describe("admin route graph boundaries", () => {
 
   it("normalizes stale hosted-payment archives in incomplete-checkout UI", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "AbandonedCheckoutsManager.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "AbandonedCheckoutsManager.tsx",
+      ),
       "utf8",
     );
     const routeSource = readFileSync(
@@ -1625,13 +1827,32 @@ describe("admin route graph boundaries", () => {
 
   it("keeps order detail SSR formatting deterministic", () => {
     const orderViewSources = [
-      ...listSourceFiles(join(ADMIN_SRC_ROOT, "components", "admin", "orderview")),
-      join(ADMIN_SRC_ROOT, "components", "admin", "ShipmentStatusIndicator.tsx"),
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
-    ].map((file) => [relative(ADMIN_SRC_ROOT, file), readFileSync(file, "utf8")] as const);
+      ...listSourceFiles(
+        join(ADMIN_SRC_ROOT, "components", "admin", "orderview"),
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "ShipmentStatusIndicator.tsx",
+      ),
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "orders",
+        "$orderId",
+        "index.tsx",
+      ),
+    ].map(
+      (file) =>
+        [relative(ADMIN_SRC_ROOT, file), readFileSync(file, "utf8")] as const,
+    );
 
     for (const [file, source] of orderViewSources) {
-      expect(source, file).not.toMatch(/\.toLocale(?:String|DateString|TimeString)\(/);
+      expect(source, file).not.toMatch(
+        /\.toLocale(?:String|DateString|TimeString)\(/,
+      );
       expect(source, file).not.toContain("new Date().toISOString()");
       expect(source, file).not.toContain("suppressHydrationWarning");
     }
@@ -1640,21 +1861,42 @@ describe("admin route graph boundaries", () => {
       join(ADMIN_SRC_ROOT, "lib", "admin-time.ts"),
       "utf8",
     );
-    expect(formatterSource).toContain('export const ADMIN_TIME_ZONE = "Asia/Dhaka"');
+    expect(formatterSource).toContain(
+      'export const ADMIN_TIME_ZONE = "Asia/Dhaka"',
+    );
     expect(formatterSource).toContain('new Intl.DateTimeFormat("en-US"');
   });
 
   it("keeps order detail optional panels hydration-gated", () => {
     const routeSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "orders",
+        "$orderId",
+        "index.tsx",
+      ),
       "utf8",
     );
     const paymentSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "PaymentCard.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "orderview",
+        "PaymentCard.tsx",
+      ),
       "utf8",
     );
     const notificationsSource = readFileSync(
-      join(ADMIN_SRC_ROOT, "components", "admin", "orderview", "OrderNotificationsCard.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "components",
+        "admin",
+        "orderview",
+        "OrderNotificationsCard.tsx",
+      ),
       "utf8",
     );
     const notificationDisplaySource = readFileSync(
@@ -1664,8 +1906,12 @@ describe("admin route graph boundaries", () => {
 
     expect(routeSource).toContain("const isHydrated = useHydrated()");
     expect(routeSource).toContain("enabled: isHydrated");
-    expect(routeSource).toContain("const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)");
-    expect(routeSource).toContain("isHydrated && Array.isArray(providersQuery.data)");
+    expect(routeSource).toContain(
+      "const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)",
+    );
+    expect(routeSource).toContain(
+      "isHydrated && Array.isArray(providersQuery.data)",
+    );
     expect(paymentSource).toContain("const isHydrated = useHydrated()");
     expect(paymentSource).toContain("enabled: isHydrated");
     expect(paymentSource).toContain("enabled: isHydrated && isCOD");
@@ -1680,7 +1926,12 @@ describe("admin route graph boundaries", () => {
   });
 
   it("keeps order detail panels on the deterministic eager boundary", () => {
-    const orderViewPath = join(ADMIN_SRC_ROOT, "components", "admin", "OrderView.tsx");
+    const orderViewPath = join(
+      ADMIN_SRC_ROOT,
+      "components",
+      "admin",
+      "OrderView.tsx",
+    );
     const orderViewSource = readFileSync(orderViewPath, "utf8");
     const supportPath = join(
       ADMIN_SRC_ROOT,
@@ -1713,28 +1964,51 @@ describe("admin route graph boundaries", () => {
 
     expect(orderViewSource).not.toContain("lazy(");
     expect(orderViewSource).not.toContain("<Suspense");
-    expect(orderViewSource).toContain("(order.supportRequests?.length ?? 0) > 0");
-    expect(orderViewSource).toContain('import { PaymentCard } from "./orderview/PaymentCard"');
-    expect(orderViewSource).toContain('import { ShipmentCard } from "./orderview/ShipmentCard"');
+    expect(orderViewSource).toContain(
+      "(order.supportRequests?.length ?? 0) > 0",
+    );
+    expect(orderViewSource).toContain(
+      'import { PaymentCard } from "./orderview/PaymentCard"',
+    );
+    expect(orderViewSource).toContain(
+      'import { ShipmentCard } from "./orderview/ShipmentCard"',
+    );
     expect(orderViewSource).toContain(
       'import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard"',
     );
     expect(orderViewSource).toContain(
       'import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard"',
     );
-    expect(findStaticImportPathToTarget(orderViewPath, supportPath)).not.toBeNull();
-    expect(findStaticImportPathToTarget(orderViewPath, notificationsPath)).not.toBeNull();
-    expect(findStaticImportPathToTarget(orderViewPath, paymentPath)).not.toBeNull();
-    expect(findStaticImportPathToTarget(orderViewPath, shipmentPath)).not.toBeNull();
+    expect(
+      findStaticImportPathToTarget(orderViewPath, supportPath),
+    ).not.toBeNull();
+    expect(
+      findStaticImportPathToTarget(orderViewPath, notificationsPath),
+    ).not.toBeNull();
+    expect(
+      findStaticImportPathToTarget(orderViewPath, paymentPath),
+    ).not.toBeNull();
+    expect(
+      findStaticImportPathToTarget(orderViewPath, shipmentPath),
+    ).not.toBeNull();
   });
 
   it("keeps order-detail refund recovery context as the payment-card fallback", () => {
     const source = readFileSync(
-      join(ADMIN_SRC_ROOT, "routes", "admin", "orders", "$orderId", "index.tsx"),
+      join(
+        ADMIN_SRC_ROOT,
+        "routes",
+        "admin",
+        "orders",
+        "$orderId",
+        "index.tsx",
+      ),
       "utf8",
     );
 
     expect(source).toContain("refundAttempts: order.refundAttempts");
-    expect(source).toContain("activeRefundOperation: order.activeRefundOperation");
+    expect(source).toContain(
+      "activeRefundOperation: order.activeRefundOperation",
+    );
   });
 });

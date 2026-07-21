@@ -1,18 +1,17 @@
 export const CANONICAL_PATH_MAX_LENGTH = 2048;
 
 export type CanonicalResourceKind =
-  | "product"
-  | "category"
-  | "collection"
-  | "page";
+  "product" | "category" | "collection" | "article" | "page";
 
 const CANONICAL_SLUG_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CANONICAL_COLLECTION_SEGMENT_PATTERN = /^(?:col_[A-Za-z0-9_-]+|[A-Za-z0-9_-]{18,32})$/;
+const CANONICAL_COLLECTION_SEGMENT_PATTERN =
+  /^(?:col_[A-Za-z0-9_-]+|[A-Za-z0-9_-]{18,32})$/;
 const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "account",
   "admin",
   "api",
   "buy",
+  "blog",
   "cart",
   "categories",
   "checkout",
@@ -77,7 +76,10 @@ function getResourceCanonicalSegment(
     return segment && !segment.includes("/") ? segment : null;
   }
 
-  const prefix = `/${kind === "category" ? "categories" : `${kind}s`}/`;
+  const prefix =
+    kind === "article"
+      ? "/blog/"
+      : `/${kind === "category" ? "categories" : `${kind}s`}/`;
   if (!value.startsWith(prefix)) return null;
 
   const segment = value.slice(prefix.length);

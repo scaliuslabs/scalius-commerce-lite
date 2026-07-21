@@ -1,6 +1,6 @@
-# Pages
+# Pages and Articles
 
-CMS page management with TipTap rich text editing, publish/unpublish workflow, SEO metadata, shortcode processing, public query functions, and bulk operations.
+Revisioned CMS content management with TipTap rich text editing, publish/unpublish workflow, SEO metadata, shortcode processing, public query functions, and bulk operations. Static pages and chronological articles share this authority but use immutable `contentType` values and distinct admin/storefront routes.
 
 ## Content System
 
@@ -29,6 +29,7 @@ These flags are passed through the storefront's `Layout` component and respected
 Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected globally across active and trashed pages, and reserved storefront roots are rejected before persistence.
 
 On the storefront, `[slug].astro` is the catch-all dynamic route. It performs early validation before making API calls:
+
 1. Rejects empty slugs, file extensions, known non-page paths (`api`, `favicon`, `_astro`, etc.)
 2. Validates slug format against the same regex pattern
 3. Only then calls `getPageBySlug()` via the public API
@@ -51,16 +52,21 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 ### Service Functions
 
 **Admin Queries:**
+
 - `listPages(db, options)` -- paginated list with FTS5 search, lifecycle status (`draft`/`scheduled`/`published`), sort (`title`/`createdAt`/`updatedAt`), and trash filter. Defaults: page 1, limit 10, sort by `updatedAt` desc.
 - `getPageById(db, id)` -- single page by ID (non-deleted only)
 - `getPageBySlug(db, slug)` -- single page by slug (non-deleted only)
 
 **Public Queries:**
+
 - `getPublicPageById(db, id)` -- single published page by ID (non-deleted, `isPublished = true`)
 - `getPublicPageBySlug(db, slug)` -- single published page by slug (non-deleted, `isPublished = true`)
 - `getPublicPages(db, options?)` -- paginated list of published pages. Sort options: `title`, `createdAt`, `-title`, `-createdAt` (prefix `-` for descending). Defaults: page 1, limit 10, sort by `title` asc.
+- `getPublicArticleBySlug(db, slug)` -- one buyer-resolvable published article.
+- `getPublicArticles(db, options?)` -- newest-first published articles with bounded pagination and optional case-insensitive tag filtering.
 
 **Mutations:**
+
 - `createPage(db, data, authority?)` -- defaults Draft; publication or scheduling requires verified `pages.publish` authority.
 - `updatePage(db, id, data, authority?)` -- CAS edit; ordinary edit may preserve publication state, while changing publication or schedule requires verified `pages.publish` authority.
 - `deletePage(db, id, expectedRevision)` -- CAS soft-delete to Draft.
@@ -73,6 +79,8 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `title`: 3-100 chars
 - `slug`: 3-100 chars, lowercase alphanumeric with hyphens
 - `content`: required string (TipTap HTML)
+- `contentType`: immutable `page | article` creation discriminator
+- `excerpt`, `author`, `tags`: article-only metadata; tags are bounded to 20
 - `metaTitle`, `metaDescription`: nullable strings
 - `isPublished`: boolean (default false)
 - `publishedAt`: optional date (auto-set on publish if not provided)
@@ -88,39 +96,61 @@ Exported types: `CreatePageInput`, `UpdatePageInput`.
 
 ### Admin (authenticated, via `apps/api/src/routes/admin/pages.ts`)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/admin/pages` | List pages (paginated, searchable, lifecycle-filtered, sortable, trash filter) |
-| POST | `/admin/pages` | Create page |
-| GET | `/admin/pages/{id}` | Get page by ID |
-| PUT | `/admin/pages/{id}` | Update page |
-| DELETE | `/admin/pages/{id}` | Soft-delete page |
-| DELETE | `/admin/pages/{id}/permanent` | Hard-delete page |
-| POST | `/admin/pages/{id}/restore` | Restore soft-deleted page |
-| POST | `/admin/pages/bulk-delete` | Bulk soft/hard delete with revision claims |
-| POST | `/admin/pages/bulk-publish` | Bulk publish with revision claims |
-| POST | `/admin/pages/bulk-unpublish` | Bulk unpublish with revision claims |
-| POST | `/admin/pages/bulk-restore` | Bulk restore to Draft with revision claims |
+| Method | Path                          | Description                                                                    |
+| ------ | ----------------------------- | ------------------------------------------------------------------------------ |
+| GET    | `/admin/pages`                | List pages (paginated, searchable, lifecycle-filtered, sortable, trash filter) |
+| POST   | `/admin/pages`                | Create page                                                                    |
+| GET    | `/admin/pages/{id}`           | Get page by ID                                                                 |
+| PUT    | `/admin/pages/{id}`           | Update page                                                                    |
+| DELETE | `/admin/pages/{id}`           | Soft-delete page                                                               |
+| DELETE | `/admin/pages/{id}/permanent` | Hard-delete page                                                               |
+| POST   | `/admin/pages/{id}/restore`   | Restore soft-deleted page                                                      |
+| POST   | `/admin/pages/bulk-delete`    | Bulk soft/hard delete with revision claims                                     |
+| POST   | `/admin/pages/bulk-publish`   | Bulk publish with revision claims                                              |
+| POST   | `/admin/pages/bulk-unpublish` | Bulk unpublish with revision claims                                            |
+| POST   | `/admin/pages/bulk-restore`   | Bulk restore to Draft with revision claims                                     |
 
 ### Public (via `apps/api/src/routes/pages.ts`)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/pages` | List buyer-resolvable published pages (paginated, cached 1h) |
-| GET | `/pages/slug/{slug}` | Get published page by slug (cached 1h) |
-| GET | `/pages/{id}` | Get page by ID, non-deleted only (cached 1h) |
+| Method | Path                 | Description                                                  |
+| ------ | -------------------- | ------------------------------------------------------------ |
+| GET    | `/pages`             | List buyer-resolvable published pages (paginated, cached 1h) |
+| GET    | `/pages/slug/{slug}` | Get published page by slug (cached 1h)                       |
+| GET    | `/pages/{id}`        | Get page by ID, non-deleted only (cached 1h)                 |
+
+Articles use `GET /articles` and `GET /articles/slug/{slug}`. The storefront
+publishes `/blog`, `/blog/{slug}`, `/blog/feed.xml`, and
+`/sitemap-articles.xml`.
 
 Public routes return `{ page }` or `{ pages, pagination }` inside the standard `{ success, data }` envelope.
 The public list has no draft/schedule escape hatch: `publishedOnly` is not a
 supported query parameter.
 
+## Article release checkpoint (2026-07-22)
+
+- Additive migration `0043_grey_the_spike.sql` is applied in production. It
+  preserves the existing Pages table and FTS triggers while adding immutable
+  content typing plus article metadata.
+- Disposable article `article_0KLB31ihSpUh5V-PiEZ_O` proved draft 404,
+  publication, desktop and 390 x 844 rendering, rich lists and blockquotes,
+  RSS/sitemap inclusion, unpublish, trash, restore-as-Draft, second trash, and
+  permanent deletion through the merchant UI.
+- API cache generation fences and exact storefront purges remained immediate;
+  stale prefix cleanup moved to the Worker execution context. Live Draft and
+  Publish saves measured 2.68 seconds and 2.32 seconds, while buyer HTML
+  changed to 404 in 447 ms and back to the article in 380 ms.
+- Production was left clean: active Articles and trash are empty, RSS is a
+  valid empty channel, and the article sitemap is a valid empty URL set.
+
 ## Storefront Integration
 
 **Client library** (`apps/storefront/src/lib/api/pages.ts`):
+
 - `getPageBySlug(slug)` -- fetches via `/pages/slug/{slug}`, edge-cached (24h TTL via `withEdgeCache`)
 - `getAllPages(options)` -- fetches the always-published `/pages` list, edge-cached, and returns `{ data: Page[], pagination }`
 
 **Dynamic page route** (`apps/storefront/src/pages/[slug].astro`):
+
 - Validates slug format before making API calls
 - Fetches layout data and page data in parallel
 - Processes shortcodes in page content

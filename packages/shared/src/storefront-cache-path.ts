@@ -37,10 +37,13 @@ function appendSortedParams(
     .forEach(([key, value]) => params.append(key, value));
 }
 
-function getHtmlPathDefaults(pathname: string): Record<string, string | number> {
+function getHtmlPathDefaults(
+  pathname: string,
+): Record<string, string | number> {
   if (
     /^\/categories\/[^/]+$/.test(pathname) ||
     /^\/collections\/[^/]+$/.test(pathname) ||
+    /^\/blog\/?$/.test(pathname) ||
     /^\/search\/?$/.test(pathname)
   ) {
     return { page: 1, sortBy: "newest" };
@@ -49,10 +52,12 @@ function getHtmlPathDefaults(pathname: string): Record<string, string | number> 
 }
 
 export function hasStorefrontProductVariantSelectionParams(url: URL): boolean {
-  return /^\/products\/[^/]+$/.test(url.pathname) &&
+  return (
+    /^\/products\/[^/]+$/.test(url.pathname) &&
     PRODUCT_HTML_IGNORED_QUERY_PARAMS.some((param) =>
-      url.searchParams.has(param)
-    );
+      url.searchParams.has(param),
+    )
+  );
 }
 
 function getIgnoredParams(pathname: string): Set<string> {
@@ -63,7 +68,9 @@ function getIgnoredParams(pathname: string): Set<string> {
   return ignored;
 }
 
-export function canonicalizeStorefrontHtmlCachePath(path: string): string | null {
+export function canonicalizeStorefrontHtmlCachePath(
+  path: string,
+): string | null {
   if (!path || !path.startsWith("/") || path.startsWith("//")) return null;
 
   let url: URL;
@@ -83,10 +90,11 @@ export function canonicalizeStorefrontHtmlCachePath(path: string): string | null
     entries.push([key, value]);
   }
 
-  const filteredEntries = entries.filter(([key, value]) => (
-    value !== "" &&
-    !(Object.hasOwn(defaults, key) && value === String(defaults[key]))
-  ));
+  const filteredEntries = entries.filter(
+    ([key, value]) =>
+      value !== "" &&
+      !(Object.hasOwn(defaults, key) && value === String(defaults[key])),
+  );
   const params = new URLSearchParams();
   appendSortedParams(params, filteredEntries);
   const query = params.toString();

@@ -8,4 +8,13 @@ describe("admin breadcrumbs", () => {
       { title: "Incomplete Checkouts", href: undefined },
     ]);
   });
+
+  it("keeps internal article IDs out of edit breadcrumbs", () => {
+    expect(
+      generateAdminBreadcrumbs("/admin/articles/article_internal-id/edit"),
+    ).toEqual([
+      { title: "Articles", href: "/admin/articles" },
+      { title: "Edit", href: undefined },
+    ]);
+  });
 });

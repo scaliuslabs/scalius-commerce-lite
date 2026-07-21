@@ -21,17 +21,32 @@ const categoryFormSource = readFileSync(
   new URL("../CategoryForm.tsx", import.meta.url),
   "utf8",
 );
-const pageFormSource = readFileSync(new URL("../PageForm.tsx", import.meta.url), "utf8");
-const customerFormSource = readFileSync(new URL("../CustomerForm.tsx", import.meta.url), "utf8");
-const analyticsFormSource = readFileSync(new URL("../AnalyticsForm.tsx", import.meta.url), "utf8");
-const orderFormSource = readFileSync(new URL("../OrderForm.tsx", import.meta.url), "utf8");
+const pageFormSource = readFileSync(
+  new URL("../PageForm.tsx", import.meta.url),
+  "utf8",
+);
+const customerFormSource = readFileSync(
+  new URL("../CustomerForm.tsx", import.meta.url),
+  "utf8",
+);
+const analyticsFormSource = readFileSync(
+  new URL("../AnalyticsForm.tsx", import.meta.url),
+  "utf8",
+);
+const orderFormSource = readFileSync(
+  new URL("../OrderForm.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("admin form workflow boundaries", () => {
+  it("keeps form headings compact instead of repeating generic instructions", () => {
+    expect(formContainerSource).not.toContain("and save when ready");
+    expect(formContainerSource).not.toContain("to your store");
+  });
+
   it("replaces navigation links with inert buttons while saving", () => {
     expect(actionBarSource).toContain("isSubmitting ? (");
-    expect(actionBarSource).not.toMatch(
-      /asChild\s+disabled=\{isSubmitting\}/,
-    );
+    expect(actionBarSource).not.toMatch(/asChild\s+disabled=\{isSubmitting\}/);
   });
 
   it("allows catalog forms to hide create-another shortcuts by capability", () => {
@@ -46,15 +61,23 @@ describe("admin form workflow boundaries", () => {
   it("requires a fail-closed save capability from every consumer", () => {
     expect(actionBarSource).toContain("canSave: boolean;");
     expect(actionBarSource).not.toContain("canSave = true");
-    expect(actionBarSource).toContain("disabled={isSubmitting || !canSave || !isDirty}");
+    expect(actionBarSource).toContain(
+      "disabled={isSubmitting || !canSave || !isDirty}",
+    );
     expect(actionBarSource).toContain("if (canSave && isDirty) onSave();");
     expect(formContainerSource).toContain("canSave: boolean;");
     expect(formContainerSource).not.toContain("canSave = true");
-    expect(formContainerSource).toContain("if (canSave && form.formState.isDirty) onSubmit();");
-    expect(formContainerSource).toContain("getFormEntityLabel(title, newLabel)");
+    expect(formContainerSource).toContain(
+      "if (canSave && form.formState.isDirty) onSubmit();",
+    );
+    expect(formContainerSource).toContain(
+      "getFormEntityLabel(title, newLabel)",
+    );
     expect(formContainerSource).toContain("title={entityLabel}");
     expect(formContainerSource).toContain("canSave={canSave}");
-    expect(formContainerSource).toContain("saveDisabledReason={saveDisabledReason}");
+    expect(formContainerSource).toContain(
+      "saveDisabledReason={saveDisabledReason}",
+    );
   });
 
   it("maps every shared form consumer to the API's exact create/edit permission", () => {
@@ -66,12 +89,24 @@ describe("admin form workflow boundaries", () => {
     expect(analyticsFormSource).toContain("PERMISSIONS.ANALYTICS_EDIT");
     expect(orderFormSource).toContain("orderActions.canCreateOrders");
     expect(orderFormSource).toContain("orderActions.canEditOrders");
-    expect(orderFormSource).toContain("canSave &&\n          manualQuote.isCurrent &&\n          !isSubmitting");
-    expect(orderFormSource).toContain("onSubmit={canSubmit && form.formState.isDirty");
-    expect(collectionFormSource).toContain("onSubmit={canSave && form.formState.isDirty");
+    expect(orderFormSource).toContain(
+      "canSave &&\n          manualQuote.isCurrent &&\n          !isSubmitting",
+    );
+    expect(orderFormSource).toContain(
+      "onSubmit={canSubmit && form.formState.isDirty",
+    );
+    expect(collectionFormSource).toContain(
+      "onSubmit={canSave && form.formState.isDirty",
+    );
     expect(collectionFormSource).toContain("canSave={canSave}");
     expect(orderFormSource).toContain("canSave={canSubmit}");
-    for (const source of [categoryFormSource, pageFormSource, customerFormSource, analyticsFormSource, collectionFormSource]) {
+    for (const source of [
+      categoryFormSource,
+      pageFormSource,
+      customerFormSource,
+      analyticsFormSource,
+      collectionFormSource,
+    ]) {
       expect(source).toContain("canSave={canSave}");
     }
   });
@@ -81,8 +116,12 @@ describe("admin form workflow boundaries", () => {
     expect(categoryFormSource).toContain("? categoryActions.canEdit");
     expect(categoryFormSource).toContain(": categoryActions.canCreate;");
     expect(categoryFormSource).toContain("canSave={canSave}");
-    expect(categoryFormSource).toContain("You do not have permission to edit categories.");
-    expect(categoryFormSource).toContain("You do not have permission to create categories.");
+    expect(categoryFormSource).toContain(
+      "You do not have permission to edit categories.",
+    );
+    expect(categoryFormSource).toContain(
+      "You do not have permission to create categories.",
+    );
   });
 
   it("gives shared and catalog forms a visible page heading", () => {

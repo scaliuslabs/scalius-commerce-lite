@@ -101,6 +101,7 @@ describe("SEO discovery settings", () => {
             categories: false,
             collections: true,
             pages: false,
+            articles: true,
           },
           feeds: {
             productCatalogEnabled: false,
@@ -118,6 +119,7 @@ describe("SEO discovery settings", () => {
             offerShippingDetails: true,
             breadcrumbs: true,
             collections: true,
+            articles: true,
           },
         },
         {
@@ -141,6 +143,7 @@ describe("SEO discovery settings", () => {
         categories: false,
         collections: true,
         pages: true,
+        articles: true,
       },
       feeds: {
         productCatalogEnabled: false,
@@ -158,6 +161,7 @@ describe("SEO discovery settings", () => {
         offerShippingDetails: true,
         breadcrumbs: true,
         collections: true,
+        articles: true,
       },
     });
   });

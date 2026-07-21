@@ -19,9 +19,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@scalius/core/modules/pages", async () => {
-  const actual = await vi.importActual<typeof import("@scalius/core/modules/pages")>(
-    "@scalius/core/modules/pages",
-  );
+  const actual = await vi.importActual<
+    typeof import("@scalius/core/modules/pages")
+  >("@scalius/core/modules/pages");
   return {
     ...actual,
     listPages: mocks.listPages,
@@ -38,7 +38,9 @@ vi.mock("@scalius/core/modules/pages", async () => {
 
 vi.mock("../../utils/cache-invalidation", () => ({
   invalidateApiAndStorefrontGroups: mocks.invalidateApiAndStorefrontGroups,
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups:
+    mocks.invalidateApiAndScheduleStorefrontGroups,
+  getOptionalExecutionContext: vi.fn(() => undefined),
   MAX_STOREFRONT_EXACT_HTML_PATHS: 20,
 }));
 
@@ -61,14 +63,20 @@ function createPageBody(overrides: Record<string, unknown> = {}) {
 }
 
 function createDb(
-  publicRows = [{ slug: "about-us" }],
-  subsequentPublicRows: Array<Array<{ slug: string }>> = [],
+  publicRows: Array<{
+    slug: string;
+    contentType?: "page" | "article";
+  }> = [{ slug: "about-us" }],
+  subsequentPublicRows: Array<
+    Array<{ slug: string; contentType?: "page" | "article" }>
+  > = [],
 ) {
   const rowBatches = [publicRows, ...subsequentPublicRows];
   let selectCall = 0;
   return {
     select: vi.fn(() => {
-      const rows = rowBatches[Math.min(selectCall, rowBatches.length - 1)] ?? [];
+      const rows =
+        rowBatches[Math.min(selectCall, rowBatches.length - 1)] ?? [];
       selectCall += 1;
       const query = {
         from: vi.fn(),
@@ -81,9 +89,14 @@ function createDb(
 }
 
 function createTestApp(
-  publicRows = [{ slug: "about-us" }],
+  publicRows: Array<{
+    slug: string;
+    contentType?: "page" | "article";
+  }> = [{ slug: "about-us" }],
   permissions = new Set([PERMISSIONS.PAGES_PUBLISH]),
-  subsequentPublicRows: Array<Array<{ slug: string }>> = [],
+  subsequentPublicRows: Array<
+    Array<{ slug: string; contentType?: "page" | "article" }>
+  > = [],
 ) {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
   const db = createDb(publicRows, subsequentPublicRows);
@@ -131,7 +144,8 @@ async function requestJson(
     `/api/v1/admin/pages${path}`,
     {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers:
+        body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     },
     env,
@@ -139,43 +153,91 @@ async function requestJson(
 }
 
 describe("admin page cache invalidation", () => {
+  const discoveryPaths = [
+    "/sitemap-pages.xml",
+    "/blog",
+    "/blog/feed.xml",
+    "/sitemap-articles.xml",
+  ];
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it.each([
-    { label: "create published page", path: "", method: "POST", body: createPageBody(), status: 201 },
-    { label: "update public page", path: "/page_1", method: "PUT", body: { expectedRevision: 1, title: "About Scalius" }, status: 200 },
-    { label: "bulk publish pages", path: "/bulk-publish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-  ])("warms exact public CMS paths after $label", async ({ path, method, body, status }) => {
-    const { app, env } = createTestApp([{ slug: "about-us" }]);
+    {
+      label: "create published page",
+      path: "",
+      method: "POST",
+      body: createPageBody(),
+      status: 201,
+    },
+    {
+      label: "update public page",
+      path: "/page_1",
+      method: "PUT",
+      body: { expectedRevision: 1, title: "About Scalius" },
+      status: 200,
+    },
+    {
+      label: "bulk publish pages",
+      path: "/bulk-publish",
+      method: "POST",
+      body: { pages: [{ id: "page_1", expectedRevision: 1 }] },
+      status: 204,
+    },
+  ])(
+    "warms exact public CMS paths after $label",
+    async ({ path, method, body, status }) => {
+      const { app, env } = createTestApp([{ slug: "about-us" }]);
 
-    const response = await requestJson(app, env, path, method, body);
+      const response = await requestJson(app, env, path, method, body);
 
-    expect(response.status).toBe(status);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["pages"],
-      env,
-      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
-    );
-  });
+      expect(response.status).toBe(status);
+      expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+        ["pages"],
+        env,
+        { htmlPaths: [...discoveryPaths, "/about-us"] },
+      );
+    },
+  );
 
   it.each([
-    { label: "draft create", path: "", method: "POST", body: createPageBody({ slug: "draft-page", isPublished: false }), status: 201 },
-    { label: "bulk restore", path: "/bulk-restore", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-    { label: "restore", path: "/page_1/restore", method: "POST", body: { expectedRevision: 1 }, status: 200 },
-  ])("refreshes discovery without warming a page after $label", async ({ path, method, body, status }) => {
-    const { app, env } = createTestApp([]);
+    {
+      label: "draft create",
+      path: "",
+      method: "POST",
+      body: createPageBody({ slug: "draft-page", isPublished: false }),
+      status: 201,
+    },
+    {
+      label: "bulk restore",
+      path: "/bulk-restore",
+      method: "POST",
+      body: { pages: [{ id: "page_1", expectedRevision: 1 }] },
+      status: 204,
+    },
+    {
+      label: "restore",
+      path: "/page_1/restore",
+      method: "POST",
+      body: { expectedRevision: 1 },
+      status: 200,
+    },
+  ])(
+    "refreshes discovery without warming a page after $label",
+    async ({ path, method, body, status }) => {
+      const { app, env } = createTestApp([]);
 
-    const response = await requestJson(app, env, path, method, body);
+      const response = await requestJson(app, env, path, method, body);
 
-    expect(response.status).toBe(status);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["pages"],
-      env,
-      { htmlPaths: ["/sitemap-pages.xml"] },
-    );
-  });
+      expect(response.status).toBe(status);
+      expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+        ["pages"],
+        env,
+        { htmlPaths: discoveryPaths },
+      );
+    },
+  );
 
   it("purges both the previous and current public paths after a slug update", async () => {
     const { app, env } = createTestApp(
@@ -184,24 +246,44 @@ describe("admin page cache invalidation", () => {
       [[{ slug: "our-story" }]],
     );
 
-    const response = await requestJson(
-      app,
-      env,
-      "/page_1",
-      "PUT",
-      { expectedRevision: 1, slug: "our-story" },
-    );
+    const response = await requestJson(app, env, "/page_1", "PUT", {
+      expectedRevision: 1,
+      slug: "our-story",
+    });
 
     expect(response.status).toBe(200);
     expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
       ["pages"],
       env,
       {
-        htmlPaths: [
-          "/sitemap-pages.xml",
-          "/about-us",
-          "/our-story",
-        ],
+        htmlPaths: [...discoveryPaths, "/about-us", "/our-story"],
+      },
+    );
+  });
+
+  it("warms the public blog path after creating a published article", async () => {
+    const { app, env } = createTestApp([
+      { slug: "summer-care-guide", contentType: "article" },
+    ]);
+
+    const response = await requestJson(
+      app,
+      env,
+      "",
+      "POST",
+      createPageBody({
+        contentType: "article",
+        title: "Summer care guide",
+        slug: "summer-care-guide",
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+      ["pages"],
+      env,
+      {
+        htmlPaths: [...discoveryPaths, "/blog/summer-care-guide"],
       },
     );
   });
@@ -216,13 +298,11 @@ describe("admin page cache invalidation", () => {
       "POST",
       createPageBody({ isPublished: false }),
     );
-    const updateResponse = await requestJson(
-      app,
-      env,
-      "/page_1",
-      "PUT",
-      { expectedRevision: 1, title: "Still a draft", isPublished: false },
-    );
+    const updateResponse = await requestJson(app, env, "/page_1", "PUT", {
+      expectedRevision: 1,
+      title: "Still a draft",
+      isPublished: false,
+    });
 
     expect(createResponse.status).toBe(201);
     expect(updateResponse.status).toBe(200);
@@ -245,38 +325,62 @@ describe("admin page cache invalidation", () => {
       new Error("storefront unavailable"),
     );
 
-    const response = await requestJson(
-      app,
-      env,
-      "",
-      "POST",
-      createPageBody(),
-    );
+    const response = await requestJson(app, env, "", "POST", createPageBody());
 
     expect(response.status).toBe(201);
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["pages"],
       expect.objectContaining({ env }),
-      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
+      { htmlPaths: [...discoveryPaths, "/about-us"] },
     );
   });
 
   it.each([
-    { label: "soft delete", path: "/page_1", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
-    { label: "permanent delete", path: "/page_1/permanent", method: "DELETE", body: { expectedRevision: 1 }, status: 204 },
-    { label: "bulk delete", path: "/bulk-delete", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }], permanent: false }, status: 204 },
-    { label: "bulk unpublish", path: "/bulk-unpublish", method: "POST", body: { pages: [{ id: "page_1", expectedRevision: 1 }] }, status: 204 },
-  ])("purges the previously public path after $label", async ({ path, method, body, status }) => {
-    const { app, env, db } = createTestApp([{ slug: "about-us" }]);
+    {
+      label: "soft delete",
+      path: "/page_1",
+      method: "DELETE",
+      body: { expectedRevision: 1 },
+      status: 204,
+    },
+    {
+      label: "permanent delete",
+      path: "/page_1/permanent",
+      method: "DELETE",
+      body: { expectedRevision: 1 },
+      status: 204,
+    },
+    {
+      label: "bulk delete",
+      path: "/bulk-delete",
+      method: "POST",
+      body: {
+        pages: [{ id: "page_1", expectedRevision: 1 }],
+        permanent: false,
+      },
+      status: 204,
+    },
+    {
+      label: "bulk unpublish",
+      path: "/bulk-unpublish",
+      method: "POST",
+      body: { pages: [{ id: "page_1", expectedRevision: 1 }] },
+      status: 204,
+    },
+  ])(
+    "purges the previously public path after $label",
+    async ({ path, method, body, status }) => {
+      const { app, env, db } = createTestApp([{ slug: "about-us" }]);
 
-    const response = await requestJson(app, env, path, method, body);
+      const response = await requestJson(app, env, path, method, body);
 
-    expect(response.status).toBe(status);
-    expect(db.select).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-      ["pages"],
-      env,
-      { htmlPaths: ["/sitemap-pages.xml", "/about-us"] },
-    );
-  });
+      expect(response.status).toBe(status);
+      expect(db.select).toHaveBeenCalledTimes(1);
+      expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
+        ["pages"],
+        env,
+        { htmlPaths: [...discoveryPaths, "/about-us"] },
+      );
+    },
+  );
 });

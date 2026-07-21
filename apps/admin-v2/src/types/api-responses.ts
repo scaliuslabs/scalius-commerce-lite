@@ -59,13 +59,16 @@ type DashboardResponseData = ExtractData<GetApiV1AdminDashboardResponse>;
 
 /** Dashboard stats */
 export type DashboardStats = DashboardResponseData["stats"];
-export type DashboardRecentOrder = DashboardResponseData["recentOrders"][number];
-export type DashboardDailyActivity = DashboardResponseData["dailyActivityData"][number];
+export type DashboardRecentOrder =
+  DashboardResponseData["recentOrders"][number];
+export type DashboardDailyActivity =
+  DashboardResponseData["dailyActivityData"][number];
 /** Full dashboard response (stats + recentOrders + dailyActivityData) */
 export type DashboardData = DashboardResponseData;
 
 /** Collection form options from GET /admin/collections/form-options */
-export type CollectionFormOptions = ExtractData<GetApiV1AdminCollectionsFormOptionsResponse>;
+export type CollectionFormOptions =
+  ExtractData<GetApiV1AdminCollectionsFormOptionsResponse>;
 
 // ---------------------------------------------------------------------------
 // Product domain
@@ -172,7 +175,8 @@ export interface ProductVariant {
   deletedAt: Date | string | number | null;
 }
 
-export type ProductOptionStandardMapping = "size" | "color" | "material" | "pattern" | "none";
+export type ProductOptionStandardMapping =
+  "size" | "color" | "material" | "pattern" | "none";
 
 export interface SelectedProductOption {
   optionDefinitionId: string;
@@ -221,7 +225,12 @@ export interface ProductDetail extends Product {
   media: ProductMediaDetail[];
   options: ProductOptionDefinition[];
   attributes: Array<{ attributeId: string; value: string }>;
-  additionalInfo: Array<{ id: string; title: string; content: string; sortOrder: number }>;
+  additionalInfo: Array<{
+    id: string;
+    title: string;
+    content: string;
+    sortOrder: number;
+  }>;
 }
 
 export interface ProductListItem {
@@ -414,14 +423,16 @@ export interface AbandonedCheckout {
 // ---------------------------------------------------------------------------
 
 export type DeliveryProviderReadinessStatus =
-  | "draft"
-  | "configured"
-  | "tested"
-  | "active"
-  | "blocked";
+  "draft" | "configured" | "tested" | "active" | "blocked";
 
 export interface DeliveryProviderReadinessBlocker {
-  code: "inactive" | "unconfigured" | "untested" | "test_failed" | "unreadable" | string;
+  code:
+    | "inactive"
+    | "unconfigured"
+    | "untested"
+    | "test_failed"
+    | "unreadable"
+    | string;
   message: string;
 }
 
@@ -501,9 +512,13 @@ export interface PageFeaturedImage {
 
 export interface Page {
   id: string;
+  contentType: "page" | "article";
   title: string;
   slug: string;
   content: string;
+  excerpt: string | null;
+  author: string | null;
+  tags: string[];
   metaTitle: string | null;
   metaDescription: string | null;
   canonicalPath: string | null;
@@ -740,13 +755,12 @@ export interface AnalyticsScript {
 }
 
 export type AnalyticsScriptReadiness =
-  | "ready"
-  | "blocked"
-  | "draft"
-  | "ready_to_activate"
-  | "trashed";
+  "ready" | "blocked" | "draft" | "ready_to_activate" | "trashed";
 
-export interface AnalyticsScriptSummary extends Omit<AnalyticsScript, "config"> {
+export interface AnalyticsScriptSummary extends Omit<
+  AnalyticsScript,
+  "config"
+> {
   identifier: string | null;
   readiness: AnalyticsScriptReadiness;
   configIssue: string | null;
@@ -766,16 +780,10 @@ export type AnalyticsProviderType =
   | "custom";
 
 export type AnalyticsProviderBrowserStatus =
-  | "ready"
-  | "draft"
-  | "blocked"
-  | "not_configured";
+  "ready" | "draft" | "blocked" | "not_configured";
 
 export type AnalyticsProviderServerStatus =
-  | "ready"
-  | "blocked"
-  | "not_configured"
-  | "not_applicable";
+  "ready" | "blocked" | "not_configured" | "not_applicable";
 
 export interface AnalyticsProviderBrowserReadiness {
   status: AnalyticsProviderBrowserStatus;

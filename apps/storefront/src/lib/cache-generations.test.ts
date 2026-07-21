@@ -13,17 +13,35 @@ describe("exact cache generations", () => {
   it("recognizes product exact cache keys and product HTML paths", () => {
     expect(shouldUseExactCacheGeneration("product_slug_fish")).toBe(true);
     expect(shouldUseExactCacheGeneration("product_variants_prod_1")).toBe(true);
-    expect(shouldUseExactCacheGeneration("feed_products_page=2&limit=5")).toBe(true);
+    expect(shouldUseExactCacheGeneration("feed_products_page=2&limit=5")).toBe(
+      true,
+    );
     expect(shouldUseExactCacheGeneration("sitemap_products_page=2")).toBe(true);
     expect(shouldUseExactCacheGeneration("all_products_default")).toBe(true);
-    expect(shouldUseExactCacheGeneration("category_products_shoes_default")).toBe(true);
-    expect(shouldUseExactCacheGeneration("collection_by_id_col_1::page=2")).toBe(true);
+    expect(
+      shouldUseExactCacheGeneration("category_products_shoes_default"),
+    ).toBe(true);
+    expect(
+      shouldUseExactCacheGeneration("collection_by_id_col_1::page=2"),
+    ).toBe(true);
     expect(shouldUseExactCacheGeneration("page_slug_about-us")).toBe(true);
-    expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(true);
+    expect(shouldUseExactCacheGeneration("page_render_about-us_build")).toBe(
+      true,
+    );
     expect(shouldUseExactCacheGeneration("all_pages_default")).toBe(true);
     expect(shouldUseExactCacheGeneration("sitemap_pages_")).toBe(true);
     expect(shouldUseExactCacheGeneration("page_html_")).toBe(true);
-    expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(true);
+    expect(shouldUseExactCacheGeneration("article_slug_fit-guide_build")).toBe(
+      true,
+    );
+    expect(shouldUseExactCacheGeneration("all_articles_default_build")).toBe(
+      true,
+    );
+    expect(shouldUseExactCacheGeneration("sitemap_articles_")).toBe(true);
+    expect(shouldUseExactCacheGeneration("blog_feed_")).toBe(true);
+    expect(shouldUseExactCacheGeneration("html_path_/categories/drinks")).toBe(
+      true,
+    );
     expect(shouldUseExactCacheGeneration("checkout_config")).toBe(true);
     expect(shouldUseExactCacheGeneration("global_shipping_methods")).toBe(true);
     expect(shouldUseExactCacheGeneration("shipping_zones_city_1")).toBe(true);
@@ -34,21 +52,21 @@ describe("exact cache generations", () => {
     expect(cacheGenerationKeyForLogicalKey("shipping_areas_zone_1")).toBe(
       "shipping_areas_",
     );
-    expect(cacheGenerationKeyForLogicalKey("feed_products_page=2&limit=5")).toBe(
-      "feed_products_",
-    );
+    expect(
+      cacheGenerationKeyForLogicalKey("feed_products_page=2&limit=5"),
+    ).toBe("feed_products_");
     expect(cacheGenerationKeyForLogicalKey("sitemap_products_page=2")).toBe(
       "sitemap_products_",
     );
     expect(cacheGenerationKeyForLogicalKey("all_products_default")).toBe(
       "all_products_",
     );
-    expect(cacheGenerationKeyForLogicalKey("category_products_shoes_default")).toBe(
-      "category_products_",
-    );
-    expect(cacheGenerationKeyForLogicalKey("collection_by_id_col_1::page=2")).toBe(
-      "collection_by_id_col_1::",
-    );
+    expect(
+      cacheGenerationKeyForLogicalKey("category_products_shoes_default"),
+    ).toBe("category_products_");
+    expect(
+      cacheGenerationKeyForLogicalKey("collection_by_id_col_1::page=2"),
+    ).toBe("collection_by_id_col_1::");
     expect(cacheGenerationKeyForLogicalKey("collection_by_id_col_1::")).toBe(
       "collection_by_id_col_1::",
     );
@@ -60,6 +78,12 @@ describe("exact cache generations", () => {
     );
     expect(cacheGenerationKeyForLogicalKey("all_pages_default")).toBe(
       "all_pages_",
+    );
+    expect(
+      cacheGenerationKeyForLogicalKey("article_slug_fit-guide_build"),
+    ).toBe("article_slug_");
+    expect(cacheGenerationKeyForLogicalKey("all_articles_default_build")).toBe(
+      "all_articles_",
     );
 
     expect(productSlugCacheKeyFromPath("/products/fish?size=m")).toBe(
@@ -80,9 +104,9 @@ describe("exact cache generations", () => {
     expect(htmlPathCacheKeyFromPath("/api/product-feed.xml")).toBe(
       "feed_products_",
     );
-    expect(htmlPathCacheKeyFromPath("/api/product-feed.xml?page=2&limit=50")).toBe(
-      "feed_products_",
-    );
+    expect(
+      htmlPathCacheKeyFromPath("/api/product-feed.xml?page=2&limit=50"),
+    ).toBe("feed_products_");
     expect(htmlPathCacheKeyFromPath("/api/facebook-feed.xml")).toBe(
       "feed_products_",
     );
@@ -91,6 +115,12 @@ describe("exact cache generations", () => {
     );
     expect(htmlPathCacheKeyFromPath("/sitemap-pages.xml?page=2")).toBe(
       "sitemap_pages_",
+    );
+    expect(htmlPathCacheKeyFromPath("/blog")).toBe("article_html_");
+    expect(htmlPathCacheKeyFromPath("/blog/fit-guide")).toBe("article_html_");
+    expect(htmlPathCacheKeyFromPath("/blog/feed.xml")).toBe("blog_feed_");
+    expect(htmlPathCacheKeyFromPath("/sitemap-articles.xml")).toBe(
+      "sitemap_articles_",
     );
     expect(htmlPathCacheKeyFromPath("/")).toBeNull();
     expect(htmlPathCacheKeyFromPath("/search?q=fish")).toBeNull();
@@ -126,17 +156,27 @@ describe("exact cache generations", () => {
     const result = await bumpExactCacheGenerations({
       store,
       hostname: "storefront.example.com",
-      logicalKeys: ["product_slug_fish", "product_slug_fish", "product_variants_prod_1"],
+      logicalKeys: [
+        "product_slug_fish",
+        "product_slug_fish",
+        "product_variants_prod_1",
+      ],
     });
 
     expect(result).toHaveLength(2);
     expect(new Set(result.map((item) => item.generation)).size).toBe(1);
     expect(store.put).toHaveBeenCalledWith(
-      buildExactCacheGenerationKey("storefront.example.com", "product_slug_fish"),
+      buildExactCacheGenerationKey(
+        "storefront.example.com",
+        "product_slug_fish",
+      ),
       expect.any(String),
     );
     expect(store.put).toHaveBeenCalledWith(
-      buildExactCacheGenerationKey("storefront.example.com", "product_variants_prod_1"),
+      buildExactCacheGenerationKey(
+        "storefront.example.com",
+        "product_variants_prod_1",
+      ),
       expect.any(String),
     );
   });
@@ -178,7 +218,10 @@ describe("exact cache generations", () => {
     expect(result[0]?.logicalKey).toBe("sitemap_products_");
     expect(store.put).toHaveBeenCalledOnce();
     expect(store.put).toHaveBeenCalledWith(
-      buildExactCacheGenerationKey("storefront.example.com", "sitemap_products_"),
+      buildExactCacheGenerationKey(
+        "storefront.example.com",
+        "sitemap_products_",
+      ),
       expect.any(String),
     );
   });
@@ -211,7 +254,10 @@ describe("exact cache generations", () => {
       expect.any(String),
     );
     expect(store.put).toHaveBeenCalledWith(
-      buildExactCacheGenerationKey("storefront.example.com", "category_products_"),
+      buildExactCacheGenerationKey(
+        "storefront.example.com",
+        "category_products_",
+      ),
       expect.any(String),
     );
   });

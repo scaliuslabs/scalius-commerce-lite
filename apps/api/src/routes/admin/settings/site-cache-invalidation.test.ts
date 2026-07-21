@@ -49,7 +49,8 @@ vi.mock("@scalius/core/modules/settings", () => ({
 }));
 
 vi.mock("../../../utils/cache-invalidation", () => ({
-  invalidateApiAndScheduleStorefrontGroups: mocks.invalidateApiAndScheduleStorefrontGroups,
+  invalidateApiAndScheduleStorefrontGroups:
+    mocks.invalidateApiAndScheduleStorefrontGroups,
 }));
 
 vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
@@ -134,7 +135,11 @@ function createTestApp() {
   mocks.saveFooterConfig.mockResolvedValue(undefined);
   mocks.getHomepagePresentationSettings.mockResolvedValue({
     config: {
-      categoryRail: { enabled: false, title: "Shop by category", categoryIds: [] },
+      categoryRail: {
+        enabled: false,
+        title: "Shop by category",
+        categoryIds: [],
+      },
       trustStrip: { enabled: false },
     },
     revision: 1,
@@ -391,21 +396,22 @@ describe("site settings cache invalidation", () => {
     "http://storefront.example.com",
     "https://storefront.example.com/shop",
     "https://user:secret@storefront.example.com",
-  ])("rejects invalid Store URL origin %j before writes", async (storefrontUrl) => {
-    const { app, env } = createTestApp();
+  ])(
+    "rejects invalid Store URL origin %j before writes",
+    async (storefrontUrl) => {
+      const { app, env } = createTestApp();
 
-    const response = await requestJson(
-      app,
-      env,
-      "POST",
-      "/storefront-url",
-      { storefrontUrl },
-    );
+      const response = await requestJson(app, env, "POST", "/storefront-url", {
+        storefrontUrl,
+      });
 
-    expect(response.status).toBe(400);
-    expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(400);
+      expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
+      expect(
+        mocks.invalidateApiAndScheduleStorefrontGroups,
+      ).not.toHaveBeenCalled();
+    },
+  );
 
   it("returns section-local navigation diagnostics without failing general settings", async () => {
     const { app, env } = createTestApp();
@@ -524,19 +530,16 @@ describe("site settings cache invalidation", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mocks.saveSeoSettings).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        discovery: {
-          sitemap: { pages: false },
-          feeds: { variantStrategy: "products" },
-          structuredData: {
-            websiteSearch: false,
-            productGroups: false,
-          },
+    expect(mocks.saveSeoSettings).toHaveBeenCalledWith(expect.anything(), {
+      discovery: {
+        sitemap: { pages: false },
+        feeds: { variantStrategy: "products" },
+        structuredData: {
+          websiteSearch: false,
+          productGroups: false,
         },
       },
-    );
+    });
     expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
       ["homepage", "layout", "discovery"],
       expect.anything(),
@@ -549,6 +552,8 @@ describe("site settings cache invalidation", () => {
           "/sitemap-categories.xml",
           "/sitemap-collections.xml",
           "/sitemap-pages.xml",
+          "/sitemap-articles.xml",
+          "/blog/feed.xml",
           "/sitemap-products.xml?page=1",
           "/api/product-feed.xml",
           "/api/facebook-feed.xml",
@@ -610,7 +615,9 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.saveSeoSettings).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("returns bounded product feed diagnostics from the current SEO feed policy", async () => {
@@ -716,6 +723,8 @@ describe("site settings cache invalidation", () => {
           "/sitemap-categories.xml",
           "/sitemap-collections.xml",
           "/sitemap-pages.xml",
+          "/sitemap-articles.xml",
+          "/blog/feed.xml",
           "/sitemap-products.xml?page=1",
           "/api/product-feed.xml",
           "/api/facebook-feed.xml",
@@ -736,6 +745,8 @@ describe("site settings cache invalidation", () => {
           "/sitemap-categories.xml",
           "/sitemap-collections.xml",
           "/sitemap-pages.xml",
+          "/sitemap-articles.xml",
+          "/blog/feed.xml",
           "/sitemap-products.xml?page=1",
           "/api/product-feed.xml",
           "/api/facebook-feed.xml",
@@ -762,30 +773,34 @@ describe("site settings cache invalidation", () => {
       body: { allowedCountries: ["BD"], mode: "include" },
       groups: ["checkout"],
     },
-  ])("invalidates $groups after $path saves", async ({ path, method, body, groups, options }) => {
-    const { app, env, kv } = createTestApp();
+  ])(
+    "invalidates $groups after $path saves",
+    async ({ path, method, body, groups, options }) => {
+      const { app, env, kv } = createTestApp();
 
-    const response = await requestJson(app, env, method, path, body);
+      const response = await requestJson(app, env, method, path, body);
 
-    expect(response.status).toBe(200);
-    if (options) {
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-        groups,
-        expect.objectContaining({ env }),
-        options,
-      );
-    } else {
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledWith(
-        groups,
-        expect.objectContaining({ env }),
-      );
-    }
-    if (path === "/storefront-url") {
-      expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
-      expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();
-      expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(kv);
-    }
-  });
+      expect(response.status).toBe(200);
+      if (options) {
+        expect(
+          mocks.invalidateApiAndScheduleStorefrontGroups,
+        ).toHaveBeenCalledWith(
+          groups,
+          expect.objectContaining({ env }),
+          options,
+        );
+      } else {
+        expect(
+          mocks.invalidateApiAndScheduleStorefrontGroups,
+        ).toHaveBeenCalledWith(groups, expect.objectContaining({ env }));
+      }
+      if (path === "/storefront-url") {
+        expect(mocks.invalidateSiteSettingsCache).toHaveBeenCalledOnce();
+        expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledOnce();
+        expect(mocks.invalidateStorefrontUrlCache).toHaveBeenCalledWith(kv);
+      }
+    },
+  );
 
   it("does not fail currency saves when legacy gateway currency KV cleanup fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -821,7 +836,7 @@ describe("site settings cache invalidation", () => {
       { method: "GET" },
       env,
     );
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       data?: { currencyCodeLocked?: boolean };
     };
 
@@ -858,7 +873,9 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+      expect(
+        mocks.invalidateApiAndScheduleStorefrontGroups,
+      ).not.toHaveBeenCalled();
     },
   );
 
@@ -875,7 +892,9 @@ describe("site settings cache invalidation", () => {
 
       expect(response.status).toBe(400);
       expect(mocks.saveCurrencySettings).not.toHaveBeenCalled();
-      expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+      expect(
+        mocks.invalidateApiAndScheduleStorefrontGroups,
+      ).not.toHaveBeenCalled();
     },
   );
 
@@ -892,7 +911,7 @@ describe("site settings cache invalidation", () => {
       currencySymbol: "$",
       usdExchangeRate: "1",
     });
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       error?: { code?: string; message?: string };
     };
 
@@ -902,7 +921,9 @@ describe("site settings cache invalidation", () => {
       message:
         "Currency code cannot be changed after products or orders exist. You can still update the currency symbol and USD exchange rate.",
     });
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects unsafe theme colors before saving or invalidating cache", async () => {
@@ -922,7 +943,9 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("does not invalidate storefront caches after a stale theme publish", async () => {
@@ -951,7 +974,9 @@ describe("site settings cache invalidation", () => {
       1,
       null,
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("saves and rebases theme drafts without invalidating the published storefront", async () => {
@@ -962,8 +987,20 @@ describe("site settings cache invalidation", () => {
       basePublishedRevision: 1,
     };
 
-    const saveResponse = await requestJson(app, env, "POST", "/theme/draft", payload);
-    const rebaseResponse = await requestJson(app, env, "POST", "/theme/draft/rebase", payload);
+    const saveResponse = await requestJson(
+      app,
+      env,
+      "POST",
+      "/theme/draft",
+      payload,
+    );
+    const rebaseResponse = await requestJson(
+      app,
+      env,
+      "POST",
+      "/theme/draft/rebase",
+      payload,
+    );
 
     expect(saveResponse.status).toBe(200);
     expect(rebaseResponse.status).toBe(200);
@@ -981,7 +1018,9 @@ describe("site settings cache invalidation", () => {
       1,
       null,
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("creates a private exact-draft preview without invalidating caches", async () => {
@@ -993,7 +1032,7 @@ describe("site settings cache invalidation", () => {
       "/theme/preview-session",
       { expectedDraftRevision: 2 },
     );
-    const body = await response.json() as { data?: Record<string, unknown> };
+    const body = (await response.json()) as { data?: Record<string, unknown> };
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toContain("no-store");
@@ -1003,7 +1042,9 @@ describe("site settings cache invalidation", () => {
       basePublishedRevision: 1,
     });
     expect(body.data).not.toHaveProperty("theme");
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).not.toHaveBeenCalled();
   });
 
   it("invalidates layout only after publishing or restoring a theme revision", async () => {
@@ -1029,13 +1070,19 @@ describe("site settings cache invalidation", () => {
 
     expect(publishResponse.status).toBe(200);
     expect(rollbackResponse.status).toBe(200);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenCalledTimes(2);
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenNthCalledWith(
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).toHaveBeenNthCalledWith(
       1,
       expect.arrayContaining(["layout"]),
       expect.anything(),
     );
-    expect(mocks.invalidateApiAndScheduleStorefrontGroups).toHaveBeenNthCalledWith(
+    expect(
+      mocks.invalidateApiAndScheduleStorefrontGroups,
+    ).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining(["layout"]),
       expect.anything(),

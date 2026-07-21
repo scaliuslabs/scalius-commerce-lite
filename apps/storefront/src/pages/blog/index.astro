@@ -1,0 +1,274 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { getArticles } from "@/lib/api/articles";
+import { getLayoutData } from "@/lib/api";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { htmlToPlainText } from "@scalius/shared/html-sanitize";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+
+const pageParam = Number(Astro.url.searchParams.get("page") ?? "1");
+const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+const tag = Astro.url.searchParams.get("tag")?.trim().slice(0, 60) || undefined;
+const [layoutData, articleResponse] = await Promise.all([
+  getLayoutData(),
+  getArticles({ page, limit: 12, tag }),
+]);
+setRuntimeImageCdnPolicy(layoutData?.media);
+
+if (!layoutData || !articleResponse) {
+  const response = storefrontDataUnavailableResponse(
+    "We could not load the blog. Please try again shortly.",
+  );
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+
+const articles = articleResponse.data;
+const pagination = articleResponse.pagination;
+if (pagination.totalPages > 0 && page > pagination.totalPages) {
+  return new Response(null, { status: 404 });
+}
+
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/blog");
+const isFilteredView = page > 1 || Boolean(tag);
+const description = tag
+  ? `Articles tagged ${tag}.`
+  : "Stories, guides, and updates from our store.";
+const title = tag ? `${tag} articles` : "Blog";
+const discovery = normalizeSeoDiscoverySettings(layoutData.seo?.discovery);
+const tags = [...new Set(articles.flatMap((article) => article.tags))].sort(
+  (a, b) => a.localeCompare(b),
+);
+
+const blogJsonLd =
+  discovery.structuredData.articles && canonicalUrl && !isFilteredView
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        name: "Blog",
+        url: canonicalUrl,
+        description,
+        blogPost: articles
+          .map((article) => {
+            const url = buildAbsoluteStorefrontSeoUrl(`/blog/${article.slug}`);
+            return url
+              ? { "@type": "BlogPosting", headline: article.title, url }
+              : null;
+          })
+          .filter(Boolean),
+      })
+    : null;
+
+function excerptFor(article: (typeof articles)[number]): string {
+  const text = article.excerpt || htmlToPlainText(article.content);
+  return text.length > 180 ? `${text.slice(0, 177).trimEnd()}…` : text;
+}
+
+function parsedDate(value: number | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value < 1_000_000_000_000 ? value * 1000 : value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dateFor(value: number | null): string | null {
+  const date = parsedDate(value);
+  return date
+    ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(date)
+    : null;
+}
+
+function pageHref(nextPage: number): string {
+  const params = new URLSearchParams();
+  if (nextPage > 1) params.set("page", String(nextPage));
+  if (tag) params.set("tag", tag);
+  const query = params.toString();
+  return `/blog${query ? `?${query}` : ""}`;
+}
+---
+
+<Layout
+  title={title}
+  description={description}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl ?? undefined}
+  noindex={isFilteredView}
+>
+  <Fragment slot="head">
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="Blog feed"
+      href="/blog/feed.xml"
+    />
+    {
+      blogJsonLd && (
+        <script is:inline type="application/ld+json" set:html={blogJsonLd} />
+      )
+    }
+  </Fragment>
+
+  <div class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <header class="max-w-2xl">
+      <h1
+        class="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl"
+      >
+        {title}
+      </h1>
+      {
+        tag && (
+          <p class="mt-3 text-base leading-7 text-muted-foreground">
+            {description}
+          </p>
+        )
+      }
+    </header>
+
+    {
+      tags.length > 0 && (
+        <nav
+          class="mt-6 flex gap-2 overflow-x-auto pb-2"
+          aria-label="Article tags"
+        >
+          <a
+            href="/blog"
+            class:list={[
+              "shrink-0 rounded-full border px-3 py-1.5 text-sm",
+              !tag
+                ? "border-foreground bg-foreground text-background"
+                : "border-border hover:border-foreground/40",
+            ]}
+          >
+            All
+          </a>
+          {tags.map((item) => (
+            <a
+              href={`/blog?tag=${encodeURIComponent(item)}`}
+              class:list={[
+                "shrink-0 rounded-full border px-3 py-1.5 text-sm",
+                tag?.toLowerCase() === item.toLowerCase()
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border hover:border-foreground/40",
+              ]}
+            >
+              {item}
+            </a>
+          ))}
+        </nav>
+      )
+    }
+
+    {
+      articles.length > 0 ? (
+        <section
+          class="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3"
+          aria-label="Articles"
+        >
+          {articles.map((article) => {
+            const image = article.featuredImage?.url
+              ? getOptimizedImageUrl(article.featuredImage.url, {
+                  width: 800,
+                  height: 450,
+                  fit: "cover",
+                  gravity: "auto",
+                  format: "auto",
+                  quality: 82,
+                })
+              : null;
+            const published = dateFor(article.publishedAt);
+            const publishedDate = parsedDate(article.publishedAt);
+            return (
+              <article class="group min-w-0">
+                {image && (
+                  <a
+                    href={`/blog/${article.slug}`}
+                    class="block overflow-hidden rounded-xl bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <img
+                      src={image}
+                      alt={article.featuredImage?.altText || article.title}
+                      width="800"
+                      height="450"
+                      loading="lazy"
+                      decoding="async"
+                      class="aspect-video w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                  </a>
+                )}
+                <div
+                  class:list={[
+                    "flex items-center gap-2 text-xs text-muted-foreground",
+                    image && "mt-4",
+                  ]}
+                >
+                  {published && publishedDate && (
+                    <time datetime={publishedDate.toISOString()}>
+                      {published}
+                    </time>
+                  )}
+                  {published && article.author && (
+                    <span aria-hidden="true">·</span>
+                  )}
+                  {article.author && <span>{article.author}</span>}
+                </div>
+                <h2 class="mt-2 text-xl font-semibold leading-7 tracking-tight text-foreground">
+                  <a href={`/blog/${article.slug}`} class="hover:underline">
+                    {article.title}
+                  </a>
+                </h2>
+                {excerptFor(article) && (
+                  <p class="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+                    {excerptFor(article)}
+                  </p>
+                )}
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <div class="mt-10 rounded-xl border border-dashed border-border px-5 py-14 text-center">
+          <h2 class="text-base font-medium text-foreground">No articles yet</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Published articles will appear here.
+          </p>
+        </div>
+      )
+    }
+
+    {
+      pagination.totalPages > 1 && (
+        <nav
+          class="mt-12 flex items-center justify-between border-t border-border pt-6"
+          aria-label="Blog pagination"
+        >
+          {page > 1 ? (
+            <a
+              href={pageHref(page - 1)}
+              class="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Previous
+            </a>
+          ) : (
+            <span />
+          )}
+          <span class="text-sm text-muted-foreground">
+            Page {page} of {pagination.totalPages}
+          </span>
+          {page < pagination.totalPages ? (
+            <a
+              href={pageHref(page + 1)}
+              class="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Next
+            </a>
+          ) : (
+            <span />
+          )}
+        </nav>
+      )
+    }
+  </div>
+</Layout>

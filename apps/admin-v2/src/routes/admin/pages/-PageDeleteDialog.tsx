@@ -18,6 +18,8 @@ interface PageDeleteDialogProps {
   isActionLoading: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
+  entityName?: string;
+  entityPlural?: string;
 }
 
 export function PageDeleteDialog({
@@ -27,6 +29,8 @@ export function PageDeleteDialog({
   isActionLoading,
   onOpenChange,
   onConfirm,
+  entityName = "page",
+  entityPlural = "pages",
 }: PageDeleteDialogProps) {
   const multiple = itemCount > 1;
   return (
@@ -36,18 +40,20 @@ export function PageDeleteDialog({
           <AlertDialogTitle className="flex items-center gap-2 text-base">
             {showTrashed ? (
               <>
-                <AlertTriangle className="h-4 w-4 text-red-500" /> Delete {multiple ? "pages" : "page"} permanently?
+                <AlertTriangle className="h-4 w-4 text-red-500" /> Delete{" "}
+                {multiple ? entityPlural : entityName} permanently?
               </>
             ) : (
               <>
-                <Trash2 className="h-4 w-4 text-amber-500" /> Move {multiple ? "pages" : "page"} to trash?
+                <Trash2 className="h-4 w-4 text-amber-500" /> Move{" "}
+                {multiple ? entityPlural : entityName} to trash?
               </>
             )}
           </AlertDialogTitle>
           <AlertDialogDescription className="pt-1 text-xs">
             {showTrashed
-              ? `Permanently delete ${multiple ? `these ${itemCount} pages` : "this page"}. This cannot be undone.`
-              : `Move ${multiple ? `these ${itemCount} pages` : "this page"} to trash. ${multiple ? "They" : "It"} can be restored later.`}
+              ? `Permanently delete ${multiple ? `these ${itemCount} ${entityPlural}` : `this ${entityName}`}. This cannot be undone.`
+              : `Move ${multiple ? `these ${itemCount} ${entityPlural}` : `this ${entityName}`} to trash. ${multiple ? "They" : "It"} can be restored later.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -43,10 +43,8 @@ const PREVIEW_ENDPOINTS = [
 
 const UCP_PROFILE_PATH = "/.well-known/ucp";
 const UCP_SHOPPING_SERVICE = "dev.ucp.shopping";
-const UCP_CATALOG_SEARCH_CAPABILITY =
-  "dev.ucp.shopping.catalog.search";
-const UCP_CATALOG_LOOKUP_CAPABILITY =
-  "dev.ucp.shopping.catalog.lookup";
+const UCP_CATALOG_SEARCH_CAPABILITY = "dev.ucp.shopping.catalog.search";
+const UCP_CATALOG_LOOKUP_CAPABILITY = "dev.ucp.shopping.catalog.lookup";
 const UCP_REQUIRED_CATALOG_CAPABILITIES = [
   UCP_CATALOG_SEARCH_CAPABILITY,
   UCP_CATALOG_LOOKUP_CAPABILITY,
@@ -142,13 +140,18 @@ export const SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS = [
     "collections",
   ] as const,
   ["pagesSitemap", "Pages sitemap", "/sitemap-pages.xml", "pages"] as const,
+  [
+    "articlesSitemap",
+    "Articles sitemap",
+    "/sitemap-articles.xml",
+    "articles",
+  ] as const,
 ];
 export type SeoDiscoveryLiveProbeKey =
   | (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][0]
   | (typeof SEO_DISCOVERY_SITEMAP_CHILD_PROBE_ENDPOINTS)[number][0];
 export type SeoDiscoveryLiveProbeKind =
-  | (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][3]
-  | "sitemapChild";
+  (typeof SEO_DISCOVERY_LIVE_PROBE_ENDPOINTS)[number][3] | "sitemapChild";
 
 export interface SeoDiscoveryLiveProbeCounts {
   robotsSitemapLines?: number;
@@ -291,7 +294,8 @@ function hasBusinessSchemaName(
   businessIdentity: SeoDiscoveryBusinessIdentity | null | undefined,
 ): boolean {
   return Boolean(
-    businessIdentity?.companyName?.trim() || businessIdentity?.legalName?.trim(),
+    businessIdentity?.companyName?.trim() ||
+    businessIdentity?.legalName?.trim(),
   );
 }
 
@@ -637,7 +641,10 @@ function buildProductSchemaPreviewRow({
     };
   }
 
-  if (!productsEnabled && (productGroupsEnabled || offerShippingDetailsEnabled)) {
+  if (
+    !productsEnabled &&
+    (productGroupsEnabled || offerShippingDetailsEnabled)
+  ) {
     return {
       key: "productPages",
       tone: "warning",
@@ -670,7 +677,9 @@ function buildProductSchemaPreviewRow({
           ? "Product/ProductGroup on"
           : "Product on"
         : "Product off",
-      offerShippingDetailsEnabled ? "shipping details on" : "shipping details off",
+      offerShippingDetailsEnabled
+        ? "shipping details on"
+        : "shipping details off",
       breadcrumbsEnabled ? "product breadcrumbs on" : "product breadcrumbs off",
       "Only public, indexed product pages emit resource JSON-LD.",
     ].join("; "),
@@ -775,7 +784,9 @@ function isPlaceholderSitemapValue(value: string): boolean {
   );
 }
 
-function findCustomSitemapLines(robotsTxt: string | null | undefined): string[] {
+function findCustomSitemapLines(
+  robotsTxt: string | null | undefined,
+): string[] {
   if (!robotsTxt) return [];
 
   return robotsTxt
@@ -1032,11 +1043,7 @@ export function getSeoDiscoveryLiveProbeCountIssue(
   const missingFields = [
     resource.counts.feedLinks === undefined
       ? null
-      : formatMissingFeedField(
-          resource.counts.feedLinks,
-          itemCount,
-          "link",
-        ),
+      : formatMissingFeedField(resource.counts.feedLinks, itemCount, "link"),
     formatMissingFeedField(
       resource.counts.imageLinks ?? 0,
       itemCount,
@@ -1143,8 +1150,8 @@ export function buildSeoDiscoveryStatus({
   });
   const structuredDataNeedsReview = Boolean(
     identityWarning ||
-      returnPolicyEmission.warning ||
-      schemaPreviewRows.some((row) => row.tone === "warning"),
+    returnPolicyEmission.warning ||
+    schemaPreviewRows.some((row) => row.tone === "warning"),
   );
   const anyStructuredDataEnabled =
     normalized.structuredData.organization ||
@@ -1185,8 +1192,8 @@ export function buildSeoDiscoveryStatus({
         ? sitemapNeedsStoreUrl
           ? `${storeUrlRequirement} Runtime sitemap XML is unavailable until this is fixed.`
           : enabledSectionLabels.length > 0
-          ? `Includes ${enabledSectionLabels.join(", ")}.`
-          : "Index is enabled, but every section is turned off."
+            ? `Includes ${enabledSectionLabels.join(", ")}.`
+            : "Index is enabled, but every section is turned off."
         : "Search engines will not receive the generated sitemap index.",
       enabled: normalized.sitemap.enabled,
       includedSections,
@@ -1206,10 +1213,10 @@ export function buildSeoDiscoveryStatus({
         ? feedNeedsStoreUrl
           ? `${feedVariantStrategyLabel}; ${storeUrlRequirement} Feed XML is unavailable until this is fixed.`
           : `${feedVariantStrategyLabel}; ${
-            normalized.feeds.includeUnavailableProducts
-              ? "sold-out catalog items are marked out of stock."
-              : "only items currently available for sale are included."
-          }`
+              normalized.feeds.includeUnavailableProducts
+                ? "sold-out catalog items are marked out of stock."
+                : "only items currently available for sale are included."
+            }`
         : "Catalog XML is not advertised for feed tools.",
       enabled: normalized.feeds.productCatalogEnabled,
       includesUnavailableProducts: normalized.feeds.includeUnavailableProducts,

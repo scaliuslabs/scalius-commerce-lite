@@ -43,8 +43,12 @@ describe("admin shell access", () => {
 
     expect(canAccessAdminPath("/admin/products", productViewer)).toBe(true);
     expect(canAccessAdminPath("/admin/products/abc", productViewer)).toBe(true);
-    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(false);
-    expect(canAccessAdminPath("/admin/products/new", productViewer)).toBe(false);
+    expect(canAccessAdminPath("/admin/products/abc/edit", productViewer)).toBe(
+      false,
+    );
+    expect(canAccessAdminPath("/admin/products/new", productViewer)).toBe(
+      false,
+    );
   });
 
   it("allows the account page to any authenticated user with admin access", () => {
@@ -64,10 +68,12 @@ describe("admin shell access", () => {
       permissions: new Set([PERMISSIONS.TAXES_VIEW]),
     };
     expect(canAccessAdminPath("/admin/settings/taxes", context)).toBe(true);
-    expect(canAccessAdminPath("/admin/settings/taxes", {
-      ...context,
-      permissions: new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]),
-    })).toBe(false);
+    expect(
+      canAccessAdminPath("/admin/settings/taxes", {
+        ...context,
+        permissions: new Set([PERMISSIONS.SETTINGS_GENERAL_VIEW]),
+      }),
+    ).toBe(false);
   });
 
   it("redirects /admin to the first allowed section when dashboard is unavailable", () => {
@@ -117,6 +123,7 @@ describe("admin shell access", () => {
       "/admin/promotions/promotion-123/edit",
       "/admin/analytics/report-123/edit",
       "/admin/pages/page-123/edit",
+      "/admin/articles/article-123/edit",
       "/admin/settings/account",
       "/admin/settings/cache",
       "/admin/settings/taxes",

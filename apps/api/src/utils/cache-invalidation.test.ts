@@ -68,7 +68,9 @@ describe("catalog cache groups", () => {
       getGroupsForPath("/api/v1/admin/settings/shipping-methods/sm_123"),
     ).toEqual(["checkout", "product-schema"]);
 
-    expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.products])).toEqual(
+    expect(
+      getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.products]),
+    ).toEqual(
       expect.arrayContaining([
         "product_slug_",
         "all_products_",
@@ -78,10 +80,14 @@ describe("catalog cache groups", () => {
         "global_all_collections",
       ]),
     );
-    expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.collections])).toEqual(
+    expect(
+      getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.collections]),
+    ).toEqual(
       expect.arrayContaining(["collection_by_id_", "storefront_homepage_"]),
     );
-    expect(getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.categories])).toEqual(
+    expect(
+      getStorefrontPrefixesForGroups([...CATALOG_CACHE_GROUPS.categories]),
+    ).toEqual(
       expect.arrayContaining([
         "category_slug_",
         "global_navigation_",
@@ -133,15 +139,25 @@ describe("settings cache dependency inventory", () => {
   });
 
   it("records direct-read settings as intentional no-shared-cache boundaries", () => {
-    expect(SETTINGS_CACHE_DEPENDENCIES.firebase.strategy).toBe("credential-scoped");
-    expect(SETTINGS_CACHE_DEPENDENCIES.notificationChannels.strategy).toBe("authoritative-read");
-    expect(SETTINGS_CACHE_DEPENDENCIES.customerRequests.strategy).toBe("authoritative-read");
-    expect(SETTINGS_CACHE_DEPENDENCIES.fraud.strategy).toBe("authoritative-read");
+    expect(SETTINGS_CACHE_DEPENDENCIES.firebase.strategy).toBe(
+      "credential-scoped",
+    );
+    expect(SETTINGS_CACHE_DEPENDENCIES.notificationChannels.strategy).toBe(
+      "authoritative-read",
+    );
+    expect(SETTINGS_CACHE_DEPENDENCIES.customerRequests.strategy).toBe(
+      "authoritative-read",
+    );
+    expect(SETTINGS_CACHE_DEPENDENCIES.fraud.strategy).toBe(
+      "authoritative-read",
+    );
   });
 });
 
 describe("CMS shortcode page invalidation", () => {
-  function cmsPageDb(rows: Array<{ id: string; slug: string; content: string }>) {
+  function cmsPageDb(
+    rows: Array<{ id: string; slug: string; content: string }>,
+  ) {
     const query = {
       from: vi.fn(() => query),
       where: vi.fn(() => Promise.resolve(rows)),
@@ -205,9 +221,7 @@ describe("CMS shortcode page invalidation", () => {
       resolveCmsShortcodePageTargets(db as never, {
         productSlugs: ["phone"],
       }),
-    ).resolves.toEqual([
-      { id: "page_1", slug: "combo-offer" },
-    ]);
+    ).resolves.toEqual([{ id: "page_1", slug: "combo-offer" }]);
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(db.query.where).toHaveBeenCalledTimes(1);
   });
@@ -258,6 +272,11 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "all_pages_",
         "sitemap_pages_",
         "page_html_",
+        "article_slug_",
+        "all_articles_",
+        "article_html_",
+        "sitemap_articles_",
+        "blog_feed_",
       ],
       bumpVersion: false,
     });
@@ -281,6 +300,11 @@ describe("triggerStorefrontPurgeForGroups", () => {
         "all_pages_",
         "sitemap_pages_",
         "page_html_",
+        "article_slug_",
+        "all_articles_",
+        "article_html_",
+        "sitemap_articles_",
+        "blog_feed_",
         "storefront_layout_",
         "global_header_data",
         "global_footer_data",
@@ -293,7 +317,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("can purge exact storefront prefixes without expanding to coarse groups", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await purgeStorefrontForPrefixes(
@@ -315,7 +341,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("can suppress storefront-side warming for queue-driven purge messages", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await purgeStorefrontForPrefixes(
@@ -348,7 +376,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("caps and sanitizes exact storefront HTML paths before sending purge payloads", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const noisyPaths = [
       "/products/p0",
@@ -382,14 +412,20 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(body.htmlPaths).toHaveLength(MAX_STOREFRONT_EXACT_HTML_PATHS);
     expect(body.htmlPaths[0]).toBe("/products/p0");
     expect(body.htmlPaths).not.toContain("/products/p0?size=m");
-    expect(body.htmlPaths).not.toContain("/products/p0?color=red&utm_source=ad");
-    expect(body.htmlPaths).not.toContain("https://external.example/products/p1");
+    expect(body.htmlPaths).not.toContain(
+      "/products/p0?color=red&utm_source=ad",
+    );
+    expect(body.htmlPaths).not.toContain(
+      "https://external.example/products/p1",
+    );
     expect(body.htmlPaths).not.toContain("//external.example/products/p2");
     expect(new Set(body.htmlPaths).size).toBe(body.htmlPaths.length);
   });
 
   it("dedupes storefront HTML paths by canonical cache key before applying the cap", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const noisyPaths = [
       ...Array.from(
@@ -424,7 +460,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("schedules exact storefront prefix purges through waitUntil", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -479,19 +517,18 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("maps settings and reference-data writes to their storefront cache groups", () => {
-    expect(getGroupsForPath("/api/v1/admin/settings/shipping-methods")).toEqual([
-      "checkout",
-      "product-schema",
-    ]);
-    expect(getGroupsForPath("/api/v1/admin/settings/delivery-locations")).toEqual([
-      "checkout",
-    ]);
-    expect(getGroupsForPath("/api/v1/admin/settings/checkout-languages")).toEqual([
-      "checkout",
-    ]);
-    expect(getGroupsForPath("/api/v1/admin/settings/allowed-countries")).toEqual([
-      "checkout",
-    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/shipping-methods")).toEqual(
+      ["checkout", "product-schema"],
+    );
+    expect(
+      getGroupsForPath("/api/v1/admin/settings/delivery-locations"),
+    ).toEqual(["checkout"]);
+    expect(
+      getGroupsForPath("/api/v1/admin/settings/checkout-languages"),
+    ).toEqual(["checkout"]);
+    expect(
+      getGroupsForPath("/api/v1/admin/settings/allowed-countries"),
+    ).toEqual(["checkout"]);
     expect(getGroupsForPath("/api/v1/admin/settings/email")).toEqual([
       "checkout",
     ]);
@@ -503,9 +540,15 @@ describe("triggerStorefrontPurgeForGroups", () => {
     ]);
     expect(getGroupsForPath("/api/v1/admin/navigation")).toEqual(["layout"]);
     expect(getGroupsForPath("/api/v1/admin/analytics")).toEqual(["layout"]);
-    expect(getGroupsForPath("/api/v1/admin/settings/header")).toEqual(["layout"]);
-    expect(getGroupsForPath("/api/v1/admin/settings/footer")).toEqual(["layout"]);
-    expect(getGroupsForPath("/api/v1/admin/settings/theme")).toEqual(["layout"]);
+    expect(getGroupsForPath("/api/v1/admin/settings/header")).toEqual([
+      "layout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/footer")).toEqual([
+      "layout",
+    ]);
+    expect(getGroupsForPath("/api/v1/admin/settings/theme")).toEqual([
+      "layout",
+    ]);
     expect(getGroupsForPath("/api/v1/admin/settings/storefront-url")).toEqual([
       "homepage",
       "layout",
@@ -535,7 +578,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("sends checkout prefixes without marking the purge as HTML-affecting", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await purgeStorefrontForGroups(["checkout"], {
@@ -560,7 +605,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("advances product HTML when shipping settings change Offer schema facts", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await purgeStorefrontForGroups(
@@ -600,7 +647,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("invalidates API KV prefixes before awaiting the matching storefront purge", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
       delete: vi.fn(),
@@ -621,7 +670,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
     const [, init] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(init?.body))).toMatchObject({
       groups: ["layout"],
-      prefixes: expect.arrayContaining(["storefront_layout_", "global_header_data"]),
+      prefixes: expect.arrayContaining([
+        "storefront_layout_",
+        "global_header_data",
+      ]),
       bumpVersion: true,
     });
   });
@@ -650,8 +702,36 @@ describe("triggerStorefrontPurgeForGroups", () => {
     expect(calls.indexOf("list")).toBeGreaterThan(calls.indexOf("put"));
   });
 
+  it("can defer stale KV cleanup after the cache fence is committed", async () => {
+    let finishList!: (value: { keys: []; list_complete: true }) => void;
+    const listPromise = new Promise<{ keys: []; list_complete: true }>(
+      (resolve) => {
+        finishList = resolve;
+      },
+    );
+    const waitUntil = vi.fn();
+    const kv = {
+      put: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn(() => listPromise),
+      delete: vi.fn(),
+    };
+
+    await invalidateGroups(["pages"], kv as unknown as KVNamespace, {
+      cleanupExecutionCtx: { waitUntil },
+    });
+
+    expect(kv.put).toHaveBeenCalledTimes(2);
+    expect(kv.list).toHaveBeenCalledTimes(2);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    finishList({ keys: [], list_complete: true });
+    await (waitUntil.mock.calls[0]?.[0] as Promise<unknown>);
+  });
+
   it("invalidates API KV prefixes before scheduling the matching storefront purge", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -686,8 +766,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("enqueues scheduled storefront purges when the durable cache queue is configured", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    const queueSend = vi.fn<(message: unknown) => Promise<void>>(async () => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const queueSend = vi.fn<(message: unknown) => Promise<void>>(
+      async () => undefined,
+    );
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -696,17 +780,21 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await invalidateApiAndScheduleStorefrontGroups(["layout"], {
-      env: {
-        CACHE: kv,
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
-        STOREFRONT_CACHE_QUEUE: { send: queueSend },
-      } as unknown as Env,
-      executionCtx: { waitUntil } as unknown as ExecutionContext,
-    }, {
-      htmlPaths: ["/about-us?utm_source=test"],
-    });
+    await invalidateApiAndScheduleStorefrontGroups(
+      ["layout"],
+      {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+          STOREFRONT_CACHE_QUEUE: { send: queueSend },
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      },
+      {
+        htmlPaths: ["/about-us?utm_source=test"],
+      },
+    );
 
     expect(queueSend).toHaveBeenCalledTimes(1);
     expect(waitUntil).not.toHaveBeenCalled();
@@ -715,7 +803,10 @@ describe("triggerStorefrontPurgeForGroups", () => {
       type: "storefront.cache_purge",
       operationId: expect.any(String),
       groups: ["layout"],
-      prefixes: expect.arrayContaining(["storefront_layout_", "global_header_data"]),
+      prefixes: expect.arrayContaining([
+        "storefront_layout_",
+        "global_header_data",
+      ]),
       htmlPaths: ["/about-us"],
       bumpVersion: true,
       source: "api-groups",
@@ -724,8 +815,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("falls back to direct scheduled purge when the durable cache queue send fails", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -769,8 +864,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("does not fail scheduled non-catalog writes when the storefront purge rejects", async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error("Network connection lost"));
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(new Error("Network connection lost"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -836,15 +935,17 @@ describe("triggerStorefrontPurgeForGroups", () => {
       requestedAt: 1_790_000_000_000,
     });
 
-    expect(getStorefrontWarmPathsForPurge({
-      type: "storefront.cache_purge",
-      operationId: "checkout_op_1",
-      groups: ["checkout"],
-      prefixes: ["checkout_config", "global_shipping_methods"],
-      bumpVersion: false,
-      source: "api-groups",
-      requestedAt: 1_790_000_000_000,
-    })).toEqual([]);
+    expect(
+      getStorefrontWarmPathsForPurge({
+        type: "storefront.cache_purge",
+        operationId: "checkout_op_1",
+        groups: ["checkout"],
+        prefixes: ["checkout_config", "global_shipping_methods"],
+        bumpVersion: false,
+        source: "api-groups",
+        requestedAt: 1_790_000_000_000,
+      }),
+    ).toEqual([]);
     expect(warmMessage).toMatchObject({
       type: "storefront.cache_warm",
       operationId: "purge_op_1",
@@ -901,32 +1002,39 @@ describe("triggerStorefrontPurgeForGroups", () => {
       path: string;
       resolve: (response: Response) => void;
     }> = [];
-    const fetchMock = vi.fn((input: RequestInfo | URL) => new Promise<Response>((resolve) => {
-      pendingResponses.push({
-        path: new URL(String(input)).pathname,
-        resolve,
-      });
-    }));
+    const fetchMock = vi.fn(
+      (input: RequestInfo | URL) =>
+        new Promise<Response>((resolve) => {
+          pendingResponses.push({
+            path: new URL(String(input)).pathname,
+            resolve,
+          });
+        }),
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const resultPromise = warmStorefrontHtmlPaths(
-      ["/one", "/two", "/three"],
-      {
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
-      } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">,
-    );
+    const resultPromise = warmStorefrontHtmlPaths(["/one", "/two", "/three"], {
+      PURGE_URL: "https://storefront.example.com/api/purge-cache",
+      PURGE_TOKEN: "secret-token",
+    } as Pick<Env, "PURGE_URL" | "PURGE_TOKEN">);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(pendingResponses.map((pending) => pending.path)).toEqual(["/one", "/two"]);
+    expect(pendingResponses.map((pending) => pending.path)).toEqual([
+      "/one",
+      "/two",
+    ]);
 
     pendingResponses[0]?.resolve(new Response("ok", { status: 200 }));
     pendingResponses[1]?.resolve(new Response("ok", { status: 200 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(pendingResponses.map((pending) => pending.path)).toEqual(["/one", "/two", "/three"]);
+    expect(pendingResponses.map((pending) => pending.path)).toEqual([
+      "/one",
+      "/two",
+      "/three",
+    ]);
 
     pendingResponses[2]?.resolve(new Response("ok", { status: 200 }));
     await expect(resultPromise).resolves.toMatchObject({
@@ -955,10 +1063,18 @@ describe("triggerStorefrontPurgeForGroups", () => {
       executionCtx: { waitUntil } as unknown as ExecutionContext,
     });
 
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:filterable" });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category" });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:category-slug" });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:attributes:search-filters" });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:attributes:filterable",
+    });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:attributes:category",
+    });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:attributes:category-slug",
+    });
+    expect(kv.list).toHaveBeenCalledWith({
+      prefix: "sc:api:attributes:search-filters",
+    });
     expect(kv.list).toHaveBeenCalledWith({ prefix: "sc:api:categories:" });
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
@@ -1021,19 +1137,23 @@ describe("triggerStorefrontPurgeForGroups", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    await invalidateCatalogCaches("categories", {
-      env: {
-        CACHE: kv,
-        PURGE_URL: "https://storefront.example.com/api/purge-cache",
-        PURGE_TOKEN: "secret-token",
-      } as unknown as Env,
-      executionCtx: { waitUntil } as unknown as ExecutionContext,
-    }, {
-      htmlPaths: [
-        "/categories/fish?page=1&sortBy=newest&utm_source=ad",
-        "/categories/fish",
-      ],
-    });
+    await invalidateCatalogCaches(
+      "categories",
+      {
+        env: {
+          CACHE: kv,
+          PURGE_URL: "https://storefront.example.com/api/purge-cache",
+          PURGE_TOKEN: "secret-token",
+        } as unknown as Env,
+        executionCtx: { waitUntil } as unknown as ExecutionContext,
+      },
+      {
+        htmlPaths: [
+          "/categories/fish?page=1&sortBy=newest&utm_source=ad",
+          "/categories/fish",
+        ],
+      },
+    );
 
     expect(waitUntil).toHaveBeenCalledTimes(1);
     const purgePromise = waitUntil.mock.calls[0]?.[0] as Promise<unknown>;
@@ -1048,8 +1168,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("does not fail catalog writes when the scheduled storefront purge rejects", async () => {
-    const fetchMock = vi.fn().mockRejectedValue(new Error("Network connection lost"));
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(new Error("Network connection lost"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const waitUntil = vi.fn();
 
     vi.stubGlobal("fetch", fetchMock);
@@ -1139,11 +1263,13 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("builds exact collection detail invalidation without clearing unrelated collections", () => {
-    expect(collectCollectionCacheInvalidation([
-      { id: "col_manual" },
-      { id: "col_dynamic" },
-      { id: "col_manual" },
-    ])).toEqual({
+    expect(
+      collectCollectionCacheInvalidation([
+        { id: "col_manual" },
+        { id: "col_dynamic" },
+        { id: "col_manual" },
+      ]),
+    ).toEqual({
       apiKeys: [
         "api:collections:/api/v1/collections/col_manual",
         "api:collections:/api/v1/collections/col_dynamic",
@@ -1189,17 +1315,21 @@ describe("triggerStorefrontPurgeForGroups", () => {
     );
 
     expect(store.has("sc:api:products:v2:/api/v1/products/phone")).toBe(false);
-    expect(store.has("sc:api:products:v2:/api/v1/products/phone#f:old")).toBe(false);
-    expect(store.has("sc:api:products:v2:/api/v1/products/phone-case#f:old")).toBe(
-      true,
+    expect(store.has("sc:api:products:v2:/api/v1/products/phone#f:old")).toBe(
+      false,
     );
     expect(
-      store.has("sc:api:products:/api/v1/products/phone#f:retired"),
+      store.has("sc:api:products:v2:/api/v1/products/phone-case#f:old"),
     ).toBe(true);
+    expect(store.has("sc:api:products:/api/v1/products/phone#f:retired")).toBe(
+      true,
+    );
   });
 
   it("invalidates targeted product availability API KV before scheduling storefront prefixes", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -1220,11 +1350,21 @@ describe("triggerStorefrontPurgeForGroups", () => {
       },
     );
 
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/phone");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/feed");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/sitemap");
-    expect(kv.delete).toHaveBeenCalledWith("sc:api:products:v2:/api/v1/products/search");
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:products:v2:/api/v1/products/phone",
+    );
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:products:v2:/api/v1/products",
+    );
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:products:v2:/api/v1/products/feed",
+    );
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:products:v2:/api/v1/products/sitemap",
+    );
+    expect(kv.delete).toHaveBeenCalledWith(
+      "sc:api:products:v2:/api/v1/products/search",
+    );
     expect(kv.list).toHaveBeenCalledWith({
       prefix: "sc:api:products:v2:/api/v1/products?",
     });
@@ -1265,7 +1405,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("adds CMS shortcode page paths to product availability purges", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -1310,7 +1452,8 @@ describe("triggerStorefrontPurgeForGroups", () => {
     );
 
     expect(kv.list).toHaveBeenCalledWith({
-      prefix: "sc:api:storefront:page:/api/v1/storefront/pages/slug/stock-alert",
+      prefix:
+        "sc:api:storefront:page:/api/v1/storefront/pages/slug/stock-alert",
     });
     expect(waitUntil).toHaveBeenCalledTimes(1);
 
@@ -1335,7 +1478,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
   });
 
   it("invalidates only collection detail caches affected by availability", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
     const waitUntil = vi.fn();
     const kv = {
       list: vi.fn().mockResolvedValue({ keys: [], list_complete: true }),
@@ -1347,10 +1492,9 @@ describe("triggerStorefrontPurgeForGroups", () => {
     };
     const collectionQuery = {
       from: vi.fn(() => collectionQuery),
-      where: vi.fn(() => Promise.resolve([
-        { id: "col_manual" },
-        { id: "col_dynamic" },
-      ])),
+      where: vi.fn(() =>
+        Promise.resolve([{ id: "col_manual" }, { id: "col_dynamic" }]),
+      ),
     };
     const db = {
       select: vi.fn(() => pageQuery),
@@ -1403,22 +1547,23 @@ describe("triggerStorefrontPurgeForGroups", () => {
   it("resolves manual, dynamic, and featured collection dependencies in one D1-safe query", async () => {
     const query = {
       from: vi.fn(() => query),
-      where: vi.fn(() => Promise.resolve([
-        { id: "col_manual" },
-        { id: "col_dynamic" },
-        { id: "col_featured" },
-        { id: "col_manual" },
-      ])),
+      where: vi.fn(() =>
+        Promise.resolve([
+          { id: "col_manual" },
+          { id: "col_dynamic" },
+          { id: "col_featured" },
+          { id: "col_manual" },
+        ]),
+      ),
     };
     const selectDistinct = vi.fn(() => query);
 
-    await expect(resolveCollectionCacheTargets(
-      { selectDistinct } as never,
-      {
+    await expect(
+      resolveCollectionCacheTargets({ selectDistinct } as never, {
         productIds: Array.from({ length: 150 }, (_, index) => `prod_${index}`),
         categoryIds: Array.from({ length: 150 }, (_, index) => `cat_${index}`),
-      },
-    )).resolves.toEqual([
+      }),
+    ).resolves.toEqual([
       { id: "col_manual" },
       { id: "col_dynamic" },
       { id: "col_featured" },
@@ -1449,14 +1594,11 @@ describe("triggerStorefrontPurgeForGroups", () => {
     });
 
     await expect(
-      resolveProductAvailabilityCacheSubjects(
-        { selectDistinct } as never,
-        {
-          orderIds: ["order_1", "order_1"],
-          productIds: ["prod_3"],
-          variantIds: ["var_2"],
-        },
-      ),
+      resolveProductAvailabilityCacheSubjects({ selectDistinct } as never, {
+        orderIds: ["order_1", "order_1"],
+        productIds: ["prod_3"],
+        variantIds: ["var_2"],
+      }),
     ).resolves.toEqual([
       { productId: "prod_1", slug: "phone" },
       { productId: "prod_2", slug: "case" },
@@ -1477,15 +1619,12 @@ describe("triggerStorefrontPurgeForGroups", () => {
       return query;
     });
 
-    await resolveProductAvailabilityCacheSubjects(
-      { selectDistinct } as never,
-      {
-        productIds: Array.from(
-          { length: D1_CACHE_SUBJECT_ID_CHUNK_SIZE + 1 },
-          (_, index) => `prod_${index}`,
-        ),
-      },
-    );
+    await resolveProductAvailabilityCacheSubjects({ selectDistinct } as never, {
+      productIds: Array.from(
+        { length: D1_CACHE_SUBJECT_ID_CHUNK_SIZE + 1 },
+        (_, index) => `prod_${index}`,
+      ),
+    });
 
     expect(selectDistinct).toHaveBeenCalledTimes(2);
     expect(where).toHaveBeenCalledTimes(2);

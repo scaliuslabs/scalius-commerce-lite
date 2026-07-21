@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const routeSource = readFileSync(resolve(import.meta.dirname, "index.tsx"), "utf8");
+const routeSource = readFileSync(
+  resolve(import.meta.dirname, "index.tsx"),
+  "utf8",
+);
 const dialogSource = readFileSync(
   resolve(import.meta.dirname, "-PageDeleteDialog.tsx"),
   "utf8",
@@ -21,8 +24,12 @@ describe("page mobile workflow boundaries", () => {
   });
 
   it("keeps destructive copy direct and in sentence case", () => {
-    expect(dialogSource).toContain('Delete {multiple ? "pages" : "page"} permanently?');
-    expect(dialogSource).toContain('Move {multiple ? "pages" : "page"} to trash?');
+    expect(dialogSource).toContain(
+      "{multiple ? entityPlural : entityName} permanently?",
+    );
+    expect(dialogSource).toContain(
+      "{multiple ? entityPlural : entityName} to trash?",
+    );
     expect(routeSource).toContain('"View trash"');
     expect(routeSource).toContain("New page");
   });
@@ -30,9 +37,15 @@ describe("page mobile workflow boundaries", () => {
   it("shows a live link only for the committed page route", () => {
     expect(formSource).toContain("const committedSlug = defaultValues?.slug");
     expect(formSource).toContain("const isCommittedLivePage =");
-    expect(formSource).toContain('defaultValues?.publicationMode === "published"');
+    expect(formSource).toContain(
+      'defaultValues?.publicationMode === "published"',
+    );
     expect(formSource).toContain("{isCommittedLivePage ? (");
-    expect(formSource).toContain('ariaLabel="Page content"');
-    expect(formSource).not.toContain('isEdit && slug && publicationMode === "published"');
+    expect(formSource).toMatch(
+      /ariaLabel=\{\s*contentType === "article"\s*\? "Article content"\s*: "Page content"\s*\}/,
+    );
+    expect(formSource).not.toContain(
+      'isEdit && slug && publicationMode === "published"',
+    );
   });
 });

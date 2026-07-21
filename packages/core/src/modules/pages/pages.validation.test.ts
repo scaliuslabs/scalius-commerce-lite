@@ -43,6 +43,8 @@ describe("page validation", () => {
     });
 
     expect(parsed.isPublished).toBe(false);
+    expect(parsed.contentType).toBe("page");
+    expect(parsed.tags).toEqual([]);
   });
 
   it("accepts a featured image when creating a page", () => {
@@ -67,13 +69,19 @@ describe("page validation", () => {
   });
 
   it("allows featured image removal when updating a page", () => {
-    const parsed = updatePageSchema.parse({ expectedRevision: 1, featuredImage: null });
+    const parsed = updatePageSchema.parse({
+      expectedRevision: 1,
+      featuredImage: null,
+    });
 
     expect(parsed).toEqual({ expectedRevision: 1, featuredImage: null });
   });
 
   it("does not clear canonical path on unrelated partial updates", () => {
-    const parsed = updatePageSchema.parse({ expectedRevision: 3, title: "Updated Offer" });
+    const parsed = updatePageSchema.parse({
+      expectedRevision: 3,
+      title: "Updated Offer",
+    });
 
     expect(parsed).toEqual({ expectedRevision: 3, title: "Updated Offer" });
   });
@@ -95,6 +103,7 @@ describe("page validation", () => {
       "/collections",
       "/api",
       "/buy",
+      "/blog",
       "/health",
       "/order-success",
       "/payment-recovery",
@@ -117,25 +126,88 @@ describe("page validation", () => {
   });
 
   it("rejects reserved storefront slugs", () => {
-    for (const slug of ["account", "admin", "api", "buy", "cart", "categories", "checkout", "collections", "health", "products", "search"]) {
-      expect(createPageSchema.safeParse({ ...pageInput, slug }).success, slug).toBe(false);
+    for (const slug of [
+      "account",
+      "admin",
+      "api",
+      "blog",
+      "buy",
+      "cart",
+      "categories",
+      "checkout",
+      "collections",
+      "health",
+      "products",
+      "search",
+    ]) {
+      expect(
+        createPageSchema.safeParse({ ...pageInput, slug }).success,
+        slug,
+      ).toBe(false);
     }
   });
 
+  it("accepts article metadata and only article-shaped canonical paths", () => {
+    const parsed = createPageSchema.parse({
+      ...pageInput,
+      contentType: "article",
+      slug: "choose-running-shoes",
+      canonicalPath: " /blog/choose-running-shoes ",
+      excerpt: "A practical guide to fit, cushioning, and daily mileage.",
+      author: "Scalius Editorial",
+      tags: ["Guides", "running", "guides"],
+    });
+
+    expect(parsed.canonicalPath).toBe("/blog/choose-running-shoes");
+    expect(parsed.tags).toEqual(["Guides", "running"]);
+    expect(
+      createPageSchema.safeParse({
+        ...pageInput,
+        contentType: "article",
+        canonicalPath: "/choose-running-shoes",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("keeps article-only metadata off static pages", () => {
+    expect(
+      createPageSchema.safeParse({
+        ...pageInput,
+        excerpt: "This belongs to an article.",
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires a positive expected revision on updates", () => {
-    expect(updatePageSchema.safeParse({ title: "Updated Offer" }).success).toBe(false);
-    expect(updatePageSchema.safeParse({ expectedRevision: 0, title: "Updated Offer" }).success).toBe(false);
-    expect(updatePageSchema.safeParse({ expectedRevision: 1, title: "Updated Offer" }).success).toBe(true);
+    expect(updatePageSchema.safeParse({ title: "Updated Offer" }).success).toBe(
+      false,
+    );
+    expect(
+      updatePageSchema.safeParse({
+        expectedRevision: 0,
+        title: "Updated Offer",
+      }).success,
+    ).toBe(false);
+    expect(
+      updatePageSchema.safeParse({
+        expectedRevision: 1,
+        title: "Updated Offer",
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects invalid publication timestamps at the API boundary", () => {
-    expect(createPageSchema.safeParse({
-      ...pageInput,
-      publishedAt: "not-a-date",
-    }).success).toBe(false);
-    expect(updatePageSchema.safeParse({
-      expectedRevision: 1,
-      publishedAt: "not-a-date",
-    }).success).toBe(false);
+    expect(
+      createPageSchema.safeParse({
+        ...pageInput,
+        publishedAt: "not-a-date",
+      }).success,
+    ).toBe(false);
+    expect(
+      updatePageSchema.safeParse({
+        expectedRevision: 1,
+        publishedAt: "not-a-date",
+      }).success,
+    ).toBe(false);
   });
 });

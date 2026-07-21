@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ConflictError,
-  ValidationError,
-} from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 
 const mocks = vi.hoisted(() => ({
   upsertSetting: vi.fn(),
@@ -26,21 +23,25 @@ describe("general site settings", () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
-          limit: vi.fn(async () => [{
-            headerConfig: JSON.stringify({
-              topBar: { text: "Free delivery", isEnabled: true },
-              navigation: [{
-                id: "returns",
-                target: { type: "internal_path", path: "/returns" },
-                labelMode: "custom",
-                customLabel: "Returns",
-              }],
-            }),
-            footerConfig: JSON.stringify({
-              tagline: "Thoughtful goods",
-              menus: [{ id: "legacy-menu", links: [] }],
-            }),
-          }]),
+          limit: vi.fn(async () => [
+            {
+              headerConfig: JSON.stringify({
+                topBar: { text: "Free delivery", isEnabled: true },
+                navigation: [
+                  {
+                    id: "returns",
+                    target: { type: "internal_path", path: "/returns" },
+                    labelMode: "custom",
+                    customLabel: "Returns",
+                  },
+                ],
+              }),
+              footerConfig: JSON.stringify({
+                tagline: "Thoughtful goods",
+                menus: [{ id: "legacy-menu", links: [] }],
+              }),
+            },
+          ]),
         })),
       })),
     };
@@ -57,22 +58,28 @@ describe("general site settings", () => {
     const db = {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
-          limit: vi.fn(async () => [{
-            headerConfig: "{not-json",
-            footerConfig: JSON.stringify({
-              description: "Support when you need it",
-              menus: [{
-                id: "help",
-                title: "Help",
-                links: [{
-                  id: "returns",
-                  target: { type: "internal_path", path: "/returns" },
-                  labelMode: "custom",
-                  customLabel: "Returns",
-                }],
-              }],
-            }),
-          }]),
+          limit: vi.fn(async () => [
+            {
+              headerConfig: "{not-json",
+              footerConfig: JSON.stringify({
+                description: "Support when you need it",
+                menus: [
+                  {
+                    id: "help",
+                    title: "Help",
+                    links: [
+                      {
+                        id: "returns",
+                        target: { type: "internal_path", path: "/returns" },
+                        labelMode: "custom",
+                        customLabel: "Returns",
+                      },
+                    ],
+                  },
+                ],
+              }),
+            },
+          ]),
         })),
       })),
     };
@@ -95,12 +102,14 @@ describe("general site settings", () => {
       insert,
       select: vi.fn(() => ({
         from: vi.fn(() => ({
-          limit: vi.fn(async () => [{
-            headerConfig: JSON.stringify({
-              navigation: [{ id: "home", title: "Home", href: "/" }],
-            }),
-            footerConfig: JSON.stringify({ menus: [] }),
-          }]),
+          limit: vi.fn(async () => [
+            {
+              headerConfig: JSON.stringify({
+                navigation: [{ id: "home", title: "Home", href: "/" }],
+              }),
+              footerConfig: JSON.stringify({ menus: [] }),
+            },
+          ]),
         })),
       })),
     };
@@ -122,21 +131,31 @@ describe("general site settings", () => {
     const values = vi.fn(() => ({ onConflictDoNothing }));
     const db = { insert: vi.fn(() => ({ values })) };
 
-    await expect(saveHeaderConfig(db as never, {
-      topBar: { text: "Hello", isEnabled: true },
-      navigation: [{
-        id: "unsafe",
-        target: { type: "external_url", url: "javascript:alert(1)" },
-        labelMode: "custom",
-        customLabel: "Unsafe",
-      }],
-      arbitrary: "not-persisted",
-    }, 0)).resolves.toEqual({ revision: 1 });
-    expect(values).toHaveBeenCalledWith(expect.objectContaining({
-      headerConfig: JSON.stringify({
-        topBar: { text: "Hello", isEnabled: true },
+    await expect(
+      saveHeaderConfig(
+        db as never,
+        {
+          topBar: { text: "Hello", isEnabled: true },
+          navigation: [
+            {
+              id: "unsafe",
+              target: { type: "external_url", url: "javascript:alert(1)" },
+              labelMode: "custom",
+              customLabel: "Unsafe",
+            },
+          ],
+          arbitrary: "not-persisted",
+        },
+        0,
+      ),
+    ).resolves.toEqual({ revision: 1 });
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headerConfig: JSON.stringify({
+          topBar: { text: "Hello", isEnabled: true },
+        }),
       }),
-    }));
+    );
   });
 });
 
@@ -145,10 +164,12 @@ function createCurrencyReadDb(values: Record<string, string>) {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
-          all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
-            key,
-            value,
-          }))),
+          all: vi.fn(async () =>
+            Object.entries(values).map(([key, value]) => ({
+              key,
+              value,
+            })),
+          ),
         })),
       })),
     })),
@@ -189,10 +210,12 @@ function createCurrencyWriteDb({
         return {
           from: vi.fn(() => ({
             where: vi.fn(() => ({
-              all: vi.fn(async () => Object.entries(values).map(([key, value]) => ({
-                key,
-                value,
-              }))),
+              all: vi.fn(async () =>
+                Object.entries(values).map(([key, value]) => ({
+                  key,
+                  value,
+                })),
+              ),
             })),
           })),
         };
@@ -296,15 +319,18 @@ describe("site currency settings", () => {
   it.each([
     { hasProducts: true, hasOrders: false },
     { hasProducts: false, hasOrders: true },
-  ])("blocks currency code changes when money-bearing rows exist", async (rowState) => {
-    const db = createCurrencyWriteDb(rowState);
+  ])(
+    "blocks currency code changes when money-bearing rows exist",
+    async (rowState) => {
+      const db = createCurrencyWriteDb(rowState);
 
-    await expect(
-      saveCurrencySettings(db as never, { currencyCode: "USD" }),
-    ).rejects.toBeInstanceOf(ConflictError);
-    expect(db.insert).not.toHaveBeenCalled();
-    expect(db.batch).toHaveBeenCalledTimes(1);
-  });
+      await expect(
+        saveCurrencySettings(db as never, { currencyCode: "USD" }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect(db.insert).not.toHaveBeenCalled();
+      expect(db.batch).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("allows initial currency setup and commits all three values in one batch", async () => {
     const db = createCurrencyWriteDb();
@@ -543,6 +569,7 @@ describe("site SEO settings", () => {
         categories: false,
         collections: true,
         pages: true,
+        articles: true,
       },
       feeds: {
         productCatalogEnabled: false,
@@ -560,6 +587,7 @@ describe("site SEO settings", () => {
         offerShippingDetails: true,
         breadcrumbs: true,
         collections: true,
+        articles: true,
       },
     });
   });

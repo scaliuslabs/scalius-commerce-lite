@@ -12,25 +12,36 @@ const ANALYTICS_FORM_SOURCE = fileURLToPath(
   new URL("../components/admin/AnalyticsForm.tsx", import.meta.url),
 );
 const ANALYTICS_LIST_SOURCE = fileURLToPath(
-  new URL("../components/admin/analytics-list-presentation.ts", import.meta.url),
+  new URL(
+    "../components/admin/analytics-list-presentation.ts",
+    import.meta.url,
+  ),
 );
 
 describe("analytics form schema", () => {
   it("keeps Google Tag Manager as a first-class guided script type", () => {
-    const analyticsTypesSource = readFileSync(ANALYTICS_SCRIPT_TYPES_SOURCE, "utf8");
+    const analyticsTypesSource = readFileSync(
+      ANALYTICS_SCRIPT_TYPES_SOURCE,
+      "utf8",
+    );
     const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
 
     expect(analyticsTypesSource).toMatch(
       /analyticsScriptTypes = \[[\s\S]*"google_tag_manager"/,
     );
-    expect(analyticsFormSource).toContain("google_tag_manager: `<!-- Google Tag Manager -->");
+    expect(analyticsFormSource).toContain(
+      "google_tag_manager: `<!-- Google Tag Manager -->",
+    );
     expect(analyticsFormSource).toContain('type: "google_tag_manager"');
     expect(analyticsFormSource).toContain("GTM-XXXXXXX");
     expect(analyticsFormSource).toContain("G-XXXXXXXXXX");
   });
 
   it("keeps TikTok Pixel as a first-class guided script type", () => {
-    const analyticsTypesSource = readFileSync(ANALYTICS_SCRIPT_TYPES_SOURCE, "utf8");
+    const analyticsTypesSource = readFileSync(
+      ANALYTICS_SCRIPT_TYPES_SOURCE,
+      "utf8",
+    );
     const analyticsFormSource = readFileSync(ANALYTICS_FORM_SOURCE, "utf8");
     const analyticsListSource = readFileSync(ANALYTICS_LIST_SOURCE, "utf8");
 
@@ -56,7 +67,9 @@ describe("analytics form schema", () => {
     expect(formSchemasSource).toContain("getActiveAnalyticsConfigError(data)");
     expect(formSchemasSource).toContain('path: ["config"]');
     expect(analyticsFormSource).toContain('type: "cloudflare_web_analytics"');
-    expect(analyticsFormSource).toContain('placeholder="Paste the Web Analytics site token"');
+    expect(analyticsFormSource).toContain(
+      'placeholder="Paste the Web Analytics site token"',
+    );
   });
 });
 
@@ -69,6 +82,12 @@ describe("resource form canonical validation", () => {
       /canonicalPathFormSchema\(\s*"category"\s*,\s*"\/categories\/summer-shoes"\s*,?\s*\)/,
     );
     expect(formSchemasSource).toContain('"/categories/summer-shoes"');
-    expect(formSchemasSource).toContain('canonicalPathFormSchema("page", "/returns")');
+    expect(formSchemasSource).toContain(
+      'const resourceKind = value.contentType === "article" ? "article" : "page"',
+    );
+    expect(formSchemasSource).toContain("`/blog/${value.slug}`");
+    expect(formSchemasSource).toContain(
+      "isValidResourceCanonicalPath(resourceKind, value.canonicalPath)",
+    );
   });
 });

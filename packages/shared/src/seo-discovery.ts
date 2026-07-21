@@ -8,6 +8,7 @@ export interface SeoDiscoverySettings {
     categories: boolean;
     collections: boolean;
     pages: boolean;
+    articles: boolean;
   };
   feeds: {
     productCatalogEnabled: boolean;
@@ -27,6 +28,7 @@ export interface SeoDiscoverySettings {
     offerShippingDetails: boolean;
     breadcrumbs: boolean;
     collections: boolean;
+    articles: boolean;
   };
 }
 
@@ -38,6 +40,7 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
     categories: true,
     collections: true,
     pages: true,
+    articles: true,
   },
   feeds: {
     productCatalogEnabled: true,
@@ -57,6 +60,7 @@ export const DEFAULT_SEO_DISCOVERY_SETTINGS: SeoDiscoverySettings = {
     offerShippingDetails: true,
     breadcrumbs: true,
     collections: true,
+    articles: true,
   },
 };
 
@@ -116,6 +120,10 @@ export function normalizeSeoDiscoverySettings(
         sitemap.pages,
         DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap.pages,
       ),
+      articles: boolOrDefault(
+        sitemap.articles,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.sitemap.articles,
+      ),
     },
     feeds: {
       productCatalogEnabled: boolOrDefault(
@@ -173,6 +181,10 @@ export function normalizeSeoDiscoverySettings(
       collections: boolOrDefault(
         structuredData.collections,
         DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.collections,
+      ),
+      articles: boolOrDefault(
+        structuredData.articles,
+        DEFAULT_SEO_DISCOVERY_SETTINGS.structuredData.articles,
       ),
     },
   };

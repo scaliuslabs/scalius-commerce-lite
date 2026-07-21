@@ -17,9 +17,7 @@ import {
   STOREFRONT_THEME_TYPE_SCALES,
   listInvalidStorefrontThemeSettingsEntries,
 } from "@scalius/shared/storefront-theme";
-import {
-  SUPPORTED_CURRENCY_CODES,
-} from "@scalius/shared/currency";
+import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
 import {
   SEO_RETURN_POLICY_CATEGORIES,
   SEO_RETURN_POLICY_FEES,
@@ -100,12 +98,16 @@ const SEO_DISCOVERY_WARM_PATHS = [
   "/sitemap-categories.xml",
   "/sitemap-collections.xml",
   "/sitemap-pages.xml",
+  "/sitemap-articles.xml",
+  "/blog/feed.xml",
   "/sitemap-products.xml?page=1",
   "/api/product-feed.xml",
   "/api/facebook-feed.xml",
 ] as const;
 
-async function deleteLegacyCurrencyGatewayCache(kv?: KVNamespace | null): Promise<void> {
+async function deleteLegacyCurrencyGatewayCache(
+  kv?: KVNamespace | null,
+): Promise<void> {
   if (!kv) return;
   try {
     await kv.delete("gw:currency");
@@ -122,7 +124,7 @@ async function deleteLegacyCurrencyGatewayCache(kv?: KVNamespace | null): Promis
 // ─────────────────────────────────────────
 
 const supportedCurrencyCodeSchema = z.preprocess(
-  (value) => typeof value === "string" ? value.trim().toUpperCase() : value,
+  (value) => (typeof value === "string" ? value.trim().toUpperCase() : value),
   z.enum(SUPPORTED_CURRENCY_CODES, {
     error: "Select a supported three-letter currency code.",
   }),
@@ -256,7 +258,9 @@ const socialLinkSchema = z.object({
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const headerLogoWidthSchema = z.number().int()
+const headerLogoWidthSchema = z
+  .number()
+  .int()
   .min(HEADER_LOGO_WIDTH_MIN)
   .max(HEADER_LOGO_WIDTH_MAX)
   .multipleOf(HEADER_LOGO_WIDTH_STEP);
@@ -296,9 +300,11 @@ const saveHeaderRoute = createRoute({
       description: "Header saved",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({
-            revision: z.number().int().positive(),
-          })),
+          schema: successEnvelope(
+            z.object({
+              revision: z.number().int().positive(),
+            }),
+          ),
         },
       },
     },
@@ -348,9 +354,11 @@ const saveFooterRoute = createRoute({
       description: "Footer saved",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({
-            revision: z.number().int().positive(),
-          })),
+          schema: successEnvelope(
+            z.object({
+              revision: z.number().int().positive(),
+            }),
+          ),
         },
       },
     },
@@ -379,19 +387,23 @@ app.openapi(saveFooterRoute, async (c) => {
 const themeDocumentSchema = z
   .object({
     colors: z.record(z.string(), z.string()),
-    typography: z.object({
-      heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
-      body: z.enum(STOREFRONT_THEME_BODY_FONTS),
-      scale: z.enum(STOREFRONT_THEME_TYPE_SCALES),
-    }).strict(),
+    typography: z
+      .object({
+        heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
+        body: z.enum(STOREFRONT_THEME_BODY_FONTS),
+        scale: z.enum(STOREFRONT_THEME_TYPE_SCALES),
+      })
+      .strict(),
     cornerStyle: z.enum(STOREFRONT_THEME_CORNER_STYLES),
     density: z.enum(STOREFRONT_THEME_DENSITIES),
     containerWidth: z.enum(STOREFRONT_THEME_CONTAINER_WIDTHS),
-    components: z.object({
-      buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
-      inputs: z.enum(STOREFRONT_THEME_INPUT_STYLES),
-      cards: z.enum(STOREFRONT_THEME_CARD_STYLES),
-    }).strict(),
+    components: z
+      .object({
+        buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
+        inputs: z.enum(STOREFRONT_THEME_INPUT_STYLES),
+        cards: z.enum(STOREFRONT_THEME_CARD_STYLES),
+      })
+      .strict(),
   })
   .strict()
   .superRefine((theme, ctx) => {
@@ -452,11 +464,13 @@ const saveThemeRoute = createRoute({
       description: "Theme saved",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({
-            theme: themeDocumentSchema,
-            revision: z.number().int().positive(),
-            message: z.string(),
-          })),
+          schema: successEnvelope(
+            z.object({
+              theme: themeDocumentSchema,
+              revision: z.number().int().positive(),
+              message: z.string(),
+            }),
+          ),
         },
       },
     },
@@ -504,7 +518,9 @@ const getThemeWorkspaceRoute = createRoute({
   responses: {
     200: {
       description: "Theme workspace",
-      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+      content: {
+        "application/json": { schema: successEnvelope(themeWorkspaceSchema) },
+      },
     },
     ...errorResponses,
   },
@@ -525,11 +541,15 @@ const saveThemeDraftRoute = createRoute({
   path: "/theme/draft",
   tags: ["Admin - Settings"],
   summary: "Save the durable storefront style draft",
-  request: { body: { content: { "application/json": { schema: saveThemeDraftSchema } } } },
+  request: {
+    body: { content: { "application/json": { schema: saveThemeDraftSchema } } },
+  },
   responses: {
     200: {
       description: "Draft saved",
-      content: { "application/json": { schema: successEnvelope(themeDraftSchema) } },
+      content: {
+        "application/json": { schema: successEnvelope(themeDraftSchema) },
+      },
     },
     ...errorResponses,
   },
@@ -538,25 +558,33 @@ const saveThemeDraftRoute = createRoute({
 app.openapi(saveThemeDraftRoute, async (c) => {
   const body = c.req.valid("json");
   const user = c.get("user") as { id?: string } | undefined;
-  return ok(c, await saveThemeDraft(
-    c.get("db"),
-    body.theme,
-    body.expectedDraftRevision,
-    body.basePublishedRevision,
-    user?.id ?? null,
-  ));
+  return ok(
+    c,
+    await saveThemeDraft(
+      c.get("db"),
+      body.theme,
+      body.expectedDraftRevision,
+      body.basePublishedRevision,
+      user?.id ?? null,
+    ),
+  );
 });
 
 const rebaseThemeDraftRoute = createRoute({
   method: "post",
   path: "/theme/draft/rebase",
   tags: ["Admin - Settings"],
-  summary: "Rebase a storefront style draft onto the current published revision",
-  request: { body: { content: { "application/json": { schema: saveThemeDraftSchema } } } },
+  summary:
+    "Rebase a storefront style draft onto the current published revision",
+  request: {
+    body: { content: { "application/json": { schema: saveThemeDraftSchema } } },
+  },
   responses: {
     200: {
       description: "Draft rebased",
-      content: { "application/json": { schema: successEnvelope(themeDraftSchema) } },
+      content: {
+        "application/json": { schema: successEnvelope(themeDraftSchema) },
+      },
     },
     ...errorResponses,
   },
@@ -565,13 +593,16 @@ const rebaseThemeDraftRoute = createRoute({
 app.openapi(rebaseThemeDraftRoute, async (c) => {
   const body = c.req.valid("json");
   const user = c.get("user") as { id?: string } | undefined;
-  return ok(c, await rebaseThemeDraft(
-    c.get("db"),
-    body.theme,
-    body.expectedDraftRevision,
-    body.basePublishedRevision,
-    user?.id ?? null,
-  ));
+  return ok(
+    c,
+    await rebaseThemeDraft(
+      c.get("db"),
+      body.theme,
+      body.expectedDraftRevision,
+      body.basePublishedRevision,
+      user?.id ?? null,
+    ),
+  );
 });
 
 const publishThemeDraftSchema = z.object({
@@ -584,11 +615,17 @@ const publishThemeDraftRoute = createRoute({
   path: "/theme/publish",
   tags: ["Admin - Settings"],
   summary: "Publish the exact durable storefront style draft",
-  request: { body: { content: { "application/json": { schema: publishThemeDraftSchema } } } },
+  request: {
+    body: {
+      content: { "application/json": { schema: publishThemeDraftSchema } },
+    },
+  },
   responses: {
     200: {
       description: "Draft published",
-      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+      content: {
+        "application/json": { schema: successEnvelope(themeWorkspaceSchema) },
+      },
     },
     ...errorResponses,
   },
@@ -622,18 +659,30 @@ const listThemeVersionsRoute = createRoute({
   path: "/theme/versions",
   tags: ["Admin - Settings"],
   summary: "List immutable published storefront style revisions",
-  request: { query: z.object({ limit: z.coerce.number().int().min(1).max(50).default(20) }) },
+  request: {
+    query: z.object({
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+    }),
+  },
   responses: {
     200: {
       description: "Published theme revisions",
-      content: { "application/json": { schema: successEnvelope(z.object({ versions: z.array(themeVersionSchema) })) } },
+      content: {
+        "application/json": {
+          schema: successEnvelope(
+            z.object({ versions: z.array(themeVersionSchema) }),
+          ),
+        },
+      },
     },
     ...errorResponses,
   },
 });
 
 app.openapi(listThemeVersionsRoute, async (c) => {
-  return ok(c, { versions: await listThemeVersions(c.get("db"), c.req.valid("query").limit) });
+  return ok(c, {
+    versions: await listThemeVersions(c.get("db"), c.req.valid("query").limit),
+  });
 });
 
 const rollbackThemeRoute = createRoute({
@@ -641,15 +690,25 @@ const rollbackThemeRoute = createRoute({
   path: "/theme/rollback",
   tags: ["Admin - Settings"],
   summary: "Restore a published storefront style as a new revision",
-  request: { body: { content: { "application/json": { schema: z.object({
-    sourceRevision: z.number().int().positive(),
-    expectedPublishedRevision: z.number().int().nonnegative(),
-    expectedDraftRevision: z.number().int().positive(),
-  }) } } } },
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            sourceRevision: z.number().int().positive(),
+            expectedPublishedRevision: z.number().int().nonnegative(),
+            expectedDraftRevision: z.number().int().positive(),
+          }),
+        },
+      },
+    },
+  },
   responses: {
     200: {
       description: "Theme rollback published",
-      content: { "application/json": { schema: successEnvelope(themeWorkspaceSchema) } },
+      content: {
+        "application/json": { schema: successEnvelope(themeWorkspaceSchema) },
+      },
     },
     ...errorResponses,
   },
@@ -674,18 +733,32 @@ const createThemePreviewRoute = createRoute({
   path: "/theme/preview-session",
   tags: ["Admin - Settings"],
   summary: "Create a short-lived exact-draft storefront preview session",
-  request: { body: { content: { "application/json": { schema: z.object({
-    expectedDraftRevision: z.number().int().positive(),
-  }) } } } },
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            expectedDraftRevision: z.number().int().positive(),
+          }),
+        },
+      },
+    },
+  },
   responses: {
     200: {
       description: "Preview handoff",
-      content: { "application/json": { schema: successEnvelope(z.object({
-        token: z.string(),
-        draftRevision: z.number().int().positive(),
-        basePublishedRevision: z.number().int().nonnegative(),
-        expiresAt: z.any(),
-      })) } },
+      content: {
+        "application/json": {
+          schema: successEnvelope(
+            z.object({
+              token: z.string(),
+              draftRevision: z.number().int().positive(),
+              basePublishedRevision: z.number().int().nonnegative(),
+              expiresAt: z.any(),
+            }),
+          ),
+        },
+      },
     },
     ...errorResponses,
   },
@@ -812,6 +885,7 @@ const seoSettingsSchema = z.object({
       categories: z.boolean(),
       collections: z.boolean(),
       pages: z.boolean(),
+      articles: z.boolean(),
     }),
     feeds: z.object({
       productCatalogEnabled: z.boolean(),
@@ -831,6 +905,7 @@ const seoSettingsSchema = z.object({
       offerShippingDetails: z.boolean(),
       breadcrumbs: z.boolean(),
       collections: z.boolean(),
+      articles: z.boolean(),
     }),
   }),
   returnPolicy: z.object({
@@ -866,7 +941,9 @@ app.openapi(getSeoRoute, async (c) => {
   return ok(c, result);
 });
 
-const productFeedDiagnosticReasonSchema = z.enum(PRODUCT_FEED_DIAGNOSTIC_REASONS);
+const productFeedDiagnosticReasonSchema = z.enum(
+  PRODUCT_FEED_DIAGNOSTIC_REASONS,
+);
 
 const productFeedDiagnosticSampleSchema = z.object({
   id: z.string(),
@@ -960,7 +1037,9 @@ const saveSeoDiscoverySchema = z.object({
   sitemap: seoSettingsSchema.shape.discovery.shape.sitemap.partial().optional(),
   feeds: seoSettingsSchema.shape.discovery.shape.feeds.partial().optional(),
   robots: seoSettingsSchema.shape.discovery.shape.robots.partial().optional(),
-  structuredData: seoSettingsSchema.shape.discovery.shape.structuredData.partial().optional(),
+  structuredData: seoSettingsSchema.shape.discovery.shape.structuredData
+    .partial()
+    .optional(),
 });
 
 const saveSeoReturnPolicySchema = z.object({
@@ -1055,10 +1134,14 @@ app.openapi(getStorefrontUrlRoute, async (c) => {
 });
 
 const saveStorefrontUrlSchema = z.object({
-  storefrontUrl: z.string().trim().min(1, "Enter the public store origin.").refine(
-    (value) => normalizeStorefrontOrigin(value) !== null,
-    "Use an HTTPS origin without credentials, a path, query, or fragment. HTTP is limited to loopback development.",
-  ),
+  storefrontUrl: z
+    .string()
+    .trim()
+    .min(1, "Enter the public store origin.")
+    .refine(
+      (value) => normalizeStorefrontOrigin(value) !== null,
+      "Use an HTTPS origin without credentials, a path, query, or fragment. HTTP is limited to loopback development.",
+    ),
 });
 
 const saveStorefrontUrlRoute = createRoute({
@@ -1090,9 +1173,13 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
     invalidateSiteSettingsCache(kv),
     invalidateStorefrontUrlCache(kv),
   ]);
-  await invalidateApiAndScheduleStorefrontGroups(STOREFRONT_URL_CACHE_GROUPS, c, {
-    htmlPaths: SEO_DISCOVERY_WARM_PATHS,
-  });
+  await invalidateApiAndScheduleStorefrontGroups(
+    STOREFRONT_URL_CACHE_GROUPS,
+    c,
+    {
+      htmlPaths: SEO_DISCOVERY_WARM_PATHS,
+    },
+  );
   return ok(c, { message: "Storefront URL saved successfully" });
 });
 

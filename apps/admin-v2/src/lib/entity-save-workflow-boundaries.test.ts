@@ -17,11 +17,22 @@ describe("merchant create and edit save workflows", () => {
       adminSource("components", "admin", "PageForm.tsx"),
       "/admin/pages/$pageId/edit",
     ],
-  ])("keeps %s edits in place and opens new resources in their editor", (_name, source, editRoute) => {
-    expect(source).toContain("onSuccess: (result) => {");
-    expect(source).toContain("form.reset({");
-    expect(source).toContain("if (!isEdit && mutation.id)");
-    expect(source).toContain(`to: "${editRoute}"`);
+  ])(
+    "keeps %s edits in place and opens new resources in their editor",
+    (_name, source, editRoute) => {
+      expect(source).toContain("onSuccess: (result) => {");
+      expect(source).toContain("form.reset({");
+      expect(source).toContain("if (!isEdit && mutation.id)");
+      expect(source).toContain(`to: "${editRoute}"`);
+    },
+  );
+
+  it("keeps article saves in the article editor instead of returning to the list", () => {
+    const source = adminSource("components", "admin", "PageForm.tsx");
+    expect(source).toContain('to: "/admin/articles/$articleId/edit"');
+    expect(source).toMatch(
+      /navigateTo:\s+contentType === "article" \? "\/admin\/articles" : "\/admin\/pages"/,
+    );
   });
 
   it("keeps collection edits in place and advances the local version", () => {

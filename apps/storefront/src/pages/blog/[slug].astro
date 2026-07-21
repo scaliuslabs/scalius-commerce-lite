@@ -1,0 +1,263 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import { getArticleBySlug } from "@/lib/api/articles";
+import { getLayoutData } from "@/lib/api";
+import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
+import { getOptimizedImageUrl } from "@/lib/image-optimizer";
+import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { processShortcodes } from "@/lib/shortcodes";
+import {
+  buildAbsoluteStorefrontSeoUrl,
+  buildResourceCanonicalSeoUrl,
+  toAbsoluteStorefrontSeoUrl,
+} from "@/lib/seo-base-url";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { htmlToPlainText, sanitizeHtml } from "@scalius/shared/html-sanitize";
+import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+
+const { slug } = Astro.params;
+if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+  return new Response(null, { status: 404 });
+}
+
+const [layoutData, article] = await Promise.all([
+  getLayoutData(),
+  getArticleBySlug(slug),
+]);
+if (!article) return new Response(null, { status: 404 });
+if (!layoutData) {
+  const response = storefrontDataUnavailableResponse(
+    "We could not load this article. Please try again shortly.",
+  );
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+setRuntimeImageCdnPolicy(layoutData.media);
+
+const plainContent = htmlToPlainText(article.content);
+const description =
+  article.metaDescription || article.excerpt || plainContent.slice(0, 180);
+const title = article.metaTitle || article.title;
+const canonicalUrl = buildResourceCanonicalSeoUrl(
+  "article",
+  `/blog/${slug}`,
+  article.canonicalPath,
+);
+const featuredImageUrl = article.featuredImage?.url
+  ? getOptimizedImageUrl(article.featuredImage.url, {
+      width: 1440,
+      height: 810,
+      fit: "cover",
+      gravity: "auto",
+      format: "auto",
+      quality: 85,
+    })
+  : null;
+const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(featuredImageUrl);
+const featuredImageAlt =
+  article.featuredImage?.altText ||
+  article.featuredImage?.filename ||
+  article.title;
+let processedContent = sanitizeHtml(article.content || "");
+try {
+  processedContent = await processShortcodes(processedContent);
+} catch (error: unknown) {
+  console.error(`Error processing article shortcodes for "${slug}":`, error);
+}
+processedContent = optimizeRichContentImages(processedContent);
+const hasProductShortcode = processedContent.includes(
+  'class="product-shortcode-container"',
+);
+
+function asDate(value: number | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value < 1_000_000_000_000 ? value * 1000 : value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+const publishedDate = asDate(article.publishedAt);
+const updatedDate = asDate(article.updatedAt);
+const displayDate = publishedDate
+  ? new Intl.DateTimeFormat("en", { dateStyle: "long" }).format(publishedDate)
+  : null;
+const readingMinutes = Math.max(
+  1,
+  Math.ceil(plainContent.split(/\s+/).filter(Boolean).length / 220),
+);
+const discovery = normalizeSeoDiscoverySettings(layoutData.seo?.discovery);
+const articleJsonLd =
+  discovery.structuredData.articles && canonicalUrl && !article.noIndex
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: article.title,
+        description,
+        url: canonicalUrl,
+        mainEntityOfPage: canonicalUrl,
+        ...(publishedDate
+          ? { datePublished: publishedDate.toISOString() }
+          : {}),
+        ...(updatedDate ? { dateModified: updatedDate.toISOString() } : {}),
+        ...(article.author
+          ? { author: { "@type": "Person", name: article.author } }
+          : {}),
+        ...(absoluteImageUrl ? { image: [absoluteImageUrl] } : {}),
+      })
+    : null;
+const breadcrumbJsonLd =
+  discovery.structuredData.breadcrumbs && canonicalUrl && !article.noIndex
+    ? serializeJsonForInlineScript({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: buildAbsoluteStorefrontSeoUrl("/"),
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Blog",
+            item: buildAbsoluteStorefrontSeoUrl("/blog"),
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: article.title,
+            item: canonicalUrl,
+          },
+        ].filter((item) => item.item),
+      })
+    : null;
+---
+
+<Layout
+  title={title}
+  description={description}
+  hideHeader={article.hideHeader}
+  hideFooter={article.hideFooter}
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl ?? undefined}
+  ogImage={featuredImageUrl ?? undefined}
+  ogType="article"
+  noindex={article.noIndex === true}
+>
+  <Fragment slot="head">
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="Blog feed"
+      href="/blog/feed.xml"
+    />
+    {
+      publishedDate && (
+        <meta
+          property="article:published_time"
+          content={publishedDate.toISOString()}
+        />
+      )
+    }
+    {
+      updatedDate && (
+        <meta
+          property="article:modified_time"
+          content={updatedDate.toISOString()}
+        />
+      )
+    }
+    {
+      articleJsonLd && (
+        <script is:inline type="application/ld+json" set:html={articleJsonLd} />
+      )
+    }
+    {
+      breadcrumbJsonLd && (
+        <script
+          is:inline
+          type="application/ld+json"
+          set:html={breadcrumbJsonLd}
+        />
+      )
+    }
+  </Fragment>
+
+  <div class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
+    <nav aria-label="Breadcrumb" class="text-sm text-muted-foreground">
+      <a href="/blog" class="hover:text-foreground">Blog</a>
+      <span class="mx-2" aria-hidden="true">/</span>
+      <span aria-current="page" class="text-foreground">{article.title}</span>
+    </nav>
+
+    <header class="mx-auto mt-8 max-w-3xl text-center">
+      <h1
+        class="text-balance text-3xl font-semibold tracking-tight text-foreground sm:text-5xl sm:leading-tight"
+      >
+        {article.title}
+      </h1>
+      {
+        (displayDate || article.author) && (
+          <div class="mt-5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {article.author && <span>{article.author}</span>}
+            {article.author && displayDate && <span aria-hidden="true">·</span>}
+            {displayDate && (
+              <time datetime={publishedDate?.toISOString()}>{displayDate}</time>
+            )}
+            <span aria-hidden="true">·</span>
+            <span>{readingMinutes} min read</span>
+          </div>
+        )
+      }
+      {
+        article.excerpt && (
+          <p class="mx-auto mt-5 max-w-2xl text-lg leading-8 text-muted-foreground">
+            {article.excerpt}
+          </p>
+        )
+      }
+    </header>
+
+    {
+      featuredImageUrl && (
+        <figure class="mt-10 overflow-hidden rounded-2xl bg-muted">
+          <img
+            src={featuredImageUrl}
+            alt={featuredImageAlt}
+            width="1440"
+            height="810"
+            loading="eager"
+            decoding="async"
+            class="aspect-video w-full object-cover"
+          />
+        </figure>
+      )
+    }
+
+    <article
+      class="prose prose-lg mx-auto mt-10 max-w-3xl dark:prose-invert prose-headings:scroll-mt-24 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-a:text-primary prose-img:rounded-xl prose-blockquote:border-primary/40 prose-blockquote:text-foreground"
+      set:html={processedContent}
+    />
+
+    {
+      article.tags.length > 0 && (
+        <footer class="mx-auto mt-10 flex max-w-3xl flex-wrap gap-2 border-t border-border pt-6">
+          {article.tags.map((tag) => (
+            <a
+              href={`/blog?tag=${encodeURIComponent(tag)}`}
+              class="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:border-foreground/40 hover:text-foreground"
+            >
+              {tag}
+            </a>
+          ))}
+        </footer>
+      )
+    }
+  </div>
+
+  {
+    hasProductShortcode && (
+      <script>import "@/scripts/hydrateProductShortcodes.ts";</script>
+    )
+  }
+</Layout>
