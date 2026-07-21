@@ -8,7 +8,6 @@ const adminDir = resolve(settingsDir, "..");
 
 const sources = [
   resolve(adminDir, "StorefrontUrlBuilder.tsx"),
-  resolve(adminDir, "SecuritySettingsBuilder.tsx"),
   resolve(settingsDir, "BusinessSettingsBuilder.tsx"),
   resolve(settingsDir, "CurrencySettingsBuilder.tsx"),
   resolve(settingsDir, "MediaSettingsBuilder.tsx"),
@@ -23,6 +22,16 @@ describe("general settings read failures", () => {
       expect(source).toContain("isLoaded");
       expect(source).toContain("!isLoaded");
     }
+  });
+
+  it("keeps the custom security editor locked until its query succeeds", () => {
+    const source = readFileSync(
+      resolve(adminDir, "SecuritySettingsBuilder.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("securityQuery.isError");
+    expect(source).toContain("SettingsLoadFailure");
+    expect(source).toContain("!merchantSources || !savedMerchantSources");
   });
 
   it("explains that a failed read never becomes an editable default", () => {

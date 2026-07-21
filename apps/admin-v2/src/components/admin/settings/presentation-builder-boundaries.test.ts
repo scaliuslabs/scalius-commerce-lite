@@ -55,4 +55,14 @@ describe("header and footer builder workflow boundaries", () => {
     expect(headerBuilder).toContain('<TabsContent value="announcement"');
     expect(headerBuilder).not.toContain('value="top-bar"');
   });
+
+  it("keeps homepage composition recoverable and touch-sized", () => {
+    const homepage = source("./HomepagePresentationBuilder.tsx");
+
+    expect(homepage).toContain("onDraftStateChange");
+    expect(homepage).toContain("cloneConfig(saved.config)");
+    expect(homepage).toContain("min-h-11");
+    expect(homepage).toContain("md:size-8");
+    expect(homepage).toContain("Reset");
+  });
 });

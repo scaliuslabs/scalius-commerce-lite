@@ -24533,7 +24533,7 @@ export type GetApiV1AdminSettingsStorefrontUrlResponse = GetApiV1AdminSettingsSt
 
 export type PostApiV1AdminSettingsStorefrontUrlData = {
     body?: {
-        storefrontUrl?: string;
+        storefrontUrl: string;
     };
     path?: never;
     query?: never;

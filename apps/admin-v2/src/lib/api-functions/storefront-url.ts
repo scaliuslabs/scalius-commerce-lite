@@ -8,7 +8,7 @@ export interface StorefrontUrlPayload {
 }
 
 export interface UpdateStorefrontUrlInput {
-  storefrontUrl?: string;
+  storefrontUrl: string;
 }
 
 export const getStorefrontUrl = createServerFn({ method: "GET" }).handler(

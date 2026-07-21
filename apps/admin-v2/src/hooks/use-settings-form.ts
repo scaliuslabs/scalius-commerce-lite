@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -38,18 +38,24 @@ export function useSettingsForm<T extends object>({
   const hasLoaded = data !== undefined && !isError;
 
   // Local values state that syncs with query data
+  const defaultValuesRef = useRef(defaultValues);
   const [values, setValues] = useState<T>(defaultValues);
+  const [savedValues, setSavedValues] = useState<T>(defaultValues);
 
   // Sync query data to local state when data changes
   useEffect(() => {
     if (data) {
-      setValues((prev) => ({ ...prev, ...data }));
+      const nextValues = { ...defaultValuesRef.current, ...data } as T;
+      setValues(nextValues);
+      setSavedValues(nextValues);
     }
   }, [data]);
 
   const mutation = useMutation({
     mutationFn: saveFn,
-    onSuccess: () => {
+    onSuccess: (_result, submittedValues) => {
+      setValues(submittedValues);
+      setSavedValues(submittedValues);
       queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
       invalidateQueryKeys.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key as unknown[] });
@@ -65,6 +71,11 @@ export function useSettingsForm<T extends object>({
     setValues((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const isDirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+  const reset = useCallback(() => {
+    setValues(savedValues);
+  }, [savedValues]);
+
   const handleSubmit = useCallback(async () => {
     if (!hasLoaded) {
       toast.error("Reload settings before saving.");
@@ -77,6 +88,8 @@ export function useSettingsForm<T extends object>({
     values,
     setValue,
     setValues,
+    isDirty,
+    reset,
     isLoading,
     isLoaded: hasLoaded,
     isLoadError: isError,

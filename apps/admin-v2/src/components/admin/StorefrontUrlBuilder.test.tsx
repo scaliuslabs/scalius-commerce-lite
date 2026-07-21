@@ -17,6 +17,12 @@ const storefrontUrlApi = vi.hoisted(() => ({
 }));
 
 vi.mock("~/lib/api-functions/storefront-url", () => storefrontUrlApi);
+vi.mock("./shared/UnsavedChangesGuard", () => ({
+  UnsavedChangesGuard: () => null,
+}));
+vi.mock("./settings/HomepagePresentationBuilder", () => ({
+  HomepagePresentationBuilder: () => null,
+}));
 vi.mock("sonner", () => ({
   toast: {
     success: vi.fn(),
@@ -38,6 +44,19 @@ function getButton(host: HTMLElement, label: string): HTMLButtonElement {
   );
   if (!button) throw new Error(`Expected button labeled ${label}`);
   return button;
+}
+
+async function setStoreUrl(host: HTMLElement, value: string) {
+  const input = host.querySelector<HTMLInputElement>("#storefront-url");
+  if (!input) throw new Error("Expected Store URL input");
+  await act(async () => {
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    valueSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 async function waitFor(assertion: () => void) {
@@ -104,16 +123,37 @@ describe("StorefrontUrlBuilder", () => {
     });
   }
 
-  it("explains why the public Store URL must be absolute", async () => {
+  it("shows a clean saved state and explains where the origin is used", async () => {
     await renderBuilder();
 
     expect(host.textContent).toContain(
-      "Use the absolute public URL so previews, discovery files, and cache refreshes target the correct store.",
+      "Used for storefront links, previews, discovery files, and cache refreshes.",
     );
+    expect(getButton(host, "Reset").disabled).toBe(true);
+    expect(getButton(host, "Save URL").disabled).toBe(true);
   });
 
-  it("invalidates the SEO live proof after saving the Store URL", async () => {
+  it("rejects a relative draft without calling the API", async () => {
     await renderBuilder();
+    await setStoreUrl(host, "/preview");
+
+    expect(host.textContent).toContain(
+      "Use an HTTPS origin without a path, query, credentials, or fragment.",
+    );
+    expect(
+      host.querySelector<HTMLButtonElement>('[aria-label="Open storefront"]')
+        ?.disabled,
+    ).toBe(true);
+    expect(getButton(host, "Save URL").disabled).toBe(true);
+    expect(storefrontUrlApi.updateStorefrontUrl).not.toHaveBeenCalled();
+  });
+
+  it("normalizes and saves a changed origin, then invalidates the SEO live proof", async () => {
+    await renderBuilder();
+    await setStoreUrl(host, "https://new-shop.example.com/");
+
+    expect(getButton(host, "Reset").disabled).toBe(false);
+    expect(getButton(host, "Save URL").disabled).toBe(false);
 
     await act(async () => {
       getButton(host, "Save URL").dispatchEvent(
@@ -123,7 +163,7 @@ describe("StorefrontUrlBuilder", () => {
 
     await waitFor(() => {
       expect(storefrontUrlApi.updateStorefrontUrl).toHaveBeenCalledWith({
-        data: { storefrontUrl: "https://shop.example.com" },
+        data: { storefrontUrl: "https://new-shop.example.com" },
       });
     });
 

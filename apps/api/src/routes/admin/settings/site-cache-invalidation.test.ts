@@ -291,6 +291,9 @@ function createTestApp() {
     ],
   });
   mocks.saveSeoSettings.mockResolvedValue(undefined);
+  mocks.getStorefrontUrlSetting.mockResolvedValue({
+    storefrontUrl: "https://storefront.example.com",
+  });
   mocks.saveStorefrontUrl.mockResolvedValue(undefined);
   mocks.saveAllowedCountries.mockResolvedValue({
     allowedCountries: ["BD"],
@@ -361,6 +364,47 @@ describe("site settings cache invalidation", () => {
 
     expect(response.status).toBe(500);
     expect(body).toMatchObject({ success: false });
+  });
+
+  it("fails Store URL reads visibly instead of returning a relative fallback", async () => {
+    const { app, env } = createTestApp();
+    mocks.getStorefrontUrlSetting.mockRejectedValueOnce(
+      new Error("D1 unavailable"),
+    );
+
+    const response = await app.request(
+      "/api/v1/admin/settings/storefront-url",
+      { method: "GET" },
+      env,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toMatchObject({ success: false });
+    expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "",
+    "/",
+    "storefront.example.com",
+    "http://storefront.example.com",
+    "https://storefront.example.com/shop",
+    "https://user:secret@storefront.example.com",
+  ])("rejects invalid Store URL origin %j before writes", async (storefrontUrl) => {
+    const { app, env } = createTestApp();
+
+    const response = await requestJson(
+      app,
+      env,
+      "POST",
+      "/storefront-url",
+      { storefrontUrl },
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveStorefrontUrl).not.toHaveBeenCalled();
+    expect(mocks.invalidateApiAndScheduleStorefrontGroups).not.toHaveBeenCalled();
   });
 
   it("returns section-local navigation diagnostics without failing general settings", async () => {
@@ -456,7 +500,7 @@ describe("site settings cache invalidation", () => {
       expect.anything(),
       {
         topBar: { text: "Hi", isEnabled: true },
-        logo: { src: "/logo.png", alt: "Logo" },
+        logo: { src: "/logo.png", alt: "Logo", width: 180 },
         favicon: { src: "/favicon.png", alt: "Icon" },
         contact: { phone: "123", text: "Call", isEnabled: true },
         social: [],
