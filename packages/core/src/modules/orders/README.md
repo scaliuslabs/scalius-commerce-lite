@@ -148,6 +148,15 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 ### COD Actions
 
 `processCodAction()` handles three actions with CAS protection on the order version:
+
+- Collection is valid only for `confirmed | shipped | delivered` orders.
+- A failed delivery attempt is valid only for `confirmed | shipped` orders.
+- Return-to-sender is valid only for `shipped | delivered | completed` orders.
+
+The shared `canProcessOrderCodAction()` policy drives both the merchant UI and
+the core write guard. The server must reject a stale or direct request even
+when the dashboard has already hidden the action.
+
 - `collected`: CAS-updates the order toward `delivered`, records collection via `recordCODCollection()` before inventory movement, reconciles reserved inventory, synchronizes shipped-item and provider-less manual-shipment delivery evidence, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry/repair signal
 - `failed`: Records failure via `recordCODFailure()`
 - `returned`: CAS-updates the order toward `returned`, marks COD returned before inventory restoration, rolls back the returned claim if the COD marker or inventory repair fails, and retries inventory restoration when the order is already returned

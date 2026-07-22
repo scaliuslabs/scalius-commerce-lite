@@ -30,6 +30,15 @@ export type OrderStatusValue = (typeof ORDER_STATUSES)[number];
 export type PaymentStatusValue = (typeof PAYMENT_STATUSES)[number];
 export type FulfillmentStatusValue = (typeof FULFILLMENT_STATUSES)[number];
 export type StatusDimension = "order" | "payment" | "fulfillment";
+export type OrderCodAction = "collected" | "failed" | "returned";
+
+const ORDER_COD_ACTION_STATUSES: Readonly<
+  Record<OrderCodAction, readonly OrderStatusValue[]>
+> = {
+  collected: ["confirmed", "shipped", "delivered"],
+  failed: ["confirmed", "shipped"],
+  returned: ["shipped", "delivered", "completed"],
+};
 
 export const ORDER_STATUS_TRANSITIONS: Record<
   OrderStatusValue,
@@ -119,4 +128,12 @@ export function canTransitionTo(
   const next = normalizeStatusValue(newStatus);
   if (current === next) return true;
   return getAvailableTransitions(dimension, current).includes(next);
+}
+
+export function canProcessOrderCodAction(
+  currentStatus: string,
+  action: OrderCodAction,
+): boolean {
+  const current = normalizeOrderStatus(currentStatus);
+  return current !== null && ORDER_COD_ACTION_STATUSES[action].includes(current);
 }

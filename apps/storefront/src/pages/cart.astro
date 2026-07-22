@@ -539,7 +539,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                   name="customerName"
                   required
                   placeholder={lang.languageData.customerNamePlaceholder}
-                  className="h-9 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground"
+                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
                 />
               </div>
 
@@ -570,7 +570,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                       id="customerEmail"
                       name="customerEmail"
                       placeholder={lang.languageData.customerEmailPlaceholder}
-                      className="h-9 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground"
+                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-sm text-foreground sm:h-9"
                     />
                   </div>
                 )
@@ -639,7 +639,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             <div class="pt-4">
               <Button
                 type="submit"
-                className="w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
+                className="h-11 w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:h-10 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
                 id="submitButton"
                 disabled={true}
               >
@@ -1242,12 +1242,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     .px-4 {
       padding-left: 0.75rem;
       padding-right: 0.75rem;
-    }
-    .h-9 {
-      height: 2rem;
-    }
-    .h-10 {
-      height: 2.25rem;
     }
     .px-2\.5 {
       padding-left: 0.5rem;

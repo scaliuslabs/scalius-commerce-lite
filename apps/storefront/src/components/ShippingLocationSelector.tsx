@@ -104,7 +104,7 @@ export default function ShippingLocationSelector({
             <Label
               key={method.id}
               htmlFor={method.id}
-              className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer transition-all duration-200 h-full ${
+              className={`flex min-h-11 items-center justify-between rounded-lg border p-3 cursor-pointer transition-all duration-200 ${
                 selectedLocation === method.id
                   ? "border-black bg-white ring-1 ring-black shadow-sm"
                   : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"

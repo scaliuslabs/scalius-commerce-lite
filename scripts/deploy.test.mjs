@@ -184,6 +184,33 @@ describe("storefront post-deploy warming", () => {
     expect(sleepImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("proves an uncached health response through its explicit build header", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ status: "ok", buildId: "src-current" }),
+      {
+        status: 200,
+        headers: {
+          "X-Cache-Status": "BYPASS_FAST",
+          "X-Storefront-Build": "src-current",
+        },
+      },
+    ));
+
+    await expect(warmStorefrontPath(
+      "https://storefront.example.test",
+      "/health",
+      {
+        expectedBuildId: "src-current",
+        maxAttempts: 1,
+        fetchImpl,
+      },
+    )).resolves.toMatchObject({
+      attempt: 1,
+      cacheStatus: "BYPASS_FAST",
+      servedBuildId: "src-current",
+    });
+  });
+
   it("fails verification when the old build persists", async () => {
     const fetchImpl = vi.fn().mockImplementation(async () =>
       new Response("old", {

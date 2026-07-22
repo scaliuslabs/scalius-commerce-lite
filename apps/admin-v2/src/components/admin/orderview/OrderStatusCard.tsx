@@ -68,7 +68,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
           >
             <SelectTrigger
               aria-label="Order status"
-              className="h-9 text-sm border-border bg-background text-foreground"
+              className="h-11 border-border bg-background text-sm text-foreground sm:h-9"
             >
               {statusMutation.isPending ? (
                 <div className="flex items-center gap-2">
