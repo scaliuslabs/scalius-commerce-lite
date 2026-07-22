@@ -271,7 +271,7 @@ export function PageForm({
       newUrl={
         contentType === "article" ? "/admin/articles/new" : "/admin/pages/new"
       }
-      newLabel={contentType === "article" ? "New Article" : "New Page"}
+      newLabel={contentType === "article" ? "New article" : "New page"}
       canCreateNew={canCreate}
       canSave={canSave}
       saveDisabledReason={
@@ -281,8 +281,8 @@ export function PageForm({
       }
       saveLabel={
         isEdit
-          ? `Save ${contentType === "article" ? "Article" : "Page"}`
-          : `Create ${contentType === "article" ? "Article" : "Page"}`
+          ? `Save ${contentType}`
+          : `Create ${contentType}`
       }
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
@@ -383,7 +383,7 @@ export function PageForm({
           ) : null}
 
           {/* Featured Image Card (collapsible) */}
-          <CollapsibleCard title="Featured Image" defaultOpen={true}>
+          <CollapsibleCard title="Featured image" defaultOpen={true}>
             <FormField
               control={form.control}
               name="featuredImage"
@@ -665,13 +665,13 @@ export function PageForm({
           </Card>
 
           {/* SEO card (collapsible) */}
-          <CollapsibleCard title="Search Engine Listing" defaultOpen={false}>
+          <CollapsibleCard title="Search listing" defaultOpen={false}>
             <FormField
               control={form.control}
               name="metaTitle"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Meta Title</FormLabel>
+                  <FormLabel>Meta title</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="SEO title (optional)"
@@ -690,9 +690,7 @@ export function PageForm({
                       max={70}
                     />
                   )}
-                  <FormDescription>
-                    Leave empty to use the title. Recommended: 50-60 characters.
-                  </FormDescription>
+                  <FormDescription>Defaults to the content title.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -703,7 +701,7 @@ export function PageForm({
               name="metaDescription"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Meta Description</FormLabel>
+                  <FormLabel>Meta description</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="SEO description (optional)"
@@ -722,10 +720,6 @@ export function PageForm({
                       max={200}
                     />
                   )}
-                  <FormDescription>
-                    A brief description for search engines. Recommended: 150-160
-                    characters.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -736,7 +730,7 @@ export function PageForm({
               name="canonicalPath"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Canonical Path</FormLabel>
+                  <FormLabel>Canonical path</FormLabel>
                   <FormControl>
                     <Input
                       placeholder={
@@ -753,8 +747,7 @@ export function PageForm({
                     />
                   </FormControl>
                   <FormDescription>
-                    Optional same-store canonical path. Leave blank to use this
-                    URL.
+                    Leave blank to use this URL.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

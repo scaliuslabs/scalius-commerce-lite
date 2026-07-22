@@ -111,7 +111,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
               {file.kind === "video" && (
                 <div className="space-y-1.5">
                   <Label className="text-xs">Poster image</Label>
-                  {posterUrl || posterMediaId ? <div className="flex items-center gap-2 rounded-md border p-2">{posterUrl ? <img src={getOptimizedImageUrl(posterUrl)} alt="" className="h-10 w-14 rounded bg-muted object-contain" /> : <div className="flex h-10 w-14 items-center justify-center rounded bg-muted"><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>}<span className="min-w-0 flex-1 truncate text-xs">{poster?.filename ?? "Saved poster image"}</span><Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-8" onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>Remove</Button></div> : <div className="flex h-16 items-center justify-center rounded-md border border-dashed text-muted-foreground"><Play className="mr-2 h-4 w-4" /><span className="text-xs">Neutral video placeholder</span></div>}
+                  {posterUrl || posterMediaId ? <div className="flex items-center gap-2 rounded-md border p-2">{posterUrl ? <img src={getOptimizedImageUrl(posterUrl)} alt="" className="h-10 w-14 rounded bg-muted object-contain" /> : <div className="flex h-10 w-14 items-center justify-center rounded bg-muted"><ImagePlus className="h-4 w-4 text-muted-foreground" /></div>}<span className="min-w-0 flex-1 truncate text-xs">{poster?.filename ?? "Saved poster image"}</span><Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-8" onClick={() => { setPoster(null); setPosterMediaId(null); setPosterUrl(null); }}>Remove</Button></div> : <div className="flex h-16 items-center justify-center rounded-md border border-dashed text-muted-foreground"><Play className="mr-2 h-4 w-4" /><span className="text-xs">No poster selected</span></div>}
                   <MediaManager capability="image" onSelect={(image) => { setPoster(image); setPosterMediaId(image.id); setPosterUrl(image.url); }} trigger={<Button type="button" variant="outline" size="sm" className="h-11 w-full sm:h-8"><ImagePlus className="mr-1.5 h-3.5 w-3.5" />{posterMediaId ? "Change poster" : "Choose poster"}</Button>} />
                 </div>
               )}
@@ -130,7 +130,7 @@ export function MediaPreview({ open, file, files, onOpenChange, onNavigate, onUp
     </Dialog>
     <AlertDialog open={pendingAction !== null} onOpenChange={(nextOpen) => !nextOpen && setPendingAction(null)}>
       <AlertDialogContent>
-        <AlertDialogHeader><AlertDialogTitle>Discard unsaved details?</AlertDialogTitle><AlertDialogDescription>Your file is already safe. Only the unsaved name, description, or poster change will be discarded.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogHeader><AlertDialogTitle>Discard unsaved details?</AlertDialogTitle><AlertDialogDescription>Unsaved name, description, and poster changes will be lost.</AlertDialogDescription></AlertDialogHeader>
         <AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><AlertDialogAction onClick={discardAndContinue}>Discard changes</AlertDialogAction></AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

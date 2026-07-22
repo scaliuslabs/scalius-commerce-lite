@@ -88,7 +88,7 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
 
       <Dialog open={!!dialog} onOpenChange={(value) => !value && setDialog(null)}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle>{dialog?.mode === "rename" ? "Rename folder" : "Create folder"}</DialogTitle><DialogDescription>Folders are flat and only organize this library.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{dialog?.mode === "rename" ? "Rename folder" : "Create folder"}</DialogTitle><DialogDescription>Folders cannot be nested.</DialogDescription></DialogHeader>
           <Input value={name} maxLength={100} autoFocus placeholder="Folder name" onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void save(); }} />
           <DialogFooter><Button type="button" variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button type="button" disabled={!name.trim() || busy} onClick={() => void save()}>{dialog?.mode === "rename" ? "Save name" : "Create folder"}</Button></DialogFooter>
         </DialogContent>

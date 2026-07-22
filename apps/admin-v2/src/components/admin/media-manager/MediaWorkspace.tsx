@@ -76,7 +76,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
           ) : (
             <h1 className="text-sm font-semibold">Media</h1>
           )}
-          <p className="truncate text-xs text-muted-foreground">{limitHint}</p>
+          <p className="sr-only">{limitHint}</p>
         </div>
         {!picker && <div className="flex rounded-md border p-0.5" role="group" aria-label="Media view"><Button type="button" aria-pressed={mm.view === "ready"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "ready" && "bg-muted")} onClick={() => mm.setView("ready")}><Image className="mr-1.5 h-3.5 w-3.5" />Library</Button><Button type="button" aria-pressed={mm.view === "trash"} variant="ghost" size="sm" className={cn("h-11 px-2.5 text-xs sm:h-7", mm.view === "trash" && "bg-muted")} onClick={() => mm.setView("trash")}><Trash2 className="mr-1.5 h-3.5 w-3.5" />Trash</Button></div>}
         {onClose && <Button type="button" variant="ghost" size="sm" className="h-11 sm:h-8" onClick={onClose}>Close</Button>}
@@ -117,7 +117,7 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
 
       <MediaPreview open={mm.showPreview} file={mm.previewFile} files={mm.files} onOpenChange={mm.setShowPreview} onNavigate={navigate} onUpdate={mm.updateFile} onSelect={onSelect} />
       <AlertDialog open={!!confirm} onOpenChange={(value) => !value && setConfirm(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete permanently?</AlertDialogTitle><AlertDialogDescription>This removes the R2 object after dependency checks. It cannot be undone. Referenced assets will be blocked.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep in trash</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (confirm?.file) void mm.mutateOne(confirm.file, "permanent"); else if (confirm?.bulk) void mm.mutateSelected("permanent"); setConfirm(null); }}>Delete permanently</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete permanently?</AlertDialogTitle><AlertDialogDescription>This cannot be undone. Assets in use cannot be deleted.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Keep in trash</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (confirm?.file) void mm.mutateOne(confirm.file, "permanent"); else if (confirm?.bulk) void mm.mutateSelected("permanent"); setConfirm(null); }}>Delete permanently</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
     </div>
   );

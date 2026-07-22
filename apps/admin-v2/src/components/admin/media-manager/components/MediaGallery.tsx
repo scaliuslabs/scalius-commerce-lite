@@ -48,7 +48,7 @@ export function MediaGallery(props: MediaGalleryProps) {
       <div className="flex h-full min-h-72 flex-col items-center justify-center px-6 text-center">
         <span className="mb-3 rounded-xl border bg-muted/40 p-3"><ImageIcon className="h-6 w-6 text-muted-foreground" /></span>
         <h3 className="text-sm font-semibold">{props.view === "trash" ? "Trash is empty" : "No matching assets"}</h3>
-        <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.view === "trash" ? "Assets moved to trash stay here until restored or permanently deleted." : "Change the search, folder, or type filter—or upload a new asset."}</p>
+        <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{props.view === "trash" ? "Deleted assets appear here." : "Try another search, folder, or file type."}</p>
         {props.view === "ready" && props.onUploadClick && <Button type="button" size="sm" className="mt-4 h-11 sm:h-8" onClick={props.onUploadClick}><Upload className="mr-1.5 h-3.5 w-3.5" />Upload assets</Button>}
       </div>
     );

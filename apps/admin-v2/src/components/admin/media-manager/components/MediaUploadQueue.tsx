@@ -36,8 +36,8 @@ export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFi
         {attentionCount ? `${attentionCount} upload${attentionCount === 1 ? " needs" : "s need"} attention.` : ""}
       </p>
       <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· 5 MiB parts · keep this tab open to resume</span></p>
-        {finished && <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onClearFinished}>Clear finished</Button>}
+        <p className="text-xs font-semibold">Uploads <span className="font-normal text-muted-foreground">· Keep this tab open</span></p>
+        {finished && <Button type="button" variant="ghost" size="sm" className="h-11 text-xs sm:h-7" onClick={onClearFinished}>Clear finished</Button>}
       </div>
       <div className="grid gap-1.5 lg:grid-cols-2">
         {queue.map((item) => (
@@ -47,9 +47,9 @@ export function MediaUploadQueue({ queue, onPause, onResume, onCancel, onClearFi
                 <div className="flex items-baseline gap-2"><p className="truncate text-xs font-medium">{item.file.name}</p><span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel[item.status]}</span></div>
                 <Progress className="mt-1.5 h-1" value={item.progress} aria-label={`${item.file.name} upload progress`} />
               </div>
-              {["initiating", "uploading"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onPause(item.id)} aria-label={`Pause ${item.file.name}`}><Pause className="h-3.5 w-3.5" /></Button>}
-              {["paused", "failed"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onResume(item.id)} aria-label={`${item.status === "failed" ? "Retry" : "Resume"} ${item.file.name}`}>{item.status === "failed" ? <RotateCcw className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}</Button>}
-              {item.status === "complete" ? <Check className="h-4 w-4 text-emerald-600" /> : !["cancelled", "completing"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => onCancel(item.id)} aria-label={`Cancel ${item.file.name}`}><X className="h-3.5 w-3.5" /></Button>}
+              {["initiating", "uploading"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onPause(item.id)} aria-label={`Pause ${item.file.name}`}><Pause className="h-3.5 w-3.5" /></Button>}
+              {["paused", "failed"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onResume(item.id)} aria-label={`${item.status === "failed" ? "Retry" : "Resume"} ${item.file.name}`}>{item.status === "failed" ? <RotateCcw className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}</Button>}
+              {item.status === "complete" ? <Check className="h-4 w-4 text-emerald-600" /> : !["cancelled", "completing"].includes(item.status) && <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" onClick={() => onCancel(item.id)} aria-label={`Cancel ${item.file.name}`}><X className="h-3.5 w-3.5" /></Button>}
             </div>
             {item.error && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-destructive"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.failedPart ? `Part ${item.failedPart}: ` : ""}{item.error}</p>}
             {item.warning && <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-4 text-amber-700 dark:text-amber-400" role="status"><AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />{item.warning}</p>}

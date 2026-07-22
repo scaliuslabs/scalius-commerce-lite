@@ -87,8 +87,7 @@ export function FormImageUploadField({
       ) : (
         <div
           className={cn(
-            "flex flex-col items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 text-muted-foreground",
-            aspectRatio,
+            "flex min-h-28 flex-col items-center justify-center rounded-md border border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-6 text-muted-foreground",
             maxWidth,
           )}
         >

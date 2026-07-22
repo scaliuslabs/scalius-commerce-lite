@@ -238,11 +238,11 @@ function PagesPage() {
           <h1 className="text-xl font-semibold tracking-tight">
             {showTrashed ? "Page trash" : "Pages"}
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {showTrashed
-              ? "Restore pages or delete them permanently."
-              : "Manage your website pages and content."}
-          </p>
+          {showTrashed ? (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Restore pages or delete them permanently.
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -290,7 +290,7 @@ function PagesPage() {
                 search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
               })
             }
-            searchPlaceholder="Search pages..."
+            searchPlaceholder="Search pages…"
             filters={!showTrashed ? (
               <Select
                 value={search.status ?? "all"}
