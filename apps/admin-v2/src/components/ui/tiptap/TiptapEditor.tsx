@@ -180,7 +180,7 @@ export function TiptapEditor({
     <div
       ref={contentWrapperRef}
       className={cn(
-        "flex flex-col bg-background transition-colors",
+        "flex min-w-0 w-full flex-col bg-background transition-colors",
         isFullscreen
           ? "fixed inset-0 z-[9999] h-dvh w-full"
           : "border rounded-md",
@@ -203,7 +203,7 @@ export function TiptapEditor({
               size="sm"
               aria-label="Exit fullscreen"
               onClick={() => setIsFullscreen(false)}
-              className="gap-1.5"
+              className="min-h-11 gap-1.5 sm:min-h-9"
             >
               <Minimize2 className="h-3.5 w-3.5" />
               Exit fullscreen

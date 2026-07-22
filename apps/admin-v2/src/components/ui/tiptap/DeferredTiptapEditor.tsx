@@ -46,7 +46,7 @@ function EditorLoadingShell({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-md border bg-background",
+        "w-full min-w-0 overflow-hidden rounded-md border bg-background",
         getDeferredEditorMinHeightClass(Boolean(compact)),
         className,
       )}
@@ -103,7 +103,7 @@ export function DeferredTiptapEditor({
 
   if (shouldMountEditor) {
     return (
-      <div>
+      <div className="w-full min-w-0">
         <Suspense
           fallback={
             <EditorLoadingShell className={className} compact={compact} />
@@ -126,7 +126,7 @@ export function DeferredTiptapEditor({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "w-full min-w-0 overflow-hidden rounded-md border bg-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         getDeferredEditorMinHeightClass(compact),
         className,
       )}

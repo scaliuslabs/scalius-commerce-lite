@@ -40,6 +40,18 @@ describe("rich text editor mobile boundaries", () => {
   });
 
   it("keeps the feature-rich toolbar to one scrollable row on mobile", () => {
+    expect(deferredSource).toContain(
+      '<div className="w-full min-w-0">',
+    );
+    expect(deferredSource).toContain(
+      '"w-full min-w-0 overflow-hidden rounded-md border bg-background"',
+    );
+    expect(deferredSource).toContain(
+      '"w-full min-w-0 overflow-hidden rounded-md border bg-background transition-colors',
+    );
+    expect(editorSource).toContain(
+      '"flex min-w-0 w-full flex-col bg-background transition-colors"',
+    );
     expect(menuSource).toContain("overflow-x-auto overscroll-x-contain scrollbar-hide");
     expect(menuSource).toContain("flex min-w-max items-center");
     expect(menuSource).not.toContain("flex flex-wrap items-center");
@@ -61,6 +73,12 @@ describe("rich text editor mobile boundaries", () => {
     expect(imageViewSource).toContain(
       "onMouseDown={(event) => event.preventDefault()}",
     );
+    expect(imageViewSource).toContain(
+      '"flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"',
+    );
+    expect(imageViewSource).toContain(
+      'className="h-11 rounded-md border border-input bg-background px-2 text-xs sm:h-8"',
+    );
   });
 
   it("keeps table setup compact and defers editing actions until needed", () => {
@@ -76,6 +94,7 @@ describe("rich text editor mobile boundaries", () => {
 
   it("uses one explicit fullscreen exit and names each formatting toolbar", () => {
     expect(editorSource).toContain('aria-label="Exit fullscreen"');
+    expect(editorSource).toContain('className="min-h-11 gap-1.5 sm:min-h-9"');
     expect(editorSource).toContain('ariaLabel={`${ariaLabel} formatting`}');
     expect(menuSource).not.toContain("Minimize2");
   });
