@@ -87,6 +87,22 @@ export interface NavigationPublication {
   checksum: string;
 }
 
+export type NavigationResourceType = "page" | "category" | "collection" | "product";
+
+export interface NavigationResourceOption {
+  id: string;
+  name: string;
+  type: NavigationResourceType;
+  url: string;
+  available: boolean;
+}
+
+export interface NavigationResourcePage {
+  items: NavigationResourceOption[];
+  selected: NavigationResourceOption | null;
+  nextCursor: string | null;
+}
+
 export interface NavigationItemDraft {
   label: string;
   labelMode: "custom" | "resource";
@@ -110,6 +126,25 @@ export const getNavigationMenusAuthority = createServerFn({ method: "GET" })
     ...(data.cursor ? { cursor: data.cursor } : {}),
     ...(data.includeTrash ? { includeTrash: "true" } : {}),
   }));
+
+export const getNavigationResourcesAuthority = createServerFn({ method: "GET" })
+  .validator((data: {
+    type: NavigationResourceType;
+    query?: string;
+    cursor?: string;
+    limit?: number;
+    selectedId?: string;
+  }) => data)
+  .handler(async ({ data }) => apiGet<NavigationResourcePage>(
+    "/navigation/resources",
+    {
+      type: data.type,
+      q: data.query?.trim() ?? "",
+      limit: String(data.limit ?? 20),
+      ...(data.cursor ? { cursor: data.cursor } : {}),
+      ...(data.selectedId ? { selectedId: data.selectedId } : {}),
+    },
+  ));
 
 export const getNavigationMenuAuthority = createServerFn({ method: "GET" })
   .validator((data: { menuId: string }) => data)

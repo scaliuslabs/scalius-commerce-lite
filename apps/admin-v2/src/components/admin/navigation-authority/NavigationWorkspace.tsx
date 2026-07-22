@@ -79,7 +79,6 @@ import {
 import { Switch } from "~/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { getServerFnError } from "~/lib/api-helpers";
-import { getNavigationItems } from "~/lib/api-functions/navigation";
 import {
   createNavigationMenuAuthority,
   createNavigationMenuItemAuthority,
@@ -106,6 +105,7 @@ import {
 } from "~/lib/api-functions/navigation-authority";
 import { queryKeys } from "~/lib/query-keys";
 import { NavigationAuthorityMoveDialog } from "./NavigationAuthorityMoveDialog";
+import { NavigationResourcePicker } from "./NavigationResourcePicker";
 
 export type NavigationWorkspacePanel = "items" | "placements" | "history";
 
@@ -569,11 +569,6 @@ function MenuItemDialog({
     queryFn: () => getNavigationMenuItemAuthority({ data: { menuId: menu.id, itemId } }),
     enabled: editing,
   });
-  const sourcesQuery = useQuery({
-    queryKey: queryKeys.navigation.items(),
-    queryFn: () => getNavigationItems(),
-    staleTime: 5 * 60_000,
-  });
   const [draft, setDraft] = useState<NavigationItemDraft>({
     label: "",
     labelMode: "custom",
@@ -626,16 +621,6 @@ function MenuItemDialog({
   });
 
   const targetType = draft.target.type === "resource" ? draft.target.resourceType : draft.target.type;
-  const sources = sourcesQuery.data?.items;
-  const sourceKeyByType = {
-    page: "pages",
-    category: "categories",
-    collection: "collections",
-    product: "products",
-  } as const;
-  const resourceOptions = draft.target.type === "resource"
-    ? sources?.[sourceKeyByType[draft.target.resourceType]] ?? []
-    : [];
   const selectedResourceId = draft.target.type === "resource"
     ? draft.target.resourceId
     : "";
@@ -722,23 +707,17 @@ function MenuItemDialog({
             {draft.target.type === "resource" && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Resource</Label>
-                  <Select
+                  <Label htmlFor="navigation-item-resource">Resource</Label>
+                  <NavigationResourcePicker
+                    key={draft.target.resourceType}
+                    id="navigation-item-resource"
+                    type={draft.target.resourceType}
                     value={selectedResourceId}
+                    fallbackLabel={draft.label}
                     onValueChange={(resourceId) => setDraft((current) => current.target.type === "resource"
                       ? { ...current, target: { ...current.target, resourceId } }
                       : current)}
-                  >
-                    <SelectTrigger><SelectValue placeholder="Choose resource" /></SelectTrigger>
-                    <SelectContent>
-                      {selectedResourceId && !resourceOptions.some((option) => option.id === selectedResourceId) && (
-                        <SelectItem value={selectedResourceId}>{selectedResourceId}</SelectItem>
-                      )}
-                      {resourceOptions.map((option) => (
-                        <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="navigation-item-query">Optional query</Label>

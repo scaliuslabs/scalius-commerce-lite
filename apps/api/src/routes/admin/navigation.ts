@@ -13,6 +13,7 @@ import {
     getNavigationPlacementManifest,
     getNavigationItems,
     getNavigationPreviewProductCount,
+    listNavigationResources,
     listNavigationMenuItems,
     listNavigationMenuPublications,
     listNavigationMenus,
@@ -44,6 +45,24 @@ const navSourceItemSchema = z.object({
     slug: z.string(),
     type: z.string(),
     url: z.string(),
+});
+
+const navigationResourceTypeSchema = z.enum([
+    "page",
+    "category",
+    "collection",
+    "product",
+]);
+const navigationResourceCursorSchema = z.object({
+    name: z.string().max(200),
+    id: z.string().min(1).max(200),
+});
+const navigationResourceOptionSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    type: navigationResourceTypeSchema,
+    url: z.string(),
+    available: z.boolean(),
 });
 
 const previewProductsQuerySchema = z
@@ -162,6 +181,61 @@ app.openapi(listItemsRoute, async (c) => {
     const db = c.get("db");
     const items = await getNavigationItems(db);
     return ok(c, { items });
+});
+
+// ── Search Navigation Resources ──
+
+const listResourcesRoute = createRoute({
+    method: "get",
+    path: "/resources",
+    tags: ["Admin - Navigation"],
+    summary: "Search resources for navigation menu items",
+    request: {
+        query: z.object({
+            type: navigationResourceTypeSchema,
+            q: z.string().trim().max(100).optional().default(""),
+            cursor: z.string().optional(),
+            limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+            selectedId: z.string().trim().min(1).max(200).optional(),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Keyset-paginated navigation resource options",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        items: z.array(navigationResourceOptionSchema),
+                        selected: navigationResourceOptionSchema.nullable(),
+                        nextCursor: z.string().nullable(),
+                    })),
+                },
+            },
+        },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listResourcesRoute, async (c) => {
+    const db = c.get("db");
+    const query = c.req.valid("query");
+    const decodedCursor = query.cursor
+        ? navigationResourceCursorSchema.parse(decodeCursor<unknown>(query.cursor))
+        : undefined;
+    const result = await listNavigationResources(db, {
+        type: query.type,
+        query: query.q,
+        cursor: decodedCursor,
+        limit: query.limit,
+        selectedId: query.selectedId,
+    });
+    return ok(c, {
+        items: result.items,
+        selected: result.selected,
+        nextCursor: result.nextCursor
+            ? encodeCursor({ name: result.nextCursor.name, id: result.nextCursor.id })
+            : null,
+    });
 });
 
 // ── Preview Dynamic Navigation Product Count ──
