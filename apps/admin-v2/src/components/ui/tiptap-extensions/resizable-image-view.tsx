@@ -189,7 +189,7 @@ export function ResizableImageView({
               aria-label="Align image left"
               title="Align image left"
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "left" && "bg-accent",
               )}
             >
@@ -201,7 +201,7 @@ export function ResizableImageView({
               aria-label="Center image"
               title="Center image"
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 (textAlign === "center" || !textAlign) && "bg-accent",
               )}
             >
@@ -213,7 +213,7 @@ export function ResizableImageView({
               aria-label="Align image right"
               title="Align image right"
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
+                "flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8",
                 textAlign === "right" && "bg-accent",
               )}
             >
@@ -234,7 +234,7 @@ export function ResizableImageView({
                   width: event.target.value === "auto" ? null : event.target.value,
                 })
               }
-              className="h-10 rounded-md border border-input bg-background px-2 text-xs sm:h-8"
+              className="h-11 rounded-md border border-input bg-background px-2 text-xs sm:h-8"
             >
               <option value="auto">Natural</option>
               <option value="25%">25%</option>
@@ -255,7 +255,7 @@ export function ResizableImageView({
                   type="button"
                   aria-label="Edit image alternative text"
                   title="Edit image alternative text"
-                  className="flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"
+                  className="flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"
                 >
                   <PencilLine className="h-3.5 w-3.5" />
                 </button>
@@ -303,7 +303,7 @@ export function ResizableImageView({
               onClick={deleteNode}
               aria-label="Remove image"
               title="Remove image"
-              className="flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:w-8"
+              className="flex h-11 w-11 items-center justify-center rounded transition-colors hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:w-8"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
