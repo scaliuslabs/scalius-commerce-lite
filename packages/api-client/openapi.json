@@ -2226,6 +2226,22 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "newest",
+                "price-asc",
+                "price-desc",
+                "name-asc",
+                "name-desc",
+                "discount"
+              ]
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "string"
             },
             "required": false,

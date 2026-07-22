@@ -12,6 +12,17 @@ describe("public collection catalog route", () => {
     expect(source).toContain("collectionCatalogQuerySchema");
     expect(source).toContain("readRepeatedPublicQueryValues(c.req.url)");
     expect(source).toContain("resolvePublicAttributeFilters(");
+    expect(source).toContain('sort: z.enum([');
+    for (const sort of [
+      "newest",
+      "price-asc",
+      "price-desc",
+      "name-asc",
+      "name-desc",
+      "discount",
+    ]) {
+      expect(source).toContain(`"${sort}"`);
+    }
     expect(source).toContain("pagination: paginationSchema");
     expect(source).toContain("facets: z.array(collectionFacetSchema)");
     expect(source).toContain("priceRange: z.object");

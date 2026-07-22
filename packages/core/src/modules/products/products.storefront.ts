@@ -1077,7 +1077,7 @@ export async function getStorefrontCollectionProducts(
 
     return readStorefrontCatalogPage(db, params, {
         condition: membershipCondition,
-        orderBy: productIds.length > 0
+        orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")
             ? (buyerPricing) => sql`COALESCE((
                 SELECT CAST(key AS INTEGER)
                 FROM json_each(${membershipJson}) AS curated_membership

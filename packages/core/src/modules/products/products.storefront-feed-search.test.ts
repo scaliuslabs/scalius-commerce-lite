@@ -771,6 +771,27 @@ describe("storefront feed category search", () => {
         expect(maxBoundParameters).toBeLessThanOrEqual(100);
     });
 
+    it("honors an explicit shopper sort instead of the manual collection order", async () => {
+        const membership = {
+            productIds: ["prod_slip_on", "prod_runner", "prod_loafer"],
+        };
+        sqlite.prepare("UPDATE product_variants SET price = 500 WHERE product_id = 'prod_runner'").run();
+        sqlite.prepare("UPDATE product_variants SET price = 1500 WHERE product_id = 'prod_slip_on'").run();
+
+        const result = await getStorefrontCollectionProducts(db, membership, {
+            page: 1,
+            limit: 20,
+            sort: "price-asc",
+        });
+
+        expect(result.products.map((product) => product.id)).toEqual([
+            "prod_runner",
+            "prod_loafer",
+            "prod_slip_on",
+        ]);
+        expect(maxBoundParameters).toBeLessThanOrEqual(100);
+    });
+
     it("unions mixed collection membership with curated products first and no duplicates", async () => {
         const membership = {
             productIds: ["prod_runner", "prod_oxford"],

@@ -86,4 +86,15 @@ describe("catalog filter dialog", () => {
     expect(dialog.getAttribute("role")).toBe("dialog");
     expect(document.activeElement?.id).toBe("collection-close");
   });
+
+  it("restores the page's existing overflow style after closing", () => {
+    document.body.style.overflow = "clip";
+    setupCatalogFilterDialog();
+
+    document.querySelector<HTMLButtonElement>("#mobile-filter-toggle")!.click();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    document.querySelector<HTMLButtonElement>("#mobile-filter-close")!.click();
+    expect(document.body.style.overflow).toBe("clip");
+  });
 });

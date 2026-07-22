@@ -29,6 +29,7 @@ export function setupCatalogFilterDialog({
   dialog.dataset.dialogBound = "true";
 
   const mobile = window.matchMedia("(max-width: 1023px)");
+  let previousBodyOverflow = document.body.style.overflow;
 
   const isOpen = () => mobile.matches && !dialog.classList.contains("hidden");
   const focusable = () =>
@@ -49,13 +50,14 @@ export function setupCatalogFilterDialog({
       dialog.removeAttribute("aria-modal");
       dialog.removeAttribute("aria-hidden");
       toggle.setAttribute("aria-expanded", "false");
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousBodyOverflow;
     }
   };
 
   const openDialog = () => {
     if (!mobile.matches) return;
     dialog.classList.remove("hidden");
+    previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     syncSemantics();
     close.focus();
@@ -64,7 +66,7 @@ export function setupCatalogFilterDialog({
   const closeDialog = (restoreFocus = true) => {
     if (!mobile.matches) return;
     dialog.classList.add("hidden");
-    document.body.style.overflow = "";
+    document.body.style.overflow = previousBodyOverflow;
     syncSemantics();
     if (restoreFocus) toggle.focus();
   };

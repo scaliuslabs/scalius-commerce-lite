@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { storefrontSourcePath } from "../test-source-paths";
 
 const source = readFileSync(
-  fileURLToPath(new URL("../../pages/categories/[slug].astro", import.meta.url)),
+  storefrontSourcePath("pages/categories/[slug].astro"),
+  "utf8",
+);
+const catalogSortSource = readFileSync(
+  storefrontSourcePath("lib/catalog-sort.ts"),
   "utf8",
 );
 
@@ -26,7 +30,12 @@ describe("category listing page boundaries", () => {
   });
 
   it("binds sort navigation once across Astro lifecycle events", () => {
-    expect(source).toContain('if (sortSelect.dataset.sortBound === "true") return');
-    expect(source).toContain('sortSelect.dataset.sortBound = "true"');
+    expect(source).toContain("setupCatalogSorts");
+    expect(catalogSortSource).toContain(
+      'if (sortSelect.dataset.sortBound === "true") return',
+    );
+    expect(catalogSortSource).toContain(
+      'sortSelect.dataset.sortBound = "true"',
+    );
   });
 });
