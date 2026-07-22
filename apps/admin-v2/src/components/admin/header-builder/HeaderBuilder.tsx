@@ -193,12 +193,7 @@ export function HeaderBuilder({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Storefront header</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Brand, announce, and guide customers from one compact workspace.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold tracking-tight">Storefront header</h2>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span
             className={cn(
@@ -309,14 +304,14 @@ export function HeaderBuilder({
               <Menu className="size-5" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Menus have their own workspace</h3>
+              <h3 className="text-sm font-semibold">Navigation menus</h3>
               <p className="mt-1 max-w-lg text-sm text-muted-foreground">
-                Arrange reusable menus, publish changes, and choose storefront locations without overwriting header branding.
+                Manage menus and choose where they appear.
               </p>
             </div>
             <Button asChild size="sm">
               <Link to="/admin/navigation" search={{ panel: "items", q: "" }}>
-                Open Navigation
+                Manage menus
               </Link>
             </Button>
           </Card>

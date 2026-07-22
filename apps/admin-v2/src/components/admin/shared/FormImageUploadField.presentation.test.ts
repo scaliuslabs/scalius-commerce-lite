@@ -17,6 +17,9 @@ describe("FormImageUploadField presentation boundary", () => {
     expect(source).toContain("width: 640");
     expect(source).toContain("height: 480");
     expect(source).toContain("aria-label={`Remove ${value.filename}`}");
+    expect(source).toContain("h-11 w-11 sm:h-8 sm:w-8");
+    expect(source).toContain('triggerLabel = "Choose image"');
+    expect(source).toContain('changeTriggerLabel = "Change image"');
   });
 
   it("keeps the empty state compact instead of reserving a full preview ratio", () => {

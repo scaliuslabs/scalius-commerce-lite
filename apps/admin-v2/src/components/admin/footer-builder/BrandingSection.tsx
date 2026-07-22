@@ -45,8 +45,9 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
                 <Button
                   size="icon"
                   variant="destructive"
-                  className="absolute -top-2 -right-2 h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  className="absolute -right-2 -top-2 h-11 w-11 opacity-100 transition-opacity sm:h-8 sm:w-8 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100"
                   onClick={removeLogo}
+                  aria-label="Remove footer logo"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -61,7 +62,7 @@ export function BrandingSection({ logo, onLogoChange }: BrandingSectionProps) {
             <MediaManager
               capability="image"
               onSelect={handleLogoSelect}
-              triggerLabel={logo.src ? "Change Logo" : "Select Logo"}
+              triggerLabel={logo.src ? "Change logo" : "Choose logo"}
             />
           </div>
         </div>

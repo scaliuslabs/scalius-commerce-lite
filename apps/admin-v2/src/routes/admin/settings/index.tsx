@@ -25,7 +25,7 @@ export const Route = createFileRoute("/admin/settings/")({
   loader: async ({ context: { queryClient } }) => {
     await queryClient.ensureQueryData(generalSettingsQueryOptions());
   },
-  head: () => ({ meta: [{ title: "General Settings | Scalius Admin" }] }),
+  head: () => ({ meta: [{ title: "General settings | Scalius Admin" }] }),
   component: SettingsPage,
   errorComponent: RouteErrorComponent,
 });

@@ -50,8 +50,8 @@ interface FormImageUploadFieldProps {
 export function FormImageUploadField({
   value,
   onChange,
-  triggerLabel = "Select Image",
-  changeTriggerLabel = "Change Image",
+  triggerLabel = "Choose image",
+  changeTriggerLabel = "Change image",
   aspectRatio = "aspect-video",
   maxWidth = "max-w-sm",
   placeholder = "No image selected",
@@ -77,7 +77,7 @@ export function FormImageUploadField({
             type="button"
             variant="destructive"
             size="icon"
-            className="absolute -right-2 -top-2 h-6 w-6"
+            className="absolute -right-2 -top-2 h-11 w-11 sm:h-8 sm:w-8"
             onClick={() => onChange(null)}
             aria-label={`Remove ${value.filename}`}
           >

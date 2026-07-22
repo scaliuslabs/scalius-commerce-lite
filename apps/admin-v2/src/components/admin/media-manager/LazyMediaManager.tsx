@@ -33,7 +33,7 @@ type TriggerElement = ReactElement<{
 
 function MediaManagerTriggerShell({
   trigger,
-  triggerLabel = "Select Image",
+  triggerLabel = "Choose image",
   isLoading = false,
   onOpen,
 }: Pick<MediaManagerProps, "trigger" | "triggerLabel"> & {
@@ -59,13 +59,13 @@ function MediaManagerTriggerShell({
     <Button
       type="button"
       variant="outline"
-      className="w-full"
+      className="min-h-11 w-full sm:min-h-10"
       disabled={isLoading}
       aria-busy={isLoading || undefined}
       onClick={onOpen}
     >
       <Upload className="mr-2 h-4 w-4" />
-      {isLoading ? "Loading media..." : triggerLabel}
+      {isLoading ? "Loading media…" : triggerLabel}
     </Button>
   );
 }

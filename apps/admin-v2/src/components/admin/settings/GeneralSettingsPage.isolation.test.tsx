@@ -65,7 +65,7 @@ describe("GeneralSettingsPage editor isolation", () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(
       "Header settings could not be opened.",
     );
-    expect(host.textContent).toContain("General Settings");
+    expect(host.textContent).toContain("General settings");
     expect(host.textContent).not.toContain("Something went wrong loading settings");
 
     const footerTab = Array.from(
@@ -84,6 +84,6 @@ describe("GeneralSettingsPage editor isolation", () => {
     });
 
     expect(host.textContent).toContain("Footer editor ready");
-    expect(host.textContent).toContain("General Settings");
+    expect(host.textContent).toContain("General settings");
   });
 });

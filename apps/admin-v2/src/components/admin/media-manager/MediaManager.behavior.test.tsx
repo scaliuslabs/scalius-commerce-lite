@@ -143,9 +143,10 @@ describe("MediaManager lazy-open lifecycle", () => {
 
     await act(async () => root.render(<Harness />));
     const trigger = Array.from(host.querySelectorAll("button")).find((button) =>
-      button.textContent?.toLowerCase().includes("select image"),
+      button.textContent?.toLowerCase().includes("choose image"),
     );
     expect(trigger).toBeDefined();
+    expect(trigger?.className).toContain("min-h-11");
     act(() => click(trigger!));
     await flush();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();

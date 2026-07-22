@@ -49,7 +49,7 @@ export function ContactSection({ contact, onChange }: ContactSectionProps) {
             value={contact.phone}
             onChange={(e) => onChange({ ...contact, phone: e.target.value })}
             placeholder="e.g. +880 1712 345678"
-            className="h-9"
+            className="h-11 sm:h-9"
             type="tel"
             disabled={!contact.isEnabled}
           />
@@ -61,7 +61,7 @@ export function ContactSection({ contact, onChange }: ContactSectionProps) {
             value={contact.text}
             onChange={(e) => onChange({ ...contact, text: e.target.value })}
             placeholder="e.g. Every day, 9am–9pm"
-            className="h-9"
+            className="h-11 sm:h-9"
             disabled={!contact.isEnabled}
           />
         </div>

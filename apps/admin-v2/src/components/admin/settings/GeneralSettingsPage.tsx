@@ -117,7 +117,7 @@ const tabs = [
   { value: "media", label: "Media" },
   { value: "business", label: "Business" },
   { value: "countries", label: "Countries" },
-  { value: "auth", label: "Auth & Access" },
+  { value: "auth", label: "Auth & access" },
   { value: "security", label: "Security" },
   { value: "scanner", label: "Scanner" },
 ] as const;
@@ -174,11 +174,8 @@ export default function GeneralSettingsPage({
       <div className="mx-auto max-w-6xl">
         <div className="mb-4">
           <h1 className="text-xl font-semibold tracking-tight">
-            General Settings
+            General settings
           </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Store identity, presentation, discovery, communication, and access.
-          </p>
         </div>
 
         <Tabs
