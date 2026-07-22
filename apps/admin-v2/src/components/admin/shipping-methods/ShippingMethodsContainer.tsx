@@ -123,7 +123,7 @@ export function ShippingMethodsContainer() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
             <CardTitle className="text-base font-semibold tracking-tight">
-              {showTrashed ? "Trashed Shipping Methods" : "Shipping Methods"}
+              {showTrashed ? "Trashed shipping methods" : "Shipping methods"}
             </CardTitle>
             <CardDescription className="mt-0 text-xs text-muted-foreground">
               {showTrashed
@@ -131,12 +131,12 @@ export function ShippingMethodsContainer() {
                 : `Manage your store's shipping options. ${pagination.total} total methods.`}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
             <Button
               variant="outline"
               size="sm"
               onClick={toggleTrash}
-              className="h-7 text-xs text-muted-foreground hover:text-foreground"
+              className="h-11 text-xs text-muted-foreground hover:text-foreground sm:h-7"
             >
               {showTrashed ? (
                 <>
@@ -149,7 +149,7 @@ export function ShippingMethodsContainer() {
               )}
             </Button>
             {!showTrashed && (
-              <Button size="sm" className="h-7 text-xs" onClick={openFormForCreate}>
+              <Button size="sm" className="h-11 text-xs sm:h-7" onClick={openFormForCreate}>
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Method
               </Button>
             )}
@@ -167,13 +167,13 @@ export function ShippingMethodsContainer() {
                 className="flex-1 sm:flex-initial sm:max-w-xs w-full"
               >
                 <div className="relative">
-                  <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="search"
                     placeholder="Search methods..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-7 h-7 w-full text-xs"
+                    className="h-11 w-full pl-7 text-xs sm:h-7"
                   />
                 </div>
               </form>
@@ -181,7 +181,7 @@ export function ShippingMethodsContainer() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                  className="h-11 px-2 text-xs text-muted-foreground sm:h-7 sm:px-1.5"
                   onClick={clearFilters}
                 >
                   <X className="h-3.5 w-3.5 mr-1" /> Clear
@@ -223,20 +223,20 @@ export function ShippingMethodsContainer() {
         />
 
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-between p-2 sm:p-3 border-t">
+          <div className="flex items-center justify-between border-t p-2 sm:p-3">
             <div className="text-xs text-muted-foreground hidden sm:block">
               {selectedMethods.size > 0
                 ? `${selectedMethods.size} of ${pagination.total} row(s) selected.`
                 : `Showing ${(pagination.page - 1) * pagination.limit + 1}-${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
             </div>
-            <div className="flex items-center space-x-2 lg:space-x-3">
+            <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-nowrap lg:gap-3">
               <div className="flex items-center space-x-1.5">
                 <p className="text-xs font-medium text-muted-foreground whitespace-nowrap">Rows</p>
                 <Select
                   value={pagination.limit.toString()}
                   onValueChange={(value) => handleLimitChange(Number(value))}
                 >
-                  <SelectTrigger className="h-7 w-[60px] text-xs">
+                  <SelectTrigger className="h-11 w-[68px] text-xs sm:h-7 sm:w-[60px]">
                     <SelectValue placeholder={pagination.limit} />
                   </SelectTrigger>
                   <SelectContent>
@@ -253,10 +253,10 @@ export function ShippingMethodsContainer() {
                 <Button variant="outline" className="h-7 w-7 p-0 hidden lg:flex" onClick={() => handlePageChange(1)} disabled={pagination.page === 1 || isLoading}>
                   <ChevronsLeft className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="outline" className="h-7 w-7 p-0" onClick={() => handlePageChange(pagination.page - 1)} disabled={pagination.page === 1 || isLoading}>
+                <Button variant="outline" className="h-11 w-11 p-0 sm:h-7 sm:w-7" aria-label="Previous page" onClick={() => handlePageChange(pagination.page - 1)} disabled={pagination.page === 1 || isLoading}>
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="outline" className="h-7 w-7 p-0" onClick={() => handlePageChange(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages || isLoading}>
+                <Button variant="outline" className="h-11 w-11 p-0 sm:h-7 sm:w-7" aria-label="Next page" onClick={() => handlePageChange(pagination.page + 1)} disabled={pagination.page >= pagination.totalPages || isLoading}>
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
                 <Button variant="outline" className="h-7 w-7 p-0 hidden lg:flex" onClick={() => handlePageChange(pagination.totalPages)} disabled={pagination.page >= pagination.totalPages || isLoading}>
@@ -294,8 +294,8 @@ export function ShippingMethodsContainer() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionLoading} className="h-8 text-xs">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="h-8 text-xs" disabled={isActionLoading}>
+            <AlertDialogCancel disabled={isActionLoading} className="h-11 text-xs sm:h-8">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="h-11 text-xs sm:h-8" disabled={isActionLoading}>
               {isActionLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null} Move to Trash
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -317,8 +317,8 @@ export function ShippingMethodsContainer() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionLoading} className="h-8 text-xs">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="h-8 text-xs bg-destructive hover:bg-destructive/90" disabled={isActionLoading}>
+            <AlertDialogCancel disabled={isActionLoading} className="h-11 text-xs sm:h-8">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="h-11 bg-destructive text-xs hover:bg-destructive/90 sm:h-8" disabled={isActionLoading}>
               {isActionLoading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null} Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>

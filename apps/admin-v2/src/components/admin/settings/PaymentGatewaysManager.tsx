@@ -465,7 +465,7 @@ export default function PaymentGatewaysManager() {
                         onValueChange={(value) => setDefaultMethod(value as MethodKey)}
                         disabled={defaultOptions.length === 0 || Boolean(methodsLoadError) || !checkoutFlowSettings}
                     >
-                        <SelectTrigger id="default-payment-method" className="h-9 w-full"><SelectValue placeholder="No eligible method" /></SelectTrigger>
+                        <SelectTrigger id="default-payment-method" className="h-11 w-full sm:h-9"><SelectValue placeholder="No eligible method" /></SelectTrigger>
                         <SelectContent>
                             {defaultOptions.map((method) => (
                                 <SelectItem key={method} value={method} className="text-sm">{META[method].label}</SelectItem>
@@ -480,10 +480,10 @@ export default function PaymentGatewaysManager() {
                     </div>
                 )}
                 <CardFooter className="justify-between gap-2 border-t px-4 py-3">
-                    <Button type="button" variant="ghost" size="sm" onClick={resetMethods} disabled={!methodsDirty || savingMethods}>
+                    <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-9" onClick={resetMethods} disabled={!methodsDirty || savingMethods}>
                         Reset
                     </Button>
-                    <Button type="button" size="sm" onClick={() => void saveMethods()} disabled={savingMethods || !canSaveMethods || !methodsDirty}>
+                    <Button type="button" size="sm" className="min-h-11 sm:min-h-9" onClick={() => void saveMethods()} disabled={savingMethods || !canSaveMethods || !methodsDirty}>
                         {savingMethods && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
                         Save payment methods
                     </Button>
@@ -550,7 +550,7 @@ export default function PaymentGatewaysManager() {
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex shrink-0 flex-col items-end gap-1">
+                                        <label htmlFor={`toggle-${method}`} className="flex min-h-11 shrink-0 cursor-pointer flex-col items-end justify-center gap-1">
                                             <Switch
                                                 id={`toggle-${method}`}
                                                 checked={enabledMethods.has(method)}
@@ -558,8 +558,8 @@ export default function PaymentGatewaysManager() {
                                                 disabled={toggleDisabled || Boolean(methodsLoadError) || !checkoutFlowSettings}
                                                 onCheckedChange={(v) => toggleMethod(method, v)}
                                             />
-                                            <Label htmlFor={`toggle-${method}`} className="max-w-20 cursor-pointer text-right text-[11px] font-normal leading-3 text-muted-foreground">Offer to buyers</Label>
-                                        </div>
+                                            <span className="max-w-20 text-right text-[11px] font-normal leading-3 text-muted-foreground">Offer to buyers</span>
+                                        </label>
                                     </div>
                                     {gatewayNotice && (
                                         <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-background/80 px-3 py-2 text-xs text-foreground">

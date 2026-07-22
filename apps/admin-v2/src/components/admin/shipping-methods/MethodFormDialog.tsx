@@ -72,12 +72,8 @@ export function MethodFormDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {editingMethod ? "Edit" : "Create"} Shipping Method
-          </DialogTitle>
-          <DialogDescription>
-            Fill in the details for the shipping method.
-          </DialogDescription>
+          <DialogTitle>{editingMethod ? "Edit shipping method" : "Add shipping method"}</DialogTitle>
+          <DialogDescription>Set the buyer-facing name, fee, and availability.</DialogDescription>
         </DialogHeader>
         <form
           method="post"
@@ -96,7 +92,7 @@ export function MethodFormDialog({
                 setCurrentFormData((p) => ({ ...p, name: e.target.value }))
               }
               required
-              className="mt-1 text-sm"
+              className="mt-1 min-h-11 text-sm sm:min-h-9"
             />
           </div>
           <div>
@@ -115,7 +111,7 @@ export function MethodFormDialog({
                 }))
               }
               required
-              className="mt-1 text-sm"
+              className="mt-1 min-h-11 text-sm sm:min-h-9"
               placeholder="0.00"
             />
           </div>
@@ -136,7 +132,7 @@ export function MethodFormDialog({
               rows={2}
             />
           </div>
-          <div className="flex items-center space-x-2">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3">
             <Checkbox
               id="isActive"
               checked={currentFormData.isActive}
@@ -144,10 +140,10 @@ export function MethodFormDialog({
                 setCurrentFormData((p) => ({ ...p, isActive: !!checked }))
               }
             />
-            <Label htmlFor="isActive" className="text-xs font-normal">
+            <span className="text-sm font-normal">
               Active
-            </Label>
-          </div>
+            </span>
+          </label>
           <div>
             <Label htmlFor="sortOrder" className="text-xs">
               Sort Order
@@ -164,21 +160,21 @@ export function MethodFormDialog({
                     : 0,
                 }))
               }
-              className="mt-1 text-sm"
+              className="mt-1 min-h-11 text-sm sm:min-h-9"
               placeholder="0"
             />
           </div>
           <DialogFooter className="pt-2">
             <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm" className="text-xs h-8">
+              <Button type="button" variant="outline" size="sm" className="h-11 text-xs sm:h-8">
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={isActionLoading} size="sm" className="text-xs h-8">
+            <Button type="submit" disabled={isActionLoading} size="sm" className="h-11 text-xs sm:h-8">
               {isActionLoading && (
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
               )}{" "}
-              {editingMethod ? "Save Changes" : "Create Method"}
+              {editingMethod ? "Save changes" : "Add method"}
             </Button>
           </DialogFooter>
         </form>

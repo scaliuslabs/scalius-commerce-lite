@@ -242,7 +242,7 @@ export default function CustomerRequestSettings() {
             <Tabs value={previewState} onValueChange={setPreviewState}>
               <TabsList className="grid h-auto w-full grid-cols-3 p-1">
                 {preview.map((state) => (
-                  <TabsTrigger key={state.id} value={state.id} className="px-2 py-1.5 text-xs">
+                  <TabsTrigger key={state.id} value={state.id} className="min-h-11 px-2 py-1.5 text-xs sm:min-h-9">
                     {state.label}
                   </TabsTrigger>
                 ))}
