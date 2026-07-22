@@ -18,6 +18,10 @@ const skeletonSource = readFileSync(
   resolve(import.meta.dirname, "TiptapToolbarSkeleton.tsx"),
   "utf8",
 );
+const tableSource = readFileSync(
+  resolve(import.meta.dirname, "TiptapTablePopover.tsx"),
+  "utf8",
+);
 
 describe("rich text editor mobile boundaries", () => {
   it("names the editable canvas before and after the deferred editor mounts", () => {
@@ -51,5 +55,28 @@ describe("rich text editor mobile boundaries", () => {
     expect(imageViewSource).toContain('<option value="100%">Full width</option>');
     expect(imageViewSource).toContain("onPointerDown={handleResizeStart}");
     expect(imageViewSource).toContain('aria-label="Remove image"');
+    expect(imageViewSource).toContain(
+      'aria-label="Edit image alternative text"',
+    );
+    expect(imageViewSource).toContain(
+      "onMouseDown={(event) => event.preventDefault()}",
+    );
+  });
+
+  it("keeps table setup compact and defers editing actions until needed", () => {
+    expect(tableSource).toContain('aria-label="Table rows"');
+    expect(tableSource).toContain('aria-label="Table columns"');
+    expect(tableSource).toContain('max="20"');
+    expect(tableSource).toContain('max="10"');
+    expect(tableSource).toContain("!isInTable ? (");
+    expect(tableSource).not.toContain("Quick Actions:");
+    expect(tableSource).not.toContain("Del Col");
+    expect(tableSource).not.toContain("H Row");
+  });
+
+  it("uses one explicit fullscreen exit and names each formatting toolbar", () => {
+    expect(editorSource).toContain('aria-label="Exit fullscreen"');
+    expect(editorSource).toContain('ariaLabel={`${ariaLabel} formatting`}');
+    expect(menuSource).not.toContain("Minimize2");
   });
 });

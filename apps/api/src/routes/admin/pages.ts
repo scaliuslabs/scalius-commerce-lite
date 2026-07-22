@@ -84,11 +84,17 @@ async function invalidatePageCaches(
   c: { env: Env; executionCtx?: WaitUntilExecutionContext },
   options: { htmlPaths?: readonly string[] } = {},
 ): Promise<void> {
+  const publicPaths = options.htmlPaths ?? [];
+  if (publicPaths.length === 0) return;
+
   const htmlPaths = [
     PAGE_DISCOVERY_HTML_PATH,
     ...ARTICLE_DISCOVERY_HTML_PATHS,
-    ...(options.htmlPaths ?? []),
+    ...publicPaths,
   ];
+  // Draft-only writes do not change a buyer-visible projection. Public path
+  // changes retain the synchronous exact purge so the response does not claim
+  // success while buyers can still see stale content.
   try {
     const cleanupExecutionCtx = getOptionalExecutionContext(c);
     const result = await invalidateApiAndStorefrontGroups(

@@ -224,18 +224,17 @@ describe("admin page cache invalidation", () => {
       status: 200,
     },
   ])(
-    "refreshes discovery without warming a page after $label",
+    "skips public cache work after $label because no buyer-visible path changed",
     async ({ path, method, body, status }) => {
       const { app, env } = createTestApp([]);
 
       const response = await requestJson(app, env, path, method, body);
 
       expect(response.status).toBe(status);
-      expect(mocks.invalidateApiAndStorefrontGroups).toHaveBeenCalledWith(
-        ["pages"],
-        env,
-        { htmlPaths: discoveryPaths },
-      );
+      expect(
+        mocks.invalidateApiAndScheduleStorefrontGroups,
+      ).not.toHaveBeenCalled();
+      expect(mocks.invalidateApiAndStorefrontGroups).not.toHaveBeenCalled();
     },
   );
 

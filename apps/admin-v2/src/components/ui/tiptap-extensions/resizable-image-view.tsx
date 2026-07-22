@@ -1,8 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { cn } from "@scalius/shared/utils";
-import { AlignLeft, AlignCenter, AlignRight, Trash2, ImageOff } from "lucide-react";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Trash2,
+  ImageOff,
+  PencilLine,
+} from "lucide-react";
+import { Button } from "../button";
+import { Input } from "../input";
+import { Label } from "../label";
+import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 
 export function ResizableImageView({
   node,
@@ -16,7 +28,17 @@ export function ResizableImageView({
   const [resizing, setResizing] = useState(false);
   const [displayWidth, setDisplayWidth] = useState<number | null>(null);
   const [imageError, setImageError] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [altDraft, setAltDraft] = useState<string>(alt || "");
   const widthRef = useRef<number | null>(null);
+  const fieldId = useId();
+  const altInputId = `${fieldId}-image-alt`;
+  const previewSrc = getOptimizedImageUrl(src, {
+    width: 1200,
+    height: null,
+    quality: 85,
+    fit: "scale-down",
+  });
 
   // Reset display width when the attribute changes externally
   useEffect(() => {
@@ -27,6 +49,10 @@ export function ResizableImageView({
   useEffect(() => {
     setImageError(false);
   }, [src]);
+
+  useEffect(() => {
+    setAltDraft(alt || "");
+  }, [alt]);
 
   const getStartWidth = useCallback(() => {
     if (imgRef.current && imgRef.current.offsetWidth > 0) {
@@ -120,7 +146,7 @@ export function ResizableImageView({
         ) : (
           <img
             ref={imgRef}
-            src={src}
+            src={previewSrc || src}
             alt={alt || ""}
             className={cn(
               "block h-auto rounded-md",
@@ -217,6 +243,60 @@ export function ResizableImageView({
               <option value="100%">Full width</option>
               <option value="custom" disabled>Custom</option>
             </select>
+            <Popover
+              open={detailsOpen}
+              onOpenChange={(open) => {
+                setDetailsOpen(open);
+                if (open) setAltDraft(alt || "");
+              }}
+            >
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Edit image alternative text"
+                  title="Edit image alternative text"
+                  className="flex h-10 w-10 items-center justify-center rounded transition-colors hover:bg-accent sm:h-8 sm:w-8"
+                >
+                  <PencilLine className="h-3.5 w-3.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor={altInputId} className="text-xs">
+                    Alternative text
+                  </Label>
+                  <Input
+                    id={altInputId}
+                    value={altDraft}
+                    maxLength={512}
+                    onChange={(event) => setAltDraft(event.target.value)}
+                    placeholder="Describe the image"
+                    className="min-h-11 sm:min-h-9"
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      event.preventDefault();
+                      updateAttributes({ alt: altDraft.trim() });
+                      setDetailsOpen(false);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty only when the image is decorative.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-h-11 w-full sm:min-h-9"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    updateAttributes({ alt: altDraft.trim() });
+                    setDetailsOpen(false);
+                  }}
+                >
+                  Apply
+                </Button>
+              </PopoverContent>
+            </Popover>
             <div className="h-5 w-px bg-border" />
             <button
               type="button"

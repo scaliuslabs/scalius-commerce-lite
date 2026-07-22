@@ -50,6 +50,7 @@ export function ContentSection({
             content={description}
             onChange={onDescriptionChange}
             placeholder="Enter footer description..."
+            ariaLabel="Footer description"
             className="min-h-[150px]"
             compact={true}
           />

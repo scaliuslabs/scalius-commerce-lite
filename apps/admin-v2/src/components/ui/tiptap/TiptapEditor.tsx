@@ -11,6 +11,7 @@ import { TiptapMenuBar } from "./TiptapMenuBar";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { createTiptapExtensions } from "./tiptap-extensions";
 import { shouldApplyExternalTiptapContent } from "./tiptap-content-sync";
+import { shouldExitRichTextFullscreen } from "./tiptap-fullscreen";
 
 interface TiptapEditorProps {
   content: string;
@@ -50,7 +51,7 @@ export function TiptapEditor({
       window.innerWidth - document.documentElement.clientWidth;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (shouldExitRichTextFullscreen(e, contentWrapperRef.current)) {
         setIsFullscreen(false);
       }
     };
@@ -200,6 +201,7 @@ export function TiptapEditor({
               type="button"
               variant="outline"
               size="sm"
+              aria-label="Exit fullscreen"
               onClick={() => setIsFullscreen(false)}
               className="gap-1.5"
             >
@@ -224,6 +226,7 @@ export function TiptapEditor({
           }}
           compact={isFullscreen ? false : compact}
           isFullscreen={isFullscreen}
+          ariaLabel={`${ariaLabel} formatting`}
         />
       ) : (
         <TiptapToolbarSkeleton

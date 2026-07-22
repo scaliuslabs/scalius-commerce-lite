@@ -147,6 +147,7 @@ function SortableRichContentItem({
                           onUpdate(item.id, { content: newContent });
                         }}
                         placeholder="Add content for this section..."
+                        ariaLabel={`Additional section content: ${item.title || "Untitled section"}`}
                         compact={true}
                       />
                     </FormControl>
