@@ -181,9 +181,6 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       onSelect={(file) => field.onChange(addMedia(field.value, [file]))}
                       onSelectMultiple={(files) => field.onChange(addMedia(field.value, files))}
                     />
-                    <span className="text-xs text-muted-foreground">
-                      Images can be assigned to SKUs; videos stay in the gallery.
-                    </span>
                   </div>
                 </div>
                 <FormMessage />

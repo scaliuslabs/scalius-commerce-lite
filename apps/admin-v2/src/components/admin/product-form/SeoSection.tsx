@@ -174,29 +174,59 @@ export const SeoSection = memo(function SeoSection({
   return (
     <CollapsibleCard
       title="Search and discovery"
-      description="Search preview, canonical URL, sitemap, and feeds"
       defaultOpen={defaultOpen}
       summary={
         <div className="rounded-md border bg-muted/15 p-2.5">
           <p className="truncate text-xs font-medium text-foreground">
-            {metaTitle?.trim() || productName?.trim() || "Add a search title"}
+            {metaTitle?.trim() || productName?.trim() || "Search preview"}
           </p>
           <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
             /products/{slug?.trim() || "product-url"}
           </p>
-          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-            {metaDescription?.trim() || "Add a description to preview how this product can appear in search."}
-          </p>
+          {metaDescription?.trim() ? (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+              {metaDescription.trim()}
+            </p>
+          ) : null}
         </div>
       }
     >
       <div className="space-y-3">
         <FormField
           control={form.control}
+          name="slug"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm">
+                URL <span className="text-destructive">*</span>
+              </FormLabel>
+              <div className="flex items-center gap-1.5">
+                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  /products/
+                </span>
+                <FormControl>
+                  <Input
+                    placeholder="product-url"
+                    className="min-h-11 md:h-9 md:min-h-9"
+                    {...field}
+                    onChange={(event) => {
+                      field.onChange(event);
+                      form.setValue("slugEdited", true);
+                    }}
+                  />
+                </FormControl>
+              </div>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
           name="metaTitle"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm">Page Title</FormLabel>
+              <FormLabel className="text-sm">Page title</FormLabel>
               <FormControl>
                 <Input
                   placeholder="Meta title for SEO"
@@ -222,7 +252,7 @@ export const SeoSection = memo(function SeoSection({
           name="metaDescription"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm">Meta Description</FormLabel>
+              <FormLabel className="text-sm">Meta description</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Meta description for SEO"
@@ -249,7 +279,7 @@ export const SeoSection = memo(function SeoSection({
           name="canonicalPath"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm">Canonical Path</FormLabel>
+              <FormLabel className="text-sm">Canonical path</FormLabel>
               <FormControl>
                 <Input
                   placeholder="/products/main-shoe"

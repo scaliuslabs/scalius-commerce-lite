@@ -33,5 +33,23 @@ describe("product editor mobile boundaries", () => {
     expect(readSource("ProductImagesSection.tsx")).not.toContain(
       "Image-only surfaces use",
     );
+    expect(readSource("ProductImagesSection.tsx")).not.toContain(
+      "videos stay in the gallery",
+    );
+    expect(readSource("StatusCard.tsx")).not.toContain(
+      "Waive product delivery fees",
+    );
+    expect(readSource("StatusCard.tsx")).not.toContain(
+      "Unused product in new condition",
+    );
+    expect(readSource("OrganizationCard.tsx")).not.toContain(
+      "Generated from the product title",
+    );
+    expect(readSource("SeoSection.tsx")).not.toContain(
+      "Add a description to preview",
+    );
+    expect(readSource("variants/OptionMatrixEditor.tsx")).not.toContain(
+      "Saved with product",
+    );
   });
 });
