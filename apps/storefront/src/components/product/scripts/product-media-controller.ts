@@ -28,6 +28,15 @@ interface GalleryItem extends ProductMediaChangeDetail {
   thumbnail: HTMLButtonElement | null;
 }
 
+interface NetworkConnectionInfo {
+  saveData?: boolean;
+  effectiveType?: string;
+}
+
+interface NavigatorWithConnection extends Navigator {
+  connection?: NetworkConnectionInfo;
+}
+
 const imageCache = new Map<string, HTMLImageElement>();
 const imagePreloads = new Map<string, Promise<void>>();
 let activeController: AbortController | null = null;
@@ -554,6 +563,46 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
   );
 }
 
+function canWarmVariantImages(): boolean {
+  if (!window.matchMedia("(min-width: 1024px)").matches) return false;
+  const connection = (navigator as NavigatorWithConnection).connection;
+  if (connection?.saveData) return false;
+  return (
+    !connection?.effectiveType ||
+    !["slow-2g", "2g", "3g"].includes(connection.effectiveType)
+  );
+}
+
+function scheduleVariantImagePreload(
+  root: HTMLElement,
+  signal: AbortSignal,
+): void {
+  if (!canWarmVariantImages()) return;
+  const currentUrl = root.dataset.activeMediaUrl;
+  const urls = Array.from(
+    root.querySelectorAll<HTMLButtonElement>(
+      "[data-thumbnail-rail='desktop'] [data-gallery-thumbnail][data-media-kind='image'][data-variant-image='true']",
+    ),
+  )
+    .flatMap((button) =>
+      button.dataset.mediaUrl ? [button.dataset.mediaUrl] : [],
+    )
+    .filter(
+      (url, index, values) =>
+        url !== currentUrl && values.indexOf(url) === index,
+    )
+    .slice(0, 4);
+  if (urls.length === 0) return;
+
+  const run = () => {
+    if (signal.aborted || !root.isConnected) return;
+    urls.forEach((url) => void preloadImage(url, "low"));
+  };
+  const requestIdleCallback = window.requestIdleCallback;
+  if (requestIdleCallback) requestIdleCallback(run, { timeout: 1_000 });
+  else window.setTimeout(run, 300);
+}
+
 function preferredThumbnail(
   buttons: HTMLButtonElement[],
   predicate: (button: HTMLButtonElement) => boolean,
@@ -664,4 +713,5 @@ export function initProductMediaGallery(
     const fallback = fallbackItem(root);
     if (fallback) setSelectedItem(root, fallback, "initial");
   }
+  scheduleVariantImagePreload(root, signal);
 }

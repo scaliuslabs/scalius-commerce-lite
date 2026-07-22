@@ -15,6 +15,20 @@ interface Props {
 const { headerData } = Astro.props;
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
+const socialLinks = (headerData.social ?? []).filter(
+  (item): item is SocialLink & { url: string } => Boolean(item.url),
+);
+const hasDesktopPhone =
+  headerData.contact.isEnabled !== false && Boolean(headerData.contact.phone);
+const desktopSocialWidth =
+  socialLinks.length > 0
+    ? socialLinks.length * 36 + (socialLinks.length - 1) * 4
+    : 0;
+const expandedActionsLgWidth = desktopSocialWidth;
+const expandedActionsXlWidth =
+  desktopSocialWidth +
+  (desktopSocialWidth > 0 && hasDesktopPhone ? 12 : 0) +
+  (hasDesktopPhone ? 40 : 0);
 ---
 
 {
@@ -110,92 +124,98 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
       </div>
 
       <div
-        class="flex items-center justify-end gap-1 sm:gap-3 shrink-0 z-30 ml-auto lg:ml-0"
+        class="flex items-center justify-end gap-1 sm:gap-3 lg:gap-0 shrink-0 z-30 ml-auto lg:ml-0"
       >
-        <button
-          id="scrolled-search-trigger"
-          type="button"
-          class="hidden lg:hidden lg:group-[.is-scrolled]/header:flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 opacity-0 -translate-x-2 lg:group-[.is-scrolled]/header:opacity-100 lg:group-[.is-scrolled]/header:translate-x-0"
-          aria-label="Search"
+        <div
+          class="header-action-morph relative hidden h-10 shrink-0 overflow-hidden lg:block"
+          style={`--header-actions-expanded-lg: ${expandedActionsLgWidth}px; --header-actions-expanded-xl: ${expandedActionsXlWidth}px; --header-actions-gap-lg: ${expandedActionsLgWidth > 0 ? 12 : 0}px; --header-actions-gap-xl: ${expandedActionsXlWidth > 0 ? 12 : 0}px;`}
         >
-          <Search className="h-5 w-5 stroke-[1.5]" />
-        </button>
+          <button
+            id="scrolled-search-trigger"
+            type="button"
+            class="header-scroll-search absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5 stroke-[1.5]" />
+          </button>
 
-        {
-          headerData.social && headerData.social.length > 0 && (
-            <div class="hidden lg:flex lg:group-[.is-scrolled]/header:hidden items-center gap-1">
-              {headerData.social.map((item: SocialLink) => {
-                if (!item.url) return null;
-                const displayTitle = item.label || item.platform || "Social";
-                const href = item.url.startsWith("http")
-                  ? item.url
-                  : `https://${item.url}`;
+          <div class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3">
+            {
+              socialLinks.length > 0 && (
+                <div class="flex items-center gap-1">
+                  {socialLinks.map((item) => {
+                    const displayTitle =
+                      item.label || item.platform || "Social";
+                    const href = item.url.startsWith("http")
+                      ? item.url
+                      : `https://${item.url}`;
 
-                return (
-                  <a
-                    href={href}
-                    class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={displayTitle}
-                    title={displayTitle}
+                    return (
+                      <a
+                        href={href}
+                        class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={displayTitle}
+                        title={displayTitle}
+                      >
+                        {item.iconUrl ? (
+                          <img
+                            src={getOptimizedImageUrl(item.iconUrl, {
+                              width: 32,
+                              height: 32,
+                              fit: "contain",
+                            })}
+                            alt=""
+                            aria-hidden="true"
+                            class="w-4 h-4 object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span aria-hidden="true" class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
+                            {displayTitle.charAt(0)}
+                          </span>
+                        )}
+                      </a>
+                    );
+                  })}
+                </div>
+              )
+            }
+
+            {
+              hasDesktopPhone && headerData.contact.phone && (
+                <button
+                  type="button"
+                  id="desktop-phone-btn"
+                  data-phone={headerData.contact.phone}
+                  class="group relative hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input bg-background text-muted-foreground transition-all duration-200 hover:border-primary/50 hover:text-foreground hover:shadow-sm active:scale-95 xl:flex"
+                  aria-label="Copy phone number"
+                  title={headerData.contact.phone}
+                >
+                  <div
+                    class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-full"
+                    id="phone-icon-normal"
                   >
-                    {item.iconUrl ? (
-                      <img
-                        src={getOptimizedImageUrl(item.iconUrl, {
-                          width: 32,
-                          height: 32,
-                          fit: "contain",
-                        })}
-                        alt=""
-                        aria-hidden="true"
-                        class="w-4 h-4 object-contain"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span aria-hidden="true" class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase">
-                        {displayTitle.charAt(0)}
-                      </span>
-                    )}
-                  </a>
-                );
-              })}
-            </div>
-          )
-        }
-
-        {
-          headerData.contact.isEnabled !== false &&
-            headerData.contact.phone && (
-              <button
-                type="button"
-                id="desktop-phone-btn"
-                data-phone={headerData.contact.phone}
-                class="hidden xl:flex xl:group-[.is-scrolled]/header:hidden group items-center justify-center h-10 w-10 rounded-full bg-background border border-input text-muted-foreground hover:border-primary/50 hover:text-foreground hover:shadow-sm transition-all duration-200 active:scale-95 relative overflow-hidden"
-                aria-label="Copy phone number"
-                title={headerData.contact.phone}
-              >
-                <div
-                  class="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-full"
-                  id="phone-icon-normal"
-                >
-                  <Phone className="h-4 w-4 stroke-[1.5]" />
-                </div>
-                <div
-                  class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-300 group-hover:translate-y-0"
-                  id="phone-icon-hover"
-                >
-                  <Copy className="h-4 w-4 stroke-2" />
-                </div>
-                <div
-                  class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-200 text-primary bg-primary/10"
-                  id="phone-icon-success"
-                >
-                  <Check className="h-4 w-4 stroke-[2.5]" />
-                </div>
-              </button>
-            )
-        }
+                    <Phone className="h-4 w-4 stroke-[1.5]" />
+                  </div>
+                  <div
+                    class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-300 group-hover:translate-y-0"
+                    id="phone-icon-hover"
+                  >
+                    <Copy className="h-4 w-4 stroke-2" />
+                  </div>
+                  <div
+                    class="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-200 text-primary bg-primary/10"
+                    id="phone-icon-success"
+                  >
+                    <Check className="h-4 w-4 stroke-[2.5]" />
+                  </div>
+                </button>
+              )
+            }
+          </div>
+        </div>
 
         <div
           class="group relative flex h-11 shrink-0 items-center rounded-full bg-card-foreground py-1 pl-1 pr-1 text-card shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl lg:pr-1.5"
@@ -253,13 +273,8 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
       </div>
     </div>
 
-    <!--
-      ROW 2: Desktop Nav
-      CRITICAL FIX: Removed 'overflow-hidden' from default state.
-      Added 'group-[.is-scrolled]/header:overflow-hidden' to clip ONLY when collapsing.
-    -->
     <div
-      class="hidden lg:block border-t border-border transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] max-h-14 opacity-100 overflow-visible group-[.is-scrolled]/header:max-h-0 group-[.is-scrolled]/header:opacity-0 group-[.is-scrolled]/header:border-none group-[.is-scrolled]/header:overflow-hidden"
+      class="header-full-nav-row hidden border-t border-border lg:block"
     >
       <div class="py-2 flex justify-center relative z-50">
         <slot name="desktop-nav-full" />
@@ -281,7 +296,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition-delay: 80ms, 80ms, 0ms;
   }
 
   .header-compact-center {
@@ -289,7 +304,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: hidden;
     opacity: 0;
     transform: translateY(0.5rem) scale(0.98);
-    transition-delay: 0ms, 0ms, 180ms;
+    transition-delay: 0ms, 0ms, 120ms;
   }
 
   #main-header.is-scrolled .header-expanded-center {
@@ -297,7 +312,7 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: hidden;
     opacity: 0;
     transform: translateY(-0.5rem) scale(0.96);
-    transition-delay: 0ms, 0ms, 180ms;
+    transition-delay: 0ms, 0ms, 120ms;
   }
 
   #main-header.is-scrolled .header-compact-center {
@@ -305,7 +320,80 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     visibility: visible;
     opacity: 1;
     transform: translateY(0) scale(1);
-    transition-delay: 0ms, 0ms, 0ms;
+    transition-delay: 80ms, 80ms, 0ms;
+  }
+
+  .header-full-nav-row {
+    max-height: 3.5rem;
+    overflow: visible;
+    border-top-width: 1px;
+    opacity: 1;
+    transition:
+      max-height 300ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      opacity 120ms ease 80ms,
+      border-top-width 120ms ease 80ms,
+      border-color 120ms ease 80ms;
+  }
+
+  #main-header.is-scrolled .header-full-nav-row {
+    max-height: 0;
+    overflow: hidden;
+    border-top-width: 0;
+    border-color: transparent;
+    opacity: 0;
+    transition-delay: 0ms, 0ms, 0ms, 0ms;
+  }
+
+  .header-action-morph {
+    width: var(--header-actions-expanded-lg);
+    margin-right: var(--header-actions-gap-lg);
+    transition:
+      width 240ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      margin-right 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  .header-expanded-actions,
+  .header-scroll-search {
+    transition:
+      opacity 120ms ease,
+      transform 180ms cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear;
+  }
+
+  .header-expanded-actions {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(0);
+    transition-delay: 80ms, 80ms, 0ms;
+  }
+
+  .header-scroll-search {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(-0.5rem);
+    transition-delay: 0ms, 0ms, 120ms;
+  }
+
+  #main-header.is-scrolled .header-action-morph {
+    width: 2.5rem;
+    margin-right: 0.75rem;
+  }
+
+  #main-header.is-scrolled .header-expanded-actions {
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(0.5rem);
+    transition-delay: 0ms, 0ms, 120ms;
+  }
+
+  #main-header.is-scrolled .header-scroll-search {
+    pointer-events: auto;
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(0);
+    transition-delay: 80ms, 80ms, 0ms;
   }
 
   .storefront-header-logo {
@@ -318,9 +406,25 @@ const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
     }
   }
 
+  @media (min-width: 80rem) {
+    .header-action-morph {
+      width: var(--header-actions-expanded-xl);
+      margin-right: var(--header-actions-gap-xl);
+    }
+
+    #main-header.is-scrolled .header-action-morph {
+      width: 2.5rem;
+      margin-right: 0.75rem;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .header-expanded-center,
-    .header-compact-center {
+    .header-compact-center,
+    .header-full-nav-row,
+    .header-action-morph,
+    .header-expanded-actions,
+    .header-scroll-search {
       transition: none;
     }
   }
