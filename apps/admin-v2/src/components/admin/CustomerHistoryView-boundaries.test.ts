@@ -24,7 +24,7 @@ describe("CustomerHistoryView responsive boundaries", () => {
     expect(source).not.toContain("suppressHydrationWarning");
     expect(source).toContain("formatAdminDate(order.createdAt)");
     expect(source).toContain("formatAdminTimestamp(record.createdAt)");
-    expect(source).toContain("Paid Spend");
+    expect(source).toContain("Paid spend");
     expect(source).not.toContain("Total Spent");
   });
 });

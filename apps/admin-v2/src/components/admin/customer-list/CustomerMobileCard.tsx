@@ -6,6 +6,7 @@ import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowA
 import { Checkbox } from "~/components/ui/checkbox";
 import { formatAdminDate } from "~/lib/admin-time";
 import { CustomerAccountBadge } from "./CustomerAccountBadge";
+import { CustomerOrderRetentionBadge } from "./CustomerOrderRetentionBadge";
 import {
   customerHasAccount,
   formatCustomerLocation,
@@ -45,6 +46,7 @@ export function CustomerMobileCard({
 }: CustomerMobileCardProps) {
   const location = formatCustomerLocation(customer);
   const buyerName = customer.name || "Unnamed buyer";
+  const isRetainedForOrders = showTrashed && customer.totalOrders > 0;
   const hasActions = showTrashed ? canDelete : canEdit || canDelete;
   const name = canViewHistory ? (
     <Link
@@ -64,18 +66,21 @@ export function CustomerMobileCard({
     <article className={selected ? "bg-primary/5 px-3 py-3" : "bg-background px-3 py-3"}>
       <div className={`grid items-start gap-2.5 ${canSelect ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]"}`}>
         {canSelect ? (
-          <Checkbox
-            checked={selected}
-            onCheckedChange={(value) => onSelectedChange(value === true)}
-            aria-label={`Select ${buyerName}`}
-            className="mt-0.5"
-          />
+          <label className="-m-3 flex h-11 w-11 cursor-pointer items-center justify-center sm:m-0 sm:h-auto sm:w-auto">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(value) => onSelectedChange(value === true)}
+              aria-label={`Select ${buyerName}`}
+              className="mt-0.5"
+            />
+          </label>
         ) : null}
 
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1.5">
             {name}
             <CustomerAccountBadge hasAccount={customerHasAccount(customer)} />
+            {isRetainedForOrders ? <CustomerOrderRetentionBadge /> : null}
           </div>
           <div className="mt-1.5 space-y-1 text-[11px] leading-4 text-muted-foreground">
             <div className="flex items-center gap-1.5">
@@ -104,7 +109,7 @@ export function CustomerMobileCard({
             onEdit={!showTrashed && canEdit ? onEdit : undefined}
             onDelete={!showTrashed && canDelete ? onArchive : undefined}
             onRestore={showTrashed && canDelete ? onRestore : undefined}
-            onPermanentDelete={showTrashed && canDelete ? onPermanentDelete : undefined}
+            onPermanentDelete={showTrashed && canDelete && !isRetainedForOrders ? onPermanentDelete : undefined}
           />
         ) : null}
       </div>
@@ -132,7 +137,7 @@ export function CustomerMobileCard({
         <Link
           to="/admin/customers/$customerId/history"
           params={{ customerId: customer.id }}
-          className="mt-2.5 inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mt-2.5 inline-flex h-11 items-center rounded-md border px-3 text-xs font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
         >
           View order history
         </Link>

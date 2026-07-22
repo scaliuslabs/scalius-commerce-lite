@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFormContext, useWatch } from "react-hook-form";
+import { Loader2 } from "lucide-react";
+
+import type { CustomerFormValues } from "~/lib/form-schemas";
+import { getDeliveryLocations } from "~/lib/api-functions/delivery";
 import {
   FormControl,
   FormField,
@@ -13,9 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { useFormContext } from "react-hook-form";
-import { Loader2 } from "lucide-react";
-import { getDeliveryLocations } from "@/lib/api-functions/delivery";
 
 interface Location {
   id: string;
@@ -28,174 +30,116 @@ interface Location {
   sortOrder: number;
 }
 
+const selectTriggerClassName = "h-11 sm:h-9";
+const selectItemClassName = "min-h-11 sm:min-h-8";
+
 export function LocationSelector() {
-  const form = useFormContext();
+  const form = useFormContext<CustomerFormValues>();
+  const cityValue = useWatch({ control: form.control, name: "city" });
+  const zoneValue = useWatch({ control: form.control, name: "zone" });
+  const areaValue = useWatch({ control: form.control, name: "area" });
 
   const [cities, setCities] = useState<Location[]>([]);
   const [zones, setZones] = useState<Location[]>([]);
   const [areas, setAreas] = useState<Location[]>([]);
-
-  const [loadingCities, setLoadingCities] = useState(false);
+  const [loadingCities, setLoadingCities] = useState(true);
   const [loadingZones, setLoadingZones] = useState(false);
   const [loadingAreas, setLoadingAreas] = useState(false);
+  const zoneRequest = useRef(0);
+  const areaRequest = useRef(0);
 
-  const cityValue = form.watch("city");
-  const zoneValue = form.watch("zone");
-  const areaValue = form.watch("area");
-
-  const loadZones = useCallback(async (cityId: string) => {
-    try {
-      setLoadingZones(true);
-      const result = await getDeliveryLocations({ data: { type: "zone", parentId: cityId } });
-      setZones(result.locations as Location[]);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading zones:", error);
-    } finally {
-      setLoadingZones(false);
-    }
-  }, []);
-
-  const loadAreas = useCallback(async (zoneId: string) => {
-    try {
-      setLoadingAreas(true);
-      const result = await getDeliveryLocations({ data: { type: "area", parentId: zoneId } });
-      setAreas(result.locations as Location[]);
-    } catch (error: unknown) {
-      if (import.meta.env.DEV) console.error("Error loading areas:", error);
-    } finally {
-      setLoadingAreas(false);
-    }
-  }, []);
-
-  // Load cities on initial mount and handle initial values
   useEffect(() => {
-    const loadInitialData = async () => {
-      // Keep record of initial values
-      const initialCity = form.getValues("city");
-      const initialZone = form.getValues("zone");
+    let active = true;
+    setLoadingCities(true);
 
-      // Set loading states
-      setLoadingCities(true);
+    void getDeliveryLocations({ data: { type: "city" } })
+      .then((result) => {
+        if (active) setCities(result.locations as Location[]);
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV) console.error("Error loading cities:", error);
+      })
+      .finally(() => {
+        if (active) setLoadingCities(false);
+      });
 
-      try {
-        // Load cities
-        const result = await getDeliveryLocations({ data: { type: "city" } });
-        setCities(result.locations as Location[]);
-
-        // If we have a city value, proceed to load zones
-        if (initialCity) {
-          setLoadingZones(true);
-          try {
-            const zoneResult = await getDeliveryLocations({ data: { type: "zone", parentId: initialCity } });
-            setZones(zoneResult.locations as Location[]);
-
-            // If we have a zone value, proceed to load areas
-            if (initialZone) {
-              setLoadingAreas(true);
-              try {
-                const areaResult = await getDeliveryLocations({ data: { type: "area", parentId: initialZone } });
-                setAreas(areaResult.locations as Location[]);
-              } catch (error: unknown) {
-                if (import.meta.env.DEV) console.error("Error loading initial areas:", error);
-              } finally {
-                setLoadingAreas(false);
-              }
-            }
-          } catch (error: unknown) {
-            if (import.meta.env.DEV) console.error("Error loading initial zones:", error);
-          } finally {
-            setLoadingZones(false);
-          }
-        }
-      } catch (error: unknown) {
-        if (import.meta.env.DEV) console.error("Error loading initial cities:", error);
-      } finally {
-        setLoadingCities(false);
-      }
+    return () => {
+      active = false;
     };
+  }, []);
 
-    loadInitialData();
-  }, [form, loadAreas, loadZones]);
-
-  // Load zones when city changes
   useEffect(() => {
-    const city = cityValue;
-    if (city) {
-      // Set the city name in the form
-      const selectedCity = cities.find((c) => c.id === city);
-      if (selectedCity) {
-        form.setValue("cityName", selectedCity.name);
-      }
+    const requestId = ++zoneRequest.current;
 
-      loadZones(city);
-    } else {
+    if (!cityValue) {
       setZones([]);
-      setAreas([]);
-      form.setValue("zone", "");
-      form.setValue("area", "");
-      form.setValue("cityName", "");
-      form.setValue("zoneName", "");
-      form.setValue("areaName", "");
+      setLoadingZones(false);
+      return;
     }
-  }, [cities, cityValue, form, loadZones]);
 
-  // Load areas when zone changes
+    setLoadingZones(true);
+    void getDeliveryLocations({
+      data: { type: "zone", parentId: cityValue },
+    })
+      .then((result) => {
+        if (requestId === zoneRequest.current) {
+          setZones(result.locations as Location[]);
+        }
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV) console.error("Error loading zones:", error);
+      })
+      .finally(() => {
+        if (requestId === zoneRequest.current) setLoadingZones(false);
+      });
+  }, [cityValue]);
+
   useEffect(() => {
-    const zone = zoneValue;
-    if (zone) {
-      // Set the zone name in the form
-      const selectedZone = zones.find((z) => z.id === zone);
-      if (selectedZone) {
-        form.setValue("zoneName", selectedZone.name);
-      }
+    const requestId = ++areaRequest.current;
 
-      loadAreas(zone);
-    } else {
+    if (!zoneValue) {
       setAreas([]);
-      form.setValue("area", "");
-      form.setValue("zoneName", "");
-      form.setValue("areaName", "");
+      setLoadingAreas(false);
+      return;
     }
-  }, [form, loadAreas, zones, zoneValue]);
 
-  // Update the area name when area changes
+    setLoadingAreas(true);
+    void getDeliveryLocations({
+      data: { type: "area", parentId: zoneValue },
+    })
+      .then((result) => {
+        if (requestId === areaRequest.current) {
+          setAreas(result.locations as Location[]);
+        }
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV) console.error("Error loading areas:", error);
+      })
+      .finally(() => {
+        if (requestId === areaRequest.current) setLoadingAreas(false);
+      });
+  }, [zoneValue]);
+
   useEffect(() => {
-    const area = areaValue;
-    if (area) {
-      // Set the area name in the form
-      const selectedArea = areas.find((a) => a.id === area);
-      if (selectedArea) {
-        form.setValue("areaName", selectedArea.name);
-      }
-    } else {
-      form.setValue("areaName", "");
+    const selected = cities.find((city) => city.id === cityValue);
+    if (selected && form.getValues("cityName") !== selected.name) {
+      form.setValue("cityName", selected.name, { shouldDirty: false });
+    }
+  }, [cities, cityValue, form]);
+
+  useEffect(() => {
+    const selected = zones.find((zone) => zone.id === zoneValue);
+    if (selected && form.getValues("zoneName") !== selected.name) {
+      form.setValue("zoneName", selected.name, { shouldDirty: false });
+    }
+  }, [form, zoneValue, zones]);
+
+  useEffect(() => {
+    const selected = areas.find((area) => area.id === areaValue);
+    if (selected && form.getValues("areaName") !== selected.name) {
+      form.setValue("areaName", selected.name, { shouldDirty: false });
     }
   }, [areaValue, areas, form]);
-
-  // Check for value updates that might come from outside
-  useEffect(() => {
-    // This effect runs on every render to check if the values changed from outside
-    const currentCity = form.getValues("city");
-    const currentZone = form.getValues("zone");
-
-    // If we have city and cities are loaded but the city isn't in the currently selected dropdown
-    if (
-      currentCity &&
-      cities.length > 0 &&
-      !cities.some((c) => c.id === currentCity)
-    ) {
-      loadZones(currentCity);
-    }
-
-    // If we have zone and zones are loaded but the zone isn't in the currently selected dropdown
-    if (
-      currentZone &&
-      zones.length > 0 &&
-      !zones.some((z) => z.id === currentZone)
-    ) {
-      loadAreas(currentZone);
-    }
-  }, [cities, form, loadAreas, loadZones, zones]);
 
   return (
     <div className="grid gap-4 md:grid-cols-3">
@@ -204,48 +148,56 @@ export function LocationSelector() {
         name="city"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              City<span className="text-red-500">*</span>
-            </FormLabel>
+            <FormLabel>City</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
-                const cityId = value === "_none" ? "" : value;
-                field.onChange(cityId);
-
-                // Set the city name immediately
-                if (cityId) {
-                  const selectedCity = cities.find((c) => c.id === cityId);
-                  if (selectedCity) {
-                    form.setValue("cityName", selectedCity.name);
-                  }
-                } else {
-                  form.setValue("cityName", "");
+                const cityId = value === "_none" ? null : value;
+                if (cityId !== field.value) {
+                  form.setValue("zone", null, { shouldDirty: true });
+                  form.setValue("area", null, { shouldDirty: true });
+                  form.setValue("zoneName", "", { shouldDirty: false });
+                  form.setValue("areaName", "", { shouldDirty: false });
                 }
+                field.onChange(cityId);
+                form.setValue(
+                  "cityName",
+                  cities.find((city) => city.id === cityId)?.name ?? "",
+                  { shouldDirty: false },
+                );
               }}
             >
               <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a city">
+                <SelectTrigger
+                  className={selectTriggerClassName}
+                  aria-busy={loadingCities}
+                >
+                  <SelectValue placeholder="Select city">
                     {loadingCities ? (
-                      <div className="flex items-center">
+                      <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </div>
+                        Loading…
+                      </span>
                     ) : field.value ? (
-                      cities.find((c) => c.id === field.value)?.name ||
+                      cities.find((city) => city.id === field.value)?.name ||
                       form.getValues("cityName") ||
                       field.value
                     ) : (
-                      "Select a city"
+                      "Select city"
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent className="rounded-xl bg-background">
-                <SelectItem value="_none">-- Select a city --</SelectItem>
+                <SelectItem value="_none" className={selectItemClassName}>
+                  No city selected
+                </SelectItem>
                 {cities.map((city) => (
-                  <SelectItem key={city.id} value={city.id}>
+                  <SelectItem
+                    key={city.id}
+                    value={city.id}
+                    className={selectItemClassName}
+                  >
                     {city.name}
                   </SelectItem>
                 ))}
@@ -261,49 +213,55 @@ export function LocationSelector() {
         name="zone"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>
-              Zone<span className="text-red-500">*</span>
-            </FormLabel>
+            <FormLabel>Zone</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
-                const zoneId = value === "_none" ? "" : value;
-                field.onChange(zoneId);
-
-                // Set the zone name immediately
-                if (zoneId) {
-                  const selectedZone = zones.find((z) => z.id === zoneId);
-                  if (selectedZone) {
-                    form.setValue("zoneName", selectedZone.name);
-                  }
-                } else {
-                  form.setValue("zoneName", "");
+                const zoneId = value === "_none" ? null : value;
+                if (zoneId !== field.value) {
+                  form.setValue("area", null, { shouldDirty: true });
+                  form.setValue("areaName", "", { shouldDirty: false });
                 }
+                field.onChange(zoneId);
+                form.setValue(
+                  "zoneName",
+                  zones.find((zone) => zone.id === zoneId)?.name ?? "",
+                  { shouldDirty: false },
+                );
               }}
-              disabled={!form.getValues("city") || loadingZones}
+              disabled={!cityValue || loadingZones}
             >
               <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a zone">
+                <SelectTrigger
+                  className={selectTriggerClassName}
+                  aria-busy={loadingZones}
+                >
+                  <SelectValue placeholder="Select zone">
                     {loadingZones ? (
-                      <div className="flex items-center">
+                      <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </div>
+                        Loading…
+                      </span>
                     ) : field.value ? (
-                      zones.find((z) => z.id === field.value)?.name ||
+                      zones.find((zone) => zone.id === field.value)?.name ||
                       form.getValues("zoneName") ||
                       field.value
                     ) : (
-                      "Select a zone"
+                      "Select zone"
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent className="rounded-xl bg-background">
-                <SelectItem value="_none">-- Select a zone --</SelectItem>
+                <SelectItem value="_none" className={selectItemClassName}>
+                  No zone selected
+                </SelectItem>
                 {zones.map((zone) => (
-                  <SelectItem key={zone.id} value={zone.id}>
+                  <SelectItem
+                    key={zone.id}
+                    value={zone.id}
+                    className={selectItemClassName}
+                  >
                     {zone.name}
                   </SelectItem>
                 ))}
@@ -319,47 +277,51 @@ export function LocationSelector() {
         name="area"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Area (Optional)</FormLabel>
+            <FormLabel>Area</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
-                const areaId = value === "_none" ? "" : value;
+                const areaId = value === "_none" ? null : value;
                 field.onChange(areaId);
-
-                // Set the area name immediately
-                if (areaId) {
-                  const selectedArea = areas.find((a) => a.id === areaId);
-                  if (selectedArea) {
-                    form.setValue("areaName", selectedArea.name);
-                  }
-                } else {
-                  form.setValue("areaName", "");
-                }
+                form.setValue(
+                  "areaName",
+                  areas.find((area) => area.id === areaId)?.name ?? "",
+                  { shouldDirty: false },
+                );
               }}
-              disabled={!form.getValues("zone") || loadingAreas}
+              disabled={!zoneValue || loadingAreas}
             >
               <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an area">
+                <SelectTrigger
+                  className={selectTriggerClassName}
+                  aria-busy={loadingAreas}
+                >
+                  <SelectValue placeholder="Select area">
                     {loadingAreas ? (
-                      <div className="flex items-center">
+                      <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading...
-                      </div>
+                        Loading…
+                      </span>
                     ) : field.value ? (
-                      areas.find((a) => a.id === field.value)?.name ||
+                      areas.find((area) => area.id === field.value)?.name ||
                       form.getValues("areaName") ||
                       field.value
                     ) : (
-                      "Select an area"
+                      "Select area"
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent className="rounded-xl bg-background">
-                <SelectItem value="_none">-- No area selected --</SelectItem>
+                <SelectItem value="_none" className={selectItemClassName}>
+                  No area selected
+                </SelectItem>
                 {areas.map((area) => (
-                  <SelectItem key={area.id} value={area.id}>
+                  <SelectItem
+                    key={area.id}
+                    value={area.id}
+                    className={selectItemClassName}
+                  >
                     {area.name}
                   </SelectItem>
                 ))}

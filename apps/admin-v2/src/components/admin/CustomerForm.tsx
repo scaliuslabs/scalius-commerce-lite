@@ -1,6 +1,7 @@
-import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import {
   FormControl,
   FormField,
@@ -22,6 +23,7 @@ import {
   createCustomer,
   updateCustomer,
   type CreateCustomerInput,
+  type CreateCustomerPayload,
   type UpdateCustomerInput,
 } from "@/lib/api-functions/customers";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
@@ -61,19 +63,12 @@ export function CustomerForm({
   defaultValues,
   isEdit = false,
 }: CustomerFormProps) {
+  const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
   const canSave = isEdit
     ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT)
     : canCreate;
-  const [isInitializing, setIsInitializing] = React.useState(
-    isEdit &&
-      defaultValues &&
-      (Boolean(defaultValues.city) ||
-        Boolean(defaultValues.zone) ||
-        Boolean(defaultValues.area)),
-  );
-
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
     defaultValues: {
@@ -90,42 +85,6 @@ export function CustomerForm({
       ...defaultValues,
     },
   });
-
-  // Trigger a manual form update to help with initialization of dependent fields
-  React.useEffect(() => {
-    if (isEdit && defaultValues && isInitializing) {
-      let cancelled = false;
-
-      const initFields = async () => {
-        // Set city to trigger city dropdown to populate
-        if (defaultValues.city) {
-          form.setValue("city", defaultValues.city, { shouldDirty: false });
-        }
-        // Wait for city's useEffect to trigger zone list load
-        await new Promise((r) => setTimeout(r, 300));
-        if (cancelled) return;
-
-        if (defaultValues.zone) {
-          form.setValue("zone", defaultValues.zone, { shouldDirty: false });
-        }
-        // Wait for zone's useEffect to trigger area list load
-        await new Promise((r) => setTimeout(r, 300));
-        if (cancelled) return;
-
-        if (defaultValues.area) {
-          form.setValue("area", defaultValues.area, { shouldDirty: false });
-        }
-        // Wait for area to settle
-        await new Promise((r) => setTimeout(r, 300));
-        if (cancelled) return;
-
-        setIsInitializing(false);
-      };
-
-      initFields();
-      return () => { cancelled = true; };
-    }
-  }, [isEdit, defaultValues, isInitializing, form]);
 
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CustomerFormValues>({
     entityName: "Customer",
@@ -145,6 +104,30 @@ export function CustomerForm({
       ...(isEdit && defaultValues?.id ? [queryKeys.customers.detail(defaultValues.id)] : []),
     ],
     navigateTo: "/admin/customers",
+    onSuccess: (result) => {
+      const id = (result as Partial<CreateCustomerPayload>).id || defaultValues?.id;
+      form.reset({
+        ...form.getValues(),
+        ...(id ? { id } : {}),
+      });
+      toast.success(isEdit ? "Customer saved" : "Customer created");
+      if (!isEdit && id) {
+        void navigate({
+          to: "/admin/customers/$customerId/edit",
+          params: { customerId: id },
+          replace: true,
+        });
+      }
+    },
+    onError: (_error, message) => {
+      if (message.toLowerCase().includes("phone number already exists")) {
+        const detail = "A customer already uses this phone number.";
+        form.setError("phone", { type: "server", message: detail });
+        toast.error("Phone number already in use", { description: detail });
+        return true;
+      }
+      return false;
+    },
   });
 
   const handleSubmit = (values: CustomerFormValues) => {
@@ -156,7 +139,7 @@ export function CustomerForm({
       title="Customers"
       entityName={form.watch("name")}
       isEdit={isEdit}
-      isSubmitting={isSubmitting || !!isInitializing}
+      isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       newUrl="/admin/customers/new"
       newLabel="New Customer"
@@ -173,7 +156,7 @@ export function CustomerForm({
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-base">Basic Information</CardTitle>
+              <CardTitle className="text-base">Basic information</CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4 space-y-3">
               <FormField
@@ -181,9 +164,17 @@ export function CustomerForm({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>
+                      Name<span className="text-destructive" aria-hidden="true"> *</span>
+                      <span className="sr-only"> (required)</span>
+                    </FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter customer name" {...field} />
+                      <Input
+                        placeholder="Enter customer name"
+                        className="h-11 sm:h-9"
+                        required
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -196,12 +187,16 @@ export function CustomerForm({
                   name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>
+                        Phone number<span className="text-destructive" aria-hidden="true"> *</span>
+                        <span className="sr-only"> (required)</span>
+                      </FormLabel>
                       <FormControl>
                         <AdminPhoneInput
                           value={field.value}
                           onChange={field.onChange}
                           preserveExistingValue={isEdit ? defaultValues?.phone : undefined}
+                          required
                         />
                       </FormControl>
                       <FormMessage />
@@ -214,11 +209,12 @@ export function CustomerForm({
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email (Optional)</FormLabel>
+                      <FormLabel>Email</FormLabel>
                       <FormControl>
                         <Input
                           type="email"
                           placeholder="Enter email address"
+                          className="h-11 sm:h-9"
                           {...field}
                           value={field.value || ""}
                         />
@@ -244,7 +240,7 @@ export function CustomerForm({
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address (Optional)</FormLabel>
+                    <FormLabel>Address</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder="Enter address"

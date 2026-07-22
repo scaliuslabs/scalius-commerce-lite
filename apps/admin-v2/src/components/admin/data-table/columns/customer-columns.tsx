@@ -12,6 +12,7 @@ import {
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { createSelectColumn, createActionsColumn } from "./column-factories";
 import { CustomerAccountBadge } from "~/components/admin/customer-list/CustomerAccountBadge";
+import { CustomerOrderRetentionBadge } from "~/components/admin/customer-list/CustomerOrderRetentionBadge";
 import { formatAdminDate } from "~/lib/admin-time";
 import {
   customerHasAccount,
@@ -66,6 +67,9 @@ export function getCustomerColumns(
                 <span className="truncate font-medium text-foreground">{buyerName}</span>
               )}
               <CustomerAccountBadge hasAccount={customerHasAccount(customer)} />
+              {opts.showTrashed && customer.totalOrders > 0 ? (
+                <CustomerOrderRetentionBadge />
+              ) : null}
             </div>
             <div className="text-xs text-muted-foreground mt-1 space-y-1">
               <div className="flex items-center gap-2">
@@ -143,6 +147,7 @@ export function getCustomerColumns(
           onPermanentDelete: opts.showTrashed && opts.canDelete
             ? (customer) => opts.onPermanentDelete(customer.id)
             : undefined,
+          canPermanentDelete: (customer) => customer.totalOrders === 0,
         })]
       : []),
   ];
