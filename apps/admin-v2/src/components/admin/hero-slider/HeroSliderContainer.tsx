@@ -191,26 +191,21 @@ export function HeroSliderContainer({
         isDirty={dirty.desktop || dirty.mobile}
         isSubmitting={saving.desktop || saving.mobile}
       />
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Build separate desktop and mobile banners. Changes reach customers only after save.
-          </p>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {dirty.desktop || dirty.mobile ? "Unsaved changes" : "All changes saved"}
-        </div>
+      <div className="border-b pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Homepage hero</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage separate desktop and mobile homepage banners.
+        </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => onSectionChange(value as SliderType)}>
-        <TabsList className="h-9 w-full justify-start gap-1 rounded-lg border bg-muted/20 p-1 sm:w-auto">
-          <TabsTrigger value="desktop" className="h-7 gap-2 px-3">
+        <TabsList className="h-auto w-full justify-start gap-1 rounded-lg border bg-muted/20 p-1 sm:h-9 sm:w-auto">
+          <TabsTrigger value="desktop" className="h-11 gap-2 px-3 sm:h-7">
             <ImageIcon className="h-3.5 w-3.5" />
             Desktop
             {dirty.desktop ? <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> : null}
           </TabsTrigger>
-          <TabsTrigger value="mobile" className="h-7 gap-2 px-3">
+          <TabsTrigger value="mobile" className="h-11 gap-2 px-3 sm:h-7">
             <span className="h-4 w-2.5 rounded-[3px] border border-current" />
             Mobile
             {dirty.mobile ? <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> : null}
