@@ -47,8 +47,12 @@ describe("catalog filter UI boundaries", () => {
       expect(source).toContain('value="name-asc"');
       expect(source).toContain('value="name-desc"');
       expect(source).toContain('value="discount"');
-      expect(source).toContain("sticky top-[calc(var(--header-height,3.5rem)+0.5rem)]");
-      expect(source).toContain("lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)]");
+      expect(source).toContain(
+        "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)]",
+      );
+      expect(source).toContain(
+        "lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)]",
+      );
     }
   });
 
@@ -59,11 +63,21 @@ describe("catalog filter UI boundaries", () => {
     expect(collection).toContain('placeholder="Search this collection…"');
   });
 
+  it("removes dead filter and sort chrome from tiny unrefined listings", () => {
+    for (const source of [category, collection]) {
+      expect(source).toContain("shouldShowCatalogControls");
+      expect(source).toContain(
+        "const showCatalogControls = shouldShowCatalogControls({",
+      );
+      expect(source).toContain("showCatalogControls && (");
+    }
+  });
+
   it("shows removable applied filters outside the drawer", () => {
     expect(appliedFilters).toContain('aria-label="Applied filters"');
     expect(appliedFilters).toContain("Remove ${filter.label} filter");
     expect(appliedFilters).toContain("Clear all");
-    expect(appliedFilters).toContain('`Search: “${value}”`');
+    expect(appliedFilters).toContain("`Search: “${value}”`");
     expect(appliedFilters).not.toContain('new Set(["q", "page", "sortBy"])');
     for (const source of [category, search, collection]) {
       expect(source).toContain("AppliedCatalogFilters");

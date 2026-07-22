@@ -154,6 +154,25 @@ describe("storefront SEO regressions", () => {
     expect(source).toContain('name="robots" content="noindex,follow"');
   });
 
+  it("noindexes filtered category and collection variants consistently", async () => {
+    const categorySource = await readFile(
+      join(storefrontRoot, "src/pages/categories/[slug].astro"),
+      "utf8",
+    );
+    const collectionSource = await readFile(
+      join(storefrontRoot, "src/pages/collections/[id].astro"),
+      "utf8",
+    );
+
+    expect(categorySource).toMatch(
+      /const shouldNoindexCategoryView =\s*category\?\.noIndex === true \|\| hasListingQuery;/,
+    );
+    expect(categorySource).toContain("noindex={shouldNoindexCategoryView}");
+    expect(collectionSource).toMatch(
+      /const shouldNoindexCollectionView =\s*collection\.noIndex === true \|\|\s*hasListingQuery;/,
+    );
+  });
+
   it("uses noindex,follow for public resource indexing controls", async () => {
     const source = await readFile(
       join(storefrontRoot, "src/layouts/Layout.astro"),
