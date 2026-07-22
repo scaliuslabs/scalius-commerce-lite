@@ -26,9 +26,9 @@ describe("category listing page boundaries", () => {
   });
 
   it("distinguishes an empty category from an empty filtered result", () => {
-    expect(source).toContain("No products match these filters");
-    expect(source).toContain("No products in this category yet");
-    expect(source).toContain("Browse all products");
+    expect(source).toContain('activeFilterCount > 0 ? "No matching products" : "No products yet"');
+    expect(source).toContain('activeFilterCount > 0 ? "Clear filters" : "Browse products"');
+    expect(source).toContain("CatalogEmptyState");
   });
 
   it("binds sort navigation once across Astro lifecycle events", () => {

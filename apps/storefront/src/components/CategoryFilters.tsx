@@ -31,11 +31,22 @@ interface CategoryFiltersProps {
   priceRange?: BuyerPriceRange;
 }
 
+export function formatCatalogPriceDisplay(
+  price: number,
+  symbol = getCurrencySymbol(),
+): string {
+  const formatted = new Intl.NumberFormat("en-US", {
+    notation: Math.abs(price) >= 10_000 ? "compact" : "standard",
+    maximumFractionDigits: Math.abs(price) < 100 ? 2 : 1,
+  }).format(price);
+  return `${symbol}${formatted}`;
+}
+
 /**
  * Extracts initial component state from URL parameters
  * Separates price filters from other filters for independent state management
  */
-const getInitialState = (
+export const getInitialCategoryFilterState = (
   currentFilters: ProductListFilterState,
   priceRange?: BuyerPriceRange,
 ) => {
@@ -47,12 +58,15 @@ const getInitialState = (
       : currentFilters.minPrice,
     defaultMinPrice,
   );
-  const maxPrice = parsePriceFilterValue(
+  const parsedMaxPrice = parsePriceFilterValue(
     Array.isArray(currentFilters.maxPrice)
       ? currentFilters.maxPrice.at(-1)
       : currentFilters.maxPrice,
     defaultMaxPrice,
   );
+  const maxPrice = currentFilters.maxPrice
+    ? parsedMaxPrice
+    : Math.max(parsedMaxPrice, minPrice);
   const filters: Record<string, string[] | boolean> = {};
 
   // Extract non-navigation filters (exclude URL navigation and price params)
@@ -68,7 +82,7 @@ const getInitialState = (
     minPrice,
     maxPrice,
     minRange: Math.min(defaultMinPrice, minPrice),
-    maxRange: Math.max(defaultMaxPrice, maxPrice),
+    maxRange: Math.max(defaultMaxPrice, minPrice, maxPrice),
     defaultMaxPrice,
     filters,
   };
@@ -97,7 +111,7 @@ export default function CategoryFilters({
 }: CategoryFiltersProps) {
   // Parse initial state from URL parameters
   const initialState = useMemo(
-    () => getInitialState(currentFilters, priceRange),
+    () => getInitialCategoryFilterState(currentFilters, priceRange),
     [currentFilters, priceRange],
   );
 
@@ -162,12 +176,15 @@ export default function CategoryFilters({
           : currentFilters.minPrice,
         priceRange?.min ?? DEFAULT_MIN_PRICE,
       );
-      const newMaxPrice = parsePriceFilterValue(
+      const parsedMaxPrice = parsePriceFilterValue(
         Array.isArray(currentFilters.maxPrice)
           ? currentFilters.maxPrice.at(-1)
           : currentFilters.maxPrice,
         priceRange?.max ?? DEFAULT_MAX_PRICE,
       );
+      const newMaxPrice = currentFilters.maxPrice
+        ? parsedMaxPrice
+        : Math.max(parsedMaxPrice, newMinPrice);
 
       setPriceState((prev) => ({
         ...prev,
@@ -176,7 +193,11 @@ export default function CategoryFilters({
         minPriceInput: newMinPrice.toString(),
         maxPriceInput: newMaxPrice.toString(),
         minRange: Math.min(priceRange?.min ?? DEFAULT_MIN_PRICE, newMinPrice),
-        maxRange: Math.max(priceRange?.max ?? DEFAULT_MAX_PRICE, newMaxPrice),
+        maxRange: Math.max(
+          priceRange?.max ?? DEFAULT_MAX_PRICE,
+          newMinPrice,
+          newMaxPrice,
+        ),
         defaultMaxPrice: priceRange?.max ?? DEFAULT_MAX_PRICE,
         priceChanged: !!(currentFilters.minPrice || currentFilters.maxPrice),
       }));
@@ -474,15 +495,6 @@ export default function CategoryFilters({
   };
 
   // Format price display for slider labels
-  const formatPriceDisplay = (price: number): string => {
-    const sym = getCurrencySymbol();
-    const formatted = new Intl.NumberFormat(undefined, {
-      notation: Math.abs(price) >= 10_000 ? "compact" : "standard",
-      maximumFractionDigits: Math.abs(price) < 100 ? 2 : 1,
-    }).format(price);
-    return `${sym}${formatted}`;
-  };
-
   const sliderStep = useMemo(() => {
     const span = Math.max(0, priceState.maxRange - priceState.minRange);
     if (span <= 100) return 0.01;
@@ -642,8 +654,8 @@ export default function CategoryFilters({
                   />
                   {/* Slider Value Display */}
                   <div className="flex justify-between text-xs text-gray-500 mt-4 px-1">
-                    <span>{formatPriceDisplay(priceState.minPrice)}</span>
-                    <span>{formatPriceDisplay(priceState.maxPrice)}</span>
+                    <span>{formatCatalogPriceDisplay(priceState.minPrice)}</span>
+                    <span>{formatCatalogPriceDisplay(priceState.maxPrice)}</span>
                   </div>
                 </div>
 
@@ -669,7 +681,7 @@ export default function CategoryFilters({
                           handlePriceInputChange("min", e.target.value)
                         }
                         onKeyDown={handlePriceInputKeyPress}
-                        className="pl-7 h-9 text-sm"
+                        className="h-11 pl-7 text-sm lg:h-9"
                         placeholder="0"
                         min="0"
                         step="any"
@@ -697,7 +709,7 @@ export default function CategoryFilters({
                           handlePriceInputChange("max", e.target.value)
                         }
                         onKeyDown={handlePriceInputKeyPress}
-                        className="pl-7 h-9 text-sm"
+                        className="h-11 pl-7 text-sm lg:h-9"
                         placeholder={priceState.defaultMaxPrice.toString()}
                         min="0"
                         step="any"
@@ -758,7 +770,7 @@ export default function CategoryFilters({
                     <button
                       type="button"
                       onClick={() => toggleFacetExpansion(attr.slug)}
-                      className="min-h-10 px-2 text-sm font-medium text-primary hover:underline"
+                      className="min-h-11 px-2 text-sm font-medium text-primary hover:underline lg:min-h-10"
                       aria-expanded={expandedFacets.has(attr.slug)}
                     >
                       {expandedFacets.has(attr.slug)
