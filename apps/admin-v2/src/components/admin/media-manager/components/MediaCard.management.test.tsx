@@ -47,12 +47,13 @@ describe("MediaCard picker management boundary", () => {
     host.remove();
   });
 
-  function render(allowManagement: boolean) {
+  function render(allowManagement: boolean, unavailable = false, selectionMode = false) {
     act(() => root.render(
       <MediaCard
         file={file}
         selected={false}
-        selectionMode={false}
+        selectionMode={selectionMode}
+        unavailable={unavailable}
         allowManagement={allowManagement}
         view="ready"
         onActivate={vi.fn()}
@@ -75,5 +76,14 @@ describe("MediaCard picker management boundary", () => {
 
     expect(host.querySelector('button[aria-label="Preview product-front.webp"]')).toBeTruthy();
     expect(host.querySelector('button[aria-label="Actions for product-front.webp"]')).toBeTruthy();
+  });
+
+  it("marks already-attached picker assets as unavailable instead of selected", () => {
+    render(false, true, true);
+
+    const asset = host.querySelector<HTMLButtonElement>('button[aria-label="Already added product-front.webp"]');
+    expect(asset?.disabled).toBe(true);
+    expect(asset?.getAttribute("aria-pressed")).toBeNull();
+    expect(host.textContent).toContain("Added");
   });
 });

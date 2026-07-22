@@ -83,6 +83,7 @@ function libraryFile(id: string, filename: string): LibraryMediaFile {
 type Manager = ReturnType<typeof useMediaManager>;
 let latest: Manager;
 const onSelectMultiple = vi.fn();
+let unavailableFileIds: string[] = [];
 const offPage: MediaFile = {
   id: "off-page",
   url: "https://cdn.example.com/off-page.webp",
@@ -97,6 +98,7 @@ function Harness() {
     autoLoad: false,
     capability: "both",
     initialSelectedFiles: [offPage, offPage],
+    unavailableFileIds,
     onSelectMultiple,
   });
   return null;
@@ -108,6 +110,7 @@ describe("useMediaManager off-page selection", () => {
 
   beforeEach(() => {
     hookState.files = [libraryFile("visible", "visible-fresh.webp")];
+    unavailableFileIds = [];
     onSelectMultiple.mockReset();
     Object.values(api).forEach((mock) => mock.mockReset().mockResolvedValue(undefined));
     host = document.createElement("div");
@@ -163,5 +166,19 @@ describe("useMediaManager off-page selection", () => {
     expect(onSelectMultiple).toHaveBeenLastCalledWith([
       expect.objectContaining({ id: "visible", filename: "visible-fresh.webp" }),
     ]);
+  });
+
+  it("keeps already-attached assets out of a new picker selection", () => {
+    unavailableFileIds = ["visible", "off-page"];
+    act(() => root.render(<Harness />));
+
+    act(() => latest.replaceSelection(["off-page", "visible"]));
+    expect(latest.selectedFileIds).toEqual([]);
+
+    act(() => latest.selectAllVisible());
+    expect(latest.selectedFileIds).toEqual([]);
+
+    act(() => latest.toggleSelection("visible"));
+    expect(latest.selectedFileIds).toEqual([]);
   });
 });

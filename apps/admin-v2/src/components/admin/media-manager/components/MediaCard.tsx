@@ -16,6 +16,7 @@ interface MediaCardProps {
   file: LibraryMediaFile;
   posterUrl?: string | null;
   selected: boolean;
+  unavailable?: boolean;
   selectionMode: boolean;
   allowManagement: boolean;
   view: MediaLibraryView;
@@ -25,7 +26,7 @@ interface MediaCardProps {
   onLifecycle: (action: "trash" | "restore" | "permanent") => void;
 }
 
-export function MediaCard({ file, posterUrl, selected, selectionMode, allowManagement, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
+export function MediaCard({ file, posterUrl, selected, unavailable = false, selectionMode, allowManagement, view, onActivate, onPreview, onToggle, onLifecycle }: MediaCardProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const isImage = file.kind === "image";
   const duration = formatDuration(file.durationMs);
@@ -42,16 +43,18 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, allowManag
       className={cn(
         "group relative overflow-hidden rounded-lg border bg-card transition-colors focus-within:border-foreground/40",
         selected && "border-primary ring-1 ring-primary",
+        unavailable && "opacity-60",
       )}
     >
       <button
         type="button"
+        disabled={unavailable}
         className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         onClick={selectionMode ? onToggle : onActivate}
-        aria-pressed={selectionMode ? selected : undefined}
-        aria-keyshortcuts={selectionMode ? "Shift+Enter" : undefined}
-        aria-label={`${selectionMode ? (selected ? "Deselect" : "Select") : "Open"} ${file.filename}`}
-        title={selectionMode ? "Hold Shift to select a range" : undefined}
+        aria-pressed={selectionMode && !unavailable ? selected : undefined}
+        aria-keyshortcuts={selectionMode && !unavailable ? "Shift+Enter" : undefined}
+        aria-label={`${unavailable ? "Already added" : selectionMode ? (selected ? "Deselect" : "Select") : "Open"} ${file.filename}`}
+        title={unavailable ? "Already added to this product" : selectionMode ? "Hold Shift to select a range" : undefined}
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {previewUrl && !loadFailed ? (
@@ -73,9 +76,11 @@ export function MediaCard({ file, posterUrl, selected, selectionMode, allowManag
               <Play className="h-3 w-3 fill-current" aria-hidden="true" /> Video
             </span>
           )}
-          {selectionMode && (
+          {selectionMode && unavailable ? (
+            <span className="absolute left-2 top-2 rounded bg-background/95 px-1.5 py-1 text-[11px] font-medium shadow-sm">Added</span>
+          ) : selectionMode ? (
             <span aria-hidden="true" className={cn("absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded border bg-background/90 shadow-sm", selected && "border-primary bg-primary text-primary-foreground")}>{selected && <Check className="h-3.5 w-3.5" />}</span>
-          )}
+          ) : null}
         </div>
         <div className="px-2.5 py-2">
           <p className="truncate text-[13px] font-medium" title={file.filename}>{file.filename}</p>
