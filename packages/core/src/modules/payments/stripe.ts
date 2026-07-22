@@ -236,6 +236,50 @@ export async function listStripeRefundsForCharge(
   }
 }
 
+export interface StripePaymentIntentSnapshot {
+  id: string;
+  status: string;
+  amountReceived: number;
+  currency: string;
+  chargeId: string | null;
+  metadata: Record<string, string>;
+}
+
+export async function retrieveStripePaymentIntent(
+  secretKey: string,
+  paymentIntentId: string,
+  requestTimeoutMs?: number,
+): Promise<{ success: boolean; paymentIntent?: StripePaymentIntentSnapshot; error?: string }> {
+  try {
+    const stripe = getStripe(secretKey);
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      {},
+      requestTimeoutMs && requestTimeoutMs > 0 ? { timeout: requestTimeoutMs } : undefined,
+    );
+    const chargeId = typeof paymentIntent.latest_charge === "string"
+      ? paymentIntent.latest_charge
+      : paymentIntent.latest_charge?.id ?? null;
+
+    return {
+      success: true,
+      paymentIntent: {
+        id: paymentIntent.id,
+        status: paymentIntent.status,
+        amountReceived: paymentIntent.amount_received,
+        currency: paymentIntent.currency,
+        chargeId,
+        metadata: paymentIntent.metadata ?? {},
+      },
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Stripe.errors.StripeError
+      ? err.message
+      : "Failed to retrieve Stripe payment intent";
+    return { success: false, error: message };
+  }
+}
+
 /**
  * Verify and parse a Stripe webhook event signature.
  * Uses `constructEventAsync` which works with Web Crypto (CF Workers).

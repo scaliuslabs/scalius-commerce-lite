@@ -433,7 +433,7 @@ describe("payment processing idempotency", () => {
       amount: 50,
     });
 
-    expect(result).toEqual({ success: true });
+    expect(result).toEqual({ success: true, alreadyProcessed: true });
     expect(inserts).toHaveLength(0);
     expect(updates).toHaveLength(0);
     expect(batch).not.toHaveBeenCalled();

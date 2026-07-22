@@ -20,6 +20,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
 import { POST as polarPost } from "../../../../pages/api/checkout/polar-session";
 import { POST as sslcommerzPost } from "../../../../pages/api/checkout/sslcommerz-session";
 import { POST as stripePost } from "../../../../pages/api/checkout/stripe-intent";
+import { POST as stripeReconcilePost } from "../../../../pages/api/checkout/stripe-reconcile";
 import { getOrderReceiptCookieName } from "../../../order-receipt-cookie";
 
 beforeEach(() => {
@@ -35,6 +36,11 @@ describe("checkout payment-session proxies", () => {
       label: "Stripe",
       endpoint: "https://storefront.example.test/api/checkout/stripe-intent",
       post: stripePost,
+    },
+    {
+      label: "Stripe reconciliation",
+      endpoint: "https://storefront.example.test/api/checkout/stripe-reconcile",
+      post: stripeReconcilePost,
     },
     {
       label: "SSLCommerz",
@@ -136,5 +142,48 @@ describe("checkout payment-session proxies", () => {
     });
     expect(backendBody).not.toHaveProperty("token");
     expect(backendBody).not.toHaveProperty("receipt_token");
+  });
+
+  it("keeps Stripe receipt proof server-side while forwarding reconciliation", async () => {
+    mocks.fetchWithRetry.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      data: { status: "scheduled", providerStatus: "succeeded" },
+    }), {
+      status: 202,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    const response = await stripeReconcilePost({
+      request: new Request("https://storefront.example.test/api/checkout/stripe-reconcile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: `${getOrderReceiptCookieName("order_1")}=receipt_1`,
+        },
+        body: JSON.stringify({
+          orderId: "order_1",
+          receiptToken: "browser-injected-proof",
+          token: "browser-injected-token",
+        }),
+      }),
+    } as never);
+    const [, requestInit] = mocks.fetchWithRetry.mock.calls[0]!;
+
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({
+      success: true,
+      data: { status: "scheduled", providerStatus: "succeeded" },
+    });
+    expect(mocks.fetchWithRetry).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/payment/stripe/reconcile",
+      expect.objectContaining({ method: "POST", cache: "no-store" }),
+      0,
+      15000,
+      false,
+    );
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      orderId: "order_1",
+      receiptToken: "receipt_1",
+    });
   });
 });

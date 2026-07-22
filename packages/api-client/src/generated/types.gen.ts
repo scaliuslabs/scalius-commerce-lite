@@ -44249,6 +44249,126 @@ export type PostApiV1PaymentStripeIntentResponses = {
 
 export type PostApiV1PaymentStripeIntentResponse = PostApiV1PaymentStripeIntentResponses[keyof PostApiV1PaymentStripeIntentResponses];
 
+export type PostApiV1PaymentStripeReconcileData = {
+    body?: {
+        orderId: string;
+        receiptToken?: string;
+    };
+    headers?: {
+        'X-Receipt-Token'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/payment/stripe/reconcile';
+};
+
+export type PostApiV1PaymentStripeReconcileErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1PaymentStripeReconcileError = PostApiV1PaymentStripeReconcileErrors[keyof PostApiV1PaymentStripeReconcileErrors];
+
+export type PostApiV1PaymentStripeReconcileResponses = {
+    /**
+     * Payment is pending or already settled
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'pending' | 'scheduled' | 'settled';
+            providerStatus: string | null;
+        };
+    };
+    /**
+     * Confirmed provider payment was scheduled for settlement
+     */
+    202: {
+        success: true;
+        data: {
+            status: 'pending' | 'scheduled' | 'settled';
+            providerStatus: string | null;
+        };
+    };
+};
+
+export type PostApiV1PaymentStripeReconcileResponse = PostApiV1PaymentStripeReconcileResponses[keyof PostApiV1PaymentStripeReconcileResponses];
+
 export type PostApiV1PaymentSslcommerzSessionData = {
     body?: {
         orderId: string;

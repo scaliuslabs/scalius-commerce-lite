@@ -313,6 +313,44 @@ describe("hosted online payment handlers", () => {
 });
 
 describe("Stripe checkout handler", () => {
+  it("does not create an order until the Stripe card form is complete", async () => {
+    document.body.innerHTML = `
+      <div id="stripeSection">
+        <div id="stripeCardElement"></div>
+        <div id="stripeError"></div>
+      </div>
+      <button id="payButton"></button>
+    `;
+    let changeHandler: ((event: { complete?: boolean }) => void) | undefined;
+    const stripeCard = {
+      mount: vi.fn(),
+      on: vi.fn((_event: string, handler: (event: { complete?: boolean }) => void) => {
+        changeHandler = handler;
+      }),
+    };
+    const stripeInstance = {
+      elements: vi.fn(() => ({ create: vi.fn(() => stripeCard) })),
+      confirmCardPayment: vi.fn(),
+    };
+    vi.stubGlobal("Stripe", vi.fn(() => stripeInstance));
+    const container = document.getElementById("stripeSection") as HTMLElement;
+    container.dataset.publishableKey = "pk_incomplete";
+    await stripeHandler.onSelect?.(container);
+
+    expect(stripeHandler.isReady?.()).toBe(false);
+    expect(await stripeHandler.processPayment(makeContext())).toEqual({
+      success: false,
+      error: "Complete your card details before paying.",
+    });
+    expect(mocks.createOrder).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(stripeInstance.confirmCardPayment).not.toHaveBeenCalled();
+
+    changeHandler?.({ complete: true });
+    expect(stripeHandler.isReady?.()).toBe(true);
+    expect((document.getElementById("payButton") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("keeps card payment failures on checkout instead of redirecting to hosted recovery", async () => {
     document.body.innerHTML = `
       <div id="stripeCardElement"></div>
@@ -320,7 +358,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({
@@ -360,7 +398,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({
@@ -414,7 +452,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({
@@ -474,7 +512,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({
@@ -520,7 +558,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({
@@ -564,7 +602,7 @@ describe("Stripe checkout handler", () => {
     `;
     const stripeCard = {
       mount: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((_event, handler) => handler({ complete: true })),
     };
     const stripeInstance = {
       elements: vi.fn(() => ({

@@ -28,12 +28,23 @@ interface StripeElements {
 
 interface StripeCardElement {
   mount(selector: string): void;
-  on(event: string, handler: (e: { error?: { message: string } }) => void): void;
+  on(
+    event: "change",
+    handler: (e: { complete?: boolean; error?: { message: string } }) => void,
+  ): void;
 }
 
 let stripeInstance: StripeInstance | null = null;
 let stripeCard: StripeCardElement | null = null;
 let publishableKey: string | null = null;
+let stripeCardComplete = false;
+
+function syncPayButtonReadiness(): void {
+  const section = document.getElementById("stripeSection");
+  if (section?.classList.contains("hidden")) return;
+  const button = document.getElementById("payButton") as HTMLButtonElement | null;
+  if (button) button.disabled = !stripeCardComplete;
+}
 
 export const stripeHandler: GatewayHandler = {
   id: "stripe",
@@ -49,6 +60,10 @@ export const stripeHandler: GatewayHandler = {
     return "Pay with Card";
   },
 
+  isReady(): boolean {
+    return stripeCardComplete;
+  },
+
   async onSelect(container: HTMLElement): Promise<void> {
     // Extract publishable key from the gateway config stored on the container
     const key = container.dataset.publishableKey;
@@ -56,6 +71,7 @@ export const stripeHandler: GatewayHandler = {
       publishableKey = key;
       stripeInstance = null;
       stripeCard = null;
+      stripeCardComplete = false;
     } else if (key) {
       publishableKey = key;
     }
@@ -84,6 +100,7 @@ export const stripeHandler: GatewayHandler = {
       });
       stripeCard.mount("#stripeCardElement");
       stripeCard.on("change", (event) => {
+        stripeCardComplete = event.complete === true;
         const errEl = document.getElementById("stripeError");
         if (event.error) {
           if (errEl) {
@@ -93,6 +110,7 @@ export const stripeHandler: GatewayHandler = {
         } else {
           errEl?.classList.add("hidden");
         }
+        syncPayButtonReadiness();
       });
     } catch {
       throw new Error("Failed to load payment form. Please refresh and try again.");
@@ -102,6 +120,9 @@ export const stripeHandler: GatewayHandler = {
   async processPayment(ctx: PaymentContext): Promise<PaymentResult> {
     if (!stripeCard || !stripeInstance) {
       return { success: false, error: "Payment form not ready. Please wait a moment." };
+    }
+    if (!stripeCardComplete) {
+      return { success: false, error: "Complete your card details before paying." };
     }
 
     try {

@@ -98,13 +98,15 @@ describe("order success side effects", () => {
       .toBeLessThan(retryScript.indexOf("Payment gateway did not return a redirect URL."));
   });
 
-  it("reconciles a pending hosted payment through a same-origin receipt status read", () => {
+  it("reconciles pending Stripe payments before bounded receipt status reads", () => {
     const pageSource = readFileSync(
       sourcePath("pages", "order-success.astro"),
       "utf8",
     );
 
     expect(pageSource).toContain("data-order-success-state='payment_pending'");
+    expect(pageSource).toContain('receipt.dataset.paymentMethod !== "stripe"');
+    expect(pageSource).toContain('fetch("/api/checkout/stripe-reconcile"');
     expect(pageSource).toContain("/api/order-receipt/status?orderId=");
     expect(pageSource).toContain('credentials: "same-origin"');
     expect(pageSource).toContain('cache: "no-store"');
@@ -112,5 +114,7 @@ describe("order success side effects", () => {
     expect(pageSource).toContain("window.location.reload()");
     expect(pageSource).not.toContain("X-Receipt-Token");
     expect(pageSource).not.toContain("receiptToken=${");
+    expect(pageSource.indexOf('fetch("/api/checkout/stripe-reconcile"'))
+      .toBeLessThan(pageSource.indexOf("/api/order-receipt/status?orderId="));
   });
 });

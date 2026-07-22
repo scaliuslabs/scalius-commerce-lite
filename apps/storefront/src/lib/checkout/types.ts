@@ -37,6 +37,8 @@ export interface GatewayHandler {
   getButtonText(isPartialPayment: boolean): string;
   /** Called when user selects this gateway. For Stripe: mount card element */
   onSelect?(container: HTMLElement): Promise<void>;
+  /** Whether gateway-specific buyer input is complete enough to submit. */
+  isReady?(): boolean;
   /** Called when user clicks pay. Handles the full payment flow. */
   processPayment(ctx: PaymentContext): Promise<PaymentResult>;
 }
