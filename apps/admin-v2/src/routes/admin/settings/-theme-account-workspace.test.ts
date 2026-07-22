@@ -133,15 +133,17 @@ describe("theme and account settings workspace", () => {
     expect(twoFactorSource).toContain('data: { method: "email", password }');
     const emailChangeHandler = twoFactorSource.slice(
       twoFactorSource.indexOf("const handleSetupEmailForChange"),
-      twoFactorSource.indexOf("const handleDisable2FA"),
+      twoFactorSource.indexOf("const handleResendOtp"),
     );
     expect(emailChangeHandler).not.toContain("twoFactor.enable");
     expect(emailChangeHandler).toContain("startTwoFactorMethodChallenge");
     expect(emailChangeHandler).toContain("setBackupCodes([])");
     expect(twoFactorSource).toContain(
-      "Turn off two-factor authentication?",
+      "Admin accounts must verify a second sign-in method.",
     );
-    expect(twoFactorSource).toContain("AlertDialogAction");
+    expect(twoFactorSource).toContain("Change method");
+    expect(twoFactorSource).not.toContain("twoFactor.disable");
+    expect(twoFactorSource).not.toContain("Turn off two-factor authentication?");
     expect(twoFactorSource).toContain("min-h-11");
     expect(twoFactorSource).not.toContain("More secure. Works offline.");
     expect(twoFactorSource).not.toContain("More convenient. No app needed.");
