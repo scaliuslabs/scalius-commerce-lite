@@ -57,4 +57,25 @@ describe("category admin workflow boundaries", () => {
     expect(apiSource).toContain("apiDelete(`/categories/${data.id}`, {");
     expect(apiSource).toContain("expectedRevision: data.expectedRevision");
   });
+
+  it("keeps the category editor compact without removing merchandising content", () => {
+    expect(formSource).toContain('<Tabs defaultValue="introduction"');
+    expect(formSource).toContain('value="below-products"');
+    expect(formSource).toContain('name="description"');
+    expect(formSource).toContain('name="content"');
+    expect(formSource).toContain('title="Search and discovery"');
+    expect(formSource).toContain('name="slug"');
+    expect(formSource).toContain('title="Image"');
+    expect(formSource).not.toContain("New categories start as drafts");
+    expect(formSource).not.toContain("Auto-generated from the name");
+    expect(formSource).not.toContain("Optimize for search engines");
+    expect(formSource).not.toContain("URL & Slug");
+  });
+
+  it("keeps category saves in context", () => {
+    expect(formSource).toContain("onSuccess: (result) => {");
+    expect(formSource).toContain("form.reset({");
+    expect(formSource).toContain('to: "/admin/categories/$categoryId/edit"');
+    expect(formSource).toContain("if (!isEdit && mutation.id)");
+  });
 });

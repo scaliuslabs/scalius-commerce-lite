@@ -20,12 +20,13 @@ import {
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import { Switch } from "../ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   AlertCircle,
   CheckCircle2,
   ExternalLink,
-  LockKeyhole,
 } from "lucide-react";
 import {
   Select,
@@ -97,6 +98,15 @@ function requireCategoryRevision(values: CategoryFormValues): number {
     throw new Error("Category revision is missing. Reload the page before saving.");
   }
   return values.revision;
+}
+
+function getCategoryStatusSummary(
+  status: CategoryFormValues["status"],
+  ready: boolean,
+): string {
+  if (status === "published") return "Published";
+  if (status === "internal") return "Internal";
+  return ready ? "Ready to publish" : "Not ready to publish";
 }
 
 export function CategoryForm({
@@ -229,7 +239,7 @@ export function CategoryForm({
       isSubmitting={isSubmitting}
       backUrl="/admin/categories"
       newUrl="/admin/categories/new"
-      newLabel="New Category"
+      newLabel="New category"
       canCreateNew={categoryActions.canCreate}
       canSave={canSave}
       saveDisabledReason={isEdit
@@ -239,9 +249,9 @@ export function CategoryForm({
       form={form}
       onSubmit={form.handleSubmit(handleSubmit)}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">
         {/* Left Column (2/3) */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-3 lg:col-span-2">
           {/* Name field (standalone, not in a card) */}
           <FormField
             control={form.control}
@@ -255,7 +265,7 @@ export function CategoryForm({
                   <Input
                     placeholder="Category name"
                     {...field}
-                    className="text-base"
+                    className="min-h-11 text-base md:h-9 md:min-h-9"
                     maxLength={100}
                   />
                 </FormControl>
@@ -264,64 +274,71 @@ export function CategoryForm({
             )}
           />
 
-          {/* Short introduction shown with the category heading. */}
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-base">Introduction</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-3">
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <DeferredTiptapEditor
-                        content={field.value || ""}
-                        onChange={field.onChange}
-                        placeholder="Introduce this category above the product list"
-                        ariaLabel="Category introduction"
-                        compact={true}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+          <Card className="overflow-hidden">
+            <Tabs defaultValue="introduction" className="w-full">
+              <TabsList className="h-11 w-full justify-start rounded-none border-b bg-transparent p-0 md:h-9">
+                <TabsTrigger
+                  value="introduction"
+                  className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
+                >
+                  Introduction
+                </TabsTrigger>
+                <TabsTrigger
+                  value="below-products"
+                  className="h-11 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent md:h-9"
+                >
+                  Below products
+                </TabsTrigger>
+              </TabsList>
 
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-base">Content below products</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-3">
-              <FormField
-                control={form.control}
-                name="content"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <DeferredTiptapEditor
-                        content={field.value || ""}
-                        onChange={field.onChange}
-                        placeholder="Add a buying guide, specifications, comparisons, or FAQs"
-                        ariaLabel="Category content below products"
-                        compact={true}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
+              <TabsContent value="introduction" className="m-0 p-3">
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <DeferredTiptapEditor
+                          content={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Introduce this category above the product list"
+                          ariaLabel="Category introduction"
+                          compact={true}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+
+              <TabsContent value="below-products" className="m-0 p-3">
+                <FormField
+                  control={form.control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <DeferredTiptapEditor
+                          content={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Add a buying guide, specifications, comparisons, or FAQs"
+                          ariaLabel="Category content below products"
+                          compact={true}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+            </Tabs>
           </Card>
 
           {/* Image Card (collapsible) */}
           <CollapsibleCard
-            title="Category Image"
-            description="Add an image for your category (optional)"
-            defaultOpen={true}
+            title="Image"
+            defaultOpen={Boolean(defaultValues?.image)}
           >
             <FormField
               control={form.control}
@@ -331,9 +348,9 @@ export function CategoryForm({
                   <FormImageUploadField
                     value={field.value}
                     onChange={field.onChange}
-                    triggerLabel="Select Category Image"
-                    changeTriggerLabel="Change Category Image"
-                    placeholder="No category image selected"
+                    triggerLabel="Select image"
+                    changeTriggerLabel="Change image"
+                    placeholder="No image selected"
                   />
                   <FormMessage />
                 </FormItem>
@@ -345,174 +362,172 @@ export function CategoryForm({
         {/* Right Column (1/3) */}
         <div className="space-y-3">
           <Card>
-            <CardHeader className="px-4 pb-2 pt-4">
-              <CardTitle className="text-sm">Publication</CardTitle>
+            <CardHeader className="px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-sm">Status</CardTitle>
+                {!isEdit ? <Badge variant="secondary">Draft</Badge> : null}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-3 px-4 pb-4">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="sr-only">Category status</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={!isEdit}
-                    >
-                      <FormControl>
-                        <SelectTrigger aria-label="Category status">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem
-                          value="published"
-                          disabled={
-                            form.getValues("status") !== "published" &&
-                            publishReadiness?.ready === false
-                          }
-                        >
-                          Published
-                        </SelectItem>
-                        <SelectItem value="internal">Internal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormDescription className="text-xs leading-5">
-                      {!isEdit
-                        ? "New categories start as drafts. Add products, then publish from the edit page."
-                        : field.value === "published"
-                          ? "Visible to buyers and eligible for navigation, discovery, filters, and active dynamic collections."
-                          : field.value === "internal"
-                            ? "Available to admin workflows, but hidden from every buyer-facing surface."
-                            : "Hidden from buyers while you finish setup."}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {isEdit && publishReadiness ? (
-                <div className="rounded-md border bg-muted/20 p-3 text-xs">
-                  <div className="flex items-start gap-2">
-                    {publishReadiness.ready ? (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    ) : (
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    )}
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-medium text-foreground">
-                        {publishReadiness.ready
-                          ? "Ready to publish"
-                          : "Not ready to publish"}
-                      </p>
-                      <p className="text-muted-foreground">
-                        {publishReadiness.eligibleProductCount} active buyer-visible {publishReadiness.eligibleProductCount === 1 ? "product" : "products"}
-                      </p>
-                    </div>
-                  </div>
-                  {publishReadiness.blockers.map((blocker) => (
-                    <p key={blocker.code} className="mt-2 text-amber-700 dark:text-amber-400">
-                      {blocker.message}
-                    </p>
-                  ))}
-                  {publishReadiness.warnings.map((warning) => (
-                    <p key={warning.code} className="mt-2 text-muted-foreground">
-                      {warning.message}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-
-              {isEdit && form.watch("status") !== "published" ? (
-                <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>The storefront category page and discovery links stay unavailable.</span>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          {/* Slug Card */}
-          <Card>
-            <CardHeader className="pb-3 pt-4 px-4">
-              <CardTitle className="text-base">URL & Slug</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 space-y-3">
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="sr-only">URL handle</FormLabel>
-                    <div className="flex items-center space-x-2">
-                      <div className="grow flex items-center rounded-md border border-input bg-background px-3 text-sm ring-offset-background">
-                        <span className="text-muted-foreground/80 font-medium">
-                          /categories/
-                        </span>
+            {isEdit ? (
+              <CardContent className="space-y-3 px-4 pb-4 pt-0">
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="sr-only">Category status</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <input
-                            className="grow bg-transparent py-2 outline-none placeholder:text-muted-foreground"
-                            placeholder="category-url-slug"
-                            maxLength={100}
-                            {...field}
-                            onChange={(e) => {
-                              field.onChange(e);
-                              // Mark slug as manually edited
-                              form.setValue("slugEdited", true, {
-                                shouldValidate: false,
-                              });
-                            }}
-                          />
+                          <SelectTrigger
+                            aria-label="Category status"
+                            className="min-h-11 md:h-9 md:min-h-9"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
                         </FormControl>
+                        <SelectContent>
+                          <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem
+                            value="published"
+                            disabled={
+                              form.getValues("status") !== "published" &&
+                              publishReadiness?.ready === false
+                            }
+                          >
+                            Published
+                          </SelectItem>
+                          <SelectItem value="internal">Internal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {publishReadiness ? (
+                  <div className="rounded-md border bg-muted/20 p-3 text-xs">
+                    <div className="flex items-start gap-2">
+                      {publishReadiness.ready ? (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      )}
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium text-foreground">
+                          {getCategoryStatusSummary(
+                            form.getValues("status"),
+                            publishReadiness.ready,
+                          )}
+                        </p>
+                        <p className="text-muted-foreground">
+                          {publishReadiness.eligibleProductCount} active{" "}
+                          {publishReadiness.eligibleProductCount === 1
+                            ? "product"
+                            : "products"}
+                        </p>
                       </div>
                     </div>
-                    <FormDescription className="text-xs text-muted-foreground/80">
-                      Auto-generated from the name but can be edited.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {isEdit && form.watch("status") === "published" && form.watch("slug") && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 text-sm font-medium w-full"
-                  asChild
-                >
-                  <a
-                    href={getStorefrontPath(
-                      `/categories/${form.watch("slug")}`,
-                    )}
-                    target="_blank"
-                    rel="noreferrer"
+                    {publishReadiness.blockers.map((blocker) => (
+                      <p key={blocker.code} className="mt-2 text-amber-700 dark:text-amber-400">
+                        {blocker.message}
+                      </p>
+                    ))}
+                    {publishReadiness.warnings.map((warning) => (
+                      <p key={warning.code} className="mt-2 text-muted-foreground">
+                        {warning.message}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+
+                {form.watch("status") === "published" && form.watch("slug") ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 w-full gap-2 text-xs md:h-8 md:min-h-8"
+                    asChild
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    View on Storefront
-                  </a>
-                </Button>
-              )}
-            </CardContent>
+                    <a
+                      href={getStorefrontPath(
+                        `/categories/${form.watch("slug")}`,
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View on storefront
+                    </a>
+                  </Button>
+                ) : null}
+              </CardContent>
+            ) : null}
           </Card>
 
           {/* SEO Card (collapsible) */}
           <CollapsibleCard
-            title="Search Engine Listing"
-            description="Optimize for search engines"
+            title="Search and discovery"
             defaultOpen={false}
+            summary={
+              <div className="rounded-md border bg-muted/15 p-2.5">
+                <p className="truncate text-xs font-medium text-foreground">
+                  {form.watch("metaTitle")?.trim() ||
+                    form.watch("name")?.trim() ||
+                    "Search preview"}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] text-emerald-700 dark:text-emerald-400">
+                  /categories/{form.watch("slug")?.trim() || "category-url"}
+                </p>
+                {form.watch("metaDescription")?.trim() ? (
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                    {form.watch("metaDescription")?.trim()}
+                  </p>
+                ) : null}
+              </div>
+            }
           >
+            <FormField
+              control={form.control}
+              name="slug"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    URL <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <div className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">
+                      /categories/
+                    </span>
+                    <FormControl>
+                      <Input
+                        placeholder="category-url"
+                        maxLength={100}
+                        className="min-h-11 md:h-9 md:min-h-9"
+                        {...field}
+                        onChange={(event) => {
+                          field.onChange(event);
+                          form.setValue("slugEdited", true, {
+                            shouldValidate: false,
+                          });
+                        }}
+                      />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="metaTitle"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Meta Title</FormLabel>
+                  <FormLabel>Page title</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="e.g., Shop Premium Electronics | Your Store Name"
+                      placeholder="Category title"
+                      className="min-h-11 md:h-9 md:min-h-9"
                       {...field}
                       value={field.value || ""}
                       maxLength={70}
@@ -535,11 +550,11 @@ export function CategoryForm({
               name="metaDescription"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Meta Description</FormLabel>
+                  <FormLabel>Meta description</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="e.g., Discover our curated collection of premium electronics with fast shipping and expert support."
-                      className="resize-none"
+                      placeholder="Category description"
+                      className="min-h-24 resize-none"
                       {...field}
                       value={field.value || ""}
                       rows={3}
@@ -563,10 +578,11 @@ export function CategoryForm({
               name="canonicalPath"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Canonical Path</FormLabel>
+                  <FormLabel>Canonical path</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="/categories/shoes"
+                      className="min-h-11 md:h-9 md:min-h-9"
                       {...field}
                       value={field.value || ""}
                       onChange={(event) => {
@@ -600,6 +616,7 @@ export function CategoryForm({
                       <Switch
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
                       />
                     </FormControl>
                   </FormItem>
@@ -623,6 +640,7 @@ export function CategoryForm({
                       <Switch
                         checked={field.value}
                         onCheckedChange={field.onChange}
+                        className="relative before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
                       />
                     </FormControl>
                   </FormItem>
