@@ -20,17 +20,17 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
 
 <div
   id="mobile-menu-overlay"
-  class="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-500 lg:hidden"
+  class="pointer-events-none fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
   aria-hidden="true"
 >
 </div>
 
 <div
   id="mobile-menu-panel"
-  class="fixed top-0 left-0 z-70 h-dvh w-[90vw] max-w-[380px] bg-card text-foreground shadow-2xl transform -translate-x-full transition-transform duration-500 cubic-bezier(0.19, 1, 0.22, 1) lg:hidden flex flex-col border-r border-border"
+  class="fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] lg:hidden"
   role="dialog"
   aria-modal="true"
-  aria-label="Mobile Menu"
+  aria-label="Mobile menu"
   aria-hidden="true"
   inert
 >
@@ -43,7 +43,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
     <button
       id="mobile-menu-close"
       type="button"
-      class="p-2 -mr-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-full transition-colors active:scale-95"
+      class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
       aria-label="Close menu"
     >
       <X className="h-5 w-5 stroke-[1.5]" />
@@ -76,9 +76,10 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                       )}
                       <button
                         type="button"
-                        class="flex items-center justify-center w-10 h-10 -mr-2 text-muted-foreground hover:text-foreground active:bg-muted rounded-full transition-all"
+                        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:text-foreground active:bg-muted"
                         data-menu-toggle={menuId}
                         aria-expanded="false"
+                        aria-controls={`submenu-${menuId}`}
                         aria-label={`Toggle ${item.title} submenu`}
                       >
                         <ChevronDown className="h-4.5 w-4.5 stroke-2 transition-transform duration-300 pointer-events-none" />
@@ -86,8 +87,10 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                     </div>
 
                     <div
+                      id={`submenu-${menuId}`}
                       class="hidden overflow-hidden transition-[height] duration-300 ease-in-out"
                       data-submenu={menuId}
+                      aria-hidden="true"
                     >
                       <div class="border-l-2 border-border ml-2.5 pl-3 mt-1 mb-2 space-y-1">
                         <ul class="space-y-0.5">
@@ -112,26 +115,33 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                       )}
                                       <button
                                         type="button"
-                                        class="flex items-center justify-center w-9 h-9 -mr-1 text-muted-foreground hover:text-foreground rounded-full transition-colors"
+                                        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
                                         data-menu-toggle={level2Id}
                                         aria-expanded="false"
+                                        aria-controls={`submenu-${level2Id}`}
+                                        aria-label={`Toggle ${level2Item.title} submenu`}
                                       >
                                         <ChevronDown className="h-4 w-4 stroke-2 transition-transform duration-300 pointer-events-none" />
                                       </button>
                                     </div>
 
-                                    <div class="hidden" data-submenu={level2Id}>
+                                    <div
+                                      id={`submenu-${level2Id}`}
+                                      class="hidden"
+                                      data-submenu={level2Id}
+                                      aria-hidden="true"
+                                    >
                                       <ul class="space-y-0.5 border-l border-border ml-2 pl-3 mt-0.5 py-1">
                                         {(level2Item.subMenu || []).map(
                                           (level3Item) => {
                                             return (
                                               <li>
                                                 {level3Item.href ? (
-                                                  <a href={level3Item.href} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors py-1.5">
+                                                  <a href={level3Item.href} target={level3Item.openInNewTab ? "_blank" : undefined} rel={level3Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
                                                     {level3Item.title}
                                                   </a>
                                                 ) : (
-                                                  <span class="block text-[13px] font-medium text-muted-foreground py-1.5">
+                                                  <span class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground">
                                                     {level3Item.title}
                                                   </span>
                                                 )}
@@ -143,11 +153,11 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
                                     </div>
                                   </div>
                                 ) : level2Item.href ? (
-                                    <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="block text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2">
+                                    <a href={level2Item.href} target={level2Item.openInNewTab ? "_blank" : undefined} rel={level2Item.openInNewTab ? "noopener noreferrer" : undefined} class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground">
                                       {level2Item.title}
                                     </a>
                                   ) : (
-                                    <span class="block text-[14px] font-semibold text-foreground py-2">
+                                    <span class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground">
                                       {level2Item.title}
                                     </span>
                                   )}
@@ -176,13 +186,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
     <div class="h-4"></div>
   </nav>
 
-  <!-- Scroll Hint Shadow (Visible when content overflows) -->
-  <div
-    class="absolute bottom-[calc(88px+env(safe-area-inset-bottom))] left-0 right-0 h-8 bg-linear-to-t from-card to-transparent pointer-events-none z-10 lg:hidden"
-  >
-  </div>
-
-  <div class="border-t border-border bg-muted p-4 space-y-3 shrink-0 z-20">
+  <div class="z-20 shrink-0 space-y-3 border-t border-border bg-muted p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-20px_rgba(0,0,0,0.55)]">
     {
       contact.phone && (
         <a
@@ -209,7 +213,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
 
     {
       social && social.length > 0 && (
-        <div class="flex items-center justify-center gap-3">
+        <div class="grid grid-cols-3 place-items-center gap-2 min-[360px]:flex min-[360px]:justify-center">
           {social.map((item) => {
             if (!item.url) return null;
             const displayTitle = item.label || item.platform || "Social";
@@ -220,7 +224,7 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
             return (
               <a
                 href={href}
-                class="flex items-center justify-center h-9 w-9 rounded-full bg-card border border-input text-muted-foreground hover:border-primary/50 hover:text-foreground hover:shadow-sm transition-all"
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-input bg-card text-muted-foreground transition-all hover:border-primary/50 hover:text-foreground hover:shadow-sm"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={displayTitle}
