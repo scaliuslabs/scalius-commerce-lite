@@ -118,7 +118,7 @@ export default function CheckoutSettingsPage({
                                 if (element) tabRefs.current.set(tab.value, element);
                                 else tabRefs.current.delete(tab.value);
                             }}
-                            className="shrink-0 rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:bg-transparent hover:text-foreground sm:px-4"
+                            className="min-h-11 shrink-0 rounded-none border-b-2 border-transparent px-3 py-2.5 text-sm font-medium text-muted-foreground transition-none data-[state=active]:border-b-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none hover:text-foreground sm:px-4"
                         >
                             {tab.label}
                         </TabsTrigger>

@@ -771,7 +771,7 @@ export default function CheckoutFlowSettings() {
                 </Alert>
             )}
 
-            <div className="sticky bottom-3 z-10 flex flex-col-reverse gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
+            <div className="sticky bottom-3 z-10 grid gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex sm:items-center sm:justify-between lg:col-span-2">
                 <p className="text-xs text-muted-foreground" aria-live="polite">
                     {conflict
                         ? "Resolve the newer saved version before saving"
@@ -779,13 +779,13 @@ export default function CheckoutFlowSettings() {
                             ? `Unsaved checkout changes · based on revision ${editor?.revision ?? "—"}`
                             : `Checkout flow is saved · revision ${editor?.revision ?? "—"}`}
                 </p>
-                <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                <div className="grid grid-cols-2 gap-2 sm:flex">
                     <Button
                         type="button"
                         variant="outline"
                         disabled={!isDirty || saving || Boolean(conflict)}
                         onClick={resetFlow}
-                        className="w-full sm:w-auto"
+                        className="min-h-11 w-full sm:min-h-9 sm:w-auto"
                     >
                         <RotateCcw className="mr-2 h-4 w-4" />
                         Reset
@@ -793,7 +793,7 @@ export default function CheckoutFlowSettings() {
                     <Button
                         type="submit"
                         disabled={saving || saveBlocked}
-                        className="w-full sm:w-auto sm:min-w-[164px]"
+                        className="min-h-11 w-full sm:min-h-9 sm:w-auto sm:min-w-[164px]"
                     >
                         {saving ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />

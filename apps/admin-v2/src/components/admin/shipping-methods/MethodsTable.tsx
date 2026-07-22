@@ -8,7 +8,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +61,64 @@ interface MethodRowProps {
   onRestore: (id: string) => void;
 }
 
+function MethodActions({
+  method,
+  showTrashed,
+  mobile = false,
+  onEdit,
+  onDelete,
+  onRestore,
+}: Pick<MethodRowProps, "method" | "showTrashed" | "onEdit" | "onDelete" | "onRestore"> & {
+  mobile?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={mobile ? "h-11 w-11" : "h-7 w-7"}
+          aria-label={`Actions for ${method.name}`}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[170px]">
+        {showTrashed ? (
+          <>
+            <DropdownMenuItem onClick={() => onRestore(method.id)}>
+              <Undo className="mr-2 h-3.5 w-3.5" />
+              Restore
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(method.id)}
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Delete permanently
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={() => onEdit(method)}>
+              <Pencil className="mr-2 h-3.5 w-3.5" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onDelete(method.id)}
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Move to trash
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 const MethodRow = React.memo(function MethodRow({
   method,
   symbol,
@@ -91,16 +157,9 @@ const MethodRow = React.memo(function MethodRow({
         {method.description || "-"}
       </TableCell>
       <TableCell className="py-2 text-xs">
-        <span
-          className={cn(
-            "px-2 py-0.5 rounded-full text-xs font-medium",
-            method.isActive
-              ? "bg-green-100 text-green-700"
-              : "bg-red-100 text-red-700",
-          )}
-        >
+        <Badge variant={method.isActive ? "default" : "secondary"}>
           {method.isActive ? "Active" : "Inactive"}
-        </span>
+        </Badge>
       </TableCell>
       <TableCell className="py-2 text-xs text-muted-foreground">
         {method.sortOrder}
@@ -109,46 +168,13 @@ const MethodRow = React.memo(function MethodRow({
         {formatDate(method.updatedAt)}
       </TableCell>
       <TableCell className="text-right pr-3 py-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <MoreHorizontal className="h-3.5 w-3.5" />
-              <span className="sr-only">Actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[170px]">
-            {showTrashed ? (
-              <>
-                <DropdownMenuItem onClick={() => onRestore(method.id)}>
-                  <Undo className="mr-2 h-3.5 w-3.5" />
-                  Restore
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => onDelete(method.id)}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete Permanently
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <>
-                <DropdownMenuItem onClick={() => onEdit(method)}>
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onDelete(method.id)}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Move to Trash
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <MethodActions
+          method={method}
+          showTrashed={showTrashed}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onRestore={onRestore}
+        />
       </TableCell>
     </TableRow>
   );
@@ -191,7 +217,100 @@ export function MethodsTable({
 }: MethodsTableProps) {
   return (
     <div className="border-t">
-      <Table>
+      <div className="space-y-3 p-2 md:hidden">
+        <div className="flex items-center gap-2">
+          <Select value={sort.field} onValueChange={(field) => onSort(field as SortField)}>
+            <SelectTrigger className="h-11 flex-1" aria-label="Sort shipping methods by">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Name</SelectItem>
+              <SelectItem value="fee">Fee</SelectItem>
+              <SelectItem value="isActive">Status</SelectItem>
+              <SelectItem value="sortOrder">Order</SelectItem>
+              <SelectItem value="createdAt">Created</SelectItem>
+              <SelectItem value="updatedAt">Last updated</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 shrink-0"
+            aria-label={`Sort ${sort.order === "asc" ? "descending" : "ascending"}`}
+            onClick={() => onSort(sort.field)}
+          >
+            {sort.order === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </Button>
+        </div>
+
+        {methods.length > 0 && !isLoading ? (
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 text-sm text-muted-foreground">
+            <Checkbox
+              checked={selectAllCheckedState}
+              onCheckedChange={onToggleAll}
+              aria-label="Select all methods"
+            />
+            Select all {methods.length} on this page
+          </label>
+        ) : null}
+
+        {isLoading ? (
+          <div className="flex h-32 items-center justify-center" role="status" aria-label="Loading shipping methods">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          </div>
+        ) : methods.length === 0 ? (
+          <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-6 text-center">
+            <Truck className="h-8 w-8 text-muted-foreground/50" />
+            <p className="font-medium text-muted-foreground">
+              {hasActiveFilters ? "No methods match your filters." : showTrashed ? "Trash is empty." : "No shipping methods yet."}
+            </p>
+            {!showTrashed && !hasActiveFilters ? (
+              <Button onClick={onCreateFirst} className="min-h-11">
+                <Plus className="mr-1.5 h-4 w-4" /> Add shipping method
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          methods.map((method) => {
+            const selected = selectedMethods.has(method.id);
+            return (
+              <article key={method.id} className={cn("rounded-xl border bg-background p-3", selected && "border-primary bg-muted/40")}>
+                <div className="flex items-start justify-between gap-2">
+                  <label className="flex min-h-11 min-w-0 flex-1 cursor-pointer items-center gap-3">
+                    <Checkbox
+                      checked={selected}
+                      onCheckedChange={(checked) => onToggleSelection(method.id, !!checked)}
+                      aria-label={`Select ${method.name}`}
+                    />
+                    <span className="min-w-0 break-words font-medium">{method.name}</span>
+                  </label>
+                  <MethodActions
+                    method={method}
+                    showTrashed={showTrashed}
+                    mobile
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onRestore={onRestore}
+                  />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge variant={method.isActive ? "default" : "secondary"}>{method.isActive ? "Active" : "Inactive"}</Badge>
+                  <span className="text-sm font-medium">{symbol}{method.fee.toLocaleString()}</span>
+                </div>
+                {method.description ? <p className="mt-3 break-words text-sm text-muted-foreground">{method.description}</p> : null}
+                <dl className="mt-3 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
+                  <div><dt className="text-muted-foreground">Order</dt><dd className="mt-1 font-medium">{method.sortOrder}</dd></div>
+                  <div><dt className="text-muted-foreground">Last updated</dt><dd className="mt-1 font-medium">{formatDate(method.updatedAt)}</dd></div>
+                </dl>
+              </article>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        <Table>
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
             <TableHead className="w-10 pl-3 pr-1 py-2">
@@ -279,7 +398,8 @@ export function MethodsTable({
               />
             ))}
         </TableBody>
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }

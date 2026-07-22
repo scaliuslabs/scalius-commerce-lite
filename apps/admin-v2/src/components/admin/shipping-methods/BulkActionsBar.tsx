@@ -56,7 +56,7 @@ export function BulkActionsBar({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs"
+                className="h-11 text-xs sm:h-7"
                 onClick={onOpenBulkRestore}
                 disabled={isActionLoading || isLoading}
               >
@@ -65,7 +65,7 @@ export function BulkActionsBar({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs text-destructive border-destructive hover:bg-destructive/10"
+                className="h-11 border-destructive text-xs text-destructive hover:bg-destructive/10 sm:h-7"
                 onClick={onOpenBulkDelete}
                 disabled={isActionLoading || isLoading}
               >
@@ -76,7 +76,7 @@ export function BulkActionsBar({
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-xs text-destructive border-destructive hover:bg-destructive/10"
+              className="h-11 border-destructive text-xs text-destructive hover:bg-destructive/10 sm:h-7"
               onClick={onOpenBulkDelete}
               disabled={isActionLoading || isLoading}
             >
@@ -116,12 +116,12 @@ export function BulkActionsBar({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionLoading} className="h-8 text-xs">
+            <AlertDialogCancel disabled={isActionLoading} className="h-11 text-xs sm:h-8">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => onBulkAction(showTrashed ? "deletePermanent" : "trash")}
-              className={cn("h-8 text-xs", showTrashed && "bg-destructive hover:bg-destructive/90")}
+              className={cn("h-11 text-xs sm:h-8", showTrashed && "bg-destructive hover:bg-destructive/90")}
               disabled={isActionLoading || selectedCount === 0}
             >
               {isActionLoading ? (
@@ -144,12 +144,12 @@ export function BulkActionsBar({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isActionLoading} className="h-8 text-xs">
+            <AlertDialogCancel disabled={isActionLoading} className="h-11 text-xs sm:h-8">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => onBulkAction("restore")}
-              className="h-8 text-xs"
+              className="h-11 text-xs sm:h-8"
               disabled={isActionLoading || selectedCount === 0}
             >
               {isActionLoading ? (

@@ -40,8 +40,8 @@ describe("checkout settings status presentation", () => {
   it("keeps checkout flow compact, mobile-safe, and explicit about immutable buyer facts", () => {
     expect(flowSource).toContain('method="post"');
     expect(flowSource).toContain("lg:grid-cols-[minmax(0,1fr)_20rem]");
-    expect(flowSource).toContain("flex flex-col-reverse gap-2");
-    expect(flowSource).toContain("w-full sm:w-auto sm:min-w-[164px]");
+    expect(flowSource).toContain("grid grid-cols-2 gap-2 sm:flex");
+    expect(flowSource).toContain("min-h-11 w-full sm:min-h-9 sm:w-auto sm:min-w-[164px]");
     expect(flowSource).toContain("Phone number is always required.");
     expect(flowSource).toContain("The remaining balance is due on delivery.");
     expect(flowSource).toContain("Unsaved checkout changes");
@@ -105,6 +105,7 @@ describe("checkout settings status presentation", () => {
 
   it("keeps the tab strip mobile-safe and explains that refund requests are not automatic refunds", () => {
     expect(pageSource).toContain("overflow-x-auto");
+    expect(pageSource).toContain("min-h-11 shrink-0");
     expect(pageSource).toContain("shrink-0 rounded-none");
     expect(pageSource).toContain('aria-label="Checkout settings sections"');
     expect(pageSource).toContain("list.scrollTo");

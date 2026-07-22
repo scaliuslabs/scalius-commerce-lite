@@ -84,20 +84,22 @@ const LocationRow = React.memo(function LocationRow({
       }
     >
       <TableCell>
-        <Checkbox
-          checked={selectedLocationIds.includes(location.id)}
-          onCheckedChange={(checked) =>
-            onToggleSelectLocation(location.id, Boolean(checked))
-          }
-          aria-label={`Select row ${location.name}`}
-        />
+        <label className="flex h-11 w-11 cursor-pointer items-center justify-center sm:h-8 sm:w-8">
+          <Checkbox
+            checked={selectedLocationIds.includes(location.id)}
+            onCheckedChange={(checked) =>
+              onToggleSelectLocation(location.id, Boolean(checked))
+            }
+            aria-label={`Select row ${location.name}`}
+          />
+        </label>
       </TableCell>
       <TableCell className="font-medium">{location.name}</TableCell>
       {type !== "city" && (
         <TableCell>{getParentName(location.parentId)}</TableCell>
       )}
       <TableCell>
-        <div className="flex items-center space-x-2">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 sm:min-h-8">
           <Switch
             checked={location.isActive}
             onCheckedChange={() =>
@@ -115,7 +117,7 @@ const LocationRow = React.memo(function LocationRow({
           >
             {location.isActive ? "Active" : "Inactive"}
           </Badge>
-        </div>
+        </label>
       </TableCell>
       <TableCell className="hidden sm:table-cell">
         <div className="flex flex-wrap gap-1">
@@ -143,7 +145,7 @@ const LocationRow = React.memo(function LocationRow({
             variant="ghost"
             size="icon"
             onClick={() => onEdit(location)}
-            className="h-8 w-8"
+            className="h-11 w-11 sm:h-8 sm:w-8"
             aria-label={`Edit ${location.name}`}
           >
             <Edit className="h-4 w-4" />
@@ -152,7 +154,7 @@ const LocationRow = React.memo(function LocationRow({
             variant="destructive"
             size="icon"
             onClick={() => onDelete(location.id)}
-            className="h-8 w-8"
+            className="h-11 w-11 sm:h-8 sm:w-8"
             aria-label={`Delete ${location.name}`}
           >
             <Trash2 className="h-4 w-4" />
@@ -209,14 +211,16 @@ export function LocationsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">
-                <Checkbox
-                  checked={areAllSelected}
-                  onCheckedChange={(checked) =>
-                    onSelectAllLocations(Boolean(checked))
-                  }
-                  aria-label="Select all rows"
-                  disabled={locations.length === 0}
-                />
+                <label className="flex h-11 w-11 cursor-pointer items-center justify-center sm:h-8 sm:w-8">
+                  <Checkbox
+                    checked={areAllSelected}
+                    onCheckedChange={(checked) =>
+                      onSelectAllLocations(Boolean(checked))
+                    }
+                    aria-label="Select all rows"
+                    disabled={locations.length === 0}
+                  />
+                </label>
               </TableHead>
               <TableHead>Name</TableHead>
               {type !== "city" && (
@@ -269,7 +273,7 @@ export function LocationsTable({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2 text-xs"
+                    className="h-11 px-2 text-xs sm:h-8"
                   >
                     {pagination.limit} per page
                   </Button>
@@ -300,7 +304,7 @@ export function LocationsTable({
                 size="sm"
                 onClick={() => onPageChange(pagination.page - 1)}
                 disabled={pagination.page <= 1}
-                className="h-8 w-8 p-0"
+                className="h-11 w-11 p-0 sm:h-8 sm:w-8"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span className="sr-only">Previous page</span>
@@ -329,7 +333,7 @@ export function LocationsTable({
                         }
                         size="icon"
                         onClick={() => onPageChange(pageNum)}
-                        className="h-8 w-8"
+                        className="h-11 w-11 sm:h-8 sm:w-8"
                         aria-label={`Page ${pageNum}`}
                         aria-current={
                           pagination.page === pageNum ? "page" : undefined
@@ -347,7 +351,7 @@ export function LocationsTable({
                 size="sm"
                 onClick={() => onPageChange(pagination.page + 1)}
                 disabled={pagination.page >= pagination.totalPages}
-                className="h-8 w-8 p-0"
+                className="h-11 w-11 p-0 sm:h-8 sm:w-8"
               >
                 <ChevronRight className="h-4 w-4" />
                 <span className="sr-only">Next page</span>

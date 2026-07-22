@@ -94,8 +94,8 @@ export function CheckoutLanguagesContainer() {
           <div>
             <CardTitle className="text-base font-semibold tracking-tight">
               {showTrashed
-                ? "Trashed Checkout Languages"
-                : "Checkout Languages"}
+                ? "Trashed checkout languages"
+                : "Checkout languages"}
             </CardTitle>
             <CardDescription className="mt-0 text-xs text-muted-foreground">
               {showTrashed
@@ -103,12 +103,12 @@ export function CheckoutLanguagesContainer() {
                 : `Manage checkout form languages and field customization. ${pagination.total} total languages.`}
             </CardDescription>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
             <Button
               variant="outline"
               size="sm"
               onClick={toggleTrash}
-              className="h-7 text-xs text-muted-foreground hover:text-foreground"
+              className="h-11 text-xs text-muted-foreground hover:text-foreground sm:h-7"
             >
               {showTrashed ? (
                 <>
@@ -123,7 +123,7 @@ export function CheckoutLanguagesContainer() {
             {!showTrashed && (
               <Button
                 size="sm"
-                className="h-7 text-xs"
+                className="h-11 text-xs sm:h-7"
                 onClick={openFormForCreate}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Language
@@ -143,13 +143,13 @@ export function CheckoutLanguagesContainer() {
                 className="flex-1 sm:flex-initial sm:max-w-xs w-full"
               >
                 <div className="relative">
-                  <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     type="search"
                     placeholder="Search languages..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-7 h-7 w-full text-xs"
+                    className="h-11 w-full pl-7 text-xs sm:h-7"
                   />
                 </div>
               </form>
@@ -157,7 +157,7 @@ export function CheckoutLanguagesContainer() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                  className="h-11 px-2 text-xs text-muted-foreground sm:h-7 sm:px-1.5"
                   onClick={clearFilters}
                 >
                   <X className="h-3.5 w-3.5 mr-1" /> Clear

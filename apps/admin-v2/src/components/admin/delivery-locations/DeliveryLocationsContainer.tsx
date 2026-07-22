@@ -42,14 +42,14 @@ export function DeliveryLocationsContainer() {
         }}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList className="w-full justify-start sm:w-auto">
-            <TabsTrigger value="city">Cities</TabsTrigger>
-            <TabsTrigger value="zone">Zones</TabsTrigger>
-            <TabsTrigger value="area">Areas</TabsTrigger>
+          <TabsList className="h-auto w-full justify-start sm:w-auto">
+            <TabsTrigger value="city" className="min-h-11 sm:min-h-9">Cities</TabsTrigger>
+            <TabsTrigger value="zone" className="min-h-11 sm:min-h-9">Zones</TabsTrigger>
+            <TabsTrigger value="area" className="min-h-11 sm:min-h-9">Areas</TabsTrigger>
           </TabsList>
 
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-            <div className="col-span-2 [&>button]:w-full sm:col-span-1 sm:[&>button]:w-auto">
+            <div className="col-span-2 [&>button]:min-h-11 [&>button]:w-full sm:col-span-1 sm:[&>button]:min-h-9 sm:[&>button]:w-auto">
               <PathaoImportButton
                 hasPathaoProvider={state.hasPathaoProvider}
                 importing={state.importing}
@@ -57,12 +57,12 @@ export function DeliveryLocationsContainer() {
               />
             </div>
 
-            <Button variant="outline" size="sm" onClick={state.handleCleanAll}>
+            <Button variant="outline" size="sm" className="min-h-11 sm:min-h-9" onClick={state.handleCleanAll}>
               <Trash2 className="mr-2 h-4 w-4" />
               Clean All Data
             </Button>
 
-            <Button size="sm" onClick={() => state.setShowAddDialog(true)}>
+            <Button size="sm" className="min-h-11 sm:min-h-9" onClick={() => state.setShowAddDialog(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add {labels.title}
             </Button>
@@ -73,7 +73,7 @@ export function DeliveryLocationsContainer() {
                 size="sm"
                 onClick={state.handleBulkDelete}
                 disabled={state.selectedLocationIds.length === 0}
-                className="col-span-2 sm:col-span-1"
+                className="col-span-2 min-h-11 sm:col-span-1 sm:min-h-9"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Selected ({state.selectedLocationIds.length})
@@ -84,11 +84,11 @@ export function DeliveryLocationsContainer() {
 
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
               placeholder={`Search ${labels.plural}...`}
-              className="pl-8"
+              className="min-h-11 pl-8 sm:min-h-9"
               value={state.searchQuery}
               onChange={(e) => state.setSearchQuery(e.target.value)}
             />
@@ -122,7 +122,7 @@ export function DeliveryLocationsContainer() {
                 searchPlaceholder={`Search ${state.activeTab === "zone" ? "cities" : "zones"}…`}
                 emptyMessage={`No ${state.activeTab === "zone" ? "cities" : "zones"} found.`}
                 ariaLabel={`Filter ${labels.plural} by ${state.activeTab === "zone" ? "city" : "zone"}`}
-                triggerClassName="w-full"
+                triggerClassName="min-h-11 w-full sm:min-h-9"
                 maxVisibleOptions={100}
                 disabled={state.loadingParents}
               />

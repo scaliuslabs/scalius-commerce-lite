@@ -17,6 +17,7 @@ describe("delivery location responsive workspace", () => {
       "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
     );
     expect(containerSource).toContain("grid w-full grid-cols-2 gap-2");
+    expect(containerSource).toContain("min-h-11 sm:min-h-9");
     expect(containerSource).toContain("Search ${labels.plural}...");
     expect(containerSource).toContain("<SearchableSelect");
     expect(containerSource).toContain("maxVisibleOptions={100}");
@@ -30,6 +31,7 @@ describe("delivery location responsive workspace", () => {
     expect(tableSource).toContain('aria-label={`Delete ${location.name}`}');
     expect(tableSource).toContain('aria-label={`${location.isActive ? "Deactivate" : "Activate"} ${location.name}`}');
     expect(tableSource).toContain("flex flex-col gap-3 px-3 py-3 sm:flex-row");
+    expect(tableSource).toContain("h-11 w-11 sm:h-8 sm:w-8");
     expect(tableSource).not.toContain("{type}s");
   });
 });

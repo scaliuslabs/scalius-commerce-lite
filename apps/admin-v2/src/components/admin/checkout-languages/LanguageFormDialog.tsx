@@ -91,12 +91,8 @@ export function LanguageFormDialog({
     >
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {editingLanguage ? "Edit" : "Create"} Checkout Language
-          </DialogTitle>
-          <DialogDescription>
-            Configure language settings, field labels, and visibility options.
-          </DialogDescription>
+          <DialogTitle>{editingLanguage ? "Edit checkout language" : "Add checkout language"}</DialogTitle>
+          <DialogDescription>Set the labels and optional fields buyers see at checkout.</DialogDescription>
         </DialogHeader>
         <form
           method="post"
@@ -104,7 +100,7 @@ export function LanguageFormDialog({
           className="space-y-4"
           noValidate
         >
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="name" className="text-xs">
                 Language Name
@@ -117,7 +113,7 @@ export function LanguageFormDialog({
                 }
                 required
                 placeholder="e.g., English"
-                className="mt-1 text-sm"
+                className="mt-1 min-h-11 text-sm sm:min-h-9"
               />
             </div>
             <div>
@@ -132,13 +128,13 @@ export function LanguageFormDialog({
                 }
                 required
                 placeholder="e.g., en, bn"
-                className="mt-1 text-sm"
+                className="mt-1 min-h-11 text-sm sm:min-h-9"
               />
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3">
               <Switch
                 id="isActive"
                 checked={currentFormData.isActive}
@@ -146,11 +142,9 @@ export function LanguageFormDialog({
                   setCurrentFormData((p) => ({ ...p, isActive: checked }))
                 }
               />
-              <Label htmlFor="isActive" className="text-xs font-normal">
-                Set as Active Language
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
+              <span className="text-sm font-normal">Active language</span>
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3">
               <Switch
                 id="isDefault"
                 checked={currentFormData.isDefault}
@@ -158,21 +152,19 @@ export function LanguageFormDialog({
                   setCurrentFormData((p) => ({ ...p, isDefault: checked }))
                 }
               />
-              <Label htmlFor="isDefault" className="text-xs font-normal">
-                Set as Default (Fallback)
-              </Label>
-            </div>
+              <span className="text-sm font-normal">Default fallback</span>
+            </label>
           </div>
 
           <Tabs defaultValue="labels" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="labels">Field Labels</TabsTrigger>
-              <TabsTrigger value="messages">Messages & Text</TabsTrigger>
-              <TabsTrigger value="visibility">Field Visibility</TabsTrigger>
+              <TabsTrigger value="labels" className="min-h-11">Labels</TabsTrigger>
+              <TabsTrigger value="messages" className="min-h-11">Messages</TabsTrigger>
+              <TabsTrigger value="visibility" className="min-h-11">Visibility</TabsTrigger>
             </TabsList>
 
             <TabsContent value="labels" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {[
                   ["customerNameLabel", "Customer Name Label"],
                   ["customerNamePlaceholder", "Customer Name Placeholder"],
@@ -192,7 +184,7 @@ export function LanguageFormDialog({
                     <Input
                       value={currentFormData.languageData?.[key] || ""}
                       onChange={(e) => updateLanguageData(key, e.target.value)}
-                      className="mt-1 text-sm"
+                      className="mt-1 min-h-11 text-sm sm:min-h-9"
                     />
                   </div>
                 ))}
@@ -200,7 +192,7 @@ export function LanguageFormDialog({
             </TabsContent>
 
             <TabsContent value="messages" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {[
                   ["pageTitle", "Page Title"],
                   ["checkoutSectionTitle", "Checkout Section Title"],
@@ -212,7 +204,7 @@ export function LanguageFormDialog({
                     <Input
                       value={currentFormData.languageData?.[key] || ""}
                       onChange={(e) => updateLanguageData(key, e.target.value)}
-                      className="mt-1 text-sm"
+                      className="mt-1 min-h-11 text-sm sm:min-h-9"
                     />
                   </div>
                 ))}
@@ -237,7 +229,7 @@ export function LanguageFormDialog({
                   ["showOrderNotesField", "Show Order Notes Field"],
                   ["showAreaField", "Show Area Field (Optional)"],
                 ].map(([key, label]) => (
-                  <div key={key} className="flex items-center space-x-2">
+                  <label key={key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-3">
                     <Switch
                       id={key}
                       checked={currentFormData.fieldVisibility?.[key] ?? true}
@@ -245,10 +237,8 @@ export function LanguageFormDialog({
                         updateFieldVisibility(key, checked)
                       }
                     />
-                    <Label htmlFor={key} className="text-xs font-normal">
-                      {label}
-                    </Label>
-                  </div>
+                    <span className="text-sm font-normal">{label}</span>
+                  </label>
                 ))}
               </div>
             </TabsContent>
@@ -260,7 +250,7 @@ export function LanguageFormDialog({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="text-xs h-8"
+                className="h-11 text-xs sm:h-8"
               >
                 Cancel
               </Button>
@@ -269,12 +259,12 @@ export function LanguageFormDialog({
               type="submit"
               disabled={isActionLoading}
               size="sm"
-              className="text-xs h-8"
+              className="h-11 text-xs sm:h-8"
             >
               {isActionLoading && (
                 <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
               )}{" "}
-              {editingLanguage ? "Save Changes" : "Create Language"}
+              {editingLanguage ? "Save changes" : "Add language"}
             </Button>
           </DialogFooter>
         </form>
