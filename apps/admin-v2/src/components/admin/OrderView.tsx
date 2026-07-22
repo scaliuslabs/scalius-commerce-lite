@@ -33,7 +33,6 @@ export function OrderView({ order }: OrderViewProps) {
               <OrderSupportRequestsCard order={order} />
             )}
             <PaymentCard order={order} />
-            <OrderNotificationsCard order={order} />
             <ShipmentCard order={order} />
             <OrderNotesCard order={order} />
           </div>
@@ -44,6 +43,8 @@ export function OrderView({ order }: OrderViewProps) {
             <OrderReturnsCard order={order} />
           </div>
         </div>
+
+        <OrderNotificationsCard order={order} />
       </div>
     </TooltipProvider>
     </ErrorBoundary>

@@ -99,9 +99,10 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("`Resolve shipment (${selectedShipmentLockCount})`");
     expect(toolbarSource).toContain('searchPlaceholder="Search orders…"');
     expect(toolbarSource).toContain("overflow-x-auto pb-2 scrollbar-hide");
-    expect(
-      toolbarSource.match(/overflow-x-auto scrollbar-hide sm:w-auto/g),
-    ).toHaveLength(2);
+    expect(toolbarSource).toContain('aria-controls="order-advanced-filters"');
+    expect(toolbarSource).toContain('id="order-advanced-filters"');
+    expect(toolbarSource).toContain("activeAdvancedFilterCount");
+    expect(toolbarSource).toContain("Clear filters");
     expect(toolbarSource).toContain("Auto-refresh");
 
     expect(dialogSource).toContain("if (isShipping) return");

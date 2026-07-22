@@ -16,7 +16,9 @@ import {
   Truck,
   Package,
   Download,
+  ListFilter,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { DataTableToolbar } from "../DataTableToolbar";
 import type { DateRange } from "react-day-picker";
@@ -142,7 +144,7 @@ function DateRangeButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-11 w-[240px] justify-start text-left text-xs font-normal sm:h-9 ${
+      className={`h-11 w-full justify-start text-left text-xs font-normal sm:h-9 ${
         !dateRange ? "text-muted-foreground" : ""
       }`}
       aria-busy={disabled ? "true" : undefined}
@@ -208,7 +210,7 @@ function OrderFilterSelect({
     >
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-11 w-[150px] shrink-0 text-xs sm:h-9 sm:w-[170px]"
+        className="h-11 w-full text-xs sm:h-9"
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -257,6 +259,14 @@ export function OrderToolbar({
   countdown,
   orderActions,
 }: OrderToolbarProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeAdvancedFilterCount = [
+    dateRange?.from,
+    activePaymentStatus,
+    activePaymentMethod,
+    activePaymentRecovery,
+    activeFulfillmentStatus,
+  ].filter(Boolean).length;
   const showBulkArchive = selectedCount > 0 && !showTrashed && orderActions.canBulkDeleteOrders;
   const showBulkShip =
     selectedCount > 0 && !showTrashed && orderActions.canBulkShipOrders;
@@ -383,39 +393,24 @@ export function OrderToolbar({
   );
 
   const filters: ReactNode = (
-    <div className="flex w-full flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide sm:w-auto sm:flex-wrap sm:overflow-visible">
-      <LazyDateRangeFilter
-        dateRange={dateRange}
-        onDateRangeChange={onDateRangeChange}
-      />
-      <OrderFilterSelect
-        value={activePaymentStatus}
-        placeholder="Any payment"
-        options={paymentStatusFilters}
-        ariaLabel="Filter by payment status"
-        onChange={onPaymentStatusFilterChange}
-      />
-      <OrderFilterSelect
-        value={activePaymentMethod}
-        placeholder="Any method"
-        options={paymentMethodFilters}
-        ariaLabel="Filter by payment method"
-        onChange={onPaymentMethodFilterChange}
-      />
-      <OrderFilterSelect
-        value={activePaymentRecovery}
-        placeholder="Payment recovery"
-        options={paymentRecoveryFilters}
-        ariaLabel="Filter by payment recovery"
-        onChange={onPaymentRecoveryFilterChange}
-      />
-      <OrderFilterSelect
-        value={activeFulfillmentStatus}
-        placeholder="Any fulfillment"
-        options={fulfillmentStatusFilters}
-        ariaLabel="Filter by fulfillment status"
-        onChange={onFulfillmentStatusFilterChange}
-      />
+    <div className="flex flex-nowrap items-center gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-11 shrink-0 gap-1.5 px-3 text-xs sm:h-9"
+        aria-expanded={filtersOpen}
+        aria-controls="order-advanced-filters"
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        <ListFilter className="h-3.5 w-3.5" />
+        Filters
+        {activeAdvancedFilterCount > 0 ? (
+          <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+            {activeAdvancedFilterCount}
+          </span>
+        ) : null}
+      </Button>
       <div
         className="flex min-h-11 items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-xs text-muted-foreground sm:min-h-9"
         title={autoRefreshPauseReason ?? undefined}
@@ -459,9 +454,69 @@ export function OrderToolbar({
         filters={filters}
       />
 
+      {filtersOpen ? (
+        <div
+          id="order-advanced-filters"
+          className="rounded-lg border bg-muted/15 p-3"
+        >
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <LazyDateRangeFilter
+              dateRange={dateRange}
+              onDateRangeChange={onDateRangeChange}
+            />
+            <OrderFilterSelect
+              value={activePaymentStatus}
+              placeholder="Any payment"
+              options={paymentStatusFilters}
+              ariaLabel="Filter by payment status"
+              onChange={onPaymentStatusFilterChange}
+            />
+            <OrderFilterSelect
+              value={activePaymentMethod}
+              placeholder="Any method"
+              options={paymentMethodFilters}
+              ariaLabel="Filter by payment method"
+              onChange={onPaymentMethodFilterChange}
+            />
+            <OrderFilterSelect
+              value={activePaymentRecovery}
+              placeholder="Payment recovery"
+              options={paymentRecoveryFilters}
+              ariaLabel="Filter by payment recovery"
+              onChange={onPaymentRecoveryFilterChange}
+            />
+            <OrderFilterSelect
+              value={activeFulfillmentStatus}
+              placeholder="Any fulfillment"
+              options={fulfillmentStatusFilters}
+              ariaLabel="Filter by fulfillment status"
+              onChange={onFulfillmentStatusFilterChange}
+            />
+          </div>
+          {activeAdvancedFilterCount > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-11 px-2 text-xs text-muted-foreground sm:h-8"
+              onClick={() => {
+                onDateRangeChange(undefined);
+                onPaymentStatusFilterChange(null);
+                onPaymentMethodFilterChange(null);
+                onPaymentRecoveryFilterChange(null);
+                onFulfillmentStatusFilterChange(null);
+              }}
+            >
+              <X className="mr-1.5 h-3.5 w-3.5" />
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Status filter pills */}
       {!showTrashed && (
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide sm:flex-wrap sm:overflow-visible">
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide">
           <Button
             variant={activeStatus === null ? "secondary" : "ghost"}
             size="sm"
