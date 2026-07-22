@@ -95,8 +95,14 @@ describe("order list interactions", () => {
     expect(toolbarSource).toContain("disabled={isBulkActionBusy || bulkArchiveBlocked}");
     expect(toolbarSource).toContain("Resolve active refund recovery before archiving these orders.");
     expect(toolbarSource).toContain("Resolve active shipment recovery before archiving these orders.");
-    expect(toolbarSource).toContain("`Resolve Refund (${selectedActiveRefundCount})`");
-    expect(toolbarSource).toContain("`Resolve Shipment (${selectedShipmentLockCount})`");
+    expect(toolbarSource).toContain("`Resolve refund (${selectedActiveRefundCount})`");
+    expect(toolbarSource).toContain("`Resolve shipment (${selectedShipmentLockCount})`");
+    expect(toolbarSource).toContain('searchPlaceholder="Search orders…"');
+    expect(toolbarSource).toContain("overflow-x-auto pb-2 scrollbar-hide");
+    expect(
+      toolbarSource.match(/overflow-x-auto scrollbar-hide sm:w-auto/g),
+    ).toHaveLength(2);
+    expect(toolbarSource).toContain("Auto-refresh");
 
     expect(dialogSource).toContain("if (isShipping) return");
     expect(dialogSource).toContain("if (isShipping && !nextOpen) return");

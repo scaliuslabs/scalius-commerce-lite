@@ -221,16 +221,9 @@ function CustomersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {showTrashed ? "Customer Trash" : "Customers"}
-          </h1>
-          <p className="text-muted-foreground">
-            {showTrashed
-              ? "Review and manage deleted customer records."
-              : "Find every guest and account buyer in one directory."}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {showTrashed ? "Customer trash" : "Customers"}
+        </h1>
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <Link
             to="/admin/customers"
@@ -247,14 +240,14 @@ function CustomersPage() {
               ) : (
                 <Trash2 className="mr-2 h-4 w-4" />
               )}
-              {showTrashed ? "View Active" : "View Trash"}
+              {showTrashed ? "View active" : "View trash"}
             </Button>
           </Link>
           {!showTrashed && canCreate && (
             <Link to="/admin/customers/new" className="flex-1 sm:flex-none">
               <Button size="sm" className="h-11 w-full sm:h-9 sm:w-auto">
                 <UserPlus className="mr-2 h-4 w-4" />
-                Add Customer
+                Add customer
               </Button>
             </Link>
           )}
@@ -282,7 +275,7 @@ function CustomersPage() {
                 search: ((prev: Record<string, unknown>) => ({ ...prev, search: value, page: 1 })) as never,
               })
             }
-            searchPlaceholder="Search by name, phone, or email..."
+            searchPlaceholder="Search customers…"
             selectedCount={selectedIds.length}
             bulkActions={canDelete ? (
               <Button

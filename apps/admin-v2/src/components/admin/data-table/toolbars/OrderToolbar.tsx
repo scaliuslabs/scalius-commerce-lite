@@ -142,7 +142,7 @@ function DateRangeButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`h-9 w-[240px] justify-start text-left text-xs font-normal ${
+      className={`h-11 w-[240px] justify-start text-left text-xs font-normal sm:h-9 ${
         !dateRange ? "text-muted-foreground" : ""
       }`}
       aria-busy={disabled ? "true" : undefined}
@@ -208,7 +208,7 @@ function OrderFilterSelect({
     >
       <SelectTrigger
         aria-label={ariaLabel}
-        className="h-9 w-[150px] shrink-0 text-xs sm:w-[170px]"
+        className="h-11 w-[150px] shrink-0 text-xs sm:h-9 sm:w-[170px]"
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -279,13 +279,13 @@ export function OrderToolbar({
         ? "Resolve active shipment recovery before archiving these orders."
         : undefined;
   const archiveBlockLabel = selectedArchiveBlockedCount > 0
-    ? `Finish Orders (${selectedArchiveBlockedCount})`
+    ? `Finish orders (${selectedArchiveBlockedCount})`
     : selectedActiveRefundCount > 0
-    ? `Resolve Refund (${selectedActiveRefundCount})`
+    ? `Resolve refund (${selectedActiveRefundCount})`
     : selectedActivePaymentSetupCount > 0
-      ? `Payment Running (${selectedActivePaymentSetupCount})`
+      ? `Payment running (${selectedActivePaymentSetupCount})`
       : selectedShipmentLockCount > 0
-        ? `Resolve Shipment (${selectedShipmentLockCount})`
+        ? `Resolve shipment (${selectedShipmentLockCount})`
         : "Archive";
   const shipBlockTitle = selectedActiveRefundCount > 0
     ? "Resolve active refund recovery before creating shipments."
@@ -293,10 +293,10 @@ export function OrderToolbar({
       ? "Resolve active shipment recovery before creating shipments."
       : "Resolve hosted payment recovery before creating shipments.";
   const shipBlockLabel = selectedActiveRefundCount > 0
-    ? `Resolve Refund (${selectedActiveRefundCount})`
+    ? `Resolve refund (${selectedActiveRefundCount})`
     : selectedShipmentLockCount > 0
-      ? `Resolve Shipment (${selectedShipmentLockCount})`
-      : `Resolve Payment (${selectedPaymentRecoveryCount})`;
+      ? `Resolve shipment (${selectedShipmentLockCount})`
+      : `Resolve payment (${selectedPaymentRecoveryCount})`;
   const bulkActions: ReactNode =
     showBulkArchive || showBulkShip ? (
       <div className="flex flex-wrap items-center gap-2">
@@ -307,7 +307,7 @@ export function OrderToolbar({
             onClick={onBulkArchive}
             disabled={isBulkActionBusy || bulkArchiveBlocked}
             title={bulkArchiveBlocked ? archiveBlockTitle : undefined}
-            className="h-9 px-3 text-xs"
+            className="h-11 px-3 text-xs sm:h-9"
           >
             <Archive className="mr-1.5 h-3.5 w-3.5" />
             {bulkArchiveBlocked
@@ -326,26 +326,26 @@ export function OrderToolbar({
                 ? shipBlockTitle
                 : undefined
             }
-            className="h-9 px-3 text-xs"
+            className="h-11 px-3 text-xs sm:h-9"
           >
             <Truck className="mr-1.5 h-3.5 w-3.5" />
             {bulkShipBlockedByRecovery
               ? shipBlockLabel
               : isBulkActionBusy
                 ? "Shipping..."
-                : `Ship Orders (${selectedCount})`}
+                : `Ship orders (${selectedCount})`}
           </Button>
         )}
       </div>
     ) : null;
 
   const actions: ReactNode = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-full flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide sm:w-auto sm:flex-wrap sm:overflow-visible">
       <Button
         variant="outline"
         size="sm"
         onClick={onExportCSV}
-        className="h-9 px-3 text-xs"
+      className="h-11 px-3 text-xs sm:h-9"
       >
         <Download className="mr-1.5 h-3.5 w-3.5" />
         {exportLabel}
@@ -354,7 +354,7 @@ export function OrderToolbar({
         variant="outline"
         size="sm"
         asChild
-        className="h-9 px-3 text-xs"
+        className="h-11 px-3 text-xs sm:h-9"
       >
         <Link
           to="/admin/orders"
@@ -362,7 +362,7 @@ export function OrderToolbar({
         >
           {showTrashed ? (
             <>
-              <Package className="mr-1.5 h-3.5 w-3.5" /> View Active
+              <Package className="mr-1.5 h-3.5 w-3.5" /> View active
             </>
           ) : (
             <>
@@ -372,10 +372,10 @@ export function OrderToolbar({
         </Link>
       </Button>
       {!showTrashed && orderActions.canCreateOrders && (
-        <Button size="sm" asChild className="h-9 px-3 text-xs">
+        <Button size="sm" asChild className="h-11 px-3 text-xs sm:h-9">
           <Link to="/admin/orders/new">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add Order
+            Add order
           </Link>
         </Button>
       )}
@@ -383,7 +383,7 @@ export function OrderToolbar({
   );
 
   const filters: ReactNode = (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex w-full flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide sm:w-auto sm:flex-wrap sm:overflow-visible">
       <LazyDateRangeFilter
         dateRange={dateRange}
         onDateRangeChange={onDateRangeChange}
@@ -417,7 +417,7 @@ export function OrderToolbar({
         onChange={onFulfillmentStatusFilterChange}
       />
       <div
-        className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-xs text-muted-foreground"
+        className="flex min-h-11 items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2 py-1 text-xs text-muted-foreground sm:min-h-9"
         title={autoRefreshPauseReason ?? undefined}
       >
         <Checkbox
@@ -433,7 +433,7 @@ export function OrderToolbar({
           <RefreshCw
             className={`h-3 w-3 ${autoRefreshEnabled && !autoRefreshPauseReason ? "animate-spin" : ""}`}
           />
-          <span>Auto</span>
+          <span>Auto-refresh</span>
           {autoRefreshEnabled && (
             <span
               aria-live="polite"
@@ -452,7 +452,7 @@ export function OrderToolbar({
       <DataTableToolbar
         searchValue={searchValue}
         onSearchChange={onSearchChange}
-        searchPlaceholder="Search orders by name, ID, email or phone..."
+        searchPlaceholder="Search orders…"
         selectedCount={selectedCount}
         bulkActions={bulkActions}
         actions={actions}
@@ -461,15 +461,12 @@ export function OrderToolbar({
 
       {/* Status filter pills */}
       {!showTrashed && (
-        <div className="flex flex-wrap items-center gap-1.5 pb-2">
-          <span className="text-xs font-medium text-muted-foreground mr-1">
-            Status:
-          </span>
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-2 scrollbar-hide sm:flex-wrap sm:overflow-visible">
           <Button
             variant={activeStatus === null ? "secondary" : "ghost"}
             size="sm"
             onClick={() => onStatusFilterChange(null)}
-            className="h-7 px-2.5 text-xs font-medium"
+            className="h-11 shrink-0 px-3 text-xs font-medium sm:h-7 sm:px-2.5"
           >
             All
           </Button>
@@ -481,7 +478,7 @@ export function OrderToolbar({
               }
               size="sm"
               onClick={() => onStatusFilterChange(filter.value)}
-              className="h-7 px-2.5 text-xs font-medium"
+              className="h-11 shrink-0 px-3 text-xs font-medium sm:h-7 sm:px-2.5"
             >
               {filter.label}
             </Button>

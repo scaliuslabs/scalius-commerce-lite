@@ -77,7 +77,7 @@ export function DiscountTableToolbar({
     <Button
       variant="outline"
       size="sm"
-      className="h-9"
+      className="h-11 sm:h-9"
       data-state={isTypeMenuOpen ? "open" : undefined}
       aria-haspopup="menu"
       aria-expanded={isTypeMenuOpen}
@@ -129,7 +129,7 @@ export function DiscountTableToolbar({
     <DataTableToolbar
       searchValue={searchValue}
       onSearchChange={onSearchChange}
-      searchPlaceholder="Search by code..."
+      searchPlaceholder="Search discounts…"
       selectedCount={selectedCount}
       bulkActions={bulkActions}
       filters={typeFilter}

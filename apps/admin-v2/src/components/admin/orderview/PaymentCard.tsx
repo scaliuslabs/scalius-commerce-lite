@@ -867,6 +867,11 @@ export function PaymentCard({ order }: PaymentCardProps) {
               </div>
               {paymentSessionAttempts.map((attempt) => {
                 const view = getSessionAttemptView(attempt, order);
+                const hasTechnicalDetails = Boolean(
+                  attempt.claimExpiresAt
+                    || attempt.providerSessionId
+                    || attempt.providerCorrelationId,
+                );
                 return (
                   <div key={attempt.id} className="rounded-md border border-border bg-background/60 p-2.5 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -886,10 +891,19 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       <span className="capitalize">{attempt.paymentType}</span>
                       <span>{attempt.attempts} attempt{attempt.attempts === 1 ? "" : "s"}</span>
                       {formatTimestamp(attempt.createdAt) && <span>Started {formatTimestamp(attempt.createdAt)}</span>}
-                      {formatTimestamp(attempt.claimExpiresAt) && <span>Lease until {formatTimestamp(attempt.claimExpiresAt)}</span>}
-                      {attempt.providerSessionId && <span className="font-mono">Session: {attempt.providerSessionId}</span>}
-                      {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
                     </div>
+                    {hasTechnicalDetails ? (
+                      <details className="mt-2 text-muted-foreground">
+                        <summary className="w-fit cursor-pointer select-none font-medium text-foreground/80">
+                          Technical details
+                        </summary>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                          {formatTimestamp(attempt.claimExpiresAt) && <span>Lease until {formatTimestamp(attempt.claimExpiresAt)}</span>}
+                          {attempt.providerSessionId && <span className="font-mono">Session: {attempt.providerSessionId}</span>}
+                          {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
+                        </div>
+                      </details>
+                    ) : null}
                     {attempt.lastError && (
                       <p className="mt-2 truncate text-destructive">{attempt.lastError}</p>
                     )}
@@ -1083,6 +1097,15 @@ export function PaymentCard({ order }: PaymentCardProps) {
               {refundAttempts.map((attempt) => {
                 const timestampLabel = refundTimestampLabel(attempt);
                 const canCheck = canRefund && canManuallyCheckRefundAttempt(attempt);
+                const hasTechnicalDetails = Boolean(
+                  attempt.refundReference
+                    || attempt.providerRefundId
+                    || attempt.providerCorrelationId
+                    || attempt.providerStatus
+                    || attempt.sourcePaymentId
+                    || attempt.sourceTransactionId
+                    || attempt.refundPaymentId,
+                );
                 const isChecking = refundRecoveryMutation.isPending
                   && refundRecoveryMutation.variables?.attemptId === attempt.id;
                 return (
@@ -1098,19 +1121,28 @@ export function PaymentCard({ order }: PaymentCardProps) {
                       {attempt.lastError && <p className="mt-1 truncate text-destructive">{attempt.lastError}</p>}
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
                         {attempt.reason && <span>Reason: {formatRefundReason(attempt.reason)}</span>}
-                        {attempt.refundReference && <span className="font-mono">Internal ref: {attempt.refundReference}</span>}
-                        {attempt.providerRefundId && <span className="font-mono">Provider refund: {attempt.providerRefundId}</span>}
-                        {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
-                        {attempt.providerStatus && <span>Provider status: {attempt.providerStatus}</span>}
-                        {attempt.sourcePaymentId && <span className="font-mono">Source: {attempt.sourcePaymentId}</span>}
-                        {attempt.sourceTransactionId && <span className="font-mono">Source txn: {attempt.sourceTransactionId}</span>}
-                        {attempt.refundPaymentId && <span className="font-mono">Refund row: {attempt.refundPaymentId}</span>}
                         {attempt.allocationCount && attempt.allocationCount > 1 && (
                           <span>Allocation {(attempt.allocationIndex ?? 0) + 1} of {attempt.allocationCount}</span>
                         )}
                         {attempt.attempts != null && attempt.attempts > 0 && <span>{attempt.attempts} probe attempt{attempt.attempts === 1 ? "" : "s"}</span>}
                         {timestampLabel && <span>{timestampLabel}</span>}
                       </div>
+                      {hasTechnicalDetails ? (
+                        <details className="mt-2 text-muted-foreground">
+                          <summary className="w-fit cursor-pointer select-none font-medium text-foreground/80">
+                            Technical details
+                          </summary>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            {attempt.refundReference && <span className="font-mono">Internal ref: {attempt.refundReference}</span>}
+                            {attempt.providerRefundId && <span className="font-mono">Provider refund: {attempt.providerRefundId}</span>}
+                            {attempt.providerCorrelationId && <span className="font-mono">Correlation: {attempt.providerCorrelationId}</span>}
+                            {attempt.providerStatus && <span>Provider status: {attempt.providerStatus}</span>}
+                            {attempt.sourcePaymentId && <span className="font-mono">Source: {attempt.sourcePaymentId}</span>}
+                            {attempt.sourceTransactionId && <span className="font-mono">Source txn: {attempt.sourceTransactionId}</span>}
+                            {attempt.refundPaymentId && <span className="font-mono">Refund row: {attempt.refundPaymentId}</span>}
+                          </div>
+                        </details>
+                      ) : null}
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <span className="font-medium text-foreground">

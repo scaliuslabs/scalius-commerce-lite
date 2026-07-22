@@ -142,9 +142,10 @@ export function CustomerForm({
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       newUrl="/admin/customers/new"
-      newLabel="New Customer"
+      newLabel="New customer"
       canCreateNew={canCreate}
       canSave={canSave}
+      saveLabel={isEdit ? "Save customer" : "Create customer"}
       saveDisabledReason={isEdit
         ? "You do not have permission to edit customers."
         : "You do not have permission to create customers."}

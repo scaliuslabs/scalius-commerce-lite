@@ -313,8 +313,8 @@ function DiscountsPage() {
           onClick={handleBulkDelete}
           className={
             !showTrashed
-              ? "text-destructive border-destructive hover:bg-destructive/10"
-              : undefined
+              ? "h-11 border-destructive text-destructive hover:bg-destructive/10 sm:h-9"
+              : "h-11 sm:h-9"
           }
         >
           <Trash2 className="h-4 w-4 mr-1.5" />
@@ -329,16 +329,16 @@ function DiscountsPage() {
             to="/admin/discounts"
             search={showTrashed ? {} : { trashed: true }}
           >
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="h-11 sm:h-9">
               {showTrashed ? (
                 <>
                   <Tag className="mr-2 h-4 w-4" />
-                  View Active
+                  View active
                 </>
               ) : (
                 <>
                   <Trash2 className="mr-2 h-4 w-4" />
-                  View Trash
+                  View trash
                 </>
               )}
             </Button>
@@ -348,6 +348,7 @@ function DiscountsPage() {
               onClick={() =>
                 void navigate({ to: "/admin/discounts/new" })
               }
+              className="h-11 sm:h-9"
             >
               <Plus className="mr-2 h-4 w-4" />
               Create discount
@@ -360,16 +361,9 @@ function DiscountsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {showTrashed ? "Deleted Discounts" : "Discounts"}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {showTrashed
-            ? "Restore unused codes or permanently remove those without order history."
-            : "Create codes, control eligibility, and monitor redemption."}
-        </p>
-      </div>
+      <h1 className="text-2xl font-bold tracking-tight">
+        {showTrashed ? "Deleted discounts" : "Discounts"}
+      </h1>
 
       <DataTable
         table={table}
@@ -384,10 +378,10 @@ function DiscountsPage() {
           icon: Tag,
           title:
             search.search || search.type
-              ? "No discounts match your criteria."
+              ? "No discounts found"
               : showTrashed
-                ? "Trash is empty."
-                : "No discounts created yet.",
+                ? "Trash is empty"
+                : "No discounts yet",
           description:
             search.search || search.type
               ? "Try adjusting your search or filters."
