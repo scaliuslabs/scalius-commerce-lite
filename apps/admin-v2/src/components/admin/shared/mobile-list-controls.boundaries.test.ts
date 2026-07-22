@@ -22,6 +22,14 @@ const dropdownMenuSource = readFileSync(
   resolve(import.meta.dirname, "../../ui/dropdown-menu.tsx"),
   "utf8",
 );
+const productListSource = readFileSync(
+  resolve(import.meta.dirname, "../../../routes/admin/products/index.tsx"),
+  "utf8",
+);
+const darkModeToggleSource = readFileSync(
+  resolve(import.meta.dirname, "../../ui/DarkModeToggle.tsx"),
+  "utf8",
+);
 
 describe("shared mobile list controls", () => {
   it("uses touch-sized search controls while preserving desktop density", () => {
@@ -44,5 +52,14 @@ describe("shared mobile list controls", () => {
     expect(rowActionsSource).toContain("h-11 w-11 p-0 sm:h-8 sm:w-8");
     expect(dropdownMenuSource).toContain("min-h-11");
     expect(dropdownMenuSource).toContain("sm:min-h-0");
+  });
+
+  it("keeps product list and global theme actions touch-sized on phones", () => {
+    expect(productListSource.match(/h-11 text-xs/g)).toHaveLength(3);
+    expect(productListSource.match(/sm:h-7/g)).toHaveLength(3);
+    expect(darkModeToggleSource).toContain("h-11 w-11 shrink-0");
+    expect(darkModeToggleSource).toContain("sm:h-9 sm:w-9");
+    expect(darkModeToggleSource).toContain('role="switch"');
+    expect(darkModeToggleSource).toContain("aria-checked={isDark}");
   });
 });

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Sun, Moon } from "lucide-react";
-import { Switch } from "./switch";
+import { cn } from "@scalius/shared/utils";
 
 export function DarkModeToggle({ className = "" }: { className?: string }) {
   // Start as null to avoid FOUC — don't render icons until we know the theme
@@ -27,35 +27,40 @@ export function DarkModeToggle({ className = "" }: { className?: string }) {
 
   // Don't render until we know the actual theme — prevents flash
   if (isDark === null) {
-    return <div className={`flex items-center justify-between ${className}`} style={{ minWidth: 76, height: 20 }} />;
+    return (
+      <div
+        aria-hidden="true"
+        className={cn("h-11 w-11 shrink-0 sm:h-9 sm:w-9", className)}
+      />
+    );
   }
 
   return (
-    <div className={`flex items-center justify-between ${className}`}>
-      <div className="flex items-center gap-2 mr-3">
-        <div className="relative h-5 w-5 flex items-center justify-center">
-          <Sun
-            className={`absolute h-[1.1rem] w-[1.1rem] text-yellow-500 dark:text-yellow-300 transition-all duration-300 ${
-              isDark
-                ? "opacity-0 scale-50 rotate-90"
-                : "opacity-100 scale-100 rotate-0"
-            }`}
-          />
-          <Moon
-            className={`absolute h-[1.1rem] w-[1.1rem] text-indigo-600 dark:text-indigo-300 transition-all duration-300 ${
-              isDark
-                ? "opacity-100 scale-100 rotate-0"
-                : "opacity-0 scale-50 rotate-90"
-            }`}
-          />
-        </div>
-      </div>
-      <Switch
-        checked={isDark}
-        onCheckedChange={toggleTheme}
-        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-        className={`${isDark ? "bg-indigo-600 border-indigo-300" : "bg-gray-200 border-yellow-400"}`}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isDark}
+      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={toggleTheme}
+      className={cn(
+        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:h-9 sm:w-9",
+        className,
+      )}
+    >
+      <Sun
+        aria-hidden="true"
+        className={cn(
+          "absolute h-[1.1rem] w-[1.1rem] text-amber-500 transition-all duration-200 dark:text-amber-300",
+          isDark ? "scale-50 rotate-90 opacity-0" : "scale-100 rotate-0 opacity-100",
+        )}
       />
-    </div>
+      <Moon
+        aria-hidden="true"
+        className={cn(
+          "absolute h-[1.1rem] w-[1.1rem] text-indigo-600 transition-all duration-200 dark:text-indigo-300",
+          isDark ? "scale-100 rotate-0 opacity-100" : "scale-50 -rotate-90 opacity-0",
+        )}
+      />
+    </button>
   );
 }

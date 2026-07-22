@@ -444,7 +444,7 @@ function ProductsPage() {
                 variant="outline"
                 size="sm"
                 asChild
-                className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                className="h-11 text-xs text-muted-foreground hover:text-foreground sm:h-7"
               >
                 <Link
                   to="/admin/products"
@@ -463,7 +463,7 @@ function ProductsPage() {
                 </Link>
               </Button>
               {!showTrashed && productActions.canCreate && (
-                <Button size="sm" className="h-7 text-xs" asChild>
+                <Button size="sm" className="h-11 text-xs sm:h-7" asChild>
                   <Link to="/admin/products/new">
                     <Plus className="h-3.5 w-3.5 mr-1" />
                     Add Product
@@ -533,7 +533,7 @@ function ProductsPage() {
                 productActions.canCreate &&
                 !search.search &&
                 search.category === "all" ? (
-                  <Button size="sm" asChild className="h-7 text-xs">
+                  <Button size="sm" asChild className="h-11 text-xs sm:h-7">
                     <Link to="/admin/products/new">
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add First Product
