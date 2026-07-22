@@ -31,7 +31,11 @@ import {
 
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { normalizeOrderStatus } from "@scalius/shared/order-state";
+import {
+    canProcessOrderCodAction,
+    normalizeOrderStatus,
+    type OrderCodAction,
+} from "@scalius/shared/order-state";
 import {
     assertOrderPaymentCurrency,
     orderMoneyEqual,
@@ -70,6 +74,18 @@ async function reconcileInventoryForStatus(
 ): Promise<void> {
     const newInventoryAction = await applyInventoryForStatusChange(db, orderId, status);
     await db.update(orders).set({ inventoryAction: newInventoryAction }).where(eq(orders.id, orderId));
+}
+
+function assertOrderCodActionAllowed(status: string, action: OrderCodAction): void {
+    if (canProcessOrderCodAction(status, action)) return;
+    const actionLabel = action === "collected"
+        ? "collection"
+        : action === "failed"
+            ? "failure"
+            : "return";
+    throw new ValidationError(
+        `COD ${actionLabel} cannot be recorded while the order is ${status}.`,
+    );
 }
 
 /**
@@ -697,6 +713,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 
     switch (body.action) {
         case "collected": {
+            assertOrderCodActionAllowed(order.status, "collected");
             const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null
@@ -788,18 +805,13 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             return { message: "COD collection recorded" };
         }
         case "failed": {
+            assertOrderCodActionAllowed(order.status, "failed");
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
             return { message: "COD failure recorded" };
         }
         case "returned": {
-            if (
-                order.status !== OrderStatus.SHIPPED
-                && order.status !== OrderStatus.DELIVERED
-                && order.status !== OrderStatus.COMPLETED
-            ) {
-                throw new ValidationError("Courier return-to-sender can be recorded only after shipment.");
-            }
+            assertOrderCodActionAllowed(order.status, "returned");
 
             const sourceReferenceId = `cod-rts:${orderId}`;
             let returnRecord = (await listOrderReturns(db, orderId)).find(

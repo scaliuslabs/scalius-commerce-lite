@@ -56,7 +56,7 @@ export function OrderReturnsCard({ order }: { order: Order }) {
           {returns.length > 0 ? <Badge variant="secondary" className="text-sm">{returns.length}</Badge> : null}
         </CardTitle>
         {actions.canChangeOrderStatus ? (
-          <Button type="button" size="sm" variant="outline" disabled={!canRequest || query.isLoading} onClick={() => setDialog({ type: "create" })}>
+          <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" disabled={!canRequest || query.isLoading} onClick={() => setDialog({ type: "create" })}>
             <Plus className="mr-2 h-4 w-4" />
             New return
           </Button>
@@ -70,7 +70,7 @@ export function OrderReturnsCard({ order }: { order: Order }) {
         ) : query.isError ? (
           <div className="flex min-h-28 flex-col items-center justify-center gap-3 p-4 text-center">
             <p className="text-sm font-medium text-destructive">Returns could not be loaded.</p>
-            <Button type="button" size="sm" variant="outline" onClick={() => query.refetch()} disabled={query.isFetching}>
+            <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => query.refetch()} disabled={query.isFetching}>
               {query.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Try again
             </Button>

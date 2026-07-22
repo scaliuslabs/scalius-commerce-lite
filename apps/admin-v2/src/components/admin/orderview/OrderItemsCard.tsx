@@ -73,7 +73,7 @@ const OrderItemRow = ({
           )}
           <Link
             to={`/admin/products/${item.productId}/edit` as string}
-            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            className="inline-flex min-h-11 items-center gap-1 text-xs text-primary hover:underline sm:min-h-0"
           >
             View Product
             <ArrowRight className="h-3 w-3" />

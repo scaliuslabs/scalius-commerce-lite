@@ -22,6 +22,10 @@ const dropdownSource = readFileSync(
   resolve(storefrontRoot, "src/components/CustomDropdown.tsx"),
   "utf8",
 );
+const cartPageSource = readFileSync(
+  resolve(storefrontRoot, "src/pages/cart.astro"),
+  "utf8",
+);
 
 describe("cart page presentation contract", () => {
   it("keeps quantity and removal controls accessible after dynamic rendering", () => {
@@ -65,5 +69,17 @@ describe("cart page presentation contract", () => {
     expect(locationSelectorSource).not.toContain(
       'triggerClassName="bg-gray-50 border-gray-200 rounded-lg h-9"',
     );
+    expect(shippingSelectorSource).toContain("flex min-h-11 items-center");
+  });
+
+  it("does not compress primary checkout controls below the mobile target floor", () => {
+    expect(cartPageSource).toContain(
+      'className="h-11 w-full bg-muted border-input rounded-lg',
+    );
+    expect(cartPageSource).toContain(
+      'className="h-11 w-full bg-primary text-primary-foreground',
+    );
+    expect(cartPageSource).not.toContain("    .h-9 {\n      height: 2rem;");
+    expect(cartPageSource).not.toContain("    .h-10 {\n      height: 2.25rem;");
   });
 });

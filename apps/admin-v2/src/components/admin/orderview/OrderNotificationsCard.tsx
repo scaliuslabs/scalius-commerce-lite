@@ -201,7 +201,7 @@ function NotificationRow({
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 gap-1.5"
+              className="h-11 gap-1.5 sm:h-8"
               disabled={retrying}
               onClick={() => retryMutation.mutate({ orderId, outboxId: notification.id })}
             >
@@ -214,7 +214,7 @@ function NotificationRow({
               type="button"
               size="sm"
               variant="outline"
-              className="h-8 gap-1.5"
+              className="h-11 gap-1.5 sm:h-8"
               disabled={resending}
               onClick={() =>
                 resendMutation.mutate({
@@ -306,7 +306,7 @@ export function OrderNotificationsCard({ order }: { order: Order }) {
               <AlertTriangle className="h-4 w-4" />
               Notification history unavailable
             </div>
-            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+            <Button className="min-h-11 sm:min-h-9" variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
           </div>

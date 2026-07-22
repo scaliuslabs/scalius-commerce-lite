@@ -1,3 +1,5 @@
+import { BUILD_ID } from "../config/build-id";
+
 export const prerender = false;
 
 /**
@@ -9,6 +11,7 @@ export async function GET() {
   return new Response(
     JSON.stringify({
       status: "ok",
+      buildId: BUILD_ID,
       timestamp: Date.now(),
     }),
     {
@@ -16,6 +19,7 @@ export async function GET() {
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": "no-store, max-age=0",
+        "X-Storefront-Build": BUILD_ID,
       },
     },
   );

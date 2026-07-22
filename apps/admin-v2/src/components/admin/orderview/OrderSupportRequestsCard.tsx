@@ -156,6 +156,7 @@ function RequestRow({
               type="button"
               size="sm"
               variant="outline"
+              className="min-h-11 sm:min-h-9"
               onClick={() => onResolve(request)}
             >
               Resolve
@@ -332,7 +333,7 @@ function ResolveSupportRequestDialog({
               ) : returnsQuery.isError ? (
                 <div className="flex min-h-20 flex-col items-center justify-center gap-2 text-center">
                   <p className="text-sm text-destructive">Returnable items could not be loaded.</p>
-                  <Button type="button" size="sm" variant="outline" onClick={() => void returnsQuery.refetch()}>
+                  <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={() => void returnsQuery.refetch()}>
                     <RefreshCw className="h-4 w-4" /> Retry
                   </Button>
                 </div>
@@ -365,7 +366,7 @@ function ResolveSupportRequestDialog({
                               ...current,
                               [item.id]: parseReturnQuantity(event.target.value, max),
                             }))}
-                            className="h-9 text-sm"
+                            className="h-11 text-sm sm:h-9"
                           />
                         </div>
                       </div>
@@ -388,6 +389,7 @@ function ResolveSupportRequestDialog({
           <Button
             type="button"
             variant="outline"
+            className="min-h-11 sm:min-h-10"
             onClick={() => onOpenChange(false)}
             disabled={mutation.isPending}
           >
@@ -395,6 +397,7 @@ function ResolveSupportRequestDialog({
           </Button>
           <Button
             type="button"
+            className="min-h-11 sm:min-h-10"
             onClick={handleSubmit}
             disabled={!canSubmit}
           >

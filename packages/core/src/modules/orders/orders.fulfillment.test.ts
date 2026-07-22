@@ -507,6 +507,52 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).not.toHaveBeenCalled();
   });
 
+  it("rejects COD collection before confirmation and after cancellation", async () => {
+    for (const status of [OrderStatus.PENDING, OrderStatus.CANCELLED]) {
+      const { db } = createDbMock({
+        selectedOrder: {
+          status,
+          version: 3,
+          totalAmount: 100,
+          paidAmount: 0,
+          balanceDue: 100,
+        },
+        updateResults: [],
+      });
+
+      await expect(
+        processCodAction(db as never, "order_1", {
+          action: "collected",
+          collectedBy: "Courier A",
+          collectedAmount: 100,
+        }),
+      ).rejects.toThrow(`order is ${status}`);
+    }
+
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
+    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
+  });
+
+  it("rejects COD failure evidence after the order is cancelled", async () => {
+    const { db } = createDbMock({
+      selectedOrder: {
+        status: OrderStatus.CANCELLED,
+        version: 4,
+        totalAmount: 100,
+        paidAmount: 0,
+        balanceDue: 100,
+      },
+      updateResults: [],
+    });
+
+    await expect(processCodAction(db as never, "order_1", {
+      action: "failed",
+      reason: "not_home",
+    })).rejects.toThrow("order is cancelled");
+
+    expect(mocks.recordCODFailure).not.toHaveBeenCalled();
+  });
+
   it("does not record COD collection while a refund attempt is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {

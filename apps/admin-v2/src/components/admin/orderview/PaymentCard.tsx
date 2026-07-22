@@ -65,6 +65,7 @@ import {
   formatSavedMinorAmount,
   resolveSavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
+import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 
 type CodFailureReason = Extract<
   UpdateOrderCodInput,
@@ -419,6 +420,12 @@ export function PaymentCard({ order }: PaymentCardProps) {
   const latestPaymentWebhookIssue = paymentWebhookIssueViews[0];
   const olderPaymentWebhookIssues = paymentWebhookIssueViews.slice(1);
   const isRefundLocked = Boolean(activeRefundOperation?.active);
+  const canRecordCodCollection = canUpdateCod
+    && canProcessOrderCodAction(order.status, "collected");
+  const canRecordCodFailure = canUpdateCod
+    && canProcessOrderCodAction(order.status, "failed");
+  const canRecordCodReturn = canUpdateCod
+    && canProcessOrderCodAction(order.status, "returned");
 
   // COD data — conditionally fetch (useQuery, not suspense, since it's optional)
   const codQuery = useQuery({
@@ -448,6 +455,13 @@ export function PaymentCard({ order }: PaymentCardProps) {
       toast.error("COD update unavailable", {
         description: "Your role can view orders but cannot update COD status.",
       });
+      return;
+    }
+    if (!canProcessOrderCodAction(order.status, codAction)) {
+      toast.error("COD action unavailable", {
+        description: `This action cannot be recorded while the order is ${order.status.replace(/_/g, " ")}.`,
+      });
+      setCodAction(null);
       return;
     }
     if (isRefundLocked) {
@@ -960,44 +974,52 @@ export function PaymentCard({ order }: PaymentCardProps) {
               )}
 
               {/* COD action buttons -- only when not yet collected/returned */}
-              {codReadState.status === "ready" && canUpdateCod && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus)) && (
+              {codReadState.status === "ready"
+                && (!codTracking || !["collected", "returned"].includes(codTracking.codStatus))
+                && (canRecordCodCollection || canRecordCodFailure || canRecordCodReturn) && (
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1"
-                    disabled={isRefundLocked}
-                    onClick={() => {
-                      setCollectedBy("");
-                      setCollectedAmount(String(grandTotal));
-                      setCodAction("collected");
-                    }}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Mark Collected
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isRefundLocked}
-                    onClick={() => {
-                      setFailReason("not_home");
-                      setFailNotes("");
-                      setCodAction("failed");
-                    }}
-                  >
-                    <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-                    Record Failure
-                  </Button>
-                  {codTracking && codTracking.deliveryAttempts > 0 && (
+                  {canRecordCodCollection ? (
+                    <Button
+                      size="sm"
+                      className="min-h-11 flex-1 sm:min-h-9"
+                      disabled={isRefundLocked}
+                      onClick={() => {
+                        setCollectedBy("");
+                        setCollectedAmount(String(grandTotal));
+                        setCodAction("collected");
+                      }}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                      Mark Collected
+                    </Button>
+                  ) : null}
+                  {canRecordCodFailure ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="min-h-11 sm:min-h-9"
+                      disabled={isRefundLocked}
+                      onClick={() => {
+                        setFailReason("not_home");
+                        setFailNotes("");
+                        setCodAction("failed");
+                      }}
+                    >
+                      <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+                      Record Failure
+                    </Button>
+                  ) : null}
+                  {canRecordCodReturn && codTracking && codTracking.deliveryAttempts > 0 ? (
                     <Button
                       size="sm"
                       variant="ghost"
+                      className="min-h-11 sm:min-h-9"
                       disabled={isRefundLocked}
                       onClick={() => setCodAction("returned")}
                     >
                       Return
                     </Button>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1187,8 +1209,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
+            <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
+            <Button className="min-h-11 sm:min-h-10" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodCollection}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Confirm Collection
             </Button>
@@ -1214,7 +1236,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                   setFailReason(value as CodFailureReason)
                 }
               >
-                <SelectTrigger id="failReason">
+                <SelectTrigger id="failReason" className="min-h-11 sm:min-h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1237,8 +1259,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
+            <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
+            <Button className="min-h-11 sm:min-h-10" variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodFailure}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Record Failure
             </Button>
@@ -1256,8 +1278,8 @@ export function PaymentCard({ order }: PaymentCardProps) {
             This will mark the order as returned to the merchant. This action cannot be undone.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canUpdateCod}>
+            <Button className="min-h-11 sm:min-h-10" variant="outline" onClick={() => setCodAction(null)}>Cancel</Button>
+            <Button className="min-h-11 sm:min-h-10" variant="destructive" onClick={submitCODAction} disabled={codMutation.isPending || !canRecordCodReturn}>
               {codMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Mark Returned
             </Button>

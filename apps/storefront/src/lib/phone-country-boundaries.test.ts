@@ -22,7 +22,10 @@ describe("phone country policy boundaries", () => {
   });
 
   it("keeps the checkout field mobile-operable and exposes inline errors", () => {
-    expect(phoneFieldSource).toContain("min-h-11");
+    expect(phoneFieldSource).toContain("flex h-[46px] w-full");
+    expect(phoneFieldSource).toContain("md:h-9");
+    expect(phoneFieldSource).not.toContain("min-h-11");
+    expect(phoneFieldSource).not.toContain("py-1 text-sm");
     expect(phoneFieldSource).toContain('role="alert"');
     expect(phoneFieldSource).toContain("required={required}");
   });

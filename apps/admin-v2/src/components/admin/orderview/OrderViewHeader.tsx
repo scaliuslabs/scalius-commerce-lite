@@ -120,7 +120,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             {order.customerId && (
               <Link
                 to={`/admin/customers/${order.customerId}/history` as string}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors hover:bg-muted"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-muted sm:h-7 sm:w-7"
                 title="View Customer History"
               >
                 <History className="h-4 w-4 text-muted-foreground" />
@@ -131,7 +131,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             <InfoItem icon={Phone} label="Phone">
               <a
                 href={`tel:${order.customerPhone}`}
-                className="hover:text-primary"
+                className="inline-flex min-h-11 items-center hover:text-primary sm:min-h-0"
               >
                 {formatPhoneForDisplay(order.customerPhone)}
               </a>
@@ -141,7 +141,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
               <InfoItem icon={Mail} label="Email">
                 <a
                   href={`mailto:${order.customerEmail}`}
-                  className="hover:text-primary"
+                  className="inline-flex min-h-11 items-center break-all hover:text-primary sm:min-h-0"
                 >
                   {order.customerEmail}
                 </a>
@@ -219,7 +219,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             variant="outline"
             size="sm"
             asChild
-            className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
+            className="h-11 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5 sm:h-9"
           >
             <Link to={`/invoice/${order.id}` as string} target="_blank" rel="noopener noreferrer">
               <Receipt className="h-4 w-4" />
@@ -230,7 +230,7 @@ export function OrderViewHeader({ order }: OrderViewHeaderProps) {
             <Button
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5"
+              className="h-11 gap-1.5 rounded-lg border-primary/20 px-3 text-sm font-medium hover:bg-primary/5 sm:h-9"
               asChild={!editLocked}
               disabled={editLocked}
               title={

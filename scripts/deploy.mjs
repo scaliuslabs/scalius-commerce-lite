@@ -412,7 +412,8 @@ export async function warmStorefrontPath(url, path, {
       await response.arrayBuffer();
       const durationMs = Date.now() - startedAt;
       const cacheStatus = response.headers.get("X-Cache-Status") ?? "unknown";
-      const servedBuildId = cacheStatusBuildId(cacheStatus);
+      const servedBuildId = cacheStatusBuildId(cacheStatus)
+        ?? response.headers.get("X-Storefront-Build");
 
       if (response.ok && servedBuildId === expectedBuildId) {
         console.log(
@@ -602,7 +603,8 @@ async function verifyStorefrontDeploy() {
   if (!storefrontUrl) {
     throw new Error("Could not verify live storefront: STOREFRONT_URL is missing from generated Wrangler config.");
   }
-  await verifyHttpOk(new URL("/health", storefrontUrl).toString(), "Verify live Storefront /health");
+  console.log("\n▶ Verify live Storefront build propagation");
+  await warmStorefrontPath(storefrontUrl, "/health", { expectedBuildId });
   await warmStorefrontAfterDeploy(storefrontUrl, generatedConfig, expectedBuildId);
 }
 

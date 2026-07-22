@@ -127,7 +127,7 @@ const CreateShipmentForm = ({
                   <p className="font-medium">Delivery providers unavailable</p>
                   <p className="mt-1 text-xs opacity-90">Provider shipment creation is paused until setup can be verified.</p>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={retryProviders} disabled={providersRead.refreshing}>
+                <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryProviders} disabled={providersRead.refreshing}>
                   {providersRead.refreshing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
                   Retry
                 </Button>
@@ -139,7 +139,7 @@ const CreateShipmentForm = ({
                 <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">Showing the last loaded provider setup. Retry before creating a shipment.</span>
-                  <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={retryProviders} disabled={providersRead.refreshing}>
+                  <Button type="button" variant="outline" size="sm" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryProviders} disabled={providersRead.refreshing}>
                     {providersRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                     Retry
                   </Button>
@@ -163,7 +163,7 @@ const CreateShipmentForm = ({
                 >
                   <SelectTrigger
                     aria-label="Delivery provider"
-                    className="h-9 text-sm border-border bg-background text-foreground"
+                    className="h-11 border-border bg-background text-sm text-foreground sm:h-9"
                   >
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
@@ -193,7 +193,7 @@ const CreateShipmentForm = ({
                 )}
               </div>
               <Button
-                className="w-full"
+                className="min-h-11 w-full sm:min-h-10"
                 disabled={
                   shipmentMutation.isPending ||
                   !selectedProviderId ||
@@ -216,7 +216,7 @@ const CreateShipmentForm = ({
                     <p className="font-medium">No delivery providers configured</p>
                     <p className="mt-1 text-xs text-muted-foreground">Add a provider for tracked courier shipments.</p>
                   </div>
-                  <Button asChild type="button" variant="outline" size="sm" className="h-8">
+                  <Button asChild type="button" variant="outline" size="sm" className="h-11 sm:h-8">
                     <Link to="/admin/settings/delivery-providers">Configure providers</Link>
                   </Button>
                 </div>
@@ -471,7 +471,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                 <p className="text-sm font-medium text-destructive">Shipment history unavailable</p>
                 <p className="mt-1 text-xs text-muted-foreground">Existing shipments were not assumed empty.</p>
               </div>
-              <Button type="button" size="sm" variant="outline" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+              <Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-9" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
                 {shipmentsRead.refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Retry
               </Button>
@@ -482,7 +482,7 @@ export function ShipmentCard({ order }: ShipmentCardProps) {
                 <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 flex-1">Showing the last loaded shipment data. Refresh failed.</span>
-                  <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
+                  <Button type="button" size="sm" variant="outline" className="h-11 shrink-0 px-2 text-xs sm:h-7" onClick={retryShipments} disabled={shipmentsRead.refreshing}>
                     {shipmentsRead.refreshing && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
                     Retry
                   </Button>

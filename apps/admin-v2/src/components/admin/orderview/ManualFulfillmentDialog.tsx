@@ -175,7 +175,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
         <Button
           type="button"
           variant="outline"
-          className="w-full gap-2"
+          className="min-h-11 w-full gap-2 sm:min-h-10"
           disabled={!canCreateShipment}
           title={triggerTitle}
         >
@@ -321,6 +321,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
             <Button
               type="button"
               variant="outline"
+              className="min-h-11 sm:min-h-10"
               onClick={() => setOpen(false)}
               disabled={mutation.isPending}
             >
@@ -328,6 +329,7 @@ export function ManualFulfillmentDialog({ order }: ManualFulfillmentDialogProps)
             </Button>
             <Button
               type="submit"
+              className="min-h-11 sm:min-h-10"
               disabled={
                 mutation.isPending ||
                 selectedItemIds.length === 0 ||
