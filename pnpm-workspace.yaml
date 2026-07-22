@@ -20,9 +20,9 @@ peerDependencyRules:
     - react-is
 
 overrides:
-  react: "^19.2.7"
-  react-dom: "^19.2.7"
-  react-is: "^19.2.7"
+  react: "^19.2.8"
+  react-dom: "^19.2.8"
+  react-is: "^19.2.8"
   picomatch: ">=2.3.2"
   yaml: ">=2.8.3"
   dompurify: ">=3.4.12"
@@ -80,3 +80,6 @@ minimumReleaseAgeExclude:
   - '@tanstack/query-core@5.101.3'
   - '@tanstack/react-query@5.101.3'
   - '@cloudflare/vite-plugin@1.46.0'
+  - react-dom@19.2.8
+  - react@19.2.8
+  - react-is@19.2.8
