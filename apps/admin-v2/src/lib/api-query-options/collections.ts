@@ -141,18 +141,28 @@ export const collectionProductOptionsQueryOptions = (
   input: Omit<CollectionProductOptionsInput, "page">,
 ) => {
   const categoryIds = normalizeLookupIds(input.categoryIds ?? []).slice(0, 90);
+  const selectedProductIds = normalizeLookupIds(input.selectedProductIds ?? [])
+    .slice(0, 90)
+    .sort();
   const search = input.search?.trim() ?? "";
   const limit = input.limit ?? 10;
 
   return infiniteQueryOptions({
     queryKey: queryKeys.products.collectionOptions({
       categoryIds,
+      selectedProductIds,
       search,
       limit,
     }),
     queryFn: ({ pageParam }) =>
       getCollectionProductOptions({
-        data: { page: pageParam, limit, search, categoryIds },
+        data: {
+          page: pageParam,
+          limit,
+          search,
+          categoryIds,
+          selectedProductIds,
+        },
       }).then((payload) =>
         normalizeCollectionProductOptionsPayload(payload, {
           page: pageParam,

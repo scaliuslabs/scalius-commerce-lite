@@ -56,6 +56,7 @@ const collectionProductOptionSchema = z.object({
     categoryId: z.string().nullable(),
     categoryName: z.string().nullable(),
     isActive: z.boolean(),
+    primaryImage: z.string().nullable(),
 });
 
 function parseLookupIds(ids: string | undefined): string[] {
@@ -157,6 +158,9 @@ const productOptionsRoute = createRoute({
             categoryIds: z.string().max(10000).optional().default("").openapi({
                 description: "Comma-separated category IDs. At most 90 IDs are applied.",
             }),
+            selectedProductIds: z.string().max(10000).optional().default("").openapi({
+                description: "Comma-separated selected product IDs sorted after addable products.",
+            }),
         }),
     },
     responses: {
@@ -180,6 +184,7 @@ app.openapi(productOptionsRoute, async (c) => {
         limit: query.limit,
         search: query.search,
         categoryIds: parseProductOptionCategoryIds(query.categoryIds),
+        selectedProductIds: parseLookupIds(query.selectedProductIds),
     });
     return ok(c, result);
 });

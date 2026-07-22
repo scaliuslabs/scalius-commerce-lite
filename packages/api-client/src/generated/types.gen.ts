@@ -8583,6 +8583,10 @@ export type GetApiV1AdminCollectionsProductOptionsData = {
          * Comma-separated category IDs. At most 90 IDs are applied.
          */
         categoryIds?: string;
+        /**
+         * Comma-separated selected product IDs sorted after addable products.
+         */
+        selectedProductIds?: string;
     };
     url: '/api/v1/admin/collections/product-options';
 };
@@ -8672,6 +8676,7 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 categoryId: string | null;
                 categoryName: string | null;
                 isActive: boolean;
+                primaryImage: string | null;
             }>;
             pagination: {
                 page: number;

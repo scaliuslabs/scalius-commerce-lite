@@ -200,11 +200,17 @@ export function CollectionForm({
     );
   }, [form]);
 
-  const addProduct = React.useCallback((product: Product) => {
-    rememberProduct(product);
+  const addProducts = React.useCallback((newProducts: Product[]) => {
     const currentIds = form.getValues("config.productIds");
-    if (currentIds.length < 90 && !currentIds.includes(product.id)) {
-      form.setValue("config.productIds", [...currentIds, product.id], {
+    const nextIds = [...currentIds];
+    for (const product of newProducts) {
+      rememberProduct(product);
+      if (nextIds.length < 90 && !nextIds.includes(product.id)) {
+        nextIds.push(product.id);
+      }
+    }
+    if (nextIds.length !== currentIds.length) {
+      form.setValue("config.productIds", nextIds, {
         shouldDirty: true,
         shouldValidate: true,
       });
@@ -295,7 +301,7 @@ export function CollectionForm({
                 selectedProductIds={selectedProductIds}
                 addCategory={addCategory}
                 removeCategory={removeCategory}
-                addProduct={addProduct}
+                addProducts={addProducts}
                 removeProduct={removeProduct}
                 moveProduct={moveProduct}
               />

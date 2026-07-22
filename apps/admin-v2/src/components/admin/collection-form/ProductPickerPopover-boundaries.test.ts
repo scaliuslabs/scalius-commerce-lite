@@ -29,4 +29,10 @@ describe("collection product picker boundaries", () => {
     expect(source).toContain("isCollectionProductOptionDto(product)");
     expect(source).toContain("onSelectProduct(product)");
   });
+
+  it("remains the single-select picker for the lead-product field", () => {
+    expect(source).toContain("onSelectProduct: (product: Product) => void");
+    expect(source).toContain("setOpen(false)");
+    expect(source).not.toContain("onAddProducts");
+  });
 });

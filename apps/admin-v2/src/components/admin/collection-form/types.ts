@@ -39,6 +39,7 @@ export interface Product {
   price?: number;
   categoryName?: string | null;
   isActive?: boolean;
+  primaryImage?: string | null;
 }
 
 export const collectionPresentations = [

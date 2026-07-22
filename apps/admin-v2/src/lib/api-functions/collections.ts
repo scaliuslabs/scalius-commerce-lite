@@ -117,6 +117,7 @@ export interface CollectionProductOptionDto {
   categoryId: string | null;
   categoryName: string | null;
   isActive: boolean;
+  primaryImage: string | null;
 }
 
 export interface CollectionProductOptionsInput {
@@ -124,6 +125,7 @@ export interface CollectionProductOptionsInput {
   limit?: number;
   search?: string;
   categoryIds?: string[];
+  selectedProductIds?: string[];
 }
 
 export interface CollectionProductOptionsPayload {
@@ -185,6 +187,12 @@ export const getCollectionProductOptions = createServerFn({ method: "GET" })
       new Set((data.categoryIds ?? []).map((id) => id.trim()).filter(Boolean)),
     ).slice(0, 90);
     if (categoryIds.length > 0) params.categoryIds = categoryIds.join(",");
+    const selectedProductIds = Array.from(
+      new Set((data.selectedProductIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, 90);
+    if (selectedProductIds.length > 0) {
+      params.selectedProductIds = selectedProductIds.join(",");
+    }
     return apiGet<CollectionProductOptionsPayload>(
       "/collections/product-options",
       params,

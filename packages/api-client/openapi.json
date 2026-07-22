@@ -29247,6 +29247,18 @@
             "description": "Comma-separated category IDs. At most 90 IDs are applied.",
             "name": "categoryIds",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 10000,
+              "default": "",
+              "description": "Comma-separated selected product IDs sorted after addable products."
+            },
+            "required": false,
+            "description": "Comma-separated selected product IDs sorted after addable products.",
+            "name": "selectedProductIds",
+            "in": "query"
           }
         ],
         "responses": {
@@ -29290,6 +29302,10 @@
                               },
                               "isActive": {
                                 "type": "boolean"
+                              },
+                              "primaryImage": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -29298,7 +29314,8 @@
                               "price",
                               "categoryId",
                               "categoryName",
-                              "isActive"
+                              "isActive",
+                              "primaryImage"
                             ]
                           }
                         },

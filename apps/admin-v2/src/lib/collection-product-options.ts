@@ -32,7 +32,8 @@ export function isCollectionProductOptionDto(
     Number.isFinite(value.price) &&
     (value.categoryId === null || typeof value.categoryId === "string") &&
     (value.categoryName === null || typeof value.categoryName === "string") &&
-    typeof value.isActive === "boolean"
+    typeof value.isActive === "boolean" &&
+    (value.primaryImage === null || typeof value.primaryImage === "string")
   );
 }
 

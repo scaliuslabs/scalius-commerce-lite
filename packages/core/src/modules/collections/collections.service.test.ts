@@ -258,10 +258,11 @@ describe("listCollectionProductOptions", () => {
                 ...Array.from({ length: 95 }, (_, index) => `cat_${index}`),
                 "cat_1",
             ],
+            selectedProductIds: ["prod_selected", "prod_selected"],
         });
 
         expect(result).toEqual({
-            products: rows,
+            products: rows.map((row) => ({ ...row, primaryImage: null })),
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
         });
         expect(db.batch).toHaveBeenCalledTimes(1);
@@ -269,6 +270,7 @@ describe("listCollectionProductOptions", () => {
         expect(statements).toHaveLength(2);
         expect(statements[1]?.limit).toHaveBeenCalledWith(10);
         expect(statements[1]?.offset).toHaveBeenCalledWith(10);
+        expect(statements[1]?.orderBy).toHaveBeenCalled();
     });
 
     it("aliases the joined category name for D1 batch row decoding", async () => {
@@ -291,14 +293,21 @@ describe("listCollectionProductOptions", () => {
         };
         const db = drizzle(d1 as unknown as D1Database, { schema });
 
-        await listCollectionProductOptions(db, { page: 1, limit: 10 });
+        await listCollectionProductOptions(db, {
+            page: 1,
+            limit: 10,
+            selectedProductIds: ["prod_selected"],
+        });
 
         const optionQuery = queries.find((query) =>
             query.includes('left join "categories"')
         );
+        if (!optionQuery) throw new Error("Expected collection product option query");
         expect(optionQuery).toContain(
             '"categories"."name" as "collection_product_category_name"',
         );
+        expect(optionQuery).toContain("json_each(?)");
+        expect(optionQuery.toLowerCase()).toContain("then 1 else 0 end asc");
     });
 });
 
