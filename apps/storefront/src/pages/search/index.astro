@@ -17,7 +17,6 @@ import {
 import { SlidersHorizontal, X, ArrowLeft, Search } from "lucide-react";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime-env";
 import {
-  PRODUCT_LIST_NAVIGATION_PARAMS,
   buildProductListPaginationHref,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
@@ -86,9 +85,7 @@ function getPaginationUrl(pageNum: number) {
 const activeFilterCount = Object.keys(currentFilters)
   .filter(
     (key) =>
-      !PRODUCT_LIST_NAVIGATION_PARAMS.includes(
-        key as (typeof PRODUCT_LIST_NAVIGATION_PARAMS)[number],
-      ) && currentFilters[key],
+      key !== "page" && key !== "sortBy" && currentFilters[key],
   )
   .reduce(
     (count, key) =>
@@ -149,7 +146,7 @@ const analyticsProductData = products.map((p) => ({
         }
       </div>
 
-      <div class="mb-4 grid grid-cols-2 gap-2 lg:hidden">
+      <div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-gray-50/95 p-1 backdrop-blur lg:hidden">
         <button
           type="button"
           id="mobile-filter-toggle"
@@ -206,7 +203,7 @@ const analyticsProductData = products.map((p) => ({
           class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
         >
           <div
-            class="flex h-full w-full flex-col bg-white lg:w-full lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
+            class="flex h-full w-full flex-col bg-white lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-gray-100 lg:shadow-sm"
           >
             <div
               class="flex justify-between items-center lg:hidden p-4 border-b bg-white"

@@ -25,7 +25,7 @@ describe("header scroll state", () => {
     expect(shouldUseCompactHeader(HEADER_COMPACT_EXIT_PX, true)).toBe(false);
   });
 
-  it("hands desktop center states off without a midpoint overlap", () => {
+  it("cross-fades desktop center states without a blank midpoint", () => {
     const source = readFileSync(
       storefrontSourcePath("components", "header", "HeaderLayout.astro"),
       "utf8",
@@ -33,11 +33,22 @@ describe("header scroll state", () => {
 
     expect(source).toContain("header-expanded-center");
     expect(source).toContain("header-compact-center");
-    expect(source).toContain("transition-delay: 160ms, 160ms, 160ms");
-    expect(source).toContain("transition-delay: 0ms, 0ms, 120ms");
+    expect(source).toContain("transition-delay: 0ms, 0ms, 0ms");
+    expect(source).toContain("transition-delay: 0ms, 0ms, 180ms");
     expect(source).toContain("transition-[max-height,transform]");
     expect(source).not.toContain(
       "group-[.is-scrolled]/header:opacity-100 group-[.is-scrolled]/header:scale-100",
     );
+  });
+
+  it("tracks the real animated header height instead of applying a delayed jump", () => {
+    const source = readFileSync(
+      storefrontSourcePath("components", "header", "HeaderLayout.astro"),
+      "utf8",
+    );
+
+    expect(source).toContain("new ResizeObserver(updateHeaderHeight)");
+    expect(source).toContain("headerResizeObserver.observe(header)");
+    expect(source).not.toContain("setTimeout(updateHeaderHeight, 350)");
   });
 });

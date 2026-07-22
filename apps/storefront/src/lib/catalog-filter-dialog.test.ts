@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setupCatalogFilterDialog } from "./catalog-filter-dialog";
+import {
+  CATALOG_FILTER_HISTORY_KEY,
+  setupCatalogFilterDialog,
+} from "./catalog-filter-dialog";
 
 describe("catalog filter dialog", () => {
   beforeEach(() => {
+    history.replaceState({}, "", "/catalog");
     document.body.innerHTML = `
       <button id="mobile-filter-toggle" aria-controls="filter-section" aria-expanded="false">Filters</button>
       <aside id="filter-section" class="hidden" aria-labelledby="mobile-filter-title">
@@ -22,6 +26,9 @@ describe("catalog filter dialog", () => {
   });
 
   afterEach(() => {
+    (
+      window as Window & { __scaliusCatalogFilterCleanup?: () => void }
+    ).__scaliusCatalogFilterCleanup?.();
     vi.unstubAllGlobals();
     document.body.innerHTML = "";
     document.body.style.overflow = "";
@@ -96,5 +103,37 @@ describe("catalog filter dialog", () => {
 
     document.querySelector<HTMLButtonElement>("#mobile-filter-close")!.click();
     expect(document.body.style.overflow).toBe("clip");
+  });
+
+  it("uses browser Back to close an open mobile filter without leaving the page", () => {
+    setupCatalogFilterDialog();
+    const toggle = document.querySelector<HTMLButtonElement>(
+      "#mobile-filter-toggle",
+    )!;
+    const dialog = document.querySelector<HTMLElement>("#filter-section")!;
+
+    toggle.click();
+    expect(history.state[CATALOG_FILTER_HISTORY_KEY]).toBe(true);
+
+    history.replaceState({}, "", window.location.href);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+
+    expect(dialog.classList.contains("hidden")).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  it("removes global listeners before rebinding after Astro navigation", () => {
+    setupCatalogFilterDialog();
+    const firstCleanup = (
+      window as Window & { __scaliusCatalogFilterCleanup?: () => void }
+    ).__scaliusCatalogFilterCleanup;
+
+    expect(firstCleanup).toBeTypeOf("function");
+    firstCleanup?.();
+    expect(
+      document.querySelector<HTMLElement>("#filter-section")?.dataset
+        .dialogBound,
+    ).toBeUndefined();
   });
 });

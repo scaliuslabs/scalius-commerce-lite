@@ -21,6 +21,7 @@ import {
   parsePriceFilterValue,
 } from "@/lib/filters/price-url";
 import { normalizeSearchQuery } from "@/lib/search-query";
+import { navigateToCatalogFilterSearch } from "@/lib/catalog-filter-dialog";
 
 interface CategoryFiltersProps {
   facets: ProductFacet[];
@@ -236,7 +237,7 @@ export default function CategoryFilters({
       });
 
       // Navigate to new URL
-      window.location.search = finalParams.toString();
+      navigateToCatalogFilterSearch(finalParams);
     },
     [
       priceState.priceChanged,
@@ -583,7 +584,7 @@ export default function CategoryFilters({
                     htmlFor="hasDiscount"
                     className="text-sm font-medium text-gray-700 cursor-pointer"
                   >
-                    On Sale
+                    On sale
                   </label>
                   <Switch
                     id="hasDiscount"
@@ -601,7 +602,7 @@ export default function CategoryFilters({
                     htmlFor="freeDelivery"
                     className="text-sm font-medium text-gray-700 cursor-pointer"
                   >
-                    Free Delivery
+                    Free delivery
                   </label>
                   <Switch
                     id="freeDelivery"
@@ -803,7 +804,7 @@ export default function CategoryFilters({
 
           {/* Mobile Apply Button */}
           <Button type="button" onClick={handleApplyFilters} className="h-12">
-            Apply filters
+            Show products
           </Button>
         </div>
       </div>

@@ -21,7 +21,7 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).not.toContain("`/search?q=${encodeURIComponent(query)}`");
     expect(source).toContain("const searchResultCache = new Map<string, SearchResponse>();");
     expect(source).toContain("cacheSearchResults(normalizedQuery, json.data);");
-    expect(source).toContain("const PREDICTIVE_SEARCH_DEBOUNCE_MS = 200;");
+    expect(source).toContain("const PREDICTIVE_SEARCH_DEBOUNCE_MS = 150;");
     expect(source).toContain("}, PREDICTIVE_SEARCH_DEBOUNCE_MS);");
     expect(source).toContain('const PREDICTIVE_SEARCH_RESULT_LIMIT = "7";');
     expect(source).toContain("limit: PREDICTIVE_SEARCH_RESULT_LIMIT");
@@ -35,6 +35,11 @@ describe("CommandPalette search request boundaries", () => {
 
     expect(source).toContain('role="dialog"');
     expect(source).toContain('aria-modal="true"');
+    expect(source).toMatch(/ref=\{modalRef\}[\s\S]*?role="dialog"/);
+    expect(source).toContain('aria-label="Search products"');
+    expect(source).toContain('aria-live="polite"');
+    expect(source).toContain('aria-hidden="true"');
+    expect(source).toContain("element.offsetParent !== null");
     expect(source).toContain('role="combobox"');
     expect(source).toContain('role="listbox"');
     expect(source).toContain('role="option"');
@@ -51,5 +56,18 @@ describe("CommandPalette search request boundaries", () => {
     expect(source).toContain('trim: "border"');
     expect(source).toContain("onLoad={() => setLoaded(true)}");
     expect(source).toContain("motion-reduce:animate-none");
+  });
+
+  it("does not leave results from the previous query actionable while refreshing", async () => {
+    const source = await readFile(
+      storefrontSourcePath("components", "search", "CommandPalette.tsx"),
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /const controller = new AbortController\(\);[\s\S]*?setResults\(null\);[\s\S]*?setHasSearched\(false\);[\s\S]*?setIsLoading\(true\);/,
+    );
+    expect(source).toContain("Searching…");
+    expect(source).not.toContain("Your query was not lost.");
   });
 });

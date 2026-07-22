@@ -34,6 +34,7 @@ describe("catalog filter UI boundaries", () => {
 
   it("keeps mobile actions reachable in a full-width filter dialog", () => {
     expect(filters).toContain("safe-area-inset-bottom");
+    expect(filters).toContain("Show products");
     expect(filters).not.toContain('finalParams.set("page", "1")');
     for (const source of [category, search, collection]) {
       expect(source).toContain("flex h-full w-full flex-col bg-white");
@@ -46,15 +47,27 @@ describe("catalog filter UI boundaries", () => {
       expect(source).toContain('value="name-asc"');
       expect(source).toContain('value="name-desc"');
       expect(source).toContain('value="discount"');
+      expect(source).toContain("sticky top-[calc(var(--header-height,3.5rem)+0.5rem)]");
+      expect(source).toContain("lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)]");
     }
+  });
+
+  it("lets shoppers search within both category and collection filters", () => {
+    expect(category).toContain('name="q"');
+    expect(category).toContain('placeholder="Search this category…"');
+    expect(collection).toContain('name="q"');
+    expect(collection).toContain('placeholder="Search this collection…"');
   });
 
   it("shows removable applied filters outside the drawer", () => {
     expect(appliedFilters).toContain('aria-label="Applied filters"');
     expect(appliedFilters).toContain("Remove ${filter.label} filter");
     expect(appliedFilters).toContain("Clear all");
+    expect(appliedFilters).toContain('`Search: “${value}”`');
+    expect(appliedFilters).not.toContain('new Set(["q", "page", "sortBy"])');
     for (const source of [category, search, collection]) {
       expect(source).toContain("AppliedCatalogFilters");
+      expect(source).not.toContain("PRODUCT_LIST_NAVIGATION_PARAMS");
     }
   });
 });

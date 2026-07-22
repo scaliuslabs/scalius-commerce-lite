@@ -37,7 +37,7 @@ describe("collection storefront workflow boundaries", () => {
       '<input type="hidden" name="sortBy" value={sortBy} />',
     );
     expect(collectionPage).toContain("setupCatalogSorts");
-    expect(collectionPage).toContain("grid grid-cols-2 gap-2 lg:hidden");
+    expect(collectionPage).toContain("grid grid-cols-2 gap-2 rounded-xl");
     expect(collectionPage).toContain("shadow-sm lg:flex");
     expect(collectionPage).not.toContain("shadow-sm sm:flex");
     expect(collectionPage).toContain('value="discount"');
