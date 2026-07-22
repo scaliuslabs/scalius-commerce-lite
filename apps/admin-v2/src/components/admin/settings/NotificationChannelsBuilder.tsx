@@ -39,7 +39,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -86,16 +85,22 @@ function countAdminRules(config: AdminNotificationConfig): number {
   return NOTIFICATION_EVENTS.filter((event) => config[event.key].push).length;
 }
 
-function ProviderStatus({
+function CustomerChannelControl({
   label,
   ready,
   activeRules,
   issue,
+  selection,
+  disabled,
+  onToggle,
 }: {
   label: string;
   ready: boolean;
   activeRules: number;
   issue: string;
+  selection: boolean | "indeterminate";
+  disabled: boolean;
+  onToggle: (enabled: boolean) => void;
 }) {
   const state = ready
     ? "Ready"
@@ -104,17 +109,25 @@ function ProviderStatus({
       : "Needs setup";
 
   return (
-    <span
-      className="inline-flex min-h-7 items-center gap-1.5 rounded-md border bg-background px-2 text-xs"
+    <label
+      className="flex min-h-11 min-w-0 items-center gap-2 rounded-md border bg-background px-2.5 text-xs"
       title={ready ? `${label} delivery is ready.` : issue}
     >
+      <Checkbox
+        checked={selection}
+        disabled={disabled}
+        onCheckedChange={(checked) => onToggle(checked === true)}
+        aria-label={`Enable ${label} for every customer event`}
+      />
       <span
         className={ready ? "h-1.5 w-1.5 rounded-full bg-emerald-500" : "h-1.5 w-1.5 rounded-full bg-amber-500"}
         aria-hidden="true"
       />
-      <span className="font-medium">{label}</span>
-      <span className="text-muted-foreground">{state}</span>
-    </span>
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{label}</span>
+        <span className="block truncate text-muted-foreground">{state}</span>
+      </span>
+    </label>
   );
 }
 
@@ -122,17 +135,12 @@ function CustomerRulesMatrix({
   channels,
   disabled,
   onToggle,
-  onToggleColumn,
 }: {
   channels: CustomerNotificationConfig;
   disabled: boolean;
   onToggle: (
     event: OrderNotificationType,
     channel: CustomerNotificationChannel,
-  ) => void;
-  onToggleColumn: (
-    channel: CustomerNotificationChannel,
-    enabled: boolean,
   ) => void;
 }) {
   return (
@@ -142,30 +150,14 @@ function CustomerRulesMatrix({
           <thead>
             <tr className="border-b bg-muted/35">
               <th className="px-3 py-2 text-left font-medium">Event</th>
-              {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => {
-                const selection = getCustomerChannelSelection(
-                  channels,
-                  channel.key,
-                );
-                return (
-                  <th
-                    key={channel.key}
-                    className="w-28 px-3 py-2 text-center font-medium"
-                  >
-                    <label className="inline-flex items-center gap-2">
-                      <Checkbox
-                        checked={selection}
-                        disabled={disabled}
-                        onCheckedChange={(checked) =>
-                          onToggleColumn(channel.key, checked === true)
-                        }
-                        aria-label={`Enable ${channel.label} for every customer event`}
-                      />
-                      {channel.label}
-                    </label>
-                  </th>
-                );
-              })}
+              {CUSTOMER_NOTIFICATION_CHANNELS.map((channel) => (
+                <th
+                  key={channel.key}
+                  className="w-28 px-3 py-2 text-center font-medium"
+                >
+                  {channel.label}
+                </th>
+              ))}
             </tr>
           </thead>
           {NOTIFICATION_EVENT_GROUPS.map((group) => (
@@ -211,14 +203,15 @@ function CustomerRulesMatrix({
 
       <div className="divide-y md:hidden">
         {NOTIFICATION_EVENT_GROUPS.map((group) => (
-          <section key={group.label} aria-labelledby={`customer-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
-            <h3
-              id={`customer-${group.label.replace(/\W+/g, "-").toLowerCase()}`}
-              className="bg-muted/25 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
-            >
-              {group.label}
-            </h3>
-            <div className="divide-y">
+          <details key={group.label} className="group">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 bg-muted/25 px-3 text-sm font-medium">
+              <span>{group.label}</span>
+              <span className="ml-auto text-xs font-normal text-muted-foreground">
+                {group.keys.length} events
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="divide-y border-t">
               {group.keys.map((eventKey) => {
                 const event = NOTIFICATION_EVENTS.find(
                   (candidate) => candidate.key === eventKey,
@@ -249,7 +242,7 @@ function CustomerRulesMatrix({
                 );
               })}
             </div>
-          </section>
+          </details>
         ))}
       </div>
     </div>
@@ -283,38 +276,76 @@ function AdminRulesMatrix({
           Push
         </label>
       </div>
-      {NOTIFICATION_EVENT_GROUPS.map((group) => (
-        <section key={group.label} aria-labelledby={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
-          <h3
-            id={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}
-            className="border-b bg-muted/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
-          >
-            {group.label}
-          </h3>
-          <div className="divide-y">
-            {group.keys.map((eventKey) => {
-              const event = NOTIFICATION_EVENTS.find(
-                (candidate) => candidate.key === eventKey,
-              );
-              if (!event) return null;
-              return (
-                <label
-                  key={event.key}
-                  className="flex min-h-10 items-center justify-between gap-3 px-3 py-2"
-                >
-                  <span className="font-medium">{event.label}</span>
-                  <Checkbox
-                    checked={channels[event.key].push}
-                    disabled={disabled}
-                    onCheckedChange={() => onToggle(event.key, "push")}
-                    aria-label={`Admin: ${event.label} via Push`}
-                  />
-                </label>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      <div className="hidden md:block">
+        {NOTIFICATION_EVENT_GROUPS.map((group) => (
+          <section key={group.label} aria-labelledby={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
+            <h3
+              id={`admin-${group.label.replace(/\W+/g, "-").toLowerCase()}`}
+              className="border-b bg-muted/20 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              {group.label}
+            </h3>
+            <div className="divide-y">
+              {group.keys.map((eventKey) => {
+                const event = NOTIFICATION_EVENTS.find(
+                  (candidate) => candidate.key === eventKey,
+                );
+                if (!event) return null;
+                return (
+                  <label
+                    key={event.key}
+                    className="flex min-h-10 items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <span className="font-medium">{event.label}</span>
+                    <Checkbox
+                      checked={channels[event.key].push}
+                      disabled={disabled}
+                      onCheckedChange={() => onToggle(event.key, "push")}
+                      aria-label={`Admin: ${event.label} via Push`}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="divide-y md:hidden">
+        {NOTIFICATION_EVENT_GROUPS.map((group) => (
+          <details key={group.label} className="group">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 bg-muted/20 px-3 font-medium">
+              <span>{group.label}</span>
+              <span className="ml-auto text-xs font-normal text-muted-foreground">
+                {group.keys.length} events
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="divide-y border-t">
+              {group.keys.map((eventKey) => {
+                const event = NOTIFICATION_EVENTS.find(
+                  (candidate) => candidate.key === eventKey,
+                );
+                if (!event) return null;
+                return (
+                  <label
+                    key={event.key}
+                    className="flex min-h-11 items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <span className="font-medium">{event.label}</span>
+                    <Checkbox
+                      checked={channels[event.key].push}
+                      disabled={disabled}
+                      onCheckedChange={() => onToggle(event.key, "push")}
+                      aria-label={`Admin: ${event.label} via Push`}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </details>
+        ))}
+      </div>
     </div>
   );
 }
@@ -607,9 +638,6 @@ export function NotificationChannelsBuilder() {
               <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <div className="min-w-0">
                 <CardTitle className="text-base">Customer updates</CardTitle>
-                <CardDescription className="mt-0.5">
-                  Choose which order events reach buyers.
-                </CardDescription>
               </div>
             </div>
             <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">
@@ -645,24 +673,33 @@ export function NotificationChannelsBuilder() {
           </div>
 
           {!isLoading && !customerLoadError ? (
-            <div className="flex flex-wrap gap-2" aria-label="Customer channel readiness">
-              <ProviderStatus
+            <div className="grid grid-cols-3 gap-2" aria-label="Customer channel rules and readiness">
+              <CustomerChannelControl
                 label="Email"
                 ready={isEmailConfigured}
                 activeRules={countCustomerRules(channels, "email")}
                 issue={readinessIssueText(emailError, "Email delivery needs setup.")}
+                selection={getCustomerChannelSelection(channels, "email")}
+                disabled={customerControlsDisabled}
+                onToggle={(enabled) => handleToggleCustomerColumn("email", enabled)}
               />
-              <ProviderStatus
+              <CustomerChannelControl
                 label="SMS"
                 ready={isSmsConfigured}
                 activeRules={countCustomerRules(channels, "sms")}
                 issue={readinessIssueText(smsProviderError, "SMS delivery needs setup.")}
+                selection={getCustomerChannelSelection(channels, "sms")}
+                disabled={customerControlsDisabled}
+                onToggle={(enabled) => handleToggleCustomerColumn("sms", enabled)}
               />
-              <ProviderStatus
+              <CustomerChannelControl
                 label="WhatsApp"
                 ready={isWhatsAppConfigured}
                 activeRules={countCustomerRules(channels, "whatsapp")}
                 issue={readinessIssueText(whatsAppError, "WhatsApp delivery needs setup.")}
+                selection={getCustomerChannelSelection(channels, "whatsapp")}
+                disabled={customerControlsDisabled}
+                onToggle={(enabled) => handleToggleCustomerColumn("whatsapp", enabled)}
               />
             </div>
           ) : null}
@@ -763,7 +800,6 @@ export function NotificationChannelsBuilder() {
                 channels={channels}
                 disabled={customerControlsDisabled}
                 onToggle={handleToggle}
-                onToggleColumn={handleToggleCustomerColumn}
               />
             </>
           )}
@@ -795,9 +831,6 @@ export function NotificationChannelsBuilder() {
                     </Badge>
                   ) : null}
                 </div>
-                <CardDescription className="mt-0.5">
-                  Choose which events alert signed-in admin devices.
-                </CardDescription>
               </div>
             </div>
             <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row">

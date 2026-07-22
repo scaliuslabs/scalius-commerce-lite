@@ -26,4 +26,17 @@ describe("notification rules workspace", () => {
     expect(source).toContain('className="h-11 sm:h-9"');
     expect(source).toContain("min-h-11 min-w-0");
   });
+
+  it("keeps the mobile rules workspace compact without hiding capabilities", () => {
+    expect(source).toContain("CustomerChannelControl");
+    expect(source).toContain("Customer channel rules and readiness");
+    expect(source.match(/<details key=\{group\.label\}/g)).toHaveLength(2);
+    expect(source.match(/\{group\.keys\.length\} events/g)).toHaveLength(2);
+    expect(source).toContain('className="divide-y md:hidden"');
+    expect(source).toContain('className="hidden md:block"');
+    expect(source).not.toContain("Choose which order events reach buyers.");
+    expect(source).not.toContain(
+      "Choose which events alert signed-in admin devices.",
+    );
+  });
 });
