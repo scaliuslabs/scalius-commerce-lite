@@ -318,4 +318,66 @@ describe("CollectionForm edit product labels", () => {
     expect(getButton(host, "Save Collection").disabled).toBe(true);
     expect(host.querySelector("fieldset")?.hasAttribute("disabled")).toBe(true);
   });
+
+  it("appends one staged product batch and preserves its selection order", async () => {
+    collectionApi.getCollectionProductOptions.mockResolvedValue({
+      products: [
+        {
+          id: "prod_third",
+          name: "Third Woven Scarf",
+          price: 3200,
+          categoryId: "cat_curated",
+          categoryName: "Curated Picks",
+          isActive: true,
+          primaryImage: "/products/third-scarf.webp",
+        },
+        {
+          id: "prod_fourth",
+          name: "Fourth Canvas Tote",
+          price: 1800,
+          categoryId: "cat_curated",
+          categoryName: "Curated Picks",
+          isActive: true,
+          primaryImage: null,
+        },
+      ],
+      pagination: { page: 1, limit: 20, total: 2, totalPages: 1 },
+    });
+    await renderCollectionForm(productLabels);
+
+    await act(async () => getButton(host, "Add products").click());
+    await waitFor(() => {
+      expect(document.body.textContent).toContain("Third Woven Scarf");
+    });
+    const third = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Select Third Woven Scarf"]',
+    );
+    const fourth = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Select Fourth Canvas Tote"]',
+    );
+    if (!third || !fourth) throw new Error("Expected collection product options");
+    await act(async () => third.click());
+    await act(async () => fourth.click());
+
+    const addBatch = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>("button"),
+    ).find((button) => normalizeText(button.textContent) === "Add 2 products");
+    if (!addBatch) throw new Error("Expected staged add action");
+    await act(async () => addBatch.click());
+
+    expect(host.textContent).toContain("Third Woven Scarf");
+    expect(host.textContent).toContain("Fourth Canvas Tote");
+    await act(async () => getButton(host, "Save Collection").click());
+    await waitFor(() => {
+      expect(collectionApi.updateCollection).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      collectionApi.updateCollection.mock.calls[0]?.[0]?.data.config.productIds,
+    ).toEqual([
+      "prod_primary",
+      "prod_secondary",
+      "prod_third",
+      "prod_fourth",
+    ]);
+  });
 });

@@ -266,13 +266,15 @@ export interface CollectionProductOptionsInput {
     limit?: number;
     search?: string;
     categoryIds?: string[];
+    selectedProductIds?: string[];
 }
 
 /**
  * Lightweight, paginated product lookup for the collection builder.
  *
- * Category IDs are deliberately capped below D1's 100-bound-parameter limit:
- * each statement may also bind the search expression, limit, and offset.
+ * Category IDs are deliberately capped below D1's 100-bound-parameter limit.
+ * Selected product IDs use one bound json_each() set so the query can sort
+ * committed rows last without spending another 90 parameters.
  */
 export async function listCollectionProductOptions(
     db: Database,
@@ -284,6 +286,10 @@ export async function listCollectionProductOptions(
     const categoryIds = Array.from(
         new Set((input.categoryIds ?? []).map((id) => id.trim()).filter(Boolean)),
     ).slice(0, COLLECTION_PRODUCT_OPTION_CATEGORY_LIMIT);
+    const selectedProductIds = Array.from(
+        new Set((input.selectedProductIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ).slice(0, COLLECTION_PRODUCT_OPTION_CATEGORY_LIMIT);
+    const selectedProductIdSet = JSON.stringify(selectedProductIds);
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL[] = [isNull(products.deletedAt)];
@@ -314,7 +320,15 @@ export async function listCollectionProductOptions(
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
         .where(whereClause)
-        .orderBy(asc(products.name), asc(products.id))
+        .orderBy(
+            ...(selectedProductIds.length > 0
+                ? [asc(sql<number>`CASE WHEN ${products.id} IN (
+                    SELECT CAST(value AS TEXT) FROM json_each(${selectedProductIdSet})
+                ) THEN 1 ELSE 0 END`)]
+                : []),
+            asc(products.name),
+            asc(products.id),
+        )
         .limit(limit)
         .offset(offset);
 
@@ -333,9 +347,16 @@ export async function listCollectionProductOptions(
         }>,
     ];
     const total = Number(countRows[0]?.count ?? 0);
+    const mediaMap = productOptions.length > 0
+        ? await loadProductMediaProjections(db, productOptions.map((product) => product.id))
+        : new Map();
 
     return {
-        products: productOptions,
+        products: productOptions.map((product) => ({
+            ...product,
+            primaryImage:
+                resolveProductImageRepresentation(mediaMap.get(product.id) ?? [])?.url ?? null,
+        })),
         pagination: {
             page,
             limit,

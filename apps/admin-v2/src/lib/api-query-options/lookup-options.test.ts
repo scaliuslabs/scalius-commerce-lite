@@ -196,6 +196,7 @@ describe("lookup query options", () => {
         categoryId: "cat_2",
         categoryName: "Shirts",
         isActive: true,
+        primaryImage: "/products/blue-shirt.webp",
       }],
       pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
     };
@@ -203,6 +204,7 @@ describe("lookup query options", () => {
 
     const options = collectionProductOptionsQueryOptions({
       categoryIds: [" cat_2 ", "cat_1", "cat_2", ""],
+      selectedProductIds: ["prod_2", " prod_1 ", "prod_2"],
       search: " blue ",
       limit: 10,
     });
@@ -212,6 +214,7 @@ describe("lookup query options", () => {
       "collection-options",
       {
         categoryIds: ["cat_2", "cat_1"],
+        selectedProductIds: ["prod_1", "prod_2"],
         search: "blue",
         limit: 10,
       },
@@ -225,6 +228,7 @@ describe("lookup query options", () => {
         limit: 10,
         search: "blue",
         categoryIds: ["cat_2", "cat_1"],
+        selectedProductIds: ["prod_1", "prod_2"],
       },
     });
     expect(options.getNextPageParam?.(payload, [payload], 2, [1, 2])).toBe(3);

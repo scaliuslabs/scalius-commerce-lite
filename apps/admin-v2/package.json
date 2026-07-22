@@ -88,7 +88,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260721.1",
+    "@cloudflare/workers-types": "^5.20260722.1",
     "@scalius/tsconfig": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",

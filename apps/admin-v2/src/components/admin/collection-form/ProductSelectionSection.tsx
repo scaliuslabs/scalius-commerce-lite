@@ -19,9 +19,11 @@ import {
 import { Button } from "../../ui/button";
 import { Badge } from "../../ui/badge";
 import { SearchableSelect } from "../../ui/searchable-select";
-import { ChevronDown, ChevronUp, Layers, Package, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ImageIcon, Layers, Package, Trash2 } from "lucide-react";
+import { getOptimizedImageUrl } from "@scalius/shared/image-optimizer";
+import { ADMIN_IMAGE_PRESETS } from "~/lib/admin-image-presentation";
 import type { CollectionFormValues, Category, Product } from "./types";
-import { ProductPickerPopover } from "./ProductPickerPopover";
+import { ProductPickerDialog } from "./ProductPickerDialog";
 
 const MAX_MEMBERSHIP_IDS = 90;
 
@@ -35,7 +37,7 @@ interface ProductSelectionSectionProps {
   selectedProductIds: string[];
   addCategory: (id: string) => void;
   removeCategory: (id: string) => void;
-  addProduct: (product: Product) => void;
+  addProducts: (products: Product[]) => void;
   removeProduct: (id: string) => void;
   moveProduct: (id: string, direction: -1 | 1) => void;
 }
@@ -51,7 +53,7 @@ export const ProductSelectionSection = React.memo(
     selectedProductIds,
     addCategory,
     removeCategory,
-    addProduct,
+    addProducts,
     removeProduct,
     moveProduct,
   }: ProductSelectionSectionProps) {
@@ -141,7 +143,7 @@ export const ProductSelectionSection = React.memo(
                               {category.status}
                             </span>
                           ) : null}
-                          <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeCategory(category.id)} aria-label={`Remove ${category.name}`}>
+                          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-5 sm:w-5" onClick={() => removeCategory(category.id)} aria-label={`Remove ${category.name}`}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
                         </Badge>
@@ -171,16 +173,34 @@ export const ProductSelectionSection = React.memo(
                     </FormLabel>
                     <span className="text-xs tabular-nums text-muted-foreground">{selectedProductIds.length}/{MAX_MEMBERSHIP_IDS}</span>
                   </div>
-                  <ProductPickerPopover triggerLabel="Search products to add" excludeProductIds={selectedProductIds} onSelectProduct={addProduct} buttonClassName="w-full justify-between font-normal" disabled={selectedProductIds.length >= MAX_MEMBERSHIP_IDS} />
+                  <ProductPickerDialog
+                    selectedProductIds={selectedProductIds}
+                    onAddProducts={addProducts}
+                    maxProducts={MAX_MEMBERSHIP_IDS}
+                    disabled={selectedProductIds.length >= MAX_MEMBERSHIP_IDS}
+                  />
                   {selectedProducts.length > 0 ? (
                     <ol className="divide-y rounded-md border" aria-label="Manual product order">
                       {selectedProducts.map((product, index) => (
-                        <li key={product.id} className="flex min-h-10 items-center gap-2 px-2 py-1.5">
+                        <li key={product.id} className="flex min-h-14 items-center gap-2 px-2 py-1.5 sm:min-h-10">
                           <span className="w-6 shrink-0 text-center text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted sm:h-8 sm:w-8">
+                            {product.primaryImage ? (
+                              <img
+                                src={getOptimizedImageUrl(product.primaryImage, ADMIN_IMAGE_PRESETS.productMicro)}
+                                alt=""
+                                className="h-full w-full object-contain object-center"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            ) : (
+                              <ImageIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                            )}
+                          </span>
                           <span className="min-w-0 flex-1 truncate text-sm">{product.name}</span>
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === 0} onClick={() => moveProduct(product.id, -1)} aria-label={`Move ${product.name} up`}><ChevronUp className="h-3.5 w-3.5" /></Button>
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" disabled={index === selectedProducts.length - 1} onClick={() => moveProduct(product.id, 1)} aria-label={`Move ${product.name} down`}><ChevronDown className="h-3.5 w-3.5" /></Button>
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeProduct(product.id)} aria-label={`Remove ${product.name}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={index === 0} onClick={() => moveProduct(product.id, -1)} aria-label={`Move ${product.name} up`}><ChevronUp className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 sm:h-7 sm:w-7" disabled={index === selectedProducts.length - 1} onClick={() => moveProduct(product.id, 1)} aria-label={`Move ${product.name} down`}><ChevronDown className="h-3.5 w-3.5" /></Button>
+                          <Button type="button" variant="ghost" size="icon" className="h-11 w-11 text-muted-foreground hover:text-destructive sm:h-7 sm:w-7" onClick={() => removeProduct(product.id)} aria-label={`Remove ${product.name}`}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </li>
                       ))}
                     </ol>

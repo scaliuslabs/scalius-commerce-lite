@@ -133,6 +133,7 @@ describe("admin picker lookup routes", () => {
                     categoryId: "cat_1",
                     categoryName: "Shirts",
                     isActive: true,
+                    primaryImage: "/products/blue-shirt.webp",
                 },
             ],
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
@@ -140,7 +141,7 @@ describe("admin picker lookup routes", () => {
         const { app, db } = createTestApp();
 
         const response = await app.request(
-            `/api/v1/admin/collections/product-options?page=2&limit=10&search=blue&categoryIds=${categoryIds.join(",")},cat_1`,
+            `/api/v1/admin/collections/product-options?page=2&limit=10&search=blue&categoryIds=${categoryIds.join(",")},cat_1&selectedProductIds=prod_2,prod_1,prod_2`,
         );
         const body = await response.json();
 
@@ -156,6 +157,7 @@ describe("admin picker lookup routes", () => {
                         categoryId: "cat_1",
                         categoryName: "Shirts",
                         isActive: true,
+                        primaryImage: "/products/blue-shirt.webp",
                     },
                 ],
                 pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
@@ -166,6 +168,7 @@ describe("admin picker lookup routes", () => {
             limit: 10,
             search: "blue",
             categoryIds: categoryIds.slice(0, 90),
+            selectedProductIds: ["prod_2", "prod_1"],
         });
         expect(mocks.getCollectionById).not.toHaveBeenCalled();
     });
