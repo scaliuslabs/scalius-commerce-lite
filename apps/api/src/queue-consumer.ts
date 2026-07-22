@@ -989,7 +989,7 @@ async function processQueueMessage(
         metadata: { currency: payload.currency },
       });
       const completionStatus = assertPaymentConfirmed(result, "stripe", payload.orderId);
-      if (result.success) {
+      if (result.success && !result.alreadyProcessed) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,
@@ -1070,7 +1070,7 @@ async function processQueueMessage(
         metadata: { currency: payload.currency, cardType: payload.cardType, cardBrand: payload.cardBrand },
       });
       const completionStatus = assertPaymentConfirmed(result, "sslcommerz", payload.orderId);
-      if (result.success) {
+      if (result.success && !result.alreadyProcessed) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,
@@ -1139,7 +1139,7 @@ async function processQueueMessage(
         },
       });
       const completionStatus = assertPaymentConfirmed(result, "polar", payload.orderId);
-      if (result.success) {
+      if (result.success && !result.alreadyProcessed) {
         await invalidateProductAvailabilityCaches(db, { orderIds: [payload.orderId] }, { env, executionCtx });
         await enqueueOrderNotificationAfterPaymentConfirmed(db, env, {
           orderId: payload.orderId,

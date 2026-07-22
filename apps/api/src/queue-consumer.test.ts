@@ -499,6 +499,29 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(mocks.markWebhookEventProcessed).not.toHaveBeenCalled();
   });
 
+  it("acks duplicate confirmations without repeating availability, notification, or analytics side effects", async () => {
+    mocks.processPaymentConfirmed.mockResolvedValue({
+      success: true,
+      alreadyProcessed: true,
+    });
+    const message = createMessage({
+      type: "payment.stripe.confirmed",
+      orderId: "order-stripe",
+      paymentIntentId: "pi_123",
+      amount: 12345,
+      currency: "usd",
+    });
+
+    await handleQueueBatch(createBatch([message]), {} as Env);
+
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+    expect(mocks.invalidateProductAvailabilityCaches).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderCreatedNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.enqueueOrderBalancePaidNotificationForOrder).not.toHaveBeenCalled();
+    expect(mocks.processExistingMetaPurchaseOutboxForOrder).not.toHaveBeenCalled();
+  });
+
   it("enqueues balance-paid notifications instead of order-created notifications for balance payments", async () => {
     mocks.processPaymentConfirmed.mockResolvedValue({ success: true });
     const notificationQueue = { send: vi.fn(async () => undefined) };

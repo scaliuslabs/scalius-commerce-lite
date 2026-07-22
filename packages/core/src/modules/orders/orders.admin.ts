@@ -660,7 +660,7 @@ function buildPaymentRecoverySummary(
         return {
             state: "processing",
             label: "Payment setup running",
-            message: "A hosted payment session is being prepared. Avoid manual recovery until it finishes.",
+            message: "An online payment session is being prepared. Avoid manual recovery until it finishes.",
             gateway: activeAttempt.gateway,
             paymentType: activeAttempt.paymentType,
             status: activeAttempt.status,
@@ -681,7 +681,7 @@ function buildPaymentRecoverySummary(
                 ? "Payment needs attention"
                 : "Payment setup stalled",
             message: failedAttempt || order.paymentStatus === PaymentStatus.FAILED
-                ? "The hosted payment flow failed. Open the order payment panel to retry or reconcile."
+                ? "The online payment flow failed. Open the order payment panel to retry or reconcile."
                 : "Payment setup stopped before finishing. Open the order payment panel before taking shipment or delete actions.",
             gateway: attentionAttempt?.gateway ?? order.paymentMethod,
             paymentType: attentionAttempt?.paymentType ?? null,
@@ -701,7 +701,7 @@ function buildPaymentRecoverySummary(
         const latestAttempt = findLatestAttempt(attempts, () => true);
         return {
             state: "awaiting_payment",
-            label: "Awaiting hosted payment",
+            label: "Awaiting online payment",
             message: "The order is waiting for buyer payment or gateway confirmation.",
             gateway: latestAttempt?.gateway ?? order.paymentMethod,
             paymentType: latestAttempt?.paymentType ?? null,

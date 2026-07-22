@@ -563,7 +563,7 @@ async function selectMethod(methodId: string, gw: { id: string; [key: string]: u
   // Set button text
   const isPartial = checkoutConfig?.partialPaymentEnabled ?? false;
   const text = handler?.getButtonText(isPartial) ?? "Continue to Payment";
-  setPayButton(text, false);
+  setPayButton(text, handler?.isReady ? !handler.isReady() : false);
 }
 
 // ── Process payment ───────────────────────────────────────────────────────────
@@ -701,7 +701,7 @@ async function processPayment(): Promise<void> {
     const restoreHandler = getGateway(selectedMethod);
     const isPartial = checkoutConfig.partialPaymentEnabled;
     const text = restoreHandler?.getButtonText(isPartial) ?? "Continue to Payment";
-    setPayButton(text, false);
+    setPayButton(text, restoreHandler?.isReady ? !restoreHandler.isReady() : false);
   } finally {
     isProcessing = false;
   }

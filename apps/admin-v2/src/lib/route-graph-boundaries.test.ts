@@ -1790,6 +1790,8 @@ describe("admin route graph boundaries", () => {
     expect(source).toContain("paymentSessionAttempts");
     expect(source).toContain("Payment session attempts");
     expect(source).toContain("Preparing checkout");
+    expect(source).toContain("Card payment created");
+    expect(source).toContain("This card payment completed and was later refunded.");
     expect(source).toContain("Hosted session created");
     expect(source).toContain("Processing lease expired");
     expect(source).toContain("refetchInterval: (query)");

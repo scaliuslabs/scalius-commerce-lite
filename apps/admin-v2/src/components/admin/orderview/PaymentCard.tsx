@@ -194,7 +194,10 @@ const MANUAL_REFUND_RECOVERY_STATUSES = new Set([
 
 const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz", "polar"]);
 
-function getSessionAttemptView(attempt: PaymentSessionAttempt): {
+function getSessionAttemptView(
+  attempt: PaymentSessionAttempt,
+  orderState: Pick<Order, "status" | "paymentStatus">,
+): {
   label: string;
   message: string;
   badgeVariant: "default" | "secondary" | "destructive" | "outline";
@@ -214,6 +217,20 @@ function getSessionAttemptView(attempt: PaymentSessionAttempt): {
     };
   }
   if (attempt.status === "created") {
+    if (attempt.gateway === "stripe") {
+      const message = orderState.paymentStatus === "refunded"
+        ? "This card payment completed and was later refunded."
+        : orderState.paymentStatus === "paid"
+          ? "This card payment completed for the order."
+          : orderState.status === "cancelled"
+            ? "This card payment belongs to a cancelled order and cannot be retried."
+            : "The buyer can retry this card payment without creating another order.";
+      return {
+        label: "Card payment created",
+        message,
+        badgeVariant: "default",
+      };
+    }
     return {
       label: "Hosted session created",
       message: "The buyer received or can reuse this hosted payment session.",
@@ -223,7 +240,9 @@ function getSessionAttemptView(attempt: PaymentSessionAttempt): {
   if (attempt.status === "failed") {
     return {
       label: "Session setup failed",
-      message: "The platform stopped before exposing a hosted payment session to the buyer.",
+      message: attempt.gateway === "stripe"
+        ? "The card payment could not be prepared. The buyer can retry from the checkout or receipt."
+        : "The platform stopped before exposing a hosted payment session to the buyer.",
       badgeVariant: "destructive",
     };
   }
@@ -847,7 +866,7 @@ export function PaymentCard({ order }: PaymentCardProps) {
                 </Button>
               </div>
               {paymentSessionAttempts.map((attempt) => {
-                const view = getSessionAttemptView(attempt);
+                const view = getSessionAttemptView(attempt, order);
                 return (
                   <div key={attempt.id} className="rounded-md border border-border bg-background/60 p-2.5 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2">

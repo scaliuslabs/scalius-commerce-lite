@@ -289,7 +289,7 @@ async function validateIncomingPaymentState(
 export async function processPaymentConfirmed(
   db: Database,
   params: ProcessPaymentParams
-): Promise<{ success: boolean; error?: string; retryable?: boolean }> {
+): Promise<{ success: boolean; error?: string; retryable?: boolean; alreadyProcessed?: boolean }> {
   try {
     const shipmentClaim = await db
       .select({
@@ -345,7 +345,9 @@ export async function processPaymentConfirmed(
         if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing Stripe payment amount does not match webhook amount" };
         }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+          return { success: true, alreadyProcessed: true };
+        }
         paymentId = existing.id;
       }
     }
@@ -371,7 +373,9 @@ export async function processPaymentConfirmed(
         if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing SSLCommerz payment amount does not match webhook amount" };
         }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+          return { success: true, alreadyProcessed: true };
+        }
         paymentId = existing.id;
       }
     }
@@ -394,7 +398,9 @@ export async function processPaymentConfirmed(
         if (!failedAttemptCanBePromoted(existing, incomingAmount, currency)) {
           return { success: false, error: "Existing Polar payment amount does not match webhook amount" };
         }
-        if (existing.status === PaymentRecordStatus.SUCCEEDED) return { success: true };
+        if (existing.status === PaymentRecordStatus.SUCCEEDED) {
+          return { success: true, alreadyProcessed: true };
+        }
         paymentId = existing.id;
       }
     }
